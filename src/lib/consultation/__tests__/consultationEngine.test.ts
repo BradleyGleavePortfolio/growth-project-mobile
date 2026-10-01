@@ -12,6 +12,7 @@ import {
   fillCopy,
   firstIncompleteScreenId,
   firstSessionOptions,
+  hasAnswersBeyondConsent,
   isConsentAnswerCurrent,
   isVisible,
   nextScreenId,
@@ -23,7 +24,24 @@ import {
   validateScreen,
   visibleScreens,
 } from '../engine';
-import { buildSummary, CONSENT_CHECKBOX_LABEL, CONSENT_PARAGRAPHS, CONSULT_CONSENT_COPY_VERSION, P8_COPY } from '../copy';
+import { createHash } from 'crypto';
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH,
+  AI_CONSENT_VERSION,
+  aiConsentCopyText,
+  buildSummary,
+  CONSENT_BINDING,
+  CONSENT_CHECKBOX_LABEL,
+  CONSENT_COPY_SHA256,
+  CONSENT_FOOTER,
+  CONSENT_PARAGRAPHS,
+  CONSENT_TITLE,
+  consentCopyText,
+  CONSULT_CONSENT_COPY_VERSION,
+  P8_COPY,
+} from '../copy';
 import { answersBeforeSafety, fullAnswers, NOW } from '../__fixtures__/consultFixtures';
 
 const def = (id: string) => {
@@ -61,22 +79,52 @@ describe('definitions', () => {
     }
   });
 
-  it('the P0 copy names Anthropic and the data Roman and the coach can see', () => {
-    const text = CONSENT_PARAGRAPHS.join(' ');
-    expect(text).toMatch(/Anthropic/);
-    expect(text).toMatch(/third-party AI provider/);
-    expect(text).toMatch(/can see your in-app logs and answers/);
-    expect(text).toMatch(/screening questions/);
-    expect(text).toMatch(/private from your coach/);
-    expect(text).toMatch(/180 days/);
-    expect(text).toMatch(/delete them at any time/);
-    expect(text).toMatch(/only for support, safety or fixing a problem/);
-    expect(CONSENT_CHECKBOX_LABEL).toMatch(/^I agree/);
-    expect(CONSENT_CHECKBOX_LABEL).toMatch(/training waiver/);
-    // v2: the grant also covers the coach's AI drafts, and says how to withdraw.
-    expect(text).toMatch(/coach\u2019s AI drafts/);
-    expect(text).toMatch(/withdraw this agreement at any time in Settings/);
-    expect(text).toMatch(/Nothing you answer here is sent until you tick the box/);
+  it('the P0 copy is the D2 contract copy: two boxes, box 1 for coaching, box 2 optional for Roman and AI', () => {
+    expect(CONSENT_TITLE).toBe('Before we start');
+    expect(CONSENT_PARAGRAPHS).toHaveLength(3);
+    const coaching = CONSENT_PARAGRAPHS.join(' ');
+    expect(coaching).toMatch(/personal training and nutrition guidance only/);
+    expect(coaching).toMatch(/We do not diagnose, treat, or give medical advice/);
+    expect(coaching).toMatch(/the screening questions/);
+    expect(coaching).toMatch(/We never sell it/);
+    expect(coaching).toMatch(/the clinic does not see it/);
+    // Box 1 is not an AI consent: no processor named above or in it.
+    expect(coaching + CONSENT_CHECKBOX_LABEL).not.toMatch(/Anthropic|Roman/);
+    expect(CONSENT_CHECKBOX_LABEL).toBe(
+      'I agree to the training waiver, and to The Growth Project and my coach collecting and using my information to coach me.',
+    );
+    expect(AI_CONSENT_PARAGRAPH).toMatch(/powered by Anthropic, a third-party AI provider/);
+    expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach\u2019s private notes/);
+    expect(AI_CONSENT_PARAGRAPH).toMatch(/kept for 180 days/);
+    expect(AI_CONSENT_CHECKBOX_LABEL).toMatch(/^Optional: I allow Roman/);
+    expect(CONSENT_FOOTER).toMatch(/^Nothing is sent until you continue\./);
+    expect(CONSENT_FOOTER).toMatch(/guided tour works either way/);
+    // Plain copy: no exclamation marks.
+    for (const t of [...CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL, AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL, CONSENT_FOOTER]) {
+      expect(t).not.toMatch(/!/);
+    }
+  });
+
+  it('versions are bound: consult-consent-v2 with client-ai-v3 and pt-waiver-v1', () => {
+    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v2');
+    expect(AI_CONSENT_VERSION).toBe('client-ai-v3');
+    expect(CONSENT_BINDING).toEqual({
+      copy_version: 'consult-consent-v2',
+      ai_consent_version: 'client-ai-v3',
+      waiver_version: 'pt-waiver-v1',
+    });
+  });
+
+  it('pinned copy hashes match the displayed text (any copy change must bump the version and the hash)', () => {
+    const sha = (t: string) => createHash('sha256').update(t, 'utf8').digest('hex');
+    expect(sha(consentCopyText())).toBe(CONSENT_COPY_SHA256);
+    expect(sha(aiConsentCopyText())).toBe(AI_CONSENT_COPY_SHA256);
+    expect(consentCopyText().startsWith('Before we start\n\nThe Growth Project provides')).toBe(true);
+    expect(aiConsentCopyText()).toBe(`${AI_CONSENT_PARAGRAPH}\n\n${AI_CONSENT_CHECKBOX_LABEL}`);
+    // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
+    // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
+    expect(CONSENT_COPY_SHA256).toBe('4d2efe380f1833f5878b5747ad8887a01b6b459e8f2e87512c695faf0e5b57c7');
+    expect(AI_CONSENT_COPY_SHA256).toBe('88b7920d2c6cf0209199e0a8031be502db4d3cb206fa299bbf2549facf92052c');
   });
 
   it('P8 gives guidance and a next step before the physician line', () => {
@@ -192,6 +240,9 @@ describe('validation', () => {
     const ok = { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z' };
     expect(cur(ok)).toBe(true);
     expect(cur({ ...ok, copy_version: 'consult-consent-v0' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v1' })).toBe(false); // the single-box copy
+    expect(cur({ ...ok, text_sha256: CONSENT_COPY_SHA256 })).toBe(true);
+    expect(cur({ ...ok, text_sha256: 'ABC' })).toBe(false);
     expect(cur({ ...ok, copy_version: 'obsolete-v0' })).toBe(false);
     expect(cur({ ...ok, agreed: false })).toBe(false);
     expect(cur({ ...ok, agreed_at: 'not a date' })).toBe(false);
@@ -287,14 +338,31 @@ describe('resume', () => {
 });
 
 describe('save payload', () => {
-  it('drops answers for hidden screens and collapsed details', () => {
+  it('clears (null) answers for hidden screens and collapsed details, so the server does not keep them (B-06)', () => {
     const a = fullAnswers({ S3: 'gym', T3: 'no', T3_areas: ['knee'], P2: 'no', P2_note: 'old note' });
     const out = answersForSave(a);
-    expect(out.S3b).toBeUndefined();
-    expect(out.T3_areas).toBeUndefined();
-    expect(out.P2_note).toBeUndefined();
+    expect(out).toHaveProperty('S3b', null);
+    expect(out).toHaveProperty('T3_areas', null);
+    expect(out).toHaveProperty('P2_note', null);
     expect(out.G1).toBe('fat_loss');
     expect(out.P0).toEqual(a.P0);
+    expect(JSON.stringify(out)).not.toContain('old note');
+    // Intro and message screens have no answer to clear.
+    expect(out).not.toHaveProperty('W1');
+  });
+
+  it('an emptied note or a deselected "other" is sent as null while the parent is still open (B-06)', () => {
+    const out = answersForSave(fullAnswers({ T3: 'yes', T3_areas: ['knee'], T3_note: '', G2: ['energy'], G2_other: 'Run a 10k' }));
+    expect(out.T3_areas).toEqual(['knee']);
+    expect(out).toHaveProperty('T3_note', null);
+    expect(out).toHaveProperty('G2_other', null);
+    const kept = answersForSave(fullAnswers({ G2: ['energy', 'other'], G2_other: 'Run a 10k' }));
+    expect(kept.G2_other).toBe('Run a 10k');
+  });
+
+  it('a body of P0 and clears only counts as consent-only', () => {
+    expect(hasAnswersBeyondConsent({ P0: fullAnswers().P0, P8: null, T3_note: null })).toBe(false);
+    expect(hasAnswersBeyondConsent({ P0: fullAnswers().P0, G1: 'fat_loss' })).toBe(true);
   });
 
   it('keeps detail answers when the detail is open', () => {

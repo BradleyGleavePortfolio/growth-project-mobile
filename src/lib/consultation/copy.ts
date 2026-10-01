@@ -1,32 +1,76 @@
 /**
  * Consultation copy that is longer than a single definition field: the P0
- * "I agree" text (versioned), the P8 message, and the deterministic summary.
+ * agreement text (versioned, two boxes), the P8 message, and the
+ * deterministic summary.
  *
- * P0 copy is consent copy. Any change to CONSENT_PARAGRAPHS or
- * CONSENT_CHECKBOX_LABEL must bump CONSULT_CONSENT_COPY_VERSION and goes
+ * P0 copy is consent copy (D2 contract, ops/CONSENT_D2_CONTRACT.md, draft v2
+ * pending owner sign-off). Any change to the P0 paragraphs, either box label
+ * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
+ * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
  */
 import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
 
-export { CONSULT_CONSENT_COPY_VERSION, CONSENT_BINDING } from './consentVersion';
+export { CONSULT_CONSENT_COPY_VERSION, CONSENT_BINDING, AI_CONSENT_VERSION, WAIVER_VERSION } from './consentVersion';
 
+export const CONSENT_TITLE = 'Before we start';
+
+/** Paragraphs 1-3: shown above box 1 (waiver, collection and use for coaching). */
 export const CONSENT_PARAGRAPHS: readonly string[] = [
   'The Growth Project provides personal training and nutrition guidance only. We do not diagnose, treat, or give medical advice. Nothing in this app replaces the advice of a physician or other qualified health provider.',
   'Exercise carries some risk of injury. You choose how hard to work, you stop if something hurts, and you take part at your own risk.',
-  'The Growth Project, your coach and Roman can see your in-app logs and answers: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you connect, your messages with your coach, and posts you write in the community.',
-  'Roman is powered by Anthropic, a third-party AI provider. To answer you, and to prepare your coach\u2019s AI drafts about you, that information is sent to Anthropic. It is used only to help you. Only your own data is used, never another client\u2019s, and never your coach\u2019s private notes.',
-  'Your conversations with Roman are private from your coach. They are stored securely on The Growth Project\u2019s servers for 180 days, and you can delete them at any time. Our staff open them only for support, safety or fixing a problem.',
-  'Nothing you answer here is sent until you tick the box. You can withdraw this agreement at any time in Settings; Roman and AI drafts then stop until you agree again.',
+  'To coach you, The Growth Project and your coach collect and use what you share here: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you choose to connect, your messages with your coach, and posts you write in the community. We use it only to provide your training. We never sell it. If you joined through a clinic, the clinic does not see it.',
 ];
 
+/** Box 1 (required to continue). */
 export const CONSENT_CHECKBOX_LABEL =
-  'I agree to the training waiver, and to The Growth Project, my coach and Roman seeing my in-app logs and answers, with Anthropic processing them for Roman and my coach\u2019s AI drafts.';
+  'I agree to the training waiver, and to The Growth Project and my coach collecting and using my information to coach me.';
 
-/** Exact text the consent hash covers (paragraphs + box label). */
+/** Paragraph 4: shown above box 2, and again in Settings > Privacy > Roman and AI. */
+export const AI_CONSENT_PARAGRAPH =
+  'Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client\u2019s, and never your coach\u2019s private notes. Your conversations with Roman are private from your coach, kept for 180 days, and you can delete them at any time.';
+
+/** Box 2 (optional, unticked by default). */
+export const AI_CONSENT_CHECKBOX_LABEL =
+  'Optional: I allow Roman and my coach\u2019s AI tools to use my information, processed by Anthropic.';
+
+export const CONSENT_FOOTER =
+  'Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman\u2019s guided tour works either way.';
+
+/**
+ * Exact text of the whole P0 screen, in display order (title, paragraphs
+ * 1-3, box 1, paragraph 4, box 2, footer). Its sha256 is sent as the P0
+ * record's `text_sha256` (backend #607 stores what was shown).
+ */
 export function consentCopyText(): string {
-  return [...CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL].join('\n\n');
+  return [
+    CONSENT_TITLE,
+    ...CONSENT_PARAGRAPHS,
+    CONSENT_CHECKBOX_LABEL,
+    AI_CONSENT_PARAGRAPH,
+    AI_CONSENT_CHECKBOX_LABEL,
+    CONSENT_FOOTER,
+  ].join('\n\n');
 }
+
+/**
+ * Exact text box 2 covers (paragraph 4 and the box 2 label). Its sha256 is
+ * the `copy_sha256` of POST /me/ai-consent/roman; the R2a server copy for
+ * `client-ai-v3` must hash to the same value.
+ */
+export function aiConsentCopyText(): string {
+  return [AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL].join('\n\n');
+}
+
+/**
+ * Pinned sha256 (lowercase hex) of consentCopyText() and aiConsentCopyText().
+ * A unit test recomputes both from the text, so the copy cannot change
+ * without these (and the versions) changing too. Pinned rather than hashed
+ * at runtime so the record never depends on a native digest call.
+ */
+export const CONSENT_COPY_SHA256 = '4d2efe380f1833f5878b5747ad8887a01b6b459e8f2e87512c695faf0e5b57c7';
+export const AI_CONSENT_COPY_SHA256 = '88b7920d2c6cf0209199e0a8031be502db4d3cb206fa299bbf2549facf92052c';
 
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {

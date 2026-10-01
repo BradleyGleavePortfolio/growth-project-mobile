@@ -4,9 +4,13 @@
  * the fixed behaviour.
  *
  *   A-01  no consultation content reaches PostHog touch autocapture
- *   A-02  nothing is sent to the server before the P0 agreement is recorded
- *   A-03  consent must match the displayed copy version; stale, malformed and
- *         revoked records and server version bumps fail closed
+ *   A-02  nothing is sent to the server before box 1 of P0 is ticked; the
+ *         first PUT is P0 alone (backend #607 consent-first)
+ *   A-03  consent must match the displayed copy version; stale and malformed
+ *         records and server version bumps fail closed
+ *   D2    box 2 (Roman and AI) is optional, unticked by default, recorded
+ *         after the P0 save on the AI consent ledger, never blocking
+ *   C-1   a double tap on P0 Continue records once
  *   A-04  the draft is encrypted, bounded, and purged on sign-out with
  *         late writes fenced
  */
@@ -19,10 +23,11 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
 import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
-import { consentStatus, makeApi, NOT_GRANTED, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
+import { makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import {
   DRAFT_CHUNK_CHARS,
   DRAFT_RETENTION_MS,
+  installMarkerKey,
   legacyStorageKey,
   manifestKey,
   openDraft,
@@ -32,7 +37,7 @@ import {
   writeLocalState,
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
-import { CONSULT_CONSENT_COPY_VERSION } from '../../../lib/consultation/copy';
+import { AI_CONSENT_COPY_SHA256, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -174,37 +179,33 @@ describe('A-01 analytics exclusion', () => {
 
 // ── A-02 ─────────────────────────────────────────────────────────────────────
 
+const conflict = (code: string) => Object.assign(new Error('409'), { response: { status: 409, data: { code } } });
+const P0_CURRENT = fullAnswers().P0;
+/** GET /me/onboarding with a current P0 already on the server. */
+const serverWithConsent = () =>
+  jest.fn(async () => ({ answers: { P0: P0_CURRENT }, completed: false, consent_recorded: true, saved_at: '2026-09-30T18:00:00Z', revision: 1 }));
+const tick = () => act(async () => { await new Promise((res) => setTimeout(res, 0)); });
+
+async function toP0(api: ConsultationApi) {
+  const r = await renderFlow(api);
+  await waitFor(() => r.getByTestId('consult-screen-W1'));
+  await fireEvent.press(r.getByTestId('consult-continue'));
+  await waitFor(() => r.getByTestId('consult-screen-P0'));
+  return r;
+}
+
 describe('A-02 agreement before any upload', () => {
-  it('first run: W1 leads to P0 and nothing is sent until the box is ticked and recorded', async () => {
+  it('first run: W1 leads to P0 and nothing is sent until box 1 is ticked', async () => {
     const api = makeApi();
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-W1'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    const r = await toP0(api);
     expect(api.save).not.toHaveBeenCalled();
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
     await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await tick();
+    expect(api.save).not.toHaveBeenCalled(); // ticking alone sends nothing
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
-    expect(api.grantOnboardingConsent).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
-    expect(api.grantOnboardingConsent.mock.invocationCallOrder[0]).toBeLessThan(api.save.mock.invocationCallOrder[0]);
-  });
-
-  it('a failed or missing consent endpoint keeps the client on P0 and sends nothing', async () => {
-    for (const status of [null, 404, 500]) {
-      await resetStores();
-      const api = makeApi({ grantOnboardingConsent: jest.fn(async () => ({ kind: 'error' as const, status })) });
-      await seedLocal({}, 'P0');
-      const r = await renderFlow(api);
-      await waitFor(() => r.getByTestId('consult-screen-P0'));
-      await fireEvent.press(r.getByTestId('consent-checkbox'));
-      await fireEvent.press(r.getByTestId('consult-continue'));
-      await waitFor(() => r.getByTestId('consent-error'));
-      expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-      expect(api.save).not.toHaveBeenCalled();
-      r.unmount();
-    }
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
   });
 
   it('audit probe: answers without a recorded agreement never reach the server', async () => {
@@ -220,36 +221,33 @@ describe('A-02 agreement before any upload', () => {
     expect(api.save).not.toHaveBeenCalled();
   });
 
-  it('an agreement that cannot be verified holds every chapter save', async () => {
-    const api = makeApi({ getConsentStatus: jest.fn(async () => { throw new Error('offline'); }) });
-    await seedLocal(answersBeforeSafety(), 'T4');
+  it('box 1 does not depend on the AI consent ledger: saves and completion work with box 2 never ticked', async () => {
+    await seedLocal(fullAnswers(), 'SUM');
+    const api = makeApi();
     const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-T4'));
-    await fireEvent.press(r.getByTestId('consult-chip-30_45'));
-    await waitFor(() => r.getByTestId('consult-screen-S1'));
-    await act(async () => { await new Promise((res) => setTimeout(res, 0)); });
-    expect(api.save).not.toHaveBeenCalled();
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    expect(api.complete).toHaveBeenCalledTimes(1);
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
   });
 });
 
 describe('A-02 consent-first PUT (backend #607)', () => {
-  const conflict = (code: string) => Object.assign(new Error('409'), { response: { status: 409, data: { code } } });
-  const P0 = fullAnswers().P0;
-
-  it('the first PUT after W1 carries P0 alone, with the displayed copy version', async () => {
+  it('the first PUT after W1 carries P0 alone, with the displayed copy version and text hash', async () => {
     const api = makeApi();
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-W1'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    const r = await toP0(api);
     await fireEvent.press(r.getByTestId('consent-checkbox'));
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     const first = api.save.mock.calls[0][0];
     expect(Object.keys(first.answers)).toEqual(['P0']);
-    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v1' });
+    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v2', text_sha256: CONSENT_COPY_SHA256 });
     expect(first.answers.P0.copy_version).toBe(CONSULT_CONSENT_COPY_VERSION);
+    // Only backend #607 P0 keys: box 2 is never part of the intake answer.
+    expect(Object.keys(first.answers.P0).sort()).toEqual(['agreed', 'agreed_at', 'copy_version', 'text_sha256']);
   });
 
   it('if the P0 PUT never landed, the next save sends P0 alone before the rest', async () => {
@@ -272,9 +270,7 @@ describe('A-02 consent-first PUT (backend #607)', () => {
   });
 
   it('a server that already holds a current P0 gets the answers directly', async () => {
-    const api = makeApi({
-      getState: jest.fn(async () => ({ answers: { P0 }, completed: false, consent_recorded: true, saved_at: '2026-09-30T18:00:00Z', revision: 1 })),
-    });
+    const api = makeApi({ getState: serverWithConsent() });
     await seedLocal(answersBeforeSafety(), 'N3', { dirty: true, editedAt: '2026-09-30T19:00:00Z', synced: { saved_at: '2026-09-30T18:00:00Z', revision: 1 } });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-N3'));
@@ -283,24 +279,25 @@ describe('A-02 consent-first PUT (backend #607)', () => {
     expect(Object.keys(api.save.mock.calls[0][0].answers).length).toBeGreaterThan(1);
   });
 
-  it('409 consent_missing on a save routes back to the agreement, unticked, and stops uploading', async () => {
+  it('409 consent_missing on a later save routes back to the agreement, unticked, and stops uploading', async () => {
     const save = jest.fn(async () => { throw conflict('consent_missing'); });
-    const api = makeApi({ save });
-    await seedLocal(answersBeforeSafety(), 'N3');
+    const api = makeApi({ save, getState: serverWithConsent() });
+    await seedLocal(answersBeforeSafety(), 'N3', { dirty: true, editedAt: '2026-09-30T19:00:00Z', synced: { saved_at: '2026-09-30T18:00:00Z', revision: 1 } });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-N3'));
     await fireEvent.press(r.getByTestId('consult-finish-later'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    expect(r.queryByTestId('consent-error')).toBeNull(); // not a version problem
     expect(save).toHaveBeenCalledTimes(1);
-    expect(Object.keys((save.mock.calls[0] as unknown as [{ answers: object }])[0].answers)).toEqual(['P0']);
     expect((await readLocalState('u1', NOW))?.answers.P0).toBeUndefined();
   });
 
   it('409 consent_missing on the final save at Prepare shows the agreement problem, not completion', async () => {
     const save = jest.fn(async () => { throw conflict('consent_missing'); });
-    const api = makeApi({ save });
-    await seedLocal(fullAnswers(), 'SUM');
+    const api = makeApi({ save, getState: serverWithConsent() });
+    await seedLocal(fullAnswers(), 'SUM', { dirty: true, editedAt: '2026-09-30T19:00:00Z', synced: { saved_at: '2026-09-30T18:00:00Z', revision: 1 } });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
@@ -317,22 +314,44 @@ describe('A-02 consent-first PUT (backend #607)', () => {
 describe('A-03 consent matches the displayed copy, fails closed', () => {
   const stale = { agreed: true, copy_version: 'obsolete-v0', agreed_at: '2025-01-01T00:00:00Z' } as never;
 
-  it('audit probe: a stale copy version resumes at P0 unticked and is never re-granted', async () => {
+  it('audit probe: a stale copy version resumes at P0 unticked and is never re-sent', async () => {
+    for (const P0 of [stale, { agreed: true, copy_version: 'consult-consent-v1', agreed_at: '2026-09-30T19:00:00.000Z' }] as never[]) {
+      await resetStores();
+      const api = makeApi({
+        complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'conflict', code: 'consent_missing' })),
+      });
+      await seedLocal(fullAnswers({ P0 }), 'SUM');
+      const r = await renderFlow(api);
+      await waitFor(() => r.getByTestId('consult-screen-P0'));
+      expect(r.queryByTestId('consult-screen-SUM')).toBeNull();
+      expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+      expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+      await tick();
+      expect(api.save).not.toHaveBeenCalled();
+      expect(api.grantRomanConsent).not.toHaveBeenCalled();
+      r.unmount();
+    }
+  });
+
+  it('a server P0 of the earlier copy (consult-consent-v1) is not honoured', async () => {
     const api = makeApi({
-      complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'conflict', code: 'consent_missing' })),
+      getState: jest.fn(async () => ({
+        answers: fullAnswers({ P0: { agreed: true, copy_version: 'consult-consent-v1', agreed_at: '2026-09-30T19:00:00.000Z' } as never }),
+        completed: false,
+        consent_recorded: true,
+        saved_at: '2026-09-30T20:00:00Z',
+        revision: 3,
+      })),
     });
-    await seedLocal(fullAnswers({ P0: stale }), 'SUM');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(r.queryByTestId('consult-screen-SUM')).toBeNull();
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
-    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
+    await tick();
     expect(api.save).not.toHaveBeenCalled();
   });
 
   it('malformed records route to P0 unticked', async () => {
-    for (const P0 of ['yes', { agreed: 'true' }, { agreed: true }, ['agreed']] as never[]) {
+    for (const P0 of ['yes', { agreed: 'true' }, { agreed: true }, ['agreed'], { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z', text_sha256: 'NOT-HEX' }] as never[]) {
       await resetStores();
       const api = makeApi();
       await seedLocal(fullAnswers({ P0 }), 'SUM');
@@ -344,64 +363,37 @@ describe('A-03 consent matches the displayed copy, fails closed', () => {
     }
   });
 
-  it('a revoked grant on the server sends the client back to P0 and is not silently undone', async () => {
-    const api = makeApi({
-      getConsentStatus: jest.fn(async () =>
-        consentStatus({ granted: false, revoked_at: '2026-09-30T19:30:00.000Z' }),
-      ),
-    });
-    await seedLocal(fullAnswers(), 'SUM');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
+  it('a server that no longer accepts this copy version (P0-only PUT rejected) fails closed with an update message', async () => {
+    const save = jest.fn(async (_body: { answers: object }) => { throw conflict('consent_missing'); });
+    const api = makeApi({ save });
+    const r = await toP0(api);
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consent-error'));
+    expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
+    expect(r.getByTestId('consent-error').props.children).toMatch(/update the app/);
+    expect(r.getByTestId('consent-error').props.children).not.toMatch(/Nothing has been sent/); // Opus C-3
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
-    expect(api.save).not.toHaveBeenCalled();
-    expect(api.complete).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(Object.keys(save.mock.calls[0][0].answers)).toEqual(['P0']);
+    await tick();
+    // Box 1 was rejected, so the optional box 2 grant is not sent either.
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    expect((await readLocalState('u1', NOW))?.answers.P0).toBeUndefined();
   });
 
-  it('a revocation made after resume is honoured at Prepare: nothing saved, completed or re-granted', async () => {
-    const getConsentStatus = jest.fn().mockResolvedValueOnce(consentStatus()).mockResolvedValue(NOT_GRANTED);
-    const api = makeApi({ getConsentStatus });
+  it('a version rejection at Prepare shows the update problem, not completion', async () => {
+    const save = jest.fn(async () => { throw conflict('consent_missing'); });
+    const api = makeApi({ save });
     await seedLocal(fullAnswers(), 'SUM');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
-    await waitFor(() => r.getByTestId('consult-problem-consent_missing'));
-    expect(api.save).not.toHaveBeenCalled();
+    await waitFor(() => r.getByTestId('consult-problem-consent_version_mismatch'));
     expect(api.complete).not.toHaveBeenCalled();
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
-    await fireEvent.press(r.getByTestId('consult-problem-action'));
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
-  });
-
-  it('a server version bump fails closed with an update message', async () => {
-    const api = makeApi({ getConsentStatus: jest.fn(async () => consentStatus({ current_version: 'client-ai-v3', needs_reconsent: true })) });
-    await seedLocal(fullAnswers(), 'SUM');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(r.getByTestId('consent-error').props.children).toMatch(/update the app/);
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
-    expect(api.save).not.toHaveBeenCalled();
-  });
-
-  it('409 CONSENT_VERSION_MISMATCH on the grant clears the box and sends nothing', async () => {
-    const api = makeApi({
-      grantOnboardingConsent: jest.fn(async () => ({ kind: 'version_mismatch' as const, current_version: 'client-ai-v3', waiver_current_version: 'pt-waiver-v1' })),
-    });
-    await seedLocal({}, 'P0');
-    const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-P0'));
-    await fireEvent.press(r.getByTestId('consent-checkbox'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
-    await waitFor(() => r.getByTestId('consent-error'));
-    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
-    expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-    expect(api.save).not.toHaveBeenCalled();
-    const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.P0).toBeUndefined();
   });
 
   it('409 consent_version_mismatch from complete fails closed back to P0', async () => {
@@ -413,10 +405,107 @@ describe('A-03 consent matches the displayed copy, fails closed', () => {
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => r.getByTestId('consult-problem-consent_version_mismatch'));
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
     await fireEvent.press(r.getByTestId('consult-problem-action'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+  });
+});
+
+// ── D2 box 2 ─────────────────────────────────────────────────────────────────
+
+describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, never blocking', () => {
+  it('ticked: POST /me/ai-consent/roman after the P0 save, with client-ai-v3 and the box 2 copy hash; the flow does not wait', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    const grantRomanConsent = jest.fn(() => new Promise((res) => { release = res; }));
+    const api = makeApi({ grantRomanConsent });
+    const r = await toP0(api);
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: true });
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    // The client is already on G1 while the grant is still pending.
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+    expect(api.save.mock.invocationCallOrder[0]).toBeLessThan(grantRomanConsent.mock.invocationCallOrder[0]);
+    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v3', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    // Never on the intake: box 2 is not part of any PUT.
+    for (const [body] of api.save.mock.calls) expect(JSON.stringify(body)).not.toMatch(/client-ai|anthropic/i);
+    release({ kind: 'ok', status: null });
+  });
+
+  it('a failed grant is retried once and then left for Settings; onboarding continues and completes', async () => {
+    const grantRomanConsent = jest.fn(async () => ({ kind: 'error' as const, status: 500 }));
+    const api = makeApi({ grantRomanConsent });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    expect(grantRomanConsent).toHaveBeenCalledTimes(2);
+    expect(r.queryByTestId('consent-error')).toBeNull();
+  });
+
+  it('while the ledger is not deployed (404 / 503) the grant is skipped silently, with no retry', async () => {
+    for (const _status of [404, 503]) {
+      await resetStores();
+      const grantRomanConsent = jest.fn(async () => ({ kind: 'unavailable' as const }));
+      const api = makeApi({ grantRomanConsent });
+      await seedLocal({}, 'P0');
+      const r = await renderFlow(api);
+      await waitFor(() => r.getByTestId('consult-screen-P0'));
+      await fireEvent.press(r.getByTestId('consent-checkbox'));
+      await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+      await fireEvent.press(r.getByTestId('consult-continue'));
+      await waitFor(() => r.getByTestId('consult-screen-G1'));
+      await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+      await tick();
+      expect(grantRomanConsent).toHaveBeenCalledTimes(1);
+      r.unmount();
+    }
+  });
+
+  it('back on P0 later, box 2 shows the earlier choice; unticking it withdraws (DELETE), box 1 stays', async () => {
+    const api = makeApi();
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: true });
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: true });
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(1));
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
+  });
+
+  it('C-1: a double tap on Continue records the agreement and the optional grant once', async () => {
+    const api = makeApi();
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    const cont = r.getByTestId('consult-continue');
+    await act(async () => {
+      fireEvent.press(cont);
+      fireEvent.press(cont);
+    });
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -487,6 +576,23 @@ describe('A-04 encrypted, bounded, purged draft', () => {
     expect(await readLocalState('u1', new Date(written.getTime() + DRAFT_RETENTION_MS - 1000))).not.toBeNull();
     expect(await readLocalState('u1', new Date(written.getTime() + DRAFT_RETENTION_MS + 1000))).toBeNull();
     expect([...secure.__store.keys()].filter((k) => k.startsWith('consult_draft.u1.'))).toEqual([]);
+  });
+
+  it('C-7: a draft left in the Keychain by an earlier install is deleted, not resumed', async () => {
+    await writeLocalState('u1', { screenId: 'P4', answers: sensitive });
+    expect(await AsyncStorage.getItem(installMarkerKey('u1'))).toBe('1');
+    // Reinstall: AsyncStorage is wiped with the app, the Keychain is not.
+    await AsyncStorage.clear();
+    expect(secure.__store.has(manifestKey('u1'))).toBe(true);
+    expect(await readLocalState('u1')).toBeNull();
+    expect([...secure.__store.keys()].filter((k) => k.startsWith('consult_draft.u1.'))).toEqual([]);
+  });
+
+  it('the install marker holds no answer data and is removed by a purge', async () => {
+    await writeLocalState('u1', { screenId: 'P4', answers: sensitive });
+    expect(installMarkerKey('u1')).not.toMatch(/P4|Sensitive/);
+    await purgeConsultationDraft('u1');
+    expect(await AsyncStorage.getItem(installMarkerKey('u1'))).toBeNull();
   });
 
   it('a corrupt draft is deleted rather than kept', async () => {

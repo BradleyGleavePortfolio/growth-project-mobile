@@ -1,8 +1,8 @@
 /**
  * ConsultationFlow render tests with a mocked API (the backend endpoints are
  * built in a separate slice). Covers: W1 render with Roman's face, rows
- * auto-advance and back, per-chapter save, the P0 "I agree" gate and its
- * consent record, the P8 branch (shown on a yes, never blocks), resume,
+ * auto-advance and back, per-chapter save, the P0 two-box agreement (D2)
+ * and its intake record, the P8 branch (shown on a yes, never blocks), resume,
  * the complete-call happy path through macro and plan reveals, and 409
  * handling (consultation_incomplete, consent_missing, not_attached).
  */
@@ -13,6 +13,7 @@ import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { makeApi, RESULT, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import { readLocalState } from '../../../lib/consultation/storage';
+import { CONSENT_COPY_SHA256 } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
@@ -87,10 +88,13 @@ describe('ConsultationFlow', () => {
     // Consent first (backend #607): P0 on its own, then the chapter.
     expect(api.save).toHaveBeenCalledTimes(2);
     expect(api.save).toHaveBeenNthCalledWith(1, { version: 'consult-v1', answers: { P0 } });
-    expect(api.save).toHaveBeenNthCalledWith(2, {
-      version: 'consult-v1',
-      answers: { P0, G1: 'fat_loss', G2: ['energy', 'strength', 'family'] },
-    });
+    const second = api.save.mock.calls[1][0];
+    expect(second.version).toBe('consult-v1');
+    // The answers given, plus explicit clears (null) for closed details and
+    // hidden screens (Opus B-06); nothing else.
+    const given = Object.fromEntries(Object.entries(second.answers).filter(([, v]) => v !== null));
+    expect(given).toEqual({ P0, G1: 'fat_loss', G2: ['energy', 'strength', 'family'] });
+    expect(second.answers).toHaveProperty('G2_other', null);
   });
 
   it('resumes on the saved screen', async () => {
@@ -99,21 +103,31 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-N3'));
   });
 
-  it('gates P0 on the single I agree box and records the combined consent before any save', async () => {
+  it('P0 shows the D2 copy with two boxes; box 1 gates Continue and is recorded by the intake first', async () => {
     const api = makeApi();
     await seedLocal({}, 'P0');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(r.getByText(/Roman is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
+    expect(r.getByText('Before we start')).toBeTruthy();
+    expect(r.getByText(/Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
+    expect(r.getByText(/If you joined through a clinic, the clinic does not see it\./)).toBeTruthy();
+    expect(r.getByTestId('consent-footer').props.children).toBe(
+      'Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman\u2019s guided tour works either way.',
+    );
     // Chapter 0: no progress bar and no Finish later before the agreement.
     expect(r.queryByTestId('consult-finish-later')).toBeNull();
     expect(r.queryByTestId('consult-progress')).toBeNull();
 
     const cont = () => r.getByTestId('consult-continue');
     expect(cont().props.accessibilityState).toMatchObject({ disabled: true });
+    // Box 2 alone never unlocks Continue; it is unticked by default.
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: false });
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    expect(cont().props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
     await fireEvent.press(cont());
     expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
+    expect(api.save).not.toHaveBeenCalled();
 
     const box = r.getByTestId('consent-checkbox');
     expect(box.props.accessibilityRole).toBe('checkbox');
@@ -121,16 +135,19 @@ describe('ConsultationFlow', () => {
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: true });
     await fireEvent.press(cont());
     await waitFor(() => r.getByTestId('consult-screen-G1'));
-    expect(api.grantOnboardingConsent).toHaveBeenCalledWith(
-      expect.objectContaining({ ai_consent_version: 'client-ai-v2', waiver_version: 'pt-waiver-v1', platform: 'ios' }),
-    );
-    // The first server write carries only the recorded agreement, after the grant.
+    // The first server write carries only the agreement, with v2 and the pinned hash.
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
-    expect(api.grantOnboardingConsent.mock.invocationCallOrder[0]).toBeLessThan(api.save.mock.invocationCallOrder[0]);
     expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
+    expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
+      agreed: true,
+      copy_version: 'consult-consent-v2',
+      text_sha256: CONSENT_COPY_SHA256,
+    });
+    // Box 2 was left unticked: nothing goes to the AI consent ledger.
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
 
     const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v1' });
+    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v2' });
   });
 
   it('skips P8 when every screening answer is no', async () => {
@@ -263,7 +280,7 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-G1'));
   });
 
-  it('409 consent_missing re-reads the record, saves again and retries once, never re-granting', async () => {
+  it('409 consent_missing resends the saved P0 alone and retries once, never ticking a box', async () => {
     const complete = jest
       .fn<Promise<CompleteOutcome>, []>()
       .mockResolvedValueOnce({ kind: 'conflict', code: 'consent_missing' })
@@ -274,7 +291,7 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => r.getByTestId('consult-screen-MACRO'));
-    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
     // Each attempt sends P0 on its own first, then the full set.
     expect(api.save).toHaveBeenCalledTimes(4);
     expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
@@ -352,5 +369,125 @@ describe('ConsultationFlow', () => {
     ];
     expect(pressables.length).toBeGreaterThan(5);
     for (const p of pressables) expect(p.props.accessibilityLabel).toBeTruthy();
+  });
+});
+
+// ── Opus fix round (#310 @ 3606b63): B-06, C-2, C-4, C-6 ─────────────────────
+
+const P0_CURRENT = fullAnswers().P0;
+const synced = { dirty: true, editedAt: '2026-09-30T19:00:00Z', synced: { saved_at: '2026-09-30T18:00:00Z', revision: 1 } };
+const serverWithConsent = () =>
+  jest.fn(async () => ({ answers: { P0: P0_CURRENT }, completed: false, consent_recorded: true, saved_at: '2026-09-30T18:00:00Z', revision: 1 }));
+type SaveMock = jest.Mock & { mock: { calls: Array<[{ answers: Record<string, unknown> }]> } };
+const lastBody = (save: jest.Mock) => {
+  const calls = (save as SaveMock).mock.calls;
+  return calls[calls.length - 1][0].answers;
+};
+
+describe('B-06 cleared details are cleared on the server (null), not kept', () => {
+  it('deselecting "other" on G2 sends G2_other: null with the chapter save', async () => {
+    const api = makeApi({ getState: serverWithConsent() });
+    await seedLocal({ P0: P0_CURRENT, G1: 'fat_loss', G2: ['energy', 'other'], G2_other: 'Run a 10k' }, 'G2', synced);
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-G2'));
+    await fireEvent.press(r.getByTestId('consult-chip-other'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => expect(api.save).toHaveBeenCalled());
+    const body = lastBody(api.save);
+    expect(body.G2).toEqual(['energy']);
+    expect(body).toHaveProperty('G2_other', null);
+  });
+
+  it('emptying the T3 note while T3 is still yes sends T3_note: null', async () => {
+    const a = answersBeforeSafety();
+    Object.assign(a, { T3: 'yes', T3_areas: ['knee'], T3_note: 'Old surgery on the left knee' });
+    const api = makeApi({ getState: serverWithConsent() });
+    await seedLocal(a, 'T3', synced);
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-T3'));
+    await fireEvent.changeText(r.getByTestId('consult-detail-text-T3'), '');
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => expect(api.save).toHaveBeenCalled());
+    const body = lastBody(api.save);
+    expect(body.T3).toBe('yes');
+    expect(body.T3_areas).toEqual(['knee']);
+    expect(body).toHaveProperty('T3_note', null);
+    expect(JSON.stringify(body)).not.toContain('Old surgery');
+  });
+});
+
+describe('C-2 save rejections get accurate copy', () => {
+  it('409 completion_in_progress on the final save shows "already being prepared", not a connection problem', async () => {
+    const save = jest.fn(async () => {
+      throw Object.assign(new Error('409'), { response: { status: 409, data: { code: 'completion_in_progress' } } });
+    });
+    const api = makeApi({ save, getState: serverWithConsent() });
+    await seedLocal(fullAnswers(), 'SUM', synced);
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-problem-completion_in_progress'));
+    expect(api.complete).not.toHaveBeenCalled();
+  });
+
+  it('400 invalid_answers on the final save asks the client to review, and goes back to the summary', async () => {
+    const save = jest.fn(async () => {
+      throw Object.assign(new Error('400'), { response: { status: 400, data: { code: 'invalid_answers' } } });
+    });
+    const api = makeApi({ save, getState: serverWithConsent() });
+    await seedLocal(fullAnswers(), 'SUM', synced);
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-problem-invalid_answers'));
+    expect(r.queryByText(/check your connection|couldn't reach/i)).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-problem-action'));
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+  });
+});
+
+describe('C-4 macro display mode', () => {
+  it('simple mode (never-trackers, week one) shows calories and protein only', async () => {
+    const api = makeApi({
+      complete: jest.fn(async (): Promise<CompleteOutcome> => ({
+        kind: 'ok',
+        data: { ...RESULT, macro_display_mode: 'simple', simple_until: '2026-10-07' },
+      })),
+    });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    expect(r.getByTestId('macro-calories')).toBeTruthy();
+    expect(r.getByTestId('macro-protein')).toBeTruthy();
+    expect(r.queryByTestId('macro-carbs')).toBeNull();
+    expect(r.queryByTestId('macro-fat')).toBeNull();
+    await fireEvent.press(r.getByTestId('macro-why'));
+    expect(r.getByTestId('macro-simple-note')).toBeTruthy();
+  });
+
+  it('full mode (and an older server without the field) shows all four', async () => {
+    const api = makeApi({
+      complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'ok', data: { ...RESULT, macro_display_mode: 'full' } })),
+    });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    expect(r.getByTestId('macro-carbs').props.children).toBe('185 g');
+    expect(r.getByTestId('macro-fat').props.children).toBe('50 g');
+  });
+});
+
+describe('C-6 keyboard', () => {
+  it('the question body scrolls the notes above the keyboard', async () => {
+    await seedLocal(answersBeforeSafety(), 'T3');
+    const r = await renderFlow(makeApi());
+    await waitFor(() => r.getByTestId('consult-screen-T3'));
+    const scroll = r.getByTestId('consult-scroll');
+    expect(scroll.props.automaticallyAdjustKeyboardInsets).toBe(true);
+    expect(scroll.props.keyboardShouldPersistTaps).toBe('handled');
   });
 });

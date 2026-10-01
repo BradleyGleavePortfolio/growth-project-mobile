@@ -6,18 +6,25 @@
  * resume rules live in the pure engine (`lib/consultation/engine.ts`), resume
  * reconciliation in `lib/consultation/resume.ts`.
  *
- * Consent first (Sol A-02, A-03; operator decision 2026-09-30):
- *   - P0, the single "I agree" box, comes straight after W1. Ticking it and
- *     pressing Continue records POST /me/ai-consent/onboarding with the
- *     versions the displayed copy is bound to (CONSENT_BINDING). Only a 2xx
- *     counts; nothing is sent to PUT /me/onboarding/consultation before it.
- *   - 409 CONSENT_VERSION_MISMATCH fails closed: the box is cleared, nothing
- *     is uploaded, and the client is asked to update the app.
- *   - A stored P0 is honoured only when it matches this build's copy version
- *     AND the server record (GET /me/ai-consent) is a live grant of the bound
- *     versions. Stale, malformed or revoked records send the client back to P0
- *     with the box unticked. The app never re-grants on its own: a grant is
- *     only ever sent from an explicit tick.
+ * Consent first (Sol A-02, A-03; D2 ruling 2026-10-01, two boxes on P0):
+ *   - P0 comes straight after W1. Box 1 (waiver, collection and use for
+ *     coaching) is required to continue; box 2 (Roman and AI drafts,
+ *     processed by Anthropic) is optional and unticked by default.
+ *   - Box 1 is recorded by the onboarding intake (backend #607): the first
+ *     PUT /me/onboarding/consultation carries P0 alone, with this build's
+ *     copy version and the sha256 of the text shown; nothing else is sent
+ *     before it. 409 consent_missing on that P0-only PUT means the server no
+ *     longer accepts this copy version: the box is cleared and the client is
+ *     asked to update the app. On any later save it sends the client back to
+ *     P0, unticked.
+ *   - Box 2, when ticked, is recorded after the P0 save by
+ *     POST /me/ai-consent/roman (R2a). Non-blocking: it never holds the
+ *     flow, is retried once, is skipped silently while the ledger is not
+ *     deployed (404 / 503), and is otherwise left for Settings > Privacy.
+ *     It is never required for completion.
+ *   - A stored P0 is honoured only when it matches this build's copy
+ *     version; stale or malformed records send the client back to P0 with
+ *     both boxes unticked. The app never ticks a box on its own.
  *
  * Saving (Sol B-02):
  *   - every answer is written to the encrypted local draft;
@@ -34,16 +41,16 @@
  * which is reached only through a successful complete call.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, BackHandler, Platform, View } from 'react-native';
-import * as Crypto from 'expo-crypto';
+import { ActivityIndicator, BackHandler, View } from 'react-native';
 import {
-  consultationApi as defaultApi,
+  consultationApi,
   CompleteOnboardingResponse,
   CompleteOutcome,
-  ConsentStatusResponse,
   conflictCodeOf,
   httpStatusOf,
 } from '../../api/consultationApi';
+import { aiConsentApi } from '../../api/aiConsentApi';
+import { grantRomanWithRetry } from '../../lib/consultation/aiConsent';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -53,6 +60,7 @@ import {
   endsChapter,
   firstIncompleteScreenId,
   firstScreenOfChapter,
+  hasAnswersBeyondConsent,
   isConsentAnswerCurrent,
   isSatisfied,
   lastScreenOfChapter,
@@ -60,7 +68,6 @@ import {
   previousScreenId,
   resumeScreenId,
 } from '../../lib/consultation/engine';
-import { CONSENT_BINDING, consentCopyText } from '../../lib/consultation/copy';
 import { DraftHandle, openDraft, purgeConsultationDraft, readLocalState, SyncedMarker, writeDraft } from '../../lib/consultation/storage';
 import { reconcileResume } from '../../lib/consultation/resume';
 import type { AnswerValue, Answers, ChapterId } from '../../lib/consultation/types';
@@ -77,10 +84,20 @@ import {
   SummaryScreen,
 } from './RevealScreens';
 
-export type ConsultationApi = Pick<
-  typeof defaultApi,
-  'save' | 'getState' | 'complete' | 'grantOnboardingConsent' | 'getConsentStatus'
->;
+export type ConsultationApi = Pick<typeof consultationApi, 'save' | 'getState' | 'complete'> & {
+  /** Box 2: POST /me/ai-consent/roman (R2a). */
+  grantRomanConsent: typeof aiConsentApi.grantRoman;
+  /** Box 2 unticked again on a later visit to P0: DELETE /me/ai-consent/roman. */
+  withdrawRomanConsent: typeof aiConsentApi.withdrawRoman;
+};
+
+const defaultApi: ConsultationApi = {
+  save: consultationApi.save,
+  getState: consultationApi.getState,
+  complete: consultationApi.complete,
+  grantRomanConsent: aiConsentApi.grantRoman,
+  withdrawRomanConsent: aiConsentApi.withdrawRoman,
+};
 
 export interface ConsultationFlowProps {
   userId: string | null;
@@ -97,29 +114,16 @@ export interface ConsultationFlowProps {
 
 type Phase = 'loading' | 'question' | 'summary' | 'preparing' | 'macro' | 'plan' | 'paused' | 'problem';
 
-/** Consent state for this session. Only 'verified' allows a server save. */
-type ConsentState = 'none' | 'unverified' | 'verified';
-type ConsentCheck = 'ok' | 'invalid' | 'mismatch' | 'unreachable';
-export type ConsentError = 'network' | 'version_mismatch' | null;
+export type ConsentError = 'version_mismatch' | null;
 
-/** Does a server consent record grant exactly what this build's P0 copy covers? */
-export function checkConsentStatus(status: ConsentStatusResponse | null | undefined): Exclude<ConsentCheck, 'unreachable'> {
-  const r = status?.roman;
-  if (!r) return 'invalid';
-  if (
-    r.current_version !== CONSENT_BINDING.ai_consent_version ||
-    (r.waiver_current_version != null && r.waiver_current_version !== CONSENT_BINDING.waiver_version)
-  ) {
-    return 'mismatch';
-  }
-  const live = r.granted === true && !!r.granted_at && (!r.revoked_at || Date.parse(r.revoked_at) < Date.parse(r.granted_at));
-  if (!live || r.needs_reconsent) return 'invalid';
-  if (r.version !== CONSENT_BINDING.ai_consent_version) return 'invalid';
-  if (r.waiver_version !== CONSENT_BINDING.waiver_version) return 'invalid';
-  return 'ok';
-}
-
-type SaveOutcome = 'ok' | 'consent' | 'error';
+/**
+ * Save outcomes. 'consent': the agreement is missing or was rejected (back
+ * to P0). 'version': the P0-only PUT was rejected, so the server does not
+ * accept this copy version (update the app). 'busy': 409
+ * completion_in_progress. 'invalid': 400 invalid_answers. 'error': network
+ * or anything else.
+ */
+type SaveOutcome = 'ok' | 'consent' | 'version' | 'busy' | 'invalid' | 'error';
 
 interface SaveQueue {
   tail: Promise<SaveOutcome>;
@@ -147,7 +151,6 @@ export default function ConsultationFlow({
   const [answers, setAnswersState] = useState<Answers>({});
   const [result, setResult] = useState<CompleteOnboardingResponse | null>(null);
   const [problem, setProblem] = useState<CompleteProblem>('unknown');
-  const [consentBusy, setConsentBusy] = useState(false);
   const [consentError, setConsentError] = useState<ConsentError>(null);
   const [consentNonce, setConsentNonce] = useState(0);
   const answersRef = useRef<Answers>({});
@@ -160,7 +163,6 @@ export default function ConsultationFlow({
   const dirty = useRef(false);
   const editedAt = useRef<string>(new Date(0).toISOString());
   const synced = useRef<SyncedMarker | null>(null);
-  const consent = useRef<ConsentState>('none');
   const queue = useRef<SaveQueue>(newQueue());
   /**
    * Whether the server already holds this session's P0. Backend #607 is
@@ -168,6 +170,15 @@ export default function ConsultationFlow({
    * so the queue sends that first and only then the rest of the answers.
    */
   const consentOnServer = useRef(false);
+  /**
+   * Box 2 for this session: what the client last chose on P0, and a chain
+   * that keeps the grant / withdraw requests in order (one per change).
+   */
+  const aiChoice = useRef(false);
+  const [aiChoiceShown, setAiChoiceShown] = useState(false);
+  const aiChain = useRef<Promise<void>>(Promise.resolve());
+  /** P0 Continue is handled once per visit to P0 (Opus C-1 double tap). */
+  const p0Handled = useRef(false);
   const now = nowFn();
   const ctx: CopyContext = { firstName, coachName: result?.coach?.display_name ?? coachName, now };
 
@@ -217,6 +228,7 @@ export default function ConsultationFlow({
           setAnswers(a);
         }
       }
+      if (id === 'P0' && screenRef.current !== 'P0') p0Handled.current = false;
       screenRef.current = id;
       setScreenId(id);
       setPhaseBoth('question');
@@ -228,8 +240,8 @@ export default function ConsultationFlow({
   /** Remove the stored P0 and show the agreement unticked. */
   const dropConsent = useCallback(
     (error: ConsentError = null) => {
-      consent.current = 'none';
       consentOnServer.current = false;
+      p0Handled.current = false;
       const next = { ...answersRef.current };
       delete next.P0;
       setAnswers(next);
@@ -240,37 +252,14 @@ export default function ConsultationFlow({
     [setAnswers],
   );
 
-  const fetchConsentCheck = useCallback(async (): Promise<ConsentCheck> => {
-    try {
-      return checkConsentStatus(await api.getConsentStatus());
-    } catch (err) {
-      logger.warn('ConsultationFlow', 'consent status unavailable; uploads held', err);
-      return 'unreachable';
-    }
-  }, [api]);
-
-  /**
-   * The upload gate. True only when this session has a recorded or verified
-   * agreement matching the displayed copy. `fresh` re-reads the server record
-   * (used before completion, to honour a revocation made elsewhere).
-   */
-  const ensureConsent = useCallback(
-    async (gen: number, fresh = false): Promise<ConsentCheck> => {
-      if (!isConsentAnswerCurrent(answersRef.current.P0)) return 'invalid';
-      if (consent.current === 'verified' && !fresh) return 'ok';
-      if (consent.current === 'none') return 'invalid';
-      const check = await fetchConsentCheck();
-      if (gen !== generation.current) return 'unreachable';
-      if (check === 'ok') consent.current = 'verified';
-      return check;
-    },
-    [fetchConsentCheck],
-  );
+  /** The upload gate: only a current, affirmative P0 (box 1) allows a server save. */
+  const consentCurrent = useCallback(() => isConsentAnswerCurrent(answersRef.current.P0), []);
 
   /**
    * Enqueue a save of `ans`. Serialized and coalesced. Resolves 'ok' on a 2xx,
-   * 'consent' when the agreement is missing, stale or rejected by the server
-   * (the client is taken back to P0, unticked), 'error' otherwise.
+   * 'consent' / 'version' when the agreement is missing, stale or rejected
+   * by the server (the client is taken back to P0, unticked), and 'busy',
+   * 'invalid' or 'error' otherwise (see SaveOutcome).
    */
   const enqueueSave = useCallback(
     (ans: Answers): Promise<SaveOutcome> => {
@@ -282,7 +271,7 @@ export default function ConsultationFlow({
       const backToAgreement = (error: ConsentError = null): SaveOutcome => {
         const next = dropConsent(error);
         if (phaseRef.current === 'question' || phaseRef.current === 'paused') showScreen('P0', next);
-        return 'consent';
+        return error === 'version_mismatch' ? 'version' : 'consent';
       };
       const put = async (answers: Answers) => {
         const res = await api.save({ version: CONSULTATION_VERSION, answers });
@@ -296,26 +285,26 @@ export default function ConsultationFlow({
         const snapshot = q.pending;
         q.pending = null;
         if (!snapshot || q.closed || gen !== generation.current) return 'error';
-        const gate = await ensureConsent(gen);
-        if (gen !== generation.current || q.closed) return 'error';
-        if (gate !== 'ok') {
-          if (gate === 'invalid' || gate === 'mismatch') {
-            // Revoked, stale or never recorded: nothing goes up, and the
-            // client is taken back to the agreement with the box unticked.
-            logger.warn('ConsultationFlow', `save held: consent ${gate}`);
-            return backToAgreement(gate === 'mismatch' ? 'version_mismatch' : null);
-          }
-          return 'error';
+        if (!isConsentAnswerCurrent(snapshot.P0) || !consentCurrent()) {
+          // Stale or never recorded: nothing goes up, and the client is
+          // taken back to the agreement with the boxes unticked.
+          logger.warn('ConsultationFlow', 'save held: no current agreement');
+          return backToAgreement(null);
         }
+        let p0Only = false;
         try {
           const body = answersForSave(snapshot);
-          if (!consentOnServer.current) {
+          const hadServerConsent = consentOnServer.current;
+          if (!hadServerConsent) {
             // Consent first: P0 alone, then (separately) everything else.
+            p0Only = true;
             await put({ P0: body.P0 });
+            p0Only = false;
             if (gen !== generation.current) return 'error';
             consentOnServer.current = true;
           }
-          if (Object.keys(body).some((k) => k !== 'P0')) {
+          // Clears (null) matter only once the server may hold answers.
+          if (hasAnswersBeyondConsent(body) || hadServerConsent) {
             await put(body);
             if (gen !== generation.current) return 'error';
           }
@@ -324,11 +313,18 @@ export default function ConsultationFlow({
           return 'ok';
         } catch (err) {
           if (gen !== generation.current) return 'error';
-          if (httpStatusOf(err) === 409 && conflictCodeOf(err) === 'consent_missing') {
-            // The server has no current agreement on file (outdated copy,
-            // revoked, or never stored). Fail closed back to P0.
+          const status = httpStatusOf(err);
+          if (status === 409 && conflictCodeOf(err) === 'consent_missing') {
+            // P0 alone was rejected: backend #607 does that only when it does
+            // not accept this copy version, so ask for an update. Otherwise
+            // the server has no current agreement on file: back to P0.
             logger.warn('ConsultationFlow', 'save rejected: consent_missing; back to the agreement');
-            return backToAgreement(null);
+            return backToAgreement(p0Only ? 'version_mismatch' : null);
+          }
+          if (status === 409 && conflictCodeOf(err) === 'completion_in_progress') return 'busy';
+          if (status === 400) {
+            logger.warn('ConsultationFlow', 'save rejected: invalid answers; kept on this device');
+            return 'invalid';
           }
           logger.warn('ConsultationFlow', 'save failed; kept on this device', err);
           return 'error';
@@ -338,7 +334,7 @@ export default function ConsultationFlow({
       q.tail = run.catch((): SaveOutcome => 'error');
       return run;
     },
-    [api, dropConsent, ensureConsent, persistLocal, showScreen],
+    [api, consentCurrent, dropConsent, persistLocal, showScreen],
   );
 
   // ── Load and resume ────────────────────────────────────────────────────
@@ -347,8 +343,10 @@ export default function ConsultationFlow({
     queue.current.closed = true;
     queue.current = newQueue();
     draft.current = openDraft(userId);
-    consent.current = 'none';
     consentOnServer.current = false;
+    aiChoice.current = false;
+    setAiChoiceShown(false);
+    aiChain.current = Promise.resolve();
     const live = () => gen === generation.current;
     (async () => {
       const local = await readLocalState(userId, nowFn());
@@ -374,25 +372,15 @@ export default function ConsultationFlow({
       synced.current = decision.synced;
       editedAt.current = local?.editedAt ?? new Date(0).toISOString();
 
-      let resumeConsentError: ConsentError = null;
-      if (ans.P0 !== undefined) {
-        if (!isConsentAnswerCurrent(ans.P0)) {
-          ans = { ...ans };
-          delete ans.P0;
-        } else {
-          const check = await fetchConsentCheck();
-          if (!live()) return;
-          if (check === 'ok') consent.current = 'verified';
-          else if (check === 'unreachable') consent.current = 'unverified';
-          else {
-            ans = { ...ans };
-            delete ans.P0;
-            if (check === 'mismatch') resumeConsentError = 'version_mismatch';
-          }
-        }
+      // A stored P0 counts only when it matches this build's copy version
+      // (Sol A-03); a stale or malformed one shows P0 again, unticked.
+      if (ans.P0 !== undefined && !isConsentAnswerCurrent(ans.P0)) {
+        ans = { ...ans };
+        delete ans.P0;
+        consentOnServer.current = false;
       }
       setAnswers(ans, false);
-      setConsentError(resumeConsentError);
+      setConsentError(null);
       const id = resumeScreenId(decision.screenId, ans, nowFn());
       if (id === 'SUM') {
         persistLocal(ans, 'SUM');
@@ -411,41 +399,42 @@ export default function ConsultationFlow({
   }, [userId]);
 
   // ── Consent (P0) ───────────────────────────────────────────────────────
-  const recordConsent = useCallback(
-    async (record: Answers['P0']): Promise<boolean> => {
+  /**
+   * Box 2 (optional): after the P0 save settles, record the Roman and AI
+   * choice. Never awaited by the flow. Only a change is sent: ticking it
+   * grants (POST, one retry), unticking it again on a later visit to P0
+   * withdraws (DELETE). 404 / 503 are skipped silently; anything else is
+   * left for Settings > Privacy > Roman and AI.
+   */
+  const recordAiChoice = useCallback(
+    (p0Saved: Promise<SaveOutcome>, allow: boolean) => {
+      if (allow === aiChoice.current) return;
+      aiChoice.current = allow;
+      setAiChoiceShown(allow);
       const gen = generation.current;
-      setConsentBusy(true);
-      setConsentError(null);
-      let sha: string | undefined;
-      try {
-        const digest = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, consentCopyText());
-        sha = /^[a-f0-9]{64}$/i.test(digest) ? digest : undefined;
-      } catch {
-        sha = undefined;
-      }
-      const outcome = await api.grantOnboardingConsent({
-        ai_consent_version: CONSENT_BINDING.ai_consent_version,
-        waiver_version: CONSENT_BINDING.waiver_version,
-        copy_sha256: sha,
-        platform: Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web',
-      });
-      if (gen !== generation.current) return false;
-      setConsentBusy(false);
-      if (outcome.kind === 'ok') {
-        consent.current = 'verified';
-        const next = { ...answersRef.current, P0: record as AnswerValue };
-        setAnswers(next);
-        return true;
-      }
-      if (outcome.kind === 'version_mismatch') {
-        logger.warn('ConsultationFlow', 'consent copy version rejected by the server; failing closed');
-        dropConsent('version_mismatch');
-        return false;
-      }
-      setConsentError('network');
-      return false;
+      aiChain.current = aiChain.current.then(async () => {
+        const saved = await p0Saved;
+        if (gen !== generation.current) return;
+        if (allow && (saved === 'consent' || saved === 'version')) {
+          // Box 1 was rejected: the client is back on P0 and chooses again.
+          aiChoice.current = false;
+          setAiChoiceShown(false);
+          return;
+        }
+        if (allow) {
+          const result = await grantRomanWithRetry(api.grantRomanConsent);
+          if (result !== 'granted' && result !== 'unavailable') {
+            logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
+          }
+          return;
+        }
+        const out = await api.withdrawRomanConsent().catch(() => ({ kind: 'error' as const, status: null }));
+        if (out.kind !== 'ok' && out.kind !== 'unavailable') {
+          logger.warn('ConsultationFlow', 'optional AI withdrawal not recorded; left for Settings');
+        }
+      }).catch(() => undefined);
     },
-    [api, dropConsent, setAnswers],
+    [api],
   );
 
   // ── Navigation ─────────────────────────────────────────────────────────
@@ -495,28 +484,27 @@ export default function ConsultationFlow({
   );
 
   const onNext = useCallback(
-    (patch?: Answers) => {
+    (patch?: Answers, aiAllowed = false) => {
       clearTimer();
       const from = screenRef.current;
       if (from === 'P0') {
-        if (consentBusy) return;
+        // Handled once per visit (Opus C-1): a double tap records once.
+        if (p0Handled.current) return;
         const record = patch?.P0 ?? answersRef.current.P0;
         if (!isConsentAnswerCurrent(record)) return;
-        void (async () => {
-          if (consent.current === 'verified' && isConsentAnswerCurrent(answersRef.current.P0)) {
-            goNext('P0', answersRef.current);
-            return;
-          }
-          if (await recordConsent(record)) {
-            const ans = answersRef.current;
-            persistLocal(ans, 'P0');
-            // The server copy starts with the recorded agreement (backend #607 reads P0).
-            void enqueueSave(ans);
-            goNext('P0', ans);
-          }
-        })();
+        p0Handled.current = true;
+        const ans = { ...answersRef.current, P0: record as AnswerValue };
+        setAnswers(ans);
+        setConsentError(null);
+        persistLocal(ans, 'P0');
+        // Box 1: the intake starts with the agreement (P0 alone first).
+        const saved = enqueueSave(ans);
+        // Box 2: optional, recorded after the P0 save, never blocking.
+        recordAiChoice(saved, aiAllowed);
+        goNext('P0', ans);
         return;
       }
+      if (patch && 'P0' in patch) return; // stale tap from an unmounting P0
       let ans = answersRef.current;
       if (patch) {
         ans = { ...ans, ...patch };
@@ -524,7 +512,7 @@ export default function ConsultationFlow({
       }
       goNext(from, ans);
     },
-    [clearTimer, consentBusy, enqueueSave, goNext, persistLocal, recordConsent, setAnswers],
+    [clearTimer, enqueueSave, goNext, persistLocal, recordAiChoice, setAnswers],
   );
 
   const onBack = useCallback(() => {
@@ -579,16 +567,19 @@ export default function ConsultationFlow({
       setProblem(p);
       setPhaseBoth('problem');
     };
-    const consentFailure = async (check: ConsentCheck) => {
-      if (check === 'unreachable') return fail('network');
-      dropConsent(check === 'mismatch' ? 'version_mismatch' : null);
-      return fail(check === 'mismatch' ? 'consent_version_mismatch' : 'consent_missing');
+    const savedFailure = (out: SaveOutcome) => {
+      if (out === 'consent') return fail('consent_missing');
+      if (out === 'version') return fail('consent_version_mismatch');
+      if (out === 'busy') return fail('completion_in_progress');
+      if (out === 'invalid') return fail('invalid_answers');
+      return fail('network');
     };
 
-    // 1. The agreement must still be live on the server (a revocation wins).
-    const gate = await ensureConsent(gen, true);
-    if (!live()) return;
-    if (gate !== 'ok') return consentFailure(gate);
+    // 1. Box 1 must be on file (box 2 is never required).
+    if (!consentCurrent()) {
+      dropConsent(null);
+      return fail('consent_missing');
+    }
 
     // 2. Drain the save queue with the final snapshot, then close it.
     const saveFinal = async () => {
@@ -599,27 +590,31 @@ export default function ConsultationFlow({
     };
     const saved = await saveFinal();
     if (!live()) return;
-    if (saved === 'consent') return fail('consent_missing');
-    if (saved !== 'ok') return fail('network');
+    if (saved !== 'ok') return savedFailure(saved);
 
-    // 3. Complete. consent_missing: re-read the record; if it is live the
-    // saved P0 was missing, so save once more and retry once. Never re-grant.
+    // 3. Complete. consent_missing: the saved P0 did not reach the server, so
+    // send this session's P0 alone once more and retry once. Never ticks a box.
     let outcome: CompleteOutcome = await api.complete();
     if (!live()) return;
     if (outcome.kind === 'conflict' && outcome.code === 'consent_missing') {
-      const again = await ensureConsent(gen, true);
-      if (!live()) return;
-      if (again !== 'ok') return consentFailure(again);
+      if (!consentCurrent()) {
+        dropConsent(null);
+        return fail('consent_missing');
+      }
       consentOnServer.current = false; // resend P0 on its own first
       const resaved = await saveFinal();
       if (!live()) return;
-      if (resaved === 'consent') return fail('consent_missing');
-      if (resaved !== 'ok') return fail('network');
+      if (resaved !== 'ok') return savedFailure(resaved);
       outcome = await api.complete();
       if (!live()) return;
+      if (outcome.kind === 'conflict' && outcome.code === 'consent_missing') {
+        dropConsent(null);
+        return fail('consent_missing');
+      }
     }
     if (outcome.kind === 'conflict' && outcome.code === 'consent_version_mismatch') {
-      return consentFailure('mismatch');
+      dropConsent('version_mismatch');
+      return fail('consent_version_mismatch');
     }
     await hold();
     if (!live()) return;
@@ -630,7 +625,7 @@ export default function ConsultationFlow({
     }
     if (outcome.kind === 'conflict') return fail(outcome.code === 'unknown' ? 'unknown' : outcome.code);
     return fail(outcome.status === null ? 'network' : 'unknown');
-  }, [api, dropConsent, enqueueSave, ensureConsent, prepMinMs, setPhaseBoth]);
+  }, [api, consentCurrent, dropConsent, enqueueSave, prepMinMs, setPhaseBoth]);
 
   const onProblemAction = useCallback(() => {
     const ans = answersRef.current;
@@ -638,12 +633,16 @@ export default function ConsultationFlow({
       showScreen('P0', ans);
       return;
     }
+    if (problem === 'invalid_answers') {
+      setPhaseBoth('summary');
+      return;
+    }
     if (problem === 'consultation_incomplete') {
       showScreen(firstIncompleteScreenId(ans, nowFn()) ?? 'G1', ans);
       return;
     }
     void prepare();
-  }, [nowFn, prepare, problem, showScreen]);
+  }, [nowFn, prepare, problem, setPhaseBoth, showScreen]);
 
   const finish = useCallback(() => {
     if (!result) return;
@@ -715,7 +714,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ busy: consentBusy, error: consentError }}
+        consent={{ error: consentError, aiAllowed: aiChoiceShown }}
       />
     );
   }

@@ -14,7 +14,11 @@
  *   - writes are fenced per user: `purgeConsultationDraft(userId)` bumps the
  *     user's epoch, drains the serialized write chain and then deletes, so a
  *     write that was already pending (or arrives late from a screen that is
- *     unmounting) can never resurrect the draft after the purge.
+ *     unmounting) can never resurrect the draft after the purge;
+ *   - reinstall (Opus C-7): iOS Keychain items survive app deletion, so each
+ *     draft write also sets a per-user install marker in AsyncStorage (which
+ *     is removed with the app). A draft found without its marker belongs to
+ *     an earlier install and is deleted on read instead of resumed.
  */
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -66,6 +70,10 @@ export function manifestKey(userId: string | null | undefined): string {
 }
 function chunkKey(userId: string | null | undefined, gen: 'a' | 'b', i: number): string {
   return `consult_draft.${safeId(userId)}.${gen}${i}`;
+}
+/** AsyncStorage marker (no answer data) proving the draft was written by this install. */
+export function installMarkerKey(userId: string | null | undefined): string {
+  return `consult_draft_install:${safeId(userId)}`;
 }
 export function legacyStorageKey(userId: string | null | undefined): string {
   return `${LEGACY_DRAFT_PREFIX}${userId || 'anon'}`;
@@ -172,6 +180,12 @@ export async function readLocalState(
   await (chains.get(safeId(userId)) ?? Promise.resolve());
   const m = await readManifest(userId);
   if (!m) return null;
+  const marked = await AsyncStorage.getItem(installMarkerKey(userId)).catch(() => null);
+  if (marked !== '1') {
+    // Left in the Keychain by an earlier install of the app: delete, never resume.
+    await enqueue(userId, () => deleteAll(userId, m));
+    return null;
+  }
   try {
     const parts: string[] = [];
     for (let i = 0; i < m.n; i += 1) {
@@ -206,6 +220,7 @@ export function writeDraft(handle: DraftHandle, state: DraftWrite, now: Date = n
   return enqueue(handle.userId, async () => {
     if (!isHandleLive(handle)) return; // Fenced while waiting in the chain.
     try {
+      await AsyncStorage.setItem(installMarkerKey(handle.userId), '1');
       await writeSecure(handle.userId, json);
     } catch {
       // Storage failure is non-fatal: the server copy is saved per chapter.
@@ -236,6 +251,7 @@ export async function purgeConsultationDraft(userId: string | null | undefined):
   await AsyncStorage.removeItem(legacyStorageKey(userId)).catch(() => undefined);
   if (!persistAvailable()) return;
   await enqueue(userId, async () => {
+    await AsyncStorage.removeItem(installMarkerKey(userId)).catch(() => undefined);
     const m = await readManifest(userId);
     await deleteAll(userId, m);
   });

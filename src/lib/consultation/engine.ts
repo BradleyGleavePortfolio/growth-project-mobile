@@ -209,10 +209,11 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
  */
 export function isConsentAnswerCurrent(v: AnswerValue | undefined): boolean {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
-  const c = v as { agreed?: unknown; copy_version?: unknown; agreed_at?: unknown };
+  const c = v as { agreed?: unknown; copy_version?: unknown; agreed_at?: unknown; text_sha256?: unknown };
   if (c.agreed !== true) return false;
   if (c.copy_version !== CONSULT_CONSENT_COPY_VERSION) return false;
   if (typeof c.agreed_at !== 'string' || Number.isNaN(Date.parse(c.agreed_at))) return false;
+  if (c.text_sha256 !== undefined && (typeof c.text_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(c.text_sha256))) return false;
   return true;
 }
 
@@ -332,23 +333,39 @@ export function resumeScreenId(
  * The answer set sent to the server. Answers belonging to hidden screens and
  * to collapsed detail blocks are dropped, so a changed answer (S3 from home
  * to gym, T3 from yes to no) never leaves stale data behind.
+ *
+ * Clearing (Opus B-06): backend #607 merges each PUT onto the stored answers
+ * and treats an omitted key as "keep" and only `null` as "clear". So every
+ * detail key (screening notes, T3 areas and note, "other" text) that is not
+ * currently shown with a value is sent as `null`, and so is the answer of a
+ * screen that is now hidden. A note emptied while its parent is still "yes",
+ * or an "other" text after "other" is deselected, is therefore removed from
+ * the server copy the coach and Roman read. Main answers of visible screens
+ * that have no value yet are left out (they may simply not be reached yet).
  */
 export function answersForSave(answers: Answers): Answers {
   const out: Answers = {};
   for (const s of SCREENS) {
-    if (!isVisible(s, answers)) continue;
+    const visible = isVisible(s, answers);
     const key = answerKeyOf(s);
-    if (answers[key] !== undefined) out[key] = answers[key];
-    if (s.detail && detailShown(s, answers)) {
-      if (s.detail.chipsKey && answers[s.detail.chipsKey] !== undefined) {
-        out[s.detail.chipsKey] = answers[s.detail.chipsKey];
-      }
-      if (s.detail.textKey && hasValue(answers[s.detail.textKey])) {
-        out[s.detail.textKey] = answers[s.detail.textKey];
-      }
+    if (visible) {
+      if (answers[key] !== undefined) out[key] = answers[key];
+    } else if (s.template !== 'message' && s.template !== 'intro') {
+      out[key] = null;
+    }
+    if (s.detail) {
+      const open = visible && detailShown(s, answers);
+      const { chipsKey, textKey } = s.detail;
+      if (chipsKey) out[chipsKey] = open && hasValue(answers[chipsKey]) ? answers[chipsKey] : null;
+      if (textKey) out[textKey] = open && hasValue(answers[textKey]) ? answers[textKey] : null;
     }
   }
   return out;
+}
+
+/** True when a save body carries anything beyond P0 that is not a clear. */
+export function hasAnswersBeyondConsent(body: Answers): boolean {
+  return Object.entries(body).some(([k, v]) => k !== 'P0' && v !== null && v !== undefined);
 }
 
 /** Fill `{coach}`, `{Coach}`, `{first}` and `{greeting}` in definition copy. */

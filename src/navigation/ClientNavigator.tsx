@@ -40,6 +40,7 @@ import ProfileScreen from '../screens/client/ProfileScreen';
 import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -236,6 +237,8 @@ export type MoreStackParamList = {
   Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
+  /** D2: Settings > Data & Privacy > Roman and AI (box 2 allow / withdraw). */
+  RomanAiConsent: undefined;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -422,6 +425,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />

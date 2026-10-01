@@ -115,6 +115,7 @@ export type CompleteProblem =
   | 'consent_version_mismatch'
   | 'clinic_not_configured'
   | 'completion_in_progress'
+  | 'invalid_answers'
   | 'network'
   | 'unknown';
 
@@ -131,12 +132,12 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
   },
   consent_missing: {
     head: 'One box still needs your agreement.',
-    body: "Before I can prepare your plan, I'll need the I agree box at the start of the consultation. Nothing more is sent until it is ticked.",
+    body: "Before I can prepare your plan, I'll need the first box at the start of the consultation, the training waiver and agreement to coach you. Nothing more is sent until it is ticked.",
     cta: 'Take me there',
   },
   consent_version_mismatch: {
     head: 'The agreement has been updated.',
-    body: 'Nothing more has been sent. Please update the app to read the current agreement, then tick the box again.',
+    body: 'Please update the app to read the current agreement, then tick the first box again.',
     cta: 'Review the agreement',
   },
   clinic_not_configured: {
@@ -148,6 +149,11 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
     head: 'Your plan is already being prepared.',
     body: 'Give it a moment, then try again.',
     cta: 'Try again',
+  },
+  invalid_answers: {
+    head: 'A few answers need another look.',
+    body: 'Some of your answers could not be saved as they are. They are kept on this phone. Please look over the summary, change anything that looks wrong, and try again.',
+    cta: 'Review my answers',
   },
   network: {
     head: "I couldn't reach the server.",
@@ -200,6 +206,12 @@ export function MacroRevealScreen({
   const m = result.macros;
   const coach = result.coach?.display_name || ctx.coachName || null;
   const c2 = { ...ctx, coachName: coach };
+  // Opus C-4 / contract item 8: never-trackers see calories and protein only
+  // in week one. The full targets are still set on the server.
+  const simple = result.macro_display_mode === 'simple';
+  const rows = (simple
+    ? [['Protein', m.protein_g]]
+    : [['Protein', m.protein_g], ['Carbs', m.carbs_g], ['Fat', m.fat_g]]) as ReadonlyArray<readonly [string, number]>;
   return (
     <Frame testID="consult-screen-MACRO" footer={<PrimaryButton label="Next: your plan" onPress={onNext} testID="consult-macro-next" />}>
       <FadeIn><Text style={s.eyebrow}>Your daily targets</Text></FadeIn>
@@ -211,7 +223,7 @@ export function MacroRevealScreen({
       </FadeIn>
       <FadeIn delayIndex={1}><Text style={s.mutedSmall}>calories a day</Text></FadeIn>
       <FadeIn delayIndex={2} style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: palette.border }}>
-        {([['Protein', m.protein_g], ['Carbs', m.carbs_g], ['Fat', m.fat_g]] as const).map(([l, v]) => (
+        {rows.map(([l, v]) => (
           <View key={l} accessible accessibilityLabel={`${l} ${fmt(v)} grams`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: palette.border }}>
             <Text style={s.h3}>{l}</Text>
             <Text style={s.h2} testID={`macro-${l.toLowerCase()}`}>{`${fmt(v)} g`}</Text>
@@ -224,8 +236,16 @@ export function MacroRevealScreen({
       <Disclosure label="Why these numbers" testID="macro-why">
         <Text style={s.small}>Calories are your overall energy budget for the day, set from your height, weight, age, activity and goal.</Text>
         <Text style={s.small}>{`Protein helps you keep and build muscle, and keeps you fuller for longer. ${proteinExample(answers.N1, Math.round(m.protein_g))}`}</Text>
-        <Text style={s.small}>{`Carbs are your body's main fuel for workouts and daily activity. Your target is ${fmt(m.carbs_g)} g.`}</Text>
-        <Text style={s.small}>{`Fat supports your hormones and helps you absorb some vitamins. Your target is ${fmt(m.fat_g)} g.`}</Text>
+        {simple ? (
+          <Text style={s.small} testID="macro-simple-note">
+            {'For your first week, two numbers are enough: calories and protein. Carbs and fat join them after that, once logging feels easy.'}
+          </Text>
+        ) : (
+          <>
+            <Text style={s.small}>{`Carbs are your body's main fuel for workouts and daily activity. Your target is ${fmt(m.carbs_g)} g.`}</Text>
+            <Text style={s.small}>{`Fat supports your hormones and helps you absorb some vitamins. Your target is ${fmt(m.fat_g)} g.`}</Text>
+          </>
+        )}
         <Text style={s.small}>{'How to use these numbers: log what you eat, and aim to land close to each target by the end of the day. A little over or under is normal.'}</Text>
         <Text style={s.small}>{"If you're hungry, add vegetables, protein or water before more carbs or fat. If you're tired, check your carbs first, then your sleep and water."}</Text>
         <Text style={s.mutedSmall}>{`Method: ${m.method}.`}</Text>

@@ -1,16 +1,13 @@
 /**
- * Test harness for ConsultationFlow: a mocked API whose consent record is a
- * live grant of the bound versions by default, a completion payload, and a
- * seeder that writes the encrypted local draft through the real storage.
+ * Test harness for ConsultationFlow: a mocked API (intake save / state /
+ * complete, and the optional box 2 grant and withdraw on the AI consent
+ * ledger), a completion payload, and a seeder that writes the encrypted
+ * local draft through the real storage.
  */
-import type {
-  CompleteOnboardingResponse,
-  CompleteOutcome,
-  ConsentStatusResponse,
-  GrantConsentOutcome,
-} from '../../../api/consultationApi';
+import type { CompleteOnboardingResponse, CompleteOutcome } from '../../../api/consultationApi';
+import type { AiConsentOutcome, AiConsentStatusResponse, RomanConsentRecord } from '../../../api/aiConsentApi';
 import type { ConsultationApi } from '../../../screens/consultation/ConsultationFlow';
-import { CONSENT_BINDING } from '../consentVersion';
+import { AI_CONSENT_VERSION } from '../consentVersion';
 import { writeLocalState } from '../storage';
 import type { Answers } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -29,35 +26,34 @@ export const RESULT: CompleteOnboardingResponse = {
   coach: { id: 'coach-1', display_name: 'Bradley' },
 };
 
-export function consentStatus(over: Partial<ConsentStatusResponse['roman']> = {}): ConsentStatusResponse {
+/** A GET /me/ai-consent body (R2a / contract shape). Defaults to "not allowed". */
+export function aiStatus(over: Partial<RomanConsentRecord> = {}): AiConsentStatusResponse {
   return {
     roman: {
-      granted: true,
-      version: CONSENT_BINDING.ai_consent_version,
-      granted_at: '2026-09-30T19:00:00.000Z',
+      granted: false,
+      version: null,
+      granted_at: null,
       revoked_at: null,
-      current_version: CONSENT_BINDING.ai_consent_version,
+      current_version: AI_CONSENT_VERSION,
       needs_reconsent: false,
-      waiver_version: CONSENT_BINDING.waiver_version,
-      waiver_accepted_at: '2026-09-30T19:00:00.000Z',
-      waiver_current_version: CONSENT_BINDING.waiver_version,
       ...over,
     },
+    copy: null,
   };
 }
 
-export const NOT_GRANTED = consentStatus({ granted: false, version: null, granted_at: null, waiver_version: null, waiver_accepted_at: null });
+export const AI_ALLOWED = aiStatus({ granted: true, version: AI_CONSENT_VERSION, granted_at: '2026-09-30T19:00:00.000Z' });
 
 export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mock>> = {}) {
   const api = {
     save: jest.fn(async () => ({ saved_at: '2026-09-30T19:00:00Z', completed_chapters: [1] })),
     getState: jest.fn(async () => null),
     complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'ok', data: RESULT })),
-    grantOnboardingConsent: jest.fn(async (): Promise<GrantConsentOutcome> => ({ kind: 'ok', status: consentStatus() })),
-    getConsentStatus: jest.fn(async () => consentStatus()),
+    grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: AI_ALLOWED })),
+    withdrawRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: aiStatus() })),
     ...overrides,
   };
-  return api as unknown as ConsultationApi & typeof api;
+  return api as ConsultationApi & typeof api;
 }
 
 /** Seed the encrypted draft. `dirty` defaults to true (unsynced local edits). */

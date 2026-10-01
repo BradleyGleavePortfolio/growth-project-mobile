@@ -298,6 +298,7 @@ describe('C-02 identity fencing', () => {
     expect(r.getByText(/Maintain and feel better/)).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => expect(api.save).toHaveBeenCalled());
-    expect(api.save.mock.calls[0][0].answers.P4_note).toBeUndefined();
+    for (const [body] of api.save.mock.calls) expect(JSON.stringify(body)).not.toContain('Private health note');
+    expect(api.save.mock.calls[0][0].answers.P4_note ?? null).toBeNull();
   });
 });

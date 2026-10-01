@@ -7,6 +7,13 @@
  *
  * Rollback is the flag: with it off, RootNavigator mounts the lean flow as
  * before and nothing here is reachable.
+ *
+ * After "Show me around" (Opus B-05): the consultation replaces the Day-1
+ * flow and the Day-1 win, so this marks onboarding done locally and in the
+ * cached profile (backend #607 complete sets `onboardingCompleted` on the
+ * server), and RootNavigator skips the Day-1 and Day-1 win gates while the
+ * flag is on. The client lands in the app with Roman's tutorial pending
+ * (queued by ConsultationFlow.finish via startClientTutorial).
  */
 import React, { useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -15,8 +22,7 @@ import ConsultationFlow from '../screens/consultation/ConsultationFlow';
 import type { CompleteOnboardingResponse } from '../api/consultationApi';
 import { authEvents } from '../utils/authEvents';
 import { logger } from '../utils/logger';
-
-export const CONSULTATION_COMPLETE_KEY = 'consultation_complete';
+import { patchUserCache } from '../lib/userCache';
 
 function firstNameOf(user: { firstName?: string; name?: string } | null): string | null {
   if (!user) return null;
@@ -31,7 +37,7 @@ export default function ConsultationOnboardingNavigator() {
   const onFinished = useCallback(async (_result: CompleteOnboardingResponse) => {
     try {
       await AsyncStorage.setItem('onboarding_complete', 'true');
-      await AsyncStorage.setItem(CONSULTATION_COMPLETE_KEY, 'true');
+      await patchUserCache({ profile: { onboarding_completed: true } });
     } catch (err) {
       logger.warn('ConsultationOnboarding', 'could not store completion flag', err);
     }

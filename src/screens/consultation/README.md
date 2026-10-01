@@ -27,24 +27,30 @@ The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling 
 | `QuestionScreen.tsx` | Renders one screen from its definition. Templates: `intro` (T-A), `rows` (T-B), `chips` (T-C), `dob` / `measure` / `goalWeight` (T-D wheels), `yesno` (T-E), `consent` (P0), `message` (P8). |
 | `RevealScreens.tsx` | Summary (T-F), preparing state, macro reveal and plan reveal (T-G), paused state, completion problem state. |
 | `components.tsx` | `AnalyticsExcluded`, Frame (safe-area insets), chapter progress bar, rows, chips, wheels (VoiceOver `adjustable`), checkbox, buttons, Roman's line. |
-| `src/navigation/ConsultationOnboardingNavigator.tsx` | Mounts the flow with the cached user; on finish stores `onboarding_complete` and `consultation_complete` and emits `authEvents` so `RootNavigator` re-bootstraps. |
+| `src/navigation/ConsultationOnboardingNavigator.tsx` | Mounts the flow with the cached user; on finish stores `onboarding_complete`, marks the cached profile `onboarding_completed`, and emits `authEvents` so `RootNavigator` re-bootstraps straight into the app (with the flag on the old Day-1 flow and Day-1 win are skipped; Opus B-05). |
+| `src/lib/consultation/aiConsent.ts` | Box 2 grant body (`client-ai-v3`, copy hash, platform) and the one-retry, non-blocking grant. |
+| `src/api/aiConsentApi.ts` | `GET /me/ai-consent`, `POST` / `DELETE /me/ai-consent/roman` (backend R2a). Never throws; 404 / 503 is `unavailable`. |
+| `src/screens/settings/RomanAiConsentScreen.tsx` | Settings > Data & Privacy > Roman and AI: shows, allows and withdraws box 2. |
 
 ## Screens
 
-W1 welcome; P0 the single "I agree" box (before any question); G1 goal; G2 why it matters; B1 formula; B2 date of birth (16 to 100); B3 height and weight (unit tabs convert in place); B4 goal weight (optional, soft notes only); L1 activity; L2 sleep; T1 experience; T2 enjoyed; T3 injury check (yes expands areas and a note); T4 session length; S1 days per week; S2 preferred time; S3 where you train; S3b home equipment (only for "At home, with some equipment"); N1 to N5 nutrition; P1 to P7 screening (no consent box in this chapter) (yes reveals an optional note, never blocks); P8 message (only when any P answer is yes); C1 first session (tomorrow preselected); SUM; PREP; MACRO; PLAN.
+W1 welcome; P0 "Before we start", two boxes (before any question); G1 goal; G2 why it matters; B1 formula; B2 date of birth (16 to 100); B3 height and weight (unit tabs convert in place); B4 goal weight (optional, soft notes only); L1 activity; L2 sleep; T1 experience; T2 enjoyed; T3 injury check (yes expands areas and a note); T4 session length; S1 days per week; S2 preferred time; S3 where you train; S3b home equipment (only for "At home, with some equipment"); N1 to N5 nutrition; P1 to P7 screening (no consent box in this chapter) (yes reveals an optional note, never blocks); P8 message (only when any P answer is yes); C1 first session (tomorrow preselected); SUM; PREP; MACRO; PLAN.
 
-## P0: one "I agree" box
+## P0: two boxes on one screen (D2, ops/CONSENT_D2_CONTRACT.md)
 
-One box covers the personal-training waiver and "The Growth Project, your coach and Roman can see your in-app logs and answers". The copy lists what Roman sees and states plainly that Roman is powered by Anthropic, a third-party AI provider, and that the information is sent to Anthropic to answer the client (App Store 5.1.2(i)). It also says Roman conversations are private from the coach, stored securely on The Growth Project's servers for 180 days, deletable by the client at any time, and opened by staff only for support, safety or debugging (owner ruling 2026-09-30 17:42). Continue stays disabled until the box is ticked. There is no separate AI-consent screen.
+Copy is the contract copy, verbatim: title "Before we start", three paragraphs (personal training only, risk, what The Growth Project and the coach collect and use; the clinic does not see it), box 1, paragraph 4 (Roman is powered by Anthropic), box 2, and the footer. Owner sign-off on the copy is pending.
 
-P0 comes straight after W1 (operator decision, fix round). Nothing is sent to the server before it is ticked and recorded:
+- **Box 1 (required).** The training waiver, and The Growth Project and the coach collecting and using the client's information to coach them. Continue stays disabled until it is ticked. It is recorded by the intake only.
+- **Box 2 (optional, unticked by default).** Roman and the coach's AI tools may use the client's information, processed by Anthropic. It never gates anything: onboarding, plan assignment, coach messaging, community, wearables, Roman's scripted tour, the welcome message and reminders all work with it unticked.
 
-1. Continue posts `POST /me/ai-consent/onboarding { ai_consent_version: 'client-ai-v2', waiver_version: 'pt-waiver-v1', copy_sha256, platform }` (backend #601). Only a 2xx records the agreement. A network error or 404 keeps the client on P0 with a short message; `409 CONSENT_VERSION_MISMATCH` clears the box and asks for an app update. Nothing is saved in either case.
-2. The flow then stores `P0 = { agreed: true, copy_version: 'consult-consent-v1', agreed_at }` and sends it as the first `PUT /me/onboarding/consultation`, on its own (backend #607 is consent-first: answers sent before or bundled with the first agreement get `409 consent_missing` and are not stored). Every later save sends P0 alone first if the server does not hold it yet.
-3. A stored P0 counts only when `copy_version` equals the displayed copy and `agreed_at` is a valid date (`isConsentAnswerCurrent`). Stale, malformed or revoked records (from `GET /me/ai-consent`) route back to P0 with the box unticked; the app never re-grants on the client's behalf. If the record cannot be read (offline) answers are kept on the device and no save goes up until it can.
-4. `409 consent_missing` from a save, or from complete after a fresh re-check, routes back to P0. At Prepare the record is re-read first, so a revocation made in Settings wins.
+P0 comes straight after W1. Nothing is sent before Continue:
 
-Any change to `CONSENT_PARAGRAPHS` or `CONSENT_CHECKBOX_LABEL` bumps `CONSULT_CONSENT_COPY_VERSION` (and the backend's `CONSULT_CONSENT_COPY_VERSIONS`) and needs T4 review.
+1. Continue stores `P0 = { agreed: true, copy_version: 'consult-consent-v2', agreed_at, text_sha256 }` and sends it as the first `PUT /me/onboarding/consultation`, on its own (backend #607 is consent-first: answers sent before or bundled with the first agreement get `409 consent_missing` and are not stored). `text_sha256` is the sha256 of the whole P0 screen text (`consentCopyText()`, pinned as `CONSENT_COPY_SHA256`). Every later save sends P0 alone first if the server does not hold it yet. Continue acts once per visit, so a double tap records once (Opus C-1).
+2. If box 2 is ticked, after that P0 save settles the flow posts `POST /me/ai-consent/roman { version: 'client-ai-v3', copy_sha256, platform }` (backend R2a), where `copy_sha256` is the sha256 of paragraph 4 and the box 2 label (`AI_CONSENT_COPY_SHA256`). It is fire and forget: one retry on a failure, no retry and no message on `404` / `503` (ledger not deployed) or `409 CONSENT_VERSION_MISMATCH`; the client can set it later in Settings. If the client comes back to P0 and unticks box 2 after ticking it, the flow sends `DELETE /me/ai-consent/roman`. Box 2 is never part of the intake answers.
+3. A stored P0 counts only when `copy_version` equals the displayed copy, `agreed_at` is a valid date and any `text_sha256` is lowercase hex (`isConsentAnswerCurrent`). Stale (including the single-box `consult-consent-v1`) or malformed records route back to P0 with both boxes unticked. Box 1 is not read from the AI consent ledger.
+4. A P0-only PUT rejected with `409 consent_missing` means the server does not accept this copy version: the box is cleared, Continue stays disabled and the client is asked to update the app. A `409 consent_missing` on a later save, or from complete after resending P0 once, routes back to P0.
+
+Any change to the P0 copy bumps `CONSULT_CONSENT_COPY_VERSION` (and the backend's accepted versions); a change to paragraph 4 or box 2 also bumps `AI_CONSENT_VERSION` and the R2a server copy. The unit test recomputes both pinned hashes. Consent copy changes need T4 review.
 
 ## Privacy
 
@@ -56,7 +62,9 @@ Any change to `CONSENT_PARAGRAPHS` or `CONSENT_CHECKBOX_LABEL` bumps `CONSULT_CO
 
 - Saves are serialized and coalesced: one request in flight, the newest snapshot queued. Prepare drains the queue with the final snapshot and closes it before `complete`, so an older write can never land after the final one.
 - A pending auto-advance is cancelled by any answer change, Back or Pause, and a screen whose answers do not validate is never left.
-- On resume the local draft wins only when it holds unsynced edits and the server has not changed since this device last synced (revision, then `saved_at`), or the edits are newer than the server copy. Otherwise the server copy wins. Cross-device last-write-wins needs a conditional write on the backend (not available yet).
+- On resume the local draft wins only when it holds unsynced edits and the server has not changed since this device last synced (revision, then `saved_at`), or the edits are newer than the server copy. Otherwise the server copy wins. Across two devices the last save wins (Opus C-10, accepted for this slice): the backend has no conditional write yet, so a second device can overwrite answers saved from the first.
+- A save clears what the client cleared: answers of screens that are now hidden, and detail keys (notes, "other" text, areas) that are closed or emptied, go up as `null` so the server deletes them rather than keeping the old value (Opus B-06).
+- The encrypted draft is tied to this install: an AsyncStorage marker (`consult_draft_install:<userId>`, no answer data) is written with each draft, and a draft found without it (left in the Keychain by an earlier install) is deleted rather than resumed (Opus C-7).
 
 ## P8: never blocks
 
@@ -68,9 +76,10 @@ Shown only after a yes on P1 to P7. Order: a calm opening, general habits (conve
 | --- | --- |
 | `PUT /me/onboarding/consultation` `{ version: 'consult-v1', answers }` | First: P0 alone, right after the agreement. Then the end of every chapter, on Finish later / Pause, and before complete. Idempotent. A failed chapter save is non-blocking (kept locally); a failed final save shows the offline state and never calls complete. |
 | `GET /me/onboarding` | On mount. A completed onboarding replays the macro reveal from `result`. 404 falls back to local state. |
-| `POST /me/onboarding/complete` | "Prepare my plan". 200 drives the macro and plan reveals. 409 `consultation_incomplete` routes to the first missing answer, `consent_missing` re-reads the record, saves again and retries once (never re-grants), then routes to P0; `consent_version_mismatch` routes to P0; `not_attached`, `clinic_not_configured` and `completion_in_progress` show their own message. |
-| `POST /me/ai-consent/onboarding` | P0 Continue (see above). |
-| `GET /me/ai-consent` | On resume with a stored P0, and before complete. |
+| `POST /me/onboarding/complete` | "Prepare my plan". 200 drives the macro and plan reveals (`macro_display_mode: 'simple'` shows calories and protein only; Opus C-4). 409 `consultation_incomplete` routes to the first missing answer, `consent_missing` resends the saved P0 alone, saves again and retries once, then routes to P0; `consent_version_mismatch` routes to P0; `not_attached`, `clinic_not_configured` and `completion_in_progress` show their own message. A final save rejected with `409 completion_in_progress` or `400 invalid_answers` shows its own message, not the connection one (Opus C-2). |
+| `POST /me/ai-consent/roman` | After the P0 save, only when box 2 is ticked. Non-blocking. |
+| `DELETE /me/ai-consent/roman` | Back on P0, when box 2 is unticked after being ticked. |
+| `GET /me/ai-consent` | Settings > Data & Privacy > Roman and AI only. The flow does not read it. |
 
 Answer values: single selects are option values; multi selects are arrays; `B2` is `YYYY-MM-DD`; `B3` is `{ height_cm, weight_lbs, unit }`; `B4` is lbs or null; `C1` is the first-session date `YYYY-MM-DD`; detail keys are `G2_other`, `T3_areas`, `T3_note`, `N2_other`, `P1_note` to `P7_note`.
 
@@ -92,6 +101,8 @@ npx jest src/lib/consultation src/screens/consultation --maxWorkers=1
 - `src/lib/consultation/__tests__/consultationEngine.test.ts`: definitions, copy rules, conditions, validation, chapter progress, resume, save payload, summary.
 - `src/screens/consultation/__tests__/ConsultationFlow.test.tsx`: W1 render, auto-advance and back, per-chapter save, the P0 gate and consent record, the P8 branch, complete happy path, 409 handling, offline save, replay, Finish later, accessibility labels.
 - `src/lib/consultation/__tests__/consultationResume.test.ts`: resume reconciliation rules.
-- `src/screens/consultation/__tests__/consultationPrivacy.test.tsx`: analytics exclusion, agreement before any upload and consent-first PUT, copy-version, revocation and 409 handling, encrypted draft, retention, sign-out purge and late-write fence.
+- `src/screens/consultation/__tests__/consultationPrivacy.test.tsx`: analytics exclusion, agreement before any upload and consent-first PUT, copy-version and 409 handling, box 2 grant / withdraw / retry / 404-503 and double tap, encrypted draft, install marker, retention, sign-out purge and late-write fence.
+- `src/screens/settings/__tests__/RomanAiConsentScreen.test.tsx`: Roman and AI settings screen.
+- `src/__tests__/rootNavigatorConsultationComplete.test.tsx`: after the consultation the real `RootNavigator` goes straight to the app with the flag on.
 - `src/screens/consultation/__tests__/consultationOrdering.test.tsx`: auto-advance timer, serialized saves, resume reconciliation in the flow, safe-area insets, identity fencing.
 - `src/screens/consultation/__tests__/consultationTemplates.test.tsx`: wheels, unit tabs, soft notes, T3 expansion, summary Edit, API client routes and 409 mapping, the rollback flag.

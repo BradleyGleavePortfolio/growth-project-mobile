@@ -5,10 +5,12 @@
  *   PUT  /me/onboarding/consultation  idempotent save of partial or full answers
  *   GET  /me/onboarding               saved answers, completion state, result
  *   POST /me/onboarding/complete      idempotent; 409 with a machine code
- *   POST /me/ai-consent/onboarding    the single P0 "I agree" box: AI processing
- *                                     grant + training waiver (backend #601)
- *   GET  /me/ai-consent               the consent record (granted, versions,
- *                                     revoked_at), used to verify a stored P0
+ *
+ * Box 1 of the P0 agreement (waiver, collection and use for coaching) is the
+ * P0 answer saved through PUT /me/onboarding/consultation (backend #607
+ * stores disclaimer_version / disclaimer_accepted_at from it). Box 2 (Roman
+ * and AI) lives in the AI consent ledger, see `aiConsentApi.ts` (D2 ruling;
+ * the combined POST /me/ai-consent/onboarding is no longer used).
  *
  * The base URL already ends in `/api` (see `config/env.ts`), so paths here
  * start at `/me`. Every call goes through the shared axios instance, so auth
@@ -44,9 +46,13 @@ export interface OnboardingMacros {
 
 export interface OnboardingProgram {
   id: string;
+  /** Backend #607 program rule key (one of the three clinic programs). */
+  key?: string;
   name: string;
   days_per_week: number;
   weeks: number;
+  /** First training day, YYYY-MM-DD (backend #607). */
+  start_date?: string;
   /** Three short reasons tied to the client's answers. */
   why: string[];
 }
@@ -66,6 +72,13 @@ export interface CompleteOnboardingResponse {
   program: OnboardingProgram;
   spaces: OnboardingSpace[];
   coach: OnboardingCoach;
+  /**
+   * Backend #607 (owner ruling 09-30 18:11): clients who have never tracked
+   * see calories and protein only in week one ('simple'), until
+   * `simple_until`; everyone else sees all four ('full').
+   */
+  macro_display_mode?: 'simple' | 'full';
+  simple_until?: string | null;
 }
 
 export interface OnboardingStateResponse {
@@ -95,37 +108,6 @@ export type CompleteConflictCode = (typeof COMPLETE_CONFLICT_CODES)[number];
 export type CompleteOutcome =
   | { kind: 'ok'; data: CompleteOnboardingResponse }
   | { kind: 'conflict'; code: CompleteConflictCode | 'unknown' }
-  | { kind: 'error'; status: number | null };
-
-/** POST /me/ai-consent/onboarding body (backend #601 GrantOnboardingConsentDto). */
-export interface GrantOnboardingConsentRequest {
-  ai_consent_version: string;
-  waiver_version: string;
-  copy_sha256?: string;
-  platform?: 'ios' | 'android' | 'web';
-  app_version?: string;
-  locale?: string;
-}
-
-/** GET /me/ai-consent (and the grant response), the fields mobile reads. */
-export interface ConsentStatusResponse {
-  roman: {
-    granted: boolean;
-    version: string | null;
-    granted_at: string | null;
-    revoked_at: string | null;
-    current_version: string;
-    needs_reconsent?: boolean;
-    waiver_version?: string | null;
-    waiver_accepted_at?: string | null;
-    waiver_current_version?: string;
-  };
-}
-
-export type GrantConsentOutcome =
-  | { kind: 'ok'; status: ConsentStatusResponse | null }
-  /** 409 CONSENT_VERSION_MISMATCH: the server requires different copy. Fail closed. */
-  | { kind: 'version_mismatch'; current_version: string | null; waiver_current_version: string | null }
   | { kind: 'error'; status: number | null };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -184,34 +166,6 @@ export const consultationApi = {
       if (status === 409) return { kind: 'conflict', code: conflictCodeOf(err) };
       return { kind: 'error', status };
     }
-  },
-
-  /**
-   * Record the single P0 agreement. Resolves (never throws) so the caller can
-   * fail closed on every non-2xx outcome.
-   */
-  grantOnboardingConsent: async (body: GrantOnboardingConsentRequest): Promise<GrantConsentOutcome> => {
-    try {
-      const res = await api.post<ConsentStatusResponse>('/me/ai-consent/onboarding', body);
-      return { kind: 'ok', status: res?.data ?? null };
-    } catch (err) {
-      const status = httpStatusOf(err);
-      if (status === 409 && rawCodeOf(err) === 'CONSENT_VERSION_MISMATCH') {
-        const data = (err as AxiosLikeError).response?.data as Record<string, unknown> | undefined;
-        return {
-          kind: 'version_mismatch',
-          current_version: typeof data?.current_version === 'string' ? data.current_version : null,
-          waiver_current_version: typeof data?.waiver_current_version === 'string' ? data.waiver_current_version : null,
-        };
-      }
-      return { kind: 'error', status };
-    }
-  },
-
-  /** The server consent record. Throws on network failure; 404 also throws (unverifiable). */
-  getConsentStatus: async (): Promise<ConsentStatusResponse> => {
-    const res = await api.get<ConsentStatusResponse>('/me/ai-consent');
-    return res.data;
   },
 };
 

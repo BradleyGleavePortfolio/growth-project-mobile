@@ -1,33 +1,45 @@
 /**
  * P0 consent versions, kept in their own module so the pure engine can check
  * a stored agreement without importing the copy (which imports the engine).
- */
-
-/**
- * Version of the combined waiver + data visibility text shown at P0. Backend
- * #607 accepts only the versions in its CONSULT_CONSENT_COPY_VERSIONS
- * (default 'consult-consent-v1') and rejects any other with 409
- * consent_missing, so the two sides move together.
  *
- * The text was revised in the PR #310 fix round (box moved to directly after
- * W1, the coach's AI drafts and how to withdraw added) before any release:
- * the consultation is behind a feature flag that is off, so no client has
- * agreed to an earlier text. v1 therefore names the first released copy. Any
- * later change to the P0 text needs a new version here AND on the backend.
+ * D2 (operator ruling 2026-10-01, Washington RCW 19.373): P0 shows TWO boxes
+ * on the same screen.
+ *   Box 1 (required): the personal-training waiver plus collection and use of
+ *   the client's information by The Growth Project and their coach for
+ *   coaching. Recorded by the onboarding intake (backend #607): the P0 answer
+ *   carries `copy_version` and the agreement time; #607 stores
+ *   disclaimer_version / disclaimer_accepted_at before any other answer.
+ *   Box 2 (optional, unticked by default): Roman and the coach's AI drafts,
+ *   processed by Anthropic. Recorded by the AI consent ledger (backend R2a):
+ *   POST /me/ai-consent/roman { version: AI_CONSENT_VERSION }, withdrawn with
+ *   DELETE /me/ai-consent/roman (Settings > Privacy > Roman and AI).
  */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v1' as const;
 
 /**
- * The server-side versions the displayed P0 copy is bound to. Ticking the box
- * records POST /me/ai-consent/onboarding with exactly these versions (backend
- * #601: AI processing grant + personal-training waiver in one call). The
- * server rejects any other version with 409 CONSENT_VERSION_MISMATCH; the app
- * then fails closed (nothing is uploaded) and asks for an app update. A change
- * to either server version needs new P0 copy and a new
- * CONSULT_CONSENT_COPY_VERSION, never a silent remap.
+ * Version of the P0 screen copy (both boxes). Backend #607 accepts only the
+ * versions in CONSULT_CONSENT_COPY_VERSIONS (default bumped to
+ * 'consult-consent-v2' with D2) and rejects any other P0 with 409
+ * consent_missing, so the two sides move together. Any change to the P0
+ * text needs a new version here AND on the backend.
+ */
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v2' as const;
+
+/** Server copy version of the box 2 AI processing paragraph and label (R2a). */
+export const AI_CONSENT_VERSION = 'client-ai-v3' as const;
+
+/** Personal-training waiver version that box 1 records (via the intake). */
+export const WAIVER_VERSION = 'pt-waiver-v1' as const;
+
+/**
+ * What the displayed P0 copy is bound to. Box 1 is the intake's P0 record
+ * (`copy_version`, plus `text_sha256` of the box 1 text); box 2 is the R2a
+ * grant (`version`, plus `copy_sha256` of the box 2 text). The server
+ * rejects any other AI version with 409 CONSENT_VERSION_MISMATCH; the app
+ * then records nothing for box 2 and asks for an update in Settings. A
+ * change to any version needs new copy here, never a silent remap.
  */
 export const CONSENT_BINDING = {
   copy_version: CONSULT_CONSENT_COPY_VERSION,
-  ai_consent_version: 'client-ai-v2',
-  waiver_version: 'pt-waiver-v1',
+  ai_consent_version: AI_CONSENT_VERSION,
+  waiver_version: WAIVER_VERSION,
 } as const;

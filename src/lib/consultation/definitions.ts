@@ -92,15 +92,15 @@ export const SCREENS: readonly ScreenDef[] = [
     cta: 'Begin my consultation',
   },
 
-  // P0, the single "I agree" box (owner ruling 16:31 #5, operator decision on
-  // Sol A-02): it comes straight after the welcome, before any answer is
-  // collected, so nothing is uploaded until it is ticked and recorded.
+  // P0, the agreement (D2 ruling 2026-10-01: one screen, two boxes; box 1
+  // required, box 2 optional): it comes straight after the welcome, before
+  // any answer is collected, so nothing is uploaded until box 1 is ticked.
   {
     id: 'P0',
     chapter: 0,
     template: 'consent',
     eyebrow: 'Your consultation',
-    question: 'Before we get started',
+    question: 'Before we start',
     longQuestion: true,
     cta: 'Continue',
     validation: { required: true },

@@ -679,41 +679,46 @@ export default function RootNavigator() {
           await AsyncStorage.setItem('onboarding_complete', 'true');
         }
 
-        // Day-1 final onboarding gate. Decacorn-quality flow shown to every
-        // student who has not yet completed it. Backend source of truth is
-        // `profile.day_one_completed`; we also accept the legacy
-        // `onboarding_completed` flag so existing users who already finished
-        // the old flow are not asked to redo it. A local AsyncStorage flag
-        // and an in-progress resume checkpoint keep the flow alive across
-        // reinstalls when the backend hasn't caught up (fail-open).
-        try {
-          const day1ServerDone = !!user?.profile?.day_one_completed;
-          const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
-          const legacyOnboardingDone = !!user?.profile?.onboarding_completed;
-          const day1ResumeState = await readDay1ResumeState();
-          if (
-            !day1ServerDone &&
-            !day1LocalDone &&
-            (!legacyOnboardingDone || day1ResumeState !== null)
-          ) {
-            setAuthState('day1onboarding');
-            return;
-          }
-          if (day1ServerDone && !day1LocalDone) {
-            await AsyncStorage.setItem('day_one_completed', 'true');
-          }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        // Consultation onboarding (flag on, Opus B-05): the consultation, its
+        // plan reveal and Roman's tutorial replace the Day-1 flow and the
+        // Day-1 win, so a client who finished it goes straight to the app.
+        if (!featureFlags.consultationOnboarding) {
+          // Day-1 final onboarding gate. Decacorn-quality flow shown to every
+          // student who has not yet completed it. Backend source of truth is
+          // `profile.day_one_completed`; we also accept the legacy
+          // `onboarding_completed` flag so existing users who already finished
+          // the old flow are not asked to redo it. A local AsyncStorage flag
+          // and an in-progress resume checkpoint keep the flow alive across
+          // reinstalls when the backend hasn't caught up (fail-open).
+          try {
+            const day1ServerDone = !!user?.profile?.day_one_completed;
+            const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
+            const legacyOnboardingDone = !!user?.profile?.onboarding_completed;
+            const day1ResumeState = await readDay1ResumeState();
+            if (
+              !day1ServerDone &&
+              !day1LocalDone &&
+              (!legacyOnboardingDone || day1ResumeState !== null)
+            ) {
+              setAuthState('day1onboarding');
+              return;
+            }
+            if (day1ServerDone && !day1LocalDone) {
+              await AsyncStorage.setItem('day_one_completed', 'true');
+            }
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
 
-        // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
-        // error handling — if the API is unreachable, skip the win screen and
-        // go straight to the client app. The screen can be shown on next boot.
-        try {
-          const statusResponse = await firstWinApi.getStatus();
-          if (!statusResponse.data.completed) {
-            setAuthState('day1win');
-            return;
-          }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+          // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
+          // error handling — if the API is unreachable, skip the win screen and
+          // go straight to the client app. The screen can be shown on next boot.
+          try {
+            const statusResponse = await firstWinApi.getStatus();
+            if (!statusResponse.data.completed) {
+              setAuthState('day1win');
+              return;
+            }
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        }
 
         // Sync Crisp identity so operators see the client's account in the dashboard.
         syncCrispIdentity({

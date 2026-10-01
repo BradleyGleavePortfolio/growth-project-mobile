@@ -23,7 +23,16 @@ import {
   toggleSelection,
   validateScreen,
 } from '../../lib/consultation/engine';
-import { CONSENT_CHECKBOX_LABEL, CONSENT_PARAGRAPHS, CONSULT_CONSENT_COPY_VERSION, P8_COPY } from '../../lib/consultation/copy';
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_PARAGRAPH,
+  CONSENT_CHECKBOX_LABEL,
+  CONSENT_COPY_SHA256,
+  CONSENT_FOOTER,
+  CONSENT_PARAGRAPHS,
+  CONSULT_CONSENT_COPY_VERSION,
+  P8_COPY,
+} from '../../lib/consultation/copy';
 import {
   Checkbox,
   Chip,
@@ -49,11 +58,12 @@ export interface QuestionScreenProps {
   /** Set an answer. `advance` asks the flow to move on (auto-advance). */
   onAnswer: (key: string, value: AnswerValue | undefined, opts?: { advance?: boolean }) => void;
   /** Continue / Skip: move to the next screen. */
-  onNext: (patch?: Answers) => void;
+  /** `aiAllowed` is box 2 of P0 (optional Roman and AI); other screens omit it. */
+  onNext: (patch?: Answers, aiAllowed?: boolean) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
-  consent?: { busy: boolean; error: 'network' | 'version_mismatch' | null };
+  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean };
 }
 
 const MONTHS = [
@@ -410,23 +420,31 @@ function GoalWeightBody(props: BodyProps) {
   );
 }
 
+// Opus C-3: no "Nothing has been sent" here; chapter saves may already have
+// landed when the server moves to a newer agreement.
 const CONSENT_ERROR_COPY = {
-  network: "I couldn't record your agreement just now. Nothing has been sent. Please check your connection and try again.",
   version_mismatch:
-    'The agreement has been updated since this version of the app. Nothing has been sent. Please update the app to read the current agreement before you continue.',
+    'The agreement has been updated since this version of the app. Please update the app to read the current agreement before you continue.',
 } as const;
 
 function ConsentBody(props: BodyProps) {
   const { answers, onNext, header, consent: state } = props;
   // Only a record matching this build's copy version counts (Sol A-03):
-  // stale or malformed records render the box unticked.
+  // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
   const [checked, setChecked] = useState(already);
-  const busy = !!state?.busy;
+  // Box 2 is optional and unticked by default (D2). On a later visit it shows
+  // what the client chose earlier in this session.
+  const [aiChecked, setAiChecked] = useState(!!state?.aiAllowed);
   const error = state?.error ?? null;
   const consent = useMemo<ConsentAnswer>(
-    () => ({ agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: new Date().toISOString() }),
-    // agreed_at is taken when the box is ticked.
+    () => ({
+      agreed: true,
+      copy_version: CONSULT_CONSENT_COPY_VERSION,
+      agreed_at: new Date().toISOString(),
+      text_sha256: CONSENT_COPY_SHA256,
+    }),
+    // agreed_at is taken when box 1 is ticked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [checked],
   );
@@ -437,10 +455,10 @@ function ConsentBody(props: BodyProps) {
       header={header}
       footer={
         <PrimaryButton
-          label={busy ? 'Recording your agreement' : props.screen.cta ?? 'Continue'}
-          disabled={!checked || busy || blocked}
-          hint={checked ? undefined : 'Tick I agree to continue'}
-          onPress={() => onNext({ P0: already ? answers.P0 : consent })}
+          label={props.screen.cta ?? 'Continue'}
+          disabled={!checked || blocked}
+          hint={checked ? undefined : 'Tick the first box to continue'}
+          onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiChecked)}
           testID="consult-continue"
         />
       }
@@ -454,6 +472,14 @@ function ConsentBody(props: BodyProps) {
         label={CONSENT_CHECKBOX_LABEL}
         testID="consent-checkbox"
       />
+      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">{AI_CONSENT_PARAGRAPH}</Text>
+      <Checkbox
+        checked={aiChecked}
+        onToggle={() => setAiChecked((c) => !c)}
+        label={AI_CONSENT_CHECKBOX_LABEL}
+        testID="consent-ai-checkbox"
+      />
+      <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
       {error ? (
         <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consent-error">
           {CONSENT_ERROR_COPY[error]}

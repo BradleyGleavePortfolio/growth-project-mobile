@@ -27,6 +27,7 @@ import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProv
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
+import { featureFlags } from '../../config/featureFlags';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -423,6 +424,26 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* D2 (Opus A-05): the optional Roman and AI choice from the
+              onboarding agreement can be allowed or withdrawn here. Shown
+              in builds where that choice can be made. */}
+          {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
+            <HapticPressable
+              intent="light"
+              style={styles.row}
+              onPress={() => navigation.navigate('RomanAiConsent')}
+              accessibilityRole="button"
+              accessibilityLabel="Roman and AI"
+              accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
+              testID="settings-roman-ai"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                <Text style={styles.rowLabel}>Roman and AI</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </HapticPressable>
+          ) : null}
           {/* iMessage-grade DM — Apple 1.2 compliance. Users must be able to
               view and undo their blocks from Settings. */}
           <HapticPressable

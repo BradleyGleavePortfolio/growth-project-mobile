@@ -130,10 +130,18 @@ export interface MeasureAnswer {
   unit: 'imperial' | 'metric';
 }
 
+/**
+ * The P0 record saved to the intake (backend #607 P0 keys: agreed,
+ * copy_version, agreed_at, text_sha256). It records box 1 only; box 2 is
+ * recorded separately by the AI consent ledger (R2a) and is never part of
+ * the intake answers.
+ */
 export interface ConsentAnswer {
   agreed: true;
   copy_version: string;
   agreed_at: string;
+  /** sha256 of the whole P0 screen text shown (consentCopyText()). */
+  text_sha256?: string;
 }
 
 export type Answers = Record<string, AnswerValue | undefined>;

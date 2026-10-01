@@ -257,7 +257,15 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
         ) : null}
       </View>
       {progress ? <ProgressBar progress={progress} /> : null}
-      <ScrollView ph-no-capture contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      {/* Opus C-6: the notes inputs scroll above the keyboard on iOS. */}
+      <ScrollView
+        ph-no-capture
+        contentContainerStyle={s.scroll}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+        keyboardDismissMode="interactive"
+        testID="consult-scroll"
+      >
         {children}
       </ScrollView>
       {footer ? (
