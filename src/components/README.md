@@ -35,6 +35,16 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `community/CommunityWinCard.tsx` | Community feed primitive. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
+### Roman (AI butler) identity
+
+| File | What it does |
+| --- | --- |
+| `roman/RomanAvatar.tsx` | Roman's circular face avatar (neutral / smile / monogram fallback). |
+| `roman/romanAvatarAssets.ts` | Resolves bundled Roman art: `romanFaceAsset(crop)` for avatars, `romanArtAsset('portrait' \| 'hero' \| 'welcome')` for onboarding, reveal and tutorial surfaces. |
+| `roman/__tests__/romanCanonicalAssets.test.ts` | Pins every file in `assets/roman/` by sha256. |
+
+Roman is an older Black man in his 60s in a black three-piece butler suit, white shirt and straight black tie. The only approved art is `tgp-agent-context/design/roman/` (see `tgp-agent-context/strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md` section 3). Until 2026-09-30 the bundled avatar files showed a different, younger man; that art is removed and must never return. Replacing any Roman asset requires an owner decision recorded in tgp-agent-context, after which the pinned hashes are updated in the same PR.
+
 ### Logging primitives
 
 | File | What it does |
