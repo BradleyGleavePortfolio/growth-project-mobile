@@ -42,8 +42,10 @@ import {
   HealthKitClient,
   HealthKitUnsupportedError,
   HEALTHKIT_READ_PERMISSIONS,
+  SLEEP_LOOKBACK_MS,
   healthKitClient,
 } from '../healthKitClient';
+import { normalizeHealthKitResult } from '../healthKitNormalizer';
 
 // Grab the live mock instance the connector imported (same object reference).
 type MockNative = Record<string, jest.Mock>;
@@ -245,6 +247,41 @@ describe('HealthKitClient.readSamples', () => {
     const res = await new HealthKitClient().readSamples(window);
     expect(res.heartRate).toBeUndefined();
     expect(res.restingHeartRate).toHaveLength(1);
+  });
+
+  it('S14 B-317-2: reports which metric reads failed', async () => {
+    rejectWith(mockNative.getHeartRateSamples, 'no permission');
+    const res = await new HealthKitClient().readSamples(window);
+    expect(res.failed).toEqual(['heartRate']);
+  });
+
+  it('S14 B-317-3: reads sleep from a lookback before the window and reports it', async () => {
+    await new HealthKitClient().readSamples(window);
+    const [opts] = mockNative.getSleepSamples.mock.calls[0];
+    const start = new Date(window.since.getTime() - SLEEP_LOOKBACK_MS).toISOString();
+    expect(opts.startDate).toBe(start);
+    expect(opts.endDate).toBe(window.until.toISOString());
+  });
+
+  it('S14 B-317-4: asks HealthKit for kilograms, and kilograms reach the wire', async () => {
+    // Like the native module: pounds unless the caller names a unit.
+    mockNative.getWeightSamples.mockImplementation(
+      (o: { unit?: string }, cb: (e: string | null, r: unknown) => void) =>
+        cb(null, [
+          {
+            value: o.unit === 'kg' ? 81.6 : 179.9,
+            startDate: '2026-05-30T07:00:00.000Z',
+            endDate: '2026-05-30T07:00:00.000Z',
+          },
+        ]),
+    );
+    const res = await new HealthKitClient().readSamples(window);
+    expect(mockNative.getWeightSamples.mock.calls[0][0].unit).toBe('kg');
+    const samples = normalizeHealthKitResult(res, { connectionId: 'c', sourceTz: 'UTC' });
+    const weight = samples.filter((x) => x.metric === 'BODY_WEIGHT_KG');
+    expect(weight).toHaveLength(1);
+    expect(weight[0].value).toBe(81.6);
+    expect(weight[0].unit).toBe('kg');
   });
 
   it('runs all 14 readers in one pass', async () => {

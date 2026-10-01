@@ -2,15 +2,23 @@
 //
 // Orchestrates the on-device ingestion lane (Agent 2 §3.2):
 //
-//   request-permission → read since-lastSync → normalize → POST
+//   request-permission → read since progress → normalize → POST
 //
-// and persists `lastSyncAt` in secureStorage so each run reads only the
-// incremental window. Platform-guarded (Android only). Fails loud on
-// unrecoverable errors (#36/#50); a per-record-type read failure degrades
-// gracefully (handled in the client's readAllSupportedRecords).
+// S14: progress is stored per account + connection + provider and per record
+// type (`../onDeviceState.ts`), never provider-global (B-317-1). A type whose
+// read failed keeps its progress; a type whose read stopped at the page bound
+// keeps a resume token and is read on from there next time (B-317-2). The
+// run reports `complete` only when every granted type was read to the end.
+// Platform-guarded (Android only).
 
 import { Platform } from 'react-native';
-import { secureStorage } from '../../secureStorage';
+import {
+  getSyncProgress,
+  setSyncProgress,
+  type OnDeviceScope,
+  type SyncProgress,
+} from '../onDeviceState';
+import type { SessionFence } from '../sessionFence';
 import { logger } from '../../../utils/logger';
 import {
   HealthConnectPermissionDeniedError,
@@ -32,7 +40,11 @@ import {
 } from './healthConnectIngestApi';
 import type { NormalizedSample } from './types';
 
-/** SecureStore key under which the last successful sync instant is persisted. */
+/**
+ * Legacy provider-global SecureStore cursor key (pre-S14). No longer read: a
+ * cursor shared by every account on the phone made a second account skip its
+ * import (B-317-1). `signOut()` removes it.
+ */
 export const LAST_SYNC_AT_KEY = 'health_connect_last_sync_at';
 
 /**
@@ -58,6 +70,8 @@ export interface HealthConnectSyncDeps {
   ingestApi?: Pick<typeof defaultIngestApi, 'ingest'>;
   /** Override "now" for deterministic tests. */
   now?: () => Date;
+  /** Stops the run if the session changes (sign-out / account switch). */
+  fence?: SessionFence;
 }
 
 /** Result of a sync run. */
@@ -70,9 +84,15 @@ export interface HealthConnectSyncResult {
   skipped: number;
   /** Granted read record types this run observed. */
   grantedRecordTypes: HealthConnectRecordType[];
-  /** The window read this run. */
+  /** The earliest start and the end of the windows read this run. */
   windowStart: Date;
   windowEnd: Date;
+  /** True only when every granted type was read to the end (B-317-2). */
+  complete: boolean;
+  /** Types whose read failed (progress kept for a retry). */
+  failedRecordTypes: HealthConnectRecordType[];
+  /** Types whose read stopped at the page bound (resumes next run). */
+  truncatedRecordTypes: HealthConnectRecordType[];
 }
 
 function assertSupported(): void {
@@ -81,33 +101,16 @@ function assertSupported(): void {
   }
 }
 
-/** Read the persisted last-sync instant, or null if never synced. */
-export async function getLastSyncAt(): Promise<Date | null> {
-  const raw = await secureStorage.getItem(LAST_SYNC_AT_KEY);
-  if (!raw) return null;
-  const d = new Date(raw);
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-/** Persist the last-sync instant (ISO-8601) in secureStorage. */
-export async function setLastSyncAt(when: Date): Promise<void> {
-  await secureStorage.setItem(LAST_SYNC_AT_KEY, when.toISOString());
-}
-
-/** Clear the persisted last-sync instant (e.g. on disconnect / re-link). */
-export async function clearLastSyncAt(): Promise<void> {
-  await secureStorage.removeItem(LAST_SYNC_AT_KEY);
-}
-
 /**
- * Compute the read-window start: `lastSyncAt - overlap`, or
- * `now - DEFAULT_BACKFILL_DAYS` on first sync.
+ * Window start for a type: its progress minus the overlap, or the 30-day
+ * import start. Never older than the import window (older data needs the
+ * separate Health Connect history permission).
  */
-function computeWindowStart(lastSyncAt: Date | null, now: Date): Date {
-  if (lastSyncAt) {
-    return new Date(lastSyncAt.getTime() - SYNC_OVERLAP_MINUTES * 60_000);
-  }
-  return new Date(now.getTime() - DEFAULT_BACKFILL_DAYS * 24 * 60 * 60_000);
+function typeWindowStart(progress: SyncProgress, recordType: string, now: Date): Date {
+  const importStart = now.getTime() - DEFAULT_BACKFILL_DAYS * 24 * 60 * 60_000;
+  const done = progress.completedThrough[recordType];
+  const fromProgress = done ? Date.parse(done) - SYNC_OVERLAP_MINUTES * 60_000 : importStart;
+  return new Date(Math.max(fromProgress, importStart));
 }
 
 /** The granted record types intersected with the ones this connector reads. */
@@ -123,27 +126,26 @@ function grantedReadRecordTypes(
 }
 
 /**
- * Run a full Health Connect sync through the given server connection. The
- * subject user is never sent: the backend derives it from the JWT (S14).
+ * Run a full Health Connect sync for a scope (account + server connection).
+ * The subject user is never sent: the backend derives it from the JWT; the
+ * scope's user id only keys local progress.
  *
  * Steps:
- *   1. Platform guard (Android only).
- *   2. Initialize the SDK.
- *   3. Read the granted permissions; only when none of our read types is
+ *   1. Platform guard (Android only), initialize the SDK.
+ *   2. Read the granted permissions; only when none of our read types is
  *      granted, show the permission UI once. If still NONE granted → throw
- *      HealthConnectPermissionDeniedError. (Re-showing the system dialog on
- *      every background refresh would nag the user, so it is not requested
- *      again once any read access exists.)
- *   4. Read every granted record type for `[windowStart, now)`.
- *   5. Normalize → NormalizedSample[].
- *   6. POST to the ingestion lane.
- *   7. On success, persist `lastSyncAt = now`.
+ *      HealthConnectPermissionDeniedError.
+ *   3. For every granted type: resume a truncated read, or read from its
+ *      progress (or the 30-day import start) to now.
+ *   4. Normalize → POST in batches (the fence runs before every request).
+ *   5. Save progress: completed types advance; truncated types keep a resume
+ *      token; failed types keep their old progress.
  *
- * `lastSyncAt` is persisted ONLY after a successful POST so a failed run is
- * retried over the same window next time (no silent data gap, #36).
+ * Nothing is saved if the POST fails or the session changed, so the next run
+ * re-reads the same windows (ingest is idempotent).
  */
 export async function syncHealthConnect(
-  connectionId: string,
+  scope: OnDeviceScope,
   deps: HealthConnectSyncDeps = {},
 ): Promise<HealthConnectSyncResult> {
   assertSupported();
@@ -151,11 +153,10 @@ export async function syncHealthConnect(
   const client = deps.client ?? defaultClient;
   const ingestApi = deps.ingestApi ?? defaultIngestApi;
   const now = (deps.now ?? (() => new Date()))();
+  const fence = deps.fence;
 
-  // (2) Boot the SDK.
   await client.initialize();
 
-  // (3) Reconcile against what's actually granted; ask only when nothing is.
   let grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
   if (grantedRecordTypes.length === 0) {
     await client.requestPermission();
@@ -168,44 +169,68 @@ export async function syncHealthConnect(
     throw new HealthConnectPermissionDeniedError([...HEALTH_CONNECT_RECORD_TYPES]);
   }
 
-  // (4) Determine the incremental window and read every granted type.
-  const lastSyncAt = await getLastSyncAt();
-  const windowStart = computeWindowStart(lastSyncAt, now);
-  const range = {
-    startTime: windowStart.toISOString(),
-    endTime: now.toISOString(),
+  const progress = await getSyncProgress(scope);
+  const next: SyncProgress = {
+    v: 1,
+    completedThrough: { ...progress.completedThrough },
+    resume: { ...progress.resume },
   };
-
   const byType: Partial<Record<HealthConnectRecordType, unknown[]>> = {};
+  const failedRecordTypes: HealthConnectRecordType[] = [];
+  const truncatedRecordTypes: HealthConnectRecordType[] = [];
+  let earliest = now.getTime();
+
   for (const recordType of grantedRecordTypes) {
+    const resume = progress.resume[recordType];
+    const range = resume
+      ? { startTime: resume.startTime, endTime: resume.endTime }
+      : { startTime: typeWindowStart(progress, recordType, now).toISOString(), endTime: now.toISOString() };
+    earliest = Math.min(earliest, Date.parse(range.startTime));
     try {
-      byType[recordType] = await client.readRecords(recordType, range);
+      const read = await client.readRecordsPaged(recordType, range, resume?.pageToken);
+      byType[recordType] = read.records;
+      if (read.nextPageToken) {
+        next.resume[recordType] = { ...range, pageToken: read.nextPageToken };
+        truncatedRecordTypes.push(recordType);
+      } else {
+        delete next.resume[recordType];
+        next.completedThrough[recordType] = range.endTime;
+      }
     } catch (err) {
-      // Per-type read failure degrades gracefully — log + skip, never abort
-      // the whole sync (#50). Other types still flow through.
+      // Degrade per type (#50) but never count it as read: keep its progress.
+      // A failed RESUME drops the token (it may have expired) so the next run
+      // re-reads that type's window from its saved progress.
       byType[recordType] = [];
+      failedRecordTypes.push(recordType);
+      if (resume) delete next.resume[recordType];
       logger.error('healthConnectSync', 'readRecords failed', {
         recordType,
+        resumed: Boolean(resume),
         error: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  // (5) Normalize device-side.
-  const ctx: NormalizeContext = { connectionId };
+  const ctx: NormalizeContext = { connectionId: scope.connectionId };
   const samples: NormalizedSample[] = normalizeAll(ctx, byType);
 
-  // (6) POST in request-sized batches (idempotent; empty batch is a no-op).
-  const { inserted, skipped } = await ingestApi.ingest(samples);
+  const { inserted, skipped } = await ingestApi.ingest(
+    samples,
+    fence ? { beforeEachRequest: () => fence.assertCurrent() } : undefined,
+  );
 
-  // (7) Persist watermark ONLY after a successful POST.
-  await setLastSyncAt(now);
+  if (fence) await fence.assertCurrent();
+  await setSyncProgress(scope, next);
 
-  logger.log('healthConnectSync', 'sync complete', {
+  const complete = failedRecordTypes.length === 0 && truncatedRecordTypes.length === 0;
+  logger.log('healthConnectSync', 'sync pass done', {
     normalizedCount: samples.length,
     inserted,
     skipped,
     grantedRecordTypes: grantedRecordTypes.length,
+    failed: failedRecordTypes.length,
+    truncated: truncatedRecordTypes.length,
+    complete,
   });
 
   return {
@@ -213,17 +238,17 @@ export async function syncHealthConnect(
     inserted,
     skipped,
     grantedRecordTypes,
-    windowStart,
+    windowStart: new Date(earliest),
     windowEnd: now,
+    complete,
+    failedRecordTypes,
+    truncatedRecordTypes,
   };
 }
 
 /** Grouped service surface (handy for mocking from the hook). */
 export const healthConnectSyncService = {
   LAST_SYNC_AT_KEY,
-  getLastSyncAt,
-  setLastSyncAt,
-  clearLastSyncAt,
   syncHealthConnect,
 };
 

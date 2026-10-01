@@ -19,6 +19,8 @@
  */
 
 import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
+import { retireOnDeviceState } from '../services/health/onDeviceState';
+import { logger } from '../utils/logger';
 import {
   useMutation,
   useQuery,
@@ -71,7 +73,15 @@ export function useDisconnectProvider() {
   const qc = useQueryClient();
   return useMutation<DisconnectResult, Error, WearableProvider>({
     mutationFn: (provider) => wearablesConnectionsApi.disconnect(provider),
-    onSuccess: () => {
+    onSuccess: (_result, provider) => {
+      // S14 (A-317-1 / B-317-1): disconnecting an on-device source retires
+      // this phone's local authorization and progress for it, so nothing is
+      // read again until the person taps Connect again.
+      if (provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT') {
+        retireOnDeviceState(provider).catch((err: unknown) => {
+          logger.warn('[wearables] retire on-device state failed', err);
+        });
+      }
       qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
     },
   });

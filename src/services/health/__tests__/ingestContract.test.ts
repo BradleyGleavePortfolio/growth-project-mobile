@@ -35,7 +35,7 @@ const FIXTURE_PATH = path.join(
 );
 
 /** Pinned in both repos. Update both together, never one. */
-const FIXTURE_SHA256 = '033301173cc52458d4a1d2ee98a24df6b10aeac6137487e18f5c335687e4ec9e';
+const FIXTURE_SHA256 = '3c8701f9f9f592a188115bb6eea63b0417d38eba306d238465ac02de51579cfb';
 
 const HK_CONNECTION = '11111111-1111-4111-8111-111111111111';
 const HC_CONNECTION = '22222222-2222-4222-8222-222222222222';
@@ -86,6 +86,14 @@ function healthKitSamples() {
           value: 0.048,
           startDate: '2026-09-29T06:10:00.000-0700',
           endDate: '2026-09-29T06:10:00.000-0700',
+        },
+      ],
+      // B-317-4: the client asks HealthKit for kilograms; the wire value is kg.
+      weight: [
+        {
+          value: 81.6,
+          startDate: '2026-09-29T06:40:00.000-0700',
+          endDate: '2026-09-29T06:40:00.000-0700',
         },
       ],
       sleep: [
@@ -270,6 +278,22 @@ describe('S14 ingest contract fixture', () => {
       'SLEEP_AWAKE_MIN',
     ]) {
       expect(metrics.has(m)).toBe(true);
+    }
+  });
+
+  it('B-317-4: both providers carry body weight in kilograms', () => {
+    const fixture = JSON.parse(built) as {
+      requests: { provider: string; metric: string; value: number; unit: string }[][];
+    };
+    const weights = fixture.requests.flat().filter((s) => s.metric === 'BODY_WEIGHT_KG');
+    expect(new Set(weights.map((w) => w.provider))).toEqual(
+      new Set(['APPLE_HEALTHKIT', 'HEALTH_CONNECT']),
+    );
+    for (const w of weights) {
+      expect(w.unit).toBe('kg');
+      // A pounds value (about 2.2x) would land outside this band.
+      expect(w.value).toBeGreaterThan(30);
+      expect(w.value).toBeLessThan(150);
     }
   });
 });

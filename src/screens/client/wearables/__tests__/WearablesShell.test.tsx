@@ -94,7 +94,7 @@ const mockImportHistory = jest.fn();
 let mockDeviceSource: string | null = 'APPLE_HEALTHKIT';
 jest.mock('../../../../services/health/onDeviceSync', () => ({
   deviceSourceForPlatform: () => mockDeviceSource,
-  importOnDeviceHistory: (...args: unknown[]) => mockImportHistory(...args),
+  refreshOnDevice: (...args: unknown[]) => mockImportHistory(...args),
 }));
 
 jest.mock('../../../../utils/logger', () => ({
@@ -202,7 +202,16 @@ describe('WearablesShell', () => {
     await render(<WearablesShell />);
     await waitFor(() => expect(mockInvalidateWearables).toHaveBeenCalledTimes(1));
     expect(mockImportHistory).toHaveBeenCalledTimes(1);
-    expect(mockImportHistory).toHaveBeenCalledWith('APPLE_HEALTHKIT');
+    // A-317-1: the refresh is handed the server rows so it can require the
+    // SAME connection this person connected through on this phone.
+    expect(mockImportHistory).toHaveBeenCalledWith('APPLE_HEALTHKIT', expect.any(Array));
+  });
+
+  it('S14 A-317-1: does not refetch when this phone was never connected by this person', async () => {
+    mockImportHistory.mockResolvedValue({ kind: 'not_authorized', source: 'APPLE_HEALTHKIT' });
+    await render(<WearablesShell />);
+    await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(1));
+    expect(mockInvalidateWearables).not.toHaveBeenCalled();
   });
 
   it('S14: does not refresh when this phone has no connected health store', async () => {

@@ -31,9 +31,11 @@ export const WEARABLES_INGEST_PATH = '/v1/wearables/samples/ingest';
 export const MAX_SAMPLES_PER_REQUEST = 250;
 
 /**
- * Upper bound on the serialized JSON body per request. The backend uses the
- * default 100 KB (102,400 byte) JSON limit; 90,000 leaves headroom for
- * multi-byte characters (for example the unit string for Celsius).
+ * Upper bound on the UTF-8 encoded JSON body per request, in bytes. The
+ * backend uses the default 100 KB (102,400 byte) JSON limit; 90,000 leaves
+ * headroom for headers-free framing differences. Sizes are counted as UTF-8
+ * bytes (see {@link utf8ByteLength}), not UTF-16 string length, so multi-byte
+ * characters (for example the unit string for Celsius) are counted correctly.
  */
 export const MAX_REQUEST_BYTES = 90_000;
 
@@ -105,17 +107,56 @@ export function toIngestWire(sample: IngestableSample): IngestWireSample {
 }
 
 /**
- * Split wire samples into request-sized batches, bounded by both
- * {@link MAX_SAMPLES_PER_REQUEST} and {@link MAX_REQUEST_BYTES}. Order is
- * preserved. A single sample can never exceed the byte bound (every field is
- * length-capped by the backend schema), so every batch holds at least one.
+ * UTF-8 encoded byte length of a string. Counted by hand (no TextEncoder) so
+ * it behaves the same on Hermes, JSC and Node. A valid surrogate pair is one
+ * 4-byte code point; a lone surrogate is encoded by JSON.stringify as a
+ * 6-character ASCII escape before it reaches here, and is otherwise counted as
+ * the 3-byte replacement character.
  */
-export function chunkForIngest(samples: IngestWireSample[]): IngestWireSample[][] {
+export function utf8ByteLength(str: string): number {
+  let bytes = 0;
+  for (let i = 0; i < str.length; i += 1) {
+    const code = str.charCodeAt(i);
+    if (code < 0x80) bytes += 1;
+    else if (code < 0x800) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff && i + 1 < str.length) {
+      const next = str.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else {
+        bytes += 3;
+      }
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+/** Result of {@link chunkForIngest}. */
+export interface IngestChunks {
+  batches: IngestWireSample[][];
+  /** Samples whose own encoded size cannot fit one request; never sent. */
+  oversized: IngestWireSample[];
+}
+
+/**
+ * Split wire samples into request-sized batches, bounded by both
+ * {@link MAX_SAMPLES_PER_REQUEST} and {@link MAX_REQUEST_BYTES} (UTF-8
+ * bytes). Order is preserved. A sample that alone exceeds the byte bound is
+ * returned in `oversized` instead of being sent (the server would reject the
+ * whole request); every batch holds at least one sample.
+ */
+export function chunkForIngestWithReport(samples: IngestWireSample[]): IngestChunks {
   const batches: IngestWireSample[][] = [];
+  const oversized: IngestWireSample[] = [];
   let current: IngestWireSample[] = [];
   let bytes = 2; // the enclosing [ ]
   for (const sample of samples) {
-    const size = JSON.stringify(sample).length + 1; // + separating comma
+    const size = utf8ByteLength(JSON.stringify(sample)) + 1; // + separating comma
+    if (size + 2 > MAX_REQUEST_BYTES) {
+      oversized.push(sample);
+      continue;
+    }
     if (
       current.length > 0 &&
       (current.length >= MAX_SAMPLES_PER_REQUEST || bytes + size > MAX_REQUEST_BYTES)
@@ -128,13 +169,25 @@ export function chunkForIngest(samples: IngestWireSample[]): IngestWireSample[][
     bytes += size;
   }
   if (current.length > 0) batches.push(current);
-  return batches;
+  return { batches, oversized };
+}
+
+/** {@link chunkForIngestWithReport} batches only (oversized samples dropped). */
+export function chunkForIngest(samples: IngestWireSample[]): IngestWireSample[][] {
+  return chunkForIngestWithReport(samples).batches;
 }
 
 /** Injectable seams for tests. */
 export interface PostIngestDeps {
   post?: (path: string, body: IngestWireSample[]) => Promise<{ data: IngestResult }>;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * Called before every request (including retries). Throwing stops the post
+   * before anything else is sent. The session fence uses it so a sign-out or
+   * account switch mid-import can never send one account's data under
+   * another account's session.
+   */
+  beforeEachRequest?: () => void | Promise<void>;
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -163,18 +216,19 @@ function isRateLimited(err: unknown): boolean {
 export async function postIngestBatches(
   samples: IngestableSample[],
   deps: PostIngestDeps = {},
-): Promise<IngestResult & { requests: number }> {
+): Promise<IngestResult & { requests: number; oversized: number }> {
   const post =
     deps.post ?? ((path: string, body: IngestWireSample[]) => api.post<IngestResult>(path, body));
   const sleep = deps.sleep ?? defaultSleep;
 
-  const batches = chunkForIngest(samples.map(toIngestWire));
+  const { batches, oversized } = chunkForIngestWithReport(samples.map(toIngestWire));
   let inserted = 0;
   let skipped = 0;
   let requests = 0;
   for (const batch of batches) {
     for (let attempt = 1; ; attempt += 1) {
       try {
+        if (deps.beforeEachRequest) await deps.beforeEachRequest();
         requests += 1;
         const res = await post(WEARABLES_INGEST_PATH, batch);
         inserted += res.data?.inserted ?? 0;
@@ -186,5 +240,5 @@ export async function postIngestBatches(
       }
     }
   }
-  return { inserted, skipped, requests };
+  return { inserted, skipped, requests, oversized: oversized.length };
 }

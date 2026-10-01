@@ -1,26 +1,13 @@
 // PR-HK-2.b — healthConnectSyncService tests.
 //
 // Verifies the orchestration: platform guard, permission-denied path,
-// since-lastSync windowing, normalize → POST, and lastSyncAt persistence
-// (written only after a successful POST). secureStorage is mocked in-memory.
+// per-scope per-type windowing (S14 B-317-1), page-bound resume and failed
+// reads that never count as complete (S14 B-317-2), normalize → POST, and
+// progress persisted only after a successful POST. Progress lives in the
+// (jest) AsyncStorage via `../../onDeviceState`.
 
 import { Platform } from 'react-native';
-
-// In-memory secureStorage mock.
-const store: Record<string, string> = {};
-jest.mock('../../../secureStorage', () => ({
-  secureStorage: {
-    getItem: jest.fn((k: string) => Promise.resolve(store[k] ?? null)),
-    setItem: jest.fn((k: string, v: string) => {
-      store[k] = v;
-      return Promise.resolve();
-    }),
-    removeItem: jest.fn((k: string) => {
-      delete store[k];
-      return Promise.resolve();
-    }),
-  },
-}));
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('../../../../utils/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -29,21 +16,23 @@ jest.mock('../../../../utils/logger', () => ({
 import { HealthConnectPermissionDeniedError, HealthConnectUnsupportedError } from '../errors';
 import {
   DEFAULT_BACKFILL_DAYS,
-  LAST_SYNC_AT_KEY,
   SYNC_OVERLAP_MINUTES,
-  clearLastSyncAt,
-  getLastSyncAt,
-  setLastSyncAt,
   syncHealthConnect,
   type HealthConnectSyncDeps,
 } from '../healthConnectSyncService';
-import { HEALTH_CONNECT_RECORD_TYPES } from '../healthConnectClient';
+import { HEALTH_CONNECT_RECORD_TYPES, type PagedReadResult } from '../healthConnectClient';
+import { getSyncProgress, setSyncProgress, type OnDeviceScope } from '../../onDeviceState';
+import { OnDeviceSessionChangedError, type SessionFence } from '../../sessionFence';
 
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
 }
 
 const NOW = new Date('2026-05-10T12:00:00.000Z');
+const SCOPE: OnDeviceScope = { userId: 'user-a', connectionId: 'c', source: 'HEALTH_CONNECT' };
+const IMPORT_START = new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 24 * 60 * 60_000).toISOString();
+
+type PagedFn = (rt: string, range: unknown, token?: string) => Promise<PagedReadResult>;
 
 function makeClient(overrides: Partial<Record<string, jest.Mock>> = {}) {
   const grantedAll = HEALTH_CONNECT_RECORD_TYPES.map((rt) => ({
@@ -54,130 +43,192 @@ function makeClient(overrides: Partial<Record<string, jest.Mock>> = {}) {
     isHealthConnectSupported: jest.fn(() => true),
     buildReadPermissions: jest.fn(() => grantedAll),
     initialize: overrides.initialize ?? jest.fn().mockResolvedValue(true),
-    requestPermission:
-      overrides.requestPermission ?? jest.fn().mockResolvedValue(grantedAll),
+    requestPermission: overrides.requestPermission ?? jest.fn().mockResolvedValue(grantedAll),
     getGrantedPermissions:
       overrides.getGrantedPermissions ?? jest.fn().mockResolvedValue(grantedAll),
-    readRecords:
-      overrides.readRecords ??
-      jest.fn().mockResolvedValue([]),
+    readRecords: jest.fn().mockResolvedValue([]),
+    readRecordsPaged:
+      overrides.readRecordsPaged ?? jest.fn<ReturnType<PagedFn>, Parameters<PagedFn>>().mockResolvedValue({ records: [] }),
     readAllSupportedRecords: jest.fn().mockResolvedValue({}),
   };
 }
 
-function makeDeps(client: ReturnType<typeof makeClient>, ingest = jest.fn()): HealthConnectSyncDeps {
+function grantOnly(...types: string[]) {
+  return jest.fn().mockResolvedValue(types.map((recordType) => ({ accessType: 'read', recordType })));
+}
+
+function makeDeps(
+  client: ReturnType<typeof makeClient>,
+  ingest: jest.Mock = jest.fn().mockResolvedValue({ inserted: 0, skipped: 0 }),
+  extra: Partial<HealthConnectSyncDeps> = {},
+): HealthConnectSyncDeps {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    client: client as any,
-    ingestApi: { ingest: ingest.mockResolvedValue({ inserted: 0, skipped: 0 }) },
+    client: client as never,
+    ingestApi: { ingest },
     now: () => NOW,
+    ...extra,
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
-  for (const k of Object.keys(store)) delete store[k];
+  await AsyncStorage.clear();
   setPlatform('android');
-});
-
-describe('lastSyncAt persistence', () => {
-  it('round-trips through secureStorage', async () => {
-    expect(await getLastSyncAt()).toBeNull();
-    await setLastSyncAt(NOW);
-    expect(store[LAST_SYNC_AT_KEY]).toBe(NOW.toISOString());
-    expect(await getLastSyncAt()).toEqual(NOW);
-    await clearLastSyncAt();
-    expect(await getLastSyncAt()).toBeNull();
-  });
-
-  it('returns null for a corrupt stored value', async () => {
-    store[LAST_SYNC_AT_KEY] = 'not-a-date';
-    expect(await getLastSyncAt()).toBeNull();
-  });
 });
 
 describe('platform guard', () => {
   it('throws HealthConnectUnsupportedError on ios', async () => {
     setPlatform('ios');
-    await expect(
-      syncHealthConnect('c', makeDeps(makeClient())),
-    ).rejects.toBeInstanceOf(HealthConnectUnsupportedError);
+    await expect(syncHealthConnect(SCOPE, makeDeps(makeClient()))).rejects.toBeInstanceOf(
+      HealthConnectUnsupportedError,
+    );
   });
 });
 
 describe('permission-denied path', () => {
   it('throws HealthConnectPermissionDeniedError when nothing is granted', async () => {
-    const client = makeClient({
-      getGrantedPermissions: jest.fn().mockResolvedValue([]),
-    });
-    await expect(
-      syncHealthConnect('c', makeDeps(client)),
-    ).rejects.toBeInstanceOf(HealthConnectPermissionDeniedError);
-    // Watermark NOT written on a denied run.
-    expect(store[LAST_SYNC_AT_KEY]).toBeUndefined();
+    const client = makeClient({ getGrantedPermissions: jest.fn().mockResolvedValue([]) });
+    await expect(syncHealthConnect(SCOPE, makeDeps(client))).rejects.toBeInstanceOf(
+      HealthConnectPermissionDeniedError,
+    );
+    expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
   });
 
   it('proceeds with a partial grant (subset of record types)', async () => {
     const client = makeClient({
-      getGrantedPermissions: jest
-        .fn()
-        .mockResolvedValue([{ accessType: 'read', recordType: 'Steps' }]),
-      readRecords: jest.fn().mockResolvedValue([
-        { startTime: NOW.toISOString(), endTime: NOW.toISOString(), count: 7 },
-      ]),
+      getGrantedPermissions: grantOnly('Steps'),
+      readRecordsPaged: jest.fn().mockResolvedValue({
+        records: [{ startTime: NOW.toISOString(), endTime: NOW.toISOString(), count: 7 }],
+      }),
     });
-    const ingest = jest.fn();
-    const res = await syncHealthConnect('c', makeDeps(client, ingest));
+    const res = await syncHealthConnect(SCOPE, makeDeps(client));
     expect(res.grantedRecordTypes).toEqual(['Steps']);
-    // Only the granted type was read.
-    expect(client.readRecords).toHaveBeenCalledTimes(1);
-    expect(client.readRecords).toHaveBeenCalledWith('Steps', expect.anything());
+    expect(client.readRecordsPaged).toHaveBeenCalledTimes(1);
+    expect(client.readRecordsPaged).toHaveBeenCalledWith('Steps', expect.anything(), undefined);
     expect(res.normalizedCount).toBe(1);
+    expect(res.complete).toBe(true);
   });
 });
 
-describe('windowing', () => {
-  it('uses now - DEFAULT_BACKFILL_DAYS on first sync', async () => {
-    const client = makeClient();
-    await syncHealthConnect('c', makeDeps(client));
-    const firstCallRange = client.readRecords.mock.calls[0][1];
-    const expectedStart = new Date(
-      NOW.getTime() - DEFAULT_BACKFILL_DAYS * 24 * 60 * 60_000,
-    ).toISOString();
-    expect(firstCallRange.startTime).toBe(expectedStart);
-    expect(firstCallRange.endTime).toBe(NOW.toISOString());
+describe('windowing (per scope, per type)', () => {
+  it('imports DEFAULT_BACKFILL_DAYS on the first sync of a scope', async () => {
+    const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
+    await syncHealthConnect(SCOPE, makeDeps(client));
+    const range = client.readRecordsPaged.mock.calls[0][1];
+    expect(range).toEqual({ startTime: IMPORT_START, endTime: NOW.toISOString() });
   });
 
-  it('uses lastSyncAt minus overlap on incremental sync', async () => {
-    const last = new Date('2026-05-10T11:00:00.000Z');
-    store[LAST_SYNC_AT_KEY] = last.toISOString();
-    const client = makeClient();
-    await syncHealthConnect('c', makeDeps(client));
-    const range = client.readRecords.mock.calls[0][1];
-    const expectedStart = new Date(
-      last.getTime() - SYNC_OVERLAP_MINUTES * 60_000,
-    ).toISOString();
-    expect(range.startTime).toBe(expectedStart);
+  it('reads from the type progress minus overlap on an incremental sync', async () => {
+    const last = '2026-05-10T11:00:00.000Z';
+    await setSyncProgress(SCOPE, { v: 1, completedThrough: { Steps: last }, resume: {} });
+    const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
+    await syncHealthConnect(SCOPE, makeDeps(client));
+    expect(client.readRecordsPaged.mock.calls[0][1].startTime).toBe(
+      new Date(Date.parse(last) - SYNC_OVERLAP_MINUTES * 60_000).toISOString(),
+    );
+  });
+
+  it('B-317-1: a second account or a recreated connection starts its own 30-day import', async () => {
+    await setSyncProgress(SCOPE, { v: 1, completedThrough: { Steps: NOW.toISOString() }, resume: {} });
+    for (const scope of [
+      { ...SCOPE, userId: 'user-b' },
+      { ...SCOPE, connectionId: 'c-2' },
+    ]) {
+      const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
+      await syncHealthConnect(scope, makeDeps(client));
+      expect(client.readRecordsPaged.mock.calls[0][1].startTime).toBe(IMPORT_START);
+    }
+  });
+});
+
+describe('B-317-2 completeness', () => {
+  it('a page-bounded read keeps a resume token, is not complete, and resumes next run', async () => {
+    const client = makeClient({
+      getGrantedPermissions: grantOnly('Steps'),
+      readRecordsPaged: jest.fn().mockResolvedValue({
+        records: [{ startTime: NOW.toISOString(), endTime: NOW.toISOString(), count: 3 }],
+        nextPageToken: 'tok-21',
+      }),
+    });
+    const res = await syncHealthConnect(SCOPE, makeDeps(client));
+    expect(res.complete).toBe(false);
+    expect(res.truncatedRecordTypes).toEqual(['Steps']);
+    const progress = await getSyncProgress(SCOPE);
+    expect(progress.completedThrough.Steps).toBeUndefined();
+    expect(progress.resume.Steps).toEqual({
+      startTime: IMPORT_START,
+      endTime: NOW.toISOString(),
+      pageToken: 'tok-21',
+    });
+
+    // Next run resumes the SAME window from the token, then completes.
+    const later = new Date(NOW.getTime() + 60_000);
+    const next = makeClient({
+      getGrantedPermissions: grantOnly('Steps'),
+      readRecordsPaged: jest.fn().mockResolvedValue({ records: [] }),
+    });
+    const res2 = await syncHealthConnect(SCOPE, makeDeps(next, undefined, { now: () => later }));
+    expect(next.readRecordsPaged).toHaveBeenCalledWith(
+      'Steps',
+      { startTime: IMPORT_START, endTime: NOW.toISOString() },
+      'tok-21',
+    );
+    expect(res2.complete).toBe(true);
+    const after = await getSyncProgress(SCOPE);
+    expect(after.resume.Steps).toBeUndefined();
+    expect(after.completedThrough.Steps).toBe(NOW.toISOString());
+  });
+
+  it('a failed read keeps that type\u2019s progress while the others advance', async () => {
+    const prior = '2026-05-01T00:00:00.000Z';
+    await setSyncProgress(SCOPE, {
+      v: 1,
+      completedThrough: { Steps: prior, Weight: prior },
+      resume: {},
+    });
+    const client = makeClient({
+      getGrantedPermissions: grantOnly('Steps', 'Weight'),
+      readRecordsPaged: jest.fn((rt: string) => {
+        if (rt === 'Weight') return Promise.reject(new Error('native read failed'));
+        return Promise.resolve({ records: [] });
+      }),
+    });
+    const res = await syncHealthConnect(SCOPE, makeDeps(client));
+    expect(res.complete).toBe(false);
+    expect(res.failedRecordTypes).toEqual(['Weight']);
+    const progress = await getSyncProgress(SCOPE);
+    expect(progress.completedThrough.Weight).toBe(prior);
+    expect(progress.completedThrough.Steps).toBe(NOW.toISOString());
+  });
+
+  it('a failed resume drops the token and keeps the old progress', async () => {
+    await setSyncProgress(SCOPE, {
+      v: 1,
+      completedThrough: {},
+      resume: { Steps: { startTime: IMPORT_START, endTime: NOW.toISOString(), pageToken: 'stale' } },
+    });
+    const client = makeClient({
+      getGrantedPermissions: grantOnly('Steps'),
+      readRecordsPaged: jest.fn().mockRejectedValue(new Error('token expired')),
+    });
+    const res = await syncHealthConnect(SCOPE, makeDeps(client));
+    expect(res.complete).toBe(false);
+    const progress = await getSyncProgress(SCOPE);
+    expect(progress.resume.Steps).toBeUndefined();
+    expect(progress.completedThrough.Steps).toBeUndefined();
   });
 });
 
 describe('normalize → POST → persist', () => {
-  it('posts normalized samples and persists watermark only after success', async () => {
+  it('posts normalized samples and persists progress only after success', async () => {
     const client = makeClient({
-      getGrantedPermissions: jest
+      getGrantedPermissions: grantOnly('Weight'),
+      readRecordsPaged: jest
         .fn()
-        .mockResolvedValue([{ accessType: 'read', recordType: 'Weight' }]),
-      readRecords: jest
-        .fn()
-        .mockResolvedValue([{ time: NOW.toISOString(), weight: { inKilograms: 80 } }]),
+        .mockResolvedValue({ records: [{ time: NOW.toISOString(), weight: { inKilograms: 80 } }] }),
     });
     const ingest = jest.fn().mockResolvedValue({ inserted: 1, skipped: 0 });
-    const res = await syncHealthConnect('conn-9', {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      client: client as any,
-      ingestApi: { ingest },
-      now: () => NOW,
-    });
+    const res = await syncHealthConnect({ ...SCOPE, connectionId: 'conn-9' }, makeDeps(client, ingest));
     expect(ingest).toHaveBeenCalledTimes(1);
     const posted = ingest.mock.calls[0][0];
     expect(posted).toHaveLength(1);
@@ -189,43 +240,32 @@ describe('normalize → POST → persist', () => {
       value: 80,
     });
     expect(res.inserted).toBe(1);
-    // Watermark persisted to NOW after success.
-    expect(store[LAST_SYNC_AT_KEY]).toBe(NOW.toISOString());
+    const progress = await getSyncProgress({ ...SCOPE, connectionId: 'conn-9' });
+    expect(progress.completedThrough.Weight).toBe(NOW.toISOString());
   });
 
-  it('does NOT persist watermark if POST throws', async () => {
+  it('does NOT persist progress if POST throws', async () => {
     const client = makeClient();
     const ingest = jest.fn().mockRejectedValue(new Error('network'));
-    await expect(
-      syncHealthConnect('c', {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        client: client as any,
-        ingestApi: { ingest },
-        now: () => NOW,
-      }),
-    ).rejects.toThrow('network');
-    expect(store[LAST_SYNC_AT_KEY]).toBeUndefined();
+    await expect(syncHealthConnect(SCOPE, makeDeps(client, ingest))).rejects.toThrow('network');
+    expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
   });
 
-  it('isolates a per-type read failure and still posts the rest', async () => {
-    const client = makeClient({
-      getGrantedPermissions: jest.fn().mockResolvedValue([
-        { accessType: 'read', recordType: 'Steps' },
-        { accessType: 'read', recordType: 'Weight' },
-      ]),
-      readRecords: jest.fn((rt: string) => {
-        if (rt === 'Steps') return Promise.reject(new Error('read fail'));
-        return Promise.resolve([{ time: NOW.toISOString(), weight: { inKilograms: 75 } }]);
-      }),
-    });
-    const ingest = jest.fn().mockResolvedValue({ inserted: 1, skipped: 0 });
-    const res = await syncHealthConnect('c', {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      client: client as any,
-      ingestApi: { ingest },
-      now: () => NOW,
-    });
-    expect(res.normalizedCount).toBe(1);
-    expect(ingest.mock.calls[0][0][0].metric).toBe('BODY_WEIGHT_KG');
+  it('A-317-1: passes the fence to every request and saves nothing after a session change', async () => {
+    const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
+    const fence: SessionFence = {
+      userId: SCOPE.userId,
+      assertCurrent: jest.fn().mockRejectedValue(new OnDeviceSessionChangedError()),
+    };
+    const ingest = jest.fn(
+      async (_s: unknown[], deps?: { beforeEachRequest?: () => Promise<void> | void }) => {
+        if (deps?.beforeEachRequest) await deps.beforeEachRequest();
+        return { inserted: 0, skipped: 0 };
+      },
+    );
+    await expect(
+      syncHealthConnect(SCOPE, makeDeps(client, ingest as jest.Mock, { fence })),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
   });
 });

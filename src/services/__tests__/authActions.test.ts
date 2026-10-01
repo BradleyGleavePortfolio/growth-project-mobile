@@ -107,6 +107,22 @@ describe('signOut', () => {
     authEvents.off('logout', handler);
   });
 
+  // S14 (A-317-1 / B-317-1) — on-device health Connect authorizations and
+  // per-account progress never survive sign-out (also the account-deletion
+  // path, which ends in signOut()).
+  it('sweeps every on-device health authorization and progress key', async () => {
+    const keys = [
+      'wearables_on_device:auth:APPLE_HEALTHKIT:user-A',
+      'wearables_on_device:auth:HEALTH_CONNECT:user-B',
+      'wearables_on_device:progress:APPLE_HEALTHKIT:user-A:conn-1',
+    ];
+    for (const k of keys) await AsyncStorage.setItem(k, '{}');
+    await AsyncStorage.setItem('wearables_other', 'stays');
+    await signOut();
+    for (const k of keys) expect(await AsyncStorage.getItem(k)).toBeNull();
+    expect(await AsyncStorage.getItem('wearables_other')).toBe('stays');
+  });
+
   // R15 — Every variant of pending_invite_code is user-scoped (or
   // `:anonymous` for unauthenticated cold-start) and signOut must wipe
   // them all. Round-4 audit P1-A regression guard.

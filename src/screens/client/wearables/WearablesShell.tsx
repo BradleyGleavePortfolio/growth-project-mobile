@@ -38,7 +38,7 @@ import {
 import { featureFlags } from '../../../config/featureFlags';
 import {
   deviceSourceForPlatform,
-  importOnDeviceHistory,
+  refreshOnDevice,
 } from '../../../services/health/onDeviceSync';
 import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
@@ -67,13 +67,16 @@ export default function WearablesShell() {
   const fade = useMemo(() => new Animated.Value(1), []);
 
   const connectionsQuery = useWearableConnections();
-  const connections = connectionsQuery.data ?? [];
+  const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
   const invalidateWearables = useInvalidateWearableConnections();
 
-  // S14: refresh on open. When this phone's health store (Apple Health on
-  // iOS, Health Connect on Android) is connected, read what is new since the
-  // last sync and post it, then refetch so the views show it. Once per mount;
-  // failures are logged and the views keep showing what is already stored.
+  // S14: refresh on open. A remote "connected" row is NOT enough to read this
+  // phone's health store (A-317-1): refreshOnDevice runs only when the
+  // signed-in person tapped Connect on THIS phone (local authorization keyed
+  // by user + source) and the server still lists that same connection. It
+  // reads what is new since that account's progress, posts it behind a
+  // session fence, then the views refetch. Once per mount; failures are
+  // logged and the views keep showing what is already stored.
   const deviceSource = deviceSourceForPlatform();
   const hasDeviceConnection = connections.some(
     (c) => c.provider === deviceSource && c.status === 'connected',
@@ -82,14 +85,14 @@ export default function WearablesShell() {
   useEffect(() => {
     if (refreshStarted || deviceSource == null || !hasDeviceConnection) return;
     setRefreshStarted(true);
-    importOnDeviceHistory(deviceSource)
+    refreshOnDevice(deviceSource, connections)
       .then((outcome) => {
         if (outcome.kind === 'imported') invalidateWearables();
       })
       .catch((err: unknown) => {
         logger.warn('[wearables] on-device refresh failed', err);
       });
-  }, [refreshStarted, deviceSource, hasDeviceConnection, invalidateWearables]);
+  }, [refreshStarted, deviceSource, hasDeviceConnection, connections, invalidateWearables]);
 
   const goToConnections = useCallback(() => {
     navigation.navigate('Connections');

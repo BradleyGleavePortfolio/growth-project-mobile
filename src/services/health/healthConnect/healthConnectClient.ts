@@ -243,20 +243,33 @@ export async function requestPermission(): Promise<HealthConnectPermission[]> {
  */
 export const MAX_READ_PAGES = 20;
 
+/** One paged read: the records read and, when stopped early, where to resume. */
+export interface PagedReadResult {
+  records: unknown[];
+  /**
+   * Set when the read stopped at {@link MAX_READ_PAGES} with more pages left
+   * (S14 B-317-2). The caller must treat the type as NOT complete and resume
+   * from this token over the SAME window next time.
+   */
+  nextPageToken?: string;
+}
+
 /**
- * Read all records of a single type within `[startTime, endTime)`. Returns the
- * raw, provider-native records array (opaque to callers other than the
- * normalizer). Uses the library's `'between'` time-range filter.
+ * Read records of a single type within `[startTime, endTime)`, following
+ * `pageToken` for up to {@link MAX_READ_PAGES} pages, optionally resuming
+ * from a token a previous run returned. Uses the library's `'between'`
+ * time-range filter.
  *
  * The records are typed `unknown[]` deliberately: only the normalizer
  * understands each record type's field shape, and it defends against missing
  * fields at runtime. Keeping this seam `unknown` prevents the native shape
  * from leaking type assumptions into the rest of the app.
  */
-export async function readRecords(
+export async function readRecordsPaged(
   recordType: HealthConnectRecordType,
   range: TimeRange,
-): Promise<unknown[]> {
+  resumeFrom?: string,
+): Promise<PagedReadResult> {
   assertSupported();
   // The library accepts a record-type string + options; result is
   // `{ records: T[], pageToken?: string }`. We cast through `unknown` because
@@ -271,7 +284,8 @@ export async function readRecords(
   ) => Promise<{ records?: unknown[]; pageToken?: string }>;
 
   const out: unknown[] = [];
-  let pageToken: string | undefined;
+  let pageToken: string | undefined =
+    typeof resumeFrom === 'string' && resumeFrom.length > 0 ? resumeFrom : undefined;
   for (let page = 0; page < MAX_READ_PAGES; page += 1) {
     const result = await read(recordType, {
       timeRangeFilter: {
@@ -286,9 +300,22 @@ export async function readRecords(
       typeof result?.pageToken === 'string' && result.pageToken.length > 0
         ? result.pageToken
         : undefined;
-    if (!pageToken) break;
+    if (!pageToken) return { records: out };
   }
-  return out;
+  return { records: out, nextPageToken: pageToken };
+}
+
+/**
+ * Read records of a single type within `[startTime, endTime)` (first
+ * {@link MAX_READ_PAGES} pages). Kept for callers that only need the
+ * records; the sync service uses {@link readRecordsPaged} so it can tell a
+ * truncated read from a complete one.
+ */
+export async function readRecords(
+  recordType: HealthConnectRecordType,
+  range: TimeRange,
+): Promise<unknown[]> {
+  return (await readRecordsPaged(recordType, range)).records;
 }
 
 /**
@@ -324,6 +351,7 @@ export const healthConnectClient = {
   getGrantedPermissions,
   requestPermission,
   readRecords,
+  readRecordsPaged,
   readAllSupportedRecords,
 };
 

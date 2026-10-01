@@ -169,11 +169,6 @@ function classifySleepStage(value: string): SleepStageBucket | 'inbed' | 'asleep
   return null;
 }
 
-function durationMinutes(startDate: string, endDate: string): number {
-  const ms = new Date(endDate).getTime() - new Date(startDate).getTime();
-  return ms > 0 ? ms / 60000 : 0;
-}
-
 /**
  * Build a NormalizedSample from a quantity sample + descriptor.
  */
@@ -353,50 +348,125 @@ function mapBodyTemperature(
 }
 
 /**
- * Map sleep category segments → per-stage SLEEP_*_MIN totals.
+ * Gap that separates two sleep sessions. Segments closer than this belong to
+ * the same night (a short wake in the night stays inside the session).
+ */
+export const SLEEP_SESSION_GAP_MS = 2 * 60 * 60 * 1000;
+
+/**
+ * Overlap priority when sources disagree about the same minute (S14 B-317-3).
+ * HealthKit returns every source's segments (iPhone, Apple Watch, other
+ * apps), and they overlap. Each minute is counted ONCE, as the most specific
+ * stage any source reports for it: a staged watch value wins over a coarse
+ * ASLEEP, and any staged asleep value wins over AWAKE.
+ */
+const SLEEP_STAGE_PRIORITY: Array<SleepStageBucket | 'asleep'> = [
+  'deep',
+  'rem',
+  'light',
+  'awake',
+  'asleep',
+];
+
+interface SleepSegment {
+  start: number;
+  end: number;
+  stage: SleepStageBucket | 'asleep';
+}
+
+/** Minutes per stage across overlapping segments, each instant counted once. */
+function resolveOverlaps(segments: SleepSegment[]): Record<SleepStageBucket | 'asleep', number> {
+  const totals: Record<SleepStageBucket | 'asleep', number> = {
+    rem: 0,
+    deep: 0,
+    light: 0,
+    awake: 0,
+    asleep: 0,
+  };
+  const points = Array.from(new Set(segments.flatMap((g) => [g.start, g.end]))).sort(
+    (x, y) => x - y,
+  );
+  for (let i = 0; i + 1 < points.length; i += 1) {
+    const from = points[i];
+    const to = points[i + 1];
+    let best: SleepStageBucket | 'asleep' | null = null;
+    for (const g of segments) {
+      if (g.start <= from && g.end >= to) {
+        if (
+          best === null ||
+          SLEEP_STAGE_PRIORITY.indexOf(g.stage) < SLEEP_STAGE_PRIORITY.indexOf(best)
+        ) {
+          best = g.stage;
+        }
+      }
+    }
+    if (best !== null) totals[best] += (to - from) / 60000;
+  }
+  return totals;
+}
+
+/**
+ * Map sleep category segments → one record set PER SLEEP SESSION (night).
  *
- * One HealthKit sleep query can return many segments. We sum each segment's
- * duration into its stage bucket and emit one SLEEP_<STAGE>_MIN sample per
- * stage spanning the full sleep window. SLEEP_TOTAL_MIN = rem + deep + light
- * (asleep stages); "inbed" segments are container records and are not counted
- * toward asleep totals (avoids double-counting). If only coarse ASLEEP/INBED
- * data is present (older watchOS), ASLEEP rolls into SLEEP_TOTAL_MIN.
+ * S14 (B-317-3): the old mapper summed every segment of the query into one
+ * record spanning the whole query, so two nights became one 960-minute
+ * "night", and the record's bounds (the backend dedup key) changed with the
+ * query window. Now:
+ *
+ *  1. In-bed segments are containers and are ignored; asleep/stage segments
+ *     from all sources are grouped into sessions split by gaps longer than
+ *     {@link SLEEP_SESSION_GAP_MS}.
+ *  2. Within a session, overlapping sources are resolved minute by minute
+ *     ({@link SLEEP_STAGE_PRIORITY}), so a watch and a phone reporting the
+ *     same night are not double counted.
+ *  3. When the read window is known, a session that may be cut by it is not
+ *     emitted yet: one starting within the gap of the window start (it may
+ *     have begun before the read; the client reads sleep with a look-back so
+ *     a real night is read whole) or ending within the gap of the window end
+ *     (it may still be going on). It is emitted, whole, by a later sync.
+ *
+ * Each session yields SLEEP_<STAGE>_MIN per stage present plus
+ * SLEEP_TOTAL_MIN (= deep + rem + light + coarse asleep), all with the
+ * session's own start/end. The same night therefore produces the same
+ * records, and the same dedup keys, on every sync.
  */
 function mapSleep(
   ctx: NormalizationContext,
   samples: HealthKitSample[] | undefined,
+  window?: { start: string; end: string },
 ): NormalizedSample[] {
   if (!samples?.length) return [];
 
-  const minutes: Record<SleepStageBucket, number> = { rem: 0, deep: 0, light: 0, awake: 0 };
-  let asleepCoarseMin = 0;
-  let windowStart: number | null = null;
-  let windowEnd: number | null = null;
-
+  const segments: SleepSegment[] = [];
   for (const s of samples) {
     const value = typeof s.value === 'string' ? s.value : String(s.value);
     const stage = classifySleepStage(value);
-    const mins = durationMinutes(s.startDate, s.endDate);
-    if (stage === null) continue;
-
-    const startMs = new Date(s.startDate).getTime();
-    const endMs = new Date(s.endDate).getTime();
-    if (stage !== 'inbed') {
-      windowStart = windowStart === null ? startMs : Math.min(windowStart, startMs);
-      windowEnd = windowEnd === null ? endMs : Math.max(windowEnd, endMs);
-    }
-
-    if (stage === 'inbed') continue;
-    if (stage === 'asleep') {
-      asleepCoarseMin += mins;
-      continue;
-    }
-    minutes[stage] += mins;
+    if (stage === null || stage === 'inbed') continue;
+    const start = new Date(s.startDate).getTime();
+    const end = new Date(s.endDate).getTime();
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    segments.push({ start, end, stage });
   }
+  if (segments.length === 0) return [];
+  segments.sort((x, y) => x.start - y.start || x.end - y.end);
 
-  if (windowStart === null || windowEnd === null) return [];
-  const startAt = new Date(windowStart).toISOString();
-  const endAt = new Date(windowEnd).toISOString();
+  // Group into sessions by gap.
+  const sessions: SleepSegment[][] = [];
+  let current: SleepSegment[] = [];
+  let currentEnd = -Infinity;
+  for (const g of segments) {
+    if (current.length > 0 && g.start - currentEnd > SLEEP_SESSION_GAP_MS) {
+      sessions.push(current);
+      current = [];
+      currentEnd = -Infinity;
+    }
+    current.push(g);
+    currentEnd = Math.max(currentEnd, g.end);
+  }
+  if (current.length > 0) sessions.push(current);
+
+  const windowStart = window ? Date.parse(window.start) : NaN;
+  const windowEnd = window ? Date.parse(window.end) : NaN;
 
   const stageDescriptors: Array<[SleepStageBucket, MetricDescriptor]> = [
     ['rem', DESCRIPTORS.SLEEP_REM_MIN],
@@ -406,39 +476,41 @@ function mapSleep(
   ];
 
   const out: NormalizedSample[] = [];
-  for (const [bucket, descriptor] of stageDescriptors) {
-    if (minutes[bucket] <= 0) continue;
-    out.push({
+  for (const session of sessions) {
+    const sessionStart = Math.min(...session.map((g) => g.start));
+    const sessionEnd = Math.max(...session.map((g) => g.end));
+    if (Number.isFinite(windowStart) && sessionStart - windowStart < SLEEP_SESSION_GAP_MS) {
+      continue;
+    }
+    if (Number.isFinite(windowEnd) && windowEnd - sessionEnd < SLEEP_SESSION_GAP_MS) continue;
+
+    const minutes = resolveOverlaps(session);
+    const startAt = new Date(sessionStart).toISOString();
+    const endAt = new Date(sessionEnd).toISOString();
+    const base = {
       connectionId: ctx.connectionId,
       provider: APPLE_HEALTHKIT,
-      metric: descriptor.metric,
-      bucket: descriptor.bucket,
-      value: minutes[bucket],
-      unit: descriptor.unit,
       startAt,
       endAt,
       sourceTz: ctx.sourceTz ?? null,
       sourceRecordId: null,
-    });
+    };
+    for (const [bucket, descriptor] of stageDescriptors) {
+      const value = Math.round(minutes[bucket]);
+      if (value <= 0) continue;
+      out.push({
+        ...base,
+        metric: descriptor.metric,
+        bucket: descriptor.bucket,
+        value,
+        unit: descriptor.unit,
+      });
+    }
+    const totalAsleep = Math.round(minutes.rem + minutes.deep + minutes.light + minutes.asleep);
+    if (totalAsleep > 0) {
+      out.push({ ...base, metric: 'SLEEP_TOTAL_MIN', bucket: S, value: totalAsleep, unit: 'min' });
+    }
   }
-
-  // Total asleep = staged asleep (rem+deep+light) + any coarse ASLEEP segments.
-  const totalAsleep = minutes.rem + minutes.deep + minutes.light + asleepCoarseMin;
-  if (totalAsleep > 0) {
-    out.push({
-      connectionId: ctx.connectionId,
-      provider: APPLE_HEALTHKIT,
-      metric: 'SLEEP_TOTAL_MIN',
-      bucket: S,
-      value: totalAsleep,
-      unit: 'min',
-      startAt,
-      endAt,
-      sourceTz: ctx.sourceTz ?? null,
-      sourceRecordId: null,
-    });
-  }
-
   return out;
 }
 
@@ -464,7 +536,7 @@ export function normalizeHealthKitResult(
     ...mapQuantityArray(ctx, DESCRIPTORS.BODY_WEIGHT_KG, result.weight),
     ...mapQuantityArray(ctx, DESCRIPTORS.BODY_FAT_PCT, result.bodyFat),
     ...mapBloodPressure(ctx, result.bloodPressure),
-    ...mapSleep(ctx, result.sleep),
+    ...mapSleep(ctx, result.sleep, result.sleepWindow),
     ...mapTransformedArray(ctx, DESCRIPTORS.HRV_MS, result.hrv, hrvToMs),
     ...mapTransformedArray(ctx, DESCRIPTORS.SPO2_PCT, result.spo2, spo2ToPercent),
     ...mapQuantityArray(ctx, DESCRIPTORS.RESPIRATORY_RATE_BRPM, result.respiratoryRate),

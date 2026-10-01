@@ -48,10 +48,10 @@ const mockImportHistory = jest.fn();
 jest.mock('../../../../services/health/onDeviceSync', () => ({
   deviceSourceFor: (p: string) =>
     p === 'APPLE_HEALTHKIT' ? 'APPLE_HEALTHKIT' : p === 'GARMIN' ? null : 'HEALTH_CONNECT',
-  importOnDeviceHistory: (...args: unknown[]) => mockImportHistory(...args),
+  connectOnDevice: (...args: unknown[]) => mockImportHistory(...args),
 }));
 
-import ConnectProviderSheet from '../ConnectProviderSheet';
+import ConnectProviderSheet, { onDeviceDisclosure } from '../ConnectProviderSheet';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
 
@@ -171,6 +171,23 @@ describe('ConnectProviderSheet — S14 history import', () => {
 });
 
 describe('ConnectProviderSheet — on-device provider', () => {
+  it('C-317-2: discloses the 30-day import and coaching use before Continue', async () => {
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={jest.fn()} />);
+    const text = screen.getByText(/last 30 days of Apple Health data/);
+    expect(text).toBeTruthy();
+    expect(screen.getByText(/new data each time you open Health/)).toBeTruthy();
+    expect(screen.getByText(/your coach can personalize your training, recovery, and check-ins/)).toBeTruthy();
+    // Shown before any permission request or import starts.
+    expect(mockConnectOnDevice).not.toHaveBeenCalled();
+    expect(mockImportHistory).not.toHaveBeenCalled();
+  });
+
+  it('C-317-2: the disclosure copy is plain (no exclamation marks)', () => {
+    const copy = onDeviceDisclosure('Health Connect');
+    expect(copy).not.toMatch(/!/);
+    expect(copy).toContain('last 30 days of Health Connect data');
+  });
+
   it('drives the native permission request and closes on grant', async () => {
     mockConnectOnDevice.mockResolvedValue('granted');
     const onClose = jest.fn();

@@ -14,7 +14,9 @@ import {
   MAX_SAMPLES_PER_REQUEST,
   WEARABLES_INGEST_PATH,
   chunkForIngest,
+  chunkForIngestWithReport,
   postIngestBatches,
+  utf8ByteLength,
   toIngestWire,
   type IngestableSample,
 } from '../ingestBatching';
@@ -93,6 +95,34 @@ describe('chunkForIngest', () => {
     expect(batches.flat()).toHaveLength(200);
   });
 
+  it('counts UTF-8 bytes, not UTF-16 length (C-317-1)', () => {
+    // 3-byte (CJK) and 4-byte (emoji surrogate pair) code points.
+    const cjk = '\u6c34'.repeat(600); // 600 chars, 1800 bytes
+    const astral = '\ud83d\ude00'.repeat(300); // 600 UTF-16 units, 1200 bytes
+    expect(utf8ByteLength(cjk)).toBe(1800);
+    expect(utf8ByteLength(astral)).toBe(1200);
+    expect(utf8ByteLength('\u00b0C')).toBe(3);
+    expect(utf8ByteLength('abc')).toBe(3);
+    const wire = Array.from({ length: 200 }, (_, i) =>
+      toIngestWire(sample(i, { rawRef: cjk, sourceRecordId: cjk })),
+    );
+    const batches = chunkForIngest(wire);
+    for (const b of batches) {
+      const encoded = Buffer.byteLength(JSON.stringify(b), 'utf8');
+      expect(encoded).toBeLessThanOrEqual(MAX_REQUEST_BYTES);
+    }
+    expect(batches.flat()).toHaveLength(200);
+  });
+
+  it('never sends a sample whose own encoded size exceeds one request', () => {
+    const huge = '\u6c34'.repeat(40_000); // 120,000 bytes
+    const ok = toIngestWire(sample(1));
+    const tooBig = toIngestWire(sample(2, { rawRef: huge }));
+    const { batches, oversized } = chunkForIngestWithReport([ok, tooBig]);
+    expect(batches).toEqual([[ok]]);
+    expect(oversized).toEqual([tooBig]);
+  });
+
   it('returns no batches for no samples', () => {
     expect(chunkForIngest([])).toEqual([]);
   });
@@ -110,7 +140,7 @@ describe('postIngestBatches', () => {
     );
     expect(post).toHaveBeenCalledTimes(2);
     expect(post.mock.calls[0][0]).toBe(WEARABLES_INGEST_PATH);
-    expect(res).toEqual({ inserted: 290, skipped: 10, requests: 2 });
+    expect(res).toEqual({ inserted: 290, skipped: 10, requests: 2, oversized: 0 });
   });
 
   it('waits for Retry-After on 429 and retries the same batch', async () => {
@@ -133,6 +163,22 @@ describe('postIngestBatches', () => {
       AxiosError,
     );
     expect(post).toHaveBeenCalledTimes(MAX_ATTEMPTS_PER_BATCH);
+  });
+
+  it('runs beforeEachRequest before every request and stops when it throws', async () => {
+    const post = jest.fn().mockResolvedValue({ data: { inserted: 1, skipped: 0 } });
+    let calls = 0;
+    const beforeEachRequest = jest.fn(() => {
+      calls += 1;
+      if (calls === 2) throw new Error('session changed');
+    });
+    await expect(
+      postIngestBatches(
+        Array.from({ length: 300 }, (_, i) => sample(i)),
+        { post, beforeEachRequest },
+      ),
+    ).rejects.toThrow('session changed');
+    expect(post).toHaveBeenCalledTimes(1);
   });
 
   it('rejects immediately on any other failure', async () => {

@@ -27,6 +27,7 @@ import {
   isHealthConnectSupported,
   readAllSupportedRecords,
   readRecords,
+  readRecordsPaged,
   MAX_READ_PAGES,
   requestPermission,
 } from '../healthConnectClient';
@@ -173,6 +174,38 @@ describe('readRecords', () => {
     await expect(
       readRecords('Steps', { startTime: 'a', endTime: 'b' }),
     ).resolves.toEqual([]);
+  });
+});
+
+describe('readRecordsPaged (S14 B-317-2)', () => {
+  it('returns no resume token when the last page was reached', async () => {
+    mockRead
+      .mockResolvedValueOnce({ records: [{ count: 1 }], pageToken: 'p2' })
+      .mockResolvedValueOnce({ records: [{ count: 2 }] });
+    const out = await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' });
+    expect(out).toEqual({ records: [{ count: 1 }, { count: 2 }] });
+  });
+
+  it('returns the resume token when it stops at MAX_READ_PAGES', async () => {
+    mockRead.mockResolvedValue({ records: [{ count: 1 }], pageToken: 'more' });
+    const out = await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' });
+    expect(out.records).toHaveLength(MAX_READ_PAGES);
+    expect(out.nextPageToken).toBe('more');
+  });
+
+  it('resumes from a saved token on the first request', async () => {
+    mockRead.mockResolvedValue({ records: [{ count: 9 }] });
+    await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' }, 'saved');
+    expect(mockRead.mock.calls[0][1]).toMatchObject({ pageToken: 'saved' });
+  });
+
+  it('propagates a native read failure so the caller keeps its progress', async () => {
+    mockRead
+      .mockResolvedValueOnce({ records: [{ count: 1 }], pageToken: 'p2' })
+      .mockRejectedValueOnce(new Error('native'));
+    await expect(readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' })).rejects.toThrow(
+      'native',
+    );
   });
 });
 

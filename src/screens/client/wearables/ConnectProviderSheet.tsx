@@ -52,7 +52,7 @@ import {
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
-import { deviceSourceFor, importOnDeviceHistory } from '../../../services/health/onDeviceSync';
+import { connectOnDevice, deviceSourceFor } from '../../../services/health/onDeviceSync';
 import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 
@@ -129,7 +129,8 @@ export default function ConnectProviderSheet({
       const name = configFor(target).displayName;
       switch (outcome) {
         case 'granted': {
-          // S14: permission granted on-device. Register the device source and
+          // S14: permission granted on-device. Register the device source,
+          // record this person's local authorization for this phone, and
           // import the last 30 days so the Health and Sleep views show real
           // data, then re-read connections and samples.
           const source = deviceSourceFor(target);
@@ -140,7 +141,7 @@ export default function ConnectProviderSheet({
           setImporting(true);
           let result;
           try {
-            result = await importOnDeviceHistory(source);
+            result = await connectOnDevice(source);
           } catch {
             invalidate();
             setError(
@@ -241,12 +242,9 @@ export default function ConnectProviderSheet({
                 <View
                   style={styles.note}
                   accessibilityRole="text"
-                  accessibilityLabel={`${config.displayName} asks for permission on this device. Continue to grant access.`}
+                  accessibilityLabel={onDeviceDisclosure(config.displayName)}
                 >
-                  <Text style={styles.noteText}>
-                    {config.displayName} asks for permission on this device.
-                    Continue to grant access.
-                  </Text>
+                  <Text style={styles.noteText}>{onDeviceDisclosure(config.displayName)}</Text>
                 </View>
               )}
 
@@ -290,6 +288,22 @@ export default function ConnectProviderSheet({
         </Pressable>
       </Pressable>
     </Modal>
+  );
+}
+
+/**
+ * S14 (C-317-2): what Continue does, shown BEFORE the permission prompt.
+ * Plain copy consistent with the approved Apple Health usage string in
+ * app.json (coach personalizes training, recovery and check-ins). This is the
+ * required data collection for the feature, not the optional AI processing
+ * choice (consent box 2), which this sheet does not change.
+ */
+export function onDeviceDisclosure(displayName: string): string {
+  return (
+    `When you continue, ${displayName} asks for permission on this phone. ` +
+    `We then bring in your last 30 days of ${displayName} data, and new data ` +
+    `each time you open Health, so your coach can personalize your training, ` +
+    `recovery, and check-ins.`
   );
 }
 

@@ -163,6 +163,11 @@ interface HKInputOptions {
   limit?: number;
   /** Statistics bucket length in minutes (cumulative-sum readers). */
   period?: number;
+  /**
+   * Native unit string. `react-native-health` parses it in
+   * `hkUnitFromOptions` ('kg' is the kilogram unit; the JS enum omits it).
+   */
+  unit?: string;
 }
 interface HKPermissions {
   permissions: { read: string[]; write: string[] };
@@ -213,6 +218,16 @@ function promisify<T>(
   });
 }
 
+/**
+ * How far before the window start sleep is read. A night that began before
+ * the window is then read whole, so its session boundaries (and the backend
+ * dedup key) are the same on every sync.
+ */
+export const SLEEP_LOOKBACK_MS = 36 * 60 * 60 * 1000;
+
+/** Native unit string for kilograms (see HKInputOptions.unit). */
+export const WEIGHT_UNIT_KG = 'kg';
+
 function toOptions(window: HealthKitQueryWindow): HKInputOptions {
   return {
     startDate: window.since.toISOString(),
@@ -241,6 +256,13 @@ export interface HealthKitReadResult {
   spo2?: HealthKitSample[];
   respiratoryRate?: HealthKitSample[];
   bodyTemperature?: HealthKitSample[];
+  /**
+   * The exact window the sleep segments were read over (ISO). The normalizer
+   * uses it to drop sessions that may be cut by the window edges (S14).
+   */
+  sleepWindow?: { start: string; end: string };
+  /** Metrics whose native read failed this pass (S14 B-317-2). */
+  failed?: HealthKitMetricKey[];
 }
 
 /**
@@ -303,11 +325,19 @@ export class HealthKitClient {
     const o = toOptions(window);
 
     // Run each reader independently; tolerate a single metric failing
-    // (e.g. permission not granted) without losing the others (#50 graceful).
-    const settle = async <T>(fn: (cb: HKCallback<T>) => void): Promise<T | undefined> => {
+    // without losing the others (#50 graceful), but REPORT it (S14 B-317-2):
+    // the sync service keeps that metric's cursor so the next run re-reads
+    // it, and never reports the import complete while a read failed. A type
+    // the user did not grant is not a failure: HealthKit returns it empty.
+    const failed: HealthKitMetricKey[] = [];
+    const settle = async <T>(
+      key: HealthKitMetricKey,
+      fn: (cb: HKCallback<T>) => void,
+    ): Promise<T | undefined> => {
       try {
         return await promisify<T>(fn);
       } catch {
+        failed.push(key);
         return undefined;
       }
     };
@@ -322,6 +352,12 @@ export class HealthKitClient {
     // updates it. (`getStepCount` returned one day's total only, for the
     // `date` option, ignoring the import window.)
     const hourly: HKInputOptions = { ...o, period: 60 };
+    const weightKg: HKInputOptions = { ...o, unit: WEIGHT_UNIT_KG };
+    // Sleep is read with a look-back so a night that started before the
+    // window is read whole; the normalizer emits only complete, stable
+    // sessions (see SLEEP_LOOKBACK_MS and mapSleep).
+    const sleepStart = new Date(window.since.getTime() - SLEEP_LOOKBACK_MS);
+    const sleepOpts: HKInputOptions = { ...o, startDate: sleepStart.toISOString() };
     const completeOnly = (buckets: HealthKitSample[] | undefined): HealthKitSample[] | undefined =>
       buckets?.filter((b) => {
         const end = Date.parse(b.endDate);
@@ -344,20 +380,30 @@ export class HealthKitClient {
       respiratoryRate,
       bodyTemperature,
     ] = await Promise.all([
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getDailyStepCountSamples(hourly, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getActiveEnergyBurned(hourly, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getRestingHeartRateSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getHeartRateSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getVo2MaxSamples(o, cb)),
-      settle<HKAnchoredWorkoutResults>((cb) => AppleHealthKit.getAnchoredWorkouts(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getWeightSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getBodyFatPercentageSamples(o, cb)),
-      settle<HealthKitBloodPressureSample[]>((cb) => AppleHealthKit.getBloodPressureSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getSleepSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getHeartRateVariabilitySamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getOxygenSaturationSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getRespiratoryRateSamples(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getBodyTemperatureSamples(o, cb)),
+      settle<HealthKitSample[]>('steps', (cb) => AppleHealthKit.getDailyStepCountSamples(hourly, cb)),
+      settle<HealthKitSample[]>('activeEnergy', (cb) => AppleHealthKit.getActiveEnergyBurned(hourly, cb)),
+      settle<HealthKitSample[]>('restingHeartRate', (cb) =>
+        AppleHealthKit.getRestingHeartRateSamples(o, cb),
+      ),
+      settle<HealthKitSample[]>('heartRate', (cb) => AppleHealthKit.getHeartRateSamples(o, cb)),
+      settle<HealthKitSample[]>('vo2Max', (cb) => AppleHealthKit.getVo2MaxSamples(o, cb)),
+      settle<HKAnchoredWorkoutResults>('workouts', (cb) => AppleHealthKit.getAnchoredWorkouts(o, cb)),
+      // S14 (B-317-4): the native weight reader defaults to POUNDS. Ask for
+      // kilograms explicitly so BODY_WEIGHT_KG is never a pound value.
+      settle<HealthKitSample[]>('weight', (cb) => AppleHealthKit.getWeightSamples(weightKg, cb)),
+      settle<HealthKitSample[]>('bodyFat', (cb) => AppleHealthKit.getBodyFatPercentageSamples(o, cb)),
+      settle<HealthKitBloodPressureSample[]>('bloodPressure', (cb) =>
+        AppleHealthKit.getBloodPressureSamples(o, cb),
+      ),
+      settle<HealthKitSample[]>('sleep', (cb) => AppleHealthKit.getSleepSamples(sleepOpts, cb)),
+      settle<HealthKitSample[]>('hrv', (cb) => AppleHealthKit.getHeartRateVariabilitySamples(o, cb)),
+      settle<HealthKitSample[]>('spo2', (cb) => AppleHealthKit.getOxygenSaturationSamples(o, cb)),
+      settle<HealthKitSample[]>('respiratoryRate', (cb) =>
+        AppleHealthKit.getRespiratoryRateSamples(o, cb),
+      ),
+      settle<HealthKitSample[]>('bodyTemperature', (cb) =>
+        AppleHealthKit.getBodyTemperatureSamples(o, cb),
+      ),
     ]);
 
     return {
@@ -371,10 +417,12 @@ export class HealthKitClient {
       bodyFat,
       bloodPressure,
       sleep,
+      sleepWindow: { start: sleepStart.toISOString(), end: window.until.toISOString() },
       hrv,
       spo2,
       respiratoryRate,
       bodyTemperature,
+      failed,
     };
   }
 }
