@@ -647,6 +647,11 @@ export default function ConsultationFlow({
   const finish = useCallback(() => {
     if (!result) return;
     void purgeConsultationDraft(userId);
+    // INTEGRATION NOTE (#309, client tutorial, not yet on main): once #309 is
+    // merged, call `startClientTutorial(result)` from 'src/tutorial/tutorialStore'
+    // here, before onFinished. `result` is the POST /me/onboarding/complete
+    // body (completeResponse.data). It is idempotent and returns false when
+    // featureFlags.clientTutorial is off, so no extra flag check is needed.
     onFinished(result);
   }, [onFinished, result, userId]);
 
