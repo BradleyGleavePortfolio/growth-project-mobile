@@ -30,6 +30,12 @@
 export type IntendedRole = 'client' | 'coach';
 
 export const COACH_SIGNUP_UNAVAILABLE = 'coach_signup_unavailable' as const;
+/**
+ * A coach signup reached the server but no answer proves what happened
+ * (5xx, network error, timeout, or a response without a `role`). The account
+ * may or may not exist; the app must not say either way.
+ */
+export const COACH_SIGNUP_UNCONFIRMED = 'coach_signup_unconfirmed' as const;
 
 /** Thrown when a coach signup cannot be honoured; no account was created. */
 export class CoachSignupUnavailableError extends Error {
@@ -51,8 +57,14 @@ export function isUnknownIntendedRoleError(err: unknown): boolean {
   const r = (err as { response?: { status?: number; data?: { message?: unknown } } } | null)?.response;
   if (!r || r.status !== 400) return false;
   const m = r.data?.message;
-  const text = Array.isArray(m) ? m.join(' ') : typeof m === 'string' ? m : '';
-  return /intended_role/.test(text);
+  const parts = Array.isArray(m) ? m : typeof m === 'string' ? [m] : [];
+  // Only the ValidationPipe's unknown-field refusal (`forbidNonWhitelisted`),
+  // which runs before any handler. Any other 400 that merely mentions the
+  // field is a business error and says nothing about whether an account
+  // exists, so it is not treated as "no account was created".
+  return parts.some(
+    (p) => typeof p === 'string' && /^property intended_role should not exist$/.test(p.trim()),
+  );
 }
 
 export async function postWithIntendedRole<B extends object, R>(
@@ -92,3 +104,12 @@ export function isServerCoach(user: { role?: unknown } | null | undefined): bool
 /** Copy for the CreateAccount error box when a coach signup was refused. */
 export const COACH_SIGNUP_UNAVAILABLE_MESSAGE =
   'Coach sign-up is not available right now. No account was created. You can try again later, or choose "I\'m here to train" to create a client account.';
+
+
+/**
+ * Copy for the CreateAccount error box when a coach signup reached the
+ * server but its outcome is not proven. Deliberately does not say whether an
+ * account exists.
+ */
+export const COACH_SIGNUP_UNCONFIRMED_MESSAGE =
+  'We could not confirm your coach account, so you are not signed in. An account may or may not have been created. Try again with the same sign-in; if the account exists, you will be signed in to it.';

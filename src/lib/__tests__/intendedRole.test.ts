@@ -52,6 +52,26 @@ describe('postWithIntendedRole', () => {
     expect(isUnknownIntendedRoleError(new Error('x'))).toBe(false);
   });
 
+  // #306 fix round 2 (Sol C3): only the ValidationPipe unknown-field refusal
+  // means "rejected before any handler". A business 400 that merely names
+  // the field says nothing about whether an account exists.
+  it('Sol C3: matches the unknown-field refusal narrowly, not any 400 mentioning intended_role', () => {
+    expect(isUnknownIntendedRoleError({ response: { status: 400, data: { message: 'property intended_role should not exist' } } })).toBe(true);
+    expect(
+      isUnknownIntendedRoleError({ response: { status: 400, data: { message: ['email must be an email', 'property intended_role should not exist'] } } }),
+    ).toBe(true);
+    expect(isUnknownIntendedRoleError({ response: { status: 400, data: { message: 'intended_role coach cannot be combined with an invite code' } } })).toBe(false);
+    expect(isUnknownIntendedRoleError({ response: { status: 400, data: { message: ['intended_role must be one of the following values: client, coach'] } } })).toBe(false);
+    expect(isUnknownIntendedRoleError({ response: { status: 500, data: { message: 'property intended_role should not exist' } } })).toBe(false);
+  });
+
+  it('Sol C3: a business 400 on a coach request is rethrown as-is (not "no account was created")', async () => {
+    const business = { response: { status: 400, data: { message: 'intended_role coach cannot be combined with an invite code' } } };
+    const post = jest.fn().mockRejectedValue(business);
+    await expect(postWithIntendedRole(post, { email: 'a' }, 'coach')).rejects.toBe(business);
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
   it('isCoachSignupUnavailable recognises the error class and the code shape', () => {
     expect(isCoachSignupUnavailable(new CoachSignupUnavailableError())).toBe(true);
     expect(isCoachSignupUnavailable({ code: COACH_SIGNUP_UNAVAILABLE })).toBe(true);

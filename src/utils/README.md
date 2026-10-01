@@ -16,7 +16,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 
 | File | What it does |
 | --- | --- |
-| `googleAuth.ts` | Supabase OAuth via `expo-auth-session` + `expo-web-browser`. Builds the redirect URI (`tgp://auth/callback`), opens the consent screen, parses tokens out of the redirect URL (handles both error and success fragments), persists tokens through `secureStorage`, then calls `/auth/google` (with optional invite code, or with `intended_role` when codeless and the signup policy has `role_choice`) to upsert the backend user. Returns `invite_attached` + `invite_code` when a code was passed so the caller can carry an unattached code to the RoleSelection retry step; returns `error_code: 'coach_signup_unavailable'` (and drops the provider session) when a coach signup was refused before any account existed. |
+| `googleAuth.ts` | Supabase OAuth via `expo-auth-session` + `expo-web-browser`. Builds the redirect URI (`tgp://auth/callback`), opens the consent screen, parses tokens out of the redirect URL (handles both error and success fragments), persists tokens through `secureStorage`, then calls `/auth/google` (with optional invite code, or with `intended_role` when codeless and the signup policy has `role_choice`) to upsert the backend user. Returns `invite_attached` + `invite_code` when a code was passed so the caller can carry an unattached code to the RoleSelection retry step; returns `error_code: 'coach_signup_unavailable'` (and drops the provider session) when a coach signup was refused before any account existed. For a coach request, any other backend failure returns `error_code: 'coach_signup_unconfirmed'` (session and `user_data` dropped, no claim either way); every result from a real server answer carries `server_confirmed: true`, the legacy non-coach fallback `server_confirmed: false`. `services/api` is imported statically so these branches run in Jest (`utils/__tests__/googleAuth.test.ts`). |
 | `supabaseAuth.ts` | Thin Supabase wrapper for password change. Only loaded when actually needed so `supabase-js` stays out of the cold-start path. |
 | `authEvents.ts` | Tiny event bus: `onAuthChange`, `on('logout' | 'login', …)`, `emit(event?)`. The single mechanism `RootNavigator` listens on. |
 | `authErrorMessage.ts` | `toFriendlyAuthError(err)` — single mapping from raw Supabase / Google OAuth / network / backend error strings (and `Error` instances, and `null` / `undefined`) into the quiet copy the auth screens render. Cancellations resolve to a sentinel that callers ignore so the UI stays silent. Wired into `LoginScreen` and `CreateAccountScreen`. Contract — including `access_denied`, `redirect_uri_mismatch`, invalid credentials, unconfirmed email, rate limiting, and unknown-error fallback — is asserted in `src/utils/__tests__/authErrorMessage.test.ts`. |
@@ -116,7 +116,7 @@ Both are required; missing values throw at module load via `config/env.ts`.
 npm test
 ```
 
-Unit tests live in `utils/__tests__/` for the pure helpers (`date`, `nutrition`, `weekUtils`). The platform helpers (`googleAuth`, `notifications`) are exercised by the smoke matrix.
+Unit tests live in `utils/__tests__/` for the pure helpers (`date`, `nutrition`, `weekUtils`). The platform helpers (`googleAuth`, `notifications`) are exercised by the smoke matrix; `googleAuth`'s backend-failure branches also have a unit suite (`googleAuth.test.ts`).
 
 ## Release notes
 

@@ -13,9 +13,18 @@ import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from '../services/secureStorage';
+// Static import (appleAuth does the same; services/api does not import this
+// module, so there is no cycle). A dynamic import() cannot run in Jest, which
+// left the backend-failure branches below untested (#306 fix round 2).
+import { authApi } from '../services/api';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
-import { COACH_SIGNUP_UNAVAILABLE, isCoachSignupUnavailable, type IntendedRole } from '../lib/intendedRole';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  COACH_SIGNUP_UNCONFIRMED,
+  isCoachSignupUnavailable,
+  type IntendedRole,
+} from '../lib/intendedRole';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -42,7 +51,15 @@ export interface GoogleAuthResult {
    * before any handler ran, so no account row was created. Not a success;
    * the Supabase session is dropped so the next attempt starts clean.
    */
-  error_code?: typeof COACH_SIGNUP_UNAVAILABLE;
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE | typeof COACH_SIGNUP_UNCONFIRMED;
+  /**
+   * True only when the backend answered /auth/google and `user` /
+   * `is_new_user` come from that answer. False on the legacy fallback where
+   * the backend call failed and `user` is a basic Supabase identity: in that
+   * case nothing is known about whether an account row exists or its role,
+   * so callers must not tell the user an account was created.
+   */
+  server_confirmed?: boolean;
   /**
    * Set when the caller passed an invite code and the backend did not
    * attach it (no `coach_id` on the returned user, dedicated attach call
@@ -139,7 +156,6 @@ export async function signInWithGoogle(
     const supaUser = sessionData.user;
 
     // Now call our backend to upsert the user in our DB
-    const { authApi } = await import('../services/api');
 
     // Store the token in SecureStore (not AsyncStorage) so the API client can
     // attach it to the backend request. Security: SecureStore uses Keychain /
@@ -179,6 +195,7 @@ export async function signInWithGoogle(
         access_token: accessToken,
         user,
         is_new_user: response.data.is_new_user,
+        server_confirmed: true,
         ...(typeof inviteAttached === 'boolean'
           ? { invite_attached: inviteAttached, invite_code: options.inviteCode }
           : {}),
@@ -195,8 +212,29 @@ export async function signInWithGoogle(
           error_code: COACH_SIGNUP_UNAVAILABLE,
         };
       }
+      if (options.intendedRole === 'coach') {
+        // #306 r2 (B1): a coach request whose backend call failed (5xx,
+        // network, timeout, or any other error) has no server answer, so
+        // neither the account nor its role is known. The server may even
+        // have committed before the response was lost. Never fall through to
+        // the legacy "signed-in basic user" result below: that was reported
+        // as a client account being created. Drop the provisional provider
+        // session and local user cache, and return a truthful failure. A
+        // retry with the same Google account is safe: if the server did
+        // create the account, /auth/google answers with it and its role.
+        await secureStorage.removeItem('supabase_token').catch(() => undefined);
+        await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+        await AsyncStorage.removeItem('user_data').catch(() => undefined);
+        return {
+          success: false,
+          error: 'Could not confirm the coach account',
+          error_code: COACH_SIGNUP_UNCONFIRMED,
+        };
+      }
       // Backend call failed — but we still have Supabase auth
-      // Store basic user data from Supabase directly
+      // Store basic user data from Supabase directly. Pre-existing fallback
+      // for sign-in and client signup; `server_confirmed: false` tells the
+      // caller this is not a server answer.
       const basicUser = {
         id: supaUser.id,
         email: supaUser.email || '',
@@ -209,6 +247,7 @@ export async function signInWithGoogle(
         access_token: accessToken,
         user: basicUser,
         is_new_user: true,
+        server_confirmed: false,
         ...(options.inviteCode ? { invite_attached: false, invite_code: options.inviteCode } : {}),
       };
     }
