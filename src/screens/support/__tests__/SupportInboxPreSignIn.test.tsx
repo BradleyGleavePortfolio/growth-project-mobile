@@ -30,7 +30,7 @@ describe('SupportInboxScreen before sign-in', () => {
   });
 
   it('pre-sign-in: a previous user\'s session is reset before the chat opens', async () => {
-    syncCrispIdentity({ email: 'previous@example.com' });
+    syncCrispIdentity({ userId: 'previous-user', email: 'previous@example.com' });
     mockResetSession.mockClear();
     await render(<SupportInboxScreen navigation={nav as never} preSignIn />);
     expect(mockResetSession).toHaveBeenCalledTimes(1);
@@ -39,7 +39,7 @@ describe('SupportInboxScreen before sign-in', () => {
   });
 
   it('signed in (Settings > Support): the user\'s own session is kept', async () => {
-    syncCrispIdentity({ email: 'me@example.com' });
+    syncCrispIdentity({ userId: 'me', email: 'me@example.com' });
     mockResetSession.mockClear();
     await render(<SupportInboxScreen navigation={nav as never} />);
     expect(mockResetSession).not.toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('SupportInboxScreen before sign-in', () => {
   it('the auth stack registers the pre-sign-in variant', async () => {
     const src = fs.readFileSync(path.join(__dirname, '../../../navigation/AuthNavigator.tsx'), 'utf8');
     expect(src).toMatch(/name="SupportInbox" component=\{PreSignInSupportInbox\}/);
-    syncCrispIdentity({ email: 'previous@example.com' });
+    syncCrispIdentity({ userId: 'previous-user', email: 'previous@example.com' });
     mockResetSession.mockClear();
     await render(<PreSignInSupportInbox navigation={nav as never} />);
     expect(mockResetSession).toHaveBeenCalledTimes(1);

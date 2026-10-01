@@ -18,9 +18,11 @@ import {
   syncCrispIdentity,
   resetCrispIdentity,
   prepareSignedOutCrispSession,
+  openSupportChat,
   __resetCrispOwnerForTests,
   type CrispUser,
 } from '../crisp.service';
+import { prefsStorage } from '../../../storage/mmkv';
 
 const mockSetUserEmail = CrispSDK.setUserEmail as jest.Mock;
 const mockSetUserNickname = CrispSDK.setUserNickname as jest.Mock;
@@ -102,24 +104,24 @@ describe('support chat session on shared devices', () => {
   });
 
   it('binding a user resets a session of unknown owner first, then sets the email', () => {
-    syncCrispIdentity({ email: 'alice@example.com' });
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
     expect(mockResetSession).toHaveBeenCalledTimes(1);
     expect(mockResetSession.mock.invocationCallOrder[0]).toBeLessThan(
       mockSetUserEmail.mock.invocationCallOrder[0],
     );
   });
 
-  it('the same user again keeps the session; a different user resets it before binding', () => {
-    syncCrispIdentity({ email: 'alice@example.com' });
+  it('the same server user again keeps the session; a different user resets it before binding', () => {
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
     mockResetSession.mockClear();
-    syncCrispIdentity({ email: 'Alice@example.com' });
+    syncCrispIdentity({ userId: 'user-a', email: 'Alice@example.com' });
     expect(mockResetSession).not.toHaveBeenCalled();
-    syncCrispIdentity({ email: 'bob@example.com' });
+    syncCrispIdentity({ userId: 'user-b', email: 'bob@example.com' });
     expect(mockResetSession).toHaveBeenCalledTimes(1);
   });
 
   it('the pre-sign-in support screen never opens a previous user\'s conversation', () => {
-    syncCrispIdentity({ email: 'alice@example.com' });
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
     mockResetSession.mockClear();
     prepareSignedOutCrispSession();
     expect(mockResetSession).toHaveBeenCalledTimes(1);
@@ -127,15 +129,151 @@ describe('support chat session on shared devices', () => {
     prepareSignedOutCrispSession();
     expect(mockResetSession).toHaveBeenCalledTimes(1);
     // Signing in after an anonymous chat starts a fresh session for the user.
-    syncCrispIdentity({ email: 'bob@example.com' });
+    syncCrispIdentity({ userId: 'user-b', email: 'bob@example.com' });
     expect(mockResetSession).toHaveBeenCalledTimes(2);
   });
 
   it('after sign-out, the pre-sign-in screen still resets (nothing is trusted)', () => {
-    syncCrispIdentity({ email: 'alice@example.com' });
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
     resetCrispIdentity();
     mockResetSession.mockClear();
     prepareSignedOutCrispSession();
     expect(mockResetSession).toHaveBeenCalledTimes(1);
+  });
+});
+
+// #306 fix round 4 (Sol A2-R3): ownership is the server user id, never an
+// email fingerprint that can collide.
+describe('support chat ownership is the server user id (Sol A2-R3)', () => {
+  const mockResetSession = CrispSDK.resetSession as jest.Mock;
+
+  beforeEach(() => {
+    __resetCrispOwnerForTests();
+    jest.clearAllMocks();
+  });
+
+  it('two different users whose emails collide under the old 32-bit fingerprint still reset', () => {
+    // a0@example.com and _r@example.com had the same djb2 fingerprint.
+    syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
+    mockResetSession.mockClear();
+    syncCrispIdentity({ userId: 'user-r', email: '_r@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    expect(mockResetSession.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSetUserEmail.mock.invocationCallOrder[mockSetUserEmail.mock.invocationCallOrder.length - 1],
+    );
+  });
+
+  it('cold start: a different server user than the stored owner resets; colliding emails do not matter', () => {
+    const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('uid:user-a0');
+    syncCrispIdentity({ userId: 'user-r', email: '_r@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    prefs.mockRestore();
+  });
+
+  it('cold start: the same server user as the stored owner keeps the session', () => {
+    const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('uid:user-a0');
+    syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
+    expect(mockResetSession).not.toHaveBeenCalled();
+    prefs.mockRestore();
+  });
+
+  it('a stored round-3 email fingerprint is not trusted (reset once)', () => {
+    const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('u1a2b3c');
+    syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    prefs.mockRestore();
+  });
+
+  it('a user without a server id is always reset before binding', () => {
+    syncCrispIdentity({ email: 'a0@example.com' });
+    syncCrispIdentity({ email: 'a0@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('RootNavigator passes the server user id to both callers', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const fs = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const path = require('path');
+    const src: string = fs.readFileSync(path.join(__dirname, '../../../navigation/RootNavigator.tsx'), 'utf8');
+    const calls = src.split('syncCrispIdentity({').slice(1);
+    expect(calls).toHaveLength(2);
+    for (const c of calls) expect(c.slice(0, 300)).toMatch(/userId: typeof user\.id === 'string' \? user\.id : undefined/);
+  });
+});
+
+// #306 fix round 4 (Sol A1-R3): a failed reset fails closed.
+describe('support chat reset failure fails closed (Sol A1-R3)', () => {
+  const mockResetSession = CrispSDK.resetSession as jest.Mock;
+  const mockShow = CrispSDK.show as jest.Mock;
+
+  beforeEach(() => {
+    __resetCrispOwnerForTests();
+    jest.clearAllMocks();
+    mockResetSession.mockReset();
+  });
+
+  it('binding a different user when the reset throws does not relabel the old session, and the chat stays closed', () => {
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
+    mockSetUserEmail.mockClear();
+    mockResetSession.mockImplementation(() => {
+      throw new Error('native reset failed');
+    });
+    expect(syncCrispIdentity({ userId: 'user-b', email: 'bob@example.com' })).toBe(false);
+    expect(mockSetUserEmail).not.toHaveBeenCalled();
+    expect(openSupportChat({ preSignIn: false })).toBe('blocked');
+    expect(mockShow).not.toHaveBeenCalled();
+    // The reset works again: the pending binding is retried, then the chat opens.
+    mockResetSession.mockImplementation(() => undefined);
+    expect(openSupportChat({ preSignIn: false })).toBe('opened');
+    expect(mockSetUserEmail).toHaveBeenCalledWith('bob@example.com');
+    expect(mockShow).toHaveBeenCalledTimes(1);
+    expect(mockResetSession.mock.invocationCallOrder.slice(-1)[0]).toBeLessThan(mockShow.mock.invocationCallOrder[0]);
+  });
+
+  it('pre-sign-in: a previous user is bound and the reset throws: no show, and every reopen retries the reset', () => {
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
+    mockResetSession.mockImplementation(() => {
+      throw new Error('native reset failed');
+    });
+    expect(openSupportChat({ preSignIn: true })).toBe('blocked');
+    expect(openSupportChat({ preSignIn: true })).toBe('blocked');
+    expect(mockShow).not.toHaveBeenCalled();
+    expect(prepareSignedOutCrispSession()).toBe(false);
+    mockResetSession.mockImplementation(() => undefined);
+    expect(openSupportChat({ preSignIn: true })).toBe('opened');
+    expect(mockShow).toHaveBeenCalledTimes(1);
+  });
+
+  it('sign-out whose reset throws leaves ownership unknown, so the next open resets first', () => {
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
+    mockResetSession.mockImplementationOnce(() => {
+      throw new Error('native reset failed');
+    });
+    resetCrispIdentity();
+    mockResetSession.mockClear();
+    expect(openSupportChat({ preSignIn: true })).toBe('opened');
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    expect(mockResetSession.mock.invocationCallOrder[0]).toBeLessThan(mockShow.mock.invocationCallOrder[0]);
+  });
+
+  it('cold start, signed out: a persisted claim is never trusted; the pre-sign-in open resets first', () => {
+    const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('signed-out');
+    expect(openSupportChat({ preSignIn: true })).toBe('opened');
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    prefs.mockRestore();
+  });
+
+  it('signed in with no binding in this process: reset to a fresh session before showing', () => {
+    expect(openSupportChat({ preSignIn: false })).toBe('opened');
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    expect(mockResetSession.mock.invocationCallOrder[0]).toBeLessThan(mockShow.mock.invocationCallOrder[0]);
+  });
+
+  it('signed in, bound this process: shows the user\'s own session without a reset', () => {
+    syncCrispIdentity({ userId: 'user-a', email: 'alice@example.com' });
+    mockResetSession.mockClear();
+    expect(openSupportChat({ preSignIn: false })).toBe('opened');
+    expect(mockResetSession).not.toHaveBeenCalled();
   });
 });

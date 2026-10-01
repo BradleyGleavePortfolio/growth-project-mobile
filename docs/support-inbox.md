@@ -15,7 +15,7 @@ The Growth Project uses [Crisp](https://crisp.chat) as its in-app support channe
 ## User Flow
 
 1. User navigates to **Settings -> Support**.
-2. `SupportInboxScreen` mounts and calls `crisp-sdk-react-native`'s `show()`, opening the Crisp chat overlay natively.
+2. `SupportInboxScreen` mounts and calls `openSupportChat()` (`crisp.service.ts`), which opens the Crisp chat overlay natively with `show()` once the session is known to be safe for the viewer.
 3. The user types their message. The conversation appears in the Crisp operator dashboard at [app.crisp.chat](https://app.crisp.chat).
 4. The operator replies from the dashboard; the reply is pushed to the user's device via the Crisp native SDK.
 
@@ -43,8 +43,10 @@ setSessionString('tenantId', tenantId);
 The native Crisp SDK keeps its chat session, and its history, across launches and accounts until `resetSession()` is called. So:
 
 - `signOut()` (`services/authActions.ts`) calls `resetCrispIdentity()`, which resets the session.
-- `syncCrispIdentity(user)` resets the session before binding when it belongs to anyone else: another user, an anonymous pre-sign-in session, or an unknown owner (a cold start on a build without MMKV, or a session from before this fix). The owner is remembered as a non-reversible fingerprint of the email in prefs (`support.crisp_session_owner`), so the same user is not reset on every launch.
-- The auth stack registers `SupportInbox` as `PreSignInSupportInbox` (`preSignIn`), which calls `prepareSignedOutCrispSession()` before `show()`: a previous user's conversation is never shown before sign-in. A signed-out visitor who reopens the screen keeps their own anonymous session.
+- `syncCrispIdentity(user)` resets the session before binding when it belongs to anyone else: another user, an anonymous pre-sign-in session, or an unknown owner. Ownership is the authenticated **server user id** (`uid:<id>` in prefs, `support.crisp_session_owner`), compared exactly, so the same user is not reset on every launch and two people can never be confused (a round-3 email fingerprint could collide; Sol A2-R3). A user without a server id is always reset first.
+- **Fail closed (Sol A1-R3).** If `resetSession()` throws, the new user is not bound to the old session, ownership stays unknown, and the binding is retried before the chat opens.
+- Every open goes through `openSupportChat({ preSignIn })` (on mount and from the "Open Support Chat" button). It calls `show()` only when the session is known to be safe for the viewer: signed out, only after a reset that succeeded in this process (a persisted "signed out" claim is never trusted); signed in, only after a binding in this process, otherwise after a reset to a fresh session. When a reset fails the chat stays closed and the screen says so and offers "Try again".
+- The auth stack registers `SupportInbox` as `PreSignInSupportInbox` (`preSignIn`), so a previous user's conversation is never shown before sign-in. A signed-out visitor who reopens the screen in the same app session keeps their own anonymous session.
 
 Tests: `src/services/support/__tests__/crisp.service.test.ts`, `src/screens/support/__tests__/SupportInboxPreSignIn.test.tsx`, `src/services/__tests__/authActions.test.ts`.
 

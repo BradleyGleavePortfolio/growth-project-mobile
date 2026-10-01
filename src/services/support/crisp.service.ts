@@ -17,6 +17,9 @@
  *     someone else (or to nobody known), before binding the new identity.
  *   - `prepareSignedOutCrispSession()` runs before the pre-sign-in support
  *     screen opens the chat, so it never shows a previous user's conversation.
+ *   - #306 r4 (Sol A1-R3 / A2-R3): ownership is the server user id, and every
+ *     open goes through `openSupportChat()`, which fails closed: when a reset
+ *     fails the chat is not shown.
  *
  * NOTE: `crisp-sdk-react-native` requires a development build (Expo Go is not
  * supported) because the SDK bundles native modules for iOS and Android.
@@ -28,10 +31,17 @@ import {
   setUserNickname,
   setSessionString,
   resetSession,
+  show,
 } from 'crisp-sdk-react-native';
 import { prefsStorage } from '../../storage/mmkv';
 
 export interface CrispUser {
+  /**
+   * The authenticated server user id. It decides whether the chat session
+   * already belongs to this user; without it the session is always reset
+   * before binding.
+   */
+  userId?: string;
   email: string;
   displayName?: string;
   planTier?: string;
@@ -58,58 +68,88 @@ export function initCrisp(): void {
   configured = true;
 }
 
-// Which identity the native Crisp session currently belongs to:
-//  - a fingerprint of the signed-in email (never the email itself),
-//  - SIGNED_OUT for a session started on the pre-sign-in support screen,
-//  - null when unknown (cold start, or sessions created before this fix).
-// Kept in memory and mirrored to prefs so the same user is not reset on every
-// launch. sign-out wipes prefs and resets the session.
+// Which identity the native Crisp session currently belongs to (#306 r4,
+// Sol A1-R3 / A2-R3):
+//  - `uid:<server user id>` for a signed-in user. The authenticated server
+//    user id is the discriminator, compared exactly; an email fingerprint
+//    could collide (32-bit djb2: `a0@example.com` / `_r@example.com`).
+//  - SIGNED_OUT for an anonymous session this process reset itself,
+//  - null when unknown or dirty (cold start before a check, a reset that
+//    failed, a user without a server id). Unknown always means "reset first".
+// Mirrored to prefs only so the same user is not reset on every launch. The
+// pre-sign-in screen never trusts a persisted value: only a reset that
+// succeeded in this process makes a session safe to open signed out.
 const BOUND_KEY = 'support.crisp_session_owner';
 const SIGNED_OUT = 'signed-out';
-let boundOwner: string | null = null;
+let memOwner: string | null | undefined; // undefined = not read from prefs yet
+let verifiedThisProcess = false;
+// A user whose binding could not be completed because the reset failed;
+// retried before the chat opens.
+let pendingUser: CrispUser | null = null;
 
-function fingerprint(email: string): string {
-  // djb2; only used to tell "same person" from "someone else" on this device.
-  const e = email.trim().toLowerCase();
-  let h = 5381;
-  for (let i = 0; i < e.length; i++) h = ((h << 5) + h + e.charCodeAt(i)) | 0;
-  return `u${(h >>> 0).toString(36)}`;
+function ownerFor(user: CrispUser): string | null {
+  const id = typeof user.userId === 'string' ? user.userId.trim() : '';
+  return id ? `uid:${id}` : null;
 }
 
 function readOwner(): string | null {
-  if (boundOwner) return boundOwner;
+  if (memOwner !== undefined) return memOwner;
   try {
-    return prefsStorage.getString(BOUND_KEY) ?? null;
+    const v = prefsStorage.getString(BOUND_KEY) ?? null;
+    // Only the server-id form is trusted from storage (round-3 builds stored
+    // an email fingerprint; those are treated as unknown).
+    memOwner = v && v.startsWith('uid:') ? v : null;
   } catch {
-    return null;
+    memOwner = null;
   }
+  return memOwner;
 }
 
-function writeOwner(owner: string | null): void {
-  boundOwner = owner;
+function writeOwner(owner: string | null, verified: boolean): void {
+  memOwner = owner;
+  verifiedThisProcess = verified && owner !== null;
   try {
-    if (owner) void prefsStorage.set(BOUND_KEY, owner);
+    if (owner && owner !== SIGNED_OUT) void prefsStorage.set(BOUND_KEY, owner);
     else void prefsStorage.delete(BOUND_KEY);
   } catch {
     // Best effort: an unknown owner only causes an extra reset next time.
   }
 }
 
-function resetNativeSession(): void {
+/** True only when the native reset ran without throwing. */
+function resetNativeSession(): boolean {
   try {
     resetSession();
+    return true;
   } catch (err) {
     if (__DEV__) console.warn('[crisp.service] resetSession failed:', err);
+    return false;
   }
 }
 
-export function syncCrispIdentity(user: CrispUser): void {
-  if (!getWebsiteId()) return;
-  // Before binding, drop a session that belongs to anyone else, including
-  // an anonymous pre-sign-in session and one whose owner is unknown.
-  const owner = user.email ? fingerprint(user.email) : null;
-  if (!owner || readOwner() !== owner) resetNativeSession();
-  writeOwner(owner);
+/**
+ * Bind the signed-in user to the chat session. Resets first unless the
+ * session already belongs to this exact server user. If the reset fails the
+ * user is NOT bound (the previous session must not be relabelled as theirs),
+ * ownership stays unknown, and the binding is retried before the chat opens.
+ * Returns whether the session is now this user's.
+ */
+export function syncCrispIdentity(user: CrispUser): boolean {
+  if (!getWebsiteId()) return false;
+  const owner = ownerFor(user);
+  if (!owner || readOwner() !== owner) {
+    // Mark dirty before touching the native session, so a crash or a failed
+    // reset can never leave a stale "same user" mark behind.
+    writeOwner(null, false);
+    if (!resetNativeSession()) {
+      pendingUser = user;
+      return false;
+    }
+  }
+  pendingUser = null;
+  // A user without a server id is bound for attribution but stays
+  // "unknown", so the next bind or open resets again.
+  writeOwner(owner, true);
   setUserEmail(user.email);
   const displayName = user.displayName ?? user.email.split('@')[0] ?? '';
   if (displayName) {
@@ -124,28 +164,74 @@ export function syncCrispIdentity(user: CrispUser): void {
   if (user.tenantId) {
     setSessionString('tenantId', user.tenantId);
   }
+  return owner !== null;
 }
 
 /** Sign-out: end the chat session so the next person cannot open it. */
 export function resetCrispIdentity(): void {
-  writeOwner(null);
+  pendingUser = null;
+  writeOwner(null, false);
   if (!getWebsiteId()) return;
+  // On failure ownership stays unknown, so every later open resets first.
   resetNativeSession();
 }
 
 /**
- * Before the support chat opens with nobody signed in: keep an anonymous
- * session this device already started signed out, reset anything else (a
- * previous user's session, or one of unknown owner).
+ * Before the support chat opens with nobody signed in. Keeps an anonymous
+ * session only if this process reset it itself; resets anything else (a
+ * previous user's session, one of unknown owner, a persisted claim). Returns
+ * whether the session is safe to show.
  */
-export function prepareSignedOutCrispSession(): void {
-  if (!getWebsiteId()) return;
-  if (readOwner() === SIGNED_OUT) return;
-  resetNativeSession();
-  writeOwner(SIGNED_OUT);
+export function prepareSignedOutCrispSession(): boolean {
+  if (!getWebsiteId()) return false;
+  if (readOwner() === SIGNED_OUT && verifiedThisProcess) return true;
+  writeOwner(null, false);
+  if (!resetNativeSession()) return false;
+  writeOwner(SIGNED_OUT, true);
+  return true;
 }
 
-/** Test seam: forget the in-memory session owner. */
+export type SupportChatOpenResult = 'opened' | 'blocked' | 'unavailable';
+
+/**
+ * The only way the support screen opens the chat (mount and the manual
+ * button). Fail closed: `show()` runs only when the session is known to be
+ * safe for the viewer.
+ *  - Signed out: `prepareSignedOutCrispSession()` must succeed.
+ *  - Signed in: the session must have been bound to a user in this process;
+ *    a binding that failed is retried; with no binding at all the session is
+ *    reset to a fresh anonymous one first.
+ * 'blocked' means a reset failed and the chat stayed closed; the caller
+ * offers a retry. 'unavailable' means Crisp is not configured or `show()`
+ * threw (native module missing).
+ */
+export function openSupportChat(opts: { preSignIn: boolean }): SupportChatOpenResult {
+  if (!getWebsiteId()) return 'unavailable';
+  let safe: boolean;
+  if (opts.preSignIn) {
+    safe = prepareSignedOutCrispSession();
+  } else if (pendingUser) {
+    safe = syncCrispIdentity(pendingUser);
+  } else {
+    const owner = readOwner();
+    safe =
+      verifiedThisProcess && owner !== null && (owner === SIGNED_OUT || owner.startsWith('uid:'))
+        ? true
+        : prepareSignedOutCrispSession();
+  }
+  if (!safe) return 'blocked';
+  try {
+    show();
+    return 'opened';
+  } catch (err) {
+    if (__DEV__) console.warn('[crisp.service] show() failed:', err);
+    return 'unavailable';
+  }
+}
+
+/** Test seam: forget the in-memory session state (simulates a cold start). */
 export function __resetCrispOwnerForTests(): void {
-  boundOwner = null;
+  memOwner = undefined;
+  verifiedThisProcess = false;
+  pendingUser = null;
 }
