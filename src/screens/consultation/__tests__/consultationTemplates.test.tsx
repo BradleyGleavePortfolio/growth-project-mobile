@@ -5,11 +5,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
-import { storageKey } from '../../../lib/consultation/storage';
+import { makeApi as harnessApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import type { Answers } from '../../../lib/consultation/types';
 
 const mockPut = jest.fn();
@@ -26,23 +25,18 @@ jest.mock('../../../services/api', () => ({
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 
 function makeApi(): ConsultationApi {
-  return {
-    save: jest.fn(async () => ({ saved_at: 'x', completed_chapters: [] })),
-    getState: jest.fn(async () => null),
-    complete: jest.fn(async () => ({ kind: 'error' as const, status: 500 })),
-    grantConsent: jest.fn(async () => undefined),
-  };
+  return harnessApi({ complete: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
 }
 
 async function seed(answers: Answers, screenId: string) {
-  await AsyncStorage.setItem(storageKey('u1'), JSON.stringify({ version: 'consult-v1', answers, screenId, updatedAt: 'x' }));
+  await seedLocal(answers, screenId);
 }
 
 const renderFlow = (api = makeApi()) =>
   render(<ConsultationFlow userId="u1" firstName="Maya" api={api} onFinished={jest.fn()} now={() => NOW} autoAdvanceMs={0} prepMinMs={0} />);
 
 beforeEach(async () => {
-  await AsyncStorage.clear();
+  await resetStores();
   mockPut.mockReset();
   mockGet.mockReset();
   mockPost.mockReset();
@@ -128,9 +122,33 @@ describe('consultationApi', () => {
     await expect(consultationApi.complete()).resolves.toEqual({ kind: 'ok', data: { macros: {} } });
     expect(mockPost).toHaveBeenCalledWith('/me/onboarding/complete', {});
 
-    mockPost.mockResolvedValue({ data: {} });
-    await consultationApi.grantConsent({ version: 'roman-ai-v1', platform: 'ios' });
-    expect(mockPost).toHaveBeenLastCalledWith('/me/ai-consent/roman', { version: 'roman-ai-v1', platform: 'ios' });
+    mockPost.mockResolvedValue({ data: { roman: { granted: true } } });
+    const body = { ai_consent_version: 'client-ai-v2', waiver_version: 'pt-waiver-v1', platform: 'ios' as const };
+    await expect(consultationApi.grantOnboardingConsent(body)).resolves.toEqual({ kind: 'ok', status: { roman: { granted: true } } });
+    expect(mockPost).toHaveBeenLastCalledWith('/me/ai-consent/onboarding', body);
+
+    mockGet.mockResolvedValue({ data: { roman: { granted: false } } });
+    await expect(consultationApi.getConsentStatus()).resolves.toEqual({ roman: { granted: false } });
+    expect(mockGet).toHaveBeenLastCalledWith('/me/ai-consent');
+  });
+
+  it('maps 409 CONSENT_VERSION_MISMATCH on the grant to an explicit fail-closed outcome', async () => {
+    const body = { ai_consent_version: 'client-ai-v2', waiver_version: 'pt-waiver-v1' };
+    mockPost.mockRejectedValueOnce({
+      response: { status: 409, data: { code: 'CONSENT_VERSION_MISMATCH', current_version: 'client-ai-v3', waiver_current_version: 'pt-waiver-v1' } },
+    });
+    await expect(consultationApi.grantOnboardingConsent(body)).resolves.toEqual({
+      kind: 'version_mismatch',
+      current_version: 'client-ai-v3',
+      waiver_current_version: 'pt-waiver-v1',
+    });
+    mockPost.mockRejectedValueOnce({ response: { status: 404 } });
+    await expect(consultationApi.grantOnboardingConsent(body)).resolves.toEqual({ kind: 'error', status: 404 });
+    mockPost.mockRejectedValueOnce(new Error('Network Error'));
+    await expect(consultationApi.grantOnboardingConsent(body)).resolves.toEqual({ kind: 'error', status: null });
+    expect(conflictCodeOf({ response: { data: { code: 'CONSENT_VERSION_MISMATCH' } } })).toBe('consent_version_mismatch');
+    expect(conflictCodeOf({ response: { data: { code: 'completion_in_progress' } } })).toBe('completion_in_progress');
+    expect(conflictCodeOf({ response: { data: { code: 'clinic_not_configured' } } })).toBe('clinic_not_configured');
   });
 
   it('maps 409 machine codes and other failures', async () => {

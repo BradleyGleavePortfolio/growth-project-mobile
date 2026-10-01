@@ -4,7 +4,7 @@
  * 400/500, radius 4 or less (pills on chips only), and every control carries
  * an accessibility role, label and state.
  */
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import {
   AccessibilityActionEvent,
   Animated,
@@ -19,6 +19,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { colors, lightTokens, radius, spacing, typography } from '../../theme/tokens';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
@@ -188,10 +189,46 @@ export interface FrameProps {
   testID?: string;
 }
 
-export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
+/**
+ * Analytics exclusion boundary (Sol A-01). The app's PostHog provider has
+ * touch autocapture on; it walks up from the touched element and drops the
+ * whole event when any ancestor carries `ph-no-capture`. The consultation
+ * renders every phase (questions, summary, reveals, problem and paused
+ * states) inside this boundary, and the Frame, its scroll body and footer
+ * repeat the marker so the boundary is always within the SDK's 20-element
+ * ancestor walk. No consultation answer, screen id, measurement, note or
+ * summary sentence can reach the SDK through autocapture.
+ */
+export const NO_CAPTURE_PROP = 'ph-no-capture' as const;
+
+export function AnalyticsExcluded({ children }: { children: React.ReactNode }) {
   return (
-    <View style={s.root} testID={testID}>
-      <View style={s.topbar}>
+    <View ph-no-capture style={{ flex: 1 }} testID="consult-analytics-excluded">
+      {children}
+    </View>
+  );
+}
+
+const ZERO_INSETS = { top: 0, right: 0, bottom: 0, left: 0 };
+
+/**
+ * Safe-area insets without requiring a provider (tests and previews render
+ * without one). The consultation is mounted directly by RootNavigator, not
+ * inside a native stack, so the frame must consume the insets itself (Sol B-04).
+ */
+export function useConsultInsets() {
+  return useContext(SafeAreaInsetsContext) ?? ZERO_INSETS;
+}
+
+export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
+  const insets = useConsultInsets();
+  return (
+    <View
+      ph-no-capture
+      style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}
+      testID={testID}
+    >
+      <View style={s.topbar} testID="consult-topbar">
         {onBack ? (
           <Pressable
             onPress={onBack}
@@ -220,10 +257,16 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
         ) : null}
       </View>
       {progress ? <ProgressBar progress={progress} /> : null}
-      <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
+      <ScrollView ph-no-capture contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         {children}
       </ScrollView>
-      {footer ? <View style={s.footer}>{footer}</View> : <View style={s.footerSpacer} />}
+      {footer ? (
+        <View ph-no-capture style={[s.footer, { paddingBottom: spacing.xl + insets.bottom }]} testID="consult-footer">
+          {footer}
+        </View>
+      ) : (
+        <View style={{ height: 34 + insets.bottom }} testID="consult-footer" />
+      )}
     </View>
   );
 }

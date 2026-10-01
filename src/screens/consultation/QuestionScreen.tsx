@@ -18,6 +18,7 @@ import {
   CopyContext,
   detailShown,
   fillCopy,
+  isConsentAnswerCurrent,
   optionsFor,
   toggleSelection,
   validateScreen,
@@ -51,6 +52,8 @@ export interface QuestionScreenProps {
   onNext: (patch?: Answers) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
+  /** P0 only: recording in progress, or why the last attempt failed. */
+  consent?: { busy: boolean; error: 'network' | 'version_mismatch' | null };
 }
 
 const MONTHS = [
@@ -407,24 +410,35 @@ function GoalWeightBody(props: BodyProps) {
   );
 }
 
+const CONSENT_ERROR_COPY = {
+  network: "I couldn't record your agreement just now. Nothing has been sent. Please check your connection and try again.",
+  version_mismatch:
+    'The agreement has been updated since this version of the app. Nothing has been sent. Please update the app to read the current agreement before you continue.',
+} as const;
+
 function ConsentBody(props: BodyProps) {
-  const { answers, onNext, header } = props;
-  const already = !!answers.P0 && typeof answers.P0 === 'object' && !Array.isArray(answers.P0);
+  const { answers, onNext, header, consent: state } = props;
+  // Only a record matching this build's copy version counts (Sol A-03):
+  // stale or malformed records render the box unticked.
+  const already = isConsentAnswerCurrent(answers.P0);
   const [checked, setChecked] = useState(already);
+  const busy = !!state?.busy;
+  const error = state?.error ?? null;
   const consent = useMemo<ConsentAnswer>(
     () => ({ agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: new Date().toISOString() }),
     // agreed_at is taken when the box is ticked.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [checked],
   );
+  const blocked = error === 'version_mismatch';
   return (
     <BodyFrame
       props={props}
       header={header}
       footer={
         <PrimaryButton
-          label="Continue"
-          disabled={!checked}
+          label={busy ? 'Recording your agreement' : props.screen.cta ?? 'Continue'}
+          disabled={!checked || busy || blocked}
           hint={checked ? undefined : 'Tick I agree to continue'}
           onPress={() => onNext({ P0: already ? answers.P0 : consent })}
           testID="consult-continue"
@@ -434,7 +448,17 @@ function ConsentBody(props: BodyProps) {
       {CONSENT_PARAGRAPHS.map((p) => (
         <Text key={p} style={[s.small, { marginBottom: 12 }]}>{p}</Text>
       ))}
-      <Checkbox checked={checked} onToggle={() => setChecked((c) => !c)} label={CONSENT_CHECKBOX_LABEL} testID="consent-checkbox" />
+      <Checkbox
+        checked={checked}
+        onToggle={() => setChecked((c) => !c)}
+        label={CONSENT_CHECKBOX_LABEL}
+        testID="consent-checkbox"
+      />
+      {error ? (
+        <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consent-error">
+          {CONSENT_ERROR_COPY[error]}
+        </Text>
+      ) : null}
     </BodyFrame>
   );
 }

@@ -108,7 +108,15 @@ export function SummaryScreen({
 
 // ─── Completion problem (409 / network) ──────────────────────────────────────
 
-export type CompleteProblem = 'not_attached' | 'consultation_incomplete' | 'consent_missing' | 'network' | 'unknown';
+export type CompleteProblem =
+  | 'not_attached'
+  | 'consultation_incomplete'
+  | 'consent_missing'
+  | 'consent_version_mismatch'
+  | 'clinic_not_configured'
+  | 'completion_in_progress'
+  | 'network'
+  | 'unknown';
 
 const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: string }> = {
   not_attached: {
@@ -123,8 +131,23 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
   },
   consent_missing: {
     head: 'One box still needs your agreement.',
-    body: "Before I can prepare your plan, I'll need the I agree box at the start of the safety chapter.",
+    body: "Before I can prepare your plan, I'll need the I agree box at the start of the consultation. Nothing more is sent until it is ticked.",
     cta: 'Take me there',
+  },
+  consent_version_mismatch: {
+    head: 'The agreement has been updated.',
+    body: 'Nothing more has been sent. Please update the app to read the current agreement, then tick the box again.',
+    cta: 'Review the agreement',
+  },
+  clinic_not_configured: {
+    head: 'Your coach is still setting things up.',
+    body: 'Your answers are saved. Your plan will be ready to prepare shortly. Please try again in a little while.',
+    cta: 'Try again',
+  },
+  completion_in_progress: {
+    head: 'Your plan is already being prepared.',
+    body: 'Give it a moment, then try again.',
+    cta: 'Try again',
   },
   network: {
     head: "I couldn't reach the server.",
@@ -282,4 +305,3 @@ export function PlanRevealScreen({
     </Frame>
   );
 }
-

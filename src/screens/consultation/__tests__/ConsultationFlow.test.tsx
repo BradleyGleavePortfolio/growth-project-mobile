@@ -7,47 +7,15 @@
  * handling (consultation_incomplete, consent_missing, not_attached).
  */
 import React from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
-import type { CompleteOnboardingResponse, CompleteOutcome } from '../../../api/consultationApi';
+import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
-import { storageKey } from '../../../lib/consultation/storage';
-import type { Answers } from '../../../lib/consultation/types';
+import { makeApi, RESULT, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
+import { readLocalState } from '../../../lib/consultation/storage';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
-
-const RESULT: CompleteOnboardingResponse = {
-  macros: { calories: 1789, protein_g: 150, carbs_g: 185, fat_g: 50, method: 'Mifflin-St Jeor', floor_applied: false },
-  program: {
-    id: 'prog-a',
-    name: 'Foundations',
-    days_per_week: 3,
-    weeks: 4,
-    why: ['You are new to structured training.', 'You train at home with dumbbells.', 'Three days fit your week.'],
-  },
-  spaces: [{ id: 'sp1', name: 'All members' }],
-  coach: { id: 'coach-1', display_name: 'Bradley' },
-};
-
-function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mock>> = {}) {
-  const api = {
-    save: jest.fn(async () => ({ saved_at: '2026-09-30T19:00:00Z', completed_chapters: [1] })),
-    getState: jest.fn(async () => null),
-    complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'ok', data: RESULT })),
-    grantConsent: jest.fn(async () => undefined),
-    ...overrides,
-  };
-  return api as unknown as ConsultationApi & typeof api;
-}
-
-async function seedLocal(answers: Answers, screenId: string) {
-  await AsyncStorage.setItem(
-    storageKey('u1'),
-    JSON.stringify({ version: 'consult-v1', answers, screenId, updatedAt: '2026-09-30T19:00:00Z' }),
-  );
-}
 
 function renderFlow(api: ConsultationApi, onFinished = jest.fn()) {
   return render(
@@ -65,7 +33,7 @@ function renderFlow(api: ConsultationApi, onFinished = jest.fn()) {
 }
 
 beforeEach(async () => {
-  await AsyncStorage.clear();
+  await resetStores();
 });
 
 describe('ConsultationFlow', () => {
@@ -77,6 +45,10 @@ describe('ConsultationFlow', () => {
     expect(r.getByLabelText(/Roman says: I'm Roman\. Before Bradley builds/)).toBeTruthy();
     expect(r.queryByTestId('consult-progress')).toBeNull();
     await fireEvent.press(r.getByTestId('consult-continue'));
+    // The single agreement comes straight after the welcome.
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     expect(r.getByTestId('consult-progress')).toBeTruthy();
     expect(r.getByText('Chapter 1 of 8 · Goals')).toBeTruthy();
@@ -84,10 +56,9 @@ describe('ConsultationFlow', () => {
 
   it('auto-advances single-select rows, goes back, and saves at the chapter end', async () => {
     const api = makeApi();
-    await seedLocal({}, 'W1');
+    const P0 = fullAnswers().P0;
+    await seedLocal({ P0 }, 'G1');
     const r = await renderFlow(api);
-    await waitFor(() => r.getByTestId('consult-screen-W1'));
-    await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await fireEvent.press(r.getByTestId('consult-option-fat_loss'));
     await waitFor(() => r.getByTestId('consult-screen-G2'));
@@ -108,10 +79,12 @@ describe('ConsultationFlow', () => {
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-B1'));
 
-    expect(api.save).toHaveBeenCalledTimes(1);
-    expect(api.save).toHaveBeenCalledWith({
+    // Consent first (backend #607): P0 on its own, then the chapter.
+    expect(api.save).toHaveBeenCalledTimes(2);
+    expect(api.save).toHaveBeenNthCalledWith(1, { version: 'consult-v1', answers: { P0 } });
+    expect(api.save).toHaveBeenNthCalledWith(2, {
       version: 'consult-v1',
-      answers: { G1: 'fat_loss', G2: ['energy', 'strength', 'family'] },
+      answers: { P0, G1: 'fat_loss', G2: ['energy', 'strength', 'family'] },
     });
   });
 
@@ -121,30 +94,38 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-N3'));
   });
 
-  it('gates P0 on the single I agree box and records the combined consent', async () => {
+  it('gates P0 on the single I agree box and records the combined consent before any save', async () => {
     const api = makeApi();
-    await seedLocal(answersBeforeSafety(), 'P0');
+    await seedLocal({}, 'P0');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(r.getByText(/Roman is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
-    expect(r.getByTestId('consult-finish-later').props.accessibilityLabel).toBe('Pause');
+    // Chapter 0: no progress bar and no Finish later before the agreement.
+    expect(r.queryByTestId('consult-finish-later')).toBeNull();
+    expect(r.queryByTestId('consult-progress')).toBeNull();
 
     const cont = () => r.getByTestId('consult-continue');
     expect(cont().props.accessibilityState).toMatchObject({ disabled: true });
     await fireEvent.press(cont());
     expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
-    expect(api.grantConsent).not.toHaveBeenCalled();
+    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
 
     const box = r.getByTestId('consent-checkbox');
     expect(box.props.accessibilityRole).toBe('checkbox');
     await fireEvent.press(box);
     expect(r.getByTestId('consent-checkbox').props.accessibilityState).toMatchObject({ checked: true });
     await fireEvent.press(cont());
-    await waitFor(() => r.getByTestId('consult-screen-P1'));
-    await waitFor(() => expect(api.grantConsent).toHaveBeenCalledWith(expect.objectContaining({ version: 'roman-ai-v1' })));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    expect(api.grantOnboardingConsent).toHaveBeenCalledWith(
+      expect.objectContaining({ ai_consent_version: 'client-ai-v2', waiver_version: 'pt-waiver-v1', platform: 'ios' }),
+    );
+    // The first server write carries only the recorded agreement, after the grant.
+    await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
+    expect(api.grantOnboardingConsent.mock.invocationCallOrder[0]).toBeLessThan(api.save.mock.invocationCallOrder[0]);
+    expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
 
-    const stored = JSON.parse((await AsyncStorage.getItem(storageKey('u1'))) as string);
-    expect(stored.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v1' });
+    const stored = await readLocalState('u1', NOW);
+    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v1' });
   });
 
   it('skips P8 when every screening answer is no', async () => {
@@ -200,7 +181,8 @@ describe('ConsultationFlow', () => {
 
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => r.getByTestId('consult-screen-MACRO'));
-    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.save).toHaveBeenCalledTimes(2); // P0 alone, then the full set
+    expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
     expect(api.complete).toHaveBeenCalledTimes(1);
     expect(r.getByTestId('macro-calories').props.children).toBe('1,789');
     expect(r.getByTestId('macro-protein').props.children).toBe('150 g');
@@ -255,7 +237,7 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-G1'));
   });
 
-  it('409 consent_missing re-records the consent once and retries', async () => {
+  it('409 consent_missing re-reads the record, saves again and retries once, never re-granting', async () => {
     const complete = jest
       .fn<Promise<CompleteOutcome>, []>()
       .mockResolvedValueOnce({ kind: 'conflict', code: 'consent_missing' })
@@ -266,7 +248,11 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
     await waitFor(() => r.getByTestId('consult-screen-MACRO'));
-    expect(api.grantConsent).toHaveBeenCalledTimes(1);
+    expect(api.grantOnboardingConsent).not.toHaveBeenCalled();
+    // Each attempt sends P0 on its own first, then the full set.
+    expect(api.save).toHaveBeenCalledTimes(4);
+    expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
+    expect(Object.keys(api.save.mock.calls[2][0].answers)).toEqual(['P0']);
     expect(complete).toHaveBeenCalledTimes(2);
   });
 
@@ -317,14 +303,14 @@ describe('ConsultationFlow', () => {
     expect(api.complete).not.toHaveBeenCalled();
   });
 
-  it('Finish later saves and keeps the place', async () => {
+  it('Pause / Finish later saves and keeps the place', async () => {
     const api = makeApi();
     await seedLocal(answersBeforeSafety(), 'N3');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-N3'));
     await fireEvent.press(r.getByTestId('consult-finish-later'));
     await waitFor(() => r.getByTestId('consult-paused'));
-    expect(api.save).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(api.save).toHaveBeenCalledTimes(2)); // P0 alone, then the rest
     await fireEvent.press(r.getByTestId('consult-resume'));
     await waitFor(() => r.getByTestId('consult-screen-N3'));
   });
