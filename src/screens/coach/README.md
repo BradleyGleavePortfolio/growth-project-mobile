@@ -180,7 +180,7 @@ These rows belong in `docs/RELEASE_SMOKE.md`'s real-device-proof section; captur
 ## iOS: purchases that are not 1:1 services (clinic launch)
 
 With `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` on (default in release builds; set in `eas.json` preview + production), iOS builds hide:
-- The `CreditPackCheckout` route, wrapped by `components/purchases/withNonP2PPurchaseGate`.
+- The `CreditPackCheckout` route, wrapped by `components/purchases/withNonP2PPurchaseGate`. Its hidden state reads "Managed on the web" with no link or URL, and an AI budget push routes to Settings instead of this screen.
 - The "Buy credits" banner CTA, the meter chip tap, and `PackOptionsRow` in the tutorial and hard-pause modals.
 - The "Start subscription" / "Manage billing" button and invoice links in `CoachBillingScreen`. The status copy switches to a neutral note.
 

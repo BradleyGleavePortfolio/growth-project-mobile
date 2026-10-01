@@ -9,6 +9,11 @@ jest.mock('../../config/featureFlags', () => ({
   },
 }));
 
+let mockHidden = false;
+jest.mock('../../config/purchaseSurfaces', () => ({
+  nonP2PPurchasesHidden: () => mockHidden,
+}));
+
 import {
   __resetPushTapRouterForTests,
   attachPushNavigator,
@@ -48,6 +53,7 @@ describe('pushTapRouter', () => {
     mockFlags.communityTab = true;
     mockFlags.communityEvents = true;
     mockFlags.coachCommunity = true;
+    mockHidden = false;
   });
 
   describe('client nested destinations (real tab roots)', () => {
@@ -114,7 +120,16 @@ describe('pushTapRouter', () => {
       expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'NotificationCenter', params: undefined });
     });
 
-    it('CreditPackCheckout -> SettingsStack (the gated wrapper shows neutral copy on hidden iOS)', () => {
+    it('hidden iOS: an AI budget push never opens the credit checkout; it lands on Settings', () => {
+      mockHidden = true;
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CreditPackCheckout');
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', { screen: 'SettingsHome', params: undefined });
+    });
+
+    it('CreditPackCheckout -> SettingsStack checkout when purchases are visible', () => {
       const nav = makeNav(COACH_TABS);
       attachPushNavigator(nav);
       setPushSession(COACH_A);

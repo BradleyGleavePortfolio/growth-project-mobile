@@ -25,6 +25,7 @@
  *    is bounded.
  */
 import { featureFlags } from '../config/featureFlags';
+import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -79,9 +80,13 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
-  // GatedCreditPackCheckoutScreen renders the neutral "not available" copy
-  // on hidden iOS builds, so the route itself is safe to reach.
-  CreditPackCheckout: () => ({ root: 'SettingsStack', screen: 'CreditPackCheckout' }),
+  // AI credit top-ups are not purchasable on hidden iOS builds: a budget
+  // push lands on Settings, never on the checkout route (whose gated
+  // wrapper would only say "Managed on the web").
+  CreditPackCheckout: () =>
+    nonP2PPurchasesHidden()
+      ? { root: 'SettingsStack', screen: 'SettingsHome' }
+      : { root: 'SettingsStack', screen: 'CreditPackCheckout' },
   CommunityEventDetail: () =>
     featureFlags.coachCommunity && featureFlags.communityEvents
       ? { root: 'CommunityStack', screen: 'CoachCommunityEvents' }

@@ -392,8 +392,8 @@ export default function CheckoutReturnScreen() {
       <Text style={styles.title}>Payment received</Text>
       <Text style={styles.body}>
         {status?.package_name
-          ? `We're activating ${status.package_name} now — your coach has been notified and access opens within a few minutes.`
-          : 'Your coach has been notified — access activates within a few minutes.'}
+          ? `We're confirming ${status.package_name} now. Your coach has been notified and will be in touch shortly.`
+          : 'Your coach has been notified and will be in touch shortly.'}
       </Text>
       <TouchableOpacity style={styles.cta} onPress={goHome} accessibilityRole="button">
         <Text style={styles.ctaText}>Go to home</Text>

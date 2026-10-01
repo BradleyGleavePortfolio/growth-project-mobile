@@ -48,6 +48,12 @@ jest.mock('../components/PackageSelectionSheet', () => {
     visible ? R.createElement(Text, { testID: 'package-sheet' }, 'sheet') : null;
 });
 
+let mockHidden = false;
+jest.mock('../config/purchaseSurfaces', () => ({
+  ...jest.requireActual('../config/purchaseSurfaces'),
+  nonP2PPurchasesHidden: () => mockHidden,
+}));
+
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 
 async function skipAndSettle(entitlement: () => Promise<unknown>) {
@@ -59,7 +65,10 @@ async function skipAndSettle(entitlement: () => Promise<unknown>) {
 }
 
 describe('Day1WinScreen package prompt is fail closed', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockHidden = false;
+  });
 
   it('comp (active) client: no sheet, straight into the app', async () => {
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: true, entitlement_active: true } }));
@@ -81,5 +90,13 @@ describe('Day1WinScreen package prompt is fail closed', () => {
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
     await waitFor(() => expect(r.getByTestId('package-sheet')).toBeTruthy());
     expect(r.onComplete).not.toHaveBeenCalled();
+  });
+
+  it('hidden iOS build: no sheet even for an explicitly inactive client, and no entitlement lookup', async () => {
+    mockHidden = true;
+    const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
+    await waitFor(() => expect(r.onComplete).toHaveBeenCalledTimes(1));
+    expect(r.queryByTestId('package-sheet')).toBeNull();
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 });

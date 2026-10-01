@@ -104,6 +104,11 @@ jest.mock('../entitlements/EntitlementProvider', () => ({
   EntitlementProvider: ({ children }: { children: unknown }) => children,
 }));
 
+let mockHidden = false;
+jest.mock('../config/purchaseSurfaces', () => ({
+  ...jest.requireActual('../config/purchaseSurfaces'),
+  nonP2PPurchasesHidden: () => mockHidden,
+}));
 import React from 'react';
 import { render, cleanup } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -124,6 +129,7 @@ beforeEach(async () => {
   queryClient.clear();
   for (const k of Object.keys(mockSecure)) delete mockSecure[k];
   mockGetEntitlement.mockReset();
+  mockHidden = false;
   mockSecure['supabase_token'] = 'jwt-S';
   await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(STUDENT));
   await AsyncStorage.setItem('onboarding_complete', 'true');
@@ -170,5 +176,14 @@ describe('RootNavigator 24h package prompt is fail closed', () => {
     mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false } });
     const r = await mount();
     await r.findByTestId('package-prompt');
+  });
+
+  it('hidden iOS build: no prompt even for an explicitly inactive client', async () => {
+    mockHidden = true;
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: false, entitlement_active: false } });
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('package-prompt')).toBeNull();
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 });

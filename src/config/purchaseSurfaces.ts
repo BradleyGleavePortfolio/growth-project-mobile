@@ -78,9 +78,11 @@ export function purchasePolicyHeader(): 'p2p-only' | 'all' {
   return nonP2PPurchasesHidden() ? 'p2p-only' : 'all';
 }
 
-export const NON_P2P_HIDDEN_TITLE = 'Not available in this app';
+// Operator 2026-09-30 (store package P0): AI credit top-ups say "Managed on
+// the web", with no link, URL or instruction to buy elsewhere (3.1.1 / 3.1.3).
+export const NON_P2P_HIDDEN_TITLE = 'Managed on the web';
 export const NON_P2P_HIDDEN_BODY =
-  'This purchase is not offered in the iOS app. Your account and anything you already have are unchanged.';
+  'This is not available in the iOS app. Your account and anything you already have are unchanged.';
 
 /** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
 export function oneToOneCoachingLabel(coachName?: string | null): string {
