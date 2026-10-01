@@ -33,6 +33,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 // in PR #130; this PR places it on HomeScreen).
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import PendingInviteBanner from '../../components/PendingInviteBanner';
+import HomeHeaderActions from '../../components/home/HomeHeaderActions';
+import PushPermissionCard from '../../components/home/PushPermissionCard';
 import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
 import { workoutApi } from '../../services/api';
 import {
@@ -296,7 +298,9 @@ export default function HomeScreen() {
           />
         }
       >
+        <HomeHeaderActions />
         <PendingInviteBanner />
+        <PushPermissionCard />
         {showProfileNudge ? (
           <Pressable
             onPress={goToEditProfile}

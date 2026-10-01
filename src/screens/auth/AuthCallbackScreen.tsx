@@ -19,18 +19,18 @@
  * The screen renders a minimal centered spinner while the redirect
  * happens; the user should never see it for more than a frame or two.
  *
- * Note: this stub is not yet mounted inside AuthNavigator — the
- * `RootNavigator.linking.config.screens` entry aliases the path onto
- * the already-mounted `Login` route so the URL has a real landing
- * surface today. When the auth stack is next refactored, mount this
- * component under the `AuthCallback` route and update the linking
- * config to point at it directly.
+ * Mounted in AuthNavigator under `AuthCallback` (clinic C10: the linking
+ * entry used to point at an unmounted route, so the URL went nowhere).
+ * The auth stack has no `Home` route, so the authenticated branch asks the
+ * root to re-bootstrap (authEvents.emit) instead of resetting to a route
+ * that does not exist in this navigator.
  */
 import React, { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { secureStorage } from '../../services/secureStorage';
+import { authEvents } from '../../utils/authEvents';
 
 export default function AuthCallbackScreen() {
   const navigation = useNavigation<{
@@ -42,12 +42,15 @@ export default function AuthCallbackScreen() {
     (async () => {
       const token = await secureStorage.getItem('supabase_token');
       if (cancelled) return;
-      // Either path resets the stack to a single route so the callback
-      // landing cannot be re-entered via back navigation.
-      navigation.reset({
-        index: 0,
-        routes: [{ name: token ? 'Home' : 'Login' }],
-      });
+      if (token) {
+        // Signed in: RootNavigator.bootstrapAuth re-runs and mounts the
+        // client/coach app on its Home route.
+        authEvents.emit();
+        return;
+      }
+      // Signed out: reset to a single Login route so the callback landing
+      // cannot be re-entered via back navigation.
+      navigation.reset({ index: 0, routes: [{ name: 'Login' }] });
     })();
     return () => {
       cancelled = true;

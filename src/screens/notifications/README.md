@@ -161,3 +161,11 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 - Notification grouping by kind (collapsible sections) once the list grows beyond 50 items.
 - Rich push payloads (image, action buttons) — requires Expo Notifications v3 + backend change.
 - Per-schedule quiet hours (different windows per day of week).
+
+## Push tap routing (clinic launch)
+
+- `installNotificationResponseHandler(routePushTap)` is installed once in `App.tsx` (skipped in screenshot mode). It handles live taps and the cold-start tap from `getLastNotificationResponseAsync`, de-duplicated by notification id.
+- `src/services/pushTapRouter.ts` delivers a tap only when RootNavigator reports an explicit app session (`setPushSession(pushSessionFor(authState, userId))`): `student`/`package_prompt` mount the client navigator, `coach` the coach navigator. Bootstrap and every onboarding root (lean questions, Day-1, Day-1 win, coach wizard) hold the tap. Sign-out drops it, a tap that arrives while signed out is dropped, and a session for a different user id drops it.
+- Destinations are a role-aware allow-list of real nested routes. Client: `Messages`, `NotificationCenter`, `Habits` -> `Home`; `Timeline`, `MoreIndex`, `Membership`, `Deliverables` -> `MoreTab`; `WorkoutMain` -> `WorkoutTab`; `CommunityEventDetail` -> `CommunityTab` (community + events flags). Coach: `Messages` (root tab); `NotificationCenter`, `NotificationPreferences` -> `ClientsStack`; `CreditPackCheckout` -> `SettingsStack` (gated wrapper, neutral copy on hidden iOS); `CommunityEventDetail` -> `CommunityStack/CoachCommunityEvents` (coach community + events flags). Unknown or unavailable names land on the role's notification center.
+- Push params are decoded to at most 8 string values (200 chars each); the delivered-id dedupe set keeps the last 200 ids.
+- The OS permission prompt is no longer shown at sign-in. `registerForPushNotifications({ requestPermission: false })` only registers the token when permission is already granted. The prompt comes from `components/home/PushPermissionCard.tsx` on Home, and only when the user taps "Turn on".

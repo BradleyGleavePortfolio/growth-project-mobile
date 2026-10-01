@@ -20,6 +20,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
 import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -68,9 +69,14 @@ function formatDate(iso?: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// iOS builds hide subscription CTAs; the status copy must not ask the coach
+// to subscribe or update a card either.
+const IOS_BILLING_NOTE = 'Your coach account status is shown here. Billing changes are not made in the iOS app.';
+
 export default function CoachBillingScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const purchasesHidden = nonP2PPurchasesHidden();
   const [status, setStatus] = useState<CoachBillingStatus | null>(null);
   const [invoices, setInvoices] = useState<CoachInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,7 +252,9 @@ export default function CoachBillingScreen({ navigation }: Props) {
               </Text>
             </View>
           </View>
-          <Text style={styles.statusBody}>{s.summary || copy.description}</Text>
+          <Text style={styles.statusBody} testID="coach-billing-status-body">
+            {purchasesHidden ? IOS_BILLING_NOTE : s.summary || copy.description}
+          </Text>
 
           {(s.planName || s.seatLimit != null || periodEnd || trialEnd) && (
             <View style={styles.detailGrid}>
@@ -282,35 +290,41 @@ export default function CoachBillingScreen({ navigation }: Props) {
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.portalBtn, portalBusy && styles.portalBtnDisabled]}
-          onPress={handleOpenPortal}
-          disabled={portalBusy}
-          accessibilityRole="button"
-          accessibilityLabel={
-            s.state === 'none' || s.state === 'paused' || s.state === 'canceled'
-              ? 'Start subscription'
-              : 'Manage billing'
-          }
-        >
-          {portalBusy ? (
-            <ActivityIndicator color={colors.textOnPrimary} />
-          ) : (
-            <>
-              <Ionicons name="open-outline" size={18} color={colors.textOnPrimary} />
-              <Text style={styles.portalBtnText}>
-                {s.state === 'none' || s.state === 'paused' || s.state === 'canceled'
+        {/* iOS: coach subscription / seat CTAs are not a 1:1 person-to-person
+            service, so they are hidden (purchaseSurfaces.ts). */}
+        {purchasesHidden ? null : (
+          <>
+            <TouchableOpacity
+              style={[styles.portalBtn, portalBusy && styles.portalBtnDisabled]}
+              onPress={handleOpenPortal}
+              disabled={portalBusy}
+              accessibilityRole="button"
+              accessibilityLabel={
+                s.state === 'none' || s.state === 'paused' || s.state === 'canceled'
                   ? 'Start subscription'
-                  : 'Manage billing'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
+                  : 'Manage billing'
+              }
+            >
+              {portalBusy ? (
+                <ActivityIndicator color={colors.textOnPrimary} />
+              ) : (
+                <>
+                  <Ionicons name="open-outline" size={18} color={colors.textOnPrimary} />
+                  <Text style={styles.portalBtnText}>
+                    {s.state === 'none' || s.state === 'paused' || s.state === 'canceled'
+                      ? 'Start subscription'
+                      : 'Manage billing'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
-        <Text style={styles.fineprint}>
-          Billing is handled by our payment provider in a secure browser session. Card
-          details never touch the app.
-        </Text>
+            <Text style={styles.fineprint}>
+              Billing is handled by our payment provider in a secure browser session. Card
+              details never touch the app.
+            </Text>
+          </>
+        )}
 
         {invoices.length > 0 ? (
           <View style={styles.invoicesSection}>
@@ -320,7 +334,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
                 key={inv.id}
                 style={styles.invoiceRow}
                 onPress={() => handleOpenInvoice(inv)}
-                disabled={!inv.hosted_invoice_url && !inv.invoice_pdf}
+                disabled={purchasesHidden || (!inv.hosted_invoice_url && !inv.invoice_pdf)}
                 accessibilityRole="button"
                 accessibilityLabel={`Invoice ${formatDate(inv.created_at) ?? ''}, ${inv.status}`}
               >
@@ -335,7 +349,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
                     {inv.status}
                   </Text>
                 </View>
-                {inv.hosted_invoice_url || inv.invoice_pdf ? (
+                {!purchasesHidden && (inv.hosted_invoice_url || inv.invoice_pdf) ? (
                   <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
                 ) : null}
               </TouchableOpacity>

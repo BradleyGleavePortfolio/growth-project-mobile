@@ -62,6 +62,8 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
+| `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
+| `coach/ai-budget/*` | AI usage meter, 95% banner, 80% tutorial and hard-pause modal. When `nonP2PPurchasesHidden()` is true, the meter is a non-interactive readout with neutral accessibility copy, the banner has no CTA, the tutorial shows three usage-only cards ending in "Done", and the hard pause says when AI resumes. None of them mentions packs, buying or top-ups. |
 | `invite/PasteInviteCodeButton.tsx` | "Paste invite code" text button used by CreateAccount and RoleSelection. It reads the clipboard only on tap and parses with `lib/inviteCodeInput.extractInviteCode`, which accepts a bare code, `/join/<code>`, `tgp://join/<code>` or `?code=`, and never truncates a token. It fills the field and never auto-attaches. |
 | `PendingInviteBanner.tsx` | Home consent banner for a pending invite code. It refreshes on auth events and on `subscribePendingInviteCode` (a foreground invite link). Legacy scoped `pending_invite_code:*` keys are never read; they are only deleted at sign-out. |
 

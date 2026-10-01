@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
+import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -29,6 +30,8 @@ export interface AIBudgetHardPauseModalProps {
   budget: CoachAIBudgetResponse;
   onClose: () => void;
   onSelectPack: (amountCents: number | 'custom') => void;
+  /** iOS with non-P2P purchases hidden: neutral pause notice, no packs. */
+  purchasesHidden?: boolean;
   testID?: string;
 }
 
@@ -37,6 +40,7 @@ export function AIBudgetHardPauseModal({
   budget,
   onClose,
   onSelectPack,
+  purchasesHidden = nonP2PPurchasesHidden(),
   testID,
 }: AIBudgetHardPauseModalProps): React.ReactElement {
   const { colors } = useTheme();
@@ -70,18 +74,28 @@ export function AIBudgetHardPauseModal({
             </View>
 
             <Text style={styles.title}>AI paused</Text>
-            <Text style={styles.body}>
-              You&apos;ve used the full {formatCents(budget.total_displayed_cents)} of
-              AI value for this period. Top up with a credit pack to keep AI
-              features running, or wait for your monthly rollover on{' '}
-              {formatPeriodEnd(budget.period_end)}.
-            </Text>
+            {purchasesHidden ? (
+              <Text style={styles.body} testID="ai-hard-pause-neutral">
+                You&apos;ve used the full {formatCents(budget.total_displayed_cents)} of
+                AI value for this period. AI features resume when your allowance
+                renews on {formatPeriodEnd(budget.period_end)}.
+              </Text>
+            ) : (
+              <>
+                <Text style={styles.body}>
+                  You&apos;ve used the full {formatCents(budget.total_displayed_cents)} of
+                  AI value for this period. Top up with a credit pack to keep AI
+                  features running, or wait for your monthly rollover on{' '}
+                  {formatPeriodEnd(budget.period_end)}.
+                </Text>
 
-            <PackOptionsRow
-              options={budget.pack_options_cents}
-              onSelect={onSelectPack}
-              style={styles.options}
-            />
+                <PackOptionsRow
+                  options={budget.pack_options_cents}
+                  onSelect={onSelectPack}
+                  style={styles.options}
+                />
+              </>
+            )}
           </View>
         </SafeAreaView>
       </View>

@@ -524,3 +524,29 @@ describe('validate-app-config — TestFlight-recommended env vars', () => {
     }
   });
 });
+
+describe('validate-app-config — iOS build number vs native purchase anchor (#304 C1)', () => {
+  it('the checked-in ios.buildNumber is at least IOS_P2P_ONLY_MIN_NATIVE_BUILD (6)', () => {
+    const app = JSON.parse(fs.readFileSync(path.join(REPO_ROOT, 'app.json'), 'utf8'));
+    const src = fs.readFileSync(path.join(REPO_ROOT, 'src', 'config', 'purchaseSurfaces.ts'), 'utf8');
+    const anchor = Number((src.match(/IOS_P2P_ONLY_MIN_NATIVE_BUILD = (\d+)/) || [])[1]);
+    expect(anchor).toBe(6);
+    expect(app.expo.ios.buildNumber).toMatch(/^\d+$/);
+    expect(parseInt(app.expo.ios.buildNumber, 10)).toBeGreaterThanOrEqual(anchor);
+  });
+
+  it.each(['5', '0', 'six', ''])('fails when ios.buildNumber is %j', (bad) => {
+    const dir = makeWorkspace();
+    try {
+      const appJsonPath = path.join(dir, 'app.json');
+      const app = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+      app.expo.ios.buildNumber = bad;
+      fs.writeFileSync(appJsonPath, JSON.stringify(app, null, 2));
+      const res = runIn(dir, []);
+      expect(res.status).not.toBe(0);
+      expect(res.parsed.errors.some((e) => /ios\.buildNumber/.test(e) && /purchase-surface anchor/.test(e))).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
