@@ -17,7 +17,13 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
-import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
+import {
+  coachApi,
+  profileApi,
+  notificationsApi,
+  deletionApi,
+  AccountStatus,
+} from '../../services/api';
 import { helpUrl } from '../../config/env';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -122,8 +128,15 @@ export default function SettingsScreen() {
   const loadAccountStatus = useCallback(async () => {
     setAccountStatusLoading(true);
     try {
-      const res = await usersApi.getAccountStatus();
-      setAccountStatus(res.data ?? null);
+      // Canonical in-app deletion status (POST /me/delete-account flow). The
+      // legacy /users/me/account status reflects a different, unused path.
+      const res = await deletionApi.getDeletionStatus();
+      const st = res.data;
+      const scheduled = st?.state === 'confirmed' || st?.state === 'requested';
+      setAccountStatus({
+        deletionScheduled: scheduled,
+        permanentDeletionAt: scheduled ? (st?.purge_after ?? null) : null,
+      });
     } catch (err) {
       // 404 means the backend has not yet shipped the status endpoint — treat
       // as "no scheduled deletion" so the UI shows the request-deletion path.
@@ -141,7 +154,12 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadAccountStatus();
-  }, [loadAccountStatus]);
+    // Refresh after returning from the Delete account screen.
+    const unsubscribe = navigation.addListener?.('focus', loadAccountStatus);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [loadAccountStatus, navigation]);
 
   const updateSetting = async <K extends keyof CoachSettings>(key: K, value: CoachSettings[K]) => {
     const previous = settings;
@@ -289,7 +307,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             setDeletionBusy(true);
             try {
-              await usersApi.cancelAccountDeletion();
+              await deletionApi.cancelDeletion();
               await loadAccountStatus();
               successTap();
               Alert.alert('Deletion canceled', 'Your account is no longer scheduled for deletion.');

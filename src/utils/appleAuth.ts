@@ -175,3 +175,48 @@ export async function signInWithApple(
     return { success: false, error: msg };
   }
 }
+
+// ── Re-authentication (account deletion, Apple 5.1.1(v)) ──────────────────────
+
+export interface AppleReauthResult {
+  success: boolean;
+  /** Fresh Apple identity token for POST /auth/recent-auth-token (provider=apple). */
+  identityToken?: string;
+  /**
+   * Single-use authorization code. Sent with POST /me/delete-account so the
+   * server can exchange it and revoke the user's Sign in with Apple tokens.
+   * Never logged or stored.
+   */
+  authorizationCode?: string | null;
+  cancelled?: boolean;
+  error?: string;
+}
+
+/**
+ * Show the native Sign in with Apple sheet to prove the user is present,
+ * WITHOUT creating a new app session (unlike signInWithApple, nothing is
+ * posted to /auth/apple and no tokens are stored). No name/email scopes are
+ * requested: the account already exists.
+ */
+export async function reauthenticateWithApple(): Promise<AppleReauthResult> {
+  if (Platform.OS !== 'ios') {
+    return { success: false, error: 'Apple sign-in is only available on iOS' };
+  }
+  try {
+    const credential = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+    if (!credential?.identityToken) {
+      return { success: false, error: 'No identity token returned from Apple' };
+    }
+    return {
+      success: true,
+      identityToken: credential.identityToken,
+      authorizationCode: credential.authorizationCode ?? null,
+    };
+  } catch (err) {
+    const authErr = err as { code?: string; message?: string };
+    if (authErr?.code === APPLE_CANCEL_CODE) {
+      return { success: false, cancelled: true };
+    }
+    return { success: false, error: authErr?.message || 'Apple sign-in failed' };
+  }
+}

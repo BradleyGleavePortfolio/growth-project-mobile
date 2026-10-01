@@ -15,7 +15,7 @@ jest.mock('../../services/api', () => ({
   default: { post: (...args: unknown[]) => mockApiPost(...args) },
 }));
 
-import { buildAppleAuthBody, signInWithApple } from '../appleAuth';
+import { buildAppleAuthBody, reauthenticateWithApple, signInWithApple } from '../appleAuth';
 import { secureStorage } from '../../services/secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -114,5 +114,40 @@ describe('buildAppleAuthBody (live + fixed backend contract)', () => {
       .toEqual({ token: 'jwt', full_name: 'Ada' });
     expect(buildAppleAuthBody({ identityToken: 'jwt' })).toEqual({ token: 'jwt' });
     expect(buildAppleAuthBody({ identityToken: 'jwt', givenName: 'x'.repeat(300) }).full_name).toHaveLength(200);
+  });
+});
+
+describe('reauthenticateWithApple (account deletion re-auth)', () => {
+  beforeEach(() => {
+    Platform.OS = 'ios';
+    mockSignInAsync.mockReset();
+    mockApiPost.mockReset();
+  });
+
+  it('returns the identity token and authorization code without creating a session', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'fresh-id', authorizationCode: 'code-1' });
+    const res = await reauthenticateWithApple();
+    expect(res).toEqual({ success: true, identityToken: 'fresh-id', authorizationCode: 'code-1' });
+    expect(mockSignInAsync).toHaveBeenCalledWith({ requestedScopes: [] });
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('reports a user cancel silently', async () => {
+    mockSignInAsync.mockRejectedValueOnce({ code: 'ERR_REQUEST_CANCELED' });
+    expect(await reauthenticateWithApple()).toEqual({ success: false, cancelled: true });
+  });
+
+  it('fails when Apple returns no identity token', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: null });
+    const res = await reauthenticateWithApple();
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/identity token/);
+  });
+
+  it('is unavailable off iOS', async () => {
+    Platform.OS = 'android';
+    const res = await reauthenticateWithApple();
+    expect(res.success).toBe(false);
+    expect(mockSignInAsync).not.toHaveBeenCalled();
   });
 });

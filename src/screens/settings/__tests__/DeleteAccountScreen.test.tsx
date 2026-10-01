@@ -12,8 +12,16 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 jest.mock('../../../services/api', () => ({
   deletionApi: {
+    issueRecentAuthToken: jest.fn(),
     requestDeletion: jest.fn(),
+    getDeletionStatus: jest.fn(),
+    cancelDeletion: jest.fn(),
   },
+}));
+
+jest.mock('../../../utils/appleAuth', () => ({
+  isAppleAuthAvailable: jest.fn(),
+  reauthenticateWithApple: jest.fn(),
 }));
 
 jest.mock('../../../services/authActions', () => ({
@@ -26,6 +34,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 
 jest.mock('../../../utils/haptics', () => ({
   warningTap: jest.fn(),
+  successTap: jest.fn(),
 }));
 
 // Provide a minimal theme so styled components don't crash
@@ -58,10 +67,13 @@ import DeleteAccountScreen from '../DeleteAccountScreen';
 import { deletionApi } from '../../../services/api';
 import { signOut } from '../../../services/authActions';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { isAppleAuthAvailable, reauthenticateWithApple } from '../../../utils/appleAuth';
 
 const mockedDeletionApi = deletionApi as jest.Mocked<typeof deletionApi>;
 const mockedSignOut = signOut as jest.Mock;
 const mockedUseCurrentUser = useCurrentUser as jest.Mock;
+const mockedAppleAvailable = isAppleAuthAvailable as jest.Mock;
+const mockedAppleReauth = reauthenticateWithApple as jest.Mock;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -70,10 +82,56 @@ const mockNavigation = {
   navigate: jest.fn(),
 };
 
+const PURGE_AFTER = '2026-10-14T12:00:00.000Z';
+const PURGE_DATE_TEXT = 'October 14, 2026';
+
+function scheduledResponse(over: Record<string, unknown> = {}) {
+  return {
+    data: {
+      state: 'confirmed',
+      already_scheduled: false,
+      message: 'scheduled',
+      requested_at: '2026-09-30T12:00:00.000Z',
+      confirmed_at: '2026-09-30T12:00:00.000Z',
+      grace_days: 14,
+      purge_after: PURGE_AFTER,
+      cancellable: true,
+      apple_revocation: 'not_requested',
+      ...over,
+    },
+  };
+}
+
+function axiosError(status: number, message?: string) {
+  return Object.assign(new Error('Request failed'), {
+    response: { status, data: message ? { message } : {} },
+  });
+}
+
 async function renderScreen() {
-  return await render(
-    <DeleteAccountScreen navigation={mockNavigation as never} />,
-  );
+  const utils = await render(<DeleteAccountScreen navigation={mockNavigation as never} />);
+  // Wait for the initial status load to settle.
+  await waitFor(() => expect(mockedDeletionApi.getDeletionStatus).toHaveBeenCalled());
+  return utils;
+}
+
+function isDisabled(node: { props: { accessibilityState?: { disabled?: boolean }; disabled?: boolean } }) {
+  return node.props.accessibilityState?.disabled ?? node.props.disabled;
+}
+
+async function fillForm(
+  utils: Awaited<ReturnType<typeof renderScreen>>,
+  opts: { confirm?: string; password?: string } = {},
+) {
+  await waitFor(() => utils.getByTestId('confirm-input'));
+  await act(async () => {
+    fireEvent.changeText(utils.getByTestId('confirm-input'), opts.confirm ?? 'DELETE');
+  });
+  if (opts.password !== undefined) {
+    await act(async () => {
+      fireEvent.changeText(utils.getByTestId('password-input'), opts.password as string);
+    });
+  }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -87,228 +145,235 @@ describe('DeleteAccountScreen', () => {
       name: 'Test User',
       role: 'student',
     });
+    mockedDeletionApi.getDeletionStatus.mockResolvedValue({ data: { state: 'none' } } as never);
+    mockedAppleAvailable.mockResolvedValue(false);
     jest.spyOn(Alert, 'alert');
   });
 
-  // ── Render ──────────────────────────────────────────────────────────────────
-
-  describe('render', () => {
-    it('renders the screen title', async () => {
-      const { getByText } = await renderScreen();
-      expect(getByText('Delete account')).toBeTruthy();
-    });
-
-    it('renders the 14-day grace period copy', async () => {
-      const { getAllByText } = await renderScreen();
+  describe('request form', () => {
+    it('renders the title, grace-period copy and both lists', async () => {
+      const { getByText, getAllByText } = await renderScreen();
+      await waitFor(() => getByText(/Your profile, biometrics/i));
+      expect(getAllByText('Delete account').length).toBeGreaterThan(0);
       expect(getAllByText(/14-day grace period/i).length).toBeGreaterThan(0);
-    });
-
-    it('renders the permanently deleted list', async () => {
-      const { getByText } = await renderScreen();
-      expect(getByText(/Your profile, biometrics/i)).toBeTruthy();
-    });
-
-    it('renders the kept-for-legal list', async () => {
-      const { getByText } = await renderScreen();
       expect(getByText(/Billing and invoice records/i)).toBeTruthy();
+      expect(getByText(/Health and activity data/i)).toBeTruthy();
+      expect(getByText(/conversations with Roman/i)).toBeTruthy();
+      expect(getByText(/community posts, comments, messages/i)).toBeTruthy();
     });
 
-    it('renders the confirmation input field', async () => {
-      const { getByTestId } = await renderScreen();
-      expect(getByTestId('confirm-input')).toBeTruthy();
-    });
-
-    it('renders the confirm deletion button as disabled initially', async () => {
-      const { getByTestId } = await renderScreen();
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
+    it('does not promise an email step or contacting support', async () => {
+      const { toJSON, getByTestId } = await renderScreen();
+      await waitFor(() => getByTestId('confirm-input'));
+      const json = JSON.stringify(toJSON());
+      expect(json).not.toMatch(/confirmation email|Contact support/i);
     });
 
     it('does not contain forbidden tokens (emoji, income, finance, netWorth)', async () => {
-      const { toJSON } = await renderScreen();
+      const { toJSON, getByTestId } = await renderScreen();
+      await waitFor(() => getByTestId('confirm-input'));
       const json = JSON.stringify(toJSON());
-      const forbiddenTokens = new RegExp(['income', 'finance', 'netWorth', 'conf' + 'etti', '\ud83c'].join('|'));
+      const forbiddenTokens = new RegExp(
+        ['income', 'finance', 'netWorth', 'conf' + 'etti', '\\ud83c'].join('|'),
+      );
       expect(json).not.toMatch(forbiddenTokens);
     });
-  });
 
-  // ── Confirmation gate ───────────────────────────────────────────────────────
-
-  describe('confirmation gate', () => {
-    it('disables the button when input is empty', async () => {
-      const { getByTestId } = await renderScreen();
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
+    it('keeps the delete button disabled until DELETE and a password are entered', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('confirm-button'));
+      expect(isDisabled(utils.getByTestId('confirm-button'))).toBe(true);
+      await fillForm(utils, { confirm: 'delete' });
+      expect(isDisabled(utils.getByTestId('confirm-button'))).toBe(true);
+      await fillForm(utils, { confirm: 'delete', password: 'pw' });
+      expect(isDisabled(utils.getByTestId('confirm-button'))).toBe(false);
     });
 
-    it('disables the button when input is wrong text', async () => {
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'wrong text');
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
+    it('accepts the account email (case-insensitive) instead of DELETE', async () => {
+      const utils = await renderScreen();
+      await fillForm(utils, { confirm: 'TEST@example.com', password: 'pw' });
+      expect(isDisabled(utils.getByTestId('confirm-button'))).toBe(false);
     });
 
-    it('enables the button when input is "DELETE" (case-insensitive)', async () => {
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'delete');
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
+    it('rejects other confirmation text', async () => {
+      const utils = await renderScreen();
+      await fillForm(utils, { confirm: 'remove', password: 'pw' });
+      expect(isDisabled(utils.getByTestId('confirm-button'))).toBe(true);
     });
 
-    it('enables the button when input matches the user email', async () => {
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'test@example.com');
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
-    });
-
-    it('is case-insensitive for the email match', async () => {
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'TEST@EXAMPLE.COM');
-      const btn = getByTestId('confirm-button');
-      expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
+    it('hides the Apple option when Sign in with Apple is unavailable', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('confirm-input'));
+      expect(utils.queryByTestId('apple-confirm-button')).toBeNull();
     });
   });
 
-  // ── Success state ───────────────────────────────────────────────────────────
-
-  describe('success state', () => {
-    it('calls deletionApi.requestDeletion on confirm', async () => {
-      mockedDeletionApi.requestDeletion.mockResolvedValue({
-        data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
+  describe('password re-auth', () => {
+    it('mints a recent-auth token, schedules deletion with it and shows the date', async () => {
+      mockedDeletionApi.issueRecentAuthToken.mockResolvedValue({
+        data: { token: 'recent-tok', expires_in_ms: 300000 },
       } as never);
-
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
+      mockedDeletionApi.requestDeletion.mockResolvedValue(scheduledResponse() as never);
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'hunter2' });
       await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
+        fireEvent.press(utils.getByTestId('confirm-button'));
       });
-
-      await waitFor(() => {
-        expect(mockedDeletionApi.requestDeletion).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    it('shows a success Alert with the 14-day grace message', async () => {
-      mockedDeletionApi.requestDeletion.mockResolvedValue({
-        data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
-      } as never);
-
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
-      await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
-      });
-
-      await waitFor(() => {
-        expect(Alert.alert).toHaveBeenCalledWith(
-          expect.stringContaining('scheduled for deletion'),
-          expect.stringContaining('14 days'),
-          expect.any(Array),
-          expect.any(Object),
-        );
-      });
-    });
-
-    it('calls signOut after the Alert button is pressed', async () => {
-      mockedDeletionApi.requestDeletion.mockResolvedValue({
-        data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
-      } as never);
-
-      // Capture the Alert callback so we can simulate pressing OK
-      let alertCallback: (() => void) | undefined;
-      (Alert.alert as jest.Mock).mockImplementation(
-        (_title: string, _msg: string, buttons: Array<{ onPress?: () => void }>) => {
-          alertCallback = buttons[0]?.onPress;
-        },
-      );
-
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
-      await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
-      });
-
-      await waitFor(() => {
-        expect(alertCallback).toBeDefined();
-      });
-
-      await act(() => {
-        alertCallback?.();
-      });
-
-      expect(mockedSignOut).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  // ── Error state ─────────────────────────────────────────────────────────────
-
-  describe('error state', () => {
-    it('shows an error message when the API call fails', async () => {
-      mockedDeletionApi.requestDeletion.mockRejectedValue(
-        new Error('Network error'),
-      );
-
-      const { getByTestId, findByText } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
-      await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
-      });
-
-      const errorText = await findByText(/Network error|Could not request/i);
-      expect(errorText).toBeTruthy();
-    });
-
-    it('does not call signOut when the API fails', async () => {
-      mockedDeletionApi.requestDeletion.mockRejectedValue(new Error('Server down'));
-
-      const { getByTestId } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
-      await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
-      });
-
+      await waitFor(() => utils.getByTestId('deletion-date'));
+      expect(mockedDeletionApi.issueRecentAuthToken).toHaveBeenCalledWith({ password: 'hunter2' });
+      expect(mockedDeletionApi.requestDeletion).toHaveBeenCalledWith('recent-tok', undefined);
+      expect(utils.getByTestId('deletion-date').props.children).toBe(PURGE_DATE_TEXT);
+      expect(utils.getByTestId('keep-account-button')).toBeTruthy();
       expect(mockedSignOut).not.toHaveBeenCalled();
     });
 
-    it('clears the error when the user edits the confirmation input', async () => {
-      mockedDeletionApi.requestDeletion.mockRejectedValue(new Error('Failed'));
-
-      const { getByTestId, queryByText } = await renderScreen();
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
-
+    it('shows a wrong-password message on 401 and does not request deletion', async () => {
+      mockedDeletionApi.issueRecentAuthToken.mockRejectedValue(axiosError(401) as never);
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'nope' });
       await act(async () => {
-        await fireEvent.press(getByTestId('confirm-button'));
+        fireEvent.press(utils.getByTestId('confirm-button'));
       });
+      await waitFor(() => utils.getByText(/password is not correct/i));
+      expect(mockedDeletionApi.requestDeletion).not.toHaveBeenCalled();
+    });
 
-      // Edit the input — error should clear
-      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE2');
-      expect(queryByText(/Failed/)).toBeNull();
+    it('shows a rate-limit message on 429', async () => {
+      mockedDeletionApi.issueRecentAuthToken.mockRejectedValue(axiosError(429) as never);
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'pw' });
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('confirm-button'));
+      });
+      await waitFor(() => utils.getByText(/Too many attempts/i));
+    });
+
+    it('shows the server message when scheduling fails and stays on the form', async () => {
+      mockedDeletionApi.issueRecentAuthToken.mockResolvedValue({
+        data: { token: 't', expires_in_ms: 1 },
+      } as never);
+      mockedDeletionApi.requestDeletion.mockRejectedValue(
+        axiosError(401, 'Recent authentication required') as never,
+      );
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'pw' });
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('confirm-button'));
+      });
+      await waitFor(() => utils.getByText('Recent authentication required'));
+      expect(utils.queryByTestId('deletion-date')).toBeNull();
     });
   });
 
-  // ── Navigation ──────────────────────────────────────────────────────────────
+  describe('Sign in with Apple re-auth', () => {
+    beforeEach(() => {
+      mockedAppleAvailable.mockResolvedValue(true);
+    });
+
+    it('re-authenticates with Apple and forwards the authorization code for revocation', async () => {
+      mockedAppleReauth.mockResolvedValue({
+        success: true,
+        identityToken: 'apple-id',
+        authorizationCode: 'apple-code',
+      });
+      mockedDeletionApi.issueRecentAuthToken.mockResolvedValue({
+        data: { token: 'recent-tok', expires_in_ms: 300000 },
+      } as never);
+      mockedDeletionApi.requestDeletion.mockResolvedValue(
+        scheduledResponse({ apple_revocation: 'revoked' }) as never,
+      );
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('apple-confirm-button'));
+      expect(isDisabled(utils.getByTestId('apple-confirm-button'))).toBe(true);
+      await fillForm(utils);
+      expect(isDisabled(utils.getByTestId('apple-confirm-button'))).toBe(false);
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('apple-confirm-button'));
+      });
+      await waitFor(() => utils.getByTestId('deletion-date'));
+      expect(mockedDeletionApi.issueRecentAuthToken).toHaveBeenCalledWith({
+        provider: 'apple',
+        provider_token: 'apple-id',
+      });
+      expect(mockedDeletionApi.requestDeletion).toHaveBeenCalledWith('recent-tok', 'apple-code');
+    });
+
+    it('stays silent when the user cancels the Apple sheet', async () => {
+      mockedAppleReauth.mockResolvedValue({ success: false, cancelled: true });
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('apple-confirm-button'));
+      await fillForm(utils);
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('apple-confirm-button'));
+      });
+      expect(mockedDeletionApi.issueRecentAuthToken).not.toHaveBeenCalled();
+      expect(utils.queryByText(/Apple could not confirm/i)).toBeNull();
+    });
+  });
+
+  describe('status view', () => {
+    beforeEach(() => {
+      mockedDeletionApi.getDeletionStatus.mockResolvedValue({
+        data: { state: 'confirmed', purge_after: PURGE_AFTER, cancellable: true },
+      } as never);
+    });
+
+    it('shows the scheduled date instead of the form when deletion is already scheduled', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('deletion-date'));
+      expect(utils.getByTestId('deletion-date').props.children).toBe(PURGE_DATE_TEXT);
+      expect(utils.queryByTestId('confirm-input')).toBeNull();
+    });
+
+    it('cancels the deletion after confirmation and returns to the form', async () => {
+      mockedDeletionApi.cancelDeletion.mockResolvedValue({ data: { message: 'ok' } } as never);
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('keep-account-button'));
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('keep-account-button'));
+      });
+      const alertMock = Alert.alert as jest.Mock;
+      const buttons = alertMock.mock.calls[0][2] as Array<{ text: string; onPress?: () => unknown }>;
+      const keep = buttons.find((b) => b.text === 'Keep my account');
+      mockedDeletionApi.getDeletionStatus.mockResolvedValue({ data: { state: 'none' } } as never);
+      await act(async () => {
+        await keep?.onPress?.();
+      });
+      expect(mockedDeletionApi.cancelDeletion).toHaveBeenCalledTimes(1);
+      await waitFor(() => utils.getByTestId('confirm-input'));
+    });
+
+    it('hides cancel once the grace period can no longer be cancelled', async () => {
+      mockedDeletionApi.getDeletionStatus.mockResolvedValue({
+        data: { state: 'confirmed', purge_after: PURGE_AFTER, cancellable: false },
+      } as never);
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('deletion-date'));
+      expect(utils.queryByTestId('keep-account-button')).toBeNull();
+    });
+
+    it('signs out from the status view', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('sign-out-button'));
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('sign-out-button'));
+      });
+      expect(mockedSignOut).toHaveBeenCalled();
+    });
+  });
 
   describe('navigation', () => {
-    it('calls navigation.goBack when the back button is pressed', async () => {
-      const { getAllByRole } = await renderScreen();
-      const buttons = getAllByRole('button');
-      const backButton = buttons.find(
-        (b) => b.props.accessibilityLabel === 'Go back',
-      );
-      expect(backButton).toBeTruthy();
-      await fireEvent.press(backButton!);
+    it('goes back from the header back button', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByLabelText('Go back'));
+      fireEvent.press(utils.getByLabelText('Go back'));
       expect(mockNavigation.goBack).toHaveBeenCalled();
     });
 
-    it('calls navigation.goBack when "Cancel — keep my account" is pressed', async () => {
-      const { getByText } = await renderScreen();
-      await fireEvent.press(getByText('Cancel — keep my account'));
+    it('goes back from "Cancel — keep my account"', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByLabelText('Cancel, go back to Settings'));
+      fireEvent.press(utils.getByLabelText('Cancel, go back to Settings'));
       expect(mockNavigation.goBack).toHaveBeenCalled();
     });
   });

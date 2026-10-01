@@ -151,6 +151,11 @@ const MAX_REFRESH_ATTEMPTS = 2;
 type RetryableConfig = AxiosRequestConfig & {
   _refreshAttempts?: number;
   _lastUsedCycleId?: number;
+  // Set on requests whose 401 means "the credential in the BODY/HEADER was
+  // rejected" (re-auth password, single-use recent-auth token), not "the
+  // session expired". Refresh-and-retry would replay a wrong password against
+  // a 5/min throttle, so these 401s go straight back to the caller.
+  skipAuthRefresh?: boolean;
 };
 
 async function performRefresh(): Promise<string> {
@@ -247,7 +252,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response.status !== 401 || !originalConfig) {
+    if (error.response.status !== 401 || !originalConfig || originalConfig.skipAuthRefresh) {
       return Promise.reject(error);
     }
 
@@ -896,11 +901,18 @@ export const systemApi = {
     }>('/system/trust-meta'),
 };
 
-// ── Phase 10 — GDPR right to erasure ────────────────────────────────────────
-// These endpoints drive the two-phase deletion flow introduced in
-// src/account-deletion/. Separate from the legacy usersApi.deleteAccount
-// and usersApi.cancelAccountDeletion which were the earlier 30-day soft-
-// delete stubs. Both sets co-exist; the new flow is the canonical one.
+// ── Phase 10 — GDPR right to erasure / Apple 5.1.1(v) in-app deletion ──────
+// Canonical in-app flow (backend src/account-deletion/):
+//   1. POST /auth/recent-auth-token  — fresh re-auth (password, or a fresh
+//      Sign in with Apple identity token). Returns a short-lived single-use
+//      token bound to the caller.
+//   2. POST /me/delete-account with header X-Recent-Auth-Token — schedules the
+//      deletion in the same request: the grace period starts now and the
+//      response carries the exact purge date. Idempotent.
+//   3. GET  /me/delete-account/status — state + purge date for the status view.
+//   4. POST /me/delete-account/cancel — cancel during the grace period.
+// The legacy usersApi.deleteAccount (DELETE /users/me/account) is not used by
+// the app's deletion screen.
 
 export interface DeletionStatus {
   state: 'none' | 'requested' | 'confirmed' | 'deleted';
@@ -909,18 +921,52 @@ export interface DeletionStatus {
   grace_days?: number | null;
   purge_after?: string | null;
   deleted_at?: string | null;
+  cancellable?: boolean | null;
 }
 
+export interface DeletionScheduledResponse {
+  state: 'confirmed';
+  already_scheduled: boolean;
+  message: string;
+  requested_at: string | null;
+  confirmed_at: string | null;
+  grace_days: number;
+  purge_after: string;
+  cancellable: boolean;
+  apple_revocation?: string;
+}
+
+/** Re-auth proof for POST /auth/recent-auth-token. */
+export type RecentAuthProof =
+  | { password: string }
+  | { provider: 'apple'; provider_token: string };
+
+export const RECENT_AUTH_HEADER = 'X-Recent-Auth-Token';
+
 export const deletionApi = {
-  /** Request deletion — sends a confirmation email with a single-use 24h link. */
-  requestDeletion: () =>
-    api.post<{ message: string; expires_at: string }>('/me/delete-account'),
+  /** Mint a short-lived recent-auth token (password or fresh Apple identity token). */
+  issueRecentAuthToken: (proof: RecentAuthProof) =>
+    api.post<{ token: string; expires_in_ms: number }>('/auth/recent-auth-token', proof, {
+      skipAuthRefresh: true,
+    } as RetryableConfig),
+
+  /**
+   * Schedule deletion now (grace period starts immediately). Requires the
+   * recent-auth token. Apple users pass the authorization code from the
+   * re-auth sheet so the server can revoke their Sign in with Apple tokens.
+   */
+  requestDeletion: (recentAuthToken: string, appleAuthorizationCode?: string | null) =>
+    api.post<DeletionScheduledResponse>(
+      '/me/delete-account',
+      appleAuthorizationCode ? { apple_authorization_code: appleAuthorizationCode } : {},
+      { headers: { [RECENT_AUTH_HEADER]: recentAuthToken } },
+    ),
 
   /** Get current deletion state (none | requested | confirmed | deleted). */
   getDeletionStatus: () =>
     api.get<DeletionStatus>('/me/delete-account/status'),
 
-  /** Cancel a pending deletion within the 14-day grace period. */
+  /** Cancel a pending deletion within the grace period. */
   cancelDeletion: () =>
     api.post<{ message: string }>('/me/delete-account/cancel'),
 };

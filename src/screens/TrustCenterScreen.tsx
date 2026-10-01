@@ -29,7 +29,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
-import api, { deletionApi } from '../services/api';
+import api from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
 import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
@@ -162,7 +162,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const [meta, setMeta] = useState<TrustMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
 
   // Fire trust_center_opened once on mount
   useEffect(() => {
@@ -205,34 +204,13 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     }
   }, []);
 
+  // Deletion needs re-authentication and shows the scheduled date + cancel,
+  // so it lives on the shared Delete account screen (registered in both the
+  // client and coach navigators), not in an inline alert.
   const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      'Delete My Account',
-      'This will schedule your account for permanent deletion after a 14-day grace period. You can cancel within that window from Settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm Deletion',
-          style: 'destructive',
-          onPress: async () => {
-            track('account_deletion_requested');
-            setDeleteBusy(true);
-            try {
-              await deletionApi.requestDeletion();
-              Alert.alert(
-                'Confirmation email sent',
-                'We have emailed a confirmation link. After you confirm, your account enters a 14-day grace period during which you can cancel from Settings.',
-              );
-            } catch {
-              Alert.alert('Request Failed', 'Could not schedule account deletion. Please try again later.');
-            } finally {
-              setDeleteBusy(false);
-            }
-          },
-        },
-      ],
-    );
-  }, []);
+    track('account_deletion_opened');
+    navigation?.navigate?.('DeleteAccount');
+  }, [navigation]);
 
   return (
     <ScrollView
@@ -344,7 +322,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             intent="warning"
             style={styles.actionBtn}
             onPress={handleDeleteAccount}
-            disabled={deleteBusy}
             accessibilityRole="button"
             accessibilityLabel="Delete my account"
           >
@@ -355,11 +332,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
               <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
               <Text style={styles.actionBtnSub}>14-day grace period before permanent deletion</Text>
             </View>
-            {deleteBusy ? (
-              <ActivityIndicator size="small" color={colors.error} />
-            ) : (
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            )}
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
       </View>

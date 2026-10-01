@@ -300,4 +300,12 @@ describe('api.ts — refresh-cycle race fix', () => {
 
     expect(signOutMock).toHaveBeenCalledTimes(2);
   });
+
+  it('skipAuthRefresh: a rejected re-auth credential 401 goes straight to the caller (no refresh, no replay)', async () => {
+    const err = fake401({ url: '/auth/recent-auth-token', skipAuthRefresh: true } as AxiosRequestConfig);
+    await expect(handler(err)).rejects.toBe(err);
+    expect(refreshSessionMock).not.toHaveBeenCalled();
+    expect(axiosMock.__instance.request).not.toHaveBeenCalled();
+    expect(signOutMock).not.toHaveBeenCalled();
+  });
 });
