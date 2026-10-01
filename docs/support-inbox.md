@@ -37,6 +37,17 @@ setSessionString('tenantId', tenantId);
 
 ---
 
+
+### Shared devices: the chat session is reset (#306 fix round 3)
+
+The native Crisp SDK keeps its chat session, and its history, across launches and accounts until `resetSession()` is called. So:
+
+- `signOut()` (`services/authActions.ts`) calls `resetCrispIdentity()`, which resets the session.
+- `syncCrispIdentity(user)` resets the session before binding when it belongs to anyone else: another user, an anonymous pre-sign-in session, or an unknown owner (a cold start on a build without MMKV, or a session from before this fix). The owner is remembered as a non-reversible fingerprint of the email in prefs (`support.crisp_session_owner`), so the same user is not reset on every launch.
+- The auth stack registers `SupportInbox` as `PreSignInSupportInbox` (`preSignIn`), which calls `prepareSignedOutCrispSession()` before `show()`: a previous user's conversation is never shown before sign-in. A signed-out visitor who reopens the screen keeps their own anonymous session.
+
+Tests: `src/services/support/__tests__/crisp.service.test.ts`, `src/screens/support/__tests__/SupportInboxPreSignIn.test.tsx`, `src/services/__tests__/authActions.test.ts`.
+
 ## Environment Variable
 
 | Variable | Required | Purpose |

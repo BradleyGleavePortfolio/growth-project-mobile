@@ -14,7 +14,13 @@ process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID = 'test-website-id-123';
 // The global mock in jest.setup.js handles the native module. Import the
 // real service so we test its logic.
 import * as CrispSDK from 'crisp-sdk-react-native';
-import { syncCrispIdentity, resetCrispIdentity, type CrispUser } from '../crisp.service';
+import {
+  syncCrispIdentity,
+  resetCrispIdentity,
+  prepareSignedOutCrispSession,
+  __resetCrispOwnerForTests,
+  type CrispUser,
+} from '../crisp.service';
 
 const mockSetUserEmail = CrispSDK.setUserEmail as jest.Mock;
 const mockSetUserNickname = CrispSDK.setUserNickname as jest.Mock;
@@ -77,5 +83,59 @@ describe('syncCrispIdentity', () => {
 describe('resetCrispIdentity', () => {
   it('is callable without throwing', () => {
     expect(() => resetCrispIdentity()).not.toThrow();
+  });
+});
+
+// #306 fix round 3 (Opus C2): the native chat session (and its history)
+// survives across accounts until resetSession() is called.
+describe('support chat session on shared devices', () => {
+  const mockResetSession = CrispSDK.resetSession as jest.Mock;
+
+  beforeEach(() => {
+    __resetCrispOwnerForTests();
+    jest.clearAllMocks();
+  });
+
+  it('sign-out reset ends the session', () => {
+    resetCrispIdentity();
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('binding a user resets a session of unknown owner first, then sets the email', () => {
+    syncCrispIdentity({ email: 'alice@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    expect(mockResetSession.mock.invocationCallOrder[0]).toBeLessThan(
+      mockSetUserEmail.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('the same user again keeps the session; a different user resets it before binding', () => {
+    syncCrispIdentity({ email: 'alice@example.com' });
+    mockResetSession.mockClear();
+    syncCrispIdentity({ email: 'Alice@example.com' });
+    expect(mockResetSession).not.toHaveBeenCalled();
+    syncCrispIdentity({ email: 'bob@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('the pre-sign-in support screen never opens a previous user\'s conversation', () => {
+    syncCrispIdentity({ email: 'alice@example.com' });
+    mockResetSession.mockClear();
+    prepareSignedOutCrispSession();
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    // Re-opening it while still signed out keeps the anonymous session.
+    prepareSignedOutCrispSession();
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    // Signing in after an anonymous chat starts a fresh session for the user.
+    syncCrispIdentity({ email: 'bob@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('after sign-out, the pre-sign-in screen still resets (nothing is trusted)', () => {
+    syncCrispIdentity({ email: 'alice@example.com' });
+    resetCrispIdentity();
+    mockResetSession.mockClear();
+    prepareSignedOutCrispSession();
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
   });
 });

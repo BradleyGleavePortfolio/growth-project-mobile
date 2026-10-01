@@ -27,12 +27,19 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { prepareSignedOutCrispSession } from '../../services/support/crisp.service';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
+  /**
+   * Opened from the auth stack (nobody signed in). The chat session is reset
+   * first unless it is already this device's anonymous one, so a previous
+   * user's conversation is never shown (#306 fix round 3, Opus C2).
+   */
+  preSignIn?: boolean;
 }
 
-export default function SupportInboxScreen({ navigation }: Props) {
+export default function SupportInboxScreen({ navigation, preSignIn = false }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -41,6 +48,7 @@ export default function SupportInboxScreen({ navigation }: Props) {
     // The overlay sits above the current React Native view hierarchy;
     // the user dismisses it via the Crisp UI and returns to this screen.
     try {
+      if (preSignIn) prepareSignedOutCrispSession();
       show();
     } catch (err) {
       // If the native module is unavailable (e.g. running in Expo Go or
@@ -50,7 +58,7 @@ export default function SupportInboxScreen({ navigation }: Props) {
         console.warn('[SupportInboxScreen] crisp-sdk-react-native show() failed:', err);
       }
     }
-  }, []);
+  }, [preSignIn]);
 
   return (
     <View style={styles.container}>

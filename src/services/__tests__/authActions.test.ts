@@ -87,6 +87,25 @@ describe('signOut', () => {
     Notifications.cancelScheduledNotificationAsync.mockClear();
   });
 
+  it('#306 r3 (Opus C2): ends the support chat session so the next person cannot open this user\'s conversation', async () => {
+    const prev = process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID;
+    process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID = 'test-website-id-123';
+    const Crisp = jest.requireMock('crisp-sdk-react-native') as { resetSession: jest.Mock };
+    Crisp.resetSession.mockClear();
+    try {
+      await signOut();
+      expect(Crisp.resetSession).toHaveBeenCalledTimes(1);
+    } finally {
+      process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID = prev;
+    }
+  });
+
+  it('#306 r3: clears the unconfirmed coach signup marker', async () => {
+    await AsyncStorage.setItem('signup_coach_unconfirmed', JSON.stringify({ method: 'apple', at: Date.now() }));
+    await signOut();
+    expect(await AsyncStorage.getItem('signup_coach_unconfirmed')).toBeNull();
+  });
+
   it('clears all auth + session keys and fires logout event exactly once', async () => {
     for (const key of SIGN_OUT_KEYS) {
       await AsyncStorage.setItem(key, 'seed');
