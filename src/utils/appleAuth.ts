@@ -32,6 +32,8 @@ import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
 import {
   COACH_SIGNUP_UNAVAILABLE,
+  COACH_SIGNUP_UNCONFIRMED,
+  classifyCoachSignupFailure,
   isCoachSignupUnavailable,
   postWithIntendedRole,
   type IntendedRole,
@@ -88,8 +90,10 @@ export interface AppleAuthResult {
    * 'coach_signup_unavailable' (C13): the backend refused `intended_role`
    * before any handler ran, so no account was created. CreateAccount shows
    * plain copy and never falls back to a client account.
+   * 'coach_signup_unconfirmed' (#306 r3): a coach request got no server
+   * answer (network, timeout, 5xx); it may or may not have committed.
    */
-  error_code?: typeof COACH_SIGNUP_UNAVAILABLE;
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE | typeof COACH_SIGNUP_UNCONFIRMED;
   // Invite-attach outcome (C03 contract). `invite_attached:false` means the
   // account exists but is not connected to the coach; callers route to the
   // enter-code retry step instead of continuing silently.
@@ -194,6 +198,12 @@ export async function signInWithApple(
   } catch (err) {
     if (isCoachSignupUnavailable(err)) {
       return { success: false, error: 'Coach sign-up is not available right now', error_code: COACH_SIGNUP_UNAVAILABLE };
+    }
+    if (options.intendedRole === 'coach' && !options.inviteCode && classifyCoachSignupFailure(err) === 'unconfirmed') {
+      // #306 r3: same rule as Google. A coach request with no server answer
+      // (network, timeout, 5xx) may have committed; the outcome is unknown,
+      // never reported as a refusal or a generic failure.
+      return { success: false, error: 'Could not confirm the coach account', error_code: COACH_SIGNUP_UNCONFIRMED };
     }
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };
     const msg =

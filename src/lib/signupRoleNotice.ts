@@ -20,12 +20,19 @@ export type SignupRoleNoticeKind =
   | 'coach_request_not_applied'
   /** The user chose a role, but the Apple ID / Google account already had an account, so they were signed in. */
   | 'existing_account'
+  /**
+   * A retry after an unconfirmed coach attempt found an existing non-coach
+   * account. It may be the account the lost attempt created, so "already had
+   * an account" is not claimed (#306 fix round 3, Opus C4).
+   */
+  | 'coach_retry_not_applied'
   /** Sign in with Apple / Google on the Login screen had no matching account and created a new client account. */
   | 'new_account_from_sign_in';
 
 const KINDS: readonly SignupRoleNoticeKind[] = [
   'coach_request_not_applied',
   'existing_account',
+  'coach_retry_not_applied',
   'new_account_from_sign_in',
 ];
 
@@ -35,7 +42,7 @@ export function isSignupRoleNoticeKind(v: unknown): v is SignupRoleNoticeKind {
 
 /** Notices that ask the user to contact support; the screen must offer a way there. */
 export function signupRoleNoticeNeedsSupport(kind: SignupRoleNoticeKind): boolean {
-  return kind === 'coach_request_not_applied';
+  return kind === 'coach_request_not_applied' || kind === 'coach_retry_not_applied';
 }
 
 export function signupRoleNoticeMessage(kind: SignupRoleNoticeKind): string {
@@ -44,6 +51,8 @@ export function signupRoleNoticeMessage(kind: SignupRoleNoticeKind): string {
       return 'Coach sign-up was not applied to this account, so it was created as a client account. You can continue as a client. To run your practice here, contact support and we will set up coach access. Use Contact support below, or Support in Settings at any time.';
     case 'existing_account':
       return 'This Apple ID or Google account already had an account, so we signed you in. The role choice applies only to new accounts.';
+    case 'coach_retry_not_applied':
+      return 'Coach sign-up was not applied to this account, so you are signed in to a client account. Your earlier attempt may have created it. To run your practice here, contact support and we will set up coach access. Use Contact support below, or Support in Settings at any time.';
     case 'new_account_from_sign_in':
       return 'There was no account for this sign-in, so a new client account was created. If you meant to sign in to an existing account, sign out and use the email you registered with.';
   }

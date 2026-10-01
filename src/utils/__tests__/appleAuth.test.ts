@@ -95,6 +95,34 @@ describe('signInWithApple', () => {
     expect(await secureStorage.getItem('supabase_token')).toBeNull();
   });
 
+  it('#306 r3: a coach signup with no server answer (network) is unconfirmed, not a refusal; no session is stored', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe('coach_signup_unconfirmed');
+    expect(await secureStorage.getItem('supabase_token')).toBeNull();
+  });
+
+  it('#306 r3: a coach signup answered with a 5xx is unconfirmed (it may have committed)', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce({ response: { status: 502, data: { message: 'Bad gateway' } } });
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(result.error_code).toBe('coach_signup_unconfirmed');
+  });
+
+  it('#306 r3: a coach signup answered with a 4xx is an ordinary failure, not unconfirmed; client failures unchanged', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce({ response: { status: 401, data: { message: 'Invalid Apple token' } } });
+    const coach = await signInWithApple({ intendedRole: 'coach' });
+    expect(coach.success).toBe(false);
+    expect(coach.error_code).toBeUndefined();
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
+    const client = await signInWithApple({ intendedRole: 'client' });
+    expect(client.error_code).toBeUndefined();
+  });
+
   it('returns cancelled when user dismisses the native sheet', async () => {
     const err: any = new Error('cancelled');
     err.code = 'ERR_REQUEST_CANCELED';

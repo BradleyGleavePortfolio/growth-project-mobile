@@ -96,6 +96,29 @@ export function intendedRoleForRequest(
   return chosen;
 }
 
+/**
+ * What a failed coach signup request proves (#306 fix round 3).
+ *  - 'refused': the server answered with a refusal that runs before or
+ *    instead of account creation (the unknown-field refusal, or a 4xx such as
+ *    validation, conflict or rate limit). This request created nothing.
+ *  - 'unconfirmed': no answer, a timeout or a 5xx. The server may have
+ *    committed before the response was lost, so the app must not say either way.
+ */
+export type CoachSignupFailure = 'refused' | 'unconfirmed';
+
+export function classifyCoachSignupFailure(err: unknown): CoachSignupFailure {
+  if (isCoachSignupUnavailable(err)) return 'refused';
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  if (typeof status === 'number' && status >= 400 && status < 500 && status !== 408) return 'refused';
+  return 'unconfirmed';
+}
+
+/** HTTP status of an API error, if the server answered. */
+export function errorStatus(err: unknown): number | undefined {
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  return typeof status === 'number' ? status : undefined;
+}
+
 /** Server-confirmed role for routing. Only 'coach' changes the destination. */
 export function isServerCoach(user: { role?: unknown } | null | undefined): boolean {
   return user?.role === 'coach';
@@ -113,3 +136,10 @@ export const COACH_SIGNUP_UNAVAILABLE_MESSAGE =
  */
 export const COACH_SIGNUP_UNCONFIRMED_MESSAGE =
   'We could not confirm your coach account, so you are not signed in. An account may or may not have been created. Try again with the same sign-in; if the account exists, you will be signed in to it.';
+
+/**
+ * Email retry after an unconfirmed coach attempt answered "this email is
+ * already registered": the earlier attempt may have created that account.
+ */
+export const COACH_SIGNUP_RETRY_EMAIL_EXISTS_MESSAGE =
+  'An account with this email already exists. Your earlier coach sign-up may have created it. Sign in with this email to continue. If it is a client account, contact support and we will set up coach access.';

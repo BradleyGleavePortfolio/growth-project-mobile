@@ -664,4 +664,257 @@ describe('CreateAccountScreen', () => {
       expect(utils.nav.navigate).toHaveBeenCalledWith('SupportInbox');
     });
   });
+
+  // Fix round 3: the in-flight boundary (Sol B1-R2 / Opus C1) and the
+  // lost-response retry notice (Opus C4). The first two tests are the two
+  // independent audit probes at 83fbb619, kept as permanent regressions.
+  describe('#306 fix round 3', () => {
+    const PROVIDERS = ['email', 'apple', 'google'];
+    const NO_ACCOUNT = /No account has been created/;
+
+    async function renderCoachWithPendingLive() {
+      await loadSignupPolicy(async () => ({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS } }));
+      let resolveLive: (v: unknown) => void = () => undefined;
+      mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
+      const nav = makeNav();
+      const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
+      await fireEvent.press(utils.getByTestId('role-choice-coach'));
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      const disableLive = async () => {
+        await act(async () => {
+          resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS, role_choice: false } });
+        });
+      };
+      return { nav, utils, disableLive };
+    }
+
+    async function startPendingCoachRegister(utils: Awaited<ReturnType<typeof renderCoachWithPendingLive>>['utils']) {
+      let resolveRegister: (v: unknown) => void = () => undefined;
+      let rejectRegister: (e: unknown) => void = () => undefined;
+      mockRegister.mockReturnValueOnce(
+        new Promise((res, rej) => { resolveRegister = res; rejectRegister = rej; }),
+      );
+      await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Coach');
+      await fireEvent.changeText(utils.getByLabelText('Email'), 'pat@example.com');
+      await fireEvent.changeText(utils.getByLabelText('Password'), 'Str0ng!pass');
+      const pressing = fireEvent.press(utils.getByLabelText('Create account'));
+      await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+      expect(mockRegister.mock.calls[0][1]).toBe('coach');
+      return {
+        resolve: async (v: unknown) => { await act(async () => { resolveRegister(v); }); await pressing; },
+        reject: async (e: unknown) => { await act(async () => { rejectRegister(e); }); await pressing; },
+      };
+    }
+
+    it('Sol B1-R2 probe: live disable while a coach /auth/register is pending never claims no account, never offers a client re-choice, never sends a second request', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      // The server has the coach request and may already have committed.
+      await disableLive();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      expect(utils.queryByTestId('coach-choice-withdrawn-client')).toBeNull();
+      // A second submission while the first is in flight is ignored.
+      await fireEvent.press(utils.getByLabelText('Create account'));
+      expect(mockRegister.mock.calls.map((c) => c[1])).toEqual(['coach']);
+      await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
+      expect(await utils.findByText('Check your inbox')).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      expect(mockRegister).toHaveBeenCalledTimes(1);
+    });
+
+    it('Opus C1 probe: the withdrawal notice is held while the request is in flight; success goes to verify', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      // The pending form stays the coach form the user submitted.
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
+      expect(await utils.findByText('I verified my email')).toBeTruthy();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      expect(utils.queryByTestId('coach-request-not-applied-notice')).toBeNull();
+    });
+
+    it('in flight -> server created a client (kill switch): the verify step says coach sign-up was not applied, no withdrawal notice', async () => {
+      const { utils, nav, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      await pending.resolve({ data: { requires_verification: true, role: 'student' } });
+      expect(await utils.findByTestId('coach-request-not-applied-notice')).toBeTruthy();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      // The policy answer that landed later does not erase the attempt's outcome.
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
+      await fireEvent.press(utils.getByText('I verified my email'));
+      await waitFor(() =>
+        expect(nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_request_not_applied' }),
+      );
+    });
+
+    it('in flight -> server failure (4xx answer): shown after it settles, as "not completed", never "No account has been created"', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await pending.reject(Object.assign(new Error('Bad Request'), { response: { status: 400, data: { message: 'Invalid email' } } }));
+      expect(await utils.findByTestId('coach-choice-withdrawn-refused')).toBeTruthy();
+      expect(utils.getByText(/your coach sign-up was not completed/)).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      // The request is settled, so an explicit client choice is now allowed.
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
+      expect(await utils.findByText('Join your coach')).toBeTruthy();
+    });
+
+    it('in flight -> response lost (no answer): unconfirmed state, no "No account", no client re-choice; sign in or support offered', async () => {
+      const { utils, nav, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await pending.reject(new Error('Cannot reach server. Please check your connection and try again.'));
+      expect(await utils.findByTestId('coach-choice-withdrawn-unconfirmed')).toBeTruthy();
+      expect(utils.getByText(/An account may or may not have been created/)).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      expect(utils.queryByTestId('coach-choice-withdrawn-client')).toBeNull();
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-sign-in'));
+      expect(nav.navigate).toHaveBeenCalledWith('Login', { email: 'pat@example.com' });
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-support'));
+      expect(nav.navigate).toHaveBeenCalledWith('SupportInbox');
+      expect(mockRegister).toHaveBeenCalledTimes(1);
+    });
+
+    it('in flight -> committed but response lost (5xx), then the safe retry finds the email registered: says the earlier attempt may have created it', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      await pending.reject(Object.assign(new Error('Server error'), { response: { status: 502 } }));
+      expect(await utils.findByTestId('coach-choice-withdrawn-unconfirmed')).toBeTruthy();
+      // Coach sign-up comes back; the user retries with the same email.
+      mockGetSignupPolicy.mockResolvedValueOnce({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS } });
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
+      expect(await utils.findByText('Create your coach account')).toBeTruthy();
+      mockRegister.mockRejectedValueOnce(Object.assign(new Error('Conflict'), { response: { status: 409, data: { message: 'Email already registered' } } }));
+      await fireEvent.press(utils.getByLabelText('Create account'));
+      expect(await utils.findByText(/Your earlier coach sign-up may have created it/)).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+    });
+
+    it('in flight -> pre-handler refusal (unknown field): the proven "No account was created" copy after it settles', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await pending.reject(new CoachSignupUnavailableError());
+      expect(await utils.findByTestId('coach-choice-withdrawn-refused')).toBeTruthy();
+      expect(utils.getByText(/No account was created/)).toBeTruthy();
+    });
+
+    it('no in-flight request: a live disable still shows "No account has been created" (round-2 behaviour kept)', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      await disableLive();
+      expect(await utils.findByTestId('coach-choice-withdrawn-not-started')).toBeTruthy();
+      expect(utils.getByText(NO_ACCOUNT)).toBeTruthy();
+    });
+
+    it('Apple in flight: live disable is held; a server coach goes to the app with no notice', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      let resolveApple: (v: unknown) => void = () => undefined;
+      mockSignInWithApple.mockReturnValueOnce(new Promise((r) => { resolveApple = r; }));
+      const pressing = fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      await act(async () => { resolveApple({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } }); });
+      await pressing;
+      expect(mockSignInWithApple).toHaveBeenCalledTimes(1);
+      await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+    });
+
+    it('Google in flight: live disable is held; an unconfirmed outcome shows the unconfirmed state, not "No account"', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      let resolveGoogle: (v: unknown) => void = () => undefined;
+      mockSignInWithGoogle.mockReturnValueOnce(new Promise((r) => { resolveGoogle = r; }));
+      const pressing = fireEvent.press(utils.getByText('Continue with Google'));
+      await waitFor(() => expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1));
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await act(async () => { resolveGoogle({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' }); });
+      await pressing;
+      expect(await utils.findByTestId('coach-choice-withdrawn-unconfirmed')).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      expect(utils.queryByTestId('coach-choice-withdrawn-client')).toBeNull();
+    });
+
+    it('Apple cancelled while a live disable was held: nothing was sent, so "No account has been created" is true', async () => {
+      const { utils, disableLive } = await renderCoachWithPendingLive();
+      let resolveApple: (v: unknown) => void = () => undefined;
+      mockSignInWithApple.mockReturnValueOnce(new Promise((r) => { resolveApple = r; }));
+      const pressing = fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await act(async () => { resolveApple({ success: false, cancelled: true }); });
+      await pressing;
+      expect(await utils.findByTestId('coach-choice-withdrawn-not-started')).toBeTruthy();
+    });
+
+    it('email coach signup with no answer (no policy change): the unconfirmed copy, not a generic error', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
+      const utils = await renderScreen(undefined, 'coach');
+      await fillAndSubmit(utils);
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(utils.queryByText(/No account was created/)).toBeNull();
+    });
+
+    it('Opus C4 (Google): a lost coach response, then the safe retry returns an existing client: "not applied", never "already had an account"', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google'] } });
+      mockSignInWithGoogle
+        .mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' })
+        .mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(await utils.findByText('Continue with Google'));
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      await fireEvent.press(utils.getByText('Continue with Google'));
+      await waitFor(() =>
+        expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_retry_not_applied' }),
+      );
+      expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBe('coach_retry_not_applied');
+      expect(utils.nav.replace).not.toHaveBeenCalledWith('RoleSelection', { signupNotice: 'existing_account' });
+    });
+
+    it('Opus C4 (Apple): a lost coach response, then the safe retry returns an existing client: "not applied"', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockSignInWithApple
+        .mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' })
+        .mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() =>
+        expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_retry_not_applied' }),
+      );
+    });
+
+    it('Opus C4 boundary: with no earlier unconfirmed attempt an existing account is still "already had an account"', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google'] } });
+      mockSignInWithGoogle.mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(await utils.findByText('Continue with Google'));
+      await waitFor(() =>
+        expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'existing_account' }),
+      );
+    });
+
+    it('while a coach request is in flight the role cannot be changed', async () => {
+      const { utils } = await renderCoachWithPendingLive();
+      const pending = await startPendingCoachRegister(utils);
+      await fireEvent.press(utils.getByTestId('role-choice-change'));
+      expect(utils.queryByTestId('role-choice')).toBeNull();
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
+    });
+  });
 });

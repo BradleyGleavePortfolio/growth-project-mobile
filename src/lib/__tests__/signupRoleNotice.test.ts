@@ -6,6 +6,7 @@ import {
   readSignupRoleNotice,
   setSignupRoleNotice,
   signupRoleNoticeMessage,
+  signupRoleNoticeNeedsSupport,
 } from '../signupRoleNotice';
 
 describe('signupRoleNotice (C13)', () => {
@@ -30,11 +31,19 @@ describe('signupRoleNotice (C13)', () => {
   });
 
   it('copy is plain: no exclamation marks, and every kind has a message', () => {
-    for (const kind of ['coach_request_not_applied', 'existing_account', 'new_account_from_sign_in'] as const) {
+    for (const kind of ['coach_request_not_applied', 'existing_account', 'coach_retry_not_applied', 'new_account_from_sign_in'] as const) {
       const msg = signupRoleNoticeMessage(kind);
       expect(msg.length).toBeGreaterThan(20);
       expect(msg).not.toMatch(/!/);
     }
     expect(signupRoleNoticeMessage('coach_request_not_applied')).toMatch(/client account/);
+  });
+
+  it('#306 r3 (Opus C4): the retry notice says coach sign-up was not applied, never that the account already existed, and offers support', () => {
+    expect(isSignupRoleNoticeKind('coach_retry_not_applied')).toBe(true);
+    const msg = signupRoleNoticeMessage('coach_retry_not_applied');
+    expect(msg).toMatch(/Coach sign-up was not applied/);
+    expect(msg).not.toMatch(/already had an account/);
+    expect(signupRoleNoticeNeedsSupport('coach_retry_not_applied')).toBe(true);
   });
 });
