@@ -33,6 +33,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 // in PR #130; this PR places it on HomeScreen).
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import PendingInviteBanner from '../../components/PendingInviteBanner';
+import HomeHeaderActions from '../../components/home/HomeHeaderActions';
+import PushPermissionCard from '../../components/home/PushPermissionCard';
 import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
 // Clinic tutorial (C08/C09): pinned macro card, Message your coach row and the
 // passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
@@ -324,7 +326,9 @@ export default function HomeScreen() {
           />
         }
       >
+        <HomeHeaderActions />
         <PendingInviteBanner />
+        <PushPermissionCard />
         {showProfileNudge ? (
           <Pressable
             onPress={goToEditProfile}

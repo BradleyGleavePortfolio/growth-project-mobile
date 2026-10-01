@@ -27,6 +27,21 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { subCoachApi, type SubCoachInviteResult } from '../../api/subCoachApi';
 import { errorMessage } from '../../types/common';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
+
+/**
+ * Seat-limit copy. With non-P2P purchases hidden (iOS) it never tells the
+ * coach to upgrade; it names the headroom and the in-app way to free a seat.
+ */
+export function seatLimitMessage(remainingSeats: number, purchasesHidden: boolean): string {
+  if (remainingSeats <= 0) {
+    return purchasesHidden
+      ? 'No seats available on your plan. Revoke an existing sub-coach to free a seat.'
+      : 'No seats available on your plan. Upgrade or revoke an existing sub-coach to free a seat.';
+  }
+  const base = `Only ${remainingSeats} seat${remainingSeats === 1 ? '' : 's'} available on your plan. `;
+  return purchasesHidden ? `${base}Lower the ceiling.` : `${base}Lower the ceiling or upgrade to add more.`;
+}
 
 interface Props {
   visible: boolean;
@@ -126,16 +141,7 @@ export default function SubCoachInviteModal({
       // ceiling. Surface a structured Rule-9 message naming the exact
       // headroom so the head coach knows what to do.
       if (typeof remainingSeats === 'number' && n > remainingSeats) {
-        if (remainingSeats <= 0) {
-          setError(
-            'No seats available on your plan. Upgrade or revoke an existing sub-coach to free a seat.',
-          );
-        } else {
-          setError(
-            `Only ${remainingSeats} seat${remainingSeats === 1 ? '' : 's'} available on your plan. ` +
-              `Lower the ceiling or upgrade to add more.`,
-          );
-        }
+        setError(seatLimitMessage(remainingSeats, nonP2PPurchasesHidden()));
         return;
       }
       maxClientsNum = n;

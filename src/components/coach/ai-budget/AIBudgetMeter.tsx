@@ -42,14 +42,23 @@ export function AIBudgetMeter({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const pct = clampPctForDisplay(budget.pct_used);
+  // No handler (iOS with non-P2P purchases hidden, or any caller that does
+  // not route to checkout): a plain, non-interactive usage readout with
+  // neutral accessibility copy. No button role, no "buy" wording.
+  const interactive = typeof onPress === 'function';
 
   return (
     <HapticPressable
       intent="light"
       onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`AI usage ${pct.toFixed(0)} percent of monthly allowance. Tap to buy credits.`}
-      accessibilityHint="Opens the credit pack checkout."
+      disabled={!interactive}
+      accessibilityRole={interactive ? 'button' : 'text'}
+      accessibilityLabel={
+        interactive
+          ? `AI usage ${pct.toFixed(0)} percent of monthly allowance. Tap to buy credits.`
+          : `AI usage ${pct.toFixed(0)} percent of monthly allowance.`
+      }
+      accessibilityHint={interactive ? 'Opens the credit pack checkout.' : undefined}
       style={[styles.container, style]}
       testID={testID ?? 'ai-budget-meter'}
     >

@@ -46,6 +46,7 @@ function mockEntitlement(ctx: Partial<Ctx>) {
     paywallVisible: false,
     paywallMessage: null,
     dismissPaywall: jest.fn(),
+    messageCoach: jest.fn(),
     ...ctx,
   };
   jest.spyOn(Provider, 'useEntitlement').mockReturnValue(value);

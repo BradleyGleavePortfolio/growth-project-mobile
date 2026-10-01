@@ -7,6 +7,7 @@ import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
+import AuthCallbackScreen from '../screens/auth/AuthCallbackScreen';
 import { Colors } from '../constants/colors';
 
 export type AuthStackParamList = {
@@ -31,6 +32,8 @@ export type AuthStackParamList = {
   //   tgp://invite/accept/:token
   //   https://app.trygrowthproject.com/invite/accept/:token
   AcceptInvite: { token: string };
+  // Idempotent landing for a stray `tgp://auth/callback` (OAuth redirect URI).
+  AuthCallback: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -51,6 +54,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
       <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
+      <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
     </Stack.Navigator>
   );
 }

@@ -1,12 +1,13 @@
 /**
- * BrandedCheckoutWebViewScreen — branded in-app Stripe checkout (B2B exemption).
+ * BrandedCheckoutWebViewScreen — branded in-app Stripe checkout for client 1:1
+ * packages (Guideline 3.1.3(d); the webview itself confers no exemption).
  *
  * Why this exists:
- *   - Apple App Review Rule 3.1.3(b)/(e) ("Multiplatform / Enterprise B2B")
- *     allows coaching SaaS sold to businesses to bill outside of Apple IAP
- *     when the purchase happens in a webview pointing at the seller's own
- *     branded checkout. Salesforce, Notion, Linear, and Slack all ship this
- *     same pattern. No Apple 30%.
+ *   - Basis: App Review Guideline 3.1.3(d) (person-to-person services). A
+ *     client buying real-time 1:1 coaching from a specific coach may pay
+ *     outside IAP. The webview/transport is NOT the basis and confers no
+ *     exemption; anything that is not a real-time 1:1 service must use IAP
+ *     or stay hidden on iOS (see src/config/purchaseSurfaces.ts).
  *   - Rule 8 (decacorn doctrine): checkout MUST feel in-app and branded —
  *     the user never sees the Safari URL bar or a "leave the app" sheet.
  *
@@ -113,7 +114,8 @@ export const CHECKOUT_ALLOWED_HOSTS: readonly string[] = [
   // Stripe Customer Billing Portal — past-due clients tap "Update card"
   // in the dunning banner and the backend mints a billing.stripe.com
   // session URL. Keeping this in the branded webview avoids punting to
-  // Safari and preserves the Apple B2B exemption posture.
+  // Safari. The filing basis for client 1:1 packages is Guideline
+  // 3.1.3(d); this allow-list is a host check, not product classification.
   'billing.stripe.com',
 ];
 

@@ -19,8 +19,8 @@
  * Phase 9: Bell icon in HomeStack header routes to NotificationCenter.
  *   NotificationCenter and NotificationPreferences added to HomeStackParamList.
  */
-import React, { useEffect, useState } from 'react';
-import { AppState, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -94,10 +94,6 @@ import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDe
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
-import NotificationBadge from '../components/NotificationBadge';
-import { fetchUnreadCount } from '../services/notificationsApi';
-import { logger } from '../utils/logger';
-import { normalizeError } from '../screens/client/_completionLogging';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
@@ -155,10 +151,14 @@ const ProtectedLogScreen = withProtectedScreen(LogScreen);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
 const ProtectedCommunityScreen = withProtectedScreen(CommunityScreen);
 const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
-const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
+// Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
+// the assigned coach is free server-side (client-messaging.controller.ts:
+// GET/POST /messages, /messages/read, /messages/unread-count carry no
+// ClientEntitlementGuard; only voice-upload is paid and still 402s into the
+// paywall). It is also the one action the iOS coach-managed gate offers, so
+// gating it here would trap an unentitled client in a loop.
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
-
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
 export type HomeStackParamList = {
@@ -293,7 +293,7 @@ export type MoreStackParamList = {
   CheckoutReturn: { outcome?: 'success' | 'cancel'; session_id?: string };
   /**
    * Payments — branded in-app Stripe Checkout webview. See screen docstring
-   * for the Apple Rule 3.1.3(b)/(e) B2B exemption rationale.
+   * (basis for 1:1 packages: Guideline 3.1.3(d); the webview is not an exemption).
    */
   BrandedCheckoutWebView: BrandedCheckoutWebViewParams;
   /** iMessage-grade DM — Apple 1.2 compliance contact details surface. */
@@ -319,41 +319,6 @@ export type MoreStackParamList = {
   };
 };
 
-// ─── Phase 9: unread count polling for the bell icon ─────────────────────────
-
-function useClientUnreadCount(): number {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let mounted = true;
-    const refresh = async () => {
-      try {
-        const n = await fetchUnreadCount();
-        if (mounted) setCount(n);
-      } catch (error) {
-        // Non-fatal: the badge keeps its last-known count on a failed poll.
-        // Surfaced for diagnosis rather than swallowed (R69) so a persistently
-        // failing unread-count fetch is visible instead of silently stale.
-        logger.warn('clientNavigator.unread-count', {
-          route: 'ClientNavigator',
-          action: 'fetch-unread-count',
-          error: normalizeError(error),
-        });
-      }
-    };
-    refresh();
-    const interval = setInterval(refresh, 30000);
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
-    });
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-      sub.remove();
-    };
-  }, []);
-  return count;
-}
-
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
@@ -362,38 +327,20 @@ const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 
 function HomeStackNavigator() {
-  const unreadCount = useClientUnreadCount();
+  // The Home stack runs headerShown:false, so a headerRight bell here never
+  // rendered (dead UI). The bell + "Message your coach" entry now live in the
+  // Home screen body (components/home/HomeHeaderActions).
   return (
     <HomeStackNav.Navigator
-      screenOptions={({ navigation }) => ({
+      screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bone },
-        // Phase 9: bell icon injected into every screen in the Home stack.
-        // We use a custom header right rather than showing the header title,
-        // so each screen continues to render its own title.
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('NotificationCenter')}
-            style={styles.bellButton}
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadCount > 0
-                ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
-                : 'Notifications'
-            }
-          >
-            <View style={styles.bellWrap}>
-              <Ionicons name="notifications-outline" size={24} color={colors.ink} />
-              <NotificationBadge count={unreadCount} />
-            </View>
-          </TouchableOpacity>
-        ),
-      })}
+      }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
-      <HomeStackNav.Screen name="Messages"              component={ProtectedMessagesScreen} />
+      <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* Phase 9 — Notification center screens */}
       <HomeStackNav.Screen
         name="NotificationCenter"
@@ -539,7 +486,7 @@ function MoreStackNavigator() {
       {/* PR-15B — post-checkout unpack moment. Reachable from
           CheckoutReturnScreen on a successful confirm. */}
       <MoreStackNav.Screen name="PurchaseUnpack"  component={PurchaseUnpackScreen} />
-      {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
+      {/* Branded in-app webview checkout (1:1 packages, Guideline 3.1.3(d); see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"
         component={BrandedCheckoutWebViewScreen}
@@ -706,17 +653,6 @@ export default function ClientNavigator() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  bellButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  bellWrap: {
-    position: 'relative',
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   communityIconWrap: {
     position: 'relative',
     width: 28,

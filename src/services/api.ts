@@ -76,6 +76,8 @@ import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
+import { Platform } from 'react-native';
+import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
 
 function isEntitlementEndpoint(url?: string): boolean {
@@ -112,6 +114,15 @@ api.interceptors.request.use(async (config) => {
   // unauthenticated ones. A caller that set its own id keeps it.
   if (!config.headers[REQUEST_ID_HEADER]) {
     config.headers[REQUEST_ID_HEADER] = newRequestId();
+  }
+  // Audit #305 A1: platform, native build and purchase policy, so the server
+  // can reject non-P2P purchase sessions for an iOS binary no matter what JS
+  // is running. Native only; web keeps its CORS-allowed header set.
+  if (Platform.OS !== 'web') {
+    config.headers['X-Client-Platform'] = Platform.OS;
+    const build = nativeBuildNumber();
+    if (build !== null) config.headers['X-Client-Native-Build'] = String(build);
+    config.headers['X-Client-Purchase-Policy'] = purchasePolicyHeader();
   }
   return config;
 });
