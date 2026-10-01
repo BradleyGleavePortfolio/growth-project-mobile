@@ -22,6 +22,12 @@ import { readUserCache, setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { getLastKnownSignupPolicy, loadSignupPolicy, UNKNOWN_SIGNUP_POLICY } from '../../lib/signupPolicy';
 import { inviteAttachErrorMessage } from '../../lib/inviteAttachOutcome';
+import {
+  clearSignupRoleNotice,
+  readSignupRoleNotice,
+  signupRoleNoticeMessage,
+  type SignupRoleNoticeKind,
+} from '../../lib/signupRoleNotice';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
 import { typography } from '../../theme/tokens';
 
@@ -39,10 +45,15 @@ type Props = {
 //     is codeless. This screen only ever selects the client ('student') role.
 //   - Retry: signup reported `invite_attached:false`, so the code is mandatory
 //     and the banner explains why (see inviteAttachError below).
-//   - A person who chose "I coach clients" (CreateAccount role step, C13)
-//     while the backend has not applied `intended_role` yet. The server still
-//     returned a non-coach user, so we say so plainly and let them continue
-//     as a client or stop here. We never self-promote to coach from the app.
+//   - A person whose signup role request did not end the way they chose
+//     (C13): they chose "I coach clients" but the server created a client
+//     account; or the Apple ID / Google account already existed so the
+//     choice did not apply; or Sign in with Apple / Google on the Login
+//     screen found no account and created a client one. The fact is shown
+//     here as a plain notice (`signupNotice` param, with the persisted copy
+//     from lib/signupRoleNotice as the fallback so a remount cannot lose it)
+//     and they continue as a client. We never self-promote to coach from
+//     the app.
 //
 // Who does NOT see it: a user whose server-returned `user.role` is 'coach'
 // (the backend honoured `intended_role: 'coach'`). CreateAccount finishes
@@ -69,7 +80,9 @@ export default function RoleSelectionScreen({ route }: Props) {
   // "continue without a coach" only when the live policy allows codeless.
   const attachRetryReason = route?.params?.inviteAttachError;
   const isAttachRetry = typeof attachRetryReason === 'string';
-  const coachRequestPending = route?.params?.coachRequestPending === true;
+  const [signupNotice, setSignupNotice] = useState<SignupRoleNoticeKind | null>(
+    route?.params?.signupNotice ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
@@ -89,6 +102,13 @@ export default function RoleSelectionScreen({ route }: Props) {
       if (!mounted) return;
       setRequireInviteCode(policy.inviteCodeRequired);
 
+      // C13: a notice written by CreateAccount / Login survives a remount of
+      // the auth stack; the route param is only the fast path.
+      if (!route?.params?.signupNotice) {
+        const stored = await readSignupRoleNotice();
+        if (mounted && stored) setSignupNotice(stored);
+      }
+
       // B4: never in retry mode. A failed attach to coach B must not be
       // silently skipped because the user is already linked to coach A; the
       // retry screen offers an explicit "Keep my current coach" instead.
@@ -107,6 +127,7 @@ export default function RoleSelectionScreen({ route }: Props) {
       if (u) {
           if (mounted && u?.coach_id && !isAttachRetry) {
             await AsyncStorage.removeItem('needs_role_selection');
+            await clearSignupRoleNotice();
             authEvents.emit();
             return;
           }
@@ -172,11 +193,13 @@ export default function RoleSelectionScreen({ route }: Props) {
       logRedacted('selectRole finalize after attach failed', finErr);
     }
     await AsyncStorage.removeItem('needs_role_selection');
+    await clearSignupRoleNotice();
     authEvents.emit();
   };
 
   const handleKeepCurrentCoach = async () => {
     await AsyncStorage.removeItem('needs_role_selection');
+    await clearSignupRoleNotice();
     authEvents.emit();
   };
 
@@ -235,6 +258,7 @@ export default function RoleSelectionScreen({ route }: Props) {
         const res = await authApi.selectRole('student', undefined);
         await persistRole(res.data.role, res.data.coach_id);
         await AsyncStorage.removeItem('needs_role_selection');
+        await clearSignupRoleNotice();
         authEvents.emit();
       }
     } catch (err) {
@@ -274,12 +298,9 @@ export default function RoleSelectionScreen({ route }: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
-        {coachRequestPending ? (
-          <View style={styles.retryBox} accessible testID="coach-request-pending">
-            <Text style={styles.retryText}>
-              Coach sign-up is not open on this account yet. You can continue as a client for now.
-              To run your practice here, contact support and we will set up coach access.
-            </Text>
+        {signupNotice ? (
+          <View style={styles.retryBox} accessible accessibilityRole="alert" testID="signup-role-notice">
+            <Text style={styles.retryText}>{signupRoleNoticeMessage(signupNotice)}</Text>
           </View>
         ) : null}
         {isAttachRetry ? (

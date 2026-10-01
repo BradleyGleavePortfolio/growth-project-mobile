@@ -5,6 +5,7 @@
  */
 import React from 'react';
 import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockGetSignupPolicy = jest.fn();
@@ -36,15 +37,17 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import RoleSelectionScreen from '../RoleSelectionScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
+import { SIGNUP_ROLE_NOTICE_KEY, type SignupRoleNoticeKind } from '../../../lib/signupRoleNotice';
 
-function route(params?: { inviteAttachError?: string; inviteCode?: string; coachRequestPending?: boolean }) {
+function route(params?: { inviteAttachError?: string; inviteCode?: string; signupNotice?: SignupRoleNoticeKind }) {
   return { key: 'k', name: 'RoleSelection' as const, params };
 }
 
 describe('RoleSelection retry step', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     __resetSignupPolicyCacheForTests();
+    await AsyncStorage.clear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
   });
@@ -132,13 +135,44 @@ describe('RoleSelection retry step', () => {
 
   it('C13: a coach request the backend did not apply shows a plain notice and never selects coach', async () => {
     mockSelectRole.mockResolvedValue({ data: { role: 'student' } });
-    const { findByTestId, getByTestId } = await render(
-      <RoleSelectionScreen navigation={{} as never} route={route({ coachRequestPending: true })} />,
+    await AsyncStorage.setItem(SIGNUP_ROLE_NOTICE_KEY, 'coach_request_not_applied');
+    const { findByTestId, getByTestId, getByText } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route({ signupNotice: 'coach_request_not_applied' })} />,
     );
-    expect(await findByTestId('coach-request-pending')).toBeTruthy();
+    expect(await findByTestId('signup-role-notice')).toBeTruthy();
+    expect(getByText(/created as a client account/)).toBeTruthy();
     await fireEvent.press(getByTestId('role-continue'));
     await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
     expect(mockSelectRole).not.toHaveBeenCalledWith('coach', expect.anything());
+    // Once the role step is done the persisted notice is spent.
+    await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+    expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+  });
+
+  it('C13 F4: the notice survives a remount without params (read from the persisted copy)', async () => {
+    await AsyncStorage.setItem(SIGNUP_ROLE_NOTICE_KEY, 'existing_account');
+    const { findByTestId, getByText } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route(undefined)} />,
+    );
+    expect(await findByTestId('signup-role-notice')).toBeTruthy();
+    expect(getByText(/already had an account/)).toBeTruthy();
+  });
+
+  it('C13: the Login-screen provider notice is shown with its own copy', async () => {
+    const { findByTestId, getByText } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route({ signupNotice: 'new_account_from_sign_in' })} />,
+    );
+    expect(await findByTestId('signup-role-notice')).toBeTruthy();
+    expect(getByText(/a new client account was created/)).toBeTruthy();
+  });
+
+  it('C13: no notice, no banner', async () => {
+    const { queryByTestId, findByTestId } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route(undefined)} />,
+    );
+    await findByTestId('role-invite-code-input');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(queryByTestId('signup-role-notice')).toBeNull();
   });
 });
 

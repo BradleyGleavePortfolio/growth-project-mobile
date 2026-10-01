@@ -33,7 +33,20 @@ import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { authEvents } from '../../utils/authEvents';
 import RoleChoice from '../../components/auth/RoleChoice';
-import { isServerCoach, type IntendedRole } from '../../lib/intendedRole';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  COACH_SIGNUP_UNAVAILABLE_MESSAGE,
+  intendedRoleForRequest,
+  isCoachSignupUnavailable,
+  isServerCoach,
+  type IntendedRole,
+} from '../../lib/intendedRole';
+import {
+  clearSignupRoleNotice,
+  setSignupRoleNotice,
+  signupRoleNoticeMessage,
+  type SignupRoleNoticeKind,
+} from '../../lib/signupRoleNotice';
 import { Colors } from '../../constants/colors';
 import { typography } from '../../theme/tokens';
 
@@ -42,7 +55,16 @@ interface Props {
   route?: { params?: { invite_code?: string; email?: string } };
 }
 
-type Step = 'role' | 'register' | 'verify';
+// 'policy': the live signup policy has not answered yet and nothing is
+// cached, so the screen does not know whether to ask the role question.
+// The form is held back until the answer (or the UNKNOWN fallback) arrives.
+type Step = 'policy' | 'role' | 'register' | 'verify';
+
+function firstStep(arrivedWithCode: boolean, roleChoice: boolean | null): Step {
+  if (arrivedWithCode) return 'register';
+  if (roleChoice === null) return 'policy';
+  return roleChoice ? 'role' : 'register';
+}
 
 /**
  * Conservative sanitiser for an inbound prefilled email. Strips
@@ -65,12 +87,16 @@ function sanitisePrefillEmail(raw: unknown): string {
 export default function CreateAccountScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  // Role choice (C13): people who arrive with an invite / QR code are always
-  // clients and skip it; everyone else picks first.
+  // Role choice (C13): asked only when the live signup policy advertises
+  // `role_choice: true` (backend #597). People who arrive with an invite /
+  // QR code are always clients and skip it; everyone else picks first.
+  // `null` = policy not known yet (no live answer, nothing cached).
   const arrivedWithCode = !!route?.params?.invite_code;
-  const [step, setStep] = useState<Step>(arrivedWithCode ? 'register' : 'role');
+  const [roleChoiceEnabled, setRoleChoiceEnabled] = useState<boolean | null>(
+    () => getLastKnownSignupPolicy()?.roleChoice ?? null,
+  );
+  const [step, setStep] = useState<Step>(() => firstStep(arrivedWithCode, roleChoiceEnabled));
   const [intendedRole, setIntendedRole] = useState<IntendedRole>('client');
-  const isCoachSignup = intendedRole === 'coach' && !arrivedWithCode;
   const [name, setName] = useState('');
   const [email, setEmail] = useState<string>(() =>
     sanitisePrefillEmail(route?.params?.email),
@@ -78,6 +104,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [inviteCode, setInviteCode] = useState(route?.params?.invite_code ?? '');
+  // A typed or pasted code also means client: while the field has content the
+  // coach option is not offered, so the code is never silently dropped.
+  const hasTypedCode = inviteCode.trim().length > 0;
+  const isCoachSignup =
+    roleChoiceEnabled === true && intendedRole === 'coach' && !arrivedWithCode && !hasTypedCode;
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(
@@ -91,6 +122,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // `invite_attached:false`. The raw reason is forwarded to the
   // RoleSelection retry step, which renders friendly copy for it.
   const [inviteAttachError, setInviteAttachError] = useState<string | null>(null);
+  // C13: the user chose coach and /auth/register answered with a non-coach
+  // `role` (kill switch flipped between the policy read and the request).
+  // The account exists as a client; the verify step says so and RoleSelection
+  // repeats it.
+  const [coachRequestNotApplied, setCoachRequestNotApplied] = useState(false);
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
@@ -107,6 +143,15 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       if (!mounted) return;
       setRequireInviteCode(policy.inviteCodeRequired);
       setGoogleEnabled(policy.googleEnabled);
+      setRoleChoiceEnabled(policy.roleChoice);
+      setStep((prev) => {
+        if (prev === 'policy') return firstStep(arrivedWithCode, policy.roleChoice);
+        // Cached policy said yes, live policy says no: there is no choice
+        // to make, so continue as a client.
+        if (prev === 'role' && !policy.roleChoice) return 'register';
+        return prev;
+      });
+      if (!policy.roleChoice) setIntendedRole('client');
     })();
     return () => {
       mounted = false;
@@ -116,8 +161,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // Auto-preview when an invite code is prefilled from a deep link.
   useEffect(() => {
     if (route?.params?.invite_code) {
+      // A join link / QR code always means client and skips the choice,
+      // even if it arrives while the coach form is open.
       setIntendedRole('client');
-      setStep((prev) => (prev === 'role' ? 'register' : prev));
+      setInviteCode(route.params.invite_code);
+      setStep((prev) => (prev === 'role' || prev === 'policy' ? 'register' : prev));
       previewCode(route.params.invite_code);
     }
   }, [route?.params?.invite_code]);
@@ -212,21 +260,38 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         setInviteAttachError(outcome.attached === false ? outcome.reason ?? 'unknown' : null);
       } else {
         setInviteAttachError(null);
-        await authApi.register({
-          name,
-          email,
-          password,
-          phone: phone || undefined,
-        }, intendedRole);
+        const res = await authApi.register(
+          {
+            name,
+            email,
+            password,
+            phone: phone || undefined,
+          },
+          intendedRoleForRequest(roleChoiceEnabled === true, intendedRole, false),
+        );
+        // Backend #597 returns the role the account was created with. A
+        // coach request the server did not apply is said plainly, never
+        // treated as a normal client signup.
+        const createdRole = res?.data?.role;
+        const notApplied = isCoachSignup && typeof createdRole === 'string' && createdRole !== 'coach';
+        setCoachRequestNotApplied(notApplied);
+        if (notApplied) await setSignupRoleNotice('coach_request_not_applied');
       }
 
       await AsyncStorage.setItem('pending_email', email);
       track(AnalyticsEvents.SIGNUP_COMPLETED, {
         method: 'email',
         has_invite_code: !!trimmedCode,
+        ...(isCoachSignup ? { intended_role: 'coach' } : {}),
       });
       setStep('verify');
     } catch (err) {
+      if (isCoachSignupUnavailable(err)) {
+        // No account was created (the server rejected the body before any
+        // handler ran). Never fall back to a client account here.
+        setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+        return;
+      }
       // Map raw upstream strings (Supabase / backend / network) into quiet,
       // safe copy. Operators retain the original via console + Sentry.
       const raw = errorMessage(err) || err;
@@ -238,23 +303,35 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   // After a session exists: a server-confirmed coach goes straight to the
-  // app (RootNavigator mounts CoachNavigator from user.role). Everyone else,
-  // including a coach request the backend did not apply yet, continues to
-  // RoleSelection as before.
+  // app (RootNavigator mounts CoachNavigator from user.role). Everyone else
+  // continues to RoleSelection. A coach request the server did not apply is
+  // never silent: the notice is passed as a param AND persisted
+  // (lib/signupRoleNotice) so RoleSelection shows it even after a remount.
+  // `isNewUser === false` means the provider account already existed; the
+  // role choice did not apply and we say that instead.
   const routeAfterAuth = async (
     user: { role?: unknown } | null | undefined,
-    retryParams?: { inviteAttachError: string; inviteCode?: string },
+    opts: {
+      retryParams?: { inviteAttachError: string; inviteCode?: string };
+      isNewUser?: boolean;
+    } = {},
   ) => {
     if (isServerCoach(user)) {
       await setUserCache(user as Parameters<typeof setUserCache>[0]);
       await purgePersistedQueryCacheForAllUsers();
       await AsyncStorage.removeItem('needs_role_selection');
+      await clearSignupRoleNotice();
       authEvents.emit();
       return;
     }
     await AsyncStorage.setItem('needs_role_selection', 'true');
-    if (retryParams) navigation.replace('RoleSelection', retryParams);
-    else if (isCoachSignup) navigation.replace('RoleSelection', { coachRequestPending: true });
+    let signupNotice: SignupRoleNoticeKind | undefined;
+    if (isCoachSignup) {
+      signupNotice = opts.isNewUser === false ? 'existing_account' : 'coach_request_not_applied';
+      await setSignupRoleNotice(signupNotice);
+    }
+    const params = { ...(opts.retryParams ?? {}), ...(signupNotice ? { signupNotice } : {}) };
+    if (Object.keys(params).length > 0) navigation.replace('RoleSelection', params);
     else navigation.replace('RoleSelection');
   };
 
@@ -273,12 +350,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       // stale boot-time key before the first persistence pass for this user.
       await purgePersistedQueryCacheForAllUsers();
 
-      await routeAfterAuth(
-        user,
-        inviteAttachError !== null
-          ? { inviteAttachError, inviteCode: inviteCode.trim() || undefined }
-          : undefined,
-      );
+      await routeAfterAuth(user, {
+        retryParams:
+          inviteAttachError !== null
+            ? { inviteAttachError, inviteCode: inviteCode.trim() || undefined }
+            : undefined,
+      });
     } catch (err) {
       const msg = errorMessage(err, '').toLowerCase();
       if (msg.includes('email') || msg.includes('confirm')) {
@@ -301,12 +378,19 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     setLoading(true);
     setError('');
     try {
+      // The role question was answered before this round-trip; the backend
+      // fixes the role when it inserts the User row, so this is the only
+      // moment `intended_role` can matter.
       const result = await signInWithApple({
         inviteCode: trimmedCode || undefined,
-        intendedRole: trimmedCode ? 'client' : intendedRole,
+        intendedRole: intendedRoleForRequest(roleChoiceEnabled === true, intendedRole, !!trimmedCode),
       });
       if (!result.success) {
         if (result.cancelled) return;
+        if (result.error_code === COACH_SIGNUP_UNAVAILABLE) {
+          setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          return;
+        }
         const friendly = toFriendlyAppleAuthError(result.error);
         if (!friendly.cancelled) {
           setError(friendly.message);
@@ -314,13 +398,18 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         }
         return;
       }
-      await routeAfterAuth(
-        result.user,
-        trimmedCode && result.invite_attached === false
-          ? { inviteAttachError: result.invite_attach_error ?? 'unknown', inviteCode: trimmedCode }
-          : undefined,
-      );
+      await routeAfterAuth(result.user, {
+        isNewUser: result.is_new_user,
+        retryParams:
+          trimmedCode && result.invite_attached === false
+            ? { inviteAttachError: result.invite_attach_error ?? 'unknown', inviteCode: trimmedCode }
+            : undefined,
+      });
     } catch (err) {
+      if (isCoachSignupUnavailable(err)) {
+        setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+        return;
+      }
       const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
@@ -341,10 +430,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       const { signInWithGoogle } = await import('../../utils/googleAuth');
       const result = await signInWithGoogle({
         inviteCode: trimmedCode || undefined,
-        intendedRole: trimmedCode ? 'client' : intendedRole,
+        intendedRole: intendedRoleForRequest(roleChoiceEnabled === true, intendedRole, !!trimmedCode),
       });
 
       if (!result.success) {
+        if (result.error_code === COACH_SIGNUP_UNAVAILABLE) {
+          setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          return;
+        }
         const friendly = toFriendlyAuthError(result.error);
         if (!friendly.cancelled) {
           setError(friendly.message);
@@ -353,8 +446,20 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         return;
       }
 
-      await routeAfterAuth(result.user);
+      // A typed code the backend did not attach is carried to the retry
+      // step with the code prefilled instead of being dropped.
+      await routeAfterAuth(result.user, {
+        isNewUser: result.is_new_user,
+        retryParams:
+          trimmedCode && result.invite_attached === false
+            ? { inviteAttachError: 'unknown', inviteCode: result.invite_code ?? trimmedCode }
+            : undefined,
+      });
     } catch (err) {
+      if (isCoachSignupUnavailable(err)) {
+        setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+        return;
+      }
       const friendly = toFriendlyAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
@@ -384,6 +489,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             </View>
           ) : null}
 
+          {coachRequestNotApplied ? (
+            <View style={styles.noticeBox} testID="coach-request-not-applied-notice">
+              <Text style={styles.noticeText}>{signupRoleNoticeMessage('coach_request_not_applied')}</Text>
+            </View>
+          ) : null}
+
           {error ? (
             <View style={styles.errorBox}>
               <Text style={styles.errorText}>{error}</Text>
@@ -410,6 +521,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     );
   }
 
+  if (step === 'policy') {
+    return (
+      <View style={styles.container} testID="signup-policy-loading">
+        <View style={styles.verifyContent}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.verifySubBody}>Preparing sign-up.</Text>
+        </View>
+      </View>
+    );
+  }
+
   if (step === 'role') {
     return (
       <View style={styles.container}>
@@ -420,6 +542,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               Have an invite code from your coach? Choose the first option and enter it on the next step.
             </Text>
           </View>
+          {error ? (
+            <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
           <RoleChoice
             onChoose={(role) => {
               setIntendedRole(role);
@@ -449,16 +576,22 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                 ? 'Enter the invite code your coach shared to begin.'
                 : 'Create your account to begin.'}
           </Text>
-          {!arrivedWithCode ? (
-            <Text
-              style={styles.changeRole}
-              accessibilityRole="button"
-              accessibilityLabel="Change how you will use the app"
-              testID="role-choice-change"
-              onPress={() => setStep('role')}
-            >
-              {isCoachSignup ? 'Here to train instead?' : 'Coach clients instead?'}
-            </Text>
+          {roleChoiceEnabled === true && !arrivedWithCode ? (
+            hasTypedCode ? (
+              <Text style={styles.subtitle} testID="invite-code-means-client">
+                An invite code always means a client account.
+              </Text>
+            ) : (
+              <Text
+                style={styles.changeRole}
+                accessibilityRole="button"
+                accessibilityLabel="Change how you will use the app"
+                testID="role-choice-change"
+                onPress={() => setStep('role')}
+              >
+                {isCoachSignup ? 'Here to train instead?' : 'Coach clients instead?'}
+              </Text>
+            )
           ) : null}
         </View>
 

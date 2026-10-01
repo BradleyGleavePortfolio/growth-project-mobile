@@ -15,7 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from '../services/secureStorage';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
-import type { IntendedRole } from '../lib/intendedRole';
+import { COACH_SIGNUP_UNAVAILABLE, isCoachSignupUnavailable, type IntendedRole } from '../lib/intendedRole';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -37,13 +37,31 @@ export interface GoogleAuthResult {
   };
   is_new_user?: boolean;
   error?: string;
+  /**
+   * 'coach_signup_unavailable' (C13): the backend refused `intended_role`
+   * before any handler ran, so no account row was created. Not a success;
+   * the Supabase session is dropped so the next attempt starts clean.
+   */
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE;
+  /**
+   * Set when the caller passed an invite code and the backend did not
+   * attach it (no `coach_id` on the returned user, dedicated attach call
+   * failed too). The code is returned so the caller can carry it to the
+   * RoleSelection retry step instead of dropping it.
+   */
+  invite_attached?: boolean;
+  invite_code?: string;
 }
 
 export interface GoogleAuthOptions {
   // When set, the invite code is forwarded to /auth/google so the backend can
   // attach the new (or existing) user to the right coach during the upsert.
   inviteCode?: string;
-  /** Signup role choice; ignored when an invite code is present (always client). */
+  /**
+   * Signup role choice (C13). Pass only when the live signup policy
+   * advertises `role_choice`. Omitted from the request when an invite code
+   * is present (always client).
+   */
   intendedRole?: IntendedRole;
 }
 
@@ -139,11 +157,18 @@ export async function signInWithGoogle(
       // invite_code arg on /auth/google but exposes the dedicated attach
       // endpoint, forward the code there. Failure is non-fatal — sign-in
       // already succeeded; the user can re-enter the code on RoleSelection.
-      if (options.inviteCode && !user?.coach_id) {
-        try {
-          await authApi.attachInviteCode(options.inviteCode);
-        } catch {
-          // ignore — non-fatal
+      let inviteAttached: boolean | undefined;
+      if (options.inviteCode) {
+        inviteAttached = !!user?.coach_id;
+        if (!inviteAttached) {
+          try {
+            const attach = await authApi.attachInviteCode(options.inviteCode);
+            const coachId = (attach?.data as { coach_id?: unknown } | undefined)?.coach_id;
+            if (typeof coachId === 'string' && user) user.coach_id = coachId;
+            inviteAttached = typeof coachId === 'string';
+          } catch {
+            inviteAttached = false;
+          }
         }
       }
 
@@ -154,8 +179,22 @@ export async function signInWithGoogle(
         access_token: accessToken,
         user,
         is_new_user: response.data.is_new_user,
+        ...(typeof inviteAttached === 'boolean'
+          ? { invite_attached: inviteAttached, invite_code: options.inviteCode }
+          : {}),
       };
-    } catch {
+    } catch (backendErr) {
+      if (isCoachSignupUnavailable(backendErr)) {
+        // C13: the coach request was refused before any handler ran. Do not
+        // present this as a signed-in client; drop the provider session.
+        await secureStorage.removeItem('supabase_token').catch(() => undefined);
+        await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+        return {
+          success: false,
+          error: 'Coach sign-up is not available right now',
+          error_code: COACH_SIGNUP_UNAVAILABLE,
+        };
+      }
       // Backend call failed — but we still have Supabase auth
       // Store basic user data from Supabase directly
       const basicUser = {
@@ -170,6 +209,7 @@ export async function signInWithGoogle(
         access_token: accessToken,
         user: basicUser,
         is_new_user: true,
+        ...(options.inviteCode ? { invite_attached: false, invite_code: options.inviteCode } : {}),
       };
     }
   } catch (err) {

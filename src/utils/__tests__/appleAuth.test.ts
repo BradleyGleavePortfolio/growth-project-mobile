@@ -55,13 +55,44 @@ describe('signInWithApple', () => {
       token: 'apple-id-token',
       full_name: 'Ada Lovelace',
       invite_code: 'INV-123',
-      // C13: with an invite code the user is always a client.
-      intended_role: 'client',
     });
+    // C13: with an invite code the user is always a client, so the role
+    // field is never sent (server default), even if a caller passed one.
+    expect(mockApiPost.mock.calls[0][1]).not.toHaveProperty('intended_role');
     expect(result.success).toBe(true);
     expect(result.is_new_user).toBe(true);
     expect(await secureStorage.getItem('supabase_token')).toBe('access-jwt');
     expect(await secureStorage.getItem('supabase_refresh_token')).toBe('refresh-jwt');
+  });
+
+  it('C13: an invite code wins over intendedRole (a code always means client)', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockResolvedValueOnce({ data: { access_token: 'a', user: { id: 'u1' }, is_new_user: true } });
+    await signInWithApple({ inviteCode: 'GP-PNW1', intendedRole: 'coach' });
+    expect(mockApiPost).toHaveBeenCalledWith('/auth/apple', { token: 'apple-id-token', invite_code: 'GP-PNW1' });
+  });
+
+  it('C13: a codeless coach signup sends intended_role coach', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockResolvedValueOnce({
+      data: { access_token: 'a', user: { id: 'c1', role: 'coach' }, is_new_user: true },
+    });
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(mockApiPost).toHaveBeenCalledWith('/auth/apple', { token: 'apple-id-token', intended_role: 'coach' });
+    expect(result.success).toBe(true);
+    expect(result.user?.role).toBe('coach');
+  });
+
+  it('C13: a coach signup the backend refuses (unknown field) is NOT retried as a client; no session is stored', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce({
+      response: { status: 400, data: { message: ['property intended_role should not exist'] } },
+    });
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
+    expect(result.success).toBe(false);
+    expect(result.error_code).toBe('coach_signup_unavailable');
+    expect(await secureStorage.getItem('supabase_token')).toBeNull();
   });
 
   it('returns cancelled when user dismisses the native sheet', async () => {

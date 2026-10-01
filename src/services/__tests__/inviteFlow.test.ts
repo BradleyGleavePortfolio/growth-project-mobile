@@ -143,8 +143,6 @@ describe('email signup with invite code (atomic path)', () => {
       email: 'alice@example.com',
       password: 'Password1!',
       invite_code: 'SMOKE01',
-      // C13: invite-code signup is always a client.
-      intended_role: 'client',
     });
   });
 
@@ -174,7 +172,6 @@ describe('Google OAuth attach', () => {
     expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
       token: 'GOOGLE_TOKEN',
       invite_code: 'SMOKE01',
-      intended_role: 'client',
     });
   });
 
@@ -184,6 +181,20 @@ describe('Google OAuth attach', () => {
       token: 'GOOGLE_TOKEN',
       intended_role: 'coach',
     });
+  });
+
+  it('C13: an invite code wins over intended_role on /auth/google (a code always means client)', async () => {
+    await authApi.googleAuth('GOOGLE_TOKEN', 'SMOKE01', 'coach');
+    expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
+      token: 'GOOGLE_TOKEN',
+      invite_code: 'SMOKE01',
+    });
+  });
+
+  it('C13: /auth/signup-with-code never carries intended_role', async () => {
+    await authApi.signupWithCode({ name: 'A', email: 'a@example.com', password: 'Password1!', invite_code: 'SMOKE01' });
+    const body = axiosMock.__instance.post.mock.calls.at(-1)?.[1];
+    expect(body).not.toHaveProperty('intended_role');
   });
 
   it('attachInviteCode posts the code separately for fallback attach', async () => {

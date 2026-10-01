@@ -1,23 +1,51 @@
 /**
  * Signup role choice ("I'm here to train" / "I coach clients").
  *
- * The choice is sent to the backend as `intended_role: 'client' | 'coach'`
- * on /auth/register, /auth/signup-with-code (always 'client'), /auth/apple
- * and /auth/google. The backend slice that reads it (C13) is being built in
- * parallel. Today's backend runs a `forbidNonWhitelisted` ValidationPipe, so
- * it answers 400 "property intended_role should not exist". In that case
- * the request is retried once WITHOUT the field. The pipe rejects before any
- * handler runs, so the retry cannot double-create an account. The app then
- * falls back to the existing RoleSelection step.
+ * Contract (backend #597, C13): the optional body field
+ * `intended_role: 'client' | 'coach'` on /auth/register, /auth/apple and
+ * /auth/google is honoured only by the code path that inserts a brand-new
+ * User row. `GET /auth/signup-policy` advertises it with
+ * `role_choice: true` (false when SIGNUP_ROLE_CHOICE_ENABLED is off; absent
+ * on the current production backend).
  *
- * Users who arrive with an invite / QR code are always clients and never see
- * the choice.
+ * Rules the app enforces:
+ *  - The field is sent only when the live policy says `roleChoice === true`
+ *    (see lib/signupPolicy). Against a backend without the field the app
+ *    never sends it, so today's production flow is unchanged.
+ *  - An invite / QR code always means client. Requests that carry a code
+ *    never send `intended_role` at all (client is the server default and
+ *    the server refuses 'coach' with a code).
+ *  - A coach request is never downgraded by the app. If a backend that
+ *    advertised the field then rejects it (400 "property intended_role
+ *    should not exist" from the `forbidNonWhitelisted` ValidationPipe, which
+ *    runs before any handler so no account exists), the request fails with
+ *    `CoachSignupUnavailableError` and the user is told plainly. Only a
+ *    'client' request is retried once without the field, because the
+ *    outcome is identical either way.
  *
  * Authorization stays on the server: `intended_role` is a request, not a
  * grant. The app routes to CoachNavigator only when the returned
  * `user.role` is 'coach'.
  */
 export type IntendedRole = 'client' | 'coach';
+
+export const COACH_SIGNUP_UNAVAILABLE = 'coach_signup_unavailable' as const;
+
+/** Thrown when a coach signup cannot be honoured; no account was created. */
+export class CoachSignupUnavailableError extends Error {
+  readonly code = COACH_SIGNUP_UNAVAILABLE;
+  constructor(message = 'Coach sign-up is not available right now.') {
+    super(message);
+    this.name = 'CoachSignupUnavailableError';
+  }
+}
+
+export function isCoachSignupUnavailable(err: unknown): boolean {
+  return (
+    err instanceof CoachSignupUnavailableError ||
+    (err as { code?: unknown } | null)?.code === COACH_SIGNUP_UNAVAILABLE
+  );
+}
 
 export function isUnknownIntendedRoleError(err: unknown): boolean {
   const r = (err as { response?: { status?: number; data?: { message?: unknown } } } | null)?.response;
@@ -36,12 +64,31 @@ export async function postWithIntendedRole<B extends object, R>(
   try {
     return await post({ ...body, intended_role: intendedRole });
   } catch (err) {
-    if (isUnknownIntendedRoleError(err)) return post(body);
-    throw err;
+    if (!isUnknownIntendedRoleError(err)) throw err;
+    // The pipe rejected the body before any handler ran: nothing was created.
+    if (intendedRole === 'coach') throw new CoachSignupUnavailableError();
+    return post(body);
   }
+}
+
+/**
+ * Role the app sends. Undefined (field omitted) unless the policy advertises
+ * role choice and no invite code is involved.
+ */
+export function intendedRoleForRequest(
+  roleChoiceEnabled: boolean,
+  chosen: IntendedRole,
+  hasInviteCode: boolean,
+): IntendedRole | undefined {
+  if (!roleChoiceEnabled || hasInviteCode) return undefined;
+  return chosen;
 }
 
 /** Server-confirmed role for routing. Only 'coach' changes the destination. */
 export function isServerCoach(user: { role?: unknown } | null | undefined): boolean {
   return user?.role === 'coach';
 }
+
+/** Copy for the CreateAccount error box when a coach signup was refused. */
+export const COACH_SIGNUP_UNAVAILABLE_MESSAGE =
+  'Coach sign-up is not available right now. No account was created. You can try again later, or choose "I\'m here to train" to create a client account.';

@@ -6,6 +6,7 @@ import CreateAccountScreen from '../screens/auth/CreateAccountScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
+import type { SignupRoleNoticeKind } from '../lib/signupRoleNotice';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import AuthCallbackScreen from '../screens/auth/AuthCallbackScreen';
 import { Colors } from '../constants/colors';
@@ -27,7 +28,12 @@ export type AuthStackParamList = {
   // `inviteAttachError` is set when signup succeeded but the backend said
   // `invite_attached:false`; RoleSelection then shows the enter-code retry
   // state with friendly copy and the code prefilled.
-  RoleSelection: { inviteAttachError?: string; inviteCode?: string; coachRequestPending?: boolean } | undefined;
+  // `signupNotice` (C13) names a plain fact about the role request that the
+  // user must see once (see lib/signupRoleNotice); RoleSelection also reads
+  // the persisted copy, so the param is a fast path, not the only carrier.
+  RoleSelection:
+    | { inviteAttachError?: string; inviteCode?: string; signupNotice?: SignupRoleNoticeKind }
+    | undefined;
   // Email Pipeline v1 — public accept screen. Reachable via:
   //   tgp://invite/accept/:token
   //   https://app.trygrowthproject.com/invite/accept/:token

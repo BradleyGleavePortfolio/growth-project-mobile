@@ -31,6 +31,7 @@ import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
 import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
+import { setSignupRoleNotice } from '../../lib/signupRoleNotice';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -71,15 +72,40 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [googleEnabled, setGoogleEnabled] = useState(
     () => getLastKnownSignupPolicy()?.googleEnabled === true,
   );
+  // C13: while the server offers a role choice at account creation, the
+  // first Sign in with Apple / Google for a provider account CREATES the
+  // account (as a client) and fixes its role for good. The role question
+  // must therefore be answered before that round-trip, and this screen has
+  // not asked it. So, when `roleChoice` is on, the provider buttons first
+  // ask whether an account already exists: new people go to CreateAccount
+  // (role step first), returning people continue. `null` = policy unknown.
+  const [roleChoiceEnabled, setRoleChoiceEnabled] = useState<boolean | null>(
+    () => getLastKnownSignupPolicy()?.roleChoice ?? null,
+  );
+  const [pendingProvider, setPendingProvider] = useState<'apple' | 'google' | null>(null);
   useEffect(() => {
     let mounted = true;
     void loadSignupPolicy(() => authApi.getSignupPolicy()).then(({ policy }) => {
-      if (mounted) setGoogleEnabled(policy.googleEnabled);
+      if (!mounted) return;
+      setGoogleEnabled(policy.googleEnabled);
+      setRoleChoiceEnabled(policy.roleChoice);
     });
     return () => {
       mounted = false;
     };
   }, []);
+
+  // True when the provider round-trip must wait for the "already have an
+  // account" confirmation. The policy being unknown counts as "ask", because
+  // proceeding could create an account whose role was never chosen.
+  const mustConfirmExistingAccount = (confirmed: boolean) =>
+    !confirmed && roleChoiceEnabled !== false;
+
+  // The provider account had no user row, so the backend created a client
+  // account without a role question. Say so; never continue silently.
+  const noteNewAccountFromSignIn = async () => {
+    await setSignupRoleNotice('new_account_from_sign_in');
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -128,7 +154,13 @@ export default function LoginScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async (confirmed = false) => {
+    if (mustConfirmExistingAccount(confirmed)) {
+      setError('');
+      setPendingProvider('google');
+      return;
+    }
+    setPendingProvider(null);
     setGoogleLoading(true);
     setError('');
     try {
@@ -147,7 +179,12 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (result.is_new_user || !result.user?.role) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
-        navigation.replace('RoleSelection');
+        if (result.is_new_user && roleChoiceEnabled) {
+          await noteNewAccountFromSignIn();
+          navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+        } else {
+          navigation.replace('RoleSelection');
+        }
       } else {
         // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
         // this user's first persistence pass, matching the email sign-in path.
@@ -166,7 +203,13 @@ export default function LoginScreen({ navigation, route }: Props) {
     }
   };
 
-  const handleAppleLogin = async () => {
+  const handleAppleLogin = async (confirmed = false) => {
+    if (mustConfirmExistingAccount(confirmed)) {
+      setError('');
+      setPendingProvider('apple');
+      return;
+    }
+    setPendingProvider(null);
     setAppleLoading(true);
     setError('');
     try {
@@ -184,7 +227,12 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (result.is_new_user || !result.user?.role) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
-        navigation.replace('RoleSelection');
+        if (result.is_new_user && roleChoiceEnabled) {
+          await noteNewAccountFromSignIn();
+          navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+        } else {
+          navigation.replace('RoleSelection');
+        }
       } else {
         // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
         // this user's first persistence pass, matching the email sign-in path.
@@ -295,7 +343,7 @@ export default function LoginScreen({ navigation, route }: Props) {
             {/* Google Sign-In button */}
             <TouchableOpacity
               style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
-              onPress={handleGoogleLogin}
+              onPress={() => handleGoogleLogin()}
               disabled={googleLoading}
               accessibilityRole="button"
               accessibilityLabel="Continue with Google"
@@ -318,11 +366,45 @@ export default function LoginScreen({ navigation, route }: Props) {
             or on iOS devices that don't support Apple sign-in (very old
             simulators, accounts without Apple ID). */}
         <View style={styles.appleButtonWrap} pointerEvents={appleLoading ? 'none' : 'auto'}>
-          <AppleSignInButton onPress={handleAppleLogin} label="SIGN_IN" />
+          <AppleSignInButton onPress={() => handleAppleLogin()} label="SIGN_IN" />
           {appleLoading ? (
             <ActivityIndicator color={colors.dark} style={styles.appleSpinner} />
           ) : null}
         </View>
+
+        {/* C13: role choice is on, so a first provider sign-in would create
+            an account before the role question. Ask first. */}
+        {pendingProvider ? (
+          <View style={styles.confirmBox} accessible accessibilityRole="alert" testID="existing-account-confirm">
+            <Text style={styles.confirmTitle}>Already have an account?</Text>
+            <Text style={styles.confirmBody}>
+              {pendingProvider === 'apple' ? 'Sign in with Apple' : 'Continue with Google'} creates a new
+              account the first time. If you are new here, create your account first so you can choose how
+              you will use the app.
+            </Text>
+            <TouchableOpacity
+              style={styles.confirmPrimary}
+              onPress={() => (pendingProvider === 'apple' ? handleAppleLogin(true) : handleGoogleLogin(true))}
+              accessibilityRole="button"
+              accessibilityLabel="Yes, sign me in"
+              testID="existing-account-continue"
+            >
+              <Text style={styles.confirmPrimaryText}>Yes, sign me in</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.confirmSecondary}
+              onPress={() => {
+                setPendingProvider(null);
+                navigation.navigate('CreateAccount');
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="I am new, create an account"
+              testID="existing-account-create"
+            >
+              <Text style={styles.confirmSecondaryText}>I am new, create an account</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {/* Sign up link */}
         <View style={styles.signupRow}>
@@ -410,6 +492,25 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.dark,
   },
   googleButtonText: { ...Typography.button, color: colors.dark },
+  confirmBox: {
+    marginTop: Spacing.md,
+    padding: Spacing.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: Radius.sm,
+    backgroundColor: colors.surface,
+  },
+  confirmTitle: { ...Typography.h3, marginBottom: Spacing.xs },
+  confirmBody: { ...Typography.body, color: colors.textSecondary, marginBottom: Spacing.md },
+  confirmPrimary: {
+    backgroundColor: colors.primary,
+    borderRadius: Radius.sm,
+    padding: Spacing.md,
+    alignItems: 'center',
+  },
+  confirmPrimaryText: { ...Typography.button, color: colors.white },
+  confirmSecondary: { alignItems: 'center', paddingVertical: Spacing.md },
+  confirmSecondaryText: { ...Typography.body, color: colors.primary },
   appleButtonWrap: {
     marginTop: Spacing.md,
     minHeight: 48,

@@ -347,27 +347,45 @@ export interface SignupWithCodeResponse {
   invite_attach_error?: string;
 }
 
+/**
+ * `POST /auth/register` response. `role` is added by backend #597 (C13):
+ * 'student' (client) or 'coach', the role the account was created with.
+ * Older backends omit it.
+ */
+export interface RegisterResponse {
+  requires_verification?: boolean;
+  role?: string;
+  email?: string;
+  user?: unknown;
+}
+
 export const authApi = {
-  // `intended_role` (signup role choice) is optional and dropped on a retry
-  // when the backend does not know it yet; see lib/intendedRole.ts.
+  // `intended_role` (signup role choice, C13) is sent only when the caller
+  // passes it, which CreateAccount does only when the live signup policy
+  // advertises `role_choice: true` and no invite code is involved. A coach
+  // request is never retried without the field; see lib/intendedRole.ts.
   register: (
     data: { email: string; password: string; name: string; phone?: string; invite_code?: string },
     intendedRole?: IntendedRole,
-  ) => postWithIntendedRole((body) => api.post('/auth/register', body), data, intendedRole),
-  // Invite-code signup is always a client.
-  signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
+  ) =>
     postWithIntendedRole(
-      (body) => api.post<SignupWithCodeResponse>('/auth/signup-with-code', body),
+      (body) => api.post<RegisterResponse>('/auth/register', body),
       data,
-      'client',
+      data.invite_code ? undefined : intendedRole,
     ),
+  // Invite-code signup is always a client: the server default. The field is
+  // never sent here (the server refuses 'coach' with a code anyway).
+  signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
+    api.post<SignupWithCodeResponse>('/auth/signup-with-code', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
+  // With an invite code the user is always a client, so `intended_role` is
+  // omitted regardless of what the caller passed.
   googleAuth: (token: string, inviteCode?: string, intendedRole?: IntendedRole) =>
     postWithIntendedRole(
       (body) => api.post('/auth/google', body),
       inviteCode ? { token, invite_code: inviteCode } : { token },
-      inviteCode ? 'client' : intendedRole,
+      inviteCode ? undefined : intendedRole,
     ),
   // Apple Sign-In: POST the identity token from expo-apple-authentication.
   // Backend verifies the JWT against Apple's JWKS and returns the same

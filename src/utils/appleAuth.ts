@@ -30,7 +30,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
-import { postWithIntendedRole, type IntendedRole } from '../lib/intendedRole';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  isCoachSignupUnavailable,
+  postWithIntendedRole,
+  type IntendedRole,
+} from '../lib/intendedRole';
 
 /**
  * Request body for POST /auth/apple.
@@ -79,6 +84,12 @@ export interface AppleAuthResult {
   // silent (no error banner) on this case to match the Google flow.
   cancelled?: boolean;
   error?: string;
+  /**
+   * 'coach_signup_unavailable' (C13): the backend refused `intended_role`
+   * before any handler ran, so no account was created. CreateAccount shows
+   * plain copy and never falls back to a client account.
+   */
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE;
   // Invite-attach outcome (C03 contract). `invite_attached:false` means the
   // account exists but is not connected to the coach; callers route to the
   // enter-code retry step instead of continuing silently.
@@ -90,7 +101,11 @@ export interface AppleAuthOptions {
   // Forwarded to /auth/apple so a new (or existing) user can be attached to
   // the right coach during the upsert — matches the Google flow.
   inviteCode?: string;
-  /** Signup role choice; ignored when an invite code is present (always client). */
+  /**
+   * Signup role choice (C13). Pass only when the live signup policy
+   * advertises `role_choice`. Omitted from the request when an invite code
+   * is present (always client).
+   */
   intendedRole?: IntendedRole;
 }
 
@@ -147,10 +162,13 @@ export async function signInWithApple(
 
     // POST the identity token to /auth/apple. The backend verifies the JWT
     // against Apple's JWKS, upserts the user, and returns a Supabase session.
+    // With an invite code the user is always a client, so `intended_role`
+    // is omitted (server default). A coach request is never retried without
+    // the field; that failure is returned as `error_code`.
     const response = await postWithIntendedRole(
       (b) => api.post('/auth/apple', b),
       body,
-      options.inviteCode ? 'client' : options.intendedRole,
+      options.inviteCode ? undefined : options.intendedRole,
     );
     const { access_token, refresh_token, user, is_new_user, invite_attached, invite_attach_error } =
       response.data ?? {};
@@ -174,6 +192,9 @@ export async function signInWithApple(
       ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {
+    if (isCoachSignupUnavailable(err)) {
+      return { success: false, error: 'Coach sign-up is not available right now', error_code: COACH_SIGNUP_UNAVAILABLE };
+    }
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };
     const msg =
       apiErr?.response?.data?.message ||

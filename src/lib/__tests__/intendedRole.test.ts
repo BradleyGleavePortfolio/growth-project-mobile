@@ -1,4 +1,12 @@
-import { isServerCoach, isUnknownIntendedRoleError, postWithIntendedRole } from '../intendedRole';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  CoachSignupUnavailableError,
+  intendedRoleForRequest,
+  isCoachSignupUnavailable,
+  isServerCoach,
+  isUnknownIntendedRoleError,
+  postWithIntendedRole,
+} from '../intendedRole';
 
 const unknownField = { response: { status: 400, data: { message: ['property intended_role should not exist'] } } };
 
@@ -15,18 +23,27 @@ describe('postWithIntendedRole', () => {
     expect(post).toHaveBeenCalledWith({ email: 'a' });
   });
 
-  it('retries once WITHOUT the field when the current backend rejects it', async () => {
+  it("client: retries once WITHOUT the field when the backend rejects it (same outcome either way)", async () => {
     const post = jest.fn().mockRejectedValueOnce(unknownField).mockResolvedValueOnce({ data: 'ok' });
     await expect(postWithIntendedRole(post, { email: 'a' }, 'client')).resolves.toEqual({ data: 'ok' });
     expect(post).toHaveBeenNthCalledWith(2, { email: 'a' });
     expect(post).toHaveBeenCalledTimes(2);
   });
 
+  it('coach: NEVER retries without the field; fails with CoachSignupUnavailableError (no account created)', async () => {
+    const post = jest.fn().mockRejectedValueOnce(unknownField).mockResolvedValueOnce({ data: 'ok' });
+    await expect(postWithIntendedRole(post, { email: 'a' }, 'coach')).rejects.toBeInstanceOf(
+      CoachSignupUnavailableError,
+    );
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry other errors (no double signup)', async () => {
     const err = { response: { status: 409, data: { message: 'Email already registered' } } };
     const post = jest.fn().mockRejectedValue(err);
     await expect(postWithIntendedRole(post, { email: 'a' }, 'client')).rejects.toBe(err);
-    expect(post).toHaveBeenCalledTimes(1);
+    await expect(postWithIntendedRole(post, { email: 'a' }, 'coach')).rejects.toBe(err);
+    expect(post).toHaveBeenCalledTimes(2);
   });
 
   it('classifies only the unknown-field 400', () => {
@@ -35,6 +52,32 @@ describe('postWithIntendedRole', () => {
     expect(isUnknownIntendedRoleError(new Error('x'))).toBe(false);
   });
 
+  it('isCoachSignupUnavailable recognises the error class and the code shape', () => {
+    expect(isCoachSignupUnavailable(new CoachSignupUnavailableError())).toBe(true);
+    expect(isCoachSignupUnavailable({ code: COACH_SIGNUP_UNAVAILABLE })).toBe(true);
+    expect(isCoachSignupUnavailable(new Error('x'))).toBe(false);
+    expect(isCoachSignupUnavailable(null)).toBe(false);
+  });
+});
+
+describe('intendedRoleForRequest (policy gate + invite code rule)', () => {
+  it('omits the field when the policy does not advertise role choice', () => {
+    expect(intendedRoleForRequest(false, 'coach', false)).toBeUndefined();
+    expect(intendedRoleForRequest(false, 'client', false)).toBeUndefined();
+  });
+
+  it('omits the field whenever an invite code is present (a code always means client)', () => {
+    expect(intendedRoleForRequest(true, 'coach', true)).toBeUndefined();
+    expect(intendedRoleForRequest(true, 'client', true)).toBeUndefined();
+  });
+
+  it('sends the chosen role only when the policy allows it and there is no code', () => {
+    expect(intendedRoleForRequest(true, 'coach', false)).toBe('coach');
+    expect(intendedRoleForRequest(true, 'client', false)).toBe('client');
+  });
+});
+
+describe('isServerCoach', () => {
   it('only a server-confirmed coach routes to the coach app', () => {
     expect(isServerCoach({ role: 'coach' })).toBe(true);
     expect(isServerCoach({ role: 'student' })).toBe(false);

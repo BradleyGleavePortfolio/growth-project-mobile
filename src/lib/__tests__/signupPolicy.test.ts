@@ -12,6 +12,7 @@ describe('normalizeSignupPolicy', () => {
       providers: ['email', 'apple'],
       googleEnabled: false,
       appleEnabled: true,
+      roleChoice: false,
     });
   });
 
@@ -31,6 +32,7 @@ describe('normalizeSignupPolicy', () => {
       providers: ['email', 'google'],
       googleEnabled: true,
       appleEnabled: false,
+      roleChoice: false,
     });
   });
 
@@ -44,6 +46,48 @@ describe('normalizeSignupPolicy', () => {
     const p = normalizeSignupPolicy({ providers: ['GOOGLE ', 42, 'myspace', 'google'] });
     expect(p.inviteCodeRequired).toBe(true);
     expect(p.providers).toEqual(['google']);
+  });
+});
+
+describe('normalizeSignupPolicy role_choice (C13, backend #597)', () => {
+  const base = { invite_code_required: false, providers: ['email', 'apple'] };
+
+  it('is off when the field is absent (current production backend)', () => {
+    expect(normalizeSignupPolicy(base).roleChoice).toBe(false);
+  });
+
+  it('is on only for a literal true', () => {
+    expect(normalizeSignupPolicy({ ...base, role_choice: true }).roleChoice).toBe(true);
+    expect(normalizeSignupPolicy({ ...base, role_choice: false }).roleChoice).toBe(false);
+    expect(normalizeSignupPolicy({ ...base, role_choice: 'true' }).roleChoice).toBe(false);
+    expect(normalizeSignupPolicy({ ...base, role_choice: 1 }).roleChoice).toBe(false);
+  });
+
+  it('accepts the exact #597 descriptor', () => {
+    const p = normalizeSignupPolicy({
+      ...base,
+      role_choice: true,
+      role_choice_field: 'intended_role',
+      role_choice_values: ['client', 'coach'],
+    });
+    expect(p.roleChoice).toBe(true);
+  });
+
+  it('turns off when the server describes a contract this build does not speak', () => {
+    expect(
+      normalizeSignupPolicy({ ...base, role_choice: true, role_choice_field: 'requested_role' }).roleChoice,
+    ).toBe(false);
+    expect(
+      normalizeSignupPolicy({ ...base, role_choice: true, role_choice_values: ['client'] }).roleChoice,
+    ).toBe(false);
+    expect(normalizeSignupPolicy({ ...base, role_choice: true, role_choice_values: 'coach' }).roleChoice).toBe(
+      false,
+    );
+  });
+
+  it('strict and unknown fallbacks never ask the role question', () => {
+    expect(STRICT_SIGNUP_POLICY.roleChoice).toBe(false);
+    expect(normalizeSignupPolicy(null).roleChoice).toBe(false);
   });
 });
 
