@@ -190,11 +190,11 @@ describe('CreateAccountScreen', () => {
 
   it('paste invite code accepts a /join/<code> URL', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
-    mockGetString.mockResolvedValue('https://app.trygrowthproject.com/join/gp-pnw1?src=poster');
+    mockGetString.mockResolvedValue('https://app.trygrowthproject.com/join/gp-test1?src=poster');
     const { getByTestId } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
-    await waitFor(() => expect(getByTestId('invite-code-input').props.value).toBe('GP-PNW1'));
-    await waitFor(() => expect(mockPreview).toHaveBeenCalledWith('GP-PNW1'));
+    await waitFor(() => expect(getByTestId('invite-code-input').props.value).toBe('GP-TEST1'));
+    await waitFor(() => expect(mockPreview).toHaveBeenCalledWith('GP-TEST1'));
   });
 
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {
@@ -219,14 +219,14 @@ describe('CreateAccountScreen', () => {
       data: { requires_verification: true, invite_attached: false, invite_attach_error: 'coach_inactive' },
     });
     mockLogin.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'r', user: { id: 'u1' } } });
-    const utils = await renderScreen({ invite_code: 'GP-PNW1' });
+    const utils = await renderScreen({ invite_code: 'GP-TEST1' });
     await fillAndSubmit(utils);
     expect(await utils.findByTestId('invite-attach-pending-notice')).toBeTruthy();
     await fireEvent.press(utils.getByText('I verified my email'));
     await waitFor(() =>
       expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', {
         inviteAttachError: 'coach_inactive',
-        inviteCode: 'GP-PNW1',
+        inviteCode: 'GP-TEST1',
       }),
     );
   });
@@ -235,7 +235,7 @@ describe('CreateAccountScreen', () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
     mockSignupWithCode.mockResolvedValue({ data: { requires_verification: true, invite_attached: true } });
     mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1' } } });
-    const utils = await renderScreen({ invite_code: 'GP-PNW1' });
+    const utils = await renderScreen({ invite_code: 'GP-TEST1' });
     await fillAndSubmit(utils);
     await fireEvent.press(await utils.findByText('I verified my email'));
     await waitFor(() => expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection'));
@@ -339,7 +339,7 @@ describe('CreateAccountScreen', () => {
     it('arriving with an invite / QR code skips the choice even when role_choice is on (always a client)', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
       mockSignupWithCode.mockResolvedValue({ data: { requires_verification: true, invite_attached: true } });
-      const utils = await renderScreen({ invite_code: 'GP-PNW1' });
+      const utils = await renderScreen({ invite_code: 'GP-TEST1' });
       expect(utils.queryByTestId('role-choice')).toBeNull();
       expect(utils.getByTestId('invite-code-input')).toBeTruthy();
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
@@ -452,12 +452,12 @@ describe('CreateAccountScreen', () => {
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'u1', role: 'student', coach_id: 'c1' } });
       const utils = await renderScreen();
       expect(utils.getByTestId('role-choice-change')).toBeTruthy();
-      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-PNW1');
+      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-TEST1');
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
       expect(utils.getByTestId('invite-code-means-client')).toBeTruthy();
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
-      expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: 'GP-PNW1', intendedRole: undefined });
+      expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: 'GP-TEST1', intendedRole: undefined });
       await waitFor(() => expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection'));
     });
 
@@ -468,7 +468,7 @@ describe('CreateAccountScreen', () => {
       });
       mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
       const utils = await renderScreen();
-      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-PNW1');
+      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-TEST1');
       await fillAndSubmit(utils);
       await waitFor(() => expect(mockSignupWithCode).toHaveBeenCalledTimes(1));
       expect(mockRegister).not.toHaveBeenCalled();
@@ -476,7 +476,7 @@ describe('CreateAccountScreen', () => {
       await waitFor(() =>
         expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', {
           inviteAttachError: 'coach_inactive',
-          inviteCode: 'GP-PNW1',
+          inviteCode: 'GP-TEST1',
         }),
       );
     });
@@ -488,17 +488,17 @@ describe('CreateAccountScreen', () => {
         is_new_user: true,
         user: { id: 'u1' },
         invite_attached: false,
-        invite_code: 'GP-PNW1',
+        invite_code: 'GP-TEST1',
       });
       const utils = await renderScreen();
-      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-PNW1');
+      await fireEvent.changeText(utils.getByTestId('invite-code-input'), 'GP-TEST1');
       await fireEvent.press(await utils.findByText('Continue with Google'));
       await waitFor(() => expect(mockSignInWithGoogle).toHaveBeenCalledTimes(1));
-      expect(mockSignInWithGoogle.mock.calls[0][0]).toEqual({ inviteCode: 'GP-PNW1', intendedRole: undefined });
+      expect(mockSignInWithGoogle.mock.calls[0][0]).toEqual({ inviteCode: 'GP-TEST1', intendedRole: undefined });
       await waitFor(() =>
         expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', {
           inviteAttachError: 'unknown',
-          inviteCode: 'GP-PNW1',
+          inviteCode: 'GP-TEST1',
         }),
       );
     });

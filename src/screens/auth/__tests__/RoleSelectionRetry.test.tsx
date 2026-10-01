@@ -54,13 +54,13 @@ describe('RoleSelection retry step', () => {
 
   it('shows friendly retry copy with the code prefilled', async () => {
     const { findByTestId, getByTestId, getByText, queryByText } = await render(
-      <RoleSelectionScreen navigation={{} as never} route={route({ inviteAttachError: 'coach_inactive', inviteCode: 'GP-PNW1' })} />,
+      <RoleSelectionScreen navigation={{} as never} route={route({ inviteAttachError: 'coach_inactive', inviteCode: 'GP-TEST1' })} />,
     );
     const banner = await findByTestId('invite-attach-retry-banner');
     expect(banner).toBeTruthy();
     expect(getByText(/not accepting new clients/)).toBeTruthy();
     expect(queryByText('coach_inactive')).toBeNull();
-    expect(getByTestId('role-invite-code-input').props.value).toBe('GP-PNW1');
+    expect(getByTestId('role-invite-code-input').props.value).toBe('GP-TEST1');
     expect(getByText('Connect to my coach')).toBeTruthy();
   });
 

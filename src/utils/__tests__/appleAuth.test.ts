@@ -68,8 +68,8 @@ describe('signInWithApple', () => {
   it('C13: an invite code wins over intendedRole (a code always means client)', async () => {
     mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
     mockApiPost.mockResolvedValueOnce({ data: { access_token: 'a', user: { id: 'u1' }, is_new_user: true } });
-    await signInWithApple({ inviteCode: 'GP-PNW1', intendedRole: 'coach' });
-    expect(mockApiPost).toHaveBeenCalledWith('/auth/apple', { token: 'apple-id-token', invite_code: 'GP-PNW1' });
+    await signInWithApple({ inviteCode: 'GP-TEST1', intendedRole: 'coach' });
+    expect(mockApiPost).toHaveBeenCalledWith('/auth/apple', { token: 'apple-id-token', invite_code: 'GP-TEST1' });
   });
 
   it('C13: a codeless coach signup sends intended_role coach', async () => {
