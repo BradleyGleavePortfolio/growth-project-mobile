@@ -113,3 +113,104 @@ export function toFriendlyAppleAuthError(raw: unknown): FriendlyAuthError {
   }
   return { category: base.category, cancelled: false, message: APPLE_SIGN_IN_UNAVAILABLE_MESSAGE };
 }
+
+/**
+ * Signup (create account) errors, read from the HTTP status and the
+ * backend's structured `code` / `message`, not only from regexes over text
+ * (#306 r5, owner 13:28). Known refusals get their own plain copy and, where
+ * there is something to do, an action kind the screen renders as buttons:
+ *  - 'email_exists': 409 "Email already registered" (Log in, Reset password).
+ *  - 'signup_pending': 409 `{ code: 'signup_pending' }` from backend #597: an
+ *    unconfirmed sign-up for this address exists that this request could not
+ *    prove it owns (Reset password, Back). No resend endpoint exists, so no
+ *    resend action is offered.
+ *  - 'password_rule': 400 password rule; the backend's own rule text is shown.
+ *  - 'invalid_email': 400 invalid address.
+ *  - 'invite_invalid': 400 invalid / expired invite code.
+ *  - 'rate_limited' / 'network': the shared copy above.
+ * Anything else says sign-up did not complete; it never says "Sign-in".
+ */
+export type SignupErrorKind =
+  | 'email_exists'
+  | 'signup_pending'
+  | 'password_rule'
+  | 'invalid_email'
+  | 'invite_invalid'
+  | 'rate_limited'
+  | 'network'
+  | 'unknown';
+
+export interface FriendlySignupError {
+  kind: SignupErrorKind;
+  message: string;
+}
+
+export const SIGNUP_EMAIL_EXISTS_MESSAGE = 'An account with this email already exists.';
+export const SIGNUP_PENDING_MESSAGE = 'Check your email to finish signing up, or reset your password.';
+export const SIGNUP_INVITE_INVALID_MESSAGE =
+  'That invite code is not valid. Check it with your coach, or clear the field to sign up without one.';
+export const SIGNUP_INVALID_EMAIL_MESSAGE = 'Enter a valid email address.';
+export const SIGNUP_PASSWORD_RULE_FALLBACK =
+  'Password must be at least 8 characters with one uppercase letter, one number, and one special character.';
+export const SIGNUP_UNKNOWN_MESSAGE = 'We could not create your account. Please try again.';
+
+function signupErrorParts(err: unknown): { status?: number; code?: string; messages: string[] } {
+  const r = (err as { response?: { status?: unknown; data?: unknown } } | null | undefined)?.response;
+  const status = typeof r?.status === 'number' ? r.status : undefined;
+  const data = r?.data;
+  const messages: string[] = [];
+  let code: string | undefined;
+  if (data && typeof data === 'object') {
+    const d = data as { code?: unknown; error?: unknown; message?: unknown };
+    if (typeof d.code === 'string') code = d.code;
+    const m = d.message;
+    if (typeof m === 'string') messages.push(m);
+    else if (Array.isArray(m)) for (const x of m) if (typeof x === 'string') messages.push(x);
+    if (typeof d.error === 'string') messages.push(d.error);
+  } else if (typeof data === 'string') {
+    messages.push(data);
+  }
+  return { status, code, messages };
+}
+
+/** A rule text from the server is shown only when it reads as one plain sentence about the password. */
+function plainPasswordRule(messages: string[]): string | null {
+  for (const m of messages) {
+    const t = m.trim();
+    if (/^password\b/i.test(t) && t.length <= 200 && !/[<>{}]|https?:/i.test(t)) {
+      const plain = t.replace(/!+/g, '.');
+      return /[.?]$/.test(plain) ? plain : `${plain}.`;
+    }
+  }
+  return null;
+}
+
+export function toFriendlySignupError(err: unknown): FriendlySignupError {
+  const { status, code, messages } = signupErrorParts(err);
+  const text = messages.join(' ');
+  if (status === 409) {
+    if (code === 'signup_pending') return { kind: 'signup_pending', message: SIGNUP_PENDING_MESSAGE };
+    return { kind: 'email_exists', message: SIGNUP_EMAIL_EXISTS_MESSAGE };
+  }
+  if (status === 429) return { kind: 'rate_limited', message: 'Too many attempts. Try again in a moment.' };
+  if (status === 400 || status === 422) {
+    if (/invite code|invite_code|coach code/i.test(text)) {
+      return { kind: 'invite_invalid', message: SIGNUP_INVITE_INVALID_MESSAGE };
+    }
+    const rule = plainPasswordRule(messages);
+    if (rule) return { kind: 'password_rule', message: rule };
+    if (/password/i.test(text)) return { kind: 'password_rule', message: SIGNUP_PASSWORD_RULE_FALLBACK };
+    if (/email/i.test(text) && /invalid|valid|format/i.test(text)) {
+      return { kind: 'invalid_email', message: SIGNUP_INVALID_EMAIL_MESSAGE };
+    }
+  }
+  const raw = messages[0] ?? (err instanceof Error ? err.message : typeof err === 'string' ? err : '');
+  const base = toFriendlyAuthError(raw);
+  // No response at all (the API client rewrites the message to "Cannot reach
+  // server ...") is a connection problem, not a refusal.
+  if (base.category === 'network' || (status === undefined && /cannot reach server/i.test(raw))) {
+    return { kind: 'network', message: 'We couldn’t reach the server. Check your connection and try again.' };
+  }
+  if (base.category === 'rate_limited') return { kind: 'rate_limited', message: base.message };
+  return { kind: 'unknown', message: SIGNUP_UNKNOWN_MESSAGE };
+}

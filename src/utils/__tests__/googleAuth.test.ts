@@ -113,3 +113,58 @@ describe('signInWithGoogle: coach request with no server answer', () => {
     expect(result.user).toEqual({ id: 'supa-1', email: 'pat@example.com', name: 'Pat' });
   });
 });
+
+describe('signInWithGoogle: invite code outcome (#306 r5, Sol B-306-3)', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockStore.clear();
+    await AsyncStorage.clear();
+  });
+
+  it('server invite_attached:false wins over an existing coach_id (already paired to coach A)', async () => {
+    mockGoogleAuth.mockResolvedValue({
+      data: { user: { id: 'u1', role: 'student', coach_id: 'coach-A' }, is_new_user: false, invite_attached: false },
+    });
+    const result = await signInWithGoogle({ inviteCode: 'GP-COACHB' });
+    expect(result).toMatchObject({ success: true, invite_attached: false, invite_code: 'GP-COACHB' });
+    expect(mockAttach).not.toHaveBeenCalled();
+  });
+
+  it('server invite_attached:true is reported as attached', async () => {
+    mockGoogleAuth.mockResolvedValue({
+      data: { user: { id: 'u1', role: 'student', coach_id: 'coach-B' }, is_new_user: true, invite_attached: true },
+    });
+    const result = await signInWithGoogle({ inviteCode: 'GP-COACHB' });
+    expect(result).toMatchObject({ success: true, invite_attached: true });
+    expect(mockAttach).not.toHaveBeenCalled();
+  });
+
+  it('a server reason travels with invite_attached:false', async () => {
+    mockGoogleAuth.mockResolvedValue({
+      data: { user: { id: 'u1', role: 'student' }, is_new_user: true, invite_attached: false, invite_attach_error: 'expired' },
+    });
+    const result = await signInWithGoogle({ inviteCode: 'GP-OLD01' });
+    expect(result).toMatchObject({ invite_attached: false, invite_attach_error: 'expired' });
+  });
+
+  it('legacy backend (field absent) with an existing coach: not attached, and never re-parented via the attach call', async () => {
+    mockGoogleAuth.mockResolvedValue({ data: { user: { id: 'u1', role: 'student', coach_id: 'coach-A' }, is_new_user: false } });
+    const result = await signInWithGoogle({ inviteCode: 'GP-COACHB' });
+    expect(result).toMatchObject({ success: true, invite_attached: false });
+    expect(mockAttach).not.toHaveBeenCalled();
+  });
+
+  it('legacy backend (field absent) without a coach: the attach endpoint decides', async () => {
+    mockGoogleAuth.mockResolvedValue({ data: { user: { id: 'u1', role: 'student' }, is_new_user: true } });
+    mockAttach.mockResolvedValue({ data: { coach_id: 'coach-B' } });
+    const result = await signInWithGoogle({ inviteCode: 'GP-COACHB' });
+    expect(mockAttach).toHaveBeenCalledWith('GP-COACHB');
+    expect(result).toMatchObject({ invite_attached: true, user: { coach_id: 'coach-B' } });
+  });
+
+  it('the coach refusal returns the Google email so the screen can check an earlier attempt', async () => {
+    mockGoogleAuth.mockRejectedValue(new CoachSignupUnavailableError());
+    const result = await signInWithGoogle({ intendedRole: 'coach' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@example.com' });
+  });
+});

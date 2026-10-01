@@ -21,9 +21,14 @@
  * identity (never by a cancelled sheet, a refusal of a later request, or a
  * policy re-check). All entries are cleared on sign-out (services/authActions).
  *
- * Emails are compared trimmed and lower-cased, the same canonical form the
- * backend stores (#597 normalizeEmail), so "Jane@Example.com " and
- * "jane@example.com" are the same identity.
+ * Emails are compared NFKC-normalised, trimmed and lower-cased, the same
+ * canonical form the backend stores (#597 normalizeEmail), so
+ * "Jane@Example.com " and "jane@example.com" are the same identity.
+ *
+ * Invite-code signups never consult or resolve a marker (#306 r5, Opus
+ * C-306-1): a QR / invite signup is a client joining a coach, so a coach
+ * notice about someone else's earlier attempt is never shown to it, and it
+ * does not consume that evidence.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -40,7 +45,19 @@ interface Marker {
 }
 
 export function normaliseEmail(email: string | undefined | null): string | undefined {
-  const e = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  // Same canonical form as the backend (#597 normalizeEmail: NFKC, trimmed,
+  // lower-cased), so a compatibility variant of an address still matches its
+  // marker (#306 r5, Opus C-306-3 iii).
+  let e = '';
+  if (typeof email === 'string') {
+    let n = email;
+    try {
+      n = n.normalize('NFKC');
+    } catch {
+      // keep the raw form when the runtime lacks normalize
+    }
+    e = n.trim().toLowerCase();
+  }
   return e ? e : undefined;
 }
 

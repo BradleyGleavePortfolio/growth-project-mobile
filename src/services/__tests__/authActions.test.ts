@@ -112,6 +112,16 @@ describe('signOut', () => {
     expect(await AsyncStorage.getItem('signup_role_notice')).toBeNull();
   });
 
+  it('#306 r5 (Sol B-306-2): clears the role-selection owner and an unacknowledged recovery notice', async () => {
+    await AsyncStorage.setItem('needs_role_selection', 'true');
+    await AsyncStorage.setItem('needs_role_selection_owner', 'u1');
+    await AsyncStorage.setItem('signup_coach_recovery_gate', JSON.stringify({ userId: 'u1', method: 'email' }));
+    await signOut();
+    expect(await AsyncStorage.getItem('needs_role_selection')).toBeNull();
+    expect(await AsyncStorage.getItem('needs_role_selection_owner')).toBeNull();
+    expect(await AsyncStorage.getItem('signup_coach_recovery_gate')).toBeNull();
+  });
+
   it('clears all auth + session keys and fires logout event exactly once', async () => {
     for (const key of SIGN_OUT_KEYS) {
       await AsyncStorage.setItem(key, 'seed');

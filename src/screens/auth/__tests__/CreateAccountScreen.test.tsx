@@ -185,7 +185,7 @@ describe('CreateAccountScreen', () => {
     mockPreview.mockResolvedValue({ data: { valid: false } });
     const utils = await renderScreen({ invite_code: 'GP-NOPE' });
     await fillAndSubmit(utils);
-    expect(await utils.findByText('That invite code is not valid. Please check with your coach.')).toBeTruthy();
+    expect(await utils.findByText('That invite code is not valid. Check it with your coach, or clear the field to sign up without one.')).toBeTruthy();
     expect(mockSignupWithCode).not.toHaveBeenCalled();
   });
 
@@ -286,7 +286,7 @@ describe('CreateAccountScreen', () => {
       const utils = await renderScreen(undefined, null);
       expect(utils.queryByTestId('role-choice')).toBeNull();
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
-      expect(utils.getByText('Join your coach')).toBeTruthy();
+      expect(utils.getByText('Create your account')).toBeTruthy();
       await fillAndSubmit(utils);
       await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
       expect(mockRegister.mock.calls[0][1]).toBeUndefined();
@@ -498,7 +498,7 @@ describe('CreateAccountScreen', () => {
       expect(mockSignInWithGoogle.mock.calls[0][0]).toEqual({ inviteCode: 'GP-TEST1', intendedRole: undefined });
       await waitFor(() =>
         expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', {
-          inviteAttachError: 'unknown',
+          inviteAttachError: 'not_attached',
           inviteCode: 'GP-TEST1',
         }),
       );
@@ -524,7 +524,7 @@ describe('CreateAccountScreen', () => {
       utils.rerender(
         <CreateAccountScreen navigation={nav as never} route={{ params: { invite_code: 'GP-QR1' } }} />,
       );
-      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(await utils.findByText('Create your account')).toBeTruthy();
       expect(utils.getByTestId('invite-code-input').props.value).toBe('GP-QR1');
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
     });
@@ -534,7 +534,7 @@ describe('CreateAccountScreen', () => {
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(utils.getByTestId('role-choice-change'));
       await fireEvent.press(await utils.findByTestId('role-choice-client'));
-      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(await utils.findByText('Create your account')).toBeTruthy();
       expect(utils.getByTestId('invite-code-input')).toBeTruthy();
     });
   });
@@ -611,7 +611,7 @@ describe('CreateAccountScreen', () => {
       expect(mockRegister).not.toHaveBeenCalled();
       // Explicit re-choice: only now does a client registration go out.
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
-      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(await utils.findByText('Create your account')).toBeTruthy();
       await fillAndSubmit(utils as never);
       await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
       expect(mockRegister.mock.calls[0][1]).toBeUndefined();
@@ -652,7 +652,7 @@ describe('CreateAccountScreen', () => {
       await act(async () => {
         resolveLive({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
       });
-      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(await utils.findByText('Create your account')).toBeTruthy();
       expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
     });
 
@@ -763,7 +763,7 @@ describe('CreateAccountScreen', () => {
       expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
       // The request is settled, so an explicit client choice is now allowed.
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
-      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(await utils.findByText('Create your account')).toBeTruthy();
     });
 
     it('in flight -> response lost (no answer): unconfirmed state, no "No account", no client re-choice; sign in or support offered', async () => {

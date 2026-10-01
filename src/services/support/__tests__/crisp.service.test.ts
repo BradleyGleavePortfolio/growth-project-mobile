@@ -163,18 +163,29 @@ describe('support chat ownership is the server user id (Sol A2-R3)', () => {
     );
   });
 
-  it('cold start: a different server user than the stored owner resets; colliding emails do not matter', () => {
+  it('cold start with a synchronous MMKV backend: a different server user than the stored owner resets; colliding emails do not matter', () => {
     const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('uid:user-a0');
     syncCrispIdentity({ userId: 'user-r', email: '_r@example.com' });
     expect(mockResetSession).toHaveBeenCalledTimes(1);
     prefs.mockRestore();
   });
 
-  it('cold start: the same server user as the stored owner keeps the session', () => {
+  it('cold start with a synchronous MMKV backend: the same server user as the stored owner keeps the session', () => {
     const prefs = jest.spyOn(prefsStorage, 'getString').mockReturnValue('uid:user-a0');
     syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
     expect(mockResetSession).not.toHaveBeenCalled();
     prefs.mockRestore();
+  });
+
+  it('#306 r5 (Sol C-306-4): cold start on the AsyncStorage shim (current builds): owner unknown, reset once, then kept in-process', async () => {
+    // The real shim: an owner was persisted by an earlier launch...
+    await prefsStorage.set('support.crisp_session_owner', 'uid:user-a0');
+    // ...but the synchronous read cannot see it.
+    expect(prefsStorage.getString('support.crisp_session_owner')).toBeUndefined();
+    syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
+    syncCrispIdentity({ userId: 'user-a0', email: 'a0@example.com' });
+    expect(mockResetSession).toHaveBeenCalledTimes(1);
   });
 
   it('a stored round-3 email fingerprint is not trusted (reset once)', () => {

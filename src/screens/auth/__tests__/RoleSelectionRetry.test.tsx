@@ -34,6 +34,8 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+const mockCaptureError = jest.fn();
+jest.mock('../../../services/sentry', () => ({ captureError: (...a: unknown[]) => mockCaptureError(...a) }));
 
 import RoleSelectionScreen from '../RoleSelectionScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
@@ -226,4 +228,37 @@ describe('RoleSelection retry step', () => {
     expect(queryByTestId('signup-role-notice-acknowledge')).toBeNull();
     readUserCache.mockResolvedValue({ id: 'u1', role: null });
   });
+
+  describe('#306 r5 (owner 13:34): no generic failure on Continue', () => {
+    it('an unknown server failure shows a reference and a working Contact support link, never the raw text', async () => {
+      mockSelectRole.mockRejectedValue({
+        response: { status: 500, data: { message: 'relation "users" does not exist', request_id: 'beadfeed-0000' } },
+      });
+      const navigation = { navigate: jest.fn() };
+      const { findByText, getByTestId, queryByText } = await render(
+        <RoleSelectionScreen navigation={navigation as never} route={route()} />,
+      );
+      await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
+      await fireEvent.press(await findByText('Continue'));
+      expect(await findByText(/reference BEADFEED/)).toBeTruthy();
+      expect(queryByText(/relation/)).toBeNull();
+      expect(queryByText('Could not complete sign-up. Please try again.')).toBeNull();
+      await fireEvent.press(getByTestId('role-error-support'));
+      expect(navigation.navigate).toHaveBeenCalledWith('SupportInbox');
+      expect(mockCaptureError).toHaveBeenCalledTimes(1);
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
+
+    it('a connection failure says so, with no reference or support link', async () => {
+      mockSelectRole.mockRejectedValue(new Error('Cannot reach server. Please check your connection and try again.'));
+      const { findByText, queryByTestId } = await render(
+        <RoleSelectionScreen navigation={{ navigate: jest.fn() } as never} route={route()} />,
+      );
+      await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
+      await fireEvent.press(await findByText('Continue'));
+      expect(await findByText(/couldn’t reach the server/)).toBeTruthy();
+      expect(queryByTestId('role-error-support')).toBeNull();
+    });
+  });
 });
+

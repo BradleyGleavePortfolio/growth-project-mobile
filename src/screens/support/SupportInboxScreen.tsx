@@ -21,12 +21,16 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { openSupportChat } from '../../services/support/crisp.service';
+
+// The team inbox, also used for access requests on the signup screen.
+const SUPPORT_EMAIL = 'hello@thegrowthproject.app';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -47,8 +51,14 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
   // known to be safe for whoever is looking. If clearing a previous session
   // failed, the chat stays closed and the screen offers a retry.
   const [blocked, setBlocked] = useState(false);
+  // #306 r5 (Opus C-306-4, owner 13:34): when live chat is not available in
+  // this build (no Crisp website id, or no native module) the screen says so
+  // and offers email instead of "should open automatically".
+  const [unavailable, setUnavailable] = useState(false);
   const open = () => {
-    setBlocked(openSupportChat({ preSignIn }) === 'blocked');
+    const result = openSupportChat({ preSignIn });
+    setBlocked(result === 'blocked');
+    setUnavailable(result === 'unavailable');
   };
 
   useEffect(() => {
@@ -90,7 +100,12 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
           />
         </View>
         <Text style={styles.heading}>Live Support</Text>
-        {blocked ? (
+        {unavailable ? (
+          <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-unavailable">
+            Live chat is not available in this version of the app. Email us at {SUPPORT_EMAIL} and
+            a person from our team will reply.
+          </Text>
+        ) : blocked ? (
           <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-blocked">
             The support chat could not be opened safely on this device just
             now, so it stayed closed. Tap Try again in a moment.
@@ -102,6 +117,20 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
             below.
           </Text>
         )}
+        {unavailable ? (
+          <HapticPressable
+            intent="medium"
+            style={styles.openBtn}
+            onPress={() => {
+              void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Support%20request`).catch(() => undefined);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Email support"
+            testID="support-email"
+          >
+            <Text style={styles.openBtnText}>Email support</Text>
+          </HapticPressable>
+        ) : (
         <HapticPressable
           intent="medium"
           style={styles.openBtn}
@@ -113,6 +142,7 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
         >
           <Text style={styles.openBtnText}>{blocked ? 'Try again' : 'Open Support Chat'}</Text>
         </HapticPressable>
+        )}
 
         <Text style={styles.note}>
           Support is separate from Coach AI and the Client Bot. A human

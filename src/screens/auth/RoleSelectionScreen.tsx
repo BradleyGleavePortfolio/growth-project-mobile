@@ -9,12 +9,10 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
-import { errorMessage } from '../../types/common';
 import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -30,6 +28,8 @@ import {
   type SignupRoleNoticeKind,
 } from '../../lib/signupRoleNotice';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
+import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { typography } from '../../theme/tokens';
 
 type Props = {
@@ -92,6 +92,8 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
+  // #306 r5 (owner 13:34): Contact support next to an unknown failure.
+  const [errorSupport, setErrorSupport] = useState(false);
   const [cachedCoachId, setCachedCoachId] = useState<string | null>(null);
   // The user already has a coach, so the only thing left is the notice.
   const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
@@ -138,7 +140,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
               setAcknowledgeOnly(true);
               return;
             }
-            await AsyncStorage.removeItem('needs_role_selection');
+            await clearRoleSelectionPending();
             await clearSignupRoleNotice();
             authEvents.emit();
             return;
@@ -204,13 +206,13 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     } catch (finErr) {
       logRedacted('selectRole finalize after attach failed', finErr);
     }
-    await AsyncStorage.removeItem('needs_role_selection');
+    await clearRoleSelectionPending();
     await clearSignupRoleNotice();
     authEvents.emit();
   };
 
   const handleKeepCurrentCoach = async () => {
-    await AsyncStorage.removeItem('needs_role_selection');
+    await clearRoleSelectionPending();
     await clearSignupRoleNotice();
     authEvents.emit();
   };
@@ -218,6 +220,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
   const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
     if (inFlightRef.current) return;
     setError('');
+    setErrorSupport(false);
 
     // R3: already connected on the server; only finish locally.
     const confirmed = attachedRef.current;
@@ -269,7 +272,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
       } else {
         const res = await authApi.selectRole('student', undefined);
         await persistRole(res.data.role, res.data.coach_id);
-        await AsyncStorage.removeItem('needs_role_selection');
+        await clearRoleSelectionPending();
         await clearSignupRoleNotice();
         authEvents.emit();
       }
@@ -288,13 +291,23 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
       // A 4xx on the attach/select call is an invite problem (bad, expired,
       // used-up code, coach unavailable): show friendly copy, never the raw
       // server string.
-      const msg =
-        trimmed && status >= 400 && status < 500
-          ? inviteAttachErrorMessage(
-              r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
-            )
-          : errorMessage(err, 'Could not complete sign-up. Please try again.');
+      // #306 r5 (owner 13:34): never the raw server string, never a bare
+      // "try again". A connection problem says so; anything else unknown
+      // carries a reference and Contact support (utils/authFailure).
+      let unknownFailure = false;
+      let msg: string;
+      if (trimmed && status >= 400 && status < 500) {
+        msg = inviteAttachErrorMessage(
+          r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
+        );
+      } else if (isNetworkFailure(err)) {
+        msg = 'We couldn’t reach the server. Check your connection, then tap Continue again.';
+      } else {
+        msg = unknownAuthFailure(err, 'role_selection').message;
+        unknownFailure = true;
+      }
       setError(msg);
+      setErrorSupport(unknownFailure);
       if (isAttachRetry) Alert.alert('Coach not connected yet', msg);
       else Alert.alert('Sign-up unavailable', msg);
     } finally {
@@ -418,6 +431,17 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
             </Text>
           ) : null}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error && errorSupport ? (
+            <Text
+              style={styles.supportLink}
+              accessibilityRole="link"
+              accessibilityLabel="Contact support"
+              testID="role-error-support"
+              onPress={() => navigation?.navigate('SupportInbox')}
+            >
+              Contact support
+            </Text>
+          ) : null}
         </View>
 
         <TouchableOpacity

@@ -123,6 +123,29 @@ export interface AppleAuthOptions {
 // See https://docs.expo.dev/versions/latest/sdk/apple-authentication/
 const APPLE_CANCEL_CODE = 'ERR_REQUEST_CANCELED';
 
+/**
+ * The email in Apple's identity token (unverified decode, used only to scope
+ * the local unconfirmed-attempt marker to this Apple ID; the server verifies
+ * the token itself). Apple shares `credential.email` only on the first
+ * authorisation, but the token carries the (possibly relay) address on every
+ * sign-in once the email scope was granted (#306 r5, Opus C-306-1).
+ */
+export function emailFromAppleIdentityToken(token: string | null | undefined): string | undefined {
+  if (typeof token !== 'string') return undefined;
+  const part = token.split('.')[1];
+  if (!part) return undefined;
+  try {
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const decode = (globalThis as { atob?: (s: string) => string }).atob;
+    if (typeof decode !== 'function') return undefined;
+    const payload = JSON.parse(decode(padded)) as { email?: unknown };
+    return typeof payload.email === 'string' && payload.email.includes('@') ? payload.email : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function isAppleAuthAvailable(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
   try {
@@ -202,8 +225,18 @@ export async function signInWithApple(
       ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {
+    const providerEmail =
+      (typeof credential.email === 'string' && credential.email ? credential.email : undefined) ??
+      emailFromAppleIdentityToken(credential.identityToken);
     if (isCoachSignupUnavailable(err)) {
-      return { success: false, error: 'Coach sign-up is not available right now', error_code: COACH_SIGNUP_UNAVAILABLE };
+      // #306 r5 (Sol B-306-1): the email lets the screen check this Apple
+      // ID's earlier unconfirmed attempt before saying "No account was created".
+      return {
+        success: false,
+        error: 'Coach sign-up is not available right now',
+        error_code: COACH_SIGNUP_UNAVAILABLE,
+        ...(providerEmail ? { provider_email: providerEmail } : {}),
+      };
     }
     if (options.intendedRole === 'coach' && !options.inviteCode && classifyCoachSignupFailure(err) === 'unconfirmed') {
       // #306 r3: same rule as Google. A coach request with no server answer
@@ -213,7 +246,7 @@ export async function signInWithApple(
         success: false,
         error: 'Could not confirm the coach account',
         error_code: COACH_SIGNUP_UNCONFIRMED,
-        ...(typeof credential.email === 'string' && credential.email ? { provider_email: credential.email } : {}),
+        ...(providerEmail ? { provider_email: providerEmail } : {}),
       };
     }
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };

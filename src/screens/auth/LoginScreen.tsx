@@ -19,9 +19,8 @@ import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
-import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
+import { describeSignInFailure, type AuthFailure } from '../../utils/authFailure';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
@@ -44,14 +43,29 @@ import {
   resolveUnconfirmedCoachSignup,
   type CoachSignupMethod,
 } from '../../lib/coachSignupAttempt';
+import {
+  clearCoachRecoveryGate,
+  clearRoleSelectionPending,
+  isCoachLikeRole,
+  isRoleSelectionPendingFor,
+  markRoleSelectionPending,
+  readCoachRecoveryGate,
+  settleRoleSelectionGateForSignIn,
+  userIdOf,
+  writeCoachRecoveryGate,
+} from '../../lib/roleSelectionGate';
 
 // #306 r4 (Sol B2-R3): a sign-in that recovered the account of an earlier,
 // unconfirmed coach signup, and the server says it is not a coach. The
 // notice is shown here and must be acknowledged before the client flow.
+// #306 r5 (Sol B-306-2 / Opus B-306-1): `priorPending` is whether this
+// account genuinely needed role selection before the notice, captured once
+// (lib/roleSelectionGate), never re-read from the gate this flow set.
 interface CoachAttemptRecovery {
   method: CoachSignupMethod;
   identity?: string;
-  priorNeedsRoleSelection: string | null;
+  userId: string | null;
+  priorPending: boolean;
   proceed: () => Promise<void>;
 }
 
@@ -89,6 +103,12 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState('');
+  // #306 r5 (owner 13:34): Contact support next to an unknown failure.
+  const [errorSupport, setErrorSupport] = useState(false);
+  const showFailure = (failure: AuthFailure) => {
+    setError(failure.message);
+    setErrorSupport(failure.support);
+  };
   // B3: Google only when the shared signup policy advertises it (hidden
   // while unknown), same reader as CreateAccount.
   const [googleEnabled, setGoogleEnabled] = useState(
@@ -121,33 +141,71 @@ export default function LoginScreen({ navigation, route }: Props) {
     opts: { emailHint?: string; isNewUser?: boolean },
     proceed: () => Promise<void>,
   ) => {
-    const notice = await reconcileCoachAttempt(method, user, opts);
+    const userId = userIdOf(user as { id?: unknown } | null | undefined);
+    // #306 r5: a recovery notice that was shown to this account and never
+    // acknowledged (app closed, back gesture) is shown again on its next
+    // sign-in, even after the attempt marker has expired.
+    const gate = await readCoachRecoveryGate();
+    const gateForThisAccount = !!gate && !!userId && gate.userId === userId;
+    let notice = await reconcileCoachAttempt(method, user, opts);
+    if (
+      !notice &&
+      gateForThisAccount &&
+      typeof user?.role === 'string' &&
+      !isCoachLikeRole(user.role) &&
+      opts.isNewUser !== true
+    ) {
+      notice = 'coach_retry_not_applied';
+    }
     if (!notice) {
+      // A server coach now (for example support set up coach access): the
+      // earlier notice no longer applies.
+      if (gateForThisAccount) await clearCoachRecoveryGate();
       await proceed();
       return;
     }
-    const priorNeedsRoleSelection = await AsyncStorage.getItem('needs_role_selection').catch(() => null);
-    await setSignupRoleNotice(notice);
-    await AsyncStorage.setItem('needs_role_selection', 'true').catch(() => undefined);
     const identity =
       typeof user?.email === 'string' && user.email ? user.email : opts.emailHint || undefined;
-    setRecovery({ method, identity, priorNeedsRoleSelection, proceed });
+    const priorPending = gateForThisAccount && gate ? gate.priorPending : await isRoleSelectionPendingFor(userId);
+    await setSignupRoleNotice(notice);
+    if (userId) {
+      await writeCoachRecoveryGate({ userId, method, identity, priorPending, at: Date.now() });
+      // Hold the auth stack on a cold start until the notice is acknowledged.
+      await markRoleSelectionPending(userId).catch(() => undefined);
+    }
+    setRecovery({ method, identity, userId, priorPending, proceed });
   };
 
   const acknowledgeRecovery = async () => {
     if (!recovery || recoveryBusy) return;
     setRecoveryBusy(true);
     try {
-      if (recovery.priorNeedsRoleSelection === null) await AsyncStorage.removeItem('needs_role_selection');
-      else await AsyncStorage.setItem('needs_role_selection', recovery.priorNeedsRoleSelection);
+      // Release only what the recovery added: the gate goes back to this
+      // account's own requirement, which `proceed` then honours.
+      if (recovery.priorPending) await markRoleSelectionPending(recovery.userId);
+      else await clearRoleSelectionPending();
+      await clearCoachRecoveryGate();
       await clearSignupRoleNotice();
       await resolveUnconfirmedCoachSignup(recovery.method, recovery.identity);
       const { proceed } = recovery;
       setRecovery(null);
       await proceed();
+    } catch (err) {
+      showFailure(describeSignInFailure(err));
     } finally {
       setRecoveryBusy(false);
     }
+  };
+
+  // #306 r5 (Sol B-306-2 / Opus B-306-1): an existing account that signed in
+  // goes to RoleSelection when its own signup never finished that step (a
+  // bare emit would leave RootNavigator on the auth stack, the strand both
+  // audits reproduced). A coach-like account, or a gate left by another
+  // account, is released first.
+  const enterAppOrFinishRoleSelection = async (user: { id?: unknown; role?: unknown } | null | undefined) => {
+    const next = await settleRoleSelectionGateForSignIn(user);
+    if (next === 'role-selection') navigation.replace('RoleSelection');
+    else authEvents.emit();
   };
   useEffect(() => {
     let mounted = true;
@@ -184,6 +242,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
     setLoading(true);
     setError('');
+    setErrorSupport(false);
 
     try {
       const response = await authApi.login({ email: typedEmail, password });
@@ -213,14 +272,12 @@ export default function LoginScreen({ navigation, route }: Props) {
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       // (after the coach-attempt notice, when one applies).
       await continueAfterCoachAttemptCheck('email', user, { emailHint: typedEmail }, async () => {
-        authEvents.emit();
+        await enterAppOrFinishRoleSelection(user);
       });
     } catch (err) {
-      // Map any upstream string (Supabase, axios, or backend) into a quiet,
-      // safe line. Operators still get the raw error in console / Sentry.
-      const raw = errorMessage(err) || err;
-      const friendly = toFriendlyAuthError(raw);
-      setError(friendly.message);
+      // Status and backend message decide the copy; an unknown failure gets
+      // a reference and Contact support (utils/authFailure).
+      showFailure(describeSignInFailure(err));
     } finally {
       setLoading(false);
     }
@@ -235,22 +292,23 @@ export default function LoginScreen({ navigation, route }: Props) {
     setPendingProvider(null);
     setGoogleLoading(true);
     setError('');
+    setErrorSupport(false);
     try {
       const result = await signInWithGoogle();
 
       if (!result.success) {
-        // Map raw OAuth strings to quiet safe copy. Cancellation stays silent.
-        const friendly = toFriendlyAuthError(result.error);
-        if (!friendly.cancelled) {
-          setError(friendly.message);
-          Alert.alert('Sign-in', friendly.message);
+        // Cancellation stays silent.
+        const failure = describeSignInFailure(result.error, { provider: 'google' });
+        if (!failure.cancelled) {
+          showFailure(failure);
+          Alert.alert('Sign in with Google', failure.message);
         }
         return;
       }
 
       const proceedGoogle = async () => {
         if (result.is_new_user || !result.user?.role) {
-          await AsyncStorage.setItem('needs_role_selection', 'true');
+          await markRoleSelectionPending(userIdOf(result.user));
           // Same predicate as the confirm panel (unknown policy counts), and
           // only when the server actually answered: the legacy fallback
           // (`server_confirmed: false`) proves nothing about a new account.
@@ -268,7 +326,7 @@ export default function LoginScreen({ navigation, route }: Props) {
           // Psych Report #4: Analytics
           if (result.user?.id) identify(result.user.id, { role: result.user.role });
           track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'google' });
-          authEvents.emit();
+          await enterAppOrFinishRoleSelection(result.user);
         }
       };
       // Only a server answer can resolve (or reveal) an earlier unconfirmed
@@ -282,8 +340,8 @@ export default function LoginScreen({ navigation, route }: Props) {
           proceedGoogle,
         );
     } catch (err) {
-      const friendly = toFriendlyAuthError(err);
-      if (!friendly.cancelled) setError(friendly.message);
+      const failure = describeSignInFailure(err, { provider: 'google' });
+      if (!failure.cancelled) showFailure(failure);
     } finally {
       setGoogleLoading(false);
     }
@@ -298,22 +356,23 @@ export default function LoginScreen({ navigation, route }: Props) {
     setPendingProvider(null);
     setAppleLoading(true);
     setError('');
+    setErrorSupport(false);
     try {
       const result = await signInWithApple();
 
       if (!result.success) {
         if (result.cancelled) return;
-        const friendly = toFriendlyAppleAuthError(result.error);
-        if (!friendly.cancelled) {
-          setError(friendly.message);
-          Alert.alert('Sign in with Apple', friendly.message);
+        const failure = describeSignInFailure(result.error, { provider: 'apple' });
+        if (!failure.cancelled) {
+          showFailure(failure);
+          Alert.alert('Sign in with Apple', failure.message);
         }
         return;
       }
 
       const proceedApple = async () => {
         if (result.is_new_user || !result.user?.role) {
-          await AsyncStorage.setItem('needs_role_selection', 'true');
+          await markRoleSelectionPending(userIdOf(result.user));
           // Same predicate as the confirm panel: an unknown policy counts.
           if (result.is_new_user && roleChoiceEnabled !== false) {
             await noteNewAccountFromSignIn();
@@ -328,7 +387,7 @@ export default function LoginScreen({ navigation, route }: Props) {
           await purgePersistedQueryCacheForAllUsers();
           if (result.user?.id) identify(result.user.id, { role: result.user.role });
           track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'apple' });
-          authEvents.emit();
+          await enterAppOrFinishRoleSelection(result.user);
         }
       };
       await continueAfterCoachAttemptCheck(
@@ -338,8 +397,8 @@ export default function LoginScreen({ navigation, route }: Props) {
         proceedApple,
       );
     } catch (err) {
-      const friendly = toFriendlyAppleAuthError(err);
-      if (!friendly.cancelled) setError(friendly.message);
+      const failure = describeSignInFailure(err, { provider: 'apple' });
+      if (!failure.cancelled) showFailure(failure);
     } finally {
       setAppleLoading(false);
     }
@@ -399,6 +458,17 @@ export default function LoginScreen({ navigation, route }: Props) {
         {error ? (
           <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
             <Text style={styles.errorText}>{error}</Text>
+            {errorSupport ? (
+              <Text
+                style={styles.errorSupportLink}
+                accessibilityRole="link"
+                accessibilityLabel="Contact support"
+                testID="login-error-support"
+                onPress={() => navigation.navigate('SupportInbox')}
+              >
+                Contact support
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -571,6 +641,13 @@ const makeStyles = (colors: ThemeColors) =>
     borderLeftColor: colors.error,
   },
   errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  errorSupportLink: {
+    color: colors.primary,
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
+    marginTop: Spacing.xs,
+  },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {

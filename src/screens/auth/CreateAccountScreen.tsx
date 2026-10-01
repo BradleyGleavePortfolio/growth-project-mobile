@@ -18,7 +18,17 @@ import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
-import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
+import {
+  SIGNUP_EMAIL_EXISTS_MESSAGE,
+  SIGNUP_INVITE_INVALID_MESSAGE,
+  SIGNUP_PENDING_MESSAGE,
+} from '../../utils/authErrorMessage';
+import { describeSignInFailure, describeSignupFailure, type AuthFailure } from '../../utils/authFailure';
+import {
+  clearRoleSelectionPending,
+  markRoleSelectionPending,
+  userIdOf,
+} from '../../lib/roleSelectionGate';
 import {
   getLastKnownSignupPolicy,
   loadSignupPolicy,
@@ -48,7 +58,6 @@ import {
   COACH_SIGNUP_UNCONFIRMED_MESSAGE,
   COACH_SIGNUP_RETRY_EMAIL_EXISTS_MESSAGE,
   classifyCoachSignupFailure,
-  errorStatus,
   intendedRoleForRequest,
   isCoachSignupUnavailable,
   isServerCoach,
@@ -83,6 +92,15 @@ interface Props {
 // choice is off. Nothing has been created; the user is told and must choose
 // explicitly (client instead, or check again). Never switched silently.
 type Step = 'policy' | 'role' | 'register' | 'verify' | 'coach-unavailable';
+
+// #306 r5: signup refusals that need their own actions, not a generic line.
+//  - 'email_exists': 409 "Email already registered" (Log in, Reset password).
+//  - 'email_exists_after_coach': the same 409 after this email's coach
+//    attempt ended unconfirmed; the earlier attempt may have created it
+//    (Log in, Contact support).
+//  - 'signup_pending': 409 `signup_pending` from backend #597 (Reset
+//    password, Back). There is no resend endpoint, so no resend button.
+type SignupIssue = 'email_exists' | 'email_exists_after_coach' | 'signup_pending';
 
 // #306 r3 (Sol B1-R2 / Opus C1): what the coach-unavailable step may say.
 //  - 'not-started': no request was sent; "No account has been created" is true.
@@ -187,6 +205,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [recheckLoading, setRecheckLoading] = useState(false);
   const [recheckNote, setRecheckNote] = useState('');
   const [withdrawal, setWithdrawal] = useState<WithdrawalState>('not-started');
+  const [signupIssue, setSignupIssue] = useState<SignupIssue | null>(null);
+  // #306 r5 (owner 13:34): the error box offers Contact support when the
+  // failure is unknown (its message carries the reference) or unconfirmed.
+  const [errorSupport, setErrorSupport] = useState(false);
+  const showFailure = (failure: AuthFailure) => {
+    setError(failure.message);
+    setErrorSupport(failure.support);
+  };
 
   // The policy effect below runs once and resolves later; it reads the
   // current choice and step through refs, not the mount-time closure.
@@ -303,6 +329,29 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     }
   };
 
+  // #306 r5 (Sol B-306-1): a refusal (the pre-handler refusal of
+  // `intended_role`) proves only that THIS request created nothing. When an
+  // earlier coach attempt with the same sign-in is still unresolved, the
+  // screen keeps the "outcome unknown" step (Sign in to check, Check again,
+  // Contact support): never "No account was created", never a client offer.
+  const showCoachRefusal = async (method: CoachSignupMethod, identity?: string | null) => {
+    if (await hasUnconfirmedCoachSignup(method, identity)) {
+      unresolvedCoachRef.current = true;
+      setError('');
+      setErrorSupport(false);
+      setWithdrawal('unconfirmed');
+      setStep('coach-unavailable');
+      return;
+    }
+    setErrorSupport(false);
+    setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+  };
+
+  const showUnconfirmed = () => {
+    setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+    setErrorSupport(true);
+  };
+
   // Signup policy through the shared reader (audit A1): a live policy wins,
   // then the last policy fetched this session, then UNKNOWN_SIGNUP_POLICY
   // (code optional, Google hidden). A failed GET never blocks a codeless
@@ -405,6 +454,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     let accountEmail = submittedEmail;
     setLoading(true);
     setError('');
+    setErrorSupport(false);
+    setSignupIssue(null);
 
     try {
       if (trimmedCode) {
@@ -416,7 +467,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         try {
           const res = await authApi.getInvitePreview(trimmedCode);
           if (res.data && res.data.valid === false) {
-            setError('That invite code is not valid. Please check with your coach.');
+            setError(SIGNUP_INVITE_INVALID_MESSAGE);
             return;
           }
           if (res.data) setInvitePreview(res.data);
@@ -479,10 +530,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         setStep('verify');
       } catch (err) {
         if (isCoachSignupUnavailable(err)) {
-          // No account was created (the server rejected the body before any
-          // handler ran). Never fall back to a client account here.
+          // The server rejected the body before any handler ran, so this
+          // request created nothing. Never fall back to a client account here,
+          // and never claim more than this request proves (r5, Sol B-306-1).
           outcome = 'refused';
-          setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          await showCoachRefusal('email', submittedEmail);
           return;
         }
         if (isCoachSignup) {
@@ -490,23 +542,30 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           if (outcome === 'unconfirmed') {
             // #306 r3: no server answer. The account may exist; say neither.
             await markUnconfirmed('email', submittedEmail);
-            setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+            showUnconfirmed();
             return;
           }
         } else {
           outcome = 'refused';
         }
-        if (errorStatus(err) === 409 && (await hasUnconfirmedCoachSignup('email', submittedEmail))) {
-          // #306 r3 (Opus C4), r4: the retry (coach or client) found the email
-          // registered, possibly by the earlier attempt whose response was lost.
-          setError(COACH_SIGNUP_RETRY_EMAIL_EXISTS_MESSAGE);
+        // #306 r5: status and backend code decide the copy (owner 13:28).
+        const failure = describeSignupFailure(err, 'email');
+        if (failure.kind === 'signup_pending') {
+          // #597: an unconfirmed sign-up for this address exists and this
+          // request did not prove it owns it. No local account exists, so
+          // this is never the "already exists" copy (Opus C-306-3 i).
+          setSignupIssue('signup_pending');
           return;
         }
-        // Map raw upstream strings (Supabase / backend / network) into quiet,
-        // safe copy. Operators retain the original via console + Sentry.
-        const raw = errorMessage(err) || err;
-        const friendly = toFriendlyAuthError(raw);
-        setError(friendly.message);
+        if (failure.kind === 'email_exists') {
+          // #306 r3 (Opus C4), r4: after this email's unconfirmed coach
+          // attempt, the account may be the one that attempt created.
+          setSignupIssue(
+            (await hasUnconfirmedCoachSignup('email', submittedEmail)) ? 'email_exists_after_coach' : 'email_exists',
+          );
+          return;
+        }
+        showFailure(failure);
       }
     } finally {
       setLoading(false);
@@ -528,6 +587,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       isNewUser?: boolean;
       method: CoachSignupMethod;
       providerEmail?: string;
+      /** The signup carried an invite / QR code (always a client). */
+      hasInviteCode?: boolean;
     },
   ): Promise<'success' | 'unconfirmed'> => {
     // The submitted attempt decides, not the live form: a policy answer that
@@ -544,7 +605,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     if (coachAttempt && typeof user?.role !== 'string') {
       await dropUnconfirmedSession();
       await markUnconfirmed(opts.method, identity ?? opts.providerEmail);
-      setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+      showUnconfirmed();
       return 'unconfirmed';
     }
     // #306 r3 (Opus C4), r4: an earlier coach attempt with this sign-in ended
@@ -553,17 +614,23 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     // account" would be untrue. This holds for a client retry too (for
     // example after a remount where coach sign-up is now off).
     const serverAnswered = typeof user?.role === 'string';
-    const retryOfUnconfirmed = serverAnswered && (await hasUnconfirmedCoachSignup(opts.method, identity));
+    // #306 r5 (Opus C-306-1): an invite / QR signup is a client joining a
+    // coach. It never shows a notice about an earlier coach attempt (a
+    // provider marker without an email matches any sign-in with that
+    // provider, possibly someone else's) and never consumes that marker.
+    const consultMarker = serverAnswered && !opts.hasInviteCode;
+    const retryOfUnconfirmed = consultMarker && (await hasUnconfirmedCoachSignup(opts.method, identity));
     if (isServerCoach(user)) {
       await resolveAttempt(opts.method, identity);
       await setUserCache(user as Parameters<typeof setUserCache>[0]);
       await purgePersistedQueryCacheForAllUsers();
-      await AsyncStorage.removeItem('needs_role_selection');
+      await clearRoleSelectionPending();
       await clearSignupRoleNotice();
       authEvents.emit();
       return 'success';
     }
-    await AsyncStorage.setItem('needs_role_selection', 'true');
+    // #306 r5 (Sol B-306-2): the gate records whose it is.
+    await markRoleSelectionPending(userIdOf(user as { id?: unknown } | null | undefined));
     let signupNotice: SignupRoleNoticeKind | undefined;
     if (coachAttempt) {
       signupNotice =
@@ -577,8 +644,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     }
     // Persist the notice before the marker is resolved, so a crash in
     // between repeats the notice instead of losing it.
+    // #306 r5 (Opus C-306-2): no notice for this signup clears a stored one,
+    // so a notice left on the device is never shown to a later signup.
     if (signupNotice) await setSignupRoleNotice(signupNotice);
-    if (serverAnswered) await resolveAttempt(opts.method, identity);
+    else await clearSignupRoleNotice();
+    if (consultMarker) await resolveAttempt(opts.method, identity);
     const params = { ...(opts.retryParams ?? {}), ...(signupNotice ? { signupNotice } : {}) };
     if (Object.keys(params).length > 0) navigation.replace('RoleSelection', params);
     else navigation.replace('RoleSelection');
@@ -602,6 +672,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
       await routeAfterAuth(user, {
         method: 'email',
+        hasInviteCode: !!inviteCode.trim(),
         retryParams:
           inviteAttachError !== null
             ? { inviteAttachError, inviteCode: inviteCode.trim() || undefined }
@@ -610,9 +681,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     } catch (err) {
       const msg = errorMessage(err, '').toLowerCase();
       if (msg.includes('email') || msg.includes('confirm')) {
-        setError('Email not yet verified. Open the link we sent and try again.');
+        setErrorSupport(false);
+        setError('Your email is not verified yet. Open the link we sent to this address, then tap I verified my email.');
       } else {
-        setError('Could not sign in. Please try again.');
+        showFailure(describeSignInFailure(err, { flow: 'verify' }));
       }
     } finally {
       setVerifyLoading(false);
@@ -632,6 +704,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     let outcome: AttemptOutcome = 'not-sent';
     setLoading(true);
     setError('');
+    setErrorSupport(false);
+    setSignupIssue(null);
     try {
       // The role question was answered before this round-trip; the backend
       // fixes the role when it inserts the User row, so this is the only
@@ -645,47 +719,52 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         if (result.cancelled) return;
         if (result.error_code === COACH_SIGNUP_UNAVAILABLE) {
           outcome = 'refused';
-          setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          await showCoachRefusal('apple', result.provider_email);
           return;
         }
         if (result.error_code === COACH_SIGNUP_UNCONFIRMED) {
           outcome = 'unconfirmed';
+          // #306 r5 (Opus C-306-3 ii): nothing on the device may claim an
+          // account the server did not confirm, even if a token was stored.
+          await dropUnconfirmedSession();
           await markUnconfirmed('apple', result.provider_email);
-          setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+          showUnconfirmed();
           return;
         }
         outcome = 'refused';
-        const friendly = toFriendlyAppleAuthError(result.error);
-        if (!friendly.cancelled) {
-          setError(friendly.message);
-          Alert.alert('Sign in with Apple', friendly.message);
+        const failure = describeSignupFailure(result.error, 'apple');
+        if (!failure.cancelled) {
+          showFailure(failure);
+          Alert.alert('Sign in with Apple', failure.message);
         }
         return;
       }
       outcome = await routeAfterAuth(result.user, {
         method: 'apple',
         isNewUser: result.is_new_user,
+        hasInviteCode: !!trimmedCode,
         retryParams:
           trimmedCode && result.invite_attached === false
-            ? { inviteAttachError: result.invite_attach_error ?? 'unknown', inviteCode: trimmedCode }
+            ? { inviteAttachError: result.invite_attach_error ?? 'not_attached', inviteCode: trimmedCode }
             : undefined,
       });
     } catch (err) {
       if (isCoachSignupUnavailable(err)) {
         outcome = 'refused';
-        setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+        await showCoachRefusal('apple');
         return;
       }
       if (coachAttempt) {
         // Thrown after the request may have left: the outcome is unknown.
         outcome = 'unconfirmed';
+        await dropUnconfirmedSession();
         await markUnconfirmed('apple');
-        setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+        showUnconfirmed();
         return;
       }
       outcome = 'refused';
-      const friendly = toFriendlyAppleAuthError(err);
-      if (!friendly.cancelled) setError(friendly.message);
+      const failure = describeSignupFailure(err, 'apple');
+      if (!failure.cancelled) showFailure(failure);
     } finally {
       setLoading(false);
       settleAttempt(outcome);
@@ -705,6 +784,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     let outcome: AttemptOutcome = 'not-sent';
     setLoading(true);
     setError('');
+    setErrorSupport(false);
+    setSignupIssue(null);
     try {
       const result = await signInWithGoogle({
         inviteCode: trimmedCode || undefined,
@@ -714,50 +795,58 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       if (!result.success) {
         if (result.error_code === COACH_SIGNUP_UNAVAILABLE) {
           outcome = 'refused';
-          setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          await showCoachRefusal('google', result.provider_email);
           return;
         }
         if (result.error_code === COACH_SIGNUP_UNCONFIRMED) {
           outcome = 'unconfirmed';
           await markUnconfirmed('google', result.provider_email);
-          setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+          showUnconfirmed();
           return;
         }
-        const friendly = toFriendlyAuthError(result.error);
+        const failure = describeSignupFailure(result.error, 'google');
         // A cancelled Google sheet never reached the server.
-        outcome = friendly.cancelled ? 'not-sent' : 'refused';
-        if (!friendly.cancelled) {
-          setError(friendly.message);
-          Alert.alert('Sign-in', friendly.message);
+        outcome = failure.cancelled ? 'not-sent' : 'refused';
+        if (!failure.cancelled) {
+          showFailure(failure);
+          Alert.alert('Sign in with Google', failure.message);
         }
         return;
       }
 
       // A typed code the backend did not attach is carried to the retry
       // step with the code prefilled instead of being dropped.
+      // #306 r5 (Sol B-306-3): the server's own `invite_attached:false` (for
+      // example an already-paired student scanning another coach's code)
+      // routes to the retry step, which offers "Keep my current coach".
       outcome = await routeAfterAuth(result.user, {
         method: 'google',
         isNewUser: result.is_new_user,
+        hasInviteCode: !!trimmedCode,
         retryParams:
           trimmedCode && result.invite_attached === false
-            ? { inviteAttachError: 'unknown', inviteCode: result.invite_code ?? trimmedCode }
+            ? {
+                inviteAttachError: result.invite_attach_error ?? 'not_attached',
+                inviteCode: result.invite_code ?? trimmedCode,
+              }
             : undefined,
       });
     } catch (err) {
       if (isCoachSignupUnavailable(err)) {
         outcome = 'refused';
-        setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+        await showCoachRefusal('google');
         return;
       }
       if (coachAttempt) {
         outcome = 'unconfirmed';
+        await dropUnconfirmedSession();
         await markUnconfirmed('google');
-        setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+        showUnconfirmed();
         return;
       }
       outcome = 'refused';
-      const friendly = toFriendlyAuthError(err);
-      if (!friendly.cancelled) setError(friendly.message);
+      const failure = describeSignupFailure(err, 'google');
+      if (!failure.cancelled) showFailure(failure);
     } finally {
       setLoading(false);
       settleAttempt(outcome);
@@ -802,8 +891,19 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           ) : null}
 
           {error ? (
-            <View style={styles.errorBox}>
+            <View style={styles.errorBox} accessible accessibilityRole="alert">
               <Text style={styles.errorText}>{error}</Text>
+              {errorSupport ? (
+                <Text
+                  style={styles.supportLink}
+                  accessibilityRole="link"
+                  accessibilityLabel="Contact support"
+                  testID="signup-error-support"
+                  onPress={() => navigation.navigate('SupportInbox')}
+                >
+                  Contact support
+                </Text>
+              ) : null}
             </View>
           ) : null}
 
@@ -992,14 +1092,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title} accessibilityRole="header">
-            {isCoachSignup ? 'Create your coach account' : 'Join your coach'}
+            {isCoachSignup ? 'Create your coach account' : 'Create your account'}
           </Text>
           <Text style={styles.subtitle}>
             {isCoachSignup
-              ? 'Set up your account, then your coaching practice.'
+              ? 'Set up your account, then your coaching practice. No code is needed.'
               : requireInviteCode
                 ? 'Enter the invite code your coach shared to begin.'
-                : 'Create your account to begin.'}
+                : 'Have a code from your coach? Add it below, or add it later.'}
           </Text>
           {roleChoiceEnabled === true && !arrivedWithCode ? (
             hasTypedCode ? (
@@ -1025,9 +1125,81 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           ) : null}
         </View>
 
+        {signupIssue ? (
+          <View
+            style={styles.noticeBox}
+            accessible
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+            testID={`signup-issue-${signupIssue}`}
+          >
+            <Text style={styles.noticeText}>
+              {signupIssue === 'signup_pending'
+                ? SIGNUP_PENDING_MESSAGE
+                : signupIssue === 'email_exists_after_coach'
+                  ? COACH_SIGNUP_RETRY_EMAIL_EXISTS_MESSAGE
+                  : SIGNUP_EMAIL_EXISTS_MESSAGE}
+            </Text>
+            {signupIssue !== 'signup_pending' ? (
+              <TouchableOpacity
+                style={styles.registerButton}
+                onPress={() => navigation.navigate('Login', email.trim() ? { email: email.trim() } : undefined)}
+                accessibilityRole="button"
+                accessibilityLabel="Log in"
+                testID="signup-issue-log-in"
+              >
+                <Text style={styles.registerButtonText}>Log in</Text>
+              </TouchableOpacity>
+            ) : null}
+            {signupIssue !== 'email_exists_after_coach' ? (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => navigation.navigate('ForgotPassword')}
+                accessibilityRole="button"
+                accessibilityLabel="Reset password"
+                testID="signup-issue-reset-password"
+              >
+                <Text style={styles.secondaryButtonText}>Reset password</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text
+                style={styles.supportLink}
+                accessibilityRole="link"
+                accessibilityLabel="Contact support"
+                testID="signup-issue-support"
+                onPress={() => navigation.navigate('SupportInbox')}
+              >
+                Contact support
+              </Text>
+            )}
+            {signupIssue === 'signup_pending' ? (
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setSignupIssue(null)}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                testID="signup-issue-back"
+              >
+                <Text style={styles.secondaryButtonText}>Back</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : null}
+
         {error ? (
           <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
             <Text style={styles.errorText}>{error}</Text>
+            {errorSupport ? (
+              <Text
+                style={styles.supportLink}
+                accessibilityRole="link"
+                accessibilityLabel="Contact support"
+                testID="signup-error-support"
+                onPress={() => navigation.navigate('SupportInbox')}
+              >
+                Contact support
+              </Text>
+            ) : null}
           </View>
         ) : null}
 

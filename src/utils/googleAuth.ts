@@ -19,6 +19,7 @@ import { secureStorage } from '../services/secureStorage';
 import { authApi } from '../services/api';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
+import { readInviteAttachOutcome } from '../lib/inviteAttachOutcome';
 import {
   COACH_SIGNUP_UNAVAILABLE,
   COACH_SIGNUP_UNCONFIRMED,
@@ -68,6 +69,8 @@ export interface GoogleAuthResult {
    */
   invite_attached?: boolean;
   invite_code?: string;
+  /** Server reason when it reported `invite_attached:false` (safe code, not copy). */
+  invite_attach_error?: string;
   /**
    * #306 r4: the Google account's email, returned with
    * `coach_signup_unconfirmed` so the unconfirmed-attempt marker is scoped to
@@ -179,10 +182,25 @@ export async function signInWithGoogle(
       // invite_code arg on /auth/google but exposes the dedicated attach
       // endpoint, forward the code there. Failure is non-fatal — sign-in
       // already succeeded; the user can re-enter the code on RoleSelection.
+      // #306 r5 (Sol B-306-3): the server's own `invite_attached` decides.
+      // Backend #597 answers `invite_attached:false` when it skipped the code
+      // (an already-paired student keeps coach A when scanning coach B's QR;
+      // a coach-like account never redeems). A `coach_id` that was already
+      // there proves nothing about THIS code, so it is never read as success.
+      // The legacy second pass below runs only when the field is absent.
       let inviteAttached: boolean | undefined;
-      if (options.inviteCode) {
-        inviteAttached = !!user?.coach_id;
-        if (!inviteAttached) {
+      let inviteAttachError: string | undefined;
+      const serverAttach = readInviteAttachOutcome(response.data);
+      if (options.inviteCode && serverAttach.attached !== null) {
+        inviteAttached = serverAttach.attached;
+        if (!inviteAttached) inviteAttachError = serverAttach.reason ?? undefined;
+      } else if (options.inviteCode) {
+        // Legacy backend without the field. An existing coach is not proof
+        // that this code attached, and attaching over it could re-parent, so
+        // it is reported as not attached (the retry step offers "Keep my
+        // current coach"); otherwise the dedicated attach endpoint is tried.
+        inviteAttached = false;
+        if (!user?.coach_id) {
           try {
             const attach = await authApi.attachInviteCode(options.inviteCode);
             const coachId = (attach?.data as { coach_id?: unknown } | undefined)?.coach_id;
@@ -205,6 +223,7 @@ export async function signInWithGoogle(
         ...(typeof inviteAttached === 'boolean'
           ? { invite_attached: inviteAttached, invite_code: options.inviteCode }
           : {}),
+        ...(inviteAttachError ? { invite_attach_error: inviteAttachError } : {}),
       };
     } catch (backendErr) {
       if (isCoachSignupUnavailable(backendErr)) {
@@ -216,6 +235,9 @@ export async function signInWithGoogle(
           success: false,
           error: 'Coach sign-up is not available right now',
           error_code: COACH_SIGNUP_UNAVAILABLE,
+          // #306 r5 (Sol B-306-1): lets the screen check this sign-in's
+          // earlier unconfirmed attempt before it says "No account was created".
+          ...(supaUser.email ? { provider_email: supaUser.email } : {}),
         };
       }
       if (options.intendedRole === 'coach') {

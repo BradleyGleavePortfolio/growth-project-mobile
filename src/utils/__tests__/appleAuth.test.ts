@@ -15,7 +15,7 @@ jest.mock('../../services/api', () => ({
   default: { post: (...args: unknown[]) => mockApiPost(...args) },
 }));
 
-import { buildAppleAuthBody, signInWithApple } from '../appleAuth';
+import { buildAppleAuthBody, emailFromAppleIdentityToken, signInWithApple } from '../appleAuth';
 import { secureStorage } from '../../services/secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -183,5 +183,52 @@ describe('buildAppleAuthBody (live + fixed backend contract)', () => {
       .toEqual({ token: 'jwt', full_name: 'Ada' });
     expect(buildAppleAuthBody({ identityToken: 'jwt' })).toEqual({ token: 'jwt' });
     expect(buildAppleAuthBody({ identityToken: 'jwt', givenName: 'x'.repeat(300) }).full_name).toHaveLength(200);
+  });
+});
+
+// #306 r5 (Opus C-306-1 / Sol B-306-1): Apple shares the email only on the
+// first authorisation, but the identity token always carries it, so a
+// later attempt's marker and refusal are scoped to the Apple account.
+function tokenWith(payload: Record<string, unknown>): string {
+  const b64 = Buffer.from(JSON.stringify(payload)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `header.${b64}.signature`;
+}
+
+describe('emailFromAppleIdentityToken', () => {
+  it('reads the email claim and ignores anything malformed', () => {
+    expect(emailFromAppleIdentityToken(tokenWith({ email: 'pat@privaterelay.appleid.com', sub: '1' }))).toBe(
+      'pat@privaterelay.appleid.com',
+    );
+    expect(emailFromAppleIdentityToken(tokenWith({ sub: '1' }))).toBeUndefined();
+    expect(emailFromAppleIdentityToken(tokenWith({ email: 'not-an-email' }))).toBeUndefined();
+    expect(emailFromAppleIdentityToken('apple-id-token')).toBeUndefined();
+    expect(emailFromAppleIdentityToken('a.%%%.c')).toBeUndefined();
+    expect(emailFromAppleIdentityToken(null)).toBeUndefined();
+  });
+});
+
+describe('signInWithApple: provider email on coach outcomes (#306 r5)', () => {
+  beforeEach(async () => {
+    Platform.OS = 'ios';
+    mockSignInAsync.mockReset();
+    mockIsAvailableAsync.mockReset().mockResolvedValue(true);
+    mockApiPost.mockReset();
+    await AsyncStorage.clear();
+  });
+
+  it('a later attempt (no credential email) takes the email from the identity token', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@icloud.com' }) });
+    mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unconfirmed', provider_email: 'pat@icloud.com' });
+  });
+
+  it('the coach refusal returns the email too', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ email: 'pat@icloud.com' }) });
+    mockApiPost.mockRejectedValueOnce({
+      response: { status: 400, data: { message: ['property intended_role should not exist'] } },
+    });
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@icloud.com' });
   });
 });

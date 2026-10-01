@@ -92,6 +92,13 @@ function ownerFor(user: CrispUser): string | null {
   return id ? `uid:${id}` : null;
 }
 
+// #306 r5 (Sol C-306-4): this read is synchronous. With a synchronous MMKV
+// backend it returns the stored owner, so the same user keeps the session
+// across launches. Current builds use the AsyncStorage shim, whose
+// synchronous getString always returns undefined, so on every cold start the
+// owner is unknown and the session is reset once before binding: safe (never
+// another person's chat) but without continuity across cold starts. Within a
+// process the owner is held in memory (`memOwner`).
 function readOwner(): string | null {
   if (memOwner !== undefined) return memOwner;
   try {

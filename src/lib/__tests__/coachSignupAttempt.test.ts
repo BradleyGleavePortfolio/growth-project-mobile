@@ -5,6 +5,7 @@ import {
   clearUnconfirmedCoachSignup,
   hasAnyUnconfirmedCoachSignup,
   hasUnconfirmedCoachSignup,
+  normaliseEmail,
   reconcileCoachAttempt,
   rememberUnconfirmedCoachSignup,
   resolveUnconfirmedCoachSignup,
@@ -112,5 +113,21 @@ describe('classifyCoachSignupFailure (#306 r3)', () => {
     expect(classifyCoachSignupFailure({ response: { status: 408 } })).toBe('unconfirmed');
     expect(classifyCoachSignupFailure({ response: { status: 500 } })).toBe('unconfirmed');
     expect(classifyCoachSignupFailure({ response: { status: 503 } })).toBe('unconfirmed');
+  });
+});
+
+describe('normaliseEmail (#306 r5, Opus C-306-3 iii)', () => {
+  it('matches the backend canonical form: NFKC, trimmed, lower-cased', () => {
+    // Fullwidth letters and the fullwidth at sign fold to ASCII under NFKC.
+    expect(normaliseEmail(' ＰＡＴ＠Example.com ')).toBe('pat@example.com');
+    expect(normaliseEmail('Pat@Example.com')).toBe('pat@example.com');
+    expect(normaliseEmail('')).toBeUndefined();
+    expect(normaliseEmail(undefined)).toBeUndefined();
+  });
+
+  it('a compatibility variant of the address still finds its marker', async () => {
+    await AsyncStorage.clear();
+    await rememberUnconfirmedCoachSignup('email', 'pat@example.com');
+    expect(await hasUnconfirmedCoachSignup('email', 'ｐａｔ@example.com')).toBe(true);
   });
 });
