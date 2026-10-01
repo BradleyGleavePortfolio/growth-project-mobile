@@ -22,6 +22,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import { assertAndroidHealthConnectEnabled } from '../../../config/healthConnect';
 import api from '../../api';
 import { logger } from '../../../utils/logger';
 import { samsungHealthClient } from './samsungHealthClient';
@@ -116,6 +117,7 @@ export async function sync(
   if (Platform.OS !== 'android') {
     throw new SamsungHealthUnsupportedError(Platform.OS);
   }
+  assertAndroidHealthConnectEnabled();
 
   const end = now();
   const windowEnd = end.toISOString();
