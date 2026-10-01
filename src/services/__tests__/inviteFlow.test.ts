@@ -175,6 +175,28 @@ describe('Google OAuth attach', () => {
     });
   });
 
+  it('C13: a codeless Google signup forwards the chosen intended_role', async () => {
+    await authApi.googleAuth('GOOGLE_TOKEN', undefined, 'coach');
+    expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
+      token: 'GOOGLE_TOKEN',
+      intended_role: 'coach',
+    });
+  });
+
+  it('C13: an invite code wins over intended_role on /auth/google (a code always means client)', async () => {
+    await authApi.googleAuth('GOOGLE_TOKEN', 'SMOKE01', 'coach');
+    expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
+      token: 'GOOGLE_TOKEN',
+      invite_code: 'SMOKE01',
+    });
+  });
+
+  it('C13: /auth/signup-with-code never carries intended_role', async () => {
+    await authApi.signupWithCode({ name: 'A', email: 'a@example.com', password: 'Password1!', invite_code: 'SMOKE01' });
+    const body = axiosMock.__instance.post.mock.calls.at(-1)?.[1];
+    expect(body).not.toHaveProperty('intended_role');
+  });
+
   it('attachInviteCode posts the code separately for fallback attach', async () => {
     await authApi.attachInviteCode('SMOKE01');
     expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/attach-invite-code', {
