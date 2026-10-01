@@ -35,6 +35,7 @@ import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from './settings/deletionErrors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,8 +198,8 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         'Your data export has been queued. Open Data & Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
-    } catch {
-      Alert.alert('Request Failed', 'Could not submit your export request. Please try again later.');
+    } catch (err) {
+      Alert.alert('Export not started', deletionErrorCopy(err, 'export', 'trust_center.export'));
     } finally {
       setExportBusy(false);
     }
@@ -330,7 +331,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             </View>
             <View style={styles.actionBtnText}>
               <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
-              <Text style={styles.actionBtnSub}>14-day grace period before permanent deletion</Text>
+              <Text style={styles.actionBtnSub}>A grace period to change your mind before permanent deletion</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
@@ -366,10 +367,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           accessibilityLabel="Open the help centre"
           onPress={() => {
             Linking.openURL(helpUrl('/privacy')).catch(() => {
-              Alert.alert(
-                'Help unavailable',
-                'Could not open the help centre right now. Please try again later.',
-              );
+              Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
             });
           }}
         >

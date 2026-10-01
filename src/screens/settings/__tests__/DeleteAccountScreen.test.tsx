@@ -309,7 +309,7 @@ describe('DeleteAccountScreen', () => {
       await waitFor(() => utils.getByText(/Too many attempts/i));
     });
 
-    it('shows the server message when scheduling fails and stays on the form', async () => {
+    it('an expired identity check when scheduling says so, offers to confirm again and stays on the form', async () => {
       tokenOk();
       mockedDeletionApi.requestDeletion.mockRejectedValue(
         stub(axiosError(401, 'Recent authentication required')),
@@ -319,7 +319,9 @@ describe('DeleteAccountScreen', () => {
       await act(async () => {
         fireEvent.press(utils.getByTestId('confirm-button'));
       });
-      await waitFor(() => utils.getByText('Recent authentication required'));
+      await waitFor(() =>
+        utils.getByText('The check that it is you has expired. Confirm it is you again, then send the request.'),
+      );
       expect(utils.queryByTestId('deletion-date')).toBeNull();
       expect(mockedSignOut).not.toHaveBeenCalled();
     });

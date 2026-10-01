@@ -76,7 +76,7 @@ import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
 
@@ -199,6 +199,19 @@ async function handleRefreshFailure(): Promise<void> {
   // cycle still works without depending on a wall-clock timer.
   if (loggedOutOnce) return;
   loggedOutOnce = true;
+  // B-313-5 / backend B-608-10: once an account is deleted, Supabase can no
+  // longer refresh its session. Before signing out, ask the server whether
+  // the token this phone last held belongs to a deleted account, so the
+  // person is told the deletion is complete rather than silently signed
+  // out. Only a server-confirmed `deleted` counts; any other answer, or no
+  // answer, is an ordinary sign-out.
+  let deletionComplete = false;
+  try {
+    const stale = await secureStorage.getItem('supabase_token');
+    if (stale) deletionComplete = await deletedByReceipt(stale);
+  } catch {
+    deletionComplete = false;
+  }
   // Full sign-out on refresh failure: clears all auth keys (both stores),
   // resets analytics/Sentry, and emits logout. Lazy import avoids a require
   // cycle between api.ts and authActions.ts (authActions imports profileApi
@@ -212,6 +225,33 @@ async function handleRefreshFailure(): Promise<void> {
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
+  }
+  if (deletionComplete) {
+    Alert.alert(DELETION_COMPLETE_NOTICE.title, DELETION_COMPLETE_NOTICE.body);
+  }
+}
+
+/** Shown once when the server confirms the signed-out account was deleted. */
+export const DELETION_COMPLETE_NOTICE = {
+  title: 'Your account is deleted',
+  body: 'Your account and your data have been deleted, as you asked. You have been signed out of this phone.',
+} as const;
+
+/**
+ * POST /account-deletion/receipt with the (possibly expired) access token.
+ * The server answers `{ state: 'deleted' }` only for a deleted account and
+ * 404 NO_DELETION_RECEIPT otherwise.
+ */
+async function deletedByReceipt(accessToken: string): Promise<boolean> {
+  try {
+    const res = await api.post<{ state?: string }>('/account-deletion/receipt', undefined, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      skipAuthRefresh: true,
+      timeout: 8000,
+    } as RetryableConfig);
+    return res?.data?.state === 'deleted';
+  } catch {
+    return false;
   }
 }
 

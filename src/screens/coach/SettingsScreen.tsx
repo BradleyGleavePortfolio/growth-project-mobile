@@ -44,6 +44,7 @@ import { ProfileSection } from './settings/ProfileSection';
 import { SettingsToggles } from './settings/SettingsToggles';
 import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
+import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -132,7 +133,9 @@ export default function SettingsScreen() {
       // legacy /users/me/account status reflects a different, unused path.
       const res = await deletionApi.getDeletionStatus();
       const st = res.data;
-      const scheduled = st?.state === 'confirmed' || st?.state === 'requested';
+      // C-313-2: only `confirmed` is scheduled. A legacy `requested` row is
+      // finished from the Delete account screen, so it routes there.
+      const scheduled = st?.state === 'confirmed';
       setAccountStatus({
         deletionScheduled: scheduled,
         permanentDeletionAt: scheduled ? (st?.purge_after ?? null) : null,
@@ -285,13 +288,13 @@ export default function SettingsScreen() {
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
-        Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+        Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
         return;
       }
       await Linking.openURL(url);
     } catch (err) {
       console.warn('coach SettingsScreen: failed to open help URL', err);
-      Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+      Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
     }
   };
 
@@ -313,7 +316,7 @@ export default function SettingsScreen() {
               Alert.alert('Deletion canceled', 'Your account is no longer scheduled for deletion.');
             } catch (err) {
               const msg =
-                errorMessage(err, 'Could not cancel deletion. Contact support if this keeps happening.');
+                deletionErrorCopy(err, 'cancel', 'coach_settings.cancel_deletion');
               Alert.alert('Could not cancel', msg);
             } finally {
               setDeletionBusy(false);

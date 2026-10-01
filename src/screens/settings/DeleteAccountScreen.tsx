@@ -42,6 +42,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { warningTap, successTap } from '../../utils/haptics';
 import { signOut } from '../../services/authActions';
+import { SESSION_ENDED_COPY, deletionErrorCopy, isSessionEnded401 } from './deletionErrors';
 import {
   deletionApi,
   isAccountDeletedError,
@@ -52,7 +53,7 @@ import {
 import { isAppleAuthAvailable, reauthenticateWithApple } from '../../utils/appleAuth';
 import { reauthenticateWithGoogle } from '../../utils/googleReauth';
 import { getSignInProviders, SignInProvider } from '../../utils/authProviders';
-import { errorMessage, errorStatus } from '../../types/common';
+import { errorStatus } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 // The user must type this exact string (case-insensitive) OR their registered
@@ -76,7 +77,7 @@ export const PERMANENTLY_DELETED: readonly string[] = [
 export const KEPT_RECORDS: readonly string[] = [
   'Payment and tax records that Stripe keeps for as long as the law requires. Our own copies keep only amounts, dates and payment references, with no name or contact details.',
   'One deletion record with a random reference, the date and the result. It holds no name, email or account details.',
-  'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and see that their coach is no longer available.',
+  'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and are no longer linked to you.',
 ];
 
 export const BILLING_NOTE =
@@ -101,13 +102,15 @@ export function formatDeletionDate(iso?: string | null): string | null {
 
 function reauthErrorMessage(err: unknown, method: ReauthMethod): string {
   const status = errorStatus(err);
+  // C-313-6: a 401 from the auth guard means the session ended, not that the
+  // password or provider proof was wrong.
+  if (isSessionEnded401(err)) return SESSION_ENDED_COPY;
   if (status === 401) {
-    if (method === 'password') return 'That password is not correct. Please try again.';
-    if (method === 'apple') return 'Apple could not confirm it is you. Please try again.';
+    if (method === 'password') return 'That password is not correct. Check it and enter it again.';
+    if (method === 'apple') return 'Apple could not confirm it is you. Tap Sign in with Apple to try again.';
     return 'Google could not confirm it is you. Sign in with the Google account you use here and try again.';
   }
-  if (status === 429) return 'Too many attempts. Please wait a minute and try again.';
-  return errorMessage(err, 'Could not confirm it is you. Please try again.');
+  return deletionErrorCopy(err, 'confirm', 'delete_account.reauth');
 }
 
 export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenProps) {
@@ -116,6 +119,9 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
   const currentUser = useCurrentUser();
 
   const [phase, setPhase] = useState<LoadPhase>('loading');
+  const [statusError, setStatusError] = useState(
+    'We could not check your account deletion status. Check your connection, then try again.',
+  );
   const [status, setStatus] = useState<DeletionStatus | null>(null);
   const [appleOutcome, setAppleOutcome] = useState<AppleRevocationOutcome | null>(null);
   const [confirmText, setConfirmText] = useState('');
@@ -150,7 +156,10 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           return;
         }
         // Unknown state: never fall back to the request form.
-        if (!opts.quiet) setPhase('error');
+        if (!opts.quiet) {
+          setStatusError(deletionErrorCopy(err, 'check', 'delete_account.status'));
+          setPhase('error');
+        }
       }
     },
     [markDeleted],
@@ -228,7 +237,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       setPhase('ready');
     } catch (err) {
       if (isAccountDeletedError(err)) return markDeleted();
-      setError(errorMessage(err, 'Could not schedule account deletion. Please try again.'));
+      setError(deletionErrorCopy(err, 'schedule', 'delete_account.schedule'));
     }
   };
 
@@ -253,7 +262,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       const apple = await reauthenticateWithApple();
       if (!apple.success || !apple.identityToken) {
         if (!apple.cancelled) {
-          setError(apple.error || 'Apple could not confirm it is you. Please try again.');
+          setError(apple.error || 'Apple could not confirm it is you. Tap Sign in with Apple to try again.');
         }
         return;
       }
@@ -269,7 +278,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       const google = await reauthenticateWithGoogle();
       if (!google.success || !google.accessToken) {
         if (!google.cancelled) {
-          setError(google.error || 'Google could not confirm it is you. Please try again.');
+          setError(google.error || 'Google could not confirm it is you. Tap Continue with Google to try again.');
         }
         return;
       }
@@ -299,7 +308,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
               setError('Your deletion is already being completed and can no longer be cancelled.');
               return;
             }
-            setError(errorMessage(err, 'Could not cancel the deletion. Please try again.'));
+            setError(deletionErrorCopy(err, 'cancel', 'delete_account.cancel'));
           } finally {
             setBusy(false);
           }
@@ -381,7 +390,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         {header}
         <View style={styles.centered}>
           <Text style={styles.bodyText} testID="status-error">
-            We could not check your account deletion status. Check your connection and try again.
+            {statusError}
           </Text>
           <HapticPressable
             intent="light"
