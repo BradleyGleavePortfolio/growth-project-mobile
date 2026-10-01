@@ -3,26 +3,32 @@
  * 19.373 right to deletion). Shared by the client and coach Settings.
  *
  * Flow (backend src/account-deletion/, PR #608):
- *  1. On open, GET /me/delete-account/status. If a deletion is already
- *     scheduled the screen shows the status view (exact date + cancel).
- *  2. Otherwise the user reads what is removed and kept, types DELETE or
- *     their email, then re-authenticates: their password, or (iOS) the
- *     native Sign in with Apple sheet.
- *  3. POST /auth/recent-auth-token mints a short-lived single-use token from
- *     that proof; POST /me/delete-account with X-Recent-Auth-Token schedules
- *     the deletion IN THE SAME REQUEST (no email step). Apple users also send
- *     the sheet's authorization code so the server revokes their Sign in with
- *     Apple tokens.
- *  4. The response's purge_after date is shown in the status view, with
- *     "Keep my account" (POST /me/delete-account/cancel) until then.
+ *  1. GET /me/delete-account/status on open, on screen focus and when the app
+ *     returns to the foreground. `confirmed` shows the status view; `deleted`
+ *     (or any 403 ACCOUNT_DELETED) shows the completion view and signs out;
+ *     a legacy `requested` row is NOT scheduled and is finished from the form;
+ *     a status error shows a retry state, never the form.
+ *  2. The form explains what is deleted and kept, asks for DELETE or the
+ *     account email, then a re-auth matching the account's sign-in methods:
+ *     password, Sign in with Apple (iOS), or Google (Supabase OAuth again).
+ *  3. POST /auth/recent-auth-token mints a single-use token from that proof;
+ *     POST /me/delete-account with X-Recent-Auth-Token schedules the deletion
+ *     in the same request. Apple users also send the authorization code so
+ *     the server can revoke Sign in with Apple tokens.
+ *  4. Timing copy uses the server's grace_days, purge_after and completes_by.
+ *     Apple copy says access was removed only when the server reports
+ *     `revoked`; otherwise it explains how to remove the app from Apple ID.
  *
- * Copy rules: every claim must match the backend finalizer fan-out. No emoji,
- * theme tokens only, accessibilityLabel + accessibilityRole on every control.
+ * Copy rules: every claim must match the backend erasure manifest
+ * (src/account-deletion/account-deletion.manifest.ts). No emoji, no
+ * exclamation marks, theme tokens only, accessibilityLabel + accessibilityRole
+ * on every control.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -36,8 +42,16 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { warningTap, successTap } from '../../utils/haptics';
 import { signOut } from '../../services/authActions';
-import { deletionApi, DeletionStatus } from '../../services/api';
+import {
+  deletionApi,
+  isAccountDeletedError,
+  AppleRevocationOutcome,
+  DeletionStatus,
+  RecentAuthProof,
+} from '../../services/api';
 import { isAppleAuthAvailable, reauthenticateWithApple } from '../../utils/appleAuth';
+import { reauthenticateWithGoogle } from '../../utils/googleReauth';
+import { getSignInProviders, SignInProvider } from '../../utils/authProviders';
 import { errorMessage, errorStatus } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
@@ -45,29 +59,38 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 // email address before the re-auth controls are enabled.
 const REQUIRED_CONFIRMATION = 'DELETE';
 
+// Mirrors the backend erasure manifest: deleted or irreversibly scrubbed when
+// the deletion completes.
 export const PERMANENTLY_DELETED: readonly string[] = [
-  'Your profile, biometrics and body measurements',
-  'Food log, water log and fasting records',
-  'Workout history and exercise records',
-  'Check-ins, habits and weight entries',
-  'Health and activity data synced from Apple Health or connected devices, and bloodwork you entered',
+  'Your profile, body measurements and consultation answers',
+  'Food, water, fasting, weight and workout logs, check-ins and habits',
+  'Health and activity data synced from Apple Health or connected devices, and bloodwork you entered, including uploaded files',
   'Your conversations with Roman, the AI assistant',
-  'Your community posts, comments, messages, voice notes and reactions (the text is erased and the item is removed for everyone)',
-  'Your consultation answers, targets, recipes and lists',
-  'Notification and app preferences',
+  'Your messages, community posts, comments, direct messages, voice notes and reactions',
+  'Coach media, notes and briefs, if you coach',
+  'Your targets, recipes, lists and preferences',
+  'Notification settings and push notification tokens',
 ];
 
+// Mirrors the manifest's retained rows (operator retention policy).
 export const KEPT_RECORDS: readonly string[] = [
-  'Billing and invoice records that tax and accounting law requires us to keep',
-  'Audit log entries: your identity is removed but the event record is kept for security and compliance',
-  'Coach message threads: your name and message text are removed; the thread is kept for the other person',
+  'Payment and tax records that Stripe keeps for as long as the law requires. Our own copies keep only amounts, dates and payment references, with no name or contact details.',
+  'One deletion record with a random reference, the date and the result. It holds no name, email or account details.',
+  'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and see that their coach is no longer available.',
 ];
+
+export const BILLING_NOTE =
+  'Any subscription or payment plan you have, as a client or as a coach, is cancelled when the deletion completes, and scheduled reminders and emails stop. Until then it stays active.';
+
+export const APPLE_FALLBACK =
+  'You can also remove this app from your Apple ID yourself: on your iPhone open Settings, tap your name, then Sign-In & Security, then Sign in with Apple, choose this app and stop using it with your Apple ID.';
 
 interface DeleteAccountScreenProps {
   navigation: NavigationProp<ParamListBase>;
 }
 
-type ScheduledStatus = Pick<DeletionStatus, 'state' | 'purge_after' | 'cancellable'>;
+type ReauthMethod = 'password' | 'apple' | 'google';
+type LoadPhase = 'loading' | 'ready' | 'error' | 'deleted';
 
 export function formatDeletionDate(iso?: string | null): string | null {
   if (!iso) return null;
@@ -76,16 +99,12 @@ export function formatDeletionDate(iso?: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-function isScheduled(s: ScheduledStatus | null): boolean {
-  return !!s && (s.state === 'confirmed' || s.state === 'requested');
-}
-
-function reauthErrorMessage(err: unknown, method: 'password' | 'apple'): string {
+function reauthErrorMessage(err: unknown, method: ReauthMethod): string {
   const status = errorStatus(err);
   if (status === 401) {
-    return method === 'password'
-      ? 'That password is not correct. Please try again.'
-      : 'Apple could not confirm it is you. Please try again.';
+    if (method === 'password') return 'That password is not correct. Please try again.';
+    if (method === 'apple') return 'Apple could not confirm it is you. Please try again.';
+    return 'Google could not confirm it is you. Sign in with the Google account you use here and try again.';
   }
   if (status === 429) return 'Too many attempts. Please wait a minute and try again.';
   return errorMessage(err, 'Could not confirm it is you. Please try again.');
@@ -96,13 +115,16 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
 
-  const [status, setStatus] = useState<ScheduledStatus | null>(null);
-  const [loadingStatus, setLoadingStatus] = useState(true);
+  const [phase, setPhase] = useState<LoadPhase>('loading');
+  const [status, setStatus] = useState<DeletionStatus | null>(null);
+  const [appleOutcome, setAppleOutcome] = useState<AppleRevocationOutcome | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [password, setPassword] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [providers, setProviders] = useState<SignInProvider[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signedOut = useRef(false);
 
   const userEmail = currentUser?.email ?? '';
 
@@ -110,19 +132,29 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     confirmText.trim().toUpperCase() === REQUIRED_CONFIRMATION ||
     (userEmail !== '' && confirmText.trim().toLowerCase() === userEmail.toLowerCase());
 
-  const loadStatus = useCallback(async () => {
-    setLoadingStatus(true);
-    try {
-      const res = await deletionApi.getDeletionStatus();
-      setStatus(res.data ?? null);
-    } catch {
-      // Unknown state: show the request form. Requesting again is idempotent
-      // on the server, so a duplicate request cannot create a second schedule.
-      setStatus(null);
-    } finally {
-      setLoadingStatus(false);
-    }
+  const markDeleted = useCallback(() => {
+    setPhase('deleted');
   }, []);
+
+  const loadStatus = useCallback(
+    async (opts: { quiet?: boolean } = {}) => {
+      if (!opts.quiet) setPhase('loading');
+      try {
+        const res = await deletionApi.getDeletionStatus();
+        const next = res.data ?? null;
+        setStatus(next);
+        setPhase(next?.state === 'deleted' ? 'deleted' : 'ready');
+      } catch (err) {
+        if (isAccountDeletedError(err)) {
+          markDeleted();
+          return;
+        }
+        // Unknown state: never fall back to the request form.
+        if (!opts.quiet) setPhase('error');
+      }
+    },
+    [markDeleted],
+  );
 
   useEffect(() => {
     loadStatus();
@@ -131,15 +163,43 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       .then((ok) => {
         if (mounted) setAppleAvailable(ok);
       })
-      .catch(() => undefined);
+      .catch(() => setAppleAvailable(false));
+    getSignInProviders()
+      .then((list) => {
+        if (mounted) setProviders(list);
+      })
+      .catch(() => setProviders(null));
     return () => {
       mounted = false;
     };
   }, [loadStatus]);
 
+  // Recheck when the screen regains focus or the app returns to the
+  // foreground: the deletion may have completed in the meantime.
+  useEffect(() => {
+    const unsubscribeFocus = navigation.addListener('focus', () => {
+      loadStatus({ quiet: true });
+    });
+    const appState = AppState.addEventListener('change', (next) => {
+      if (next === 'active') loadStatus({ quiet: true });
+    });
+    return () => {
+      unsubscribeFocus();
+      appState.remove();
+    };
+  }, [navigation, loadStatus]);
+
+  // Deletion completed: clear the local session once.
+  useEffect(() => {
+    if (phase === 'deleted' && !signedOut.current) {
+      signedOut.current = true;
+      signOut();
+    }
+  }, [phase]);
+
   const schedule = async (
-    proof: Parameters<typeof deletionApi.issueRecentAuthToken>[0],
-    method: 'password' | 'apple',
+    proof: RecentAuthProof,
+    method: ReauthMethod,
     appleAuthorizationCode?: string | null,
   ) => {
     let token: string;
@@ -147,6 +207,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       const res = await deletionApi.issueRecentAuthToken(proof);
       token = res.data.token;
     } catch (err) {
+      if (isAccountDeletedError(err)) return markDeleted();
       setError(reauthErrorMessage(err, method));
       return;
     }
@@ -154,34 +215,41 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       const res = await deletionApi.requestDeletion(token, appleAuthorizationCode);
       setPassword('');
       setConfirmText('');
+      setAppleOutcome(res.data.apple_revocation ?? null);
       setStatus({
         state: 'confirmed',
+        requested_at: res.data.requested_at,
+        confirmed_at: res.data.confirmed_at,
+        grace_days: res.data.grace_days,
         purge_after: res.data.purge_after,
+        completes_by: res.data.completes_by ?? null,
         cancellable: res.data.cancellable,
       });
+      setPhase('ready');
     } catch (err) {
+      if (isAccountDeletedError(err)) return markDeleted();
       setError(errorMessage(err, 'Could not schedule account deletion. Please try again.'));
     }
   };
 
-  const handleDeleteWithPassword = async () => {
-    if (!confirmTextIsValid || !password || busy) return;
+  const runReauth = async (method: ReauthMethod, task: () => Promise<void>) => {
+    if (!confirmTextIsValid || busy) return;
+    if (method === 'password' && !password) return;
     setError(null);
     setBusy(true);
     warningTap();
     try {
-      await schedule({ password }, 'password');
+      await task();
     } finally {
       setBusy(false);
     }
   };
 
-  const handleDeleteWithApple = async () => {
-    if (!confirmTextIsValid || busy) return;
-    setError(null);
-    setBusy(true);
-    warningTap();
-    try {
+  const handleDeleteWithPassword = () =>
+    runReauth('password', () => schedule({ password }, 'password'));
+
+  const handleDeleteWithApple = () =>
+    runReauth('apple', async () => {
       const apple = await reauthenticateWithApple();
       if (!apple.success || !apple.identityToken) {
         if (!apple.cancelled) {
@@ -194,10 +262,19 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         'apple',
         apple.authorizationCode,
       );
-    } finally {
-      setBusy(false);
-    }
-  };
+    });
+
+  const handleDeleteWithGoogle = () =>
+    runReauth('google', async () => {
+      const google = await reauthenticateWithGoogle();
+      if (!google.success || !google.accessToken) {
+        if (!google.cancelled) {
+          setError(google.error || 'Google could not confirm it is you. Please try again.');
+        }
+        return;
+      }
+      await schedule({ provider: 'google_session', provider_token: google.accessToken }, 'google');
+    });
 
   const handleKeepAccount = () => {
     Alert.alert('Keep your account?', 'Your account will no longer be scheduled for deletion.', [
@@ -210,9 +287,18 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           try {
             await deletionApi.cancelDeletion();
             successTap();
+            setAppleOutcome(null);
             await loadStatus();
             Alert.alert('Deletion cancelled', 'Your account is no longer scheduled for deletion.');
           } catch (err) {
+            if (isAccountDeletedError(err)) {
+              markDeleted();
+              return;
+            }
+            if (errorStatus(err) === 409) {
+              setError('Your deletion is already being completed and can no longer be cancelled.');
+              return;
+            }
             setError(errorMessage(err, 'Could not cancel the deletion. Please try again.'));
           } finally {
             setBusy(false);
@@ -244,7 +330,23 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     </Text>
   ) : null;
 
-  if (loadingStatus) {
+  const deletedList = (
+    <View style={styles.card}>
+      {PERMANENTLY_DELETED.map((item) => (
+        <View key={item} style={styles.listRow}>
+          <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+          <Text style={styles.listText}>{item}</Text>
+        </View>
+      ))}
+    </View>
+  );
+
+  const graceDays =
+    typeof status?.grace_days === 'number' && status.grace_days > 0 ? status.grace_days : null;
+  const gracePeriod = graceDays ? `${graceDays}-day grace period` : 'grace period';
+  const isAppleAccount = providers?.includes('apple') ?? false;
+
+  if (phase === 'loading') {
     return (
       <View style={styles.container}>
         {header}
@@ -255,10 +357,53 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     );
   }
 
+  // ── Completed ──────────────────────────────────────────────────────────────
+  if (phase === 'deleted') {
+    return (
+      <View style={styles.container}>
+        {header}
+        <View style={styles.centered}>
+          <Text style={styles.statusDate} testID="deletion-complete">
+            Your account has been deleted
+          </Text>
+          <Text style={[styles.bodyText, { marginTop: 12, textAlign: 'center' }]}>
+            Your personal data has been removed. You are being signed out of this device.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Status unknown ─────────────────────────────────────────────────────────
+  if (phase === 'error') {
+    return (
+      <View style={styles.container}>
+        {header}
+        <View style={styles.centered}>
+          <Text style={styles.bodyText} testID="status-error">
+            We could not check your account deletion status. Check your connection and try again.
+          </Text>
+          <HapticPressable
+            intent="light"
+            style={styles.keepBtn}
+            onPress={() => loadStatus()}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            testID="status-retry"
+          >
+            <Text style={styles.keepBtnText}>Try again</Text>
+          </HapticPressable>
+        </View>
+      </View>
+    );
+  }
+
   // ── Status view: deletion scheduled ────────────────────────────────────────
-  if (isScheduled(status)) {
-    const date = formatDeletionDate(status?.purge_after);
-    const cancellable = status?.cancellable !== false;
+  if (status?.state === 'confirmed') {
+    const date = formatDeletionDate(status.purge_after);
+    const cancellable = status.cancellable !== false;
+    const showAppleFallback =
+      appleOutcome !== 'revoked' && (isAppleAccount || (appleOutcome !== null && appleOutcome !== 'not_requested'));
     return (
       <View style={styles.container}>
         {header}
@@ -272,12 +417,12 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           <Text style={styles.sectionHeading}>Permanent deletion date</Text>
           <View style={styles.card}>
             <Text style={styles.statusDate} testID="deletion-date">
-              {date ?? 'Within 14 days'}
+              {date ?? 'When the grace period ends'}
             </Text>
-            <Text style={[styles.bodyText, { marginTop: 12 }]}>
+            <Text style={[styles.bodyText, { marginTop: 12 }]} testID="deletion-timing">
               {date
-                ? `On ${date} your account and the data listed below are permanently deleted. This cannot be undone after that date.`
-                : 'Your account and the data listed below are permanently deleted at the end of the 14-day grace period. This cannot be undone after that date.'}
+                ? `After ${date}, your account and the data listed below are permanently deleted. This is finished within a day of that date and cannot be undone.`
+                : 'When the grace period ends, your account and the data listed below are permanently deleted, usually within a day. This cannot be undone.'}
             </Text>
             <Text style={[styles.bodyText, { marginTop: 12 }]}>
               {cancellable
@@ -285,14 +430,25 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
                 : 'The grace period has ended, so this deletion can no longer be cancelled.'}
             </Text>
           </View>
+          {appleOutcome === 'revoked' ? (
+            <View style={styles.card}>
+              <Text style={styles.bodyText} testID="apple-revoked">
+                Apple confirmed that this app no longer has access to your Apple ID.
+              </Text>
+            </View>
+          ) : null}
+          {showAppleFallback ? (
+            <View style={styles.card}>
+              <Text style={styles.bodyText} testID="apple-fallback">
+                {APPLE_FALLBACK}
+              </Text>
+            </View>
+          ) : null}
           <Text style={styles.sectionHeading}>Permanently deleted</Text>
+          {deletedList}
+          <Text style={styles.sectionHeading}>Subscriptions and payments</Text>
           <View style={styles.card}>
-            {PERMANENTLY_DELETED.map((item) => (
-              <View key={item} style={styles.listRow}>
-                <Ionicons name="close-circle-outline" size={16} color={colors.error} />
-                <Text style={styles.listText}>{item}</Text>
-              </View>
-            ))}
+            <Text style={styles.bodyText}>{BILLING_NOTE}</Text>
           </View>
           {errorView}
           {cancellable ? (
@@ -327,18 +483,47 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     );
   }
 
-  // ── Request form ───────────────────────────────────────────────────────────
+  // ── Request form (also finishes a legacy unconfirmed request) ─────────────
+  const known = providers ?? [];
+  const offerAll = providers === null;
+  let showPassword = offerAll || known.includes('email');
+  let showApple = appleAvailable && (offerAll || known.includes('apple'));
+  let showGoogle = offerAll || known.includes('google');
+  if (!showPassword && !showApple && !showGoogle) {
+    // No matching method on this device: offer everything the platform has.
+    showPassword = true;
+    showApple = appleAvailable;
+    showGoogle = true;
+  }
   const passwordEnabled = confirmTextIsValid && password.length > 0 && !busy;
-  const appleEnabled = confirmTextIsValid && !busy;
+  const providerEnabled = confirmTextIsValid && !busy;
+  const methods = [
+    showPassword ? 'enter your password' : null,
+    showApple ? 'confirm with Apple' : null,
+    showGoogle ? 'confirm with Google' : null,
+  ].filter((m): m is string => m !== null);
+  const methodsText =
+    methods.length > 1
+      ? `${methods.slice(0, -1).join(', ')} or ${methods[methods.length - 1]}`
+      : methods[0];
 
   return (
     <View style={styles.container}>
       {header}
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {status?.state === 'requested' ? (
+          <View style={styles.card}>
+            <Text style={styles.bodyText} testID="legacy-request-notice">
+              You asked to delete your account earlier, but that request was not confirmed, so
+              nothing is scheduled yet. Confirm below to schedule the deletion.
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.warningBanner}>
           <Ionicons name="warning-outline" size={20} color={colors.error} />
           <Text style={styles.warningText}>
-            This action is irreversible after the 14-day grace period.
+            Deletion becomes permanent when the {gracePeriod} ends.
           </Text>
         </View>
 
@@ -347,32 +532,26 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           <Text style={styles.bodyText}>
             When you confirm below, deletion of the account{' '}
             <Text style={styles.bodyBold}>{userEmail}</Text> is scheduled straight away. You will
-            see the exact deletion date on the next screen.
+            see the exact date on the next screen.
           </Text>
           <Text style={[styles.bodyText, { marginTop: 12 }]}>
-            There is a <Text style={styles.bodyBold}>14-day grace period</Text>. During those 14
-            days you can keep using the app and cancel the deletion from Settings, Delete account.
+            There is a <Text style={styles.bodyBold}>{gracePeriod}</Text>. During that time you can
+            keep using the app and cancel the deletion from Settings, Delete account.
           </Text>
           <Text style={[styles.bodyText, { marginTop: 12 }]}>
-            After 14 days, your personal data is permanently removed. You will not be able to
-            recover your account or any data after that point.
+            When it ends, your personal data is permanently deleted, usually within a day. You will
+            not be able to recover your account or any data after that.
           </Text>
         </View>
 
         <Text style={styles.sectionHeading}>Permanently deleted</Text>
-        <View style={styles.card}>
-          {PERMANENTLY_DELETED.map((item) => (
-            <View key={item} style={styles.listRow}>
-              <Ionicons name="close-circle-outline" size={16} color={colors.error} />
-              <Text style={styles.listText}>{item}</Text>
-            </View>
-          ))}
-          <Text style={[styles.bodyText, { marginTop: 12, fontSize: 13, color: colors.textMuted }]}>
-            If you signed in with Apple, the app&apos;s access to your Apple ID is also revoked.
-          </Text>
-        </View>
+        {deletedList}
+        <Text style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}>
+          If you signed in with Apple, we also ask Apple to remove this app&apos;s access to your
+          Apple ID. You will see whether that worked, and how to do it yourself if it did not.
+        </Text>
 
-        <Text style={styles.sectionHeading}>Kept for legal and operational reasons</Text>
+        <Text style={styles.sectionHeading}>What is kept</Text>
         <View style={styles.card}>
           {KEPT_RECORDS.map((item) => (
             <View key={item} style={styles.listRow}>
@@ -380,9 +559,11 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
               <Text style={styles.listText}>{item}</Text>
             </View>
           ))}
-          <Text style={[styles.bodyText, { marginTop: 12, fontSize: 13, color: colors.textMuted }]}>
-            Your name, email address and phone number are removed from all retained records.
-          </Text>
+        </View>
+
+        <Text style={styles.sectionHeading}>Subscriptions and payments</Text>
+        <View style={styles.card}>
+          <Text style={styles.bodyText}>{BILLING_NOTE}</Text>
         </View>
 
         <View style={styles.exportReminder}>
@@ -417,57 +598,59 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
         <Text style={styles.sectionHeading}>Step 2: Confirm it is you</Text>
         <View style={styles.card}>
-          <Text style={styles.bodyText}>
-            {appleAvailable
-              ? 'Enter your password, or if you sign in with Apple, confirm with Apple.'
-              : 'Enter your password.'}
+          <Text style={styles.bodyText} testID="reauth-methods">
+            {`To continue, ${methodsText}.`}
           </Text>
-          <TextInput
-            style={styles.reauthInput}
-            value={password}
-            onChangeText={(t) => {
-              setPassword(t);
-              setError(null);
-            }}
-            placeholder="Password"
-            placeholderTextColor={colors.textMuted}
-            secureTextEntry
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="password"
-            textContentType="password"
-            accessibilityLabel="Your password"
-            testID="password-input"
-          />
+          {showPassword ? (
+            <TextInput
+              style={styles.reauthInput}
+              value={password}
+              onChangeText={(t) => {
+                setPassword(t);
+                setError(null);
+              }}
+              placeholder="Password"
+              placeholderTextColor={colors.textMuted}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoComplete="password"
+              textContentType="password"
+              accessibilityLabel="Your password"
+              testID="password-input"
+            />
+          ) : null}
         </View>
 
         {errorView}
 
-        <HapticPressable
-          intent="warning"
-          style={[styles.deleteBtn, !passwordEnabled && styles.deleteBtnDisabled]}
-          onPress={handleDeleteWithPassword}
-          disabled={!passwordEnabled}
-          accessibilityRole="button"
-          accessibilityLabel="Confirm with password and delete my account"
-          accessibilityHint="Schedules deletion and starts the 14-day grace period"
-          testID="confirm-button"
-        >
-          {busy ? (
-            <ActivityIndicator color={colors.textOnPrimary} />
-          ) : (
-            <Text style={styles.deleteBtnText}>Delete my account</Text>
-          )}
-        </HapticPressable>
+        {showPassword ? (
+          <HapticPressable
+            intent="warning"
+            style={[styles.deleteBtn, !passwordEnabled && styles.deleteBtnDisabled]}
+            onPress={handleDeleteWithPassword}
+            disabled={!passwordEnabled}
+            accessibilityRole="button"
+            accessibilityLabel="Confirm with password and delete my account"
+            accessibilityHint="Schedules deletion and starts the grace period"
+            testID="confirm-button"
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.textOnPrimary} />
+            ) : (
+              <Text style={styles.deleteBtnText}>Delete my account</Text>
+            )}
+          </HapticPressable>
+        ) : null}
 
-        {appleAvailable ? (
+        {showApple ? (
           <>
-            <Text style={styles.orText}>or</Text>
+            {showPassword ? <Text style={styles.orText}>or</Text> : null}
             <HapticPressable
               intent="warning"
-              style={[styles.appleBtn, !appleEnabled && styles.deleteBtnDisabled]}
+              style={[styles.appleBtn, !providerEnabled && styles.deleteBtnDisabled]}
               onPress={handleDeleteWithApple}
-              disabled={!appleEnabled}
+              disabled={!providerEnabled}
               accessibilityRole="button"
               accessibilityLabel="Confirm with Apple and delete my account"
               accessibilityHint="Opens Sign in with Apple, then schedules deletion"
@@ -475,6 +658,25 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
             >
               <Ionicons name="logo-apple" size={18} color={colors.background} />
               <Text style={styles.appleBtnText}>Confirm with Apple and delete</Text>
+            </HapticPressable>
+          </>
+        ) : null}
+
+        {showGoogle ? (
+          <>
+            {showPassword || showApple ? <Text style={styles.orText}>or</Text> : null}
+            <HapticPressable
+              intent="warning"
+              style={[styles.appleBtn, !providerEnabled && styles.deleteBtnDisabled]}
+              onPress={handleDeleteWithGoogle}
+              disabled={!providerEnabled}
+              accessibilityRole="button"
+              accessibilityLabel="Confirm with Google and delete my account"
+              accessibilityHint="Opens Google sign-in, then schedules deletion"
+              testID="google-confirm-button"
+            >
+              <Ionicons name="logo-google" size={18} color={colors.background} />
+              <Text style={styles.appleBtnText}>Confirm with Google and delete</Text>
             </HapticPressable>
           </>
         ) : null}
@@ -488,7 +690,6 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         >
           <Text style={styles.cancelBtnText}>Cancel — keep my account</Text>
         </HapticPressable>
-
       </ScrollView>
     </View>
   );

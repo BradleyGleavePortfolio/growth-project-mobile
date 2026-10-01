@@ -903,9 +903,9 @@ export const systemApi = {
 
 // ── Phase 10 — GDPR right to erasure / Apple 5.1.1(v) in-app deletion ──────
 // Canonical in-app flow (backend src/account-deletion/):
-//   1. POST /auth/recent-auth-token  — fresh re-auth (password, or a fresh
-//      Sign in with Apple identity token). Returns a short-lived single-use
-//      token bound to the caller.
+//   1. POST /auth/recent-auth-token  — fresh re-auth (password, a fresh
+//      Sign in with Apple identity token, or a fresh Google sign-in session).
+//      Returns a short-lived single-use token bound to the caller.
 //   2. POST /me/delete-account with header X-Recent-Auth-Token — schedules the
 //      deletion in the same request: the grace period starts now and the
 //      response carries the exact purge date. Idempotent.
@@ -920,9 +920,23 @@ export interface DeletionStatus {
   confirmed_at?: string | null;
   grace_days?: number | null;
   purge_after?: string | null;
+  /** Latest time the nightly job is expected to have finished (purge_after + 1 day). */
+  completes_by?: string | null;
   deleted_at?: string | null;
   cancellable?: boolean | null;
 }
+
+/**
+ * Outcome of the server's Sign in with Apple token revocation (backend
+ * apple-token-revocation.service.ts). Only 'revoked' means Apple confirmed
+ * the app's access was removed; every other value needs the manual fallback.
+ */
+export type AppleRevocationOutcome =
+  | 'revoked'
+  | 'not_requested'
+  | 'not_configured'
+  | 'exchange_failed'
+  | 'revoke_failed';
 
 export interface DeletionScheduledResponse {
   state: 'confirmed';
@@ -932,19 +946,42 @@ export interface DeletionScheduledResponse {
   confirmed_at: string | null;
   grace_days: number;
   purge_after: string;
+  completes_by?: string | null;
   cancellable: boolean;
-  apple_revocation?: string;
+  apple_revocation?: AppleRevocationOutcome;
 }
 
-/** Re-auth proof for POST /auth/recent-auth-token. */
+/**
+ * Re-auth proof for POST /auth/recent-auth-token. `google_session` is the
+ * access token of a Supabase session created by a Google sign-in moments ago
+ * (the app has no Google client id, so it cannot obtain a Google ID token).
+ */
 export type RecentAuthProof =
   | { password: string }
-  | { provider: 'apple'; provider_token: string };
+  | { provider: 'apple'; provider_token: string }
+  | { provider: 'google_session'; provider_token: string };
+
+/**
+ * True when the API reports the account as deleted (backend auth guard:
+ * 403 { code: 'ACCOUNT_DELETED' }). This is the terminal deletion signal.
+ */
+export function isAccountDeletedError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const response: unknown = Reflect.get(err, 'response');
+  if (typeof response !== 'object' || response === null) return false;
+  const data: unknown = Reflect.get(response, 'data');
+  return (
+    Reflect.get(response, 'status') === 403 &&
+    typeof data === 'object' &&
+    data !== null &&
+    Reflect.get(data, 'code') === 'ACCOUNT_DELETED'
+  );
+}
 
 export const RECENT_AUTH_HEADER = 'X-Recent-Auth-Token';
 
 export const deletionApi = {
-  /** Mint a short-lived recent-auth token (password or fresh Apple identity token). */
+  /** Mint a short-lived recent-auth token (password, Apple or Google re-auth proof). */
   issueRecentAuthToken: (proof: RecentAuthProof) =>
     api.post<{ token: string; expires_in_ms: number }>('/auth/recent-auth-token', proof, {
       skipAuthRefresh: true,
