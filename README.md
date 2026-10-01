@@ -397,7 +397,11 @@ src/
 - Client 1:1 coach packages stay available on iOS (Guideline 3.1.3(d), Stripe).
 - Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.
 - The gate fails closed. It needs the bundle flag `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` to be explicitly `false` **and** a native build below 6. Build 6 and later always hide, so an OTA update cannot turn these purchases on.
-- API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy` for server-side enforcement.
+- The feature paywall (`ProtectedScreen` + `PaywallSheet`, in front of Roman, Community, Log, Workouts, Booking and the other protected screens) never lists packages or shows a Subscribe CTA on a hidden iOS build. It shows "Your coach manages your access" with a "Message your coach" action (Guideline 3.1.1). Purchases happen only on the 1:1 coaching screen (`ClientPackages`, labelled by `oneToOneCoachingLabel`), reached from More.
+- Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
+- The Membership screen's website link is not rendered on hidden iOS builds.
+- API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
+- `app.json` `ios.buildNumber` is 6, the native anchor. `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
 Bottom tabs are icons-only (no labels). Four tabs, in order:

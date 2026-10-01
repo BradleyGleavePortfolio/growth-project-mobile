@@ -796,6 +796,17 @@ export default function RootNavigator() {
     return () => clearTimeout(t);
   }, [authState]);
 
+  // iOS coach-managed gate action (audit #304 B1): the client's thread with
+  // their coach lives on the Home stack and is free server-side.
+  const openCoachThread = () => {
+    try {
+      const nav = navigationRef as unknown as {
+        navigate: (name: string, params?: object) => void;
+      };
+      nav.navigate('Home', { screen: 'Messages' });
+    } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+  };
+
   if (authState === 'loading') {
     return (
       <View style={styles.loadingContainer}>
@@ -873,6 +884,7 @@ export default function RootNavigator() {
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
+          onMessageCoach={openCoachThread}
         >
           <ClientNavigator />
           <PackageSelectionSheet
@@ -891,6 +903,7 @@ export default function RootNavigator() {
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
+          onMessageCoach={openCoachThread}
         >
           <ClientNavigator />
         </EntitlementProvider>

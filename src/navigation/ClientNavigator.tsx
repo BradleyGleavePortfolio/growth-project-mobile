@@ -145,7 +145,12 @@ const ProtectedLogScreen = withProtectedScreen(LogScreen);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
 const ProtectedCommunityScreen = withProtectedScreen(CommunityScreen);
 const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
-const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
+// Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
+// the assigned coach is free server-side (client-messaging.controller.ts:
+// GET/POST /messages, /messages/read, /messages/unread-count carry no
+// ClientEntitlementGuard; only voice-upload is paid and still 402s into the
+// paywall). It is also the one action the iOS coach-managed gate offers, so
+// gating it here would trap an unentitled client in a loop.
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -329,7 +334,7 @@ function HomeStackNavigator() {
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
-      <HomeStackNav.Screen name="Messages"              component={ProtectedMessagesScreen} />
+      <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* Phase 9 — Notification center screens */}
       <HomeStackNav.Screen
         name="NotificationCenter"
