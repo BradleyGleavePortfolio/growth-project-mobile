@@ -21,7 +21,6 @@ import {
   Text,
   StyleSheet,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
@@ -30,7 +29,8 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { openSupportChat } from '../../services/support/crisp.service';
 // The one support inbox (owner ruling 2026-10-01), also used for access
 // requests on the signup screen.
-import { SUPPORT_EMAIL, supportMailto } from '../../constants/support';
+import { SUPPORT_EMAIL } from '../../constants/support';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -55,6 +55,8 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
   // this build (no Crisp website id, or no native module) the screen says so
   // and offers email instead of "should open automatically".
   const [unavailable, setUnavailable] = useState(false);
+  // Sol B-324-1: a failed email launch is shown, never swallowed.
+  const supportEmail = useSupportEmail('Support request');
   const open = () => {
     const result = openSupportChat({ preSignIn });
     setBlocked(result === 'blocked');
@@ -122,7 +124,7 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
             intent="medium"
             style={styles.openBtn}
             onPress={() => {
-              void Linking.openURL(supportMailto('Support request')).catch(() => undefined);
+              void supportEmail.open();
             }}
             accessibilityRole="button"
             accessibilityLabel="Email support"
@@ -143,6 +145,15 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
           <Text style={styles.openBtnText}>{blocked ? 'Try again' : 'Open Support Chat'}</Text>
         </HapticPressable>
         )}
+        {unavailable ? (
+          <SupportEmailFallback
+            handle={supportEmail}
+            textStyle={styles.body_text}
+            linkColor={colors.primary}
+            testID="support-email-fallback"
+            centered
+          />
+        ) : null}
 
         <Text style={styles.note}>
           Support is separate from Coach AI and the Client Bot. A human

@@ -151,11 +151,55 @@ describe("support email guard (S-ERRORS, one support email)", () => {
     expect(bad).toEqual([]);
   });
 
+  it("the support address is written once: only src/constants/support.ts holds the literal", () => {
+    const holders = corpus
+      .filter(({ text }) =>
+        text.toLowerCase().includes(OWNER_SUPPORT_EMAIL.toLowerCase()),
+      )
+      .map(({ f }) => f);
+    expect(holders).toEqual([path.join("src", "constants", "support.ts")]);
+  });
+
+  it("no second support-email constant is declared from a literal", () => {
+    const bad: string[] = [];
+    for (const { f, text } of corpus) {
+      if (f === path.join("src", "constants", "support.ts")) continue;
+      for (const m of text.matchAll(
+        /\b(?:const|let|var)\s+([A-Z0-9_]*(?:SUPPORT|CONTACT|HELP)[A-Z0-9_]*EMAIL[A-Z0-9_]*)\s*(?::[^=]+)?=\s*['"`]/g,
+      ))
+        bad.push(`${f}: ${m[1]}`);
+    }
+    expect(bad).toEqual([]);
+  });
+
+  it("Sol B-324-1: only the shared SupportEmailFallback opens a mailto (no silent or unhandled launch)", () => {
+    const openers = corpus
+      .filter(
+        ({ text }) =>
+          /openURL\s*\(/.test(text) && /mailto|supportMailto/.test(text),
+      )
+      .map(({ f }) => f);
+    expect(openers).toEqual([
+      path.join("src", "components", "support", "SupportEmailFallback.tsx"),
+    ]);
+  });
+
   it("every allowlist entry is still used (no stale exceptions)", () => {
     const all = corpus.map(({ text }) => text.toLowerCase()).join("\n");
     expect(
       Object.keys(ALLOWED).filter((a) => !all.includes(a.toLowerCase())),
     ).toEqual([]);
+  });
+
+  it("the literal-constant detector catches a planted second support constant (negative control)", () => {
+    const re =
+      /\b(?:const|let|var)\s+([A-Z0-9_]*(?:SUPPORT|CONTACT|HELP)[A-Z0-9_]*EMAIL[A-Z0-9_]*)\s*(?::[^=]+)?=\s*['"`]/g;
+    expect(
+      [...`export const COMMUNITY_SUPPORT_EMAIL = 'a@b.com';`.matchAll(re)].map((m) => m[1]),
+    ).toEqual(["COMMUNITY_SUPPORT_EMAIL"]);
+    expect(
+      [...`export const DELETION_SUPPORT_EMAIL = SUPPORT_EMAIL;`.matchAll(re)],
+    ).toHaveLength(0);
   });
 
   it("the detector flags a planted support address and a retired one (negative control)", () => {
