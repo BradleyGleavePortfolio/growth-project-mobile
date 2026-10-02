@@ -341,7 +341,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
           <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
-          <BulletItem text="Not your coach — your Roman conversations, which are deleted after 180 days" />
+          <BulletItem text="Not your coach — your Roman conversations, which are kept until you delete them or your account" />
           <BulletItem text="Service providers that run the app for us, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="We do not sell your data or use your health data for advertising" />
 

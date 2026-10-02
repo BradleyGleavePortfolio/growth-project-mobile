@@ -175,11 +175,18 @@ describe('TrustCenterScreen render', () => {
     await waitFor(() => expect(screen.getByTestId('trust-link-privacy')).toBeTruthy());
     expect(
       screen.getByText(
-        'Not your coach — your Roman conversations, which are deleted after 180 days',
+        'Not your coach — your Roman conversations, which are kept until you delete them or your account',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('Data residency')).toBeNull();
     expect(screen.queryByText('US East')).toBeNull();
+  });
+
+  it('never promises a 180-day Roman deletion (owner 10-01 20:32 / OR-110-1: chats are kept until the client deletes them or the account)', async () => {
+    const screen = await render(<TrustCenterScreen navigation={{ goBack: jest.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('trust-link-privacy')).toBeTruthy());
+    expect(screen.queryByText(/180 days/)).toBeNull();
+    expect(SCREEN_SRC).not.toMatch(/180[- ]day|deleted after/);
   });
 
   it('the help centre link failure keeps main\'s specific copy with the support address', async () => {
