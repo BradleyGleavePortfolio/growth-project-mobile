@@ -45,6 +45,7 @@ import type { NotificationPreferenceChangedProps } from '../../analytics/events'
 import { mediumTap } from '../../utils/haptics';
 import { readUserCacheSync } from '../../lib/userCache';
 import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -196,8 +197,15 @@ export default function NotificationPreferencesScreen({
   const [pending, setPending] = useState<ReadonlySet<NotifCategory>>(() => new Set());
   const [loading, setLoading] = useState(true);
   const [saveFailure, setSaveFailure] = useState<
-    (PreferenceSaveFailure & { category: NotifCategory }) | null
+    (PreferenceSaveFailure & { category: NotifCategory; attempted: boolean }) | null
   >(null);
+  // A server failure offers a direct way to write to support, with the short
+  // reference in the subject so support can find the request.
+  const supportEmail = useSupportEmail(
+    saveFailure?.reference
+      ? `Notification setting, reference ${saveFailure.reference}`
+      : 'Notification setting',
+  );
 
   const commitPrefs = useCallback(async (update: (current: CategoryPrefs) => CategoryPrefs) => {
     const next = update(prefsRef.current);
@@ -258,7 +266,7 @@ export default function NotificationPreferencesScreen({
           // B-312-1: say what happened and what to do next, by status.
           const noun = CATEGORIES.find((c) => c.id === category)?.noun ?? 'notification';
           const failure = preferenceSaveFailureOf(err, noun);
-          setSaveFailure({ ...failure, category });
+          setSaveFailure({ ...failure, category, attempted: value });
           // B-312-2: when the write may still have reached the server (no
           // response, or an unexpected answer), show the server's value.
           if (failure.kind === 'offline' || failure.kind === 'server') {
@@ -365,9 +373,50 @@ export default function NotificationPreferencesScreen({
               color={colors.textPrimary}
               style={styles.noticeIcon}
             />
-            <Text selectable style={styles.noticeText} testID="notif-pref-save-error-text">
-              {saveFailure.message}
-            </Text>
+            <View style={styles.noticeBody}>
+              <Text selectable style={styles.noticeText} testID="notif-pref-save-error-text">
+                {saveFailure.message}
+              </Text>
+              {/* A working next action for every failure the user can act on.
+                  Signed out has none here: the app is already returning to
+                  sign-in. */}
+              {saveFailure.kind !== 'signed_out' ? (
+                <View style={styles.noticeActions}>
+                  <HapticPressable
+                    onPress={() => handleToggle(saveFailure.category, saveFailure.attempted)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Try saving the ${
+                      CATEGORIES.find((c) => c.id === saveFailure.category)?.noun ?? 'notification'
+                    } setting again`}
+                    testID="notif-pref-save-error-retry"
+                    style={styles.noticeAction}
+                  >
+                    <Text style={styles.noticeActionText}>Try again</Text>
+                  </HapticPressable>
+                  {saveFailure.kind === 'server' ? (
+                    <HapticPressable
+                      onPress={() => {
+                        void supportEmail.open();
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel="Write to support"
+                      testID="notif-pref-save-error-support"
+                      style={styles.noticeAction}
+                    >
+                      <Text style={styles.noticeActionText}>Write to support</Text>
+                    </HapticPressable>
+                  ) : null}
+                </View>
+              ) : null}
+              {saveFailure.kind === 'server' ? (
+                <SupportEmailFallback
+                  handle={supportEmail}
+                  textStyle={styles.noticeText}
+                  linkColor={colors.primary}
+                  testID="notif-pref-support-fallback"
+                />
+              ) : null}
+            </View>
           </View>
         ) : null}
 
@@ -434,8 +483,26 @@ function makeStyles(colors: ThemeColors) {
       marginRight: 8,
       marginTop: 1,
     },
-    noticeText: {
+    noticeBody: {
       flex: 1,
+    },
+    noticeActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 8,
+    },
+    noticeAction: {
+      minHeight: 44,
+      justifyContent: 'center',
+      marginRight: 20,
+    },
+    noticeActionText: {
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: 'Inter_600SemiBold',
+      color: colors.primary,
+    },
+    noticeText: {
       fontSize: 14,
       lineHeight: 20,
       fontFamily: 'Inter_400Regular',

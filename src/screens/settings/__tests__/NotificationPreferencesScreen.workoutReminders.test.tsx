@@ -1,5 +1,6 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Linking } from 'react-native';
 import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import NotificationPreferencesScreen, {
   categoriesForRole,
@@ -8,6 +9,7 @@ import NotificationPreferencesScreen, {
 } from '../NotificationPreferencesScreen';
 import { preferenceSaveFailureOf } from '../notificationPreferenceErrors';
 import { notificationsApi } from '../../../services/api';
+import { SUPPORT_EMAIL } from '../../../constants/support';
 
 // C05 item 7 — Settings > Notifications > Workout reminders (default on).
 
@@ -25,6 +27,7 @@ jest.mock('../../../lib/consultation/report', () => ({
   reportUnexpected: (...a: unknown[]) => mockReport(...a),
 }));
 jest.mock('../../../utils/haptics', () => ({ mediumTap: jest.fn() }));
+jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
@@ -261,14 +264,25 @@ function deferred<T>() {
 }
 
 /**
- * Flip a switch without waiting for its save (held by a deferred promise):
- * `await fireEvent` would adopt the handler's pending promise. Returns that
- * promise so the test can settle it inside act.
+ * Flip a switch without waiting for its save (held by a deferred promise).
+ * fireEvent returns the handler's promise, and both `await fireEvent` and an
+ * async helper that returns it would adopt that pending promise and hang, so
+ * the handler's promise is handed back boxed and the test settles it inside
+ * act. Resolves once the PATCH has been issued (or was not, for a blocked
+ * change: then `sent` is false).
  */
-async function flip(el: Parameters<typeof fireEvent>[0], value: boolean): Promise<Promise<unknown>> {
-  const call: Promise<unknown> = fireEvent(el, 'valueChange', value);
-  await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
-  return call;
+async function flip(
+  el: Parameters<typeof fireEvent>[0],
+  value: boolean,
+): Promise<{ settled: Promise<unknown> }> {
+  const before = mockUpdate.mock.calls.length;
+  const settled: Promise<unknown> = fireEvent(el, 'valueChange', value);
+  // Let the handler run up to its first held await.
+  await act(async () => {
+    await Promise.resolve();
+  });
+  await waitFor(() => expect(mockUpdate.mock.calls.length).toBeGreaterThanOrEqual(before));
+  return { settled };
 }
 
 describe('B-312-2: overlapping preference writes', () => {
@@ -278,6 +292,7 @@ describe('B-312-2: overlapping preference writes', () => {
     mockUpdate.mockReturnValueOnce(first.promise);
     const { findByLabelText, getByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} />);
     const firstCall = await flip(await findByLabelText('Workout reminders'), false);
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
     const busy = await findByLabelText('Workout reminders');
     expect(busy.props.value).toBe(false);
     expect(busy.props.disabled).toBe(true);
@@ -287,7 +302,7 @@ describe('B-312-2: overlapping preference writes', () => {
     expect((await findByLabelText('Workout reminders')).props.value).toBe(false);
     await act(async () => {
       first.resolve({ data: {} });
-      await firstCall;
+      await firstCall.settled;
     });
     await waitFor(() => expect((getByLabelText('Workout reminders')).props.disabled).toBe(false));
     // Now a new change is sent and the screen matches the last saved value.
@@ -310,7 +325,7 @@ describe('B-312-2: overlapping preference writes', () => {
     expect((await findByLabelText('Workout reminders')).props.value).toBe(false);
     await act(async () => {
       coach.reject(httpError(401));
-      await coachCall;
+      await coachCall.settled;
     });
     await waitFor(() => expect((getByLabelText('Coach Messages')).props.value).toBe(true));
     expect((await findByLabelText('Workout reminders')).props.value).toBe(false);
@@ -340,5 +355,67 @@ describe('B-312-2: overlapping preference writes', () => {
     expect(serverValueOf('workout_reminders', { workout_reminder_push: true })).toBe(true);
     expect(serverValueOf('system', { weekly_summary_enabled: 'yes' })).toBeNull();
     expect(serverValueOf('milestones', null)).toBeNull();
+  });
+});
+
+describe('B-312-1: every failure notice carries a working next action', () => {
+  it('Try again re-sends the change the user made and clears the notice on success', async () => {
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
+    mockUpdate
+      .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { isAxiosError: true }))
+      .mockResolvedValueOnce({ data: {} });
+    const { findByLabelText, findByTestId, queryByTestId } = await render(
+      <NotificationPreferencesScreen navigation={navigation} />,
+    );
+    await fireEvent(await findByLabelText('Workout reminders'), 'valueChange', false);
+    await findByTestId('notif-pref-save-error');
+    expect((await findByLabelText('Workout reminders')).props.value).toBe(true);
+    expect(queryByTestId('notif-pref-save-error-support')).toBeNull(); // offline: no support step
+    await fireEvent.press(await findByTestId('notif-pref-save-error-retry'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+    expect(mockUpdate).toHaveBeenLastCalledWith({ workout_reminder_push: false, workout_reminder_inapp: false });
+    await waitFor(() => expect(queryByTestId('notif-pref-save-error')).toBeNull());
+    expect((await findByLabelText('Workout reminders')).props.value).toBe(false);
+  });
+
+  it('a server failure offers Write to support with the reference in the subject', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
+    mockUpdate.mockRejectedValueOnce(httpError(500, { request_id: 'abcd1234-ffff' }));
+    const { findByLabelText, findByTestId } = await render(
+      <NotificationPreferencesScreen navigation={navigation} />,
+    );
+    await fireEvent(await findByLabelText('Workout reminders'), 'valueChange', false);
+    await fireEvent.press(await findByTestId('notif-pref-save-error-support'));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(1));
+    const url = String(open.mock.calls[0][0]);
+    expect(url.startsWith(`mailto:${SUPPORT_EMAIL}`)).toBe(true);
+    expect(decodeURIComponent(url)).toContain('reference abcd1234');
+    open.mockRestore();
+  });
+
+  it('when no email app opens, the support address is shown to copy (never a dead end)', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no handler'));
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
+    mockUpdate.mockRejectedValueOnce(httpError(502));
+    const { findByLabelText, findByTestId } = await render(
+      <NotificationPreferencesScreen navigation={navigation} />,
+    );
+    await fireEvent(await findByLabelText('Workout reminders'), 'valueChange', false);
+    await fireEvent.press(await findByTestId('notif-pref-save-error-support'));
+    expect((await findByTestId('notif-pref-support-fallback-address')).props.children).toBe(SUPPORT_EMAIL);
+    open.mockRestore();
+  });
+
+  it('signed out shows no action (the app is already returning to sign-in)', async () => {
+    mockGet.mockResolvedValue({ data: {} });
+    mockUpdate.mockRejectedValueOnce(httpError(401));
+    const { findByLabelText, findByTestId, queryByTestId } = await render(
+      <NotificationPreferencesScreen navigation={navigation} />,
+    );
+    await fireEvent(await findByLabelText('Workout reminders'), 'valueChange', false);
+    await findByTestId('notif-pref-save-error');
+    expect(queryByTestId('notif-pref-save-error-retry')).toBeNull();
+    expect(queryByTestId('notif-pref-save-error-support')).toBeNull();
   });
 });

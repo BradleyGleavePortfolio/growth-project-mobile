@@ -7,7 +7,7 @@
  * The toggle is rolled back before this runs, so every message says the
  * setting was left as it was.
  */
-import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference, supportReferenceOf } from '../../utils/correlation';
 
