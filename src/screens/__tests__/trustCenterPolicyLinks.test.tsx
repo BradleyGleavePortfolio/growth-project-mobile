@@ -36,9 +36,13 @@ import {
 } from '../../config/env';
 import { trustCenterLinks } from '../trustCenterLinks';
 
+// Link failures must use the no-PII reporter; the plain one (app-wide user
+// tag with email) must not be used for them.
 const mockCaptureError = jest.fn();
+const mockCapturePlain = jest.fn();
 jest.mock('../../services/sentry', () => ({
-  captureError: (...a: unknown[]) => mockCaptureError(...a),
+  captureErrorWithoutPii: (...a: unknown[]) => mockCaptureError(...a),
+  captureError: (...a: unknown[]) => mockCapturePlain(...a),
 }));
 
 const mockSetString = jest.fn();
@@ -175,6 +179,7 @@ describe('TrustCenterScreen render', () => {
     unhandled.length = 0;
     netinfo.__reset();
     mockCaptureError.mockReset();
+    mockCapturePlain.mockReset();
     mockSetString.mockReset();
     openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     canOpen = jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
@@ -186,6 +191,7 @@ describe('TrustCenterScreen render', () => {
     canOpen.mockRestore();
     alertSpy.mockRestore();
     expect(unhandled).toEqual([]);
+    expect(mockCapturePlain).not.toHaveBeenCalled();
   });
 
   async function renderScreen() {

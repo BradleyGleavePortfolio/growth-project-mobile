@@ -11,11 +11,12 @@
  *   - unexpected   anything else: the web address, the support email and a
  *                  short reference that is also on the Sentry report.
  *
- * Every non-offline failure is reported to Sentry without personal data: the
- * report carries the link id, the step that failed, the reference and the
- * page address without any query string or fragment. The raw error message
- * is not sent as is; it is passed through sentrySafeText first (no email
- * addresses, no query strings).
+ * Every non-offline failure is reported to Sentry without personal data
+ * (captureErrorWithoutPii: no signed-in user id or email, no request data,
+ * no breadcrumbs). The report carries the link id, the step that failed, the
+ * reference and the page address without any query string or fragment. The
+ * raw error name and message are not sent as is; they pass through
+ * sentrySafeText first (no email addresses, no query strings).
  *
  * openTrustCenterLink never rejects, so a tap can never leave an unhandled
  * promise behind.
@@ -24,7 +25,7 @@ import { Linking } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
 import { SUPPORT_EMAIL } from '../constants/support';
-import { captureError } from '../services/sentry';
+import { captureErrorWithoutPii } from '../services/sentry';
 import type { TrustCenterLink } from './trustCenterLinks';
 
 export type LinkFailureCause = 'offline' | 'cannot_open' | 'unexpected';
@@ -105,7 +106,7 @@ function report(link: TrustCenterLink, failure: LinkFailure, err?: unknown): voi
   error.name = 'TrustCenterLinkError';
   const name = errorField(err, 'name');
   const message = errorField(err, 'message');
-  captureError(error, {
+  captureErrorWithoutPii(error, {
     where: 'trust_center.link_open',
     link: link.id,
     cause: failure.cause,
