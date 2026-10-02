@@ -102,11 +102,11 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
       coachSetupApi.connectStatus().catch(() => null),
       coachPackagesApi.list().catch(() => null),
       api
-        .get<{ items?: unknown[] }>("/v1/coach/money/charges", {
+        .get<{ charges?: unknown[] }>("/v1/coach/money/charges", {
           params: { status: "paid", limit: 1 },
         })
         .then((r) =>
-          Array.isArray(r.data?.items) ? r.data.items.length > 0 : null,
+          Array.isArray(r.data?.charges) ? r.data.charges.length > 0 : null,
         )
         .catch(async (err) =>
           errorStatus(err) === 404 ? hasSeenFirstPayment(coachId) : null,
