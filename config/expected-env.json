@@ -166,6 +166,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_MWB_PROGRAMS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
     "EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB": {
       "kind": "flag",
       "default": "on in dev, off in release",
