@@ -20,6 +20,26 @@
  * publishable key starts with pk_live_ or pk_test_, and no secret-shaped
  * EXPO_PUBLIC_* name is set (Opus C-319-2). Values are never printed.
  *
+ * With a release profile (`--profile <name>`, or EAS_BUILD_PROFILE on an EAS
+ * builder) and that profile listed under `releaseProfiles` in the manifest,
+ * `--release-env` also fails when (S-RELEASE-MOB):
+ *   - a checked value (every `kind: required` name plus the profile's
+ *     `require` list) is missing or a placeholder (your_..._here,
+ *     REPLACE_WITH_*, <...>, ${...}, changeme, a masked *****, ...);
+ *   - a URL-shaped value is not https on a real host (no localhost, private
+ *     emulator hosts, example.*, *.invalid / *.test / *.local);
+ *   - the Supabase anon key is not a JWT with role "anon" (a service_role or
+ *     sb_secret_ key in the bundle is a full database bypass) nor an
+ *     sb_publishable_ key;
+ *   - the Sentry DSN is not https://<key>@<host>/<project>;
+ *   - the Stripe key is not pk_live_ on a `stripe: "live"` profile;
+ *   - an eas.json build.<profile>.env value (after `extends`) is overridden
+ *     with a different value in the build environment.
+ * `--eas-hook` is the EAS `eas-build-pre-install` mode: it runs before
+ * `npm install` (no TypeScript yet), so it skips the source scan (CI runs it)
+ * and skips profiles that are not release profiles (development).
+ * `--list` prints the names a profile checks, without values.
+ *
  * A "read" is a literal `process.env.EXPO_PUBLIC_X` / `process.env['EXPO_PUBLIC_X']`
  * member expression (optional chaining included), a literal key destructured
  * from `process.env`, or a literal key passed to the flag helpers
@@ -359,36 +379,180 @@ function check(root) {
   return { errors, reads, declared };
 }
 
-/**
- * Release-environment check for an EAS build hook (not wired into a build
- * yet). Reads names from `env`, never prints a value.
- */
-function checkReleaseEnv(root, env = process.env) {
-  const vars = loadManifest(root).vars || {};
-  const errors = [];
-  for (const name of Object.keys(vars).sort()) {
-    if (vars[name] && vars[name].kind === 'required' && !String(env[name] || '').trim()) {
-      errors.push(
-        `${name} is kind "required" in config/expected-env.json but is unset or empty in this build environment. Fix: set it for this EAS environment (eas env:create --name ${name} --environment <environment>), then rebuild.`,
-      );
+const PLACEHOLDER_VALUE =
+  /^(?:your[_-].*|.*[_-]here|change[_-]?me|placeholder|todo|tbd|x{3,}|dummy|sample|null|undefined|none|false|true|0|-)$/i;
+const PLACEHOLDER_ANYWHERE = /REPLACE_WITH_|<[^>]*>|\$\{[^}]*\}|^\$[A-Z_]+$|^\*{3,}/;
+const URL_NAMES = new Set(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_HELP_BASE_URL']);
+const BAD_HOST =
+  /^(?:localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.0\.2\.2|10\.0\.3\.2|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)$|(?:^|\.)example\.(?:com|org|net)$|\.(?:example|invalid|test|localhost|local)$/i;
+const SENTRY_DSN = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._-]+)*\/\d+$/;
+
+/** Why `value` is not a usable release value for `name`, or undefined. Never includes the value. */
+function valueProblem(name, value, profileSpec = {}) {
+  const v = String(value == null ? '' : value).trim();
+  if (!v) return 'is unset or empty';
+  if (PLACEHOLDER_VALUE.test(v) || PLACEHOLDER_ANYWHERE.test(v)) return 'is a placeholder, not a real value';
+  if (URL_NAMES.has(name)) {
+    let u;
+    try {
+      u = new URL(v);
+    } catch {
+      return 'is not a URL';
+    }
+    if (u.protocol !== 'https:') return `must be an https URL (got ${u.protocol.replace(':', '')})`;
+    if (BAD_HOST.test(u.hostname)) return 'points at a local, private or example host';
+  }
+  if (name === 'EXPO_PUBLIC_SUPABASE_ANON_KEY') {
+    if (/^sb_secret_/.test(v)) return 'is a Supabase SECRET key (sb_secret_); it bypasses row-level security and must never be in the app';
+    if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(v)) {
+      const parts = v.split('.');
+      if (parts.length !== 3) return 'is not a Supabase anon key (expected a JWT or an sb_publishable_ key)';
+      let payload;
+      try {
+        payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
+      } catch {
+        return 'is not a Supabase anon key (the JWT payload does not decode)';
+      }
+      if (payload && payload.role === 'service_role') return 'is the Supabase SERVICE ROLE key; it bypasses row-level security and must never be in the app';
+      if (!payload || payload.role !== 'anon') return 'is not a Supabase anon key (JWT role is not "anon")';
     }
   }
-  const pk = String(env[STRIPE_PUBLISHABLE] || '').trim();
-  if (pk && !/^pk_(live|test)_/.test(pk)) {
-    errors.push(
-      `${STRIPE_PUBLISHABLE} is set but does not start with pk_live_ or pk_test_ (value not printed). Fix: set it to the publishable key from the Stripe dashboard; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable.`,
-    );
+  if (name === 'EXPO_PUBLIC_SENTRY_DSN' && !SENTRY_DSN.test(v)) return 'is not a Sentry DSN (https://<key>@<host>/<project-id>)';
+  if (name === STRIPE_PUBLISHABLE) {
+    if (!/^pk_(live|test)_/.test(v)) return 'does not start with pk_live_ or pk_test_; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable';
+    if (profileSpec.stripe === 'live' && !/^pk_live_/.test(v)) return 'is a Stripe TEST key on a store profile (needs pk_live_)';
+  }
+  return undefined;
+}
+
+/** releaseProfiles entry plus its resolved eas.json profile, or { skip } / { error }. */
+function releaseProfile(root, manifest, profile) {
+  const specs = (manifest && manifest.releaseProfiles) || {};
+  if (!profile) return { skip: 'no build profile given (use --profile <name>, or EAS_BUILD_PROFILE on EAS)' };
+  const spec = specs[profile];
+  if (!spec || typeof spec !== 'object' || profile.startsWith('$')) {
+    return { skip: `profile "${profile}" is not a release profile in config/expected-env.json releaseProfiles` };
+  }
+  let resolved;
+  try {
+    const { loadEas, resolveProfile } = require('./eas-profile');
+    resolved = resolveProfile(loadEas(root), profile);
+  } catch (err) {
+    return { error: `${err.message} Fix: keep config/expected-env.json releaseProfiles and eas.json build profiles in step.` };
+  }
+  return { spec, env: resolved.env || {} };
+}
+
+/** Names a release profile checks (kind:required plus `require`), sorted. */
+function checkedNames(vars, spec) {
+  const names = new Set(Object.keys(vars).filter((n) => vars[n] && vars[n].kind === 'required'));
+  for (const n of (spec && spec.require) || []) names.add(n);
+  return [...names].sort();
+}
+
+/**
+ * Release-environment check for an EAS build hook. Reads names from `env`,
+ * never prints a value. With `opts.profile` naming a release profile it also
+ * runs the per-profile checks described at the top of this file.
+ */
+function checkReleaseEnv(root, env = process.env, opts = {}) {
+  const manifest = loadManifest(root);
+  const vars = manifest.vars || {};
+  const errors = [];
+  const notes = [];
+  const rp = opts.profile !== undefined ? releaseProfile(root, manifest, opts.profile) : { skip: 'no profile' };
+  if (rp.error) errors.push(rp.error);
+  if (opts.hook) {
+    // EAS pre-install: fail closed without a profile name; skip dev builds.
+    if (!opts.profile) {
+      return {
+        errors: ['EAS_BUILD_PROFILE is unset, so the release-env check cannot tell which build profile this is (fails closed). Fix: run the build through eas build, or pass --profile <name>.'],
+        notes,
+        skipped: false,
+      };
+    }
+    if (rp.skip) return { errors, notes: [rp.skip], skipped: true };
+  }
+  if (rp.spec) {
+    // eas.json profile env sits under the build environment (on EAS the
+    // builder already merged it; locally it fills what the shell lacks).
+    const effective = { ...rp.env, ...env };
+    const appExtraDsn = readAppExtraDsn(root);
+    for (const name of checkedNames(vars, rp.spec)) {
+      if (name === 'EXPO_PUBLIC_SENTRY_DSN' && !String(effective[name] || '').trim() && appExtraDsn) {
+        const p = valueProblem(name, appExtraDsn, rp.spec);
+        if (p) errors.push(`expo.extra.sentryDsn in app.json ${p} (value not printed). Fix: put the DSN from Sentry → Project Settings → Client Keys in the EAS environment as EXPO_PUBLIC_SENTRY_DSN, then rebuild.`);
+        continue;
+      }
+      const p = valueProblem(name, effective[name], rp.spec);
+      if (p) {
+        errors.push(
+          `${name} ${p} for release profile "${opts.profile}" (value not printed). Fix: set the real value in the EAS environment for this profile (eas env:create --environment <environment> --name ${name} --value <value>, or eas env:update), then rebuild.`,
+        );
+      }
+    }
+    for (const [name, want] of Object.entries(rp.env).sort()) {
+      if (env[name] !== undefined && String(env[name]) !== String(want)) {
+        errors.push(
+          `${name} is ${JSON.stringify(String(want))} in eas.json build.${opts.profile}.env but this build environment has a different value (not printed). Fix: remove or correct the EAS variable or shell export so the binary gets the reviewed eas.json value, then rebuild.`,
+        );
+      }
+    }
+    notes.push(`release profile "${opts.profile}": checked ${checkedNames(vars, rp.spec).length} values and ${Object.keys(rp.env).length} eas.json profile values`);
+  } else {
+    if (rp.skip && opts.profile !== undefined) notes.push(rp.skip);
+    for (const name of Object.keys(vars).sort()) {
+      if (vars[name] && vars[name].kind === 'required' && !String(env[name] || '').trim()) {
+        errors.push(
+          `${name} is kind "required" in config/expected-env.json but is unset or empty in this build environment. Fix: set it for this EAS environment (eas env:create --name ${name} --environment <environment>), then rebuild.`,
+        );
+      }
+    }
+    const pk = String(env[STRIPE_PUBLISHABLE] || '').trim();
+    if (pk && !/^pk_(live|test)_/.test(pk)) {
+      errors.push(
+        `${STRIPE_PUBLISHABLE} is set but does not start with pk_live_ or pk_test_ (value not printed). Fix: set it to the publishable key from the Stripe dashboard; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable.`,
+      );
+    }
   }
   for (const name of Object.keys(env).sort()) {
     if (name.startsWith('EXPO_PUBLIC_') && secretShape(name)) {
       errors.push(secretShapeError(name, 'set in this build environment'));
     }
   }
-  return { errors };
+  return { errors, notes, skipped: !rp.spec };
+}
+
+function readAppExtraDsn(root) {
+  try {
+    const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
+    const v = app && app.expo && app.expo.extra && app.expo.extra.sentryDsn;
+    return typeof v === 'string' && v.trim() ? v.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Human list of what a release profile checks (names only). */
+function describeProfile(root, profile) {
+  const manifest = loadManifest(root);
+  const rp = releaseProfile(root, manifest, profile);
+  if (!rp.spec) return [rp.error || rp.skip];
+  return [
+    `release profile "${profile}" (stripe: ${rp.spec.stripe || 'any'}) checks these values are set and not placeholders:`,
+    ...checkedNames(manifest.vars || {}, rp.spec).map((n) => `  ${n}`),
+    `and that these eas.json build.${profile}.env values reach the build unchanged:`,
+    ...Object.keys(rp.env)
+      .sort()
+      .map((n) => `  ${n}`),
+  ];
 }
 
 module.exports = {
   checkReleaseEnv,
+  valueProblem,
+  checkedNames,
+  describeProfile,
   secretShape,
   analyzeSource,
   findReads,
@@ -401,24 +565,53 @@ module.exports = {
 };
 
 if (require.main === module) {
-  const i = process.argv.indexOf('--root');
-  const root = i > -1 ? path.resolve(process.argv[i + 1]) : path.resolve(__dirname, '..');
-  const releaseEnv = process.argv.includes('--release-env');
+  const argOf = (flag) => {
+    const i = process.argv.indexOf(flag);
+    return i > -1 ? process.argv[i + 1] : undefined;
+  };
+  const root = argOf('--root') ? path.resolve(argOf('--root')) : path.resolve(__dirname, '..');
+  const hook = process.argv.includes('--eas-hook');
+  const releaseEnv = hook || process.argv.includes('--release-env');
+  const profile = argOf('--profile') || (releaseEnv ? process.env.EAS_BUILD_PROFILE : undefined);
+  if (process.argv.includes('--list')) {
+    try {
+      for (const line of describeProfile(root, profile)) console.log(`[expected-env] ${line}`);
+    } catch (err) {
+      console.error(`[expected-env] ${err && err.message ? err.message : err}`);
+      process.exit(1);
+    }
+    process.exit(0);
+  }
   let result;
+  let release = { errors: [], notes: [], skipped: true };
   try {
-    result = check(root);
-    if (releaseEnv) result.errors.push(...checkReleaseEnv(root, process.env).errors);
+    // The EAS pre-install hook runs before npm install: no TypeScript yet, so
+    // the source scan is left to CI (node scripts/check-expected-env.js).
+    result = hook ? { errors: [], reads: new Map() } : check(root);
+    if (releaseEnv) {
+      release = checkReleaseEnv(root, process.env, { profile, hook });
+      result.errors.push(...release.errors);
+    }
   } catch (err) {
     console.error(`[expected-env] ${err && err.message ? err.message : err}`);
     process.exit(1);
   }
+  for (const n of release.notes) console.log(`[expected-env] ${n}`);
   const { errors, reads } = result;
   if (errors.length) {
     for (const e of errors) console.error(`[expected-env] ${e}`);
     console.error(`[expected-env] ${errors.length} problem(s); each line above says how to fix it.`);
     process.exit(1);
   }
-  console.log(
-    `[expected-env] OK: ${reads.size} EXPO_PUBLIC_* names read, all in the manifest${releaseEnv ? '; release environment has every required name' : ''}.`,
-  );
+  if (hook) {
+    console.log(
+      release.skipped
+        ? `[expected-env] EAS pre-install: build profile ${JSON.stringify(profile || null)} is not a release profile; release-env check skipped.`
+        : `[expected-env] EAS pre-install: release environment for "${profile}" OK.`,
+    );
+  } else {
+    console.log(
+      `[expected-env] OK: ${reads.size} EXPO_PUBLIC_* names read, all in the manifest${releaseEnv ? (release.skipped ? '; release environment has every required name' : `; release environment for "${profile}" passes every check`) : ''}.`,
+    );
+  }
 }
