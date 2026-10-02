@@ -2,6 +2,8 @@
 
 Two flows live here. Only one is active at a time, and `RootNavigator` decides which one a new client sees.
 
+When `featureFlags.consultationOnboarding` is on (`EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING`, on only in the `clinic` EAS profile), neither flow here is mounted: new clients get the consultation in `src/screens/consultation/` instead, and the lean flow's skip-to-finish path is not reachable. With the flag off, everything below applies unchanged.
+
 - **Lean (4 screens, < 90 s)** — `LeanQ1`, `LeanQ2`, `LeanQ3`, `LeanQ4`. Default for new accounts. Optimised for time-to-first-win, not data completeness. Drives the activation funnel tracked in PostHog. `LeanQ4` is the optional body-metric capture step — height + current weight, imperial / metric toggle, both fields independently skippable. The legacy 10-step flow is **not** reintroduced; LeanQ4 exists so Home renders without macro blanks for users who do enter their weight.
 - **Long (10 steps)** — `OnboardingStep1`–`OnboardingStep10` plus `OnboardingResults`. Kept intact for the legacy `OnboardingNavigator`, used by accounts whose `onboarding_complete` flag predates the lean flow. Not reachable from a fresh signup today.
 

@@ -54,6 +54,7 @@ import { isAppleAuthAvailable, reauthenticateWithApple } from '../../utils/apple
 import { reauthenticateWithGoogle } from '../../utils/googleReauth';
 import { getSignInProviders, SignInProvider } from '../../utils/authProviders';
 import { errorStatus } from '../../types/common';
+import { purgeConsultationDraft } from '../../lib/consultation/storage';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 // The user must type this exact string (case-insensitive) OR their registered
@@ -222,6 +223,10 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     }
     try {
       const res = await deletionApi.requestDeletion(token, appleAuthorizationCode);
+      // Purge the local consultation draft (health answers) as soon as the
+      // deletion is scheduled, independent of any later sign-out (Sol A-04;
+      // merge-order note C-310-10 with #313).
+      if (currentUser?.id) await purgeConsultationDraft(currentUser.id).catch(() => undefined);
       setPassword('');
       setConfirmText('');
       setAppleOutcome(res.data.apple_revocation ?? null);
