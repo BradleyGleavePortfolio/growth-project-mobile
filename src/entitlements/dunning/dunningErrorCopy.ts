@@ -43,6 +43,7 @@ export type DunningErrorCode =
   | 'LINK_REJECTED'
   | 'SESSION_EXPIRED'
   | 'STATUS_NOT_AVAILABLE'
+  | 'BILLING_ROUTE_NOT_AVAILABLE'
   | 'UNEXPECTED_RESPONSE'
   | 'UNKNOWN';
 
@@ -182,6 +183,18 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
       false,
     );
   }
+  if (status === 404 && !machine) {
+    // A bare 404 (no machine code) means the server predates the native
+    // card routes (backend #628). Expected during rollout, so not reported.
+    return copy(
+      'BILLING_ROUTE_NOT_AVAILABLE',
+      action === 'cancel_plan'
+        ? `Ending a plan in the app is not available yet, so nothing changed. Email ${SUPPORT_EMAIL} and we will end it for you.`
+        : `Updating your card in the app is not available yet, so nothing was charged. Email ${SUPPORT_EMAIL} and we will help you pay.`,
+      reference,
+      false,
+    );
+  }
   switch (machine) {
     case 'CUSTOMER_NOT_FOUND':
       return copy(
@@ -228,7 +241,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     case 'CANCEL_INCOMPLETE':
       return copy(
         'CANCEL_INCOMPLETE',
-        'Your plan did not finish ending, and nothing was charged. Wait a minute, then tap End my plan again. Repeating it is safe.',
+        'Your plan did not finish ending. Nothing was charged, and if the unpaid invoice was already canceled it stays canceled. Wait a minute, then tap End my plan again. Repeating it is safe.',
         reference,
         true,
       );

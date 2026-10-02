@@ -289,6 +289,7 @@ describe('specific error copy', () => {
     [axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'invoice_void' }), 'PLAN_CHANGE_UNCONFIRMED', true],
     [axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'setup_intent' }), 'STRIPE_UNAVAILABLE', true],
     [new Error('DUNNING_RESPONSE_SHAPE'), 'UNEXPECTED_RESPONSE', true],
+    [axiosError(404), 'BILLING_ROUTE_NOT_AVAILABLE', false],
   ])('maps %#', (err, code, report) => {
     const copy = describeDunningError(err, 'update_card');
     expect(copy.code).toBe(code);
