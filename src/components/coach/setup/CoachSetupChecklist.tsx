@@ -117,7 +117,7 @@ export function buildChecklist(s: ChecklistStatus): ChecklistItem[] {
         s.paid === null
           ? UNKNOWN
           : s.paid
-            ? "You have been paid."
+            ? "You have been paid. See it in Money."
             : "We will mark the moment with you when it lands.",
       done: s.paid,
     },

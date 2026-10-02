@@ -145,7 +145,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       title: "Setup is already finished",
-      body: "You can change anything from Settings.",
+      body: "You can change anything from Settings or Money.",
       retryable: false,
     };
   }

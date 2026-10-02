@@ -636,7 +636,7 @@ function CoachWizardStep5({ navigation }: Step5Props) {
       stepNumber={5}
       totalSteps={UI_STEPS}
       heading="You are ready to coach"
-      body="Anything still open stays on your Home checklist, and we mark your first client payment with you when it lands."
+      body="Anything still open stays on your Home checklist. Your first client payment shows up in Money on your Home screen."
       ctaLabel="Go to my dashboard"
       ctaDisabled={submitting}
       onCta={finish}

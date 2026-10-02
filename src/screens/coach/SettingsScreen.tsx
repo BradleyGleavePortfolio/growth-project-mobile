@@ -266,9 +266,10 @@ export default function SettingsScreen() {
     mediumTap();
     navigation.navigate('CoachConnect');
   };
-  const handleOpenEarnings = () => {
+  // S-COACH-MOB-2 — TGP Money replaces Earnings and Business metrics.
+  const handleOpenMoney = () => {
     mediumTap();
-    navigation.navigate('CoachEarnings');
+    navigation.navigate('CoachMoney');
   };
 
   const handleOpenTrustCenter = () => {
@@ -459,12 +460,12 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <TouchableOpacity
           style={styles.row}
-          onPress={handleOpenEarnings}
+          onPress={handleOpenMoney}
           accessibilityRole="button"
-          accessibilityLabel="View earnings"
+          accessibilityLabel="Open Money"
         >
           <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Earnings</Text>
+          <Text style={styles.rowLabel}>Money</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -559,14 +560,7 @@ export default function SettingsScreen() {
           mediumTap();
           navigation.navigate('CoachTeamProfile');
         }}
-        onOpenBusinessMetrics={() => {
-          mediumTap();
-          navigation.navigate('CoachBusinessMetrics');
-        }}
-        onOpenEarnings={() => {
-          mediumTap();
-          navigation.navigate('CoachEarnings');
-        }}
+        onOpenMoney={handleOpenMoney}
         onOpenBilling={handleOpenBilling}
         colors={colors}
         styles={styles}

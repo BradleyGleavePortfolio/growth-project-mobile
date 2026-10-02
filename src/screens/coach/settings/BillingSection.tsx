@@ -6,15 +6,13 @@ import type { SettingsStyles } from './styles';
 
 export function BillingSection({
   onOpenTeamProfile,
-  onOpenBusinessMetrics,
-  onOpenEarnings,
+  onOpenMoney,
   onOpenBilling,
   colors,
   styles,
 }: {
   onOpenTeamProfile: () => void;
-  onOpenBusinessMetrics: () => void;
-  onOpenEarnings: () => void;
+  onOpenMoney: () => void;
   onOpenBilling: () => void;
   colors: ThemeColors;
   styles: SettingsStyles;
@@ -37,28 +35,16 @@ export function BillingSection({
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* S-COACH-MOB-2 — TGP Money: earnings, payouts, failed payments,
+            refunds and the old Business metrics in one place. */}
         <TouchableOpacity
           style={styles.row}
-          onPress={onOpenBusinessMetrics}
+          onPress={onOpenMoney}
           accessibilityRole="button"
-          accessibilityLabel="Open business metrics"
-        >
-          <Ionicons name="trending-up-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Revenue & metrics</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        {/* Earnings + payout readiness — backend PR #216.
-            Packages CRUD lives in the top Payments section
-            (CoachPackagesList) — single entry per surface. */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenEarnings}
-          accessibilityRole="button"
-          accessibilityLabel="Open earnings and payouts"
+          accessibilityLabel="Open Money: earnings, payouts and business numbers"
         >
           <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Earnings & payouts</Text>
+          <Text style={styles.rowLabel}>Money and business numbers</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
