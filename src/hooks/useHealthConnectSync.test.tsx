@@ -7,6 +7,11 @@
 
 import React from 'react';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { healthConnectEnabled: true } } },
+}));
 import { renderHook, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -31,6 +36,7 @@ jest.mock('../utils/logger', () => ({
 
 import { useHealthConnectSync } from './useHealthConnectSync';
 import { HealthConnectUnsupportedError } from '../services/health/healthConnect';
+import { HealthConnectDisabledError } from '../config/healthConnect';
 
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
@@ -68,11 +74,34 @@ function deps() {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  Object.defineProperty(Constants, 'expoConfig', {
+    configurable: true,
+    value: { extra: { healthConnectEnabled: true } },
+  });
   for (const k of Object.keys(store)) delete store[k];
   setPlatform('android');
 });
 
 describe('useHealthConnectSync', () => {
+  it('reports unsupported and refuses sync on Android when the build switch is OFF', async () => {
+    Object.defineProperty(Constants, 'expoConfig', {
+      configurable: true,
+      value: { extra: { healthConnectEnabled: false } },
+    });
+    const d = deps();
+    const { result } = await renderHook(
+      () => useHealthConnectSync({ deps: d }),
+      { wrapper },
+    );
+    expect(result.current.supported).toBe(false);
+    await act(async () => {
+      await expect(
+        result.current.sync({ userId: 'u1', connectionId: 'c1' }),
+      ).rejects.toBeInstanceOf(HealthConnectDisabledError);
+    });
+    expect(d.client.initialize).not.toHaveBeenCalled();
+    expect(d.ingestApi.ingest).not.toHaveBeenCalled();
+  });
   it('reports supported=true on android', async () => {
     const { result } = await renderHook(() => useHealthConnectSync(), { wrapper });
     expect(result.current.supported).toBe(true);
