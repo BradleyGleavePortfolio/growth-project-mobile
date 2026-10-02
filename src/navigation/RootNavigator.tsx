@@ -20,6 +20,7 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
+import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import Day1OnboardingNavigator from './Day1OnboardingNavigator';
 import { readResumeState as readDay1ResumeState } from '../screens/day-one/resume';
 import OfflineBanner from '../components/OfflineBanner';
@@ -83,6 +84,7 @@ import {
 } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
+import { profileOnboardingCompleted } from '../lib/profileOnboarding';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -622,6 +624,8 @@ export default function RootNavigator() {
       if (role === 'coach') {
         // Sync Crisp identity so operators see the coach's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'coach',
@@ -663,7 +667,7 @@ export default function RootNavigator() {
       if (role === 'student') {
         // Check if onboarding quiz has been completed
         const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
-        const profileDone = user?.profile?.onboarding_completed;
+        const profileDone = profileOnboardingCompleted(user?.profile);
 
         if (onboardingDone !== 'true' && !profileDone) {
           // Psych Report #1: route new users to 3-question lean flow.
@@ -678,44 +682,51 @@ export default function RootNavigator() {
           await AsyncStorage.setItem('onboarding_complete', 'true');
         }
 
-        // Day-1 final onboarding gate. Decacorn-quality flow shown to every
-        // student who has not yet completed it. Backend source of truth is
-        // `profile.day_one_completed`; we also accept the legacy
-        // `onboarding_completed` flag so existing users who already finished
-        // the old flow are not asked to redo it. A local AsyncStorage flag
-        // and an in-progress resume checkpoint keep the flow alive across
-        // reinstalls when the backend hasn't caught up (fail-open).
-        try {
-          const day1ServerDone = !!user?.profile?.day_one_completed;
-          const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
-          const legacyOnboardingDone = !!user?.profile?.onboarding_completed;
-          const day1ResumeState = await readDay1ResumeState();
-          if (
-            !day1ServerDone &&
-            !day1LocalDone &&
-            (!legacyOnboardingDone || day1ResumeState !== null)
-          ) {
-            setAuthState('day1onboarding');
-            return;
-          }
-          if (day1ServerDone && !day1LocalDone) {
-            await AsyncStorage.setItem('day_one_completed', 'true');
-          }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        // Consultation onboarding (flag on, Opus B-05): the consultation, its
+        // plan reveal and Roman's tutorial replace the Day-1 flow and the
+        // Day-1 win, so a client who finished it goes straight to the app.
+        if (!featureFlags.consultationOnboarding) {
+          // Day-1 final onboarding gate. Decacorn-quality flow shown to every
+          // student who has not yet completed it. Backend source of truth is
+          // `profile.day_one_completed`; we also accept the legacy
+          // onboarding flag (`onboardingCompleted`, see lib/profileOnboarding) so existing users who already finished
+          // the old flow are not asked to redo it. A local AsyncStorage flag
+          // and an in-progress resume checkpoint keep the flow alive across
+          // reinstalls when the backend hasn't caught up (fail-open).
+          try {
+            const day1ServerDone = !!user?.profile?.day_one_completed;
+            const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
+            const legacyOnboardingDone = profileOnboardingCompleted(user?.profile);
+            const day1ResumeState = await readDay1ResumeState();
+            if (
+              !day1ServerDone &&
+              !day1LocalDone &&
+              (!legacyOnboardingDone || day1ResumeState !== null)
+            ) {
+              setAuthState('day1onboarding');
+              return;
+            }
+            if (day1ServerDone && !day1LocalDone) {
+              await AsyncStorage.setItem('day_one_completed', 'true');
+            }
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
 
-        // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
-        // error handling — if the API is unreachable, skip the win screen and
-        // go straight to the client app. The screen can be shown on next boot.
-        try {
-          const statusResponse = await firstWinApi.getStatus();
-          if (!statusResponse.data.completed) {
-            setAuthState('day1win');
-            return;
-          }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+          // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
+          // error handling — if the API is unreachable, skip the win screen and
+          // go straight to the client app. The screen can be shown on next boot.
+          try {
+            const statusResponse = await firstWinApi.getStatus();
+            if (!statusResponse.data.completed) {
+              setAuthState('day1win');
+              return;
+            }
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        }
 
         // Sync Crisp identity so operators see the client's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'student',
@@ -861,9 +872,13 @@ export default function RootNavigator() {
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
-        // Psych Report #1: 3-question lean flow (< 60 s to first win).
-        // Original OnboardingNavigator is preserved; route around it here.
-        <LeanOnboardingNavigator />
+        // Consultation onboarding (consult-v1) when the flag is on; it has no
+        // skip-to-finish path. Flag off: the lean flow, unchanged.
+        featureFlags.consultationOnboarding ? (
+          <ConsultationOnboardingNavigator />
+        ) : (
+          <LeanOnboardingNavigator />
+        )
       ) : authState === 'day1onboarding' ? (
         // Day-1 final onboarding. Mounts after signup + lean for any student
         // who has not yet flipped `profile.day_one_completed`. The Ready

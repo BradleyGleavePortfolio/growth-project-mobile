@@ -26,14 +26,15 @@ Expo manages APNs credentials automatically via EAS Build when you have an Apple
 
 ## Firebase project
 
-- **Project ID:** `tgp-fitness`
-- **Project Number:** `129391466712`
+- **Project ID:** `project-2c2ffa46-a1eb-4f5c-b68` (same Google Cloud project as the Google sign-in client; owned by the owner's personal Google account, no organization)
+- **Project Number:** `963513798354`
 - **Android package name:** `com.growthproject.app`
-- **Firebase Console:** https://console.firebase.google.com/u/1/project/tgp-fitness
+- **Firebase Console:** https://console.firebase.google.com/project/project-2c2ffa46-a1eb-4f5c-b68
+- **History:** until 2026-10-01 the app used Firebase project `tgp-fitness` (`129391466712`). That project sits under a Google Cloud organization whose policy `iam.disableServiceAccountKeyCreation` blocks the FCM V1 service-account key Expo needs, and the owner's account cannot change that policy, so Android push was never deliverable. The app moved to the project above.
 
 ## Backend integration
 
-The backend uses `expo-server-sdk` (already in `growth-project-backend/package.json`). It does NOT require any Firebase Admin SDK credentials — Expo Push handles FCM auth on the backend's behalf using its own service account.
+The backend uses `expo-server-sdk` (already in `growth-project-backend/package.json`) and never holds Firebase credentials itself. Expo Push delivers to Android through FCM HTTP v1, which requires an **FCM V1 service account key** for the Firebase project above to be uploaded to EAS (expo.dev → project → Credentials → Android → `com.growthproject.app` → FCM V1 service account key). Without it, Expo accepts the push and Android devices never receive it. The legacy FCM server key path was shut down by Google in 2024.
 
 ## Verifying push works end-to-end
 

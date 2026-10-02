@@ -37,6 +37,18 @@ jobs:
         # supabase-js is 2.106.0–2.117.1 without a "react-native" condition.
         run: npm run guard:supabase-hermes
 
+      - name: Expo module Gradle guard (legacy ExpoModulesCorePlugin path)
+        # crisp-sdk-react-native 0.2.1 crashed the Android build on Expo SDK 56:
+        # it still built through ExpoModulesCorePlugin.gradle /
+        # applyKotlinExpoModulesCorePlugin(). Fails if any installed Expo module
+        # (package with expo-module.config.json) still does.
+        run: node scripts/check-expo-module-gradle.js
+
+      - name: EXPO_PUBLIC env manifest guard
+        # Every EXPO_PUBLIC_* the app reads (or eas.json sets) must be declared
+        # in config/expected-env.json with kind, default and reason.
+        run: node scripts/check-expected-env.js
+
       - name: Validate app config (default mode — catches genuine breakage)
         # Always runs. Catches the things that always have to be true:
         # missing custom scheme, mismatched bundle ids, stale Google client
