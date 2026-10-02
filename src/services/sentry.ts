@@ -1,6 +1,7 @@
-import * as Sentry from '@sentry/react-native';
-import Constants from 'expo-constants';
-import { Platform } from 'react-native';
+import * as Sentry from "@sentry/react-native";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
+import { scrubEvent } from "./sentryScrub";
 
 let initialized = false;
 
@@ -50,7 +51,7 @@ export function initSentry(): void {
     (Constants.expoConfig?.extra as Record<string, unknown> | undefined)
       ?.sentryDsn;
 
-  if (!dsn || typeof dsn !== 'string') {
+  if (!dsn || typeof dsn !== "string") {
     return;
   }
 
@@ -63,7 +64,8 @@ export function initSentry(): void {
     enableAutoSessionTracking: true,
     // Don't crash the app if Sentry itself blows up.
     enableNative: true,
-    // Strip sensitive headers before transmission.
+    // Strip sensitive headers, then scrub URL-borne credentials (download
+    // tokens, JWTs, signed URLs) from every part of the event (B-327-6).
     beforeSend(event) {
       if (event.request?.headers) {
         delete event.request.headers.Authorization;
@@ -71,9 +73,12 @@ export function initSentry(): void {
         delete event.request.headers.Cookie;
         delete event.request.headers.cookie;
       }
-      return event;
+      return scrubEvent(event);
     },
-    environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
+    beforeBreadcrumb(breadcrumb) {
+      return scrubEvent(breadcrumb);
+    },
+    environment: process.env.EXPO_PUBLIC_ENVIRONMENT || "production",
     release: buildReleaseId(),
   });
 
@@ -86,7 +91,10 @@ export const wrap: <P extends Record<string, unknown>>(
 ) => React.ComponentType<P> = Sentry.wrap as never;
 
 /** Manual capture for catch-blocks where we still want to surface the error. */
-export function captureError(err: unknown, context?: Record<string, unknown>): void {
+export function captureError(
+  err: unknown,
+  context?: Record<string, unknown>,
+): void {
   if (!initialized) return;
   if (context) {
     Sentry.withScope((scope) => {
@@ -99,7 +107,9 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
 }
 
 /** Tag the current user so events are attributable. Call after login. */
-export function setSentryUser(user: { id: string; email?: string } | null): void {
+export function setSentryUser(
+  user: { id: string; email?: string } | null,
+): void {
   if (!initialized) return;
   if (user) {
     Sentry.setUser({ id: user.id, email: user.email });
