@@ -41,7 +41,7 @@ import {
   type OnDeviceScope,
   type SyncProgress,
 } from '../onDeviceState';
-import type { SessionFence } from '../sessionFence';
+import { OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
 import {
   HEALTHKIT_READ_PERMISSIONS,
   HealthKitReadPermission,
@@ -119,8 +119,13 @@ export interface HealthKitSyncOptions {
    * keys local progress; it is never sent (the server uses the JWT).
    */
   scope: OnDeviceScope;
-  /** Stops the run if the session changes (sign-out / account switch). */
-  fence?: SessionFence;
+  /**
+   * Required (S14 round 3): binds the run to the person who authorized this
+   * phone. Checked before the phone's store is read, before every ingest
+   * request and before progress is saved; a sign-out or account switch stops
+   * the run. Its user must be the scope's user.
+   */
+  fence: SessionFence;
   /** Optional IANA timezone for the device, threaded onto every sample. */
   sourceTz?: string | null;
   /**
@@ -189,13 +194,18 @@ export class HealthKitSyncService {
     const permissions = options.permissions ?? HEALTHKIT_READ_PERMISSIONS;
     const until = options.now ?? new Date();
 
+    if (fence.userId !== scope.userId) throw new OnDeviceSessionChangedError();
+    await fence.assertCurrent();
+
     const progress = await getSyncProgress(scope);
     const since = windowStart(progress, until);
 
     // 1) Ensure read authorization (presents the consent sheet on first run).
     await this.client.requestAuth(permissions);
 
-    // 2) Read raw samples for the window.
+    // 2) Read raw samples for the window, only if the same person is still
+    //    signed in after the (possible) permission sheet.
+    await fence.assertCurrent();
     const raw = await this.client.readSamples({ since, until });
     const failedMetrics = [...(raw.failed ?? [])];
 
@@ -225,14 +235,14 @@ export class HealthKitSyncService {
     await postIngestBatches(samples, {
       ...options.ingestDeps,
       beforeEachRequest: async () => {
-        if (fence) await fence.assertCurrent();
+        await fence.assertCurrent();
         if (options.ingestDeps?.beforeEachRequest) await options.ingestDeps.beforeEachRequest();
       },
     });
 
     // 5) Persist progress ONLY after every batch resolved, and only for the
     //    metrics that were actually read.
-    if (fence) await fence.assertCurrent();
+    await fence.assertCurrent();
     const next: SyncProgress = {
       v: 1,
       completedThrough: { ...progress.completedThrough },

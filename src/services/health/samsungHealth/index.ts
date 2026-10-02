@@ -30,18 +30,10 @@ export {
   type SamsungHealthNormalizer,
 } from './samsungHealthNormalizer';
 
-export {
-  samsungHealthSyncService,
-  sync,
-  getLastSyncAt,
-  setLastSyncAt,
-  clearLastSyncAt,
-  SAMSUNG_LAST_SYNC_KEY,
-  SAMSUNG_INGEST_PATH,
-  DEFAULT_BACKFILL_DAYS,
-  type SamsungSyncResult,
-  type SamsungHealthSyncService,
-} from './samsungHealthSyncService';
+// S14 round 3: no Samsung upload path. The dormant Samsung sync service
+// posted samples under a phone-wide cursor with no account binding; it had no
+// caller and was removed. Samsung data reaches the app through Health Connect
+// (`../onDeviceSync.ts`), which is bound to the person who tapped Connect.
 
 export {
   SamsungHealthError,

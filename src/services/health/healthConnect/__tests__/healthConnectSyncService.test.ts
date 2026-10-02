@@ -70,8 +70,13 @@ function makeDeps(
     client: client as never,
     ingestApi: { ingest },
     now: () => NOW,
+    fence: okFence(),
     ...extra,
   };
+}
+
+function okFence(userId: string = SCOPE.userId): SessionFence {
+  return { userId, assertCurrent: jest.fn(async () => undefined), cancel: jest.fn() };
 }
 
 beforeEach(async () => {
@@ -139,7 +144,7 @@ describe('windowing (per scope, per type)', () => {
       { ...SCOPE, connectionId: 'c-2' },
     ]) {
       const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
-      await syncHealthConnect(scope, makeDeps(client));
+      await syncHealthConnect(scope, makeDeps(client, undefined, { fence: okFence(scope.userId) }));
       expect(client.readRecordsPaged.mock.calls[0][1].startTime).toBe(IMPORT_START);
     }
   });
@@ -260,6 +265,7 @@ describe('normalize → POST → persist', () => {
     const fence: SessionFence = {
       userId: SCOPE.userId,
       assertCurrent: jest.fn().mockRejectedValue(new OnDeviceSessionChangedError()),
+      cancel: jest.fn(),
     };
     const ingest = jest.fn(
       async (_s: unknown[], deps?: { beforeEachRequest?: () => Promise<void> | void }) => {
@@ -271,5 +277,35 @@ describe('normalize → POST → persist', () => {
       syncHealthConnect(SCOPE, makeDeps(client, ingest as jest.Mock, { fence })),
     ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
     expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
+  });
+});
+
+describe('A-317-1 round 3: the fence is required and checked before the phone is read', () => {
+  it('reads nothing when the fence belongs to another person than the scope', async () => {
+    const client = makeClient();
+    await expect(
+      syncHealthConnect(SCOPE, makeDeps(client, undefined, { fence: okFence('user-b') })),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(client.initialize).not.toHaveBeenCalled();
+    expect(client.readRecordsPaged).not.toHaveBeenCalled();
+  });
+
+  it('reads nothing when the session changes during the permission screen', async () => {
+    let calls = 0;
+    const fence: SessionFence = {
+      userId: SCOPE.userId,
+      assertCurrent: jest.fn(async () => {
+        calls += 1;
+        if (calls >= 2) throw new OnDeviceSessionChangedError();
+      }),
+      cancel: jest.fn(),
+    };
+    const ingest = jest.fn();
+    const client = makeClient({ getGrantedPermissions: grantOnly('Steps') });
+    await expect(
+      syncHealthConnect(SCOPE, makeDeps(client, ingest, { fence })),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(client.readRecordsPaged).not.toHaveBeenCalled();
+    expect(ingest).not.toHaveBeenCalled();
   });
 });

@@ -15,11 +15,21 @@
 import { readUserCache } from '../../lib/userCache';
 import { authEvents } from '../../utils/authEvents';
 
+/** Why on-device work stopped. */
+export type OnDeviceStopReason = 'session_changed' | 'cancelled';
+
 /** Thrown when the session changed under in-flight on-device work. */
 export class OnDeviceSessionChangedError extends Error {
-  constructor() {
-    super('The signed-in account changed; on-device health work stopped.');
+  readonly reason: OnDeviceStopReason;
+
+  constructor(reason: OnDeviceStopReason = 'session_changed') {
+    super(
+      reason === 'cancelled'
+        ? 'The on-device health work was cancelled.'
+        : 'The signed-in account changed; on-device health work stopped.',
+    );
     this.name = 'OnDeviceSessionChangedError';
+    this.reason = reason;
   }
 }
 
@@ -47,19 +57,61 @@ export interface SessionFence {
   readonly userId: string;
   /** Throws {@link OnDeviceSessionChangedError} if the session moved on. */
   assertCurrent(): Promise<void>;
+  /**
+   * Stop this run for good (the Connect sheet closed or unmounted). Every
+   * later {@link assertCurrent} throws with reason `cancelled`.
+   */
+  cancel(): void;
 }
 
+function fenceFrom(
+  userId: string,
+  startedAt: number,
+  readUserId: () => Promise<string | null>,
+): SessionFence {
+  let cancelled = false;
+  const check = (): void => {
+    if (cancelled) throw new OnDeviceSessionChangedError('cancelled');
+    if (generation !== startedAt) throw new OnDeviceSessionChangedError();
+  };
+  return {
+    userId,
+    async assertCurrent() {
+      check();
+      const now = await readUserId();
+      check();
+      if (now !== userId) throw new OnDeviceSessionChangedError();
+    },
+    cancel() {
+      cancelled = true;
+    },
+  };
+}
+
+/**
+ * A fence for a user id that was read BEFORE this call. Prefer
+ * {@link beginSessionFence}: it captures the auth generation before it reads
+ * the user, so an auth event during that read is caught too.
+ */
 export function createSessionFence(
   userId: string,
   readUserId: () => Promise<string | null> = readSignedInUserId,
 ): SessionFence {
+  return fenceFrom(userId, generation, readUserId);
+}
+
+/**
+ * S14 round 3 (Sol A-317-1): capture the auth generation synchronously,
+ * THEN read the signed-in user. Called when the person taps Continue, before
+ * any native permission prompt, so the whole Connect run (prompt, register,
+ * local authorization, import) stays bound to the person who tapped. Resolves
+ * null when nobody is signed in or the session moved during the read.
+ */
+export async function beginSessionFence(
+  readUserId: () => Promise<string | null> = readSignedInUserId,
+): Promise<SessionFence | null> {
   const startedAt = generation;
-  return {
-    userId,
-    async assertCurrent() {
-      if (generation !== startedAt) throw new OnDeviceSessionChangedError();
-      const now = await readUserId();
-      if (now !== userId || generation !== startedAt) throw new OnDeviceSessionChangedError();
-    },
-  };
+  const userId = await readUserId();
+  if (!userId || generation !== startedAt) return null;
+  return fenceFrom(userId, startedAt, readUserId);
 }

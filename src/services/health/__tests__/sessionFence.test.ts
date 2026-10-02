@@ -10,6 +10,7 @@ import { authEvents } from '../../../utils/authEvents';
 import { readUserCache } from '../../../lib/userCache';
 import {
   OnDeviceSessionChangedError,
+  beginSessionFence,
   createSessionFence,
   readSignedInUserId,
 } from '../sessionFence';
@@ -50,5 +51,41 @@ describe('readSignedInUserId', () => {
     expect(await readSignedInUserId()).toBeNull();
     mockRead.mockRejectedValueOnce(new Error('storage'));
     expect(await readSignedInUserId()).toBeNull();
+  });
+});
+
+// S14 round 3 (Sol A-317-1): the fence is taken at the Continue tap, before
+// the native permission prompt, and can be cancelled when the sheet closes.
+describe('beginSessionFence', () => {
+  it('binds to the signed-in user', async () => {
+    const fence = await beginSessionFence(async () => 'user-a');
+    expect(fence?.userId).toBe('user-a');
+    await expect(fence?.assertCurrent()).resolves.toBeUndefined();
+  });
+
+  it('returns null when nobody is signed in', async () => {
+    expect(await beginSessionFence(async () => null)).toBeNull();
+  });
+
+  it('returns null when an auth event lands while the user is read', async () => {
+    const fence = await beginSessionFence(async () => {
+      authEvents.emit('logout');
+      return 'user-a';
+    });
+    expect(fence).toBeNull();
+  });
+
+  it('fails after a later auth event, even for the same user (re-login)', async () => {
+    const fence = await beginSessionFence(async () => 'user-a');
+    authEvents.emit('login');
+    await expect(fence?.assertCurrent()).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+  });
+
+  it('cancel() stops every later check with reason cancelled', async () => {
+    const fence = await beginSessionFence(async () => 'user-a');
+    fence?.cancel();
+    const err = await fence?.assertCurrent().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OnDeviceSessionChangedError);
+    expect((err as OnDeviceSessionChangedError).reason).toBe('cancelled');
   });
 });

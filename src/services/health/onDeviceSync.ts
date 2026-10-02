@@ -39,7 +39,12 @@ import {
   type OnDeviceScope,
   type OnDeviceSource,
 } from './onDeviceState';
-import { createSessionFence, readSignedInUserId, type SessionFence } from './sessionFence';
+import {
+  beginSessionFence,
+  OnDeviceSessionChangedError,
+  readSignedInUserId,
+  type SessionFence,
+} from './sessionFence';
 
 export type { OnDeviceSource } from './onDeviceState';
 
@@ -67,7 +72,14 @@ export type OnDeviceImportOutcome =
    * `complete` is false while any type still has history left to read (a
    * failed or page-bounded read); the next refresh continues it.
    */
-  | { kind: 'imported'; source: OnDeviceSource; postedCount: number; complete: boolean }
+  | {
+      kind: 'imported';
+      source: OnDeviceSource;
+      /** The connection the data was posted under (resume target). */
+      connectionId: string;
+      postedCount: number;
+      complete: boolean;
+    }
   /** The server lane is switched off (FEATURE_WEARABLES_INGEST_POST). */
   | { kind: 'disabled'; source: OnDeviceSource }
   /** Refresh only: this user has not tapped Connect on this phone. */
@@ -78,6 +90,25 @@ export class OnDeviceNotSignedInError extends Error {
   constructor() {
     super('No signed-in account for on-device health import.');
     this.name = 'OnDeviceNotSignedInError';
+  }
+}
+
+/**
+ * A Connect step failed. `step` tells the sheet what is true afterwards:
+ * `register` means no connection was made; `import` means the source is
+ * connected and the history import stopped (progress kept). `cause` keeps
+ * the original error so its HTTP status, machine code and request id can be
+ * mapped to specific copy.
+ */
+export class OnDeviceStepError extends Error {
+  readonly step: 'register' | 'import';
+  readonly cause: unknown;
+
+  constructor(step: 'register' | 'import', cause: unknown) {
+    super(`On-device ${step} failed.`);
+    this.name = 'OnDeviceStepError';
+    this.step = step;
+    this.cause = cause;
   }
 }
 
@@ -120,7 +151,13 @@ async function runSyncPasses(
   deps: OnDeviceImportDeps,
 ): Promise<OnDeviceImportOutcome> {
   let total = 0;
-  let last: OnDeviceImportOutcome = { kind: 'imported', source: scope.source, postedCount: 0, complete: false };
+  let last: OnDeviceImportOutcome = {
+    kind: 'imported',
+    source: scope.source,
+    connectionId: scope.connectionId,
+    postedCount: 0,
+    complete: false,
+  };
   for (let pass = 0; pass < MAX_IMPORT_PASSES; pass += 1) {
     last = await runSync(scope, fence, deps);
     if (last.kind !== 'imported') return last;
@@ -148,13 +185,19 @@ async function runSync(
             sourceTz: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
           }));
       const { postedCount, complete } = await run(scope, fence);
-      return { kind: 'imported', source, postedCount, complete };
+      return { kind: 'imported', source, connectionId: scope.connectionId, postedCount, complete };
     }
     const run =
       deps.syncHealthConnect ??
       ((sc: OnDeviceScope, f: SessionFence) => syncHealthConnect(sc, { fence: f }));
     const { normalizedCount, complete } = await run(scope, fence);
-    return { kind: 'imported', source, postedCount: normalizedCount, complete };
+    return {
+      kind: 'imported',
+      source,
+      connectionId: scope.connectionId,
+      postedCount: normalizedCount,
+      complete,
+    };
   } catch (err) {
     if (isIngestDisabledError(err)) return { kind: 'disabled', source };
     throw err;
@@ -162,21 +205,38 @@ async function runSync(
 }
 
 /**
+ * Start a Connect run. Called on the Continue tap, BEFORE the native
+ * permission prompt (Sol A-317-1 round 3): the returned fence binds the whole
+ * run to the person who tapped. If the session changes while the prompt is
+ * open (sign-out, a different account), every later step refuses.
+ */
+export async function beginOnDeviceConnect(
+  deps: Pick<OnDeviceImportDeps, 'readUserId'> = {},
+): Promise<SessionFence> {
+  const fence = await beginSessionFence(deps.readUserId ?? readSignedInUserId);
+  if (!fence) throw new OnDeviceNotSignedInError();
+  return fence;
+}
+
+/**
  * Explicit Connect (the person tapped Connect and finished the platform
  * permission step on this phone): register the source, record the local
- * authorization for the signed-in user, then run the first import. Rejects on
- * any failure other than the lane being disabled; progress is kept so the
- * next run re-reads what is missing.
+ * authorization for the person who tapped, then run the first import.
+ *
+ * `fence` comes from {@link beginOnDeviceConnect} at the tap. It is checked
+ * before registration, after it, before the local authorization is written,
+ * before every ingest request and before progress is saved, so a session
+ * change at any point (including while the permission prompt was open)
+ * registers nothing new, records nothing and sends nothing. Rejects on any
+ * failure other than the lane being disabled; progress is kept so the next
+ * run re-reads what is missing.
  */
 export async function connectOnDevice(
   source: OnDeviceSource,
+  fence: SessionFence,
   deps: OnDeviceImportDeps = {},
 ): Promise<OnDeviceImportOutcome> {
-  const readUserId = deps.readUserId ?? readSignedInUserId;
-  const userId = await readUserId();
-  if (!userId) throw new OnDeviceNotSignedInError();
-  const fence = createSessionFence(userId, readUserId);
-
+  await fence.assertCurrent();
   const register =
     deps.register ?? ((s: OnDeviceSource) => wearablesConnectionsApi.registerOnDevice(s));
   let connection: WearableConnection;
@@ -184,17 +244,57 @@ export async function connectOnDevice(
     connection = await register(source);
   } catch (err) {
     if (isIngestDisabledError(err)) return { kind: 'disabled', source };
-    throw err;
+    throw new OnDeviceStepError('register', err);
   }
 
-  const scope: OnDeviceScope = { userId, connectionId: connection.id, source };
+  const scope: OnDeviceScope = { userId: fence.userId, connectionId: connection.id, source };
   await fence.assertCurrent();
   await recordLocalAuthorization(scope);
-  return runSyncPasses(scope, fence, deps);
+  try {
+    return await runSyncPasses(scope, fence, deps);
+  } catch (err) {
+    if (err instanceof OnDeviceSessionChangedError) throw err;
+    throw new OnDeviceStepError('import', err);
+  }
+}
+
+/**
+ * Continue an import that came back incomplete (the sheet's resume action).
+ * Runs only when this phone still holds the same person's local
+ * authorization for the same connection; otherwise `not_authorized`.
+ */
+export async function resumeOnDeviceImport(
+  source: OnDeviceSource,
+  connectionId: string,
+  fence: SessionFence,
+  deps: OnDeviceImportDeps = {},
+): Promise<OnDeviceImportOutcome> {
+  await fence.assertCurrent();
+  const auth = await getLocalAuthorization(fence.userId, source);
+  if (!auth || auth.connectionId !== connectionId) return { kind: 'not_authorized', source };
+  await fence.assertCurrent();
+  return runSyncPasses({ userId: fence.userId, connectionId, source }, fence, deps);
 }
 
 /** Minimal view of a server connection row the refresh check needs. */
 export type RemoteConnectionView = Pick<WearableConnection, 'id' | 'provider' | 'status'>;
+
+/**
+ * True when the server lists this source as connected but this phone holds
+ * no local authorization for the signed-in person and that connection, so
+ * Health will not sync here until the person taps Reconnect (Opus B-317-5).
+ */
+export function isConnectedButNotSyncingHere(
+  source: OnDeviceSource,
+  remoteConnections: readonly RemoteConnectionView[],
+  localConnectionId: string | null,
+): boolean {
+  const connected = remoteConnections.filter(
+    (c) => c.provider === source && c.status === 'connected',
+  );
+  if (connected.length === 0) return false;
+  return !connected.some((c) => c.id === localConnectionId);
+}
 
 /**
  * Refresh on Health screen open. Runs ONLY when the signed-in user has a
@@ -207,10 +307,9 @@ export async function refreshOnDevice(
   remoteConnections: readonly RemoteConnectionView[],
   deps: OnDeviceImportDeps = {},
 ): Promise<OnDeviceImportOutcome> {
-  const readUserId = deps.readUserId ?? readSignedInUserId;
-  const userId = await readUserId();
-  if (!userId) return { kind: 'not_authorized', source };
-  const fence = createSessionFence(userId, readUserId);
+  const fence = await beginSessionFence(deps.readUserId ?? readSignedInUserId);
+  if (!fence) return { kind: 'not_authorized', source };
+  const { userId } = fence;
 
   const auth = await getLocalAuthorization(userId, source);
   if (!auth) return { kind: 'not_authorized', source };

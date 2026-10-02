@@ -97,8 +97,11 @@ test('OFF handles future #317 permissions/plugins, tuples, existing blocks, and 
   expect(enabled.plugins).toEqual(input.plugins);
 });
 
-test('production and preview explicitly opt out; clinic inherits production', () => {
+test('production and preview explicitly opt out; the clinic launch profile opts in (S14 round 3)', () => {
   expect(eas.build.production.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
   expect(eas.build.preview.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
   expect(eas.build.clinic.extends).toBe('production');
+  // Health Connect returns in the clinic binary after #317's isolation fixes.
+  // A new Android binary is required (native permissions); never an OTA.
+  expect(eas.build.clinic.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
 });

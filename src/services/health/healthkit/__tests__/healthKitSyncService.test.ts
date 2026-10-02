@@ -63,7 +63,12 @@ const SAMPLE_READ: HealthKitReadResult = {
   heartRate: [{ value: 70, startDate: '2026-05-30T00:00:00.000Z', endDate: '2026-05-30T00:00:00.000Z' }],
 };
 
-const OPTS = { scope: SCOPE, now: NOW };
+/** A fence that always passes (the signed-in person is SCOPE's user). */
+function okFence(userId: string = SCOPE.userId): SessionFence {
+  return { userId, assertCurrent: jest.fn(async () => undefined), cancel: jest.fn() };
+}
+
+const OPTS = { scope: SCOPE, now: NOW, fence: okFence() };
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -171,7 +176,7 @@ describe('HealthKitSyncService.sync — read window', () => {
       { ...SCOPE, connectionId: 'conn-2' },
     ]) {
       const client = makeClient(SAMPLE_READ);
-      await new HealthKitSyncService(client as never).sync({ scope, now: NOW });
+      await new HealthKitSyncService(client as never).sync({ scope, now: NOW, fence: okFence(scope.userId) });
       expect(client.readSamples.mock.calls[0][0].since.toISOString()).toBe(expectedSince);
     }
   });
@@ -213,15 +218,48 @@ describe('HealthKitSyncService.sync — read window', () => {
     let checks = 0;
     const fence: SessionFence = {
       userId: SCOPE.userId,
+      // 1: before progress, 2: before the native read, 3: first request, 4: second request.
       assertCurrent: jest.fn(async () => {
         checks += 1;
-        if (checks >= 2) throw new OnDeviceSessionChangedError();
+        if (checks >= 4) throw new OnDeviceSessionChangedError();
       }),
+      cancel: jest.fn(),
     };
     const svc = new HealthKitSyncService(makeClient({ heartRate }) as never);
     await expect(svc.sync({ ...OPTS, fence })).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
     expect(mockPost).toHaveBeenCalledTimes(1);
     expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
+  });
+});
+
+describe('HealthKitSyncService.sync — A-317-1 fence (round 3)', () => {
+  it('reads nothing when the fence belongs to a different person than the scope', async () => {
+    const client = makeClient(SAMPLE_READ);
+    await expect(
+      new HealthKitSyncService(client as never).sync({ ...OPTS, fence: okFence('user-b') }),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(client.requestAuth).not.toHaveBeenCalled();
+    expect(client.readSamples).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+
+  it('reads nothing when the session changes while the permission sheet is open', async () => {
+    let calls = 0;
+    const fence: SessionFence = {
+      userId: SCOPE.userId,
+      assertCurrent: jest.fn(async () => {
+        calls += 1;
+        if (calls >= 2) throw new OnDeviceSessionChangedError();
+      }),
+      cancel: jest.fn(),
+    };
+    const client = makeClient(SAMPLE_READ);
+    await expect(
+      new HealthKitSyncService(client as never).sync({ ...OPTS, fence }),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(client.requestAuth).toHaveBeenCalledTimes(1);
+    expect(client.readSamples).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
   });
 });
 

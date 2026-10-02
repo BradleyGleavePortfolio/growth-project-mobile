@@ -92,9 +92,19 @@ jest.mock('../../../../config/featureFlags', () => ({
 // S14: refresh-on-open runs the on-device import seam.
 const mockImportHistory = jest.fn();
 let mockDeviceSource: string | null = 'APPLE_HEALTHKIT';
-jest.mock('../../../../services/health/onDeviceSync', () => ({
-  deviceSourceForPlatform: () => mockDeviceSource,
-  refreshOnDevice: (...args: unknown[]) => mockImportHistory(...args),
+jest.mock('../../../../services/health/onDeviceSync', () => {
+  const actual = jest.requireActual('../../../../services/health/onDeviceSync');
+  return {
+    OnDeviceNotSignedInError: actual.OnDeviceNotSignedInError,
+    OnDeviceStepError: actual.OnDeviceStepError,
+    deviceSourceForPlatform: () => mockDeviceSource,
+    refreshOnDevice: (...args: unknown[]) => mockImportHistory(...args),
+  };
+});
+
+const mockReportUnexpected = jest.fn();
+jest.mock('../../../../lib/consultation/report', () => ({
+  reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
 }));
 
 jest.mock('../../../../utils/logger', () => ({
@@ -125,8 +135,11 @@ beforeEach(() => {
   mockImportHistory.mockResolvedValue({
     kind: 'imported',
     source: 'APPLE_HEALTHKIT',
+    connectionId: 'c1',
     postedCount: 0,
+    complete: true,
   });
+  mockReportUnexpected.mockReset();
   mockInvalidateWearables.mockReset();
   mockNavigate.mockReset();
   mockSetParams.mockReset();
@@ -219,5 +232,47 @@ describe('WearablesShell', () => {
     await render(<WearablesShell />);
     expect(screen.getByText('FITNESS_OVERVIEW')).toBeTruthy();
     expect(mockImportHistory).not.toHaveBeenCalled();
+  });
+
+  // Opus B-317-5: connected on the server but not synced by this phone (after
+  // a sign-out, reinstall or second phone) is said out loud, with Reconnect.
+  it('B-317-5: says the phone is not syncing and routes Reconnect to Connections', async () => {
+    mockImportHistory.mockResolvedValue({ kind: 'not_authorized', source: 'APPLE_HEALTHKIT' });
+    await render(<WearablesShell />);
+    await waitFor(() =>
+      expect(
+        screen.getByText('Apple Health is not syncing on this phone. Tap Reconnect to continue.'),
+      ).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
+    expect(mockNavigate).toHaveBeenCalledWith('Connections');
+  });
+
+  // Sol B-317-2: an incomplete refresh is never discarded silently.
+  it('B-317-2: an incomplete refresh shows what happened and Try again re-runs it', async () => {
+    mockImportHistory.mockResolvedValueOnce({
+      kind: 'imported',
+      source: 'APPLE_HEALTHKIT',
+      connectionId: 'c1',
+      postedCount: 3,
+      complete: false,
+    });
+    await render(<WearablesShell />);
+    await waitFor(() =>
+      expect(screen.getByText(/Some of your Apple Health data didn't come in this time/)).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByLabelText('Try again to sync Apple Health'));
+    await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(screen.queryByText(/Some of your Apple Health data didn't come in this time/)).toBeNull(),
+    );
+  });
+
+  it('an unexpected refresh failure shows a reference and support path, and is reported', async () => {
+    mockImportHistory.mockRejectedValue(new Error('boom'));
+    await render(<WearablesShell />);
+    await waitFor(() => expect(screen.getByText(/hello@thegrowthproject.app/)).toBeTruthy());
+    expect(mockReportUnexpected).toHaveBeenCalled();
+    expect(screen.queryByText(/Something went wrong/)).toBeNull();
   });
 });

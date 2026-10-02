@@ -20,7 +20,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useNavigation,
@@ -29,7 +29,9 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import { colors, spacing } from '../../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { configFor } from '../../../api/wearablesConnectionsApi';
+import { connectFailureMessage, notSyncingHereCopy } from './onDeviceCopy';
 import type { WearableMetricBucket } from '../../../api/wearablesSamplesApi';
 import {
   useInvalidateWearableConnections,
@@ -81,18 +83,58 @@ export default function WearablesShell() {
   const hasDeviceConnection = connections.some(
     (c) => c.provider === deviceSource && c.status === 'connected',
   );
-  const [refreshStarted, setRefreshStarted] = useState(false);
+  const [refreshRun, setRefreshRun] = useState(0);
+  const [refreshStartedFor, setRefreshStartedFor] = useState(-1);
+  /**
+   * S14 round 3: what the refresh found, shown above the views instead of
+   * being dropped silently (Opus B-317-5, Sol B-317-2):
+   *   - notSyncing: connected on the server, but this phone holds no Connect
+   *     for the signed-in person, so nothing is read here; Reconnect.
+   *   - partial / failed: some or all new data did not come in; Try again.
+   */
+  const [notice, setNotice] = useState<
+    | { kind: 'notSyncing' }
+    | { kind: 'retry'; text: string; canRetry: boolean }
+    | null
+  >(null);
+  const deviceName = deviceSource != null ? configFor(deviceSource).displayName : '';
   useEffect(() => {
-    if (refreshStarted || deviceSource == null || !hasDeviceConnection) return;
-    setRefreshStarted(true);
+    if (refreshStartedFor === refreshRun || deviceSource == null || !hasDeviceConnection) return;
+    setRefreshStartedFor(refreshRun);
+    setNotice(null);
     refreshOnDevice(deviceSource, connections)
       .then((outcome) => {
-        if (outcome.kind === 'imported') invalidateWearables();
+        if (outcome.kind === 'imported') {
+          invalidateWearables();
+          if (!outcome.complete) {
+            setNotice({
+              kind: 'retry',
+              text: `Some of your ${deviceName} data didn't come in this time. Tap Try again, or it continues the next time you open Health.`,
+              canRetry: true,
+            });
+          }
+        } else if (outcome.kind === 'not_authorized') {
+          setNotice({ kind: 'notSyncing' });
+        }
       })
       .catch((err: unknown) => {
         logger.warn('[wearables] on-device refresh failed', err);
+        const message = connectFailureMessage(err, deviceName);
+        if (message != null) {
+          setNotice({ kind: 'retry', text: message.text, canRetry: message.action !== 'none' });
+        }
       });
-  }, [refreshStarted, deviceSource, hasDeviceConnection, connections, invalidateWearables]);
+  }, [
+    refreshRun,
+    refreshStartedFor,
+    deviceSource,
+    deviceName,
+    hasDeviceConnection,
+    connections,
+    invalidateWearables,
+  ]);
+
+  const retryRefresh = useCallback(() => setRefreshRun((n) => n + 1), []);
 
   const goToConnections = useCallback(() => {
     navigation.navigate('Connections');
@@ -164,6 +206,28 @@ export default function WearablesShell() {
         />
       </View>
 
+      {notice != null && (
+        <View style={styles.notice} accessibilityRole="alert">
+          <Text style={styles.noticeText}>
+            {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
+          </Text>
+          {(notice.kind === 'notSyncing' || notice.canRetry) && (
+          <Pressable
+            style={styles.noticeAction}
+            onPress={notice.kind === 'notSyncing' ? goToConnections : retryRefresh}
+            accessibilityRole="button"
+            accessibilityLabel={
+              notice.kind === 'notSyncing' ? `Reconnect ${deviceName}` : `Try again to sync ${deviceName}`
+            }
+          >
+            <Text style={styles.noticeActionText}>
+              {notice.kind === 'notSyncing' ? 'Reconnect' : 'Try again'}
+            </Text>
+          </Pressable>
+          )}
+        </View>
+      )}
+
       <Animated.View
         style={[styles.body, reduceMotion ? undefined : { opacity: fade }]}
       >
@@ -194,5 +258,25 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  notice: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.cream,
+  },
+  noticeText: {
+    ...typography.bodySmall,
+    color: colors.charcoal,
+  },
+  noticeAction: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  noticeActionText: {
+    ...typography.bodyMd,
+    color: colors.forest,
   },
 });

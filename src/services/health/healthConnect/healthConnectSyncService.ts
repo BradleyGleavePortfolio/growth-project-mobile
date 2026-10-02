@@ -19,7 +19,7 @@ import {
   type OnDeviceScope,
   type SyncProgress,
 } from '../onDeviceState';
-import type { SessionFence } from '../sessionFence';
+import { OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
 import { logger } from '../../../utils/logger';
 import {
   HealthConnectPermissionDeniedError,
@@ -70,8 +70,12 @@ export interface HealthConnectSyncDeps {
   ingestApi?: Pick<typeof defaultIngestApi, 'ingest'>;
   /** Override "now" for deterministic tests. */
   now?: () => Date;
-  /** Stops the run if the session changes (sign-out / account switch). */
-  fence?: SessionFence;
+  /**
+   * Required (S14 round 3): binds the run to the person who authorized this
+   * phone; checked before reading, before every request and before saving.
+   * Its user must be the scope's user.
+   */
+  fence: SessionFence;
 }
 
 /** Result of a sync run. */
@@ -147,7 +151,7 @@ function grantedReadRecordTypes(
  */
 export async function syncHealthConnect(
   scope: OnDeviceScope,
-  deps: HealthConnectSyncDeps = {},
+  deps: HealthConnectSyncDeps,
 ): Promise<HealthConnectSyncResult> {
   assertSupported();
 
@@ -155,6 +159,8 @@ export async function syncHealthConnect(
   const ingestApi = deps.ingestApi ?? defaultIngestApi;
   const now = (deps.now ?? (() => new Date()))();
   const fence = deps.fence;
+  if (fence.userId !== scope.userId) throw new OnDeviceSessionChangedError();
+  await fence.assertCurrent();
 
   await client.initialize();
 
@@ -170,6 +176,9 @@ export async function syncHealthConnect(
     throw new HealthConnectPermissionDeniedError([...HEALTH_CONNECT_RECORD_TYPES]);
   }
 
+  // Read the phone only if the same person is still signed in after the
+  // (possible) permission screen.
+  await fence.assertCurrent();
   const progress = await getSyncProgress(scope);
   const next: SyncProgress = {
     v: 1,
@@ -215,12 +224,11 @@ export async function syncHealthConnect(
   const ctx: NormalizeContext = { connectionId: scope.connectionId };
   const samples: NormalizedSample[] = normalizeAll(ctx, byType);
 
-  const { inserted, skipped } = await ingestApi.ingest(
-    samples,
-    fence ? { beforeEachRequest: () => fence.assertCurrent() } : undefined,
-  );
+  const { inserted, skipped } = await ingestApi.ingest(samples, {
+    beforeEachRequest: () => fence.assertCurrent(),
+  });
 
-  if (fence) await fence.assertCurrent();
+  await fence.assertCurrent();
   await setSyncProgress(scope, next);
 
   const complete = failedRecordTypes.length === 0 && truncatedRecordTypes.length === 0;

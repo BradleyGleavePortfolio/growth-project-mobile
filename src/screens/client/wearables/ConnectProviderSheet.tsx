@@ -32,7 +32,7 @@
  * tap) to satisfy the BottomSheet intent without a new dependency.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
@@ -52,7 +52,21 @@ import {
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
-import { connectOnDevice, deviceSourceFor } from '../../../services/health/onDeviceSync';
+import {
+  beginOnDeviceConnect,
+  connectOnDevice,
+  deviceSourceFor,
+  resumeOnDeviceImport,
+  type OnDeviceImportOutcome,
+  type OnDeviceSource,
+} from '../../../services/health/onDeviceSync';
+import type { SessionFence } from '../../../services/health/sessionFence';
+import {
+  connectFailureMessage,
+  INGEST_DISABLED_COPY,
+  partialImportMessage,
+  type OnDeviceMessage,
+} from './onDeviceCopy';
 import {
   HEALTH_CONNECT_DISABLED_MESSAGE,
   isHealthConnectProviderDisabled,
@@ -96,13 +110,57 @@ export default function ConnectProviderSheet({
   const startOauth = useStartOauth();
   const invalidate = useInvalidateWearableConnections();
   const [error, setError] = useState<string | null>(null);
+  /**
+   * What the primary button does after an on-device message: start Connect
+   * again, continue an incomplete import (Sol B-317-2), or nothing (the
+   * button is hidden and the person closes the sheet).
+   */
+  const [retry, setRetry] = useState<OnDeviceMessage['action']>('connect');
+  const [resumeTarget, setResumeTarget] = useState<{
+    source: OnDeviceSource;
+    connectionId: string;
+    partial: boolean;
+  } | null>(null);
   const [requestingOnDevice, setRequestingOnDevice] = useState(false);
   const [importing, setImporting] = useState(false);
+
+  /**
+   * S14 round 3 (Sol A-317-1): the session fence for the current on-device
+   * Connect run. Created on the Continue tap BEFORE the native permission
+   * prompt, so the run stays bound to the person who tapped; cancelled when
+   * the sheet closes or unmounts, so a late continuation never adopts
+   * whoever is signed in by then.
+   */
+  const attemptRef = useRef<SessionFence | null>(null);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      attemptRef.current?.cancel();
+      attemptRef.current = null;
+    };
+  }, []);
+  useEffect(() => {
+    // Closing the sheet (or switching provider) ends the run and its state.
+    attemptRef.current?.cancel();
+    attemptRef.current = null;
+    setError(null);
+    setRetry('connect');
+    setResumeTarget(null);
+    setImporting(false);
+  }, [visible, provider]);
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
   const buildDisabled =
     provider != null && isHealthConnectProviderDisabled(provider);
+
+  const showMessage = useCallback((message: OnDeviceMessage | null) => {
+    if (!mountedRef.current || message == null) return;
+    setError(message.text);
+    setRetry(message.action);
+  }, []);
 
   const handleCloudConnect = useCallback(
     async (target: WearableProvider) => {
@@ -129,74 +187,149 @@ export default function ConnectProviderSheet({
     [startOauth, invalidate, onConnected, onClose],
   );
 
+  /**
+   * Act on an import outcome. Only a COMPLETE import closes the sheet as a
+   * success; an incomplete one keeps the sheet open with a truthful message
+   * and a working Continue import / Try again action (Sol B-317-2).
+   */
+  const handleImportOutcome = useCallback(
+    (outcome: OnDeviceImportOutcome, name: string) => {
+      invalidate();
+      if (!mountedRef.current) return;
+      if (outcome.kind === 'disabled') {
+        showMessage({ text: INGEST_DISABLED_COPY, action: 'none' });
+        return;
+      }
+      if (outcome.kind === 'not_authorized') {
+        setResumeTarget(null);
+        showMessage({
+          text: `This phone is no longer set up to sync ${name} for your account. Tap Continue to connect ${name} again.`,
+          action: 'connect',
+        });
+        return;
+      }
+      if (!outcome.complete) {
+        setResumeTarget({
+          source: outcome.source,
+          connectionId: outcome.connectionId,
+          partial: outcome.postedCount > 0,
+        });
+        emitTutorialSignal('wearable_connected');
+        showMessage(partialImportMessage(name, outcome));
+        return;
+      }
+      setResumeTarget(null);
+      emitTutorialSignal('wearable_connected');
+      onConnected?.();
+      onClose();
+    },
+    [invalidate, onConnected, onClose, showMessage],
+  );
+
+  const runImport = useCallback(
+    async (name: string, run: () => Promise<OnDeviceImportOutcome>) => {
+      if (mountedRef.current) setImporting(true);
+      try {
+        handleImportOutcome(await run(), name);
+      } catch (err) {
+        invalidate();
+        showMessage(connectFailureMessage(err, name));
+      } finally {
+        if (mountedRef.current) setImporting(false);
+      }
+    },
+    [handleImportOutcome, invalidate, showMessage],
+  );
+
   const handleOnDeviceConnect = useCallback(
     async (target: WearableProvider) => {
-      const outcome = await connectOnDeviceProvider(target);
       const name = configFor(target).displayName;
+      // Bind the run to the person who tapped, BEFORE the native prompt.
+      let fence: SessionFence;
+      try {
+        fence = await beginOnDeviceConnect();
+      } catch (err) {
+        showMessage(connectFailureMessage(err, name));
+        return;
+      }
+      attemptRef.current?.cancel();
+      attemptRef.current = fence;
+
+      const outcome = await connectOnDeviceProvider(target);
+      if (attemptRef.current !== fence) return; // sheet closed meanwhile
       switch (outcome) {
         case 'disabled':
-          setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+          showMessage({ text: HEALTH_CONNECT_DISABLED_MESSAGE, action: 'none' });
           return;
         case 'granted': {
           // S14: permission granted on-device. Register the device source,
-          // record this person's local authorization for this phone, and
-          // import the last 30 days so the Health and Sleep views show real
-          // data, then re-read connections and samples.
+          // record the tapping person's local authorization for this phone,
+          // and import the last 30 days so the Health and Sleep views show
+          // real data. connectOnDevice re-checks the fence before every step.
           const source = deviceSourceFor(target);
           if (source == null) {
-            setError(`${name} can't be connected on this device.`);
+            showMessage({ text: `${name} can't be connected on this device.`, action: 'none' });
             return;
           }
-          setImporting(true);
-          let result;
-          try {
-            result = await connectOnDevice(source);
-          } catch {
-            invalidate();
-            setError(
-              `${name} is connected, but we couldn't bring in your history yet. Check your connection and try again.`,
-            );
-            return;
-          } finally {
-            setImporting(false);
-          }
-          invalidate();
-          if (result.kind === 'disabled') {
-            setError(
-              `Health data import isn't switched on yet. Your coach will let you know when it is ready.`,
-            );
-            return;
-          }
-          emitTutorialSignal('wearable_connected');
-          onConnected?.();
-          onClose();
+          await runImport(name, () => connectOnDevice(source, fence));
           return;
         }
         case 'denied':
-          setError(
-            `${name} access wasn't granted. Open ${name} permissions and allow access, then try again.`,
-          );
+          showMessage({
+            text: `${name} access wasn't granted. Open ${name} permissions and allow access, then tap Continue.`,
+            action: 'connect',
+          });
           return;
         case 'unavailable':
-          setError(
-            `${name} isn't set up on this device yet. We've opened its settings — finish setup there, then try again.`,
-          );
+          showMessage({
+            text: `${name} isn't set up on this device yet. We've opened its settings. Finish setup there, then tap Continue.`,
+            action: 'connect',
+          });
           return;
         case 'unsupported':
-          setError(`${name} can't be connected on this device.`);
+          showMessage({ text: `${name} can't be connected on this device.`, action: 'none' });
           return;
       }
     },
-    [invalidate, onConnected, onClose],
+    [runImport, showMessage],
   );
+
+  const handleResume = useCallback(async () => {
+    if (provider == null || resumeTarget == null) return;
+    const name = configFor(provider).displayName;
+    const fence = attemptRef.current;
+    if (fence == null) {
+      showMessage({
+        text: `Tap Continue to connect ${name} again.`,
+        action: 'connect',
+      });
+      return;
+    }
+    setError(null);
+    setRequestingOnDevice(true);
+    try {
+      await runImport(name, () =>
+        resumeOnDeviceImport(resumeTarget.source, resumeTarget.connectionId, fence),
+      );
+    } finally {
+      if (mountedRef.current) setRequestingOnDevice(false);
+    }
+  }, [provider, resumeTarget, runImport, showMessage]);
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
     if (isHealthConnectProviderDisabled(provider)) {
       setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+      setRetry('none');
+      return;
+    }
+    if (retry === 'resume' && resumeTarget != null) {
+      await handleResume();
       return;
     }
     setError(null);
+    setRetry('connect');
+    setResumeTarget(null);
 
     try {
       if (isOnDeviceProvider(provider)) {
@@ -206,14 +339,25 @@ export default function ConnectProviderSheet({
         await handleCloudConnect(provider);
       }
     } catch {
-      // Generic, action-oriented error copy (Stripe-quality: says what to do).
-      // No token/secret material is ever surfaced (#12).
-      setError("We couldn't start the connection. Please try again.");
+      // Cloud OAuth start failed (on-device failures are mapped above).
+      // Action-oriented copy; no token/secret material is ever surfaced (#12).
+      if (mountedRef.current) {
+        setError(
+          "We couldn't start the connection. Check your internet connection, then tap Continue.",
+        );
+      }
     } finally {
-      setRequestingOnDevice(false);
+      if (mountedRef.current) setRequestingOnDevice(false);
     }
-  }, [provider, handleOnDeviceConnect, handleCloudConnect]);
+  }, [provider, retry, resumeTarget, handleResume, handleOnDeviceConnect, handleCloudConnect]);
 
+  const ctaLabel =
+    retry === 'resume' && resumeTarget != null
+      ? resumeTarget.partial
+        ? 'Continue import'
+        : 'Try again'
+      : 'Continue';
+  const showCta = !buildDisabled && retry !== 'none';
   const continuing = startOauth.isPending || requestingOnDevice;
 
   return (
@@ -277,7 +421,7 @@ export default function ConnectProviderSheet({
                 </Text>
               )}
 
-              {!buildDisabled && (
+              {showCta && (
                 <Pressable
                   style={[styles.cta, continuing && styles.ctaDisabled]}
                   onPress={handleContinue}
@@ -287,12 +431,16 @@ export default function ConnectProviderSheet({
                     disabled: continuing,
                     busy: continuing,
                   }}
-                  accessibilityLabel={`Continue connecting ${config.displayName}`}
+                  accessibilityLabel={
+                    ctaLabel === 'Continue'
+                      ? `Continue connecting ${config.displayName}`
+                      : `${ctaLabel} for ${config.displayName}`
+                  }
                 >
                   {continuing ? (
                     <ActivityIndicator color={colors.bone} />
                   ) : (
-                    <Text style={styles.ctaText}>Continue</Text>
+                    <Text style={styles.ctaText}>{ctaLabel}</Text>
                   )}
                 </Pressable>
               )}
@@ -301,10 +449,10 @@ export default function ConnectProviderSheet({
                 style={styles.cancel}
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel={buildDisabled ? 'Close' : 'Cancel'}
+                accessibilityLabel={buildDisabled || !showCta || resumeTarget != null ? 'Close' : 'Cancel'}
               >
                 <Text style={styles.cancelText}>
-                  {buildDisabled ? 'Close' : 'Cancel'}
+                  {buildDisabled || !showCta || resumeTarget != null ? 'Close' : 'Cancel'}
                 </Text>
               </Pressable>
             </>

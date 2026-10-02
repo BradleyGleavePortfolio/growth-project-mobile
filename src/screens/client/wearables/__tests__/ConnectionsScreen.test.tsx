@@ -46,8 +46,10 @@ jest.mock('../ConnectProviderSheet', () => {
 
 const mockUseWearableConnections = jest.fn();
 const mockDisconnectMutate = jest.fn();
+const mockLocalAuth = jest.fn((_source: unknown) => ({ data: undefined as unknown }));
 jest.mock('../../../../hooks/useWearableConnections', () => ({
   useWearableConnections: () => mockUseWearableConnections(),
+  useLocalOnDeviceAuthorization: (source: unknown) => mockLocalAuth(source),
   useDisconnectProvider: () => ({
     mutate: mockDisconnectMutate,
     isPending: false,
@@ -94,6 +96,8 @@ function queryResult(over: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  mockLocalAuth.mockReset();
+  mockLocalAuth.mockReturnValue({ data: undefined });
   mockUseWearableConnections.mockReset();
   mockDisconnectMutate.mockReset();
   for (const k of Object.keys(sheetProps)) delete sheetProps[k];
@@ -190,5 +194,53 @@ describe('ConnectionsScreen — loading + error states', () => {
     expect(retry).toBeTruthy();
     await fireEvent.press(retry);
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Opus B-317-5: a connected server row that this phone does not sync (after a
+// sign-out, on a second phone, after a reinstall) offers Reconnect, routed to
+// the Connect sheet. Only app storage is read for this, never the health store.
+describe('ConnectionsScreen — not syncing on this phone (B-317-5)', () => {
+  it('shows Not syncing here + Reconnect when this phone has no Connect for the person', async () => {
+    mockUseWearableConnections.mockReturnValue(
+      queryResult({ data: [connection('APPLE_HEALTHKIT', 'connected')] }),
+    );
+    mockLocalAuth.mockReturnValue({
+      data: { userId: 'u1', source: 'APPLE_HEALTHKIT', connectionId: null },
+    });
+    await render(<ConnectionsScreen />);
+    expect(mockLocalAuth).toHaveBeenCalledWith('APPLE_HEALTHKIT');
+    expect(screen.getByText('Not syncing here')).toBeTruthy();
+    expect(screen.getByText('Apple Health is not syncing on this phone. Tap Reconnect to continue.')).toBeTruthy();
+    expect(screen.queryByLabelText('Disconnect Apple Health')).toBeNull();
+    // Nothing opened yet: the sheet (and so any native read) runs only on the tap.
+    expect(sheetProps.visible).toBe(false);
+
+    await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
+    expect(sheetProps.provider).toBe('APPLE_HEALTHKIT');
+    expect(sheetProps.visible).toBe(true);
+  });
+
+  it('also offers Reconnect when the local Connect is for an older connection', async () => {
+    mockUseWearableConnections.mockReturnValue(
+      queryResult({ data: [connection('APPLE_HEALTHKIT', 'connected')] }),
+    );
+    mockLocalAuth.mockReturnValue({
+      data: { userId: 'u1', source: 'APPLE_HEALTHKIT', connectionId: 'c-old' },
+    });
+    await render(<ConnectionsScreen />);
+    expect(screen.getByLabelText('Reconnect Apple Health')).toBeTruthy();
+  });
+
+  it('keeps Connected + Disconnect when this phone syncs that connection', async () => {
+    mockUseWearableConnections.mockReturnValue(
+      queryResult({ data: [connection('APPLE_HEALTHKIT', 'connected')] }),
+    );
+    mockLocalAuth.mockReturnValue({
+      data: { userId: 'u1', source: 'APPLE_HEALTHKIT', connectionId: 'c-APPLE_HEALTHKIT' },
+    });
+    await render(<ConnectionsScreen />);
+    expect(screen.getByLabelText('Disconnect Apple Health')).toBeTruthy();
+    expect(screen.queryByText('Not syncing here')).toBeNull();
   });
 });
