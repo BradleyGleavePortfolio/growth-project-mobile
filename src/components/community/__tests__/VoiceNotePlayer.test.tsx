@@ -8,7 +8,7 @@
  *     and a second press pauses.
  */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -18,6 +18,7 @@ jest.mock('../../../theme/useTheme', () => {
 });
 
 import VoiceNotePlayer from '../VoiceNotePlayer';
+import HapticPressable from '../../HapticPressable';
 import type {
   VoicePlaybackPort,
   VoicePlaybackHandle,
@@ -199,5 +200,103 @@ describe('VoiceNotePlayer — signed URL lifecycle (B-314-5)', () => {
     await waitFor(() => expect(handles[0]?.play).toHaveBeenCalled());
     await unmount();
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('B-314-8: one native player per control, never orphaned', () => {
+  function heldPlayback() {
+    const handles: Array<jest.Mocked<VoicePlaybackHandle>> = [];
+    const resolvers: Array<() => void> = [];
+    const port: VoicePlaybackPort = {
+      isAvailable: true,
+      load: jest.fn(
+        () =>
+          new Promise<VoicePlaybackHandle>((resolve) => {
+            const handle = {
+              play: jest.fn().mockResolvedValue(undefined),
+              pause: jest.fn().mockResolvedValue(undefined),
+              seek: jest.fn().mockResolvedValue(undefined),
+              unload: jest.fn().mockResolvedValue(undefined),
+            } as jest.Mocked<VoicePlaybackHandle>;
+            handles.push(handle);
+            resolvers.push(() => resolve(handle));
+          }),
+      ),
+    };
+    return { port, handles, resolvers };
+  }
+
+  const pressTwiceSynchronously = (toggle: { props: { onPress?: () => void } }) => {
+    // Two taps in the same frame: the second runs before React re-renders,
+    // so only a synchronous ref (not state or the disabled prop) can stop it.
+    act(() => {
+      toggle.props.onPress?.();
+      toggle.props.onPress?.();
+    });
+  };
+
+  it('two taps before the load resolves create one player, play it once and release it on unmount', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    const toggle = screen.UNSAFE_getByType(HapticPressable);
+    pressTwiceSynchronously(toggle);
+    expect(port.load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolvers.forEach((r) => r());
+    });
+    expect(handles).toHaveLength(1);
+    expect(handles[0].play).toHaveBeenCalledTimes(1);
+    screen.unmount();
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+  });
+
+  it('the control is disabled while loading', async () => {
+    const { port } = heldPlayback();
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={4000} playback={port} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() =>
+      expect(getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({
+        disabled: true,
+        busy: true,
+      }),
+    );
+  });
+
+  it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
+    await screen.rerender(
+      <VoiceNotePlayer url={`${URL}?fresh=1`} durationMs={4000} playback={port} />,
+    );
+    await act(async () => {
+      resolvers[0]();
+    });
+    // The stale handle was released, never played.
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+    expect(handles[0].play).not.toHaveBeenCalled();
+    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
+    expect(port.load).toHaveBeenCalledTimes(2);
+    expect(port.load).toHaveBeenLastCalledWith(`${URL}?fresh=1`, expect.any(Object));
+    await act(async () => {
+      resolvers[1]();
+    });
+    expect(handles[1].play).toHaveBeenCalledTimes(1);
+    screen.unmount();
+    expect(handles[1].unload).toHaveBeenCalledTimes(1);
+  });
+
+  it('unmount while loading releases the handle when it arrives', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
+    screen.unmount();
+    await act(async () => {
+      resolvers[0]();
+    });
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+    expect(handles[0].play).not.toHaveBeenCalled();
   });
 });

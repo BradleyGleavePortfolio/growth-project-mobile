@@ -64,7 +64,9 @@ const BACKEND_COMMUNITY_CODES = new Set([
   'community.message.edit_window_closed',
   'community.message.not_author',
   'community.message.not_found',
+  'community.moderation.already_actioned',
   'community.moderation.cannot_ban_coach',
+  'community.moderation.changed',
   'community.moderation.not_found',
   'community.moderation.not_moderator',
   'community.notice.not_found',
@@ -138,5 +140,42 @@ describe('communityErrors maps only codes the backend emits (C-314-4)', () => {
     expect(f.reference).toBeNull();
     expect(f.message.length).toBeGreaterThan(20);
     expect(f.message).not.toMatch(/something went wrong/i);
+  });
+});
+
+describe('moderation conflicts (backend #610 fix round 5, B-610-4)', () => {
+  it('409 already_actioned shows the server wording naming the current action', () => {
+    const serverMessage =
+      'This report was already handled with Ban. A handled report can only be made stronger (Warn, then Hide, then Ban). Refresh the queue to see where it stands.';
+    const out = describeCommunityFailure(
+      axiosError(409, {
+        statusCode: 409,
+        error: 'conflict',
+        code: 'community.moderation.already_actioned',
+        current_action: 'ban',
+        message: serverMessage,
+      }),
+      'moderate',
+    );
+    expect(out.message).toBe(serverMessage);
+    expect(out.code).toBe('community.moderation.already_actioned');
+  });
+
+  it('409 already_actioned without a server message falls back to specific copy', () => {
+    const out = describeCommunityFailure(
+      axiosError(409, { code: 'community.moderation.already_actioned' }),
+      'moderate',
+    );
+    expect(out.message).toMatch(/only be made stronger/);
+    expect(out.message).toMatch(/refresh the queue/);
+  });
+
+  it('409 changed maps to specific copy with a next step', () => {
+    const out = describeCommunityFailure(
+      axiosError(409, { code: 'community.moderation.changed', message: 'x' }),
+      'moderate',
+    );
+    expect(out.message).toMatch(/Another moderator acted/);
+    expect(out.message).toMatch(/refresh the queue/);
   });
 });

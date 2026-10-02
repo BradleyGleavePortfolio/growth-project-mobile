@@ -30,10 +30,28 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   resolveVoiceRecorder,
   RECORDER_MAX_DURATION_MS,
+  type MicPermissionStatus,
   type VoiceRecorderPort,
   type VoiceRecordingResult,
 } from './voiceRecorderPort';
 import { reportVoiceAudioCleanup, useNativeVoiceRecorder } from '../services/voiceAudio';
+import { captureError } from '../services/sentry';
+import { newRequestId, shortReference } from '../utils/correlation';
+
+/**
+ * What failed when status === 'error' (B-314-7): the composer turns it into
+ * specific copy with a working next step and the short reference.
+ *  - permission_check: the microphone permission could not be read or asked;
+ *  - start: the microphone could not start recording;
+ *  - stop: the recording could not be finished and saved.
+ */
+export type VoiceRecorderErrorKind = 'permission_check' | 'start' | 'stop';
+
+export interface VoiceRecorderError {
+  kind: VoiceRecorderErrorKind;
+  /** Short reference shown to the member; the Sentry report carries it. */
+  reference: string;
+}
 
 export type VoiceRecorderStatus =
   | 'unavailable'
@@ -68,6 +86,8 @@ export interface VoiceRecorderState {
   mustOpenSettings: boolean;
   /** True when no native recorder is bundled on this build. */
   isAvailable: boolean;
+  /** Set when status === 'error': what failed + a reported reference. */
+  error: VoiceRecorderError | null;
   start: () => Promise<void>;
   stop: () => Promise<void>;
   cancel: () => Promise<void>;
@@ -94,12 +114,20 @@ export function useVoiceRecorder(
   const [elapsedMs, setElapsedMs] = useState(0);
   const [recording, setRecording] = useState<VoiceRecordingResult | null>(null);
   const [mustOpenSettings, setMustOpenSettings] = useState(false);
+  const [error, setError] = useState<VoiceRecorderError | null>(null);
 
   // Interval + start-time refs live outside render so the ticker is stable.
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number | null>(null);
   // Guards a double-stop race when the auto-stop timer and a manual stop collide.
   const stoppingRef = useRef(false);
+  // B-314-7: one start in flight at a time, fenced by a generation. Unmount
+  // (or a cancel/reset) bumps the generation, so a permission prompt, audio
+  // mode switch or prepare that finishes afterwards is retired: the capture
+  // it began is cancelled and no ticker or state update happens.
+  const startingRef = useRef(false);
+  const generationRef = useRef(0);
+  const mountedRef = useRef(true);
 
   const clearTick = useCallback(() => {
     if (tickRef.current !== null) {
@@ -109,20 +137,31 @@ export function useVoiceRecorder(
     startedAtRef.current = null;
   }, []);
 
+  const fail = useCallback((kind: VoiceRecorderErrorKind, err: unknown) => {
+    const reference = newRequestId();
+    captureError(err, { area: 'community.voice', reason: `recorder_${kind}`, reference });
+    if (!mountedRef.current) return;
+    setError({ kind, reference: shortReference(reference) ?? reference.slice(0, 8) });
+    setStatus('error');
+  }, []);
+
   // Always clear the interval on unmount so a backgrounded composer never
-  // leaks, and release the microphone if the composer closes mid-recording.
+  // leaks, and release the microphone if the composer closes mid-recording
+  // or while a start is still in flight.
   const recorderRef = useRef(recorder);
   recorderRef.current = recorder;
-  useEffect(
-    () => () => {
-      const wasRecording = startedAtRef.current !== null;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      generationRef.current += 1;
+      const wasCapturing = startedAtRef.current !== null || startingRef.current;
       clearTick();
-      if (wasRecording) {
+      if (wasCapturing) {
         void recorderRef.current.cancel().catch(reportVoiceAudioCleanup('recorder_unmount_cancel'));
       }
-    },
-    [clearTick],
-  );
+    };
+  }, [clearTick]);
 
   const finalize = useCallback(async () => {
     if (stoppingRef.current) return;
@@ -131,18 +170,20 @@ export function useVoiceRecorder(
     setStatus('stopping');
     try {
       const result = await recorder.stop();
+      if (!mountedRef.current) return;
       const clampedMs = Math.min(result.durationMs, maxDurationMs);
       setRecording({ ...result, durationMs: clampedMs });
       setElapsedMs(clampedMs);
       setStatus('recorded');
-    } catch {
-      setStatus('error');
+    } catch (err) {
+      fail('stop', err);
     } finally {
       stoppingRef.current = false;
     }
-  }, [clearTick, maxDurationMs, recorder]);
+  }, [clearTick, fail, maxDurationMs, recorder]);
 
   const beginTicker = useCallback(() => {
+    if (tickRef.current !== null) clearInterval(tickRef.current);
     startedAtRef.current = Date.now();
     setElapsedMs(0);
     tickRef.current = setInterval(() => {
@@ -164,27 +205,52 @@ export function useVoiceRecorder(
       setStatus('unavailable');
       return;
     }
-    let perm = await recorder.getPermissionStatus();
-    if (perm === 'undetermined') {
-      perm = await recorder.requestPermission();
-    }
-    if (perm !== 'granted') {
-      // A denial after an explicit prompt usually means the OS won't prompt
-      // again — route to Settings rather than offer a no-op retry.
-      setMustOpenSettings(true);
-      setStatus('denied');
-      return;
-    }
+    // Single flight: a second tap while a start (or a recording) is under
+    // way is ignored, so two native captures can never be begun.
+    if (startingRef.current || startedAtRef.current !== null) return;
+    startingRef.current = true;
+    const generation = ++generationRef.current;
+    const retired = () => !mountedRef.current || generation !== generationRef.current;
     try {
-      await recorder.start();
+      let perm: MicPermissionStatus;
+      try {
+        perm = await recorder.getPermissionStatus();
+        if (perm === 'undetermined' && !retired()) {
+          perm = await recorder.requestPermission();
+        }
+      } catch (err) {
+        if (!retired()) fail('permission_check', err);
+        return;
+      }
+      if (retired()) return;
+      if (perm !== 'granted') {
+        // A denial after an explicit prompt usually means the OS won't prompt
+        // again — route to Settings rather than offer a no-op retry.
+        setMustOpenSettings(true);
+        setStatus('denied');
+        return;
+      }
+      try {
+        await recorder.start();
+      } catch (err) {
+        if (!retired()) fail('start', err);
+        return;
+      }
+      if (retired()) {
+        // The composer closed (or was reset) while the microphone was
+        // starting: release the capture this call began.
+        void recorder.cancel().catch(reportVoiceAudioCleanup('recorder_late_start_cancel'));
+        return;
+      }
       setRecording(null);
+      setError(null);
       setMustOpenSettings(false);
       setStatus('recording');
       beginTicker();
-    } catch {
-      setStatus('error');
+    } finally {
+      startingRef.current = false;
     }
-  }, [beginTicker, recorder]);
+  }, [beginTicker, fail, recorder]);
 
   const stop = useCallback(async () => {
     if (status !== 'recording') return;
@@ -192,6 +258,7 @@ export function useVoiceRecorder(
   }, [finalize, status]);
 
   const cancel = useCallback(async () => {
+    generationRef.current += 1;
     clearTick();
     try {
       await recorder.cancel();
@@ -204,7 +271,9 @@ export function useVoiceRecorder(
   }, [clearTick, recorder]);
 
   const reset = useCallback(() => {
+    generationRef.current += 1;
     clearTick();
+    setError(null);
     setRecording(null);
     setElapsedMs(0);
     setMustOpenSettings(false);
@@ -213,7 +282,14 @@ export function useVoiceRecorder(
   }, [clearTick, recorder.isAvailable]);
 
   const retryPermission = useCallback(async () => {
-    const perm = await recorder.requestPermission();
+    let perm: MicPermissionStatus;
+    try {
+      perm = await recorder.requestPermission();
+    } catch (err) {
+      fail('permission_check', err);
+      return;
+    }
+    if (!mountedRef.current) return;
     if (perm === 'granted') {
       setMustOpenSettings(false);
       setStatus('idle');
@@ -222,7 +298,7 @@ export function useVoiceRecorder(
       setMustOpenSettings(true);
       setStatus('denied');
     }
-  }, [recorder]);
+  }, [fail, recorder]);
 
   return {
     status,
@@ -232,6 +308,7 @@ export function useVoiceRecorder(
     canRetryPermission: status === 'denied',
     mustOpenSettings,
     isAvailable: recorder.isAvailable,
+    error,
     start,
     stop,
     cancel,

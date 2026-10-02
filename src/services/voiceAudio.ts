@@ -200,9 +200,17 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
       return p.granted ? 'granted' : 'denied';
     },
     async start() {
-      await audio.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync();
-      recorder.record();
+      // B-314-7: if switching into recording mode, preparing or starting
+      // fails, put the session back into playback mode before rethrowing, so
+      // later voice notes do not play from the iOS earpiece.
+      try {
+        await audio.setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        await recorder.prepareToRecordAsync();
+        recorder.record();
+      } catch (err) {
+        await restorePlaybackMode();
+        throw err;
+      }
       startedAt = Date.now();
       lastDurationMs = 0;
       peaks = [];
@@ -214,8 +222,12 @@ export function createExpoRecorderPort(audio: ExpoAudio, recorder: AudioRecorder
       stopMeter();
       const wallMs = startedAt === null ? 0 : Date.now() - startedAt;
       startedAt = null;
-      await recorder.stop();
-      await restorePlaybackMode();
+      try {
+        await recorder.stop();
+      } finally {
+        // B-314-7: restored whether or not the native stop succeeded.
+        await restorePlaybackMode();
+      }
       const uri = recorder.uri;
       if (!uri) throw new VoiceRecordingFileMissingError();
       const bytes = await fileBytes(uri);

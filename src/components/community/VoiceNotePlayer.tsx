@@ -75,6 +75,12 @@ export default function VoiceNotePlayer({
   // Bumped on every URL change, release and unmount; a load that resolves
   // after its generation ended is released instead of adopted.
   const generationRef = useRef(0);
+  // B-314-8: single flight. The generation of the load in progress, or null.
+  // Set synchronously on the first tap, so a second tap before React
+  // re-renders (or before the load resolves) never starts a second native
+  // player; a URL change or unmount ends that generation, so a tap for the
+  // new URL is not blocked by the stale load.
+  const loadingRef = useRef<number | null>(null);
   const onPlaybackErrorRef = useRef(onPlaybackError);
   onPlaybackErrorRef.current = onPlaybackError;
 
@@ -110,13 +116,17 @@ export default function VoiceNotePlayer({
 
   const start = useCallback(async () => {
     if (disabled || url === null) return;
-    setState('loading');
+    if (loadingRef.current !== null && loadingRef.current === generationRef.current) return;
     let generation = generationRef.current;
+    let loadingGeneration: number | null = null;
     try {
       let loaded = loadedRef.current;
       if (!loaded || loaded.url !== url) {
         if (loaded) release();
         generation = generationRef.current;
+        loadingGeneration = generation;
+        loadingRef.current = generation;
+        setState('loading');
         const handle = await port.load(url, {
           onProgress: (ms) => {
             if (generation === generationRef.current) setPositionMs(ms);
@@ -133,13 +143,22 @@ export default function VoiceNotePlayer({
           void handle.unload().catch(reportVoiceAudioCleanup('late_load_unload'));
           return;
         }
+        const previous = loadedRef.current;
         loaded = { url, handle };
         loadedRef.current = loaded;
+        // Never orphan a handle: anything adopted before this one is released.
+        if (previous && previous.handle !== handle) {
+          void previous.handle.unload().catch(reportVoiceAudioCleanup('player_replaced_unload'));
+        }
       }
       await loaded.handle.play();
       if (generation === generationRef.current) setState('playing');
     } catch {
       fail(generation);
+    } finally {
+      if (loadingGeneration !== null && loadingRef.current === loadingGeneration) {
+        loadingRef.current = null;
+      }
     }
   }, [disabled, fail, port, release, url]);
 
@@ -194,10 +213,10 @@ export default function VoiceNotePlayer({
       <HapticPressable
         intent="light"
         onPress={onPress}
-        disabled={disabled}
+        disabled={disabled || state === 'loading'}
         accessibilityRole="button"
         accessibilityLabel={controlLabel}
-        accessibilityState={{ disabled, busy: state === 'loading' }}
+        accessibilityState={{ disabled: disabled || state === 'loading', busy: state === 'loading' }}
         testID="voice-player-toggle"
         style={[styles.control, { backgroundColor: controlBg }]}
       >

@@ -73,6 +73,7 @@ class FakeRecorder {
     this.metering = -30;
     this.calls = [];
     this.failPrepare = null;
+    this.failStop = null;
   }
   async prepareToRecordAsync() {
     this.calls.push('prepare');
@@ -84,6 +85,7 @@ class FakeRecorder {
   }
   async stop() {
     this.calls.push('stop');
+    if (this.failStop) throw this.failStop;
     this.isRecording = false;
     this.uri = state.nextRecordingUri;
   }

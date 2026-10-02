@@ -109,6 +109,8 @@ const VERBS: Record<CommunityAction, string> = {
 /** Codes whose server `message` is written for members; shown verbatim. */
 const SERVER_WORDED = new Set([
   'community.content.rejected',
+  // Names the action the report already has (backend #610 round 5).
+  'community.moderation.already_actioned',
   'community.block.self',
   'community.block.not_found',
   'community.block.workspace_coach',
@@ -158,6 +160,10 @@ const BY_CODE: Record<string, string> = {
     'Only the coach who owns this community can act on its reports.',
   'community.moderation.cannot_ban_coach':
     'A coach cannot be removed from their own community. Hide the content instead.',
+  'community.moderation.already_actioned':
+    'This report was already handled with a stronger action. A handled report can only be made stronger (Warn, then Hide, then Ban). Pull down to refresh the queue.',
+  'community.moderation.changed':
+    'Another moderator acted on this report at the same moment. Pull down to refresh the queue, then act again if needed.',
   'community.win.not_found':
     'This win is no longer available. It may have been removed. Pull down to refresh.',
   'community.win.removed_member':

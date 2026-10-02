@@ -179,6 +179,84 @@ describe('voice recording: native expo-audio recorder by default', () => {
   });
 });
 
+describe('B-314-7: the default native adapter restores playback mode and owns late starts', () => {
+  const playbackMode = { allowsRecording: false, playsInSilentMode: true };
+  const lastMode = () => mock.state.audioModes[mock.state.audioModes.length - 1];
+
+  it('a failed prepare puts the session back into playback mode and reports a coded start error', async () => {
+    const { result } = await renderHook(() => useVoiceRecorder());
+    const recorder = mock.state.recorders[mock.state.recorders.length - 1];
+    recorder.failPrepare = new Error('audio session busy');
+    await act(async () => {
+      await result.current.start();
+    });
+    expect(result.current.status).toBe('error');
+    expect(result.current.error?.kind).toBe('start');
+    expect(lastMode()).toEqual(playbackMode);
+    expect(mockCapture).toHaveBeenCalledWith(
+      recorder.failPrepare,
+      expect.objectContaining({ reason: 'recorder_start' }),
+    );
+  });
+
+  it('a failed native stop still restores playback mode', async () => {
+    const { result } = await renderHook(() => useVoiceRecorder());
+    await act(async () => {
+      await result.current.start();
+    });
+    const recorder = mock.state.recorders[mock.state.recorders.length - 1] as FakeRecorder & {
+      failStop: Error | null;
+    };
+    recorder.failStop = new Error('encoder failed');
+    await act(async () => {
+      await result.current.stop();
+    });
+    expect(result.current.status).toBe('error');
+    expect(result.current.error?.kind).toBe('stop');
+    expect(lastMode()).toEqual(playbackMode);
+  });
+
+  it('a rejected permission read through expo-audio is a coded error, not an unhandled rejection', async () => {
+    const audio: { getRecordingPermissionsAsync: () => Promise<unknown> } =
+      jest.requireMock('expo-audio');
+    const spy = jest
+      .spyOn(audio, 'getRecordingPermissionsAsync')
+      .mockRejectedValueOnce(new Error('permission service unavailable'));
+    const { result } = await renderHook(() => useVoiceRecorder());
+    await act(async () => {
+      await expect(result.current.start()).resolves.toBeUndefined();
+    });
+    spy.mockRestore();
+    expect(result.current.status).toBe('error');
+    expect(result.current.error?.kind).toBe('permission_check');
+  });
+
+  it('unmount while prepare is held: the late capture is stopped and playback mode restored', async () => {
+    const { result, unmount } = await renderHook(() => useVoiceRecorder());
+    const recorder = mock.state.recorders[mock.state.recorders.length - 1] as FakeRecorder & {
+      prepareToRecordAsync: () => Promise<void>;
+    };
+    let release!: () => void;
+    recorder.prepareToRecordAsync = () =>
+      new Promise<void>((res) => {
+        recorder.calls.push('prepare');
+        release = res;
+      });
+    let pending: Promise<void> = Promise.resolve();
+    await act(async () => {
+      pending = result.current.start();
+    });
+    unmount();
+    await act(async () => {
+      release();
+      await pending;
+    });
+    await waitFor(() => expect(recorder.calls).toEqual(['prepare', 'record', 'stop']));
+    expect(recorder.isRecording).toBe(false);
+    expect(lastMode()).toEqual(playbackMode);
+  });
+});
+
 describe('metering helpers', () => {
   it('normalises dBFS into [0,1]', () => {
     expect(normaliseMetering(-160)).toBe(0);
