@@ -236,10 +236,10 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     return { port, handles, resolvers };
   }
 
-  const pressTwiceSynchronously = (toggle: { props: { onPress?: () => void } }) => {
+  const pressTwiceSynchronously = async (toggle: { props: { onPress?: () => void } }) => {
     // Two taps in the same frame: the second runs before React re-renders,
     // so only a synchronous ref (not state or the disabled prop) can stop it.
-    act(() => {
+    await act(async () => {
       toggle.props.onPress?.();
       toggle.props.onPress?.();
     });
@@ -249,7 +249,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
     const toggle = screen.getByTestId('voice-player-toggle');
-    pressTwiceSynchronously(toggle);
+    await pressTwiceSynchronously(toggle);
     expect(port.load).toHaveBeenCalledTimes(1);
     await act(async () => {
       resolvers.forEach((r) => r());
@@ -265,7 +265,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     const { getByTestId } = await render(
       <VoiceNotePlayer url={URL} durationMs={4000} playback={port} />,
     );
-    fireEvent.press(getByTestId('voice-player-toggle'));
+    await fireEvent.press(getByTestId('voice-player-toggle'));
     await waitFor(() =>
       expect(getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({
         disabled: true,
@@ -277,7 +277,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
   it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
-    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
     await screen.rerender(
       <VoiceNotePlayer url={`${URL}?fresh=1`} durationMs={4000} playback={port} />,
     );
@@ -287,7 +287,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     // The stale handle was released, never played.
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
     expect(handles[0].play).not.toHaveBeenCalled();
-    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
     expect(port.load).toHaveBeenCalledTimes(2);
     expect(port.load).toHaveBeenLastCalledWith(`${URL}?fresh=1`, expect.any(Object));
     await act(async () => {
@@ -301,7 +301,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
   it('unmount while loading releases the handle when it arrives', async () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
-    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
     await screen.unmount();
     await act(async () => {
       resolvers[0]();
