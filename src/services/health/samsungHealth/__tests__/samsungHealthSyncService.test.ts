@@ -20,6 +20,10 @@
  */
 
 import { Platform } from 'react-native';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { healthConnectEnabled: true } } },
+}));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const mockApiPost = jest.fn();

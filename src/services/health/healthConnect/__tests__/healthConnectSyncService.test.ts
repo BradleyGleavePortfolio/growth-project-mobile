@@ -5,6 +5,10 @@
 // (written only after a successful POST). secureStorage is mocked in-memory.
 
 import { Platform } from 'react-native';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { healthConnectEnabled: true } } },
+}));
 
 // In-memory secureStorage mock.
 const store: Record<string, string> = {};

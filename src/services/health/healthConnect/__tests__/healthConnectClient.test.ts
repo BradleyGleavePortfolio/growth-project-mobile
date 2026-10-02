@@ -5,6 +5,10 @@
 // readAllSupportedRecords. The native library is mocked at the module seam.
 
 import { Platform } from 'react-native';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { healthConnectEnabled: true } } },
+}));
 
 jest.mock('react-native-health-connect', () => ({
   initialize: jest.fn(),
