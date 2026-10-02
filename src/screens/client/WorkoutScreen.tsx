@@ -34,6 +34,9 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // registered in MoreStack for a while but no UI surfaced a navigate call,
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
+// Clinic tutorial (C08): pinned plan explanation card; flag-gated, renders
+// nothing unless featureFlags.clientTutorial and a program exists.
+import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
 import { featureFlags } from '../../config/featureFlags';
 // §2.8 Workout complete + §2.10 generic error — Roman speaks beside his face
 // (both components co-locate <RomanAvatar />). Gated behind
@@ -569,6 +572,8 @@ export default function WorkoutScreen() {
             <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
           </HapticPressable>
         </View>
+
+        <PlanExplanationCard />
 
         {pendingAssignments.length > 0 ? (
           <HapticPressable

@@ -87,6 +87,41 @@ describe('signOut', () => {
     Notifications.cancelScheduledNotificationAsync.mockClear();
   });
 
+  it('#306 r3 (Opus C2): ends the support chat session so the next person cannot open this user\'s conversation', async () => {
+    const prev = process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID;
+    process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID = 'test-website-id-123';
+    const Crisp = jest.requireMock('crisp-sdk-react-native') as { resetSession: jest.Mock };
+    Crisp.resetSession.mockClear();
+    try {
+      await signOut();
+      expect(Crisp.resetSession).toHaveBeenCalledTimes(1);
+    } finally {
+      process.env.EXPO_PUBLIC_CRISP_WEBSITE_ID = prev;
+    }
+  });
+
+  it('#306 r3: clears the unconfirmed coach signup marker', async () => {
+    await AsyncStorage.setItem('signup_coach_unconfirmed', JSON.stringify({ method: 'apple', at: Date.now() }));
+    await signOut();
+    expect(await AsyncStorage.getItem('signup_coach_unconfirmed')).toBeNull();
+  });
+
+  it('#306 r4 (Sol C1): clears a pending signup role notice so the next person never sees it', async () => {
+    await AsyncStorage.setItem('signup_role_notice', 'coach_retry_not_applied');
+    await signOut();
+    expect(await AsyncStorage.getItem('signup_role_notice')).toBeNull();
+  });
+
+  it('#306 r5 (Sol B-306-2): clears the role-selection owner and an unacknowledged recovery notice', async () => {
+    await AsyncStorage.setItem('needs_role_selection', 'true');
+    await AsyncStorage.setItem('needs_role_selection_owner', 'u1');
+    await AsyncStorage.setItem('signup_coach_recovery_gate', JSON.stringify({ userId: 'u1', method: 'email' }));
+    await signOut();
+    expect(await AsyncStorage.getItem('needs_role_selection')).toBeNull();
+    expect(await AsyncStorage.getItem('needs_role_selection_owner')).toBeNull();
+    expect(await AsyncStorage.getItem('signup_coach_recovery_gate')).toBeNull();
+  });
+
   it('clears all auth + session keys and fires logout event exactly once', async () => {
     for (const key of SIGN_OUT_KEYS) {
       await AsyncStorage.setItem(key, 'seed');

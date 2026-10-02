@@ -52,7 +52,18 @@ import {
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
-import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
+import {
+  HEALTH_CONNECT_DISABLED_MESSAGE,
+  isHealthConnectProviderDisabled,
+} from '../../../config/healthConnect';
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+  withAlpha,
+} from '../../../theme/tokens';
+import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 
 /**
  * The auth-session return URL. The backend server callback completes the OAuth
@@ -94,6 +105,8 @@ export default function ConnectProviderSheet({
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
+  const buildDisabled =
+    provider != null && isHealthConnectProviderDisabled(provider);
 
   const handleCloudConnect = useCallback(
     async (target: WearableProvider) => {
@@ -109,6 +122,9 @@ export default function ConnectProviderSheet({
       // list — the server may have completed the connection even if the
       // in-app session reported a dismiss (e.g. redirect handled out-of-band).
       invalidate();
+      // Clinic tutorial: only an explicit success counts as connected; a
+      // dismiss is confirmed (or not) by the re-read connections list.
+      if (result.type === 'success') emitTutorialSignal('wearable_connected');
       if (result.type === 'success' || result.type === 'dismiss') {
         onConnected?.();
         onClose();
@@ -122,9 +138,13 @@ export default function ConnectProviderSheet({
       const outcome = await connectOnDeviceProvider(target);
       const name = configFor(target).displayName;
       switch (outcome) {
+        case 'disabled':
+          setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+          return;
         case 'granted':
           // Permission granted on-device; re-read so the hub reflects it.
           invalidate();
+          emitTutorialSignal('wearable_connected');
           onConnected?.();
           onClose();
           return;
@@ -148,6 +168,10 @@ export default function ConnectProviderSheet({
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
+    if (isHealthConnectProviderDisabled(provider)) {
+      setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+      return;
+    }
     setError(null);
 
     try {
@@ -201,9 +225,13 @@ export default function ConnectProviderSheet({
                 </Text>
               </View>
 
-              <Text style={styles.body}>{config.dataDescription}</Text>
+              <Text style={styles.body}>
+                {buildDisabled
+                  ? HEALTH_CONNECT_DISABLED_MESSAGE
+                  : config.dataDescription}
+              </Text>
 
-              {onDevice && (
+              {onDevice && !buildDisabled && (
                 <View
                   style={styles.note}
                   accessibilityRole="text"
@@ -222,28 +250,35 @@ export default function ConnectProviderSheet({
                 </Text>
               )}
 
-              <Pressable
-                style={[styles.cta, continuing && styles.ctaDisabled]}
-                onPress={handleContinue}
-                disabled={continuing}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: continuing, busy: continuing }}
-                accessibilityLabel={`Continue connecting ${config.displayName}`}
-              >
-                {continuing ? (
-                  <ActivityIndicator color={colors.bone} />
-                ) : (
-                  <Text style={styles.ctaText}>Continue</Text>
-                )}
-              </Pressable>
+              {!buildDisabled && (
+                <Pressable
+                  style={[styles.cta, continuing && styles.ctaDisabled]}
+                  onPress={handleContinue}
+                  disabled={continuing}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: continuing,
+                    busy: continuing,
+                  }}
+                  accessibilityLabel={`Continue connecting ${config.displayName}`}
+                >
+                  {continuing ? (
+                    <ActivityIndicator color={colors.bone} />
+                  ) : (
+                    <Text style={styles.ctaText}>Continue</Text>
+                  )}
+                </Pressable>
+              )}
 
               <Pressable
                 style={styles.cancel}
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel="Cancel"
+                accessibilityLabel={buildDisabled ? 'Close' : 'Cancel'}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  {buildDisabled ? 'Close' : 'Cancel'}
+                </Text>
               </Pressable>
             </>
           )}

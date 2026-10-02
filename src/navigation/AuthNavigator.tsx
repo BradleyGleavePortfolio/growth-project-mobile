@@ -6,8 +6,10 @@ import CreateAccountScreen from '../screens/auth/CreateAccountScreen';
 import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
+import type { SignupRoleNoticeKind } from '../lib/signupRoleNotice';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import AuthCallbackScreen from '../screens/auth/AuthCallbackScreen';
+import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import { Colors } from '../constants/colors';
 
 export type AuthStackParamList = {
@@ -27,16 +29,31 @@ export type AuthStackParamList = {
   // `inviteAttachError` is set when signup succeeded but the backend said
   // `invite_attached:false`; RoleSelection then shows the enter-code retry
   // state with friendly copy and the code prefilled.
-  RoleSelection: { inviteAttachError?: string; inviteCode?: string } | undefined;
+  // `signupNotice` (C13) names a plain fact about the role request that the
+  // user must see once (see lib/signupRoleNotice); RoleSelection also reads
+  // the persisted copy, so the param is a fast path, not the only carrier.
+  RoleSelection:
+    | { inviteAttachError?: string; inviteCode?: string; signupNotice?: SignupRoleNoticeKind }
+    | undefined;
   // Email Pipeline v1 — public accept screen. Reachable via:
   //   tgp://invite/accept/:token
   //   https://app.trygrowthproject.com/invite/accept/:token
   AcceptInvite: { token: string };
   // Idempotent landing for a stray `tgp://auth/callback` (OAuth redirect URI).
   AuthCallback: undefined;
+  // In-app support (Crisp; initCrisp runs at app start regardless of auth).
+  // Registered here so signup notices that say "contact support" can open
+  // it before the user has reached Settings (#306 fix round 2). Opened in
+  // pre-sign-in mode: a previous user's chat session is reset first
+  // (#306 fix round 3, Opus C2).
+  SupportInbox: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
+
+export function PreSignInSupportInbox(props: React.ComponentProps<typeof SupportInboxScreen>) {
+  return <SupportInboxScreen {...props} preSignIn />;
+}
 
 export default function AuthNavigator() {
   return (
@@ -55,6 +72,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
       <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
       <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
+      <Stack.Screen name="SupportInbox" component={PreSignInSupportInbox} />
     </Stack.Navigator>
   );
 }

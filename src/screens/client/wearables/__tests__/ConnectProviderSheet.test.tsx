@@ -44,6 +44,17 @@ jest.mock('../../../../services/health/onDeviceConnect', () => ({
 }));
 
 import ConnectProviderSheet from '../ConnectProviderSheet';
+import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
+import type { TutorialSignal } from '../../../../tutorial/types';
+
+// Clinic tutorial: the wearable step completes on the sheet's real grant.
+const tutorialSignals: TutorialSignal[] = [];
+let unsubscribeTutorial: () => void = () => undefined;
+beforeEach(() => {
+  tutorialSignals.length = 0;
+  unsubscribeTutorial = subscribeTutorialSignals((s) => tutorialSignals.push(s));
+});
+afterEach(() => unsubscribeTutorial());
 
 beforeEach(() => {
   mockStartOauthMutateAsync.mockReset();
@@ -122,6 +133,8 @@ describe('ConnectProviderSheet — on-device provider', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
     // Never routed through the cloud OAuth path.
     expect(mockStartOauthMutateAsync).not.toHaveBeenCalled();
+    // The real grant is the tutorial's "wearable connected" signal.
+    expect(tutorialSignals).toEqual(['wearable_connected']);
   });
 
   it('renders a polished error and stays open when access is denied', async () => {
@@ -142,6 +155,8 @@ describe('ConnectProviderSheet — on-device provider', () => {
       expect(screen.getByText(/access wasn't granted/i)).toBeTruthy(),
     );
     expect(onClose).not.toHaveBeenCalled();
+    // A denial is never counted as connected.
+    expect(tutorialSignals).toEqual([]);
   });
 
   it('explains next steps when the device store is not set up', async () => {
