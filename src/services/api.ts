@@ -77,7 +77,7 @@ import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import { dunningLockoutStore, isLockedDunningResponse } from '../entitlements/dunning/dunningLockoutStore';
-import { Platform } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
 
@@ -152,6 +152,11 @@ const MAX_REFRESH_ATTEMPTS = 2;
 type RetryableConfig = AxiosRequestConfig & {
   _refreshAttempts?: number;
   _lastUsedCycleId?: number;
+  // Set on requests whose 401 means "the credential in the BODY/HEADER was
+  // rejected" (re-auth password, single-use recent-auth token), not "the
+  // session expired". Refresh-and-retry would replay a wrong password against
+  // a 5/min throttle, so these 401s go straight back to the caller.
+  skipAuthRefresh?: boolean;
 };
 
 async function performRefresh(): Promise<string> {
@@ -195,6 +200,19 @@ async function handleRefreshFailure(): Promise<void> {
   // cycle still works without depending on a wall-clock timer.
   if (loggedOutOnce) return;
   loggedOutOnce = true;
+  // B-313-5 / backend B-608-10: once an account is deleted, Supabase can no
+  // longer refresh its session. Before signing out, ask the server whether
+  // the token this phone last held belongs to a deleted account, so the
+  // person is told the deletion is complete rather than silently signed
+  // out. Only a server-confirmed `deleted` counts; any other answer, or no
+  // answer, is an ordinary sign-out.
+  let deletionComplete = false;
+  try {
+    const stale = await secureStorage.getItem('supabase_token');
+    if (stale) deletionComplete = await deletedByReceipt(stale);
+  } catch {
+    deletionComplete = false;
+  }
   // Full sign-out on refresh failure: clears all auth keys (both stores),
   // resets analytics/Sentry, and emits logout. Lazy import avoids a require
   // cycle between api.ts and authActions.ts (authActions imports profileApi
@@ -208,6 +226,33 @@ async function handleRefreshFailure(): Promise<void> {
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
+  }
+  if (deletionComplete) {
+    Alert.alert(DELETION_COMPLETE_NOTICE.title, DELETION_COMPLETE_NOTICE.body);
+  }
+}
+
+/** Shown once when the server confirms the signed-out account was deleted. */
+export const DELETION_COMPLETE_NOTICE = {
+  title: 'Your account is deleted',
+  body: 'Your account and your data have been deleted, as you asked. You have been signed out of this phone.',
+} as const;
+
+/**
+ * POST /account-deletion/receipt with the (possibly expired) access token.
+ * The server answers `{ state: 'deleted' }` only for a deleted account and
+ * 404 NO_DELETION_RECEIPT otherwise.
+ */
+async function deletedByReceipt(accessToken: string): Promise<boolean> {
+  try {
+    const res = await api.post<{ state?: string }>('/account-deletion/receipt', undefined, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      skipAuthRefresh: true,
+      timeout: 8000,
+    } as RetryableConfig);
+    return res?.data?.state === 'deleted';
+  } catch {
+    return false;
   }
 }
 
@@ -263,7 +308,7 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    if (error.response.status !== 401 || !originalConfig) {
+    if (error.response.status !== 401 || !originalConfig || originalConfig.skipAuthRefresh) {
       return Promise.reject(error);
     }
 
@@ -944,11 +989,18 @@ export const systemApi = {
     }>('/system/trust-meta'),
 };
 
-// ── Phase 10 — GDPR right to erasure ────────────────────────────────────────
-// These endpoints drive the two-phase deletion flow introduced in
-// src/account-deletion/. Separate from the legacy usersApi.deleteAccount
-// and usersApi.cancelAccountDeletion which were the earlier 30-day soft-
-// delete stubs. Both sets co-exist; the new flow is the canonical one.
+// ── Phase 10 — GDPR right to erasure / Apple 5.1.1(v) in-app deletion ──────
+// Canonical in-app flow (backend src/account-deletion/):
+//   1. POST /auth/recent-auth-token  — fresh re-auth (password, a fresh
+//      Sign in with Apple identity token, or a fresh Google sign-in session).
+//      Returns a short-lived single-use token bound to the caller.
+//   2. POST /me/delete-account with header X-Recent-Auth-Token — schedules the
+//      deletion in the same request: the grace period starts now and the
+//      response carries the exact purge date. Idempotent.
+//   3. GET  /me/delete-account/status — state + purge date for the status view.
+//   4. POST /me/delete-account/cancel — cancel during the grace period.
+// The legacy usersApi.deleteAccount (DELETE /users/me/account) is not used by
+// the app's deletion screen.
 
 export interface DeletionStatus {
   state: 'none' | 'requested' | 'confirmed' | 'deleted';
@@ -956,19 +1008,90 @@ export interface DeletionStatus {
   confirmed_at?: string | null;
   grace_days?: number | null;
   purge_after?: string | null;
+  /** Latest time the nightly job is expected to have finished (purge_after + 1 day). */
+  completes_by?: string | null;
   deleted_at?: string | null;
+  cancellable?: boolean | null;
 }
 
+/**
+ * Outcome of the server's Sign in with Apple token revocation (backend
+ * apple-token-revocation.service.ts). Only 'revoked' means Apple confirmed
+ * the app's access was removed; every other value needs the manual fallback.
+ */
+export type AppleRevocationOutcome =
+  | 'revoked'
+  | 'not_requested'
+  | 'not_configured'
+  | 'exchange_failed'
+  | 'revoke_failed';
+
+export interface DeletionScheduledResponse {
+  state: 'confirmed';
+  already_scheduled: boolean;
+  message: string;
+  requested_at: string | null;
+  confirmed_at: string | null;
+  grace_days: number;
+  purge_after: string;
+  completes_by?: string | null;
+  cancellable: boolean;
+  apple_revocation?: AppleRevocationOutcome;
+}
+
+/**
+ * Re-auth proof for POST /auth/recent-auth-token. `google_session` is the
+ * access token of a Supabase session created by a Google sign-in moments ago
+ * (the app has no Google client id, so it cannot obtain a Google ID token).
+ */
+export type RecentAuthProof =
+  | { password: string }
+  | { provider: 'apple'; provider_token: string }
+  | { provider: 'google_session'; provider_token: string };
+
+/**
+ * True when the API reports the account as deleted (backend auth guard:
+ * 403 { code: 'ACCOUNT_DELETED' }). This is the terminal deletion signal.
+ */
+export function isAccountDeletedError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const response: unknown = Reflect.get(err, 'response');
+  if (typeof response !== 'object' || response === null) return false;
+  const data: unknown = Reflect.get(response, 'data');
+  return (
+    Reflect.get(response, 'status') === 403 &&
+    typeof data === 'object' &&
+    data !== null &&
+    Reflect.get(data, 'code') === 'ACCOUNT_DELETED'
+  );
+}
+
+export const RECENT_AUTH_HEADER = 'X-Recent-Auth-Token';
+
 export const deletionApi = {
-  /** Request deletion — sends a confirmation email with a single-use 24h link. */
-  requestDeletion: () =>
-    api.post<{ message: string; expires_at: string }>('/me/delete-account'),
+  /** Mint a short-lived recent-auth token (password, Apple or Google re-auth proof). */
+  issueRecentAuthToken: (proof: RecentAuthProof) =>
+    api.post<{ token: string; expires_in_ms: number }>('/auth/recent-auth-token', proof, {
+      skipAuthRefresh: true,
+    } as RetryableConfig),
+
+  /**
+   * Schedule deletion now (grace period starts immediately). Requires the
+   * recent-auth token. Apple users pass the authorization code from the
+   * re-auth sheet so the server can revoke their Sign in with Apple tokens.
+   */
+  requestDeletion: (recentAuthToken: string, appleAuthorizationCode?: string | null) =>
+    api.post<DeletionScheduledResponse>(
+      '/me/delete-account',
+      appleAuthorizationCode ? { apple_authorization_code: appleAuthorizationCode } : {},
+      { headers: { [RECENT_AUTH_HEADER]: recentAuthToken } },
+    ),
 
   /** Get current deletion state (none | requested | confirmed | deleted). */
   getDeletionStatus: () =>
     api.get<DeletionStatus>('/me/delete-account/status'),
 
-  /** Cancel a pending deletion within the 14-day grace period. */
+  /** Cancel a pending deletion within the grace period. */
   cancelDeletion: () =>
     api.post<{ message: string }>('/me/delete-account/cancel'),
 };
