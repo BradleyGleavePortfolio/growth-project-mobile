@@ -318,9 +318,10 @@ describe('specific error copy', () => {
 });
 
 describe('status normaliser', () => {
-  it('degrades unexpected shapes to state none', () => {
-    expect(normalizeDunningStatus(null).state).toBe('none');
-    expect(normalizeDunningStatus({ state: 'weird', enabled: true }).state).toBe('none');
+  it('fails closed on unexpected shapes (B-322-5: the provider keeps its last known state)', () => {
+    expect(() => normalizeDunningStatus(null)).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(() => normalizeDunningStatus({ state: 'weird', enabled: true })).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(normalizeDunningStatus({ state: 'none', enabled: false }).state).toBe('none');
     expect(formatDunningAmount(null, 'usd')).toBeNull();
     expect(formatDunningAmount(990, 'eur')).toBe('9.90 EUR');
   });

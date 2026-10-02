@@ -81,10 +81,12 @@ export function DunningLockoutProvider({
     if (!enabled) return;
     setRefreshing(true);
     try {
+      // A malformed answer throws (strict normaliser), so the last known
+      // state stays: a bad body never clears a lockout or a banner (B-322-5).
       const next = await dunningApi.getStatus();
       setStatus(next);
       setLoadError(null);
-      if (next.state === 'locked') {
+      if (next.state === 'locked' && !next.lock_waived) {
         dunningLockoutStore.reportLocked({ requestId: null, requestUrl: '/v1/checkout/dunning' });
       } else {
         dunningLockoutStore.clear();

@@ -1,7 +1,8 @@
-import { extractRequestId } from '../../utils/correlation';
+import { extractRequestId, newRequestId } from '../../utils/correlation';
 import {
   formatDunningAmount,
   formatDunningDate,
+  formatDunningTotals,
   type CancelPlanResponse,
   type CardUpdateResponse,
 } from './dunningApi';
@@ -19,7 +20,12 @@ import {
 
 export const SUPPORT_EMAIL = 'Bradleyapple1031@gmail.com';
 
-export type DunningAction = 'update_card' | 'load_status' | 'cancel_plan';
+/**
+ * `update_card`: before the card is saved (setup / quote). `confirm_card`:
+ * the confirm call, after the card form finished; from here a lost answer
+ * may hide a payment that went through, so it is never "nothing charged".
+ */
+export type DunningAction = 'update_card' | 'confirm_card' | 'load_status' | 'cancel_plan';
 
 export type DunningErrorCode =
   | 'OFFLINE'
@@ -45,6 +51,9 @@ export type DunningErrorCode =
   | 'STATUS_NOT_AVAILABLE'
   | 'BILLING_ROUTE_NOT_AVAILABLE'
   | 'UNEXPECTED_RESPONSE'
+  | 'RESULT_NOT_CONFIRMED'
+  | 'INVALID_REQUEST'
+  | 'INVALID_PLAN_LINK'
   | 'UNKNOWN';
 
 export interface DunningErrorCopy {
@@ -61,8 +70,18 @@ function withReference(text: string, reference: string | null): string {
   return reference ? `${text} Reference: ${reference}.` : text;
 }
 
+/**
+ * B-322-5: the reference is part of the visible message whenever one exists
+ * (a reported failure without a server request id gets a client reference,
+ * which is also sent to Sentry), so support can always find it.
+ */
 function copy(code: DunningErrorCode, message: string, reference: string | null, report: boolean): DunningErrorCopy {
-  return { code, message: report ? withReference(message, reference) : message, reference, report };
+  const ref = reference ?? (report ? newRequestId() : null);
+  return { code, message: withReference(message, ref), reference: ref, report };
+}
+
+function serverMessage(body: { message?: unknown }): string | null {
+  return typeof body.message === 'string' && body.message.trim().length > 0 ? body.message.trim() : null;
 }
 
 /** Client-side failures with no HTTP response (native sheet, bad body). */
@@ -125,7 +144,15 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   const reference = extractRequestId(err);
   const e = (err ?? {}) as {
     message?: unknown;
-    response?: { status?: number; data?: { error?: unknown; code?: unknown; step?: unknown } };
+    response?: {
+      status?: number;
+      data?: {
+        error?: unknown;
+        code?: unknown;
+        step?: unknown;
+        message?: unknown;
+      };
+    };
   };
   const status = e.response?.status;
   const body = e.response?.data ?? {};
@@ -133,7 +160,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     (typeof body.code === 'string' && body.code) || (typeof body.error === 'string' && body.error) || null;
   const step = typeof body.step === 'string' ? body.step : null;
   const retryVerb =
-    action === 'update_card'
+    action === 'update_card' || action === 'confirm_card'
       ? 'tap Update card again'
       : action === 'cancel_plan'
         ? 'tap End my plan again'
@@ -148,7 +175,33 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     );
   }
   if (e.message === 'DUNNING_RESPONSE_SHAPE') {
-    return { ...localDunningError('UNEXPECTED_RESPONSE'), reference };
+    if (action === 'confirm_card' || action === 'cancel_plan') {
+      return copy(
+        'RESULT_NOT_CONFIRMED',
+        action === 'confirm_card'
+          ? `The server answered in a way the app did not understand, so we cannot confirm whether your payment went through. Pull down to refresh to see where things stand. Trying again never charges you twice. If it keeps happening, email ${SUPPORT_EMAIL}.`
+          : `The server answered in a way the app did not understand, so we cannot confirm whether your plan ended. Pull down to refresh to see where things stand. If it keeps happening, email ${SUPPORT_EMAIL}.`,
+        reference,
+        true,
+      );
+    }
+    return copy(
+      'UNEXPECTED_RESPONSE',
+      `The server sent an answer the app did not understand. Pull down to refresh to see where things stand. If it keeps happening, email ${SUPPORT_EMAIL}.`,
+      reference,
+      true,
+    );
+  }
+  if (!e.response && (action === 'confirm_card' || action === 'cancel_plan')) {
+    // B-322-2: the request may have reached the server; its answer was lost.
+    return copy(
+      'RESULT_NOT_CONFIRMED',
+      action === 'confirm_card'
+        ? 'We lost the connection while confirming your card, so we cannot tell yet whether the payment went through. Check your connection and pull down to refresh. Trying again never charges you twice.'
+        : 'We lost the connection while ending your plan, so we cannot tell yet whether it went through. Check your connection and pull down to refresh, then tap End my plan again if it still shows. Repeating it is safe.',
+      null,
+      false,
+    );
   }
   if (!e.response) {
     return copy(
@@ -171,7 +224,12 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     );
   }
   if (status === 429) {
-    return copy('RATE_LIMITED', `Too many attempts in a short time. Wait a minute, then ${retryVerb}.`, reference, false);
+    return copy(
+      'RATE_LIMITED',
+      `Too many attempts in a short time. Wait a minute, then ${retryVerb}.`,
+      reference,
+      false,
+    );
   }
   if (action === 'load_status' && status === 404) {
     // The status route ships with backend #628; an older server answers 404.
@@ -195,7 +253,39 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
       false,
     );
   }
+  const said = serverMessage(body);
   switch (machine) {
+    case 'INVALID_BILLING_REQUEST':
+      return copy(
+        'INVALID_REQUEST',
+        said ??
+          `The app sent an incomplete billing request, so nothing was charged or changed. Close this screen, pull down to refresh, and try again. If it keeps happening, update the app.`,
+        reference,
+        true,
+      );
+    case 'INVALID_PLAN_ID':
+      return copy(
+        'INVALID_PLAN_LINK',
+        said ?? 'That plan link is not valid, so nothing was changed. Pull down to refresh your plans, then try again.',
+        reference,
+        true,
+      );
+    case 'PAYMENT_RESULT_UNKNOWN':
+      return copy(
+        'PAYMENT_UNCONFIRMED',
+        said ??
+          'We could not confirm whether your payment went through. Wait a minute, then pull down to refresh. Trying again never charges you twice.',
+        reference,
+        true,
+      );
+    case 'PLAN_CHANGE_RESULT_UNKNOWN':
+      return copy(
+        'PLAN_CHANGE_UNCONFIRMED',
+        said ??
+          'We could not confirm that your plan change went through. Wait a minute, then tap End my plan again. Repeating it is safe and never charges you.',
+        reference,
+        true,
+      );
     case 'CUSTOMER_NOT_FOUND':
       return copy(
         'NO_BILLING_ACCOUNT',
@@ -220,7 +310,8 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     case 'BILLING_ACTION_IN_PROGRESS':
       return copy(
         'BILLING_ACTION_IN_PROGRESS',
-        'A payment change for this plan is already in progress. Wait a minute, then pull down to refresh before trying again.',
+        said ??
+          'A payment change for this plan is already in progress. Wait a minute, then pull down to refresh before trying again.',
         reference,
         false,
       );
@@ -241,14 +332,15 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     case 'CANCEL_INCOMPLETE':
       return copy(
         'CANCEL_INCOMPLETE',
-        'Your plan did not finish ending. Nothing was charged, and if the unpaid invoice was already canceled it stays canceled. Wait a minute, then tap End my plan again. Repeating it is safe.',
+        said ??
+          'Your plan did not finish ending. Nothing was charged, and if the unpaid invoice was already canceled it stays canceled. Wait a minute, then tap End my plan again. Repeating it is safe.',
         reference,
         true,
       );
     case 'PAYMENTS_NOT_CONFIGURED':
       return copy(
         'PAYMENTS_NOT_CONFIGURED',
-        `Card payments are not available right now, so nothing was charged. Email ${SUPPORT_EMAIL} and we will help you pay.`,
+        `Card updates are not available right now, so nothing was charged. Email ${SUPPORT_EMAIL} with the reference below and we will help you pay.`,
         reference,
         true,
       );
@@ -262,7 +354,32 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     default:
       break;
   }
-  if (machine === 'STRIPE_UNAVAILABLE' || machine === 'STRIPE_CHECKOUT_ERROR' || status === 502 || status === 503 || status === 504) {
+  if (machine === 'STRIPE_UNAVAILABLE' && said) {
+    // The server knows the phase and only says "nothing changed" when true.
+    return copy('STRIPE_UNAVAILABLE', said, reference, true);
+  }
+  if (
+    !machine &&
+    (status === 502 || status === 503 || status === 504) &&
+    (action === 'confirm_card' || action === 'cancel_plan')
+  ) {
+    // A bare gateway error on a money call: the server may have finished it.
+    return copy(
+      'RESULT_NOT_CONFIRMED',
+      action === 'confirm_card'
+        ? 'The server did not answer in time, so we cannot tell yet whether your payment went through. Pull down to refresh in a minute. Trying again never charges you twice.'
+        : 'The server did not answer in time, so we cannot tell yet whether your plan ended. Pull down to refresh in a minute, then tap End my plan again if it still shows.',
+      reference,
+      true,
+    );
+  }
+  if (
+    machine === 'STRIPE_UNAVAILABLE' ||
+    machine === 'STRIPE_CHECKOUT_ERROR' ||
+    status === 502 ||
+    status === 503 ||
+    status === 504
+  ) {
     if (step === 'invoice_pay') {
       // A lost answer on a payment may still have charged: never say "nothing changed".
       return copy(
@@ -288,7 +405,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     );
   }
   const unknown =
-    action === 'update_card'
+    action === 'update_card' || action === 'confirm_card'
       ? `Your card update did not finish. Pull down to refresh to see where things stand, and email ${SUPPORT_EMAIL} with this reference if it looks wrong.`
       : action === 'cancel_plan'
         ? `Your plan change did not finish. Pull down to refresh, and email ${SUPPORT_EMAIL} with this reference if your plan still shows as active.`
@@ -296,50 +413,103 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   return copy('UNKNOWN', unknown, reference, true);
 }
 
-/** Calm, specific copy for each card-update outcome. Never invents an amount. */
-export function cardUpdateOutcomeCopy(r: CardUpdateResponse): { title: string; body: string; tone: 'done' | 'action' } {
+/**
+ * Calm, specific copy for each card-update outcome. Never invents an amount
+ * and never sums currencies (B-322-1): amounts come from the per-currency
+ * totals, "active again" only when the server confirmed access is back, and
+ * the server's own sentence (which leads with what was paid) is preferred.
+ */
+export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
+  title: string;
+  body: string;
+  tone: 'done' | 'action';
+} {
   const ending = r.card_last4 ? ` ending ${r.card_last4}` : '';
-  const paid = formatDunningAmount(r.amount_paid_cents || null, r.currency);
-  const due = formatDunningAmount(r.amount_due_cents || null, r.currency);
+  const paid = formatDunningTotals(r.paid_totals);
+  const due = formatDunningTotals(r.due_totals);
+  const restored = r.access_state === 'restored' && r.access_restored;
+  const accessLine = restored
+    ? ' Your plan is active again.'
+    : r.access_state === 'updating' || r.access_state === 'partial'
+      ? ' Your plan updates within a few minutes. Pull down to refresh.'
+      : '';
+  const local = (): string => {
+    switch (r.outcome) {
+      case 'paid':
+        return paid
+          ? `Your card${ending} is saved and ${paid} went through.${accessLine}`
+          : `Your card${ending} is saved and your balance is paid.${accessLine}`;
+      case 'saved':
+        return `Your card${ending} is saved. Your next payment will use it.`;
+      case 'processing':
+        return `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`;
+      case 'requires_action':
+        return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} Your bank wants you to confirm the payment${due ? ` of ${due}` : ''}. Tap Confirm with my bank to finish.`;
+      case 'approval_required':
+        return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} The amount you owe changed${due ? ` to ${due}` : ''}, so it was not charged. Review it, then tap Pay to confirm.`;
+      case 'payment_uncertain':
+        return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} We could not confirm the rest yet. Pull down to refresh in a minute. Trying again never charges you twice.`;
+      case 'failed':
+        return paid
+          ? `Your card${ending} is saved and ${paid} went through. The rest${due ? ` (${due})` : ''} did not go through. Tap Update card to try again.`
+          : `Your card${ending} is saved, but the payment${due ? ` of ${due}` : ''} did not go through, so nothing was charged. Tap Update card to try again.`;
+      case 'declined':
+      default:
+        return paid
+          ? `Your card${ending} is saved and ${paid} went through, but your bank declined the rest${due ? ` (${due})` : ''}. Try a different card, or call your bank and try again.`
+          : `Your card${ending} is saved, but your bank declined the payment${due ? ` of ${due}` : ''}, so nothing was charged. Try a different card, or call your bank and try again.`;
+    }
+  };
+  // Built from the structured fields so the copy always names buttons that
+  // are on screen; the server's `message` is for logs and older clients.
+  const body = local();
   switch (r.outcome) {
     case 'paid':
       return {
-        title: 'Payment received',
-        body: paid
-          ? `Your card${ending} is saved and ${paid} went through. Your plan is active again.`
-          : `Your card${ending} is saved and your balance is paid. Your plan is active again.`,
+        title: restored ? 'Payment received' : 'Payment received, updating your plan',
+        body,
         tone: 'done',
       };
     case 'saved':
-      return {
-        title: 'Card saved',
-        body: `Your card${ending} is saved. Your next payment will use it.`,
-        tone: 'done',
-      };
+      return { title: 'Card saved', body, tone: 'done' };
     case 'processing':
-      return {
-        title: 'Payment processing',
-        body: `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`,
-        tone: 'done',
-      };
+      return { title: 'Payment processing', body, tone: 'done' };
     case 'requires_action':
+      return { title: 'Your bank needs to confirm', body, tone: 'action' };
+    case 'approval_required':
+      return { title: 'Please review the amount', body, tone: 'action' };
+    case 'payment_uncertain':
+      return { title: 'Confirming your payment', body, tone: 'action' };
+    case 'failed':
       return {
-        title: 'Your bank needs to confirm',
-        body: `Your card${ending} is saved. Your bank wants you to confirm the payment${due ? ` of ${due}` : ''}. Tap Confirm with my bank to finish.`,
+        title: paid ? 'Part of your payment went through' : 'Payment did not go through',
+        body,
         tone: 'action',
       };
     case 'declined':
     default:
       return {
-        title: 'Payment declined',
-        body: `Your card${ending} is saved, but your bank declined the payment${due ? ` of ${due}` : ''}, so nothing was charged. Try a different card, or call your bank and try again.`,
+        title: paid ? 'Part of your payment went through' : 'Payment declined',
+        body,
         tone: 'action',
       };
   }
 }
 
 /** Copy after ending a plan. 2A (ended now) vs option A (scheduled). */
-export function cancelOutcomeCopy(r: CancelPlanResponse): { title: string; body: string } {
+export function cancelOutcomeCopy(r: CancelPlanResponse): {
+  title: string;
+  body: string;
+} {
+  if (r.outcome === 'scheduled' && r.paid_period_kept) {
+    const until = formatDunningDate(r.access_ends_at);
+    return {
+      title: 'Your payment went through',
+      body: until
+        ? `Your payment went through just before you ended the plan, so you keep access until ${until}, the end of the period you paid for. Your plan ends then and you will not be charged again.`
+        : 'Your payment went through just before you ended the plan, so you keep access until the end of the period you paid for. Your plan ends then and you will not be charged again.',
+    };
+  }
   if (r.outcome === 'scheduled') {
     const until = formatDunningDate(r.access_ends_at);
     return {
@@ -350,7 +520,10 @@ export function cancelOutcomeCopy(r: CancelPlanResponse): { title: string; body:
     };
   }
   if (r.outcome === 'already_ended') {
-    return { title: 'Your plan has ended', body: 'This plan had already ended. Nothing more will be charged for it.' };
+    return {
+      title: 'Your plan has ended',
+      body: 'This plan had already ended. Nothing more will be charged for it.',
+    };
   }
   const voided = formatDunningAmount(r.voided_amount_cents || null, r.currency);
   return {

@@ -1,7 +1,7 @@
 import type * as StripeRN from '@stripe/stripe-react-native';
 import { resolveStripePublishableKey } from '../../config/stripe';
 import { captureError } from '../../services/sentry';
-import { dunningApi, type CardUpdateResponse } from './dunningApi';
+import { dunningApi, type ApprovedInvoice, type CardUpdateResponse } from './dunningApi';
 import { describeDunningError, localDunningError, type DunningErrorCopy } from './dunningErrorCopy';
 import { buildPaymentSheetAppearance, sheetStyleFor } from './paymentSheetAppearance';
 
@@ -63,15 +63,39 @@ export type NativeCardUpdateResult =
   | { kind: 'canceled' }
   /** The backend answered; `response.outcome` says what happened to the money. */
   | { kind: 'done'; response: CardUpdateResponse; setupIntentId: string }
+  /**
+   * The card is saved and the bank must confirm a payment, but the bank
+   * step was closed or failed (B-322-3). The SetupIntent and the bank
+   * secret are kept so "Confirm with my bank" works without a new card.
+   */
+  | {
+      kind: 'bank_pending';
+      setupIntentId: string;
+      clientSecret: string;
+      response: CardUpdateResponse | null;
+      error: DunningErrorCopy | null;
+    }
+  /**
+   * The confirm answer was lost (offline / gateway timeout) even after
+   * retries (B-322-2): the payment may have gone through. The screen shows
+   * "confirming" and can repeat the same confirm safely.
+   */
+  | { kind: 'unconfirmed'; setupIntentId: string; error: DunningErrorCopy }
   | { kind: 'error'; error: DunningErrorCopy };
 
 export interface NativeCardUpdateOptions {
   surface: string;
   colorScheme: 'light' | 'dark';
-  /** "Save card" outside dunning; "Save and pay $150.00" while a payment is owed. */
+  /** "Save card" outside dunning; "Save card and pay $150.00" while a payment is owed. */
   primaryButtonLabel: string;
+  /** The exact open invoices the client approved on the quote (B-322-6). */
+  approved: ApprovedInvoice[];
   /** Injected in tests; defaults to the lazily loaded SDK. */
   sdk?: StripeSdk | null;
+  /** Called when the confirm answer was lost and the app is re-asking. */
+  onConfirming?: () => void;
+  /** Backoff between confirm re-asks after a lost answer (tests pass zeros). */
+  retryDelaysMs?: number[];
 }
 
 function fail(error: DunningErrorCopy, surface: string, err: unknown, extra: Record<string, unknown> = {}) {
@@ -86,6 +110,28 @@ function fail(error: DunningErrorCopy, surface: string, err: unknown, extra: Rec
   return { kind: 'error' as const, error };
 }
 
+/** Run one native SDK call; a rejected promise becomes a value, never an uncaught throw (B-322-4). */
+async function guarded<T>(fn: () => Promise<T>): Promise<{ ok: true; value: T } | { ok: false; err: unknown }> {
+  try {
+    return { ok: true, value: await fn() };
+  } catch (err) {
+    return { ok: false, err };
+  }
+}
+
+function isLostAnswer(err: unknown): boolean {
+  const e = (err ?? {}) as {
+    message?: unknown;
+    response?: { status?: number; data?: { code?: unknown } };
+  };
+  if (e.message === 'DUNNING_RESPONSE_SHAPE') return false;
+  if (!e.response) return true;
+  const status = e.response.status ?? 0;
+  return (status === 502 || status === 503 || status === 504) && typeof e.response.data?.code !== 'string';
+}
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
 export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promise<NativeCardUpdateResult> {
   const { surface } = opts;
   const sdk = opts.sdk === undefined ? loadStripeSdk() : opts.sdk;
@@ -97,7 +143,9 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
   try {
     setup = await dunningApi.createCardSetup();
   } catch (err) {
-    return fail(describeDunningError(err, 'update_card'), surface, err, { step: 'setup_intent' });
+    return fail(describeDunningError(err, 'update_card'), surface, err, {
+      step: 'setup_intent',
+    });
   }
 
   // The backend key always matches the secret key that minted the
@@ -107,9 +155,13 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
     return fail(localDunningError('PAYMENTS_NOT_CONFIGURED'), surface, null);
   }
 
-  try {
-    await sdk.initStripe({ publishableKey, urlScheme: STRIPE_URL_SCHEME, setReturnUrlSchemeOnAndroid: true });
-    const init = await sdk.initPaymentSheet({
+  const init = await guarded(async () => {
+    await sdk.initStripe({
+      publishableKey,
+      urlScheme: STRIPE_URL_SCHEME,
+      setReturnUrlSchemeOnAndroid: true,
+    });
+    return sdk.initPaymentSheet({
       merchantDisplayName: setup.merchant_display_name,
       customerId: setup.customer_id,
       customerEphemeralKeySecret: setup.ephemeral_key,
@@ -120,25 +172,84 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
       style: sheetStyleFor(opts.colorScheme),
       appearance: buildPaymentSheetAppearance(),
     });
-    if (init.error) {
-      return fail(localDunningError('CARD_SHEET_FAILED'), surface, new Error('PAYMENT_SHEET_INIT'), {
-        stripe_error_code: init.error.code,
-      });
-    }
-  } catch (err) {
-    return fail(localDunningError('CARD_SHEET_FAILED'), surface, err, { step: 'sheet_init' });
-  }
-
-  const presented = await sdk.presentPaymentSheet();
-  if (presented.error) {
-    if (presented.error.code === 'Canceled') return { kind: 'canceled' };
-    return fail(localDunningError('CARD_SHEET_FAILED'), surface, new Error('PAYMENT_SHEET_PRESENT'), {
-      stripe_error_code: presented.error.code,
+  });
+  if (!init.ok) {
+    return fail(localDunningError('CARD_SHEET_FAILED'), surface, init.err, {
+      step: 'sheet_init',
     });
   }
-  if (presented.didCancel) return { kind: 'canceled' };
+  if (init.value?.error) {
+    return fail(localDunningError('CARD_SHEET_FAILED'), surface, new Error('PAYMENT_SHEET_INIT'), {
+      stripe_error_code: init.value.error.code,
+    });
+  }
 
-  return confirmWithBank({ sdk, surface, setupIntentId: setup.setup_intent_id, clientSecret: null });
+  const presented = await guarded(() => sdk.presentPaymentSheet());
+  if (!presented.ok) {
+    return fail(localDunningError('CARD_SHEET_FAILED'), surface, presented.err, { step: 'sheet_present' });
+  }
+  if (presented.value?.error) {
+    if (presented.value.error.code === 'Canceled') return { kind: 'canceled' };
+    return fail(localDunningError('CARD_SHEET_FAILED'), surface, new Error('PAYMENT_SHEET_PRESENT'), {
+      stripe_error_code: presented.value.error.code,
+    });
+  }
+  if ((presented.value as { didCancel?: boolean } | undefined)?.didCancel) return { kind: 'canceled' };
+
+  return confirmWithBank({
+    sdk,
+    surface,
+    setupIntentId: setup.setup_intent_id,
+    clientSecret: null,
+    approved: opts.approved,
+    onConfirming: opts.onConfirming,
+    retryDelaysMs: opts.retryDelaysMs,
+  });
+}
+
+/** One confirm call; a lost answer is re-asked with the same SetupIntent and approval. */
+async function confirmOnce(args: {
+  surface: string;
+  setupIntentId: string;
+  approved: ApprovedInvoice[];
+  onConfirming?: () => void;
+  retryDelaysMs?: number[];
+}): Promise<{ ok: true; response: CardUpdateResponse } | { ok: false; result: NativeCardUpdateResult }> {
+  const delays = args.retryDelaysMs ?? [1000, 3000];
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt <= delays.length; attempt += 1) {
+    if (attempt > 0) {
+      args.onConfirming?.();
+      await wait(delays[attempt - 1]);
+    }
+    try {
+      return {
+        ok: true,
+        response: await dunningApi.confirmCardUpdate(args.setupIntentId, args.approved),
+      };
+    } catch (err) {
+      lastErr = err;
+      if (!isLostAnswer(err)) {
+        return {
+          ok: false,
+          result: fail(describeDunningError(err, 'confirm_card'), args.surface, err, { step: 'confirm' }),
+        };
+      }
+    }
+  }
+  const error = describeDunningError(lastErr, 'confirm_card');
+  if (error.report) {
+    captureError(lastErr ?? new Error(error.code), {
+      surface: args.surface,
+      dunning_error_code: error.code,
+      request_id: error.reference,
+      step: 'confirm_lost_answer',
+    });
+  }
+  return {
+    ok: false,
+    result: { kind: 'unconfirmed', setupIntentId: args.setupIntentId, error },
+  };
 }
 
 /**
@@ -151,6 +262,9 @@ export async function confirmWithBank(args: {
   surface: string;
   setupIntentId: string;
   clientSecret: string | null;
+  approved: ApprovedInvoice[];
+  onConfirming?: () => void;
+  retryDelaysMs?: number[];
 }): Promise<NativeCardUpdateResult> {
   const { surface, setupIntentId } = args;
   const sdk = args.sdk === undefined ? loadStripeSdk() : args.sdk;
@@ -161,22 +275,32 @@ export async function confirmWithBank(args: {
   for (let round = 0; round < 3; round += 1) {
     if (pendingSecret) {
       if (!sdk) return fail(localDunningError('CARD_SHEET_UNAVAILABLE'), surface, null);
-      const next = await sdk.handleNextAction(pendingSecret, STRIPE_RETURN_URL);
-      if (next.error) {
-        if (next.error.code === 'Canceled') {
-          // Closed the bank sheet: the card stays saved, the invoice stays open.
-          return last ? { kind: 'done', response: last, setupIntentId } : { kind: 'canceled' };
+      const secret = pendingSecret;
+      const next = await guarded(() => sdk.handleNextAction(secret, STRIPE_RETURN_URL));
+      const nextError = next.ok ? next.value?.error : { code: 'Failed' };
+      if (nextError) {
+        const canceled = nextError.code === 'Canceled';
+        const error = canceled ? null : localDunningError('BANK_CONFIRMATION_FAILED');
+        if (error) {
+          captureError(next.ok ? new Error('HANDLE_NEXT_ACTION') : next.err, {
+            surface,
+            dunning_error_code: error.code,
+            stripe_error_code: nextError.code,
+          });
         }
-        return fail(localDunningError('BANK_CONFIRMATION_FAILED'), surface, null, {
-          stripe_error_code: next.error.code,
-        });
+        // B-322-3: keep the SetupIntent and the bank secret for a retry.
+        return {
+          kind: 'bank_pending',
+          setupIntentId,
+          clientSecret: secret,
+          response: last,
+          error,
+        };
       }
     }
-    try {
-      last = await dunningApi.confirmCardUpdate(setupIntentId);
-    } catch (err) {
-      return fail(describeDunningError(err, 'update_card'), surface, err, { step: 'confirm' });
-    }
+    const out = await confirmOnce({ ...args, setupIntentId });
+    if (!out.ok) return out.result;
+    last = out.response;
     if (last.outcome !== 'requires_action' || !last.payment_intent_client_secret) {
       return { kind: 'done', response: last, setupIntentId };
     }
@@ -186,7 +310,9 @@ export async function confirmWithBank(args: {
     }
     pendingSecret = last.payment_intent_client_secret;
   }
-  return last ? { kind: 'done', response: last, setupIntentId } : fail(localDunningError('UNEXPECTED_RESPONSE'), surface, null);
+  return last
+    ? { kind: 'done', response: last, setupIntentId }
+    : fail(localDunningError('UNEXPECTED_RESPONSE'), surface, null);
 }
 
 /**

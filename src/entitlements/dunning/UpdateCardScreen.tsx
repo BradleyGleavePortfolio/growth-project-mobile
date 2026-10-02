@@ -13,10 +13,20 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
-import { formatDunningAmount, type CardUpdateResponse, type ClientDunningStatus } from './dunningApi';
+import {
+  approvalFor,
+  dunningApi,
+  formatDunningAmount,
+  formatDunningTotals,
+  type ApprovedInvoice,
+  type CardUpdateResponse,
+  type ClientDunningStatus,
+  type PaymentQuote,
+} from './dunningApi';
 import {
   cancelOutcomeCopy,
   cardUpdateOutcomeCopy,
+  describeDunningError,
   SUPPORT_EMAIL,
   type DunningErrorCopy,
 } from './dunningErrorCopy';
@@ -43,7 +53,14 @@ export interface UpdateCardScreenProps {
   };
 }
 
-type Busy = null | 'card' | 'bank' | 'cancel';
+type Busy = null | 'card' | 'bank' | 'cancel' | 'confirming';
+
+/** What the screen can still do after a run that did not settle. */
+type Pending =
+  | null
+  | { kind: 'bank'; setupIntentId: string; clientSecret: string }
+  | { kind: 'unconfirmed'; setupIntentId: string }
+  | { kind: 'approval'; setupIntentId: string; quote: PaymentQuote };
 
 function inDunning(status: ClientDunningStatus | null | undefined): boolean {
   return Boolean(status?.enabled && (status.state === 'past_due' || status.state === 'locked'));
@@ -66,9 +83,22 @@ export function updateCardIntro(status: ClientDunningStatus | null | undefined):
   return 'Add a new card for your plan. If a payment is overdue, we charge it to this card right away. Otherwise your next payment will use it.';
 }
 
-export function sheetButtonLabel(status: ClientDunningStatus | null | undefined): string {
+/**
+ * B-322-6: the label names exactly what the confirm will charge, from the
+ * quote read just before the sheet opens (per currency, never summed).
+ */
+export function sheetButtonLabel(quote: PaymentQuote | null | undefined): string {
+  const total = formatDunningTotals(quote?.totals ?? []);
+  return total ? `Save card and pay ${total}` : 'Save card';
+}
+
+/** C-322-1: "access ends now" only while a payment is overdue; otherwise period end. */
+export function endPlanAlertBody(status: ClientDunningStatus | null | undefined): string {
   const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
-  return inDunning(status) && amount ? `Save and pay ${amount}` : 'Save card';
+  if (inDunning(status) && status?.kind !== 'dispute') {
+    return `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your access ends now. If a payment went through in the meantime, you keep the period you paid for instead. Your data stays in your account.`;
+  }
+  return 'Your plan ends at the end of the period you already paid for, and you will not be charged again. There is no refund for the current period. Your data stays in your account.';
 }
 
 export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
@@ -78,8 +108,14 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   const status = dunning?.status ?? null;
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<DunningErrorCopy | null>(null);
-  const [result, setResult] = useState<{ response: CardUpdateResponse; setupIntentId: string } | null>(null);
+  const [result, setResult] = useState<{
+    response: CardUpdateResponse;
+    setupIntentId: string;
+  } | null>(null);
   const [mailError, setMailError] = useState<string | null>(null);
+  const [quote, setQuote] = useState<PaymentQuote | null>(null);
+  const [pending, setPending] = useState<Pending>(null);
+  const approvedRef = useRef<ApprovedInvoice[]>([]);
   const autostarted = useRef(false);
 
   // Bank redirects during 3DS come back on tgp://stripe-redirect.
@@ -92,10 +128,42 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
 
   const settle = useCallback(
     async (next: Awaited<ReturnType<typeof runNativeCardUpdate>>) => {
+      setPending(null);
       if (next.kind === 'error') {
         setError(next.error);
       } else if (next.kind === 'done') {
-        setResult({ response: next.response, setupIntentId: next.setupIntentId });
+        setResult({
+          response: next.response,
+          setupIntentId: next.setupIntentId,
+        });
+        if (next.response.outcome === 'approval_required' && next.response.quote) {
+          setPending({
+            kind: 'approval',
+            setupIntentId: next.setupIntentId,
+            quote: next.response.quote,
+          });
+        } else if (next.response.outcome === 'requires_action' && next.response.payment_intent_client_secret) {
+          setPending({
+            kind: 'bank',
+            setupIntentId: next.setupIntentId,
+            clientSecret: next.response.payment_intent_client_secret,
+          });
+        }
+      } else if (next.kind === 'bank_pending') {
+        if (next.response)
+          setResult({
+            response: next.response,
+            setupIntentId: next.setupIntentId,
+          });
+        setError(next.error);
+        setPending({
+          kind: 'bank',
+          setupIntentId: next.setupIntentId,
+          clientSecret: next.clientSecret,
+        });
+      } else if (next.kind === 'unconfirmed') {
+        setError(next.error);
+        setPending({ kind: 'unconfirmed', setupIntentId: next.setupIntentId });
       }
       // Re-read either way: a payment may have cleared the lock, and a
       // failure may have been a lost answer on a payment that went through.
@@ -104,40 +172,72 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
     [dunning],
   );
 
-  const startCard = useCallback(async () => {
-    if (busy) return;
-    setBusy('card');
-    setError(null);
-    setResult(null);
-    try {
-      await settle(
-        await runNativeCardUpdate({
-          surface: 'UpdateCardScreen',
-          colorScheme,
-          primaryButtonLabel: sheetButtonLabel(status),
-        }),
-      );
-    } finally {
-      setBusy(null);
-    }
-  }, [busy, colorScheme, settle, status]);
+  /** Every screen action runs through here so no rejection goes uncaught (autostart included). */
+  const run = useCallback(
+    async (kind: Exclude<Busy, null>, work: () => Promise<void>) => {
+      if (busy) return;
+      setBusy(kind);
+      setError(null);
+      try {
+        await work();
+      } catch (err) {
+        setError(describeDunningError(err, kind === 'card' ? 'update_card' : 'confirm_card'));
+      } finally {
+        setBusy(null);
+      }
+    },
+    [busy],
+  );
 
-  const confirmBank = useCallback(async () => {
-    if (busy || !result?.response.payment_intent_client_secret) return;
-    setBusy('bank');
-    setError(null);
-    try {
-      await settle(
-        await confirmWithBank({
-          surface: 'UpdateCardScreen',
-          setupIntentId: result.setupIntentId,
-          clientSecret: result.response.payment_intent_client_secret,
-        }),
-      );
-    } finally {
-      setBusy(null);
-    }
-  }, [busy, result, settle]);
+  const startCard = useCallback(
+    () =>
+      run('card', async () => {
+        setResult(null);
+        setPending(null);
+        // B-322-6: read what is owed right now, before the sheet opens.
+        let fresh: PaymentQuote;
+        try {
+          fresh = await dunningApi.getPaymentQuote();
+        } catch (err) {
+          setError(describeDunningError(err, 'update_card'));
+          return;
+        }
+        setQuote(fresh);
+        approvedRef.current = approvalFor(fresh);
+        await settle(
+          await runNativeCardUpdate({
+            surface: 'UpdateCardScreen',
+            colorScheme,
+            primaryButtonLabel: sheetButtonLabel(fresh),
+            approved: approvedRef.current,
+            onConfirming: () => setBusy('confirming'),
+          }),
+        );
+      }),
+    [colorScheme, run, settle],
+  );
+
+  const resume = useCallback(
+    () =>
+      run(pending?.kind === 'bank' ? 'bank' : 'confirming', async () => {
+        if (!pending) return;
+        if (pending.kind === 'approval') {
+          // Re-approve the fresh amounts the server just quoted, same card.
+          setQuote(pending.quote);
+          approvedRef.current = approvalFor(pending.quote);
+        }
+        await settle(
+          await confirmWithBank({
+            surface: 'UpdateCardScreen',
+            setupIntentId: pending.setupIntentId,
+            clientSecret: pending.kind === 'bank' ? pending.clientSecret : null,
+            approved: approvedRef.current,
+            onConfirming: () => setBusy('confirming'),
+          }),
+        );
+      }),
+    [pending, run, settle],
+  );
 
   useEffect(() => {
     if (route?.params?.autostart && !autostarted.current) {
@@ -153,34 +253,29 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
 
   const endPlan = useCallback(() => {
     if (!dunning || busy) return;
-    const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
-    Alert.alert(
-      'End your plan now?',
-      `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your access ends now. Your data stays in your account.`,
-      [
-        { text: 'Keep my plan', style: 'cancel' },
-        {
-          text: 'End my plan',
-          style: 'destructive',
-          onPress: () => {
-            setBusy('cancel');
-            setError(null);
-            void dunning
-              .endPlan('UpdateCardScreen')
-              .then((out) => {
-                if (out.ok) {
-                  const c = cancelOutcomeCopy(out.response);
-                  Alert.alert(c.title, c.body);
-                  leave();
-                } else {
-                  setError(out.error);
-                }
-              })
-              .finally(() => setBusy(null));
-          },
+    Alert.alert(inDunning(status) ? 'End your plan now?' : 'End your plan?', endPlanAlertBody(status), [
+      { text: 'Keep my plan', style: 'cancel' },
+      {
+        text: 'End my plan',
+        style: 'destructive',
+        onPress: () => {
+          setBusy('cancel');
+          setError(null);
+          void dunning
+            .endPlan('UpdateCardScreen')
+            .then((out) => {
+              if (out.ok) {
+                const c = cancelOutcomeCopy(out.response);
+                Alert.alert(c.title, c.body);
+                leave();
+              } else {
+                setError(out.error);
+              }
+            })
+            .finally(() => setBusy(null));
         },
-      ],
-    );
+      },
+    ]);
   }, [dunning, busy, status, leave]);
 
   const contactSupport = useCallback(async () => {
@@ -196,8 +291,15 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   }, [error]);
 
   const outcome = result ? cardUpdateOutcomeCopy(result.response) : null;
-  const settled = result && ['paid', 'saved', 'processing'].includes(result.response.outcome);
-  const needsBank = result?.response.outcome === 'requires_action' && Boolean(result.response.payment_intent_client_secret);
+  const settled = !pending && result && ['paid', 'saved', 'processing'].includes(result.response.outcome);
+  const needsBank = pending?.kind === 'bank';
+  const quoteTotal = formatDunningTotals(quote?.totals ?? []);
+  const resumeLabel =
+    pending?.kind === 'approval'
+      ? `Pay ${formatDunningTotals(pending.quote.totals) ?? 'the new amount'}`
+      : pending?.kind === 'unconfirmed'
+        ? 'Check my payment again'
+        : null;
   const cardOnFile = status?.card_last4
     ? `The card on file ends in ${status.card_last4}${inDunning(status) ? ' and was declined' : ''}.`
     : null;
@@ -221,6 +323,16 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
           {updateCardIntro(status)}
         </Text>
         {cardOnFile ? <Text style={styles.meta}>{cardOnFile}</Text> : null}
+        {quoteTotal && !settled ? (
+          <Text style={styles.meta} testID="update-card-quote">
+            {`Saving this card pays ${quoteTotal} now.`}
+          </Text>
+        ) : null}
+        {busy === 'confirming' ? (
+          <Text style={styles.meta} testID="update-card-confirming" accessibilityRole="alert">
+            Confirming your payment with the server. This can take a few seconds.
+          </Text>
+        ) : null}
 
         {outcome ? (
           <View
@@ -242,10 +354,24 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
           <TouchableOpacity style={styles.primary} onPress={leave} accessibilityRole="button" testID="update-card-done">
             <Text style={styles.primaryText}>Done</Text>
           </TouchableOpacity>
+        ) : resumeLabel ? (
+          <TouchableOpacity
+            style={[styles.primary, busy ? styles.disabled : null]}
+            onPress={resume}
+            disabled={busy !== null}
+            accessibilityRole="button"
+            testID="update-card-resume"
+          >
+            {busy ? (
+              <ActivityIndicator color={semanticColors.textOnDisabled} />
+            ) : (
+              <Text style={styles.primaryText}>{resumeLabel}</Text>
+            )}
+          </TouchableOpacity>
         ) : needsBank ? (
           <TouchableOpacity
             style={[styles.primary, busy ? styles.disabled : null]}
-            onPress={confirmBank}
+            onPress={resume}
             disabled={busy !== null}
             accessibilityRole="button"
             testID="update-card-confirm-bank"
@@ -302,7 +428,12 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
           </TouchableOpacity>
         ) : null}
 
-        <TouchableOpacity style={styles.row} onPress={contactSupport} accessibilityRole="button" testID="update-card-support">
+        <TouchableOpacity
+          style={styles.row}
+          onPress={contactSupport}
+          accessibilityRole="button"
+          testID="update-card-support"
+        >
           <Text style={styles.rowText}>Email support</Text>
         </TouchableOpacity>
         {mailError ? <Text style={styles.notice}>{mailError}</Text> : null}
@@ -323,22 +454,74 @@ const makeStyles = (c: SemanticTokens) =>
     content: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 40 },
     back: { alignSelf: 'flex-start', paddingVertical: 8, marginBottom: 16 },
     backText: { fontSize: 15, color: c.accentText },
-    eyebrow: { fontSize: 12, letterSpacing: 1, textTransform: 'uppercase', color: c.textMuted, marginBottom: 8 },
-    title: { fontSize: 26, fontWeight: '600', color: c.textPrimary, marginBottom: 16 },
-    body: { fontSize: 15, lineHeight: 22, color: c.textPrimary, marginBottom: 8 },
+    eyebrow: {
+      fontSize: 12,
+      letterSpacing: 1,
+      textTransform: 'uppercase',
+      color: c.textMuted,
+      marginBottom: 8,
+    },
+    title: {
+      fontSize: 26,
+      fontWeight: '600',
+      color: c.textPrimary,
+      marginBottom: 16,
+    },
+    body: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: c.textPrimary,
+      marginBottom: 8,
+    },
     meta: { fontSize: 13, lineHeight: 19, color: c.textMuted, marginBottom: 8 },
-    result: { borderWidth: 1, padding: 14, marginTop: 12, backgroundColor: c.bgSurface },
+    result: {
+      borderWidth: 1,
+      padding: 14,
+      marginTop: 12,
+      backgroundColor: c.bgSurface,
+    },
     resultDone: { borderColor: c.border },
     resultAction: { borderColor: c.accent },
-    resultTitle: { fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 4 },
+    resultTitle: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: c.textPrimary,
+      marginBottom: 4,
+    },
     resultBody: { fontSize: 14, lineHeight: 20, color: c.textPrimary },
-    notice: { fontSize: 13, lineHeight: 19, color: c.accentText, marginTop: 12 },
-    primary: { backgroundColor: c.accent, paddingVertical: 14, alignItems: 'center', marginTop: 20 },
+    notice: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: c.accentText,
+      marginTop: 12,
+    },
+    primary: {
+      backgroundColor: c.accent,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 20,
+    },
     disabled: { backgroundColor: c.disabledBg },
     primaryText: { color: c.textOnAccent, fontSize: 15, fontWeight: '600' },
-    secondary: { borderWidth: 1, borderColor: c.border, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
+    secondary: {
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 12,
+    },
     secondaryText: { color: c.textPrimary, fontSize: 15, fontWeight: '500' },
-    row: { paddingVertical: 14, marginTop: 24, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
+    row: {
+      paddingVertical: 14,
+      marginTop: 24,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: c.border,
+    },
     rowText: { fontSize: 15, color: c.textPrimary },
-    footnote: { fontSize: 12, lineHeight: 17, color: c.textMuted, marginTop: 24 },
+    footnote: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: c.textMuted,
+      marginTop: 24,
+    },
   });

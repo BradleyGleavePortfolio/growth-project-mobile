@@ -12,9 +12,11 @@ import {
   formatDunningAmount,
   normalizeCardSetup,
   normalizeCardUpdate,
+  normalizeDunningStatus,
+  normalizePaymentQuote,
   type ClientDunningStatus,
 } from '../dunningApi';
-import { cancelOutcomeCopy, cardUpdateOutcomeCopy } from '../dunningErrorCopy';
+import { cancelOutcomeCopy, cardUpdateOutcomeCopy, describeDunningError } from '../dunningErrorCopy';
 import { DunningLockoutProvider } from '../DunningLockoutProvider';
 import { dunningLockoutStore } from '../dunningLockoutStore';
 import { buildPaymentSheetAppearance, sheetStyleFor } from '../paymentSheetAppearance';
@@ -26,11 +28,17 @@ import {
   STRIPE_RETURN_URL,
   type StripeSdk,
 } from '../updateCard';
-import { UpdateCardScreen, sheetButtonLabel, updateCardIntro } from '../UpdateCardScreen';
+import { UpdateCardScreen, endPlanAlertBody, sheetButtonLabel, updateCardIntro } from '../UpdateCardScreen';
 
 jest.mock('../../../theme/ThemeProvider', () => {
   const t = jest.requireActual('../../../theme/tokens').default;
-  return { useTheme: () => ({ semanticColors: t.lightTokens, tokens: t, colorScheme: 'light' }) };
+  return {
+    useTheme: () => ({
+      semanticColors: t.lightTokens,
+      tokens: t,
+      colorScheme: 'light',
+    }),
+  };
 });
 
 const mockCaptureError = jest.fn();
@@ -54,15 +62,21 @@ jest.mock('../../../services/queryClient', () => ({
 
 jest.mock('../../../utils/idempotency', () => ({
   generateIdempotencyKey: () => '00000000-0000-4000-8000-0000000000aa',
+  randomUuid: () => '00000000-0000-4000-8000-0000000000cc',
 }));
 
 type SdkErrorDouble = { code: string; message: string };
-type NextActionDouble = { paymentIntent?: { status: string }; error?: SdkErrorDouble };
+type NextActionDouble = {
+  paymentIntent?: { status: string };
+  error?: SdkErrorDouble;
+};
 const mockSdk = {
   initStripe: jest.fn(async () => undefined),
   initPaymentSheet: jest.fn(async () => ({})),
   presentPaymentSheet: jest.fn(async () => ({})),
-  handleNextAction: jest.fn(async (): Promise<NextActionDouble> => ({ paymentIntent: { status: 'Succeeded' } })),
+  handleNextAction: jest.fn(async (): Promise<NextActionDouble> => ({
+    paymentIntent: { status: 'Succeeded' },
+  })),
   handleURLCallback: jest.fn(async () => true),
 };
 jest.mock('@stripe/stripe-react-native', () => mockSdk);
@@ -145,10 +159,60 @@ const LOCKED: ClientDunningStatus = {
   card_last4: '4242',
   card_brand: 'visa',
 };
-const PAST_DUE: ClientDunningStatus = { ...LOCKED, state: 'past_due', locked_at: null, day: 3 };
-const CLEAR: ClientDunningStatus = { ...LOCKED, state: 'none', amount_cents: null, day: null, locked_at: null };
+const PAST_DUE: ClientDunningStatus = {
+  ...LOCKED,
+  state: 'past_due',
+  locked_at: null,
+  day: 3,
+};
+const CLEAR: ClientDunningStatus = {
+  ...LOCKED,
+  state: 'none',
+  amount_cents: null,
+  day: null,
+  locked_at: null,
+};
 
-const OPTS = { surface: 'test', colorScheme: 'light' as const, primaryButtonLabel: 'Save and pay $150.00', sdk };
+const QUOTE = {
+  quote_id: 'q1',
+  complete: true,
+  lines: [
+    {
+      invoice_id: 'in_1',
+      purchase_id: 'p1',
+      coach_name: 'Avery',
+      currency: 'usd',
+      amount_cents: 15000,
+      created: 1,
+    },
+  ],
+  totals: [{ currency: 'usd', amount_cents: 15000 }],
+  disputes: [],
+};
+const APPROVED = [{ invoice_id: 'in_1', amount_cents: 15000, currency: 'usd' }];
+const CONFIRM_BODY = { setup_intent_id: 'seti_1', approved_invoices: APPROVED };
+
+const OPTS = {
+  surface: 'test',
+  colorScheme: 'light' as const,
+  primaryButtonLabel: 'Save card and pay $150.00',
+  sdk,
+  approved: APPROVED,
+  retryDelaysMs: [0, 0],
+};
+
+/** GET routes: the quote, or the current status (tests change it mid-flow). */
+let currentStatus: unknown = null;
+let currentQuote: unknown = QUOTE;
+function routeGets() {
+  mockGet.mockImplementation(async (url: string) => {
+    if (url === '/v1/checkout/payment-method/quote') {
+      if (currentQuote instanceof Error) throw currentQuote;
+      return { data: currentQuote };
+    }
+    return { data: currentStatus };
+  });
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -156,7 +220,12 @@ beforeEach(() => {
   dunningLockoutStore.__resetForTests();
   mockSdk.presentPaymentSheet.mockImplementation(async () => ({}));
   mockSdk.initPaymentSheet.mockImplementation(async () => ({}));
-  mockSdk.handleNextAction.mockImplementation(async () => ({ paymentIntent: { status: 'Succeeded' } }));
+  mockSdk.handleNextAction.mockImplementation(async () => ({
+    paymentIntent: { status: 'Succeeded' },
+  }));
+  currentQuote = QUOTE;
+  currentStatus = null;
+  routeGets();
 });
 
 describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
@@ -179,13 +248,17 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
         merchantDisplayName: 'The Growth Project',
         returnURL: STRIPE_RETURN_URL,
         allowsDelayedPaymentMethods: false,
-        primaryButtonLabel: 'Save and pay $150.00',
+        primaryButtonLabel: 'Save card and pay $150.00',
         style: 'alwaysLight',
         appearance: buildPaymentSheetAppearance(),
       }),
     );
-    expect(mockPost).toHaveBeenNthCalledWith(2, '/v1/checkout/payment-method/confirm', { setup_intent_id: 'seti_1' });
-    expect(out).toEqual({ kind: 'done', response: normalizeCardUpdate(cardResult('paid')), setupIntentId: 'seti_1' });
+    expect(mockPost).toHaveBeenNthCalledWith(2, '/v1/checkout/payment-method/confirm', CONFIRM_BODY);
+    expect(out).toEqual({
+      kind: 'done',
+      response: normalizeCardUpdate(cardResult('paid')),
+      setupIntentId: 'seti_1',
+    });
     if (out.kind === 'done') {
       expect(out.response.amount_paid_cents).toBe(15000);
       expect(Number.isInteger(out.response.amount_paid_cents)).toBe(true);
@@ -194,7 +267,9 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
 
   it('closing the sheet saves nothing and never calls confirm', async () => {
     backend([]);
-    mockSdk.presentPaymentSheet.mockImplementation(async () => ({ error: { code: 'Canceled', message: 'x' } }));
+    mockSdk.presentPaymentSheet.mockImplementation(async () => ({
+      error: { code: 'Canceled', message: 'x' },
+    }));
     expect(await runNativeCardUpdate(OPTS)).toEqual({ kind: 'canceled' });
     expect(mockPost).toHaveBeenCalledTimes(1);
     expect(mockCaptureError).not.toHaveBeenCalled();
@@ -231,36 +306,77 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
   });
 
   it('1A with 3DS: runs the bank step on the returned PaymentIntent, then confirms again (same SetupIntent)', async () => {
-    backend([cardResult('requires_action', { payment_intent_client_secret: 'pi_9_secret_y' }), cardResult('paid')]);
+    backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+      cardResult('paid'),
+    ]);
     const out = await runNativeCardUpdate(OPTS);
     expect(mockSdk.handleNextAction).toHaveBeenCalledWith('pi_9_secret_y', 'tgp://stripe-redirect');
     const confirms = mockPost.mock.calls.filter(([u]) => u === '/v1/checkout/payment-method/confirm');
     expect(confirms).toEqual([
-      ['/v1/checkout/payment-method/confirm', { setup_intent_id: 'seti_1' }],
-      ['/v1/checkout/payment-method/confirm', { setup_intent_id: 'seti_1' }],
+      ['/v1/checkout/payment-method/confirm', CONFIRM_BODY],
+      ['/v1/checkout/payment-method/confirm', CONFIRM_BODY],
     ]);
     expect(out.kind === 'done' && out.response.outcome).toBe('paid');
   });
 
   it('closing the bank sheet keeps the card and offers "Confirm with my bank" (no second card entry)', async () => {
-    backend([cardResult('requires_action', { payment_intent_client_secret: 'pi_9_secret_y' })]);
-    mockSdk.handleNextAction.mockImplementation(async () => ({ error: { code: 'Canceled', message: 'x' } }));
+    backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+    ]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Canceled', message: 'x' },
+    }));
     const out = await runNativeCardUpdate(OPTS);
-    expect(out.kind === 'done' && out.response.outcome).toBe('requires_action');
+    expect(out).toEqual({
+      kind: 'bank_pending',
+      setupIntentId: 'seti_1',
+      clientSecret: 'pi_9_secret_y',
+      response: normalizeCardUpdate(
+        cardResult('requires_action', {
+          payment_intent_client_secret: 'pi_9_secret_y',
+        }),
+      ),
+      error: null,
+    });
     // Retry from the screen: bank step first, then confirm.
-    mockSdk.handleNextAction.mockImplementation(async () => ({ paymentIntent: { status: 'Succeeded' } }));
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      paymentIntent: { status: 'Succeeded' },
+    }));
     backend([cardResult('paid')]);
-    const retry = await confirmWithBank({ sdk, surface: 'test', setupIntentId: 'seti_1', clientSecret: 'pi_9_secret_y' });
+    const retry = await confirmWithBank({
+      sdk,
+      surface: 'test',
+      setupIntentId: 'seti_1',
+      clientSecret: 'pi_9_secret_y',
+      approved: APPROVED,
+    });
     expect(retry.kind === 'done' && retry.response.outcome).toBe('paid');
     expect(mockSdk.presentPaymentSheet).toHaveBeenCalledTimes(1);
   });
 
   it('a failed bank step is truthful: card saved, nothing charged', async () => {
-    backend([cardResult('requires_action', { payment_intent_client_secret: 'pi_9_secret_y' })]);
-    mockSdk.handleNextAction.mockImplementation(async () => ({ error: { code: 'Failed', message: 'x' } }));
+    backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+    ]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Failed', message: 'x' },
+    }));
     const out = await runNativeCardUpdate(OPTS);
-    expect(out.kind === 'error' && out.error.code).toBe('BANK_CONFIRMATION_FAILED');
-    expect(out.kind === 'error' && out.error.message).toContain('nothing was charged');
+    // B-322-3: the SetupIntent and bank secret survive the failure for "Confirm with my bank".
+    expect(out.kind).toBe('bank_pending');
+    if (out.kind === 'bank_pending') {
+      expect(out.setupIntentId).toBe('seti_1');
+      expect(out.clientSecret).toBe('pi_9_secret_y');
+      expect(out.error?.code).toBe('BANK_CONFIRMATION_FAILED');
+      expect(out.error?.message).toContain('nothing was charged');
+    }
   });
 
   it('declined new card: done with the declined outcome and the amount still due', async () => {
@@ -315,16 +431,47 @@ describe('PaymentSheet theme from TGP tokens', () => {
 describe('outcome copy (integer minor units, no exclamation marks)', () => {
   it('names the money for every outcome', () => {
     const texts = (['paid', 'saved', 'processing', 'requires_action', 'declined'] as const).map((o) => {
-      const c = cardUpdateOutcomeCopy(normalizeCardUpdate(cardResult(o)));
+      const c = cardUpdateOutcomeCopy(
+        normalizeCardUpdate(
+          cardResult(o, o === 'requires_action' ? { payment_intent_client_secret: 'pi_9_secret_y' } : {}),
+        ),
+      );
       return `${c.title} ${c.body}`;
     });
     expect(texts[0]).toContain('$150.00 went through');
     expect(texts[1]).toContain('Your next payment will use it');
     expect(texts[4]).toContain('declined the payment of $150.00, so nothing was charged');
     const cancel = [
-      cancelOutcomeCopy({ outcome: 'ended', purchase_id: 'p', access_ends_at: null, voided_invoice_count: 1, voided_amount_cents: 15000, currency: 'usd' }),
-      cancelOutcomeCopy({ outcome: 'scheduled', purchase_id: 'p', access_ends_at: '2026-11-01T00:00:00.000Z', voided_invoice_count: 0, voided_amount_cents: 0, currency: 'usd' }),
-      cancelOutcomeCopy({ outcome: 'already_ended', purchase_id: 'p', access_ends_at: null, voided_invoice_count: 0, voided_amount_cents: 0, currency: 'usd' }),
+      cancelOutcomeCopy({
+        outcome: 'ended',
+        purchase_id: 'p',
+        access_ends_at: null,
+        voided_invoice_count: 1,
+        voided_amount_cents: 15000,
+        currency: 'usd',
+        paid_period_kept: false,
+        message: null,
+      }),
+      cancelOutcomeCopy({
+        outcome: 'scheduled',
+        purchase_id: 'p',
+        access_ends_at: '2026-11-01T00:00:00.000Z',
+        voided_invoice_count: 0,
+        voided_amount_cents: 0,
+        currency: 'usd',
+        paid_period_kept: false,
+        message: null,
+      }),
+      cancelOutcomeCopy({
+        outcome: 'already_ended',
+        purchase_id: 'p',
+        access_ends_at: null,
+        voided_invoice_count: 0,
+        voided_amount_cents: 0,
+        currency: 'usd',
+        paid_period_kept: false,
+        message: null,
+      }),
     ];
     expect(cancel[0].body).toContain('The unpaid $150.00 is canceled');
     expect(cancel[1].body).toContain('the end of the period you paid for');
@@ -336,14 +483,18 @@ describe('outcome copy (integer minor units, no exclamation marks)', () => {
     expect(updateCardIntro(LOCKED)).toContain('we charge $150.00 to it right away');
     expect(updateCardIntro(PAST_DUE)).toContain('You keep full access');
     expect(updateCardIntro(CLEAR)).toContain('If a payment is overdue');
-    expect(sheetButtonLabel(LOCKED)).toBe('Save and pay $150.00');
-    expect(sheetButtonLabel(CLEAR)).toBe('Save card');
+    expect(sheetButtonLabel(normalizePaymentQuote(QUOTE))).toBe('Save card and pay $150.00');
+    expect(sheetButtonLabel(normalizePaymentQuote({ ...QUOTE, lines: [], totals: [] }))).toBe('Save card');
   });
 });
 
 async function renderScreen(status: ClientDunningStatus, autostart = false) {
-  mockGet.mockResolvedValue({ data: status });
-  const navigation = { canGoBack: jest.fn(() => true), goBack: jest.fn(), navigate: jest.fn() };
+  currentStatus = status;
+  const navigation = {
+    canGoBack: jest.fn(() => true),
+    goBack: jest.fn(),
+    navigate: jest.fn(),
+  };
   const utils = await render(
     <DunningLockoutProvider
       enabled
@@ -368,7 +519,7 @@ describe('UpdateCardScreen', () => {
     const routePost = mockPost.getMockImplementation() as (url: string, body: unknown) => Promise<unknown>;
     mockPost.mockImplementation(async (url: string, body: unknown) => {
       const res = await routePost(url, body);
-      if (url === '/v1/checkout/payment-method/confirm') mockGet.mockResolvedValue({ data: CLEAR });
+      if (url === '/v1/checkout/payment-method/confirm') currentStatus = CLEAR;
       return res;
     });
     const { findByTestId, getByTestId, queryByTestId, navigation } = await renderScreen(LOCKED, true);
@@ -382,8 +533,14 @@ describe('UpdateCardScreen', () => {
   });
 
   it('requires_action shows "Confirm with my bank", which settles the payment', async () => {
-    backend([cardResult('requires_action', { payment_intent_client_secret: 'pi_9_secret_y' })]);
-    mockSdk.handleNextAction.mockImplementationOnce(async () => ({ error: { code: 'Canceled', message: 'x' } }));
+    backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+    ]);
+    mockSdk.handleNextAction.mockImplementationOnce(async () => ({
+      error: { code: 'Canceled', message: 'x' },
+    }));
     const { findByTestId, getByTestId, queryByTestId, getByText } = await renderScreen(PAST_DUE);
     await act(async () => {
       await fireEvent.press(getByTestId('update-card-add'));
@@ -419,7 +576,10 @@ describe('UpdateCardScreen', () => {
     await findByTestId('update-card-end-plan');
     await waitFor(() => expect(mockGet).toHaveBeenCalled());
     await fireEvent.press(getByTestId('update-card-end-plan'));
-    const buttons = alert.mock.calls[0][2] as Array<{ text: string; onPress?: () => void }>;
+    const buttons = alert.mock.calls[0][2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
     expect(buttons[0].text).toBe('Keep my plan');
     await act(async () => {
       buttons[1].onPress?.();
@@ -431,14 +591,241 @@ describe('UpdateCardScreen', () => {
   });
 });
 
+describe('S-DUNNING-R3 money truth on the device', () => {
+  it('B-322-1: a partial success names what went through per currency and never says "nothing was charged"', () => {
+    const r = normalizeCardUpdate(
+      cardResult('declined', {
+        amount_paid_cents: null,
+        amount_due_cents: null,
+        currency: null,
+        paid_totals: [{ currency: 'usd', amount_cents: 15000 }],
+        due_totals: [{ currency: 'eur', amount_cents: 8000 }],
+        access_restored: false,
+        access_state: 'partial',
+      }),
+    );
+    const c = cardUpdateOutcomeCopy(r);
+    expect(c.title).toBe('Part of your payment went through');
+    expect(c.body).toContain('$150.00 went through');
+    expect(c.body).toContain(formatDunningAmount(8000, 'eur') as string);
+    expect(c.body).not.toContain('nothing was charged');
+    expect(c.body).not.toContain('active again');
+    // paid but access not confirmed back: no "active again".
+    const paidUpdating = cardUpdateOutcomeCopy(
+      normalizeCardUpdate(
+        cardResult('paid', {
+          access_restored: false,
+          access_state: 'updating',
+        }),
+      ),
+    );
+    expect(paidUpdating.body).toContain('$150.00 went through');
+    expect(paidUpdating.body).not.toContain('active again');
+  });
+
+  it('B-322-2: a lost confirm answer re-asks with the same card and approval, then reports the real result', async () => {
+    backend([axiosError(null), axiosError(503), cardResult('paid')]);
+    const onConfirming = jest.fn();
+    const out = await runNativeCardUpdate({ ...OPTS, onConfirming });
+    expect(out.kind === 'done' && out.response.amount_paid_cents).toBe(15000);
+    expect(onConfirming).toHaveBeenCalledTimes(2);
+    const confirms = mockPost.mock.calls.filter(([u]) => u === '/v1/checkout/payment-method/confirm');
+    expect(confirms).toHaveLength(3);
+    for (const call of confirms) expect(call[1]).toEqual(CONFIRM_BODY);
+    expect(mockSdk.presentPaymentSheet).toHaveBeenCalledTimes(1);
+  });
+
+  it('B-322-2: when every answer is lost the app says it cannot tell yet, never "nothing was charged"', async () => {
+    backend([axiosError(null), axiosError(null), axiosError(null)]);
+    const out = await runNativeCardUpdate(OPTS);
+    expect(out.kind).toBe('unconfirmed');
+    if (out.kind === 'unconfirmed') {
+      expect(out.setupIntentId).toBe('seti_1');
+      expect(out.error.code).toBe('RESULT_NOT_CONFIRMED');
+      expect(out.error.message).toContain('cannot tell yet whether the payment went through');
+      expect(out.error.message).not.toContain('nothing was charged');
+    }
+    const offlineCancel = describeDunningError(axiosError(null), 'cancel_plan');
+    expect(offlineCancel.code).toBe('RESULT_NOT_CONFIRMED');
+    expect(offlineCancel.message).not.toContain('nothing changed');
+  });
+
+  it('B-322-4: rejected native SDK promises become specific errors, never uncaught throws', async () => {
+    backend([]);
+    mockSdk.presentPaymentSheet.mockImplementation(async () => {
+      throw new Error('native crash');
+    });
+    const a = await runNativeCardUpdate(OPTS);
+    expect(a.kind === 'error' && a.error.code).toBe('CARD_SHEET_FAILED');
+
+    mockSdk.presentPaymentSheet.mockImplementation(async () => ({}));
+    mockSdk.initPaymentSheet.mockImplementation(async () => {
+      throw new Error('init crash');
+    });
+    const b = await runNativeCardUpdate(OPTS);
+    expect(b.kind === 'error' && b.error.code).toBe('CARD_SHEET_FAILED');
+
+    mockSdk.initPaymentSheet.mockImplementation(async () => ({}));
+    mockSdk.handleNextAction.mockImplementation(async () => {
+      throw new Error('3ds crash');
+    });
+    backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+    ]);
+    const c = await runNativeCardUpdate(OPTS);
+    expect(c.kind).toBe('bank_pending');
+    expect(c.kind === 'bank_pending' && c.error?.code).toBe('BANK_CONFIRMATION_FAILED');
+    expect(mockCaptureError).toHaveBeenCalled();
+  });
+
+  it('B-322-5: malformed success bodies fail closed, and references are visible', () => {
+    expect(() => normalizeCardUpdate({ outcome: 'mystery' })).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(() => normalizeCardUpdate(cardResult('requires_action'))).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(() => normalizeCardUpdate(cardResult('paid', { amount_paid_cents: '15000' }))).toThrow(
+      'DUNNING_RESPONSE_SHAPE',
+    );
+    expect(() => normalizeDunningStatus({ enabled: true, state: 'weird' })).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(() =>
+      normalizeDunningStatus({
+        enabled: true,
+        state: 'locked',
+        purchase_id: null,
+      }),
+    ).toThrow('DUNNING_RESPONSE_SHAPE');
+    expect(() => normalizePaymentQuote({ quote_id: 'q', lines: [{ invoice_id: 'in_1' }] })).toThrow(
+      'DUNNING_RESPONSE_SHAPE',
+    );
+    const shape = describeDunningError(new Error('DUNNING_RESPONSE_SHAPE'), 'confirm_card');
+    expect(shape.code).toBe('RESULT_NOT_CONFIRMED');
+    expect(shape.message).toMatch(/Reference: \S+\./);
+    const unknown = describeDunningError(axiosError(500, {}, { 'x-request-id': 'req-9' }), 'confirm_card');
+    expect(unknown.message).toContain('Reference: req-9.');
+    const invalid = describeDunningError(
+      axiosError(400, {
+        code: 'INVALID_BILLING_REQUEST',
+        message: 'approved_invoices must be a list.',
+      }),
+      'confirm_card',
+    );
+    expect(invalid.code).toBe('INVALID_REQUEST');
+    expect(invalid.message).toContain('approved_invoices must be a list.');
+  });
+
+  it('B-322-5: a malformed status keeps the lockout instead of clearing it', async () => {
+    const { findByTestId } = await renderScreen(LOCKED);
+    await waitFor(() => expect(dunningLockoutStore.isLocked()).toBe(true));
+    currentStatus = { enabled: true, state: 'surprise' };
+    await act(async () => {
+      dunningLockoutStore.reportLocked({
+        requestId: null,
+        requestUrl: '/v1/x',
+      });
+    });
+    await findByTestId('update-card-screen');
+    expect(dunningLockoutStore.isLocked()).toBe(true);
+  });
+
+  it('B-322-6: the screen reads the quote before the sheet, labels the exact amount and confirms that approval', async () => {
+    backend([cardResult('paid')]);
+    const { findByTestId, getByTestId } = await renderScreen(PAST_DUE);
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-add'));
+    });
+    await findByTestId('update-card-result-paid');
+    const quoteCall =
+      mockGet.mock.invocationCallOrder[
+        mockGet.mock.calls.findIndex(([u]) => u === '/v1/checkout/payment-method/quote')
+      ];
+    expect(quoteCall).toBeLessThan(mockSdk.initPaymentSheet.mock.invocationCallOrder[0]);
+    expect(mockSdk.initPaymentSheet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        primaryButtonLabel: 'Save card and pay $150.00',
+      }),
+    );
+    expect(mockPost).toHaveBeenCalledWith('/v1/checkout/payment-method/confirm', CONFIRM_BODY);
+  });
+
+  it('B-322-6: approval_required shows the fresh amount and re-confirms the same card with it', async () => {
+    const fresh = {
+      ...QUOTE,
+      quote_id: 'q2',
+      lines: [...QUOTE.lines, { ...QUOTE.lines[0], invoice_id: 'in_2', amount_cents: 1000 }],
+      totals: [{ currency: 'usd', amount_cents: 16000 }],
+    };
+    backend([
+      cardResult('approval_required', {
+        amount_paid_cents: 0,
+        amount_due_cents: 16000,
+        quote: fresh,
+      }),
+      cardResult('paid', { amount_paid_cents: 16000 }),
+    ]);
+    const { findByTestId, getByTestId, getByText } = await renderScreen(PAST_DUE);
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-add'));
+    });
+    await findByTestId('update-card-result-approval_required');
+    expect(getByText('Pay $160.00')).toBeTruthy();
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-resume'));
+    });
+    await findByTestId('update-card-result-paid');
+    expect(mockPost).toHaveBeenLastCalledWith('/v1/checkout/payment-method/confirm', {
+      setup_intent_id: 'seti_1',
+      approved_invoices: [
+        { invoice_id: 'in_1', amount_cents: 15000, currency: 'usd' },
+        { invoice_id: 'in_2', amount_cents: 1000, currency: 'usd' },
+      ],
+    });
+    expect(mockSdk.presentPaymentSheet).toHaveBeenCalledTimes(1);
+  });
+
+  it('autostart with the quote unreachable shows a specific error (no uncaught rejection)', async () => {
+    currentQuote = axiosError(null);
+    const { findByTestId } = await renderScreen(LOCKED, true);
+    const err = await findByTestId('update-card-error');
+    expect(err.props.children).toContain('nothing was charged');
+    expect(mockSdk.presentPaymentSheet).not.toHaveBeenCalled();
+  });
+
+  it('C-322-1: "access ends now" only while a payment is overdue; otherwise period end, no refund', () => {
+    expect(endPlanAlertBody(PAST_DUE)).toContain('Your access ends now');
+    expect(endPlanAlertBody(CLEAR)).toContain('end of the period you already paid for');
+    expect(endPlanAlertBody(CLEAR)).not.toContain('ends now');
+    const kept = cancelOutcomeCopy({
+      outcome: 'scheduled',
+      purchase_id: 'p',
+      access_ends_at: '2026-11-01T00:00:00.000Z',
+      voided_invoice_count: 0,
+      voided_amount_cents: 0,
+      currency: 'usd',
+      paid_period_kept: true,
+      message: null,
+    });
+    expect(kept.title).toBe('Your payment went through');
+    expect(kept.body).toContain('you keep access until');
+    for (const t of [endPlanAlertBody(PAST_DUE), endPlanAlertBody(CLEAR), kept.body]) expect(t).not.toContain('!');
+  });
+});
+
 describe('email link routing', () => {
   it('app.json registers the Android filters for the email link and the tgp billing host', () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const app = require('../../../../app.json') as {
-      expo: { android: { intentFilters: Array<{ data: Array<Record<string, string>> }> } };
+      expo: {
+        android: {
+          intentFilters: Array<{ data: Array<Record<string, string>> }>;
+        };
+      };
     };
     const data = app.expo.android.intentFilters.flatMap((f) => f.data);
-    expect(data).toContainEqual({ scheme: 'https', host: 'app.trygrowthproject.com', pathPrefix: '/billing/update-card' });
+    expect(data).toContainEqual({
+      scheme: 'https',
+      host: 'app.trygrowthproject.com',
+      pathPrefix: '/billing/update-card',
+    });
     expect(data).toContainEqual({ scheme: 'tgp', host: 'billing' });
   });
 });
