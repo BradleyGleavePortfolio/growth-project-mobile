@@ -84,6 +84,11 @@ export interface ProgramRevision {
   day_count: number | null;
 }
 
+export interface ProgramAssigneePage {
+  items: ProgramAssignee[];
+  next_cursor: string | null;
+}
+
 export interface ProgramAssignee {
   client_id: string;
   client_name: string;
@@ -237,12 +242,19 @@ export const programsApi = {
       )
     ).data,
 
-  assignees: async (id: string): Promise<{ items: ProgramAssignee[] }> =>
-    (
-      await api.get<{ items: ProgramAssignee[] }>(
-        `${BASE}/${enc(id)}/assignees`,
-      )
-    ).data,
+  /** One page of clients on a program (newest copy first, 50 per page). */
+  assignees: async (
+    id: string,
+    cursor?: string,
+  ): Promise<ProgramAssigneePage> => {
+    const res = await api.get<{
+      items: ProgramAssignee[];
+      next_cursor?: string | null;
+    }>(`${BASE}/${enc(id)}/assignees`, {
+      params: cursor ? { cursor } : undefined,
+    });
+    return { items: res.data.items, next_cursor: res.data.next_cursor ?? null };
+  },
 
   unassign: async (
     id: string,

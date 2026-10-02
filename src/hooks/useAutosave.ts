@@ -303,6 +303,21 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
    * passes the refetched server copy.
    */
   rebaselineToConflict: (serverCopy: TWorkingCopy) => void;
+  /**
+   * S-MWB-2 builder undo: adopt a server head the hook did not write itself
+   * (the response of `POST /workout-plans/:id/undo`). Moves the optimistic
+   * pair (head index + lock token) to the new head and anchors the diff
+   * baseline to `serverCopy`, the refetched plan at that head, so the next
+   * edit diffs against the undone state instead of 409-ing on a stale token or
+   * re-sending the undone change. Refuses (returns false, changes nothing)
+   * while a batch is in flight or queued or the working copy has unsaved
+   * edits: the caller must flush first so an edit is never discarded.
+   */
+  adoptServerHead: (next: {
+    headRevisionIndex: number;
+    lockToken: string;
+    serverCopy: TWorkingCopy;
+  }) => boolean;
 }
 
 /**
@@ -1219,6 +1234,37 @@ export function useAutosave<TWorkingCopy>(
     [setDirty, safeSet, computeHasPending],
   );
 
+  const adoptServerHead = useCallback(
+    (next: {
+      headRevisionIndex: number;
+      lockToken: string;
+      serverCopy: TWorkingCopy;
+    }): boolean => {
+      if (!enabledRef.current) return false;
+      if (currentInFlightRef.current !== null || pendingNextRef.current !== null) {
+        return false;
+      }
+      if (diffRef.current(lastSavedValueRef.current, latestValueRef.current).length > 0) {
+        return false;
+      }
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+      indexRef.current = next.headRevisionIndex;
+      tokenRef.current = next.lockToken;
+      setVersion(next.headRevisionIndex);
+      setTokenState(next.lockToken);
+      lastSavedValueRef.current = next.serverCopy;
+      // The screen folds the same server copy into its working copy in the
+      // same tick; the value effect then sees no diff and stays quiet.
+      setDirty(false);
+      safeSet(setHasPending, computeHasPending());
+      return true;
+    },
+    [setDirty, safeSet, computeHasPending],
+  );
+
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -1385,7 +1431,8 @@ export function useAutosave<TWorkingCopy>(
       replayInFlight,
       rebaselineTo,
       rebaselineToConflict,
+      adoptServerHead,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict, adoptServerHead],
   );
 }

@@ -55,9 +55,11 @@ export function useProgramRevisions(id: string) {
 }
 
 export function useProgramAssignees(id: string) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: programKeys.assignees(id),
-    queryFn: () => programsApi.assignees(id),
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => programsApi.assignees(id, pageParam),
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
 }
 

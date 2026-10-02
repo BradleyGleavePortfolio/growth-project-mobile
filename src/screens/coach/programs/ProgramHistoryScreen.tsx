@@ -42,6 +42,7 @@ export default function ProgramHistoryScreen({
   const invalidate = useInvalidatePrograms();
   const revisions = useProgramRevisions(programId);
   const assignees = useProgramAssignees(programId);
+  const assigneeItems = (assignees.data?.pages ?? []).flatMap((p) => p.items);
   const [busy, setBusy] = useState<string | null>(null);
   const [failure, setFailure] = useState<ProgramFailure | null>(null);
 
@@ -99,7 +100,7 @@ export default function ProgramHistoryScreen({
       {failure ? <FailureBox failure={failure} /> : null}
       {assignees.isLoading ? (
         <LoadingRow label="Loading clients" />
-      ) : assignees.error ? (
+      ) : assignees.error && assigneeItems.length === 0 ? (
         <FailureBox
           failure={describeProgramFailure(
             assignees.error,
@@ -107,12 +108,12 @@ export default function ProgramHistoryScreen({
           )}
           onRetry={() => assignees.refetch()}
         />
-      ) : (assignees.data?.items ?? []).length === 0 ? (
+      ) : assigneeItems.length === 0 ? (
         <Text style={[styles.muted, { color: colors.textSecondary }]}>
           No clients are on this program yet.
         </Text>
       ) : (
-        (assignees.data?.items ?? []).map((a) => (
+        assigneeItems.map((a) => (
           <View
             key={`${a.client_id}:${a.copy_program_id}`}
             style={[
@@ -140,6 +141,26 @@ export default function ProgramHistoryScreen({
           </View>
         ))
       )}
+
+      {assignees.hasNextPage ? (
+        <SmallButton
+          label={
+            assignees.isFetchingNextPage ? "Loading more" : "Show more clients"
+          }
+          disabled={assignees.isFetchingNextPage}
+          onPress={() => void assignees.fetchNextPage()}
+          accessibilityHint="Loads the next 50 clients on this program"
+        />
+      ) : null}
+      {assignees.error && assigneeItems.length > 0 ? (
+        <FailureBox
+          failure={describeProgramFailure(
+            assignees.error,
+            "load more clients on this program",
+          )}
+          onRetry={() => void assignees.fetchNextPage()}
+        />
+      ) : null}
 
       <SectionTitle>Revision history</SectionTitle>
       {revisions.isLoading ? (

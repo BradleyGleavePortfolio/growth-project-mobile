@@ -104,6 +104,29 @@ describe("programsApi routes", () => {
     );
   });
 
+  it("assignees pages with the server cursor and tolerates a backend without one", async () => {
+    mockGet.mockResolvedValueOnce({
+      data: { items: [{ client_id: "c1" }], next_cursor: "cur-2" },
+    });
+    const first = await programsApi.assignees("p-1");
+    expect(mockGet).toHaveBeenLastCalledWith(
+      "/v1/coach/programs/p-1/assignees",
+      {
+        params: undefined,
+      },
+    );
+    expect(first.next_cursor).toBe("cur-2");
+    mockGet.mockResolvedValueOnce({ data: { items: [] } });
+    const second = await programsApi.assignees("p-1", "cur-2");
+    expect(mockGet).toHaveBeenLastCalledWith(
+      "/v1/coach/programs/p-1/assignees",
+      {
+        params: { cursor: "cur-2" },
+      },
+    );
+    expect(second.next_cursor).toBeNull();
+  });
+
   it("promote uses the named-regimes route with the display name", async () => {
     await programsApi.promoteToRegime("p-1", "Intro");
     expect(mockPost).toHaveBeenLastCalledWith(

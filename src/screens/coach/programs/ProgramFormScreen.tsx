@@ -2,6 +2,17 @@
  * S-MWB — create a program, or edit its name / goal / length. Edits send the
  * program version the coach saw (`expected_version`) so a change made on
  * another device is never silently overwritten.
+ *
+ * Request keys (B-328-2): a key belongs to one exact request body. When the
+ * outcome is unknown (no response, a timeout, a server error) the key and the
+ * body are kept and the fields lock, so the next press resends the same
+ * request and can never create a second program. Only a definite refusal (a
+ * 4xx the server answered) releases the key for a new attempt.
+ *
+ * Reload after a conflict (B-328-4): when the server copy changes, untouched
+ * fields take the new server values; a field the coach changed that the
+ * server also changed is flagged and must be resolved (keep mine / use latest)
+ * before saving, so a stale full body is never paired with a fresh version.
  */
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -23,6 +34,7 @@ import {
 } from "../../../hooks/usePrograms";
 import {
   describeProgramFailure,
+  isOutcomeUnknown,
   ProgramFailure,
 } from "../../../utils/programErrors";
 import { generateIdempotencyKey } from "../../../utils/idempotency";
@@ -114,12 +126,58 @@ function ProgramForm({
   );
   const [saving, setSaving] = useState(false);
   const [failure, setFailure] = useState<ProgramFailure | null>(null);
-  // One key per form session: a retry after a timeout cannot create twice.
   const keyRef = useRef(generateIdempotencyKey());
+  // The exact body sent under keyRef while its outcome is unknown.
+  const [pending, setPending] = useState<FormValues | null>(null);
+  const pendingVersionRef = useRef<number | null>(null);
+  const [conflicts, setConflicts] = useState<FieldConflict[]>([]);
+  const baseRef = useRef<FormValues | null>(
+    existing ? valuesOf(existing) : null,
+  );
 
   useEffect(() => {
     navigation.setOptions({ title: existing ? "Edit program" : "New program" });
   }, [navigation, existing]);
+
+  const current: FormValues = { name, description, goal, weeks, daysPerWeek };
+  const setters: Record<FieldKey, (v: string) => void> = {
+    name: setName,
+    description: setDescription,
+    goal: setGoal,
+    weeks: setWeeks,
+    daysPerWeek: setDaysPerWeek,
+  };
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  // Rebase on a new server snapshot (version bump after a conflict reload).
+  const serverVersion = existing?.version;
+  const lockedForRebase = pending !== null;
+  useEffect(() => {
+    // While an attempt is unresolved the sent body stays frozen; rebase after.
+    if (lockedForRebase || !existing || !baseRef.current) return;
+    const next = valuesOf(existing);
+    const base = baseRef.current;
+    if (FIELD_KEYS.every((k) => base[k] === next[k])) return;
+    const mine = currentRef.current;
+    const found: FieldConflict[] = [];
+    FIELD_KEYS.forEach((k) => {
+      if (base[k] === next[k]) return; // the server did not change it
+      if (mine[k] === base[k])
+        setters[k](next[k]); // untouched: take theirs
+      else if (mine[k] !== next[k]) found.push({ field: k, theirs: next[k] });
+    });
+    baseRef.current = next;
+    setConflicts(found);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverVersion, lockedForRebase]);
+
+  const resolveConflict = (field: FieldKey, choice: "mine" | "theirs") => {
+    const c = conflicts.find((x) => x.field === field);
+    if (!c) return;
+    if (choice === "theirs") setters[field](c.theirs);
+    setConflicts((prev) => prev.filter((x) => x.field !== field));
+  };
 
   const weeksNum = Number(weeks);
   const daysNum = Number(daysPerWeek);
@@ -138,23 +196,24 @@ function ProgramForm({
       ? "Training days per week must be 1 to 7."
       : null;
   const invalid = !!(nameError || weeksError || daysError);
+  const locked = pending !== null;
 
   const submit = async () => {
-    if (invalid || saving) return;
+    if (saving || conflicts.length > 0) return;
+    if (!locked && invalid) return;
     setSaving(true);
     setFailure(null);
+    // An unresolved attempt resends exactly what it sent before.
+    const sent = pending ?? current;
+    const sentVersion = pending
+      ? (pendingVersionRef.current ?? existing?.version ?? 0)
+      : (existing?.version ?? 0);
     try {
-      const body = {
-        name: name.trim(),
-        description: description.trim() === "" ? null : description.trim(),
-        goal_tag: goal.trim() === "" ? null : goal.trim(),
-        weeks: weeksNum,
-        days_per_week: daysNum,
-      };
+      const body = toBody(sent);
       if (existing) {
         const updated = await programsApi.update(
           existing.id,
-          { ...body, expected_version: existing.version },
+          { ...body, expected_version: sentVersion },
           keyRef.current,
         );
         qc.setQueryData(programKeys.detail(existing.id), updated);
@@ -172,7 +231,14 @@ function ProgramForm({
         existing ? "save the program details" : "create the program",
       );
       setFailure(f);
-      keyRef.current = generateIdempotencyKey();
+      if (isOutcomeUnknown(err)) {
+        // It may have saved. Keep the key and the body until a retry tells us.
+        pendingVersionRef.current = sentVersion;
+        setPending(sent);
+      } else {
+        setPending(null);
+        keyRef.current = generateIdempotencyKey();
+      }
       if (f.reload && existing) await invalidate();
     } finally {
       setSaving(false);
@@ -193,6 +259,7 @@ function ProgramForm({
           <TextInput
             value={name}
             onChangeText={setName}
+            editable={!locked}
             placeholder="For example: Men's intro, 4 weeks"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Program name"
@@ -211,6 +278,7 @@ function ProgramForm({
           <TextInput
             value={goal}
             onChangeText={setGoal}
+            editable={!locked}
             placeholder="Intro, Strength, Fat loss"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Goal tag"
@@ -229,7 +297,9 @@ function ProgramForm({
               <SmallButton
                 key={g}
                 label={g}
-                onPress={() => setGoal(g)}
+                onPress={() => {
+                  if (!locked) setGoal(g);
+                }}
                 accessibilityHint={`Sets the goal tag to ${g}`}
               />
             ))}
@@ -240,6 +310,7 @@ function ProgramForm({
             <TextInput
               value={weeks}
               onChangeText={(t) => setWeeks(t.replace(/[^0-9]/g, ""))}
+              editable={!locked}
               keyboardType="number-pad"
               accessibilityLabel={`Number of weeks, 1 to ${PROGRAM_MAX_WEEKS}`}
               maxLength={2}
@@ -261,6 +332,7 @@ function ProgramForm({
             <TextInput
               value={daysPerWeek}
               onChangeText={(t) => setDaysPerWeek(t.replace(/[^0-9]/g, ""))}
+              editable={!locked}
               keyboardType="number-pad"
               accessibilityLabel="Training days per week, 1 to 7"
               maxLength={1}
@@ -283,6 +355,7 @@ function ProgramForm({
           <TextInput
             value={description}
             onChangeText={setDescription}
+            editable={!locked}
             multiline
             maxLength={2000}
             accessibilityLabel="Program description"
@@ -297,21 +370,101 @@ function ProgramForm({
             ]}
           />
         </Field>
+        {conflicts.map((c) => (
+          <View
+            key={c.field}
+            accessibilityRole="alert"
+            style={[
+              styles.conflict,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Text style={[styles.help, { color: colors.textPrimary }]}>
+              {`${FIELD_LABELS[c.field]} also changed on another device to "${c.theirs || "(empty)"}". Choose which to keep before saving.`}
+            </Text>
+            <View style={styles.suggestions}>
+              <SmallButton
+                label="Keep mine"
+                onPress={() => resolveConflict(c.field, "mine")}
+                accessibilityHint={`Keeps your ${FIELD_LABELS[c.field].toLowerCase()}`}
+              />
+              <SmallButton
+                label="Use latest"
+                onPress={() => resolveConflict(c.field, "theirs")}
+                accessibilityHint={`Uses the ${FIELD_LABELS[c.field].toLowerCase()} from the other device`}
+              />
+            </View>
+          </View>
+        ))}
         {failure ? <FailureBox failure={failure} onRetry={submit} /> : null}
+        {locked ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[styles.help, { color: colors.textSecondary }]}
+          >
+            We could not confirm whether this saved, so your entries are kept
+            exactly as sent. Retry to check; it cannot make a second copy.
+          </Text>
+        ) : null}
         <SmallButton
           tone="primary"
           label={
             saving ? "Saving" : existing ? "Save details" : "Create program"
           }
           onPress={submit}
-          disabled={invalid || saving}
+          disabled={(!locked && invalid) || saving || conflicts.length > 0}
           accessibilityHint={
-            invalid ? "Fix the highlighted fields first" : undefined
+            conflicts.length > 0
+              ? "Choose which change to keep first"
+              : !locked && invalid
+                ? "Fix the highlighted fields first"
+                : undefined
           }
         />
       </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+type FieldKey = "name" | "description" | "goal" | "weeks" | "daysPerWeek";
+type FormValues = Record<FieldKey, string>;
+interface FieldConflict {
+  field: FieldKey;
+  theirs: string;
+}
+const FIELD_KEYS: FieldKey[] = [
+  "name",
+  "description",
+  "goal",
+  "weeks",
+  "daysPerWeek",
+];
+const FIELD_LABELS: Record<FieldKey, string> = {
+  name: "Name",
+  description: "Description",
+  goal: "Goal tag",
+  weeks: "Weeks",
+  daysPerWeek: "Training days per week",
+};
+
+function valuesOf(e: Existing): FormValues {
+  return {
+    name: e.name,
+    description: e.description,
+    goal: e.goal,
+    weeks: String(e.weeks),
+    daysPerWeek: String(e.daysPerWeek),
+  };
+}
+
+function toBody(v: FormValues) {
+  return {
+    name: v.name.trim(),
+    description: v.description.trim() === "" ? null : v.description.trim(),
+    goal_tag: v.goal.trim() === "" ? null : v.goal.trim(),
+    weeks: Number(v.weeks),
+    days_per_week: Number(v.daysPerWeek),
+  };
 }
 
 function Field({
@@ -358,4 +511,5 @@ const styles = StyleSheet.create({
   suggestions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   help: { fontSize: 13, lineHeight: 19 },
   error: { fontSize: 13 },
+  conflict: { borderWidth: 1, borderRadius: 10, padding: 12, gap: 8 },
 });

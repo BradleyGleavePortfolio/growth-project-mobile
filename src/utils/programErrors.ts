@@ -20,6 +20,26 @@ export interface ProgramFailure {
   support: boolean;
   /** Reloading the screen's data is the right recovery (stale version, etc.). */
   reload: boolean;
+  /**
+   * A specific next step the failure box offers: sign in again (the session
+   * ended) or wait before retrying (rate limited). Null when Retry / Contact
+   * support cover it.
+   */
+  recovery?: "sign_in" | "wait" | null;
+}
+
+/**
+ * True when the request may or may not have been applied: no response at
+ * all (connection lost, timeout) or a server-side failure. The caller must
+ * keep the request key and body so a retry replays instead of duplicating.
+ * A 4xx answer is a definite refusal: nothing was applied.
+ */
+export function isOutcomeUnknown(err: unknown): boolean {
+  if (!err || typeof err !== "object") return true;
+  const response = (err as { response?: { status?: unknown } }).response;
+  if (!response) return true;
+  const status = typeof response.status === "number" ? response.status : null;
+  return status === null || status >= 500 || status === 408;
 }
 
 const KNOWN: Record<string, { message: string; reload?: boolean }> = {
@@ -166,6 +186,13 @@ function readEnvelope(err: unknown): ErrorEnvelope {
     else if (typeof d.error === "string" && /^[A-Za-z_]+$/.test(d.error))
       code = d.error;
     if (typeof d.message === "string") message = d.message;
+    else if (Array.isArray(d.message)) {
+      // Nest DTO validation sends a list of field messages.
+      const parts = d.message.filter(
+        (m): m is string => typeof m === "string" && m !== "",
+      );
+      if (parts.length > 0) message = parts.join("; ");
+    }
   }
   return { status, code, message };
 }
@@ -201,6 +228,28 @@ export function describeProgramFailure(
       reload: known.reload === true,
     };
   }
+  if (env.status === 401) {
+    return {
+      code: env.code,
+      status: 401,
+      message: `Could not ${action}: your session has ended. Sign in again to carry on; anything already saved is kept.`,
+      reference: null,
+      support: false,
+      reload: false,
+      recovery: "sign_in",
+    };
+  }
+  if (env.status === 429) {
+    return {
+      code: env.code,
+      status: 429,
+      message: `Could not ${action}: too many requests in a short time. Wait a minute, then retry.`,
+      reference: null,
+      support: false,
+      reload: false,
+      recovery: "wait",
+    };
+  }
   const isNetwork =
     !!err &&
     typeof err === "object" &&
@@ -224,13 +273,25 @@ export function describeProgramFailure(
       reload: false,
     };
   }
+  if (env.status === 403) {
+    return {
+      code: env.code,
+      status: 403,
+      message: `Could not ${action}: your account does not have access to this. If you think it should, contact support and quote reference ${reference}.`,
+      reference,
+      support: true,
+      reload: false,
+    };
+  }
   if (env.status === 400 && env.message) {
+    // A request the server refused as invalid (DTO validation). Show its
+    // reason, and keep the reference + support path in case the app sent it.
     return {
       code: env.code,
       status: env.status,
-      message: `Could not ${action}: ${env.message}`,
+      message: `Could not ${action}: ${env.message.replace(/[.\s]+$/, "")}. If this keeps happening, contact support and quote reference ${reference}.`,
       reference,
-      support: false,
+      support: true,
       reload: false,
     };
   }

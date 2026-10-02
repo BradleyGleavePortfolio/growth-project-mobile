@@ -4,6 +4,13 @@
  * plan). The request runs in chunks of 50; every client gets a visible result
  * (assigned, already on it, or failed with the reason) and failed clients can
  * be retried with the same request key, so nobody is ever assigned twice.
+ *
+ * One request key per logical intent (program, start date, repeat choice):
+ * changing the date or the repeat switch starts a new intent with a fresh key
+ * and clears the old results; a run that ends with no failures retires its
+ * key, so the next press is a new assignment rather than a replay of the old
+ * one. Only "Retry N failed" (and a re-press while failures are showing)
+ * reuses the key, which is what makes a lost response safe to retry.
  */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -71,6 +78,17 @@ export default function ProgramAssignScreen({
   );
   const [failure, setFailure] = useState<ProgramFailure | null>(null);
   const keyRef = useRef(generateIdempotencyKey());
+  const intent = `${programId}|${startDate}|${allowRepeat ? "repeat" : "once"}`;
+  const intentRef = useRef(intent);
+
+  useEffect(() => {
+    if (intentRef.current === intent) return;
+    intentRef.current = intent;
+    keyRef.current = generateIdempotencyKey();
+    setResults(new Map());
+    setProgress(null);
+    setFailure(null);
+  }, [intent]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -142,6 +160,7 @@ export default function ProgramAssignScreen({
     const chunks = chunkClientIds(ids);
     setProgress({ done: 0, total: ids.length });
     let done = 0;
+    let anyFailed = false;
     try {
       for (const chunk of chunks) {
         try {
@@ -154,12 +173,14 @@ export default function ProgramAssignScreen({
             },
             keyRef.current,
           );
+          if (res.results.some((r) => r.status === "failed")) anyFailed = true;
           setResults((prev) => {
             const next = new Map(prev);
             res.results.forEach((r) => next.set(r.client_id, r));
             return next;
           });
         } catch (err) {
+          anyFailed = true;
           const f = describeProgramFailure(err, "assign the program");
           // The whole chunk was refused (or never reached the server): mark
           // each client failed with the same reason so Retry failed covers it.
@@ -184,6 +205,9 @@ export default function ProgramAssignScreen({
         setProgress({ done, total: ids.length });
       }
     } finally {
+      // A clean run retires its key: the next press is a new assignment.
+      // Any failed or unknown outcome keeps it so a retry replays safely.
+      if (!anyFailed) keyRef.current = generateIdempotencyKey();
       setRunning(false);
       await invalidate();
     }
@@ -219,13 +243,16 @@ export default function ProgramAssignScreen({
                 key={d.label}
                 label={d.label}
                 selected={startDate === d.value}
-                onPress={() => setStartDate(d.value)}
+                onPress={() => {
+                  if (!running) setStartDate(d.value);
+                }}
               />
             ))}
           </View>
           <TextInput
             value={startDate}
             onChangeText={setStartDate}
+            editable={!running}
             placeholder="YYYY-MM-DD"
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Start date, year month day"
@@ -259,6 +286,7 @@ export default function ProgramAssignScreen({
             <Switch
               value={allowRepeat}
               onValueChange={setAllowRepeat}
+              disabled={running}
               accessibilityLabel="Assign again to clients already on this program"
             />
             <Text style={[styles.help, { color: colors.textPrimary, flex: 1 }]}>
@@ -302,7 +330,7 @@ export default function ProgramAssignScreen({
             >
               {running
                 ? `Assigning ${progress.done} of ${progress.total}`
-                : `${summary.assigned} assigned · ${summary.already} already on it · ${summary.failed} failed`}
+                : summaryLine(summary)}
             </Text>
           ) : null}
           <View style={styles.row}>
@@ -416,14 +444,25 @@ function resultLabel(r: BulkAssignResult): string {
 
 function summarise(results: Map<string, BulkAssignResult>) {
   let assigned = 0;
+  let replayed = 0;
   let already = 0;
   let failed = 0;
   results.forEach((r) => {
-    if (r.status === "assigned") assigned += 1;
+    if (r.status === "assigned" && r.replayed) replayed += 1;
+    else if (r.status === "assigned") assigned += 1;
     else if (r.status === "already_assigned") already += 1;
     else failed += 1;
   });
-  return { total: results.size, assigned, already, failed };
+  return { total: results.size, assigned, replayed, already, failed };
+}
+
+/** Rows confirmed from an earlier attempt are counted on their own. */
+function summaryLine(s: ReturnType<typeof summarise>): string {
+  const parts = [`${s.assigned} assigned`];
+  if (s.replayed > 0)
+    parts.push(`${s.replayed} confirmed from an earlier attempt`);
+  parts.push(`${s.already} already on it`, `${s.failed} failed`);
+  return parts.join(" · ");
 }
 
 const styles = StyleSheet.create({

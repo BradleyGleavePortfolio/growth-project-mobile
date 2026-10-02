@@ -65,6 +65,13 @@ import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
+import { workoutAutosaveApi } from '../../api/workoutAutosaveApi';
+import {
+  describeHistoryFailure,
+  HISTORY_REFRESH_FAILED,
+  HISTORY_WAIT_FOR_SAVE,
+  type HistoryDirection,
+} from './workoutBuilderUndo';
 import {
   diffWorkingCopy,
   type WorkoutBuilderWorkingCopy,
@@ -504,13 +511,40 @@ export default function CoachWorkoutBuilderScreen() {
     setReplayRefetchFailed(next);
   }, []);
 
-  const onAutosaveSaved = useCallback(() => {
+  // S-MWB-2 builder undo/redo: session stacks of plan revision indexes (see
+  // workoutBuilderUndo.ts). A confirmed save makes "the state before it"
+  // (head - 1) undoable and ends any redo branch.
+  // Refs are the source of truth (read after an awaited flush); state mirrors
+  // them for rendering.
+  const undoStackRef = useRef<number[]>([]);
+  const redoStackRef = useRef<number[]>([]);
+  const [undoStack, setUndoStackState] = useState<number[]>([]);
+  const [redoStack, setRedoStackState] = useState<number[]>([]);
+  const setUndoStack = useCallback((next: number[]) => {
+    undoStackRef.current = next;
+    setUndoStackState(next);
+  }, []);
+  const setRedoStack = useCallback((next: number[]) => {
+    redoStackRef.current = next;
+    setRedoStackState(next);
+  }, []);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const historyBusyRef = useRef(false);
+  const [historyNotice, setHistoryNotice] = useState<string | null>(null);
+
+  const onAutosaveSaved = useCallback((next?: { headRevisionIndex: number }) => {
     if (!autosaveEnabled) return;
+    if (next && next.headRevisionIndex > 0) {
+      const before = next.headRevisionIndex - 1;
+      const cur = undoStackRef.current;
+      if (cur[cur.length - 1] !== before) setUndoStack([...cur, before]);
+      setRedoStack([]);
+    }
     if (!hasIdlessRowsRef.current) return;
     refetchSeqRef.current += 1;
     setRefetchSeq(refetchSeqRef.current);
     void refetchPlan();
-  }, [autosaveEnabled, refetchPlan]);
+  }, [autosaveEnabled, refetchPlan, setUndoStack, setRedoStack]);
 
   // On a 409 the plan moved ahead (the first-autosave bootstrap, a replay of an
   // already-applied batch, or an edit from another device). The hook has
@@ -649,6 +683,8 @@ export default function CoachWorkoutBuilderScreen() {
     onConflict: onAutosaveConflict,
     onReplay: onAutosaveReplay,
   });
+  const autosaveHasPendingRef = useRef(false);
+  autosaveHasPendingRef.current = autosave.hasPending;
 
   // Force a final mirror-first flush before the screen is removed from the
   // stack (back gesture / header back / programmatic goBack). This closes the
@@ -1146,6 +1182,107 @@ export default function CoachWorkoutBuilderScreen() {
   // the screen owns this overlay. When the failed state is active the pill's tap
   // re-runs the refetch (`runReplayRefetch`); otherwise it retries the flush as
   // before.
+  const runHistoryStep = useCallback(
+    async (direction: HistoryDirection) => {
+      if (!autosaveEnabled || !planId || historyBusyRef.current) return;
+      historyBusyRef.current = true;
+      setHistoryBusy(true);
+      setHistoryNotice(null);
+      try {
+        // Land any buffered edit first so the undo never discards it (that
+        // save becomes the newest undo step, read below from the ref).
+        await autosave.flush();
+        if (autosaveHasPendingRef.current) {
+          setHistoryNotice(HISTORY_WAIT_FOR_SAVE);
+          return;
+        }
+        const stack = direction === 'undo' ? undoStackRef.current : redoStackRef.current;
+        const target = stack[stack.length - 1];
+        if (target === undefined) return;
+        let res: { head_revision_index: number; lock_token: string };
+        try {
+          res = await workoutAutosaveApi.undo(planId, { to_revision_index: target });
+        } catch (err) {
+          const f = describeHistoryFailure(err, direction);
+          setHistoryNotice(f.message);
+          if (f.dropHistory) {
+            if (direction === 'undo') setUndoStack([]);
+            else setRedoStack([]);
+          }
+          return;
+        }
+        // The head we just left becomes the opposite step's target.
+        const left = res.head_revision_index - 1;
+        if (direction === 'undo') {
+          setUndoStack(undoStackRef.current.slice(0, -1));
+          setRedoStack([...redoStackRef.current, left]);
+        } else {
+          setRedoStack(redoStackRef.current.slice(0, -1));
+          setUndoStack([...undoStackRef.current, left]);
+        }
+        const fresh = await refetchPlan().catch(() => null);
+        const plan = fresh && !fresh.isError ? fresh.data : undefined;
+        if (!plan) {
+          // The undo is on the server but we cannot show it yet: hold Save and
+          // offer the refresh affordance (the same path as a replay refetch).
+          runReplayRefetch();
+          setHistoryNotice(HISTORY_REFRESH_FAILED);
+          return;
+        }
+        const meta = { name: plan.name ?? '', type: plan.type ?? 'strength' };
+        deletedKeysRef.current.clear();
+        deletedSignaturesRef.current.clear();
+        setName(meta.name);
+        setType(meta.type);
+        setRows(
+          plan.exercises.map((e) => ({
+            clientId: clientIdForServerRow(e.id),
+            row_id: e.id,
+            exercise_external_id: e.exercise_external_id,
+            display_name: e.exercise_external_id,
+            sets: e.sets,
+            reps_or_duration_seconds: e.reps_or_duration_seconds,
+            rest_seconds: e.rest_seconds,
+            weight_lbs: e.weight_lbs,
+            superset_group_id: e.superset_group_id,
+            notes: e.notes,
+          })),
+        );
+        const adopted = autosave.adoptServerHead({
+          headRevisionIndex: res.head_revision_index,
+          lockToken: res.lock_token,
+          serverCopy: buildServerWorkingCopy(plan.exercises, meta),
+        });
+        setHistoryNotice(
+          adopted
+            ? direction === 'undo'
+              ? 'Undone. Redo puts the change back.'
+              : 'Redone.'
+            : HISTORY_WAIT_FOR_SAVE,
+        );
+      } finally {
+        historyBusyRef.current = false;
+        setHistoryBusy(false);
+      }
+    },
+    [
+      autosaveEnabled,
+      planId,
+      setUndoStack,
+      setRedoStack,
+      autosave,
+      refetchPlan,
+      runReplayRefetch,
+      clientIdForServerRow,
+      buildServerWorkingCopy,
+    ],
+  );
+  const historyBlocked =
+    historyBusy ||
+    autosave.replayInFlight ||
+    replayAdoptionPending ||
+    replayRefetchFailed;
+
   const pillStatus = replayRefetchFailed ? 'conflict' : autosave.status;
   const onPillPress = useCallback(() => {
     if (replayRefetchFailedRef.current) {
@@ -1178,6 +1315,46 @@ export default function CoachWorkoutBuilderScreen() {
             />
           ) : null}
         </View>
+        {autosaveEnabled ? (
+          <View style={styles.historyRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Undo last change"
+              accessibilityState={{ disabled: historyBlocked || undoStack.length === 0 }}
+              disabled={historyBlocked || undoStack.length === 0}
+              onPress={() => void runHistoryStep('undo')}
+              style={[
+                styles.historyButton,
+                (historyBlocked || undoStack.length === 0) && styles.historyButtonDisabled,
+              ]}
+            >
+              <Text style={[typography.caption, { color: sc.textPrimary }]}>
+                {historyBusy ? 'Working' : 'Undo'}
+              </Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Redo change"
+              accessibilityState={{ disabled: historyBlocked || redoStack.length === 0 }}
+              disabled={historyBlocked || redoStack.length === 0}
+              onPress={() => void runHistoryStep('redo')}
+              style={[
+                styles.historyButton,
+                (historyBlocked || redoStack.length === 0) && styles.historyButtonDisabled,
+              ]}
+            >
+              <Text style={[typography.caption, { color: sc.textPrimary }]}>Redo</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {autosaveEnabled && historyNotice ? (
+          <Text
+            accessibilityLiveRegion="polite"
+            style={[typography.caption, { color: sc.textMuted, marginBottom: spacing.xs }]}
+          >
+            {historyNotice}
+          </Text>
+        ) : null}
 
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
@@ -1410,6 +1587,18 @@ function makeStyles(sc: SemanticTokens) {
       marginBottom: spacing.xs,
     },
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
+    historyRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
+    historyButton: {
+      minHeight: 44,
+      minWidth: 64,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1,
+      borderColor: sc.border,
+      borderRadius: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    historyButtonDisabled: { opacity: 0.5 },
     input: {
       borderWidth: 1,
       borderColor: sc.border,

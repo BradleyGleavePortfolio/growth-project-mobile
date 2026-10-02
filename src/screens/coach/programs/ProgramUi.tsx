@@ -53,11 +53,28 @@ export function FailureBox({
           {failure.message}
         </Text>
         <View style={styles.failureActions}>
-          {onRetry ? (
+          {failure.recovery === "sign_in" ? (
+            <SmallButton
+              tone="primary"
+              label="Sign in again"
+              onPress={() => {
+                // Loaded on demand so the Programs screens do not pull the
+                // whole auth stack in at import time.
+                void import("../../../services/authActions").then((m) =>
+                  m.signOut(),
+                );
+              }}
+              accessibilityHint="Signs you out so you can sign back in"
+            />
+          ) : onRetry ? (
             <SmallButton
               label={retryLabel}
               onPress={onRetry}
-              accessibilityHint="Runs the action again"
+              accessibilityHint={
+                failure.recovery === "wait"
+                  ? "Runs the action again; wait a minute first"
+                  : "Runs the action again"
+              }
             />
           ) : null}
           {failure.support ? (

@@ -7,7 +7,11 @@ jest.mock("../../services/sentry", () => ({
   captureError: (...a: unknown[]) => mockCaptureError(...a),
 }));
 
-import { bulkResultCopy, describeProgramFailure } from "../programErrors";
+import {
+  bulkResultCopy,
+  describeProgramFailure,
+  isOutcomeUnknown,
+} from "../programErrors";
 
 function httpError(status: number, data: Record<string, unknown>) {
   return { response: { status, data, headers: {} } };
@@ -81,17 +85,72 @@ describe("describeProgramFailure", () => {
     expect(f.reference).toMatch(/^[A-Z0-9]{1,8}$/);
   });
 
-  it("a validation 400 surfaces the server sentence", () => {
+  it("a validation 400 surfaces the server sentence and keeps the reference + support path", () => {
     const f = describeProgramFailure(
       httpError(400, {
         code: "bad_request",
         message: "weeks must not be greater than 52",
+        request_id: "cd34ef56-0000-4000-8000-000000000000",
       }),
       "create the program",
     );
     expect(f.message).toBe(
-      "Could not create the program: weeks must not be greater than 52",
+      "Could not create the program: weeks must not be greater than 52. If this keeps happening, contact support and quote reference CD34EF56.",
     );
+    expect(f.reference).toBe("CD34EF56");
+    expect(f.support).toBe(true);
+    expect(mockCaptureError).toHaveBeenCalled();
+  });
+
+  it("a Nest DTO validation list is joined into one sentence", () => {
+    const f = describeProgramFailure(
+      httpError(400, {
+        message: ["weeks must be an integer", "name should not be empty"],
+      }),
+      "create the program",
+    );
+    expect(f.message).toMatch(
+      /^Could not create the program: weeks must be an integer; name should not be empty\. If this keeps happening/,
+    );
+    expect(f.support).toBe(true);
+  });
+
+  it("B-328-3: a 401 asks the coach to sign in again, not a server retry", () => {
+    const f = describeProgramFailure(
+      httpError(401, { code: "unauthorized" }),
+      "save",
+    );
+    expect(f.message).toMatch(/session has ended\. Sign in again/);
+    expect(f.message).not.toMatch(/problem on our side/);
+    expect(f.recovery).toBe("sign_in");
+  });
+
+  it("B-328-3: a 429 says to wait, a bare 403 names the access problem with a support path", () => {
+    const limited = describeProgramFailure(
+      httpError(429, {}),
+      "assign the program",
+    );
+    expect(limited.message).toMatch(/Wait a minute, then retry/);
+    expect(limited.recovery).toBe("wait");
+    const denied = describeProgramFailure(
+      httpError(403, { request_id: "ef56ab12-0000-4000-8000-000000000000" }),
+      "open this program",
+    );
+    expect(denied.message).toMatch(/does not have access/);
+    expect(denied.message).toMatch(/EF56AB12/);
+    expect(denied.support).toBe(true);
+  });
+});
+
+describe("isOutcomeUnknown", () => {
+  it("no response, a timeout or a 5xx may have applied; a 4xx answer did not", () => {
+    expect(isOutcomeUnknown(new Error("Network Error"))).toBe(true);
+    expect(isOutcomeUnknown(httpError(503, {}))).toBe(true);
+    expect(isOutcomeUnknown(httpError(408, {}))).toBe(true);
+    expect(isOutcomeUnknown(httpError(400, {}))).toBe(false);
+    expect(
+      isOutcomeUnknown(httpError(409, { code: "program_version_conflict" })),
+    ).toBe(false);
   });
 });
 
