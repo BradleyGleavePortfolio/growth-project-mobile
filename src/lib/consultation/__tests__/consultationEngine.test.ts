@@ -81,6 +81,8 @@ describe('definitions', () => {
 
   it('the P0 copy is the D2 contract copy: two boxes, box 1 for coaching, box 2 optional for Roman and AI', () => {
     expect(CONSENT_TITLE).toBe('Before we start');
+    // C-310-13: the rendered P0 title is the hashed title (one literal).
+    expect(screenById('P0')?.question).toBe(CONSENT_TITLE);
     expect(CONSENT_PARAGRAPHS).toHaveLength(3);
     const coaching = CONSENT_PARAGRAPHS.join(' ');
     expect(coaching).toMatch(/personal training and nutrition guidance only/);

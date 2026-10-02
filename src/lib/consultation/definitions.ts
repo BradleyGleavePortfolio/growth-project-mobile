@@ -9,6 +9,7 @@
  * line. `{coach}` / `{Coach}` and `{first}` are filled at render time by
  * `fillCopy` so a missing coach name reads "your coach" / "Your coach".
  */
+import { CONSENT_TITLE } from './consentVersion';
 import type { ChapterId, ScreenDef } from './types';
 
 export const CONSULTATION_VERSION = 'consult-v1' as const;
@@ -100,7 +101,7 @@ export const SCREENS: readonly ScreenDef[] = [
     chapter: 0,
     template: 'consent',
     eyebrow: 'Your consultation',
-    question: 'Before we start',
+    question: CONSENT_TITLE,
     longQuestion: true,
     cta: 'Continue',
     validation: { required: true },
