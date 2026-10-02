@@ -17,6 +17,11 @@
 
 import { Platform } from 'react-native';
 import {
+  assertAndroidHealthConnectEnabled,
+  HEALTH_CONNECT_DISABLED_MESSAGE,
+  isAndroidHealthConnectEnabled,
+} from '../../../config/healthConnect';
+import {
   HealthConnectUnavailableError,
   HealthConnectUnsupportedError,
 } from './errors';
@@ -125,9 +130,9 @@ export function buildReadPermissions(): HealthConnectPermission[] {
   }));
 }
 
-/** True only on Android — Health Connect's native module exists nowhere else. */
+/** True only on Android builds that explicitly include Health Connect. */
 export function isHealthConnectSupported(): boolean {
-  return Platform.OS === 'android';
+  return isAndroidHealthConnectEnabled();
 }
 
 /**
@@ -135,20 +140,19 @@ export function isHealthConnectSupported(): boolean {
  * Connect. The calling UI MUST render the unsupported case as a real,
  * user-visible state (e.g. “Health Connect is available on Android only on this
  * device”) rather than treating an iOS device as a user who simply has no data.
- * The `message` is doctrine-compliant copy: no mascot, no medicalization, no
- * “coming soon” placeholder — it states a fact about platform availability.
+ * The message states platform availability or the owner-approved closed-test
+ * boundary, with the available alternative instead of a dead permission CTA.
  */
 export interface HealthConnectStatus {
-  /** True only on Android — mirrors {@link isHealthConnectSupported}. */
+  /** True only on enabled Android builds — mirrors isHealthConnectSupported. */
   supported: boolean;
   /** The current platform (`'android' | 'ios' | 'web' | …`). */
   platform: typeof Platform.OS;
   /**
-   * Machine-readable reason the status is what it is. `'supported'` on Android;
-   * `'platform-unsupported'` everywhere else. UI branches on this, never on the
-   * human-readable `message`.
+   * Machine-readable reason: supported, platform-unsupported or build-disabled.
+   * UI branches on this, never on the human-readable message.
    */
-  reason: 'supported' | 'platform-unsupported';
+  reason: 'supported' | 'platform-unsupported' | 'build-disabled';
   /** Human-readable, render-ready copy describing the status. */
   message: string;
 }
@@ -162,6 +166,14 @@ export interface HealthConnectStatus {
  * not a silent empty-data fallback.
  */
 export function getHealthConnectStatus(): HealthConnectStatus {
+  if (Platform.OS === 'android' && !isAndroidHealthConnectEnabled()) {
+    return {
+      supported: false,
+      platform: Platform.OS,
+      reason: 'build-disabled',
+      message: HEALTH_CONNECT_DISABLED_MESSAGE,
+    };
+  }
   if (isHealthConnectSupported()) {
     return {
       supported: true,
@@ -187,9 +199,10 @@ export function getHealthConnectStatus(): HealthConnectStatus {
  * silently reading nothing.
  */
 function assertSupported(): void {
-  if (!isHealthConnectSupported()) {
+  if (Platform.OS !== 'android') {
     throw new HealthConnectUnsupportedError(Platform.OS);
   }
+  assertAndroidHealthConnectEnabled();
 }
 
 /**
