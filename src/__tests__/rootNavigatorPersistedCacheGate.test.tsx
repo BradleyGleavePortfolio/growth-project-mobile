@@ -105,6 +105,12 @@ import { QueryClient, QueryClientProvider, dehydrate } from '@tanstack/react-que
 import RootNavigator from '../navigation/RootNavigator';
 import { queryClient, persisterKeyForUser, QUERY_CACHE_BUSTER, QUERY_CACHE_KEY_PREFIX } from '../services/queryClient';
 import { PERSISTED_CACHE_RESTORE_TIMEOUT_MS } from '../services/PersistedQueryCacheGate';
+import {
+  clearCoachRecoveryGate,
+  clearRoleSelectionPending,
+  markRoleSelectionPending,
+  writeCoachRecoveryGate,
+} from '../lib/roleSelectionGate';
 
 const COACH_B = { id: 'user-B', email: 'b@example.com', role: 'coach', name: 'Bea' };
 const KEY_B = persisterKeyForUser('user-B');
@@ -192,3 +198,32 @@ describe('RootNavigator × persisted cache identity', () => {
     expect(getItem.mock.calls.filter((c) => c[0] === KEY_B)).toEqual([]);
   });
 });
+
+// #306 r5 (Sol B-306-2 / Opus B-306-1): the bootstrap destination around a
+// Login recovery notice. While the notice is unacknowledged the auth stack
+// holds (so the notice is shown again); after Continue (the same gate calls
+// LoginScreen.acknowledgeRecovery makes) bootstrap reaches the app.
+describe('RootNavigator × role-selection gate after a Login recovery notice', () => {
+  it('unacknowledged notice: bootstrap stays on the auth stack', async () => {
+    mockSecure['supabase_token'] = 'jwt-B';
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(COACH_B));
+    await writeCoachRecoveryGate({ userId: 'user-B', method: 'email', priorPending: false, at: Date.now() });
+    await markRoleSelectionPending('user-B');
+    const { findByTestId } = await mount();
+    await findByTestId('nav-auth');
+  });
+
+  it('after Continue releases the gate: bootstrap reaches the app', async () => {
+    mockSecure['supabase_token'] = 'jwt-B';
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify(COACH_B));
+    await writeCoachRecoveryGate({ userId: 'user-B', method: 'email', priorPending: false, at: Date.now() });
+    await markRoleSelectionPending('user-B');
+    // acknowledgeRecovery with priorPending false:
+    await clearRoleSelectionPending();
+    await clearCoachRecoveryGate();
+    const { findByTestId, queryByTestId } = await mount();
+    await findByTestId('nav-coach');
+    expect(queryByTestId('nav-auth')).toBeNull();
+  });
+});
+
