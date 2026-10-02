@@ -29,14 +29,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
-import api, { deletionApi } from '../services/api';
-import { purgeConsultationDraft } from '../lib/consultation/storage';
-import { readUserCacheSync } from '../lib/userCache';
+import api from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
 import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from './settings/deletionErrors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -164,7 +163,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const [meta, setMeta] = useState<TrustMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
 
   // Fire trust_center_opened once on mount
   useEffect(() => {
@@ -197,48 +195,23 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       await dataExportApi.requestExport();
       Alert.alert(
         'Export Requested',
-        'Your data export has been queued. Open Privacy in Settings to track progress and download the file when ready.',
+        'Your data export has been queued. Open Data & Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
-    } catch {
-      Alert.alert('Request Failed', 'Could not submit your export request. Please try again later.');
+    } catch (err) {
+      Alert.alert('Export not started', deletionErrorCopy(err, 'export', 'trust_center.export'));
     } finally {
       setExportBusy(false);
     }
   }, []);
 
+  // Deletion needs re-authentication and shows the scheduled date + cancel,
+  // so it lives on the shared Delete account screen (registered in both the
+  // client and coach navigators), not in an inline alert.
   const handleDeleteAccount = useCallback(() => {
-    Alert.alert(
-      'Delete My Account',
-      'This will schedule your account for permanent deletion after a 14-day grace period. You can cancel within that window from Settings.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm Deletion',
-          style: 'destructive',
-          onPress: async () => {
-            track('account_deletion_requested');
-            setDeleteBusy(true);
-            try {
-              await deletionApi.requestDeletion();
-              // Purge the local consultation draft (health answers) as soon as
-              // deletion is requested (Sol A-04).
-              const uid = readUserCacheSync()?.id;
-              if (uid) await purgeConsultationDraft(uid).catch(() => undefined);
-              Alert.alert(
-                'Confirmation email sent',
-                'We have emailed a confirmation link. After you confirm, your account enters a 14-day grace period during which you can cancel from Settings.',
-              );
-            } catch {
-              Alert.alert('Request Failed', 'Could not schedule account deletion. Please try again later.');
-            } finally {
-              setDeleteBusy(false);
-            }
-          },
-        },
-      ],
-    );
-  }, []);
+    track('account_deletion_opened');
+    navigation?.navigate?.('DeleteAccount');
+  }, [navigation]);
 
   return (
     <ScrollView
@@ -350,7 +323,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             intent="warning"
             style={styles.actionBtn}
             onPress={handleDeleteAccount}
-            disabled={deleteBusy}
             accessibilityRole="button"
             accessibilityLabel="Delete my account"
           >
@@ -359,13 +331,9 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             </View>
             <View style={styles.actionBtnText}>
               <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
-              <Text style={styles.actionBtnSub}>14-day grace period before permanent deletion</Text>
+              <Text style={styles.actionBtnSub}>A grace period to change your mind before permanent deletion</Text>
             </View>
-            {deleteBusy ? (
-              <ActivityIndicator size="small" color={colors.error} />
-            ) : (
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            )}
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
       </View>
@@ -399,10 +367,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           accessibilityLabel="Open the help centre"
           onPress={() => {
             Linking.openURL(helpUrl('/privacy')).catch(() => {
-              Alert.alert(
-                'Help unavailable',
-                'Could not open the help centre right now. Please try again later.',
-              );
+              Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
             });
           }}
         >
