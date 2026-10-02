@@ -1,5 +1,5 @@
 import { schedulingErrorCode, schedulingErrorStatus } from '../api/schedulingApi';
-import { SUPPORT_EMAIL } from '../config/support';
+import { SUPPORT_EMAIL } from '../constants/support';
 import { captureError } from '../services/sentry';
 
 /** Who reads the message: clients book; coaches run the inbox and settings. */

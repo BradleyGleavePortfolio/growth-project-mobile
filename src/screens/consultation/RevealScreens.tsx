@@ -5,7 +5,7 @@
  * computes macros on the device.
  */
 import React, { useState } from 'react';
-import { Alert, Linking, Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Answers } from '../../lib/consultation/types';
 import type { CompleteOnboardingResponse } from '../../api/consultationApi';
@@ -19,7 +19,8 @@ import {
   weeksEyebrow,
 } from '../../lib/consultation/copy';
 import { FadeIn, Frame, palette, PrimaryButton, RomanLine, s, TextLink } from './components';
-import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
+import { SUPPORT_EMAIL } from '../../constants/support';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 function Disclosure({ label, children, testID }: { label: string; children: React.ReactNode; testID?: string }) {
   const [open, setOpen] = useState(false);
@@ -187,14 +188,14 @@ export const ESCAPE_COPY = {
   signOutTitle: 'Sign out?',
   signOutBody: 'Answers that have not reached the server yet are removed from this phone. You can sign in again at any time.',
   cancel: 'Cancel',
-  supportUnavailable: 'Email is not set up on this phone. You can write to ' + SUPPORT_EMAIL + '.',
 } as const;
 
-export function supportMailto(): string {
-  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Help with my consultation')}`;
-}
+export const CONSULT_SUPPORT_SUBJECT = 'Help with my consultation';
 
 function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
+  // Sol B-324-1: if no email app opens, the address (selectable), Copy and
+  // Try again show in place, not in a dismissible alert.
+  const supportEmail = useSupportEmail(CONSULT_SUPPORT_SUBJECT);
   return (
     <View style={{ marginTop: 24 }} testID="consult-escape">
       <TextLink
@@ -202,9 +203,10 @@ function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
         role="link"
         testID="consult-support"
         onPress={() => {
-          Linking.openURL(supportMailto()).catch(() => Alert.alert(ESCAPE_COPY.support, ESCAPE_COPY.supportUnavailable));
+          void supportEmail.open();
         }}
       />
+      <SupportEmailFallback handle={supportEmail} textStyle={s.body} linkColor={palette.accent} testID="consult-support-fallback" />
       {onSignOut ? (
         <TextLink
           label={ESCAPE_COPY.signOut}

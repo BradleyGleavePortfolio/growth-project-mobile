@@ -178,6 +178,8 @@ export const calendarStyles = StyleSheet.create({
   content: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   gap: { height: spacing.md },
+  /** Body-small text for inline support fallbacks (matches Note). */
+  noteText: { ...typography.bodySmall },
 });
 
 const styles = StyleSheet.create({

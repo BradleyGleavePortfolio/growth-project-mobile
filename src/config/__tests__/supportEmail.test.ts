@@ -7,7 +7,7 @@
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 import * as fs from 'fs';
 import * as path from 'path';
-import { SUPPORT_EMAIL, supportMailto } from '../support';
+import { SUPPORT_EMAIL, supportMailto } from '../../constants/support';
 import { SUPPORT_EMAIL as CONSULTATION_SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { DELETION_SUPPORT_EMAIL, HELP_UNAVAILABLE_COPY } from '../../screens/settings/deletionErrors';
@@ -32,7 +32,7 @@ describe('support address (owner ruling)', () => {
   it('the scheduling, calendar and deletion sources declare no other address', () => {
     const root = path.resolve(__dirname, '../..');
     const files = [
-      'config/support.ts',
+      'constants/support.ts',
       'lib/consultation/copy.ts',
       'calendar/schedulingErrors.ts',
       'calendar/phoneCalendar.ts',

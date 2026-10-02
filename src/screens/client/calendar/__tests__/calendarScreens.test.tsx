@@ -51,6 +51,8 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 jest.mock('../../../../tutorial/tutorialEvents', () => ({ emitTutorialSignal: jest.fn() }));
+const mockSetString = jest.fn();
+jest.mock('expo-clipboard', () => ({ setStringAsync: (...a: unknown[]) => mockSetString(...a) }));
 
 import { schedulingApi } from '../../../../api/schedulingApi';
 import { addSessionToPhoneCalendar } from '../../../../calendar/phoneCalendar';
@@ -188,6 +190,24 @@ describe('CalendarHomeScreen', () => {
     api.listMyCoaches.mockResolvedValue([]);
     const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
     await waitFor(() => expect(r.getByTestId('calendar-no-coach')).toBeTruthy());
+  });
+
+  it('S-SCHED-5 merge (#324): no coach -> Contact support opens the one support draft; no email app -> address, Copy, Try again', async () => {
+    api.listMyCoaches.mockResolvedValue([]);
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValueOnce(new Error('No email app')).mockResolvedValue(true);
+    mockSetString.mockResolvedValue(true);
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-no-coach')).toBeTruthy());
+    expect(r.queryByTestId('calendar-support-fallback')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-contact-support'));
+    expect(open).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Calendar%20help');
+    await waitFor(() => expect(r.getByTestId('calendar-support-fallback-status')).toBeTruthy());
+    expect(r.getByTestId('calendar-support-fallback-address').props.children).toBe('Bradleyapple1031@gmail.com');
+    await fireEvent.press(r.getByTestId('calendar-support-fallback-copy'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await fireEvent.press(r.getByTestId('calendar-support-fallback-retry'));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    open.mockRestore();
   });
 
   it('shows upcoming with status using the existing list contract', async () => {

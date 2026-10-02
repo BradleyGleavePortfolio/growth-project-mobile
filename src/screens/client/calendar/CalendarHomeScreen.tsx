@@ -8,8 +8,8 @@
  * give recovery actions instead of a fake empty schedule. Phone-calendar
  * exports are explicit user-controlled copies.
  */
-import React, { useMemo, useState } from 'react';
-import { Linking, RefreshControl, ScrollView, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -18,7 +18,8 @@ import { resolveClientTimezone } from '../../../api/schedulingApi';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
-import { SUPPORT_EMAIL, supportMailto } from '../../../config/support';
+import { SUPPORT_EMAIL } from '../../../constants/support';
+import { SupportEmailFallback, useSupportEmail } from '../../../components/support/SupportEmailFallback';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { Body, Card, Note, SecondaryButton, Section, Title, calendarStyles, statusLabel } from './calendarUi';
@@ -203,7 +204,9 @@ export default function CalendarHomeScreen({ navigation }: Props) {
   const { semanticColors: sc } = useTheme();
   const coaches = useMyCoaches();
   const upcoming = useMySessions();
-  const [supportMessage, setSupportMessage] = useState<string | null>(null);
+  // One shared support-email opener (mobile #324, Sol B-324-1): a phone with
+  // no email app gets the address as selectable text, Copy and Try again.
+  const supportEmail = useSupportEmail('Calendar help');
   const openMessages = useOpenMessages();
 
   const coachById = useMemo(() => {
@@ -243,8 +246,13 @@ export default function CalendarHomeScreen({ navigation }: Props) {
             <View testID="calendar-no-coach">
               <Body muted>You are not matched with a coach yet. Once you are, their open times appear here.</Body>
               <Note text={`Ask your coach for an invite code or contact ${SUPPORT_EMAIL} for help getting matched.`} />
-              <SecondaryButton label="Contact support" onPress={() => void Linking.openURL(supportMailto()).catch((err: unknown) => setSupportMessage(calendarErrorMessage(err, 'open support email')))} />
-              {supportMessage ? <Note text={supportMessage} /> : null}
+              <SecondaryButton label="Contact support" onPress={() => void supportEmail.open()} testID="calendar-contact-support" />
+              <SupportEmailFallback
+                handle={supportEmail}
+                textStyle={[calendarStyles.noteText, { color: sc.textMuted }]}
+                linkColor={sc.accentText}
+                testID="calendar-support-fallback"
+              />
             </View>
           ) : null}
           {(coaches.data ?? []).map((c) => (

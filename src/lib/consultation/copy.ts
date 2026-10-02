@@ -388,9 +388,8 @@ export const AI_GRANT_NOTICE = {
 } as const;
 
 /**
- * Support contact on the problem and paused screens. Owner rule (lane
- * B-CONSENT-2, 2026-10-02): one support address everywhere, the same as
- * backend #611 SUPPORT_EMAIL.
+ * Support contact on the problem and paused screens. Owner rule (2026-10-01
+ * 14:19): one support address everywhere, so this re-exports the single
+ * constant in src/constants/support.ts (same as backend #611 SUPPORT_EMAIL).
  */
-// S-SCHED-4 (B-325-3): one constant, defined in src/config/support.ts.
-export { SUPPORT_EMAIL } from '../../config/support';
+export { SUPPORT_EMAIL } from '../../constants/support';

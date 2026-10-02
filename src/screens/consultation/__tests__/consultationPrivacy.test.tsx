@@ -1022,6 +1022,29 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
     alert.mockRestore();
   });
 
+  it('B-324-1: Contact support that cannot open an email app shows the address, Copy and Try again in place', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no mail app'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const r = await continueWithBothBoxes(makeApi(), { onSignOut: jest.fn() });
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => r.getByTestId('consult-paused'));
+    expect(r.queryByTestId('consult-support-fallback')).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-support'));
+    await waitFor(() => r.getByTestId('consult-support-fallback'));
+    expect(open).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Help%20with%20my%20consultation');
+    expect(r.getByTestId('consult-support-fallback-status').props.children).toMatch(/could not open an email app/);
+    const address = r.getByTestId('consult-support-fallback-address');
+    expect(address.props.selectable).toBe(true);
+    expect(address.props.children).toBe(SUPPORT_EMAIL);
+    expect(r.getByTestId('consult-support-fallback-copy')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('consult-support-fallback-retry'));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    // In place, not a dismissible alert that hides the address again.
+    expect(alert).not.toHaveBeenCalled();
+    open.mockRestore();
+    alert.mockRestore();
+  });
+
   it('C-310-3: the paused screen has the same way out', async () => {
     const r = await continueWithBothBoxes(makeApi(), { onSignOut: jest.fn() });
     await fireEvent.press(r.getByTestId('consult-finish-later'));

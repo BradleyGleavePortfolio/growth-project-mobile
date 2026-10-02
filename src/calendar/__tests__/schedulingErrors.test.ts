@@ -1,6 +1,6 @@
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 import { captureError } from '../../services/sentry';
-import { SUPPORT_EMAIL } from '../../config/support';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import {
   COACH_CODE_MESSAGES,
   SCHEDULING_CODE_MESSAGES,
