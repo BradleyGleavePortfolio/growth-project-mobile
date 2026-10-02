@@ -36,15 +36,9 @@ import AppleHealthKit, {
   type HealthKitPermissions,
   type HealthPermission,
 } from 'react-native-health';
-import {
-  getSdkStatus,
-  initialize as hcInitialize,
-  openHealthConnectSettings,
-  requestPermission as hcRequestPermission,
-  SdkAvailabilityStatus,
-  type Permission as HealthConnectPermission,
-} from 'react-native-health-connect';
+import type { Permission as HealthConnectPermission } from 'react-native-health-connect';
 import type { WearableProvider } from '../../api/wearablesConnectionsApi';
+import { isHealthConnectProviderDisabled } from '../../config/healthConnect';
 
 /**
  * The outcome of an on-device connect attempt. Exhaustive on purpose so the
@@ -57,10 +51,7 @@ import type { WearableProvider } from '../../api/wearablesConnectionsApi';
  *                   (e.g. an Android-only source on iOS); render as informative.
  */
 export type OnDeviceConnectOutcome =
-  | 'granted'
-  | 'denied'
-  | 'unavailable'
-  | 'unsupported';
+  'granted' | 'denied' | 'unavailable' | 'unsupported' | 'disabled';
 
 /** Apple HealthKit read set — the canonical signals the hub ingests. */
 const HEALTHKIT_READ_PERMISSIONS: HealthPermission[] = [
@@ -121,6 +112,16 @@ function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
  * than a silent failure.
  */
 async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
+  // Never evaluate the Android TurboModule in an OFF build or on iOS.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const hc: typeof import('react-native-health-connect') = require('react-native-health-connect');
+  const {
+    getSdkStatus,
+    initialize: hcInitialize,
+    openHealthConnectSettings,
+    requestPermission: hcRequestPermission,
+    SdkAvailabilityStatus,
+  } = hc;
   const status = await getSdkStatus();
   if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
     // Not installed or needs a provider update — route the user there.
@@ -141,6 +142,7 @@ async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
 export async function connectOnDeviceProvider(
   provider: WearableProvider,
 ): Promise<OnDeviceConnectOutcome> {
+  if (isHealthConnectProviderDisabled(provider)) return 'disabled';
   try {
     if (provider === 'APPLE_HEALTHKIT') {
       return Platform.OS === 'ios' ? await connectHealthKit() : 'unsupported';

@@ -17,7 +17,13 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
-import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
+import {
+  coachApi,
+  profileApi,
+  notificationsApi,
+  deletionApi,
+  AccountStatus,
+} from '../../services/api';
 import { helpUrl } from '../../config/env';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -38,6 +44,7 @@ import { ProfileSection } from './settings/ProfileSection';
 import { SettingsToggles } from './settings/SettingsToggles';
 import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
+import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -122,8 +129,17 @@ export default function SettingsScreen() {
   const loadAccountStatus = useCallback(async () => {
     setAccountStatusLoading(true);
     try {
-      const res = await usersApi.getAccountStatus();
-      setAccountStatus(res.data ?? null);
+      // Canonical in-app deletion status (POST /me/delete-account flow). The
+      // legacy /users/me/account status reflects a different, unused path.
+      const res = await deletionApi.getDeletionStatus();
+      const st = res.data;
+      // C-313-2: only `confirmed` is scheduled. A legacy `requested` row is
+      // finished from the Delete account screen, so it routes there.
+      const scheduled = st?.state === 'confirmed';
+      setAccountStatus({
+        deletionScheduled: scheduled,
+        permanentDeletionAt: scheduled ? (st?.purge_after ?? null) : null,
+      });
     } catch (err) {
       // 404 means the backend has not yet shipped the status endpoint — treat
       // as "no scheduled deletion" so the UI shows the request-deletion path.
@@ -141,7 +157,12 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     loadAccountStatus();
-  }, [loadAccountStatus]);
+    // Refresh after returning from the Delete account screen.
+    const unsubscribe = navigation.addListener?.('focus', loadAccountStatus);
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
+  }, [loadAccountStatus, navigation]);
 
   const updateSetting = async <K extends keyof CoachSettings>(key: K, value: CoachSettings[K]) => {
     const previous = settings;
@@ -267,13 +288,13 @@ export default function SettingsScreen() {
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {
-        Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+        Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
         return;
       }
       await Linking.openURL(url);
     } catch (err) {
       console.warn('coach SettingsScreen: failed to open help URL', err);
-      Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+      Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
     }
   };
 
@@ -289,13 +310,13 @@ export default function SettingsScreen() {
           onPress: async () => {
             setDeletionBusy(true);
             try {
-              await usersApi.cancelAccountDeletion();
+              await deletionApi.cancelDeletion();
               await loadAccountStatus();
               successTap();
               Alert.alert('Deletion canceled', 'Your account is no longer scheduled for deletion.');
             } catch (err) {
               const msg =
-                errorMessage(err, 'Could not cancel deletion. Contact support if this keeps happening.');
+                deletionErrorCopy(err, 'cancel', 'coach_settings.cancel_deletion');
               Alert.alert('Could not cancel', msg);
             } finally {
               setDeletionBusy(false);
