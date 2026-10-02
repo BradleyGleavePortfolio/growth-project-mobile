@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: { fontSize: 26, fontWeight: "800" },
+  title: { fontSize: 26, fontWeight: "600" },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   search: {
     flexDirection: "row",
@@ -405,11 +405,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 8,
   },
-  cardTitle: { fontSize: 17, fontWeight: "700", flex: 1 },
+  cardTitle: { fontSize: 17, fontWeight: "600", flex: 1 },
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   meta: { fontSize: 14 },
   tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  tagText: { fontSize: 12, fontWeight: "700" },
+  tagText: { fontSize: 12, fontWeight: "600" },
   empty: {
     fontSize: 15,
     lineHeight: 22,

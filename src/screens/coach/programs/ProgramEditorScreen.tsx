@@ -538,14 +538,14 @@ function Notice({ text }: { text: string }) {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   body: { padding: 16, paddingBottom: 64, gap: 8 },
-  title: { fontSize: 24, fontWeight: "800" },
+  title: { fontSize: 24, fontWeight: "600" },
   meta: { fontSize: 14, lineHeight: 20 },
   description: { fontSize: 15, lineHeight: 22, marginTop: 4 },
   help: { fontSize: 13, lineHeight: 19 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   notice: { borderRadius: 10, padding: 10, marginTop: 8 },
   weekRow: { gap: 6, marginTop: 8 },
-  weekLabel: { fontSize: 14, fontWeight: "700" },
+  weekLabel: { fontSize: 14, fontWeight: "600" },
   cells: { flexDirection: "row", gap: 4 },
   cell: {
     flex: 1,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 2,
   },
-  cellDay: { fontSize: 11, fontWeight: "700" },
+  cellDay: { fontSize: 11, fontWeight: "600" },
   cellName: { fontSize: 11, fontWeight: "600" },
   cellEmpty: { fontSize: 11 },
   panel: {
@@ -565,5 +565,5 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 16,
   },
-  panelTitle: { fontSize: 16, fontWeight: "700" },
+  panelTitle: { fontSize: 16, fontWeight: "600" },
 });

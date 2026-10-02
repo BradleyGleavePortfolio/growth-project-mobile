@@ -225,5 +225,5 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 14, fontWeight: "600" },
   loading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16 },
-  section: { fontSize: 17, fontWeight: "700", marginTop: 16, marginBottom: 8 },
+  section: { fontSize: 17, fontWeight: "600", marginTop: 16, marginBottom: 8 },
 });

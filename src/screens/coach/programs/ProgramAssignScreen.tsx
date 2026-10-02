@@ -453,6 +453,6 @@ const styles = StyleSheet.create({
     padding: 12,
     minHeight: 56,
   },
-  clientName: { fontSize: 15, fontWeight: "700" },
+  clientName: { fontSize: 15, fontWeight: "600" },
   result: { fontSize: 13, marginTop: 2 },
 });

@@ -286,7 +286,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   row: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 4, minHeight: 56 },
-  rowTitle: { fontSize: 15, fontWeight: "700" },
+  rowTitle: { fontSize: 15, fontWeight: "600" },
   rowSub: { fontSize: 13 },
   empty: {
     fontSize: 15,

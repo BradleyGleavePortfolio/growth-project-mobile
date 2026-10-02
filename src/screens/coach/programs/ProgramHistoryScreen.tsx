@@ -202,6 +202,6 @@ const styles = StyleSheet.create({
     padding: 12,
     minHeight: 56,
   },
-  title: { fontSize: 15, fontWeight: "700" },
+  title: { fontSize: 15, fontWeight: "600" },
   muted: { fontSize: 13, lineHeight: 19 },
 });

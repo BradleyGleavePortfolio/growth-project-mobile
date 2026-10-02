@@ -345,7 +345,7 @@ function Field({
 const styles = StyleSheet.create({
   body: { padding: 16, gap: 14, paddingBottom: 48 },
   field: { gap: 6 },
-  label: { fontSize: 14, fontWeight: "700" },
+  label: { fontSize: 14, fontWeight: "600" },
   input: {
     borderWidth: 1,
     borderRadius: 10,
