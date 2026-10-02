@@ -261,9 +261,29 @@ export function withdrawAiChoiceAs(
   });
 }
 
+let markerTail: Promise<void> = Promise.resolve();
+
+/**
+ * B-310-8: the onboarding flow's pending-withdrawal marker steps (write,
+ * clear, compare-and-clear, the load read) run one at a time, in the order
+ * the client's choices were made, so a slow storage write for an older
+ * choice can never land after, or be cleared by, a newer one. Each step
+ * checks at its turn whether its choice is still the latest. Never nest a
+ * call to this inside a step (it would wait for itself).
+ */
+export function runAiMarkerStep<T>(step: () => Promise<T>): Promise<T> {
+  const run = markerTail.then(step, step);
+  markerTail = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 /** Tests only: a fresh queue, as after an app restart (module state is per process). */
 export function resetAiLedgerWritesForTests(): void {
   ledgerTail = Promise.resolve();
+  markerTail = Promise.resolve();
 }
 
 export type AiWithdrawalDrainResult = 'none' | 'withdrawn' | 'failed';

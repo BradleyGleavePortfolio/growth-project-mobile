@@ -39,7 +39,7 @@ import {
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
 import { aiWithdrawalPendingKey, resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
-import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, AI_WITHDRAW_UNCONFIRMED_LINE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
+import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, AI_WITHDRAW_UNCONFIRMED_LINE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL, AI_CHOICE_UNKNOWN_LINE } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -908,8 +908,27 @@ describe('B-310-3 / C-310-6 / C-310-7 the latest box 2 choice wins', () => {
       await new Promise((res) => setTimeout(res, AI_STATUS_WAIT_MS + 50));
     });
     expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBeFalsy();
+    // C-310-9: nothing known yet, so P0 says the saved choice was not loaded.
+    expect(r.getByTestId('consent-ai-unknown').props.children).toBe(AI_CHOICE_UNKNOWN_LINE);
     await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
     expect(aiBox(r)).toBe(true);
+    expect(r.queryByTestId('consent-ai-unknown')).toBeNull();
+  }, 15000);
+
+  it('C-310-9: a late ledger answer replaces the "could not be loaded" line with the saved state', async () => {
+    let answer: (v: AiConsentOutcome) => void = () => undefined;
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise<AiConsentOutcome>((res) => { answer = res; })) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.queryByTestId('consent-ai-unknown')).toBeNull(); // not before the wait
+    await act(async () => {
+      await new Promise((res) => setTimeout(res, AI_STATUS_WAIT_MS + 50));
+    });
+    expect(r.getByTestId('consent-ai-unknown')).toBeTruthy();
+    await act(async () => answer({ kind: 'ok', status: AI_ALLOWED }));
+    await waitFor(() => expect(aiBox(r)).toBe(true));
+    expect(r.queryByTestId('consent-ai-unknown')).toBeNull();
   }, 15000);
 
   it('C-310-7: a phone that already knows the choice shows box 2 tappable at once', async () => {

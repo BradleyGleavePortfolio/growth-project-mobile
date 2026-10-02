@@ -21,6 +21,7 @@ import { AI_ALLOWED, aiStatus, makeApi, resetStores, seedLocal } from '../../../
 import { readLocalState } from '../../../lib/consultation/storage';
 import {
   aiWithdrawalPendingKey,
+  drainAiWithdrawal,
   grantRomanWithRetry,
   isAmbiguousWriteOutcome,
   markAiWithdrawalPending,
@@ -347,6 +348,131 @@ describe('B-310-5 a lost grant response never defeats a newer no', () => {
     expect(api.withdrawRomanConsent.mock.invocationCallOrder[0]).toBeLessThan(api.grantRomanConsent.mock.invocationCallOrder[0]);
     expect(await pendingMarker()).toBeNull();
     await r.unmount();
+  });
+});
+
+// Sol B-310-8: marker steps run in decision order and act only for the
+// latest choice, so a superseded yes never removes a newer no's marker.
+describe('B-310-8 delayed marker storage never loses the newest no', () => {
+  /** Holds every write (or remove) of u1's marker until released. */
+  function holdMarker(kind: 'setItem' | 'removeItem') {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const original = AsyncStorage[kind].bind(AsyncStorage) as (k: string, v?: string) => Promise<void>;
+    const spy = jest
+      .spyOn(AsyncStorage, kind)
+      .mockImplementation((async (key: string, value?: string) => {
+        if (key === aiWithdrawalPendingKey('u1')) await held;
+        await original(key, value);
+      }) as never);
+    return { spy, release: () => release() };
+  }
+  async function visit(r: Awaited<ReturnType<typeof continueWithBothBoxes>>, toggle: boolean) {
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    if (toggle) await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+  }
+
+  it("Sol's probe: no -> yes -> no while the no's marker write is held, every DELETE lost: the marker survives", async () => {
+    const l = ledger();
+    const withdrawRomanConsent = jest.fn(async (): Promise<AiConsentOutcome> => LOST);
+    const api = makeApi({ grantRomanConsent: jest.fn(l.lostGrant), withdrawRomanConsent });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    const hold = holdMarker('setItem');
+    try {
+      await visit(r, true); // no
+      await waitFor(() => expect(hold.spy.mock.calls.some(([k]) => k === aiWithdrawalPendingKey('u1'))).toBe(true));
+      await visit(r, true); // yes
+      await visit(r, true); // newer no
+      await act(async () => hold.release());
+      await waitFor(() => expect(withdrawRomanConsent.mock.calls.length).toBeGreaterThanOrEqual(2));
+      await tick();
+      await tick();
+      expect(l.server.granted).toBe(true); // every DELETE lost before commit
+      expect((await readLocalState('u1', NOW))?.aiWant).toBe(false);
+      expect(await pendingMarker()).not.toBeNull();
+    } finally {
+      hold.release();
+      hold.spy.mockRestore();
+    }
+    // Hand-off / restart: the drain still finds the newest no and sends it.
+    await r.unmount();
+    resetAiLedgerWritesForTests();
+    const ok = jest.fn(l.okWithdraw);
+    await expect(drainAiWithdrawal('u1', ok, () => true)).resolves.toBe('withdrawn');
+    expect(l.server.granted).toBe(false);
+    expect(await pendingMarker()).toBeNull();
+  });
+
+  it('yes -> no while the yes clear (remove) is held: the newer no still leaves its marker', async () => {
+    const l = ledger();
+    const withdrawRomanConsent = jest.fn(async (): Promise<AiConsentOutcome> => LOST);
+    const api = makeApi({ grantRomanConsent: jest.fn(l.lostGrant), withdrawRomanConsent });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    await visit(r, true); // no: marker written
+    await waitFor(async () => expect(await pendingMarker()).not.toBeNull());
+    const hold = holdMarker('removeItem');
+    try {
+      await visit(r, true); // yes: its clear is held
+      await visit(r, true); // newer no
+      await act(async () => hold.release());
+      await waitFor(() => expect(withdrawRomanConsent.mock.calls.length).toBeGreaterThanOrEqual(2));
+      await tick();
+      await tick();
+      expect((await readLocalState('u1', NOW))?.aiWant).toBe(false);
+      expect(await pendingMarker()).not.toBeNull();
+    } finally {
+      hold.release();
+      hold.spy.mockRestore();
+    }
+  });
+
+  it('control: no -> yes -> no with the write held and a DELETE that commits: server off, marker cleared', async () => {
+    const l = ledger();
+    const withdrawRomanConsent = jest.fn(l.okWithdraw);
+    const api = makeApi({ grantRomanConsent: jest.fn(l.lostGrant), withdrawRomanConsent });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    const hold = holdMarker('setItem');
+    try {
+      await visit(r, true);
+      await visit(r, true);
+      await visit(r, true);
+      await act(async () => hold.release());
+      await waitFor(() => expect(l.server.granted).toBe(false));
+      await tick();
+      await tick();
+      expect(await pendingMarker()).toBeNull();
+      expect(l.server.withdrawals).toBeGreaterThanOrEqual(1);
+    } finally {
+      hold.release();
+      hold.spy.mockRestore();
+    }
+  });
+
+  it('control: the latest choice is yes (no -> yes, write held): the marker is cleared after the write lands', async () => {
+    const l = ledger();
+    const api = makeApi({ grantRomanConsent: jest.fn(l.lostGrant), withdrawRomanConsent: jest.fn(async () => LOST) });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    const hold = holdMarker('setItem');
+    try {
+      await visit(r, true); // no
+      await visit(r, true); // yes
+      await act(async () => hold.release());
+      await tick();
+      await tick();
+      expect(await pendingMarker()).toBeNull();
+    } finally {
+      hold.release();
+      hold.spy.mockRestore();
+    }
   });
 });
 

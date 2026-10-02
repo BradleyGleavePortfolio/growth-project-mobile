@@ -58,6 +58,7 @@ import {
 import { aiConsentApi, isLiveGrant } from '../../api/aiConsentApi';
 import {
   clearAiWithdrawalPending,
+  runAiMarkerStep,
   grantRomanWithRetry,
   markAiWithdrawalPending,
   readAiWithdrawalPending,
@@ -260,6 +261,12 @@ export default function ConsultationFlow({
   const aiPendingStamp = useRef<string | null>(null);
   /** The one in-flight marker write, shared by the toggle and the queued step (C-310-11). */
   const aiPendingMarking = useRef<Promise<string | null> | null>(null);
+  /** The explicit box 2 choice that in-flight marker write is for (B-310-8). */
+  const aiPendingMarkingSeq = useRef(0);
+  /** Counts the client's explicit box 2 choices; a marker step acts only for the latest (B-310-8). */
+  const aiChoiceSeq = useRef(0);
+  /** Counts loads (and user switches): a step from an earlier load never adopts into this one. */
+  const aiLoadEpoch = useRef(0);
   const [aiShown, setAiShown] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
@@ -269,6 +276,8 @@ export default function ConsultationFlow({
   const aiWithdrawRetryDue = useRef(false);
   /** False while nothing is known on this device and GET has not answered (C-310-7). */
   const [aiReady, setAiReady] = useState(false);
+  /** C-310-9: the wait for the saved choice ran out with nothing known; P0 says so. */
+  const [aiUnknown, setAiUnknown] = useState(false);
   const aiReadyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiHeld = useRef(false);
   const aiRequests = useRef(0);
@@ -475,11 +484,13 @@ export default function ConsultationFlow({
     aiAttempted.current = false;
     aiPendingStamp.current = null;
     aiPendingMarking.current = null;
+    aiLoadEpoch.current += 1;
     aiNoticed.current = new Set();
     aiWithdrawRetryDue.current = false;
     setAiShown(false);
     setAiUnconfirmed(false);
     setAiReady(false);
+    setAiUnknown(false);
     aiHeld.current = false;
     aiRequests.current = 0;
     aiChain.current = Promise.resolve();
@@ -503,7 +514,9 @@ export default function ConsultationFlow({
       aiAttempted.current = aiAttemptedOf(local);
       // A withdrawal that outlived the draft (or its last write) is still
       // wanted, unless the draft holds a newer choice (Sol B-310-5).
-      const pending = await readAiWithdrawalPending(userId);
+      // Read in marker order: a write or clear still in flight from an earlier
+      // screen of this app lands first (B-310-8).
+      const pending = await runAiMarkerStep(() => readAiWithdrawalPending(userId));
       if (!live()) return;
       if (pending && aiWant.current === null) {
         aiWant.current = false;
@@ -511,7 +524,16 @@ export default function ConsultationFlow({
       }
       if (pending && aiWant.current === false) aiPendingStamp.current = pending;
       // The draft's newer yes supersedes an older pending no.
-      if (pending && aiWant.current === true) void clearAiWithdrawalPending(userId);
+      if (pending && aiWant.current === true) {
+        const seq = aiChoiceSeq.current;
+        const epoch = aiLoadEpoch.current;
+        void runAiMarkerStep(async () => {
+          // Only while that yes is still the latest choice of this load.
+          if (aiLoadEpoch.current === epoch && aiChoiceSeq.current === seq && aiWant.current === true) {
+            await clearAiWithdrawalPending(userId);
+          }
+        });
+      }
       // A wanted grant waits for a save that lands box 1, except after
       // completion, which the server grants only with box 1 on file.
       const completed = !!(server?.completed && server.result);
@@ -519,7 +541,13 @@ export default function ConsultationFlow({
       showAi();
       // Box 2 is tappable at once when this device knows something (C-310-7).
       if (aiConfirmed.current !== null || aiWant.current !== null) markAiReady();
-      else aiReadyTimer.current = setTimeout(markAiReady, AI_STATUS_WAIT_MS);
+      else
+        aiReadyTimer.current = setTimeout(() => {
+          markAiReady();
+          // C-310-9: still nothing known (no draft value, no ledger answer):
+          // disclose it rather than imply an unticked box is the saved state.
+          if (aiConfirmed.current === null && aiWant.current === null) setAiUnknown(true);
+        }, AI_STATUS_WAIT_MS);
       if (aiWant.current !== null) reconcileAi(gen);
       void refreshAiFromLedger(gen);
       if (completed && server?.result) {
@@ -569,6 +597,7 @@ export default function ConsultationFlow({
   /** Box 2 on P0: the latest unconfirmed choice, else the confirmed state. */
   function showAi() {
     setAiShown(aiWant.current ?? aiConfirmed.current === true);
+    if (aiConfirmed.current !== null || aiWant.current !== null) setAiUnknown(false);
     setAiUnconfirmed(aiWant.current === false && (aiConfirmed.current === true || aiAttempted.current));
   }
 
@@ -729,7 +758,8 @@ export default function ConsultationFlow({
           aiAttempted.current = false;
           const stamp = aiPendingStamp.current;
           aiPendingStamp.current = null;
-          await clearAiWithdrawalPending(userId, stamp);
+          // Compare-and-clear in marker order: a newer marker is never removed.
+          await runAiMarkerStep(() => clearAiWithdrawalPending(userId, stamp));
           setAiConfirmed(false);
           return;
         }
@@ -781,27 +811,47 @@ export default function ConsultationFlow({
    */
   function markAiPendingOnce(): Promise<string | null> {
     if (aiPendingStamp.current) return Promise.resolve(aiPendingStamp.current);
-    if (!aiPendingMarking.current) {
-      const marking: Promise<string | null> = markAiWithdrawalPending(userId).then((stamp) => {
-        if (aiPendingMarking.current === marking) aiPendingMarking.current = null;
-        if (stamp && aiWant.current === false && !aiPendingStamp.current) aiPendingStamp.current = stamp;
-        return aiPendingStamp.current;
-      });
-      aiPendingMarking.current = marking;
-    }
-    return aiPendingMarking.current;
+    const seq = aiChoiceSeq.current;
+    const epoch = aiLoadEpoch.current;
+    if (aiPendingMarking.current && aiPendingMarkingSeq.current === seq) return aiPendingMarking.current;
+    const uid = userId;
+    const marking: Promise<string | null> = runAiMarkerStep(async () => {
+      const sameLoad = aiLoadEpoch.current === epoch;
+      // B-310-8: a newer yes of this load took over; its clear follows in
+      // marker order, so writing now would only be removed again.
+      if (sameLoad && aiChoiceSeq.current !== seq && aiWant.current !== false) return null;
+      // A marker for the latest no is already on disk.
+      if (sameLoad && aiPendingStamp.current) return aiPendingStamp.current;
+      const stamp = await markAiWithdrawalPending(uid);
+      if (stamp && aiLoadEpoch.current === epoch && aiWant.current === false && !aiPendingStamp.current) {
+        aiPendingStamp.current = stamp;
+      }
+      return aiLoadEpoch.current === epoch ? aiPendingStamp.current : stamp;
+    }).finally(() => {
+      if (aiPendingMarking.current === marking) aiPendingMarking.current = null;
+    });
+    aiPendingMarking.current = marking;
+    aiPendingMarkingSeq.current = seq;
+    return marking;
   }
 
   const recordAiChoice = useCallback(
     (choice: boolean | null) => {
       if (choice === null) return;
       aiHeld.current = choice;
+      const seq = ++aiChoiceSeq.current;
       if (choice) {
-        // A newer yes supersedes any withdrawal still pending from earlier;
-        // cleared after a marker write still in flight, so it cannot land later.
+        // A newer yes supersedes any withdrawal still pending from earlier.
+        // The clear runs in marker order, after any write still in flight,
+        // and only while this yes is still the latest choice (B-310-8): a
+        // newer no keeps its durable marker until its DELETE is confirmed.
         aiPendingStamp.current = null;
-        const marking = aiPendingMarking.current ?? Promise.resolve(null);
-        void marking.then(() => clearAiWithdrawalPending(userId));
+        const epoch = aiLoadEpoch.current;
+        const uid = userId;
+        void runAiMarkerStep(async () => {
+          if (aiLoadEpoch.current === epoch && aiChoiceSeq.current !== seq) return;
+          await clearAiWithdrawalPending(uid);
+        });
       } else if (aiConfirmed.current === true || aiAttempted.current) {
         // Something may be on file: keep the "no" beyond this draft at once,
         // so finishing or closing the app before the DELETE runs cannot lose it.
@@ -1122,7 +1172,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown }}
       />
     );
   }
