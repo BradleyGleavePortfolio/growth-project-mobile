@@ -1,0 +1,294 @@
+{
+  "$schema_note": "S-ENVTRUTH (2026-10-01). Every EXPO_PUBLIC_* name the app reads. kind: required (release build must set it), optional (has a working default), flag (boolean feature/mock switch). default: what the code does when unset. Enforced by scripts/__tests__/expectedEnv.test.js. easSideCredentials lists credentials that live in EAS (not env vars, never read by app code) so they are not mistaken for missing keys.",
+  "vars": {
+    "EXPO_PUBLIC_AI_EXECUTION_MOCK": {
+      "kind": "flag",
+      "default": "off (ignored outside __DEV__)",
+      "reason": "Coach AI execution mock mode."
+    },
+    "EXPO_PUBLIC_API_URL": {
+      "kind": "required",
+      "default": "release: none, build throws; dev: https://backend-spring-lake-3890.fly.dev/api",
+      "reason": "Backend API base URL."
+    },
+    "EXPO_PUBLIC_CRISP_WEBSITE_ID": {
+      "kind": "optional",
+      "default": "'' → support chat not configured",
+      "reason": "Crisp website id for the support inbox."
+    },
+    "EXPO_PUBLIC_ENVIRONMENT": {
+      "kind": "optional",
+      "default": "'production'",
+      "reason": "Sentry environment tag."
+    },
+    "EXPO_PUBLIC_FEATURE_BLOODWORK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_CHECK_IN_SUMMARY": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_CLIENT_PATH_SUMMARY": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_COACH_BRIEF_DRAFT": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_FOOD_LOG_EXPLAIN": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_GATEWAY": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_AI_SOURCE_BADGE": {
+      "kind": "flag",
+      "default": "on",
+      "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COACH_BRIEF": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COACH_COMMUNITY": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_ACKS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_DM": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_EVENTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_HALL": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_SEARCH": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_TAB": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_DELIVERABLES": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_EXTENSION_IMPORT": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_IMPORT_REVIEW": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": {
+      "kind": "flag",
+      "default": "off in dev, on in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_CHAT": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF": {
+      "kind": "flag",
+      "default": "on in dev, off in release",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_HELP_BASE_URL": {
+      "kind": "optional",
+      "default": "https://app.trygrowthproject.com/help",
+      "reason": "Help centre base URL."
+    },
+    "EXPO_PUBLIC_NOTIFICATIONS_MOCK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_POSTHOG_API_KEY": {
+      "kind": "optional",
+      "default": "'' → analytics provider no-ops",
+      "reason": "PostHog key (canonical name, App.tsx provider)."
+    },
+    "EXPO_PUBLIC_POSTHOG_HOST": {
+      "kind": "optional",
+      "default": "https://app.posthog.com (App.tsx) / https://us.i.posthog.com (src/lib/analytics.ts)",
+      "reason": "PostHog host."
+    },
+    "EXPO_PUBLIC_POSTHOG_KEY": {
+      "kind": "optional",
+      "default": "'' → analytics no-ops",
+      "reason": "PostHog key, legacy alias (App.tsx fallback; src/lib/analytics.ts primary)."
+    },
+    "EXPO_PUBLIC_SCREENSHOT_MODE": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Store-screenshot capture mode (metro.config.js + src/screenshots/mode.ts). Never set in release profiles."
+    },
+    "EXPO_PUBLIC_SENTRY_DSN": {
+      "kind": "optional",
+      "default": "falls back to expo extra.sentryDsn; neither → Sentry off",
+      "reason": "Sentry DSN."
+    },
+    "EXPO_PUBLIC_STRIPE_PK": {
+      "kind": "optional",
+      "default": "'' → falls through to fail closed",
+      "reason": "Legacy alias of EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY, read only as a fallback."
+    },
+    "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": {
+      "kind": "required",
+      "default": "'' → package checkout fails closed",
+      "reason": "Stripe publishable key for the in-app PaymentSheet (the name EAS stores)."
+    },
+    "EXPO_PUBLIC_SUPABASE_ANON_KEY": {
+      "kind": "required",
+      "default": "none; release build throws at import (src/config/env.ts)",
+      "reason": "Supabase anon key (client-safe)."
+    },
+    "EXPO_PUBLIC_SUPABASE_URL": {
+      "kind": "required",
+      "default": "none; release build throws at import (src/config/env.ts)",
+      "reason": "Supabase project URL."
+    },
+    "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Command center mock data; eas.json sets \"false\" in every profile."
+    },
+    "EXPO_PUBLIC_WAVE11_MOCK": {
+      "kind": "flag",
+      "default": "off (and ignored when NODE_ENV=production)",
+      "reason": "Wave 11 adapter mock data."
+    }
+  },
+  "easSideCredentials": [
+    {
+      "name": "FCM V1 service account key (Android push)",
+      "kind": "eas-credential",
+      "where": "EAS credentials for the Android app (eas credentials -> Android -> Google Service Account Key for Push Notifications (FCM V1))",
+      "firebaseProject": "project-2c2ffa46-a1eb-4f5c-b68",
+      "reason": "Android push delivery depends on it (operator 2026-10-01; mobile PR #318 swaps google-services.json to this Firebase project). Not an environment variable: nothing in app code reads it."
+    }
+  ]
+}
