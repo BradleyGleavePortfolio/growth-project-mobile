@@ -243,7 +243,7 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
   });
 
   it.each([
-    [null, /couldn't reach The Growth Project, so Oura is still connected/, true],
+    [null, /The Growth Project couldn't be reached, so Oura is still connected/, true],
     [429, /Too many tries in a short time, so Oura is still connected/, true],
     [401, /Your session has ended, so Oura is still connected/, false],
     [403, /client account only, so nothing changed/, false],
@@ -281,7 +281,8 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
     await openConfirm();
     await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
     expect(screen.getByText(/Reference req12345\./)).toBeTruthy();
-    expect(screen.getByText(/hello@thegrowthproject.app/)).toBeTruthy();
+    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.queryByText(/problem on our side/)).toBeNull();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
     expect(mockReportUnexpected).toHaveBeenCalledWith(
       'wearables.disconnect',

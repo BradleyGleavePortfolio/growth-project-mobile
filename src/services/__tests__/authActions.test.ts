@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signOut, SIGN_OUT_KEYS, clearUserScopedKeys } from '../authActions';
 import { authEvents } from '../../utils/authEvents';
+import { createSessionFence, OnDeviceSessionChangedError } from '../health/sessionFence';
 import { prefsStorage, cacheStorage } from '../../storage/mmkv';
 import {
   AUTOSAVE_MIRROR_KEY_PREFIX,
@@ -156,6 +157,21 @@ describe('signOut', () => {
     await signOut();
     for (const k of keys) expect(await AsyncStorage.getItem(k)).toBeNull();
     expect(await AsyncStorage.getItem('wearables_other')).toBe('stays');
+  });
+
+  // S-WEAR-3 (Sol B-317-7): reads stop the instant the person logs out, not
+  // when the final `logout` event fires after the network and storage work.
+  it('stops every on-device health run synchronously, before its first await', async () => {
+    const fence = createSessionFence('user-A', async () => 'user-A');
+    const logout = jest.fn();
+    authEvents.on('logout', logout);
+    const pending = signOut();
+    // No await yet: the fence already refuses, and logout has not fired.
+    expect(() => fence.throwIfStopped()).toThrow(OnDeviceSessionChangedError);
+    expect(logout).not.toHaveBeenCalled();
+    await pending;
+    expect(logout).toHaveBeenCalledTimes(1);
+    authEvents.off('logout', logout);
   });
 
   // R15 — Every variant of pending_invite_code is user-scoped (or

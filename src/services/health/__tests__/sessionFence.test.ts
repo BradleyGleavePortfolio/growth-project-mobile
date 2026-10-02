@@ -12,7 +12,9 @@ import {
   OnDeviceSessionChangedError,
   beginSessionFence,
   createSessionFence,
+  isOnDeviceStop,
   readSignedInUserId,
+  stopOnDeviceHealthWork,
 } from '../sessionFence';
 
 const mockRead = readUserCache as jest.Mock;
@@ -87,5 +89,47 @@ describe('beginSessionFence', () => {
     const err = await fence?.assertCurrent().catch((e: unknown) => e);
     expect(err).toBeInstanceOf(OnDeviceSessionChangedError);
     expect((err as OnDeviceSessionChangedError).reason).toBe('cancelled');
+  });
+});
+
+describe('S-WEAR-3 (Sol B-317-7): synchronous stop', () => {
+  it('throwIfStopped passes while nothing happened', () => {
+    const fence = createSessionFence('user-a', async () => 'user-a');
+    expect(() => fence.throwIfStopped()).not.toThrow();
+  });
+
+  it('stopOnDeviceHealthWork stops every open fence at once, synchronously', async () => {
+    const a = createSessionFence('user-a', async () => 'user-a');
+    const b = await beginSessionFence(async () => 'user-a');
+    stopOnDeviceHealthWork();
+    expect(() => a.throwIfStopped()).toThrow(OnDeviceSessionChangedError);
+    expect(() => b?.throwIfStopped()).toThrow(OnDeviceSessionChangedError);
+    await expect(a.assertCurrent()).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    // A fence taken afterwards (the next sign-in) works.
+    expect(() => createSessionFence('user-a', async () => 'user-a').throwIfStopped()).not.toThrow();
+  });
+
+  it('throwIfStopped throws after an auth event and after cancel', () => {
+    const fence = createSessionFence('user-a', async () => 'user-a');
+    authEvents.emit('logout');
+    expect(() => fence.throwIfStopped()).toThrow(OnDeviceSessionChangedError);
+    const other = createSessionFence('user-a', async () => 'user-a');
+    other.cancel();
+    let err: unknown;
+    try {
+      other.throwIfStopped();
+    } catch (e) {
+      err = e;
+    }
+    expect(isOnDeviceStop(err)).toBe(true);
+    expect((err as OnDeviceSessionChangedError).reason).toBe('cancelled');
+  });
+
+  it('a stop during beginSessionFence identity read returns no fence', async () => {
+    const fence = await beginSessionFence(async () => {
+      stopOnDeviceHealthWork();
+      return 'user-a';
+    });
+    expect(fence).toBeNull();
   });
 });

@@ -31,7 +31,17 @@ import {
 } from '@react-navigation/native';
 import { colors, radius, spacing, typography } from '../../../theme/tokens';
 import { configFor } from '../../../api/wearablesConnectionsApi';
-import { connectFailureMessage, notSyncingHereCopy } from './onDeviceCopy';
+import {
+  connectFailureMessage,
+  ctaLabelFor,
+  notSyncingHereCopy,
+  type OnDeviceMessage,
+} from './onDeviceCopy';
+import {
+  openHealthConnectPermissions,
+  openHealthConnectStore,
+} from '../../../services/health/onDeviceConnect';
+import { signOut } from '../../../services/authActions';
 import type { WearableMetricBucket } from '../../../api/wearablesSamplesApi';
 import {
   useInvalidateWearableConnections,
@@ -94,7 +104,7 @@ export default function WearablesShell() {
    */
   const [notice, setNotice] = useState<
     | { kind: 'notSyncing' }
-    | { kind: 'retry'; text: string; canRetry: boolean }
+    | { kind: 'retry'; text: string; action: OnDeviceMessage['action']; cta?: string }
     | null
   >(null);
   const deviceName = deviceSource != null ? configFor(deviceSource).displayName : '';
@@ -110,7 +120,7 @@ export default function WearablesShell() {
             setNotice({
               kind: 'retry',
               text: `Some of your ${deviceName} data didn't come in this time. Tap Try again, or it continues the next time you open Health.`,
-              canRetry: true,
+              action: 'resume',
             });
           }
         } else if (outcome.kind === 'not_authorized') {
@@ -121,7 +131,7 @@ export default function WearablesShell() {
         logger.warn('[wearables] on-device refresh failed', err);
         const message = connectFailureMessage(err, deviceName);
         if (message != null) {
-          setNotice({ kind: 'retry', text: message.text, canRetry: message.action !== 'none' });
+          setNotice({ kind: 'retry', text: message.text, action: message.action, cta: message.cta });
         }
       });
   }, [
@@ -139,6 +149,37 @@ export default function WearablesShell() {
   const goToConnections = useCallback(() => {
     navigation.navigate('Connections');
   }, [navigation]);
+
+  /**
+   * S-WEAR-3: the notice button does what its message says: Try again
+   * re-runs the refresh, Log in again ends the expired session, Open Health
+   * Connect / Get Health Connect open the place the copy names.
+   */
+  const runNoticeAction = useCallback(
+    (action: OnDeviceMessage['action']) => {
+      if (action === 'login') {
+        void signOut();
+        return;
+      }
+      if (action === 'open_settings') {
+        void openHealthConnectPermissions();
+        return;
+      }
+      if (action === 'open_store') {
+        void openHealthConnectStore();
+        return;
+      }
+      if (action === 'connect') {
+        // Connect has to run again (for example, the connection is no
+        // longer linked to this account): open Connections.
+        goToConnections();
+        return;
+      }
+      retryRefresh();
+    },
+    [retryRefresh, goToConnections],
+  );
+
 
   const handleSwitch = useCallback(
     (next: WearableMetricBucket) => {
@@ -211,17 +252,33 @@ export default function WearablesShell() {
           <Text style={styles.noticeText}>
             {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
           </Text>
-          {(notice.kind === 'notSyncing' || notice.canRetry) && (
+          {(notice.kind === 'notSyncing' || notice.action !== 'none') && (
           <Pressable
             style={styles.noticeAction}
-            onPress={notice.kind === 'notSyncing' ? goToConnections : retryRefresh}
+            onPress={
+              notice.kind === 'notSyncing'
+                ? goToConnections
+                : () => runNoticeAction(notice.action)
+            }
             accessibilityRole="button"
             accessibilityLabel={
-              notice.kind === 'notSyncing' ? `Reconnect ${deviceName}` : `Try again to sync ${deviceName}`
+              notice.kind === 'notSyncing'
+                ? `Reconnect ${deviceName}`
+                : notice.action === 'resume'
+                  ? `Try again to sync ${deviceName}`
+                  : notice.action === 'connect'
+                    ? `Reconnect ${deviceName}`
+                    : ctaLabelFor({ action: notice.action, cta: notice.cta })
             }
           >
             <Text style={styles.noticeActionText}>
-              {notice.kind === 'notSyncing' ? 'Reconnect' : 'Try again'}
+              {notice.kind === 'notSyncing'
+                ? 'Reconnect'
+                : notice.action === 'resume'
+                  ? 'Try again'
+                  : notice.action === 'connect'
+                    ? 'Reconnect'
+                    : ctaLabelFor({ action: notice.action, cta: notice.cta })}
             </Text>
           </Pressable>
           )}

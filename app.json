@@ -100,9 +100,7 @@
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.READ_BODY_FAT",
         "android.permission.health.READ_VO2_MAX",
-        "android.permission.health.READ_BLOOD_PRESSURE",
-        "android.permission.ACTIVITY_RECOGNITION",
-        "com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA"
+        "android.permission.health.READ_BLOOD_PRESSURE"
       ],
       "googleServicesFile": "./google-services.json"
     },

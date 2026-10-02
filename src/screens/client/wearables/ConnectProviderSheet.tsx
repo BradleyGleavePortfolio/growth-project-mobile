@@ -51,7 +51,12 @@ import {
   useInvalidateWearableConnections,
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
-import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
+import {
+  connectOnDeviceProvider,
+  openHealthConnectPermissions,
+  openHealthConnectStore,
+} from '../../../services/health/onDeviceConnect';
+import { signOut } from '../../../services/authActions';
 import {
   beginOnDeviceConnect,
   connectOnDevice,
@@ -62,9 +67,16 @@ import {
 } from '../../../services/health/onDeviceSync';
 import type { SessionFence } from '../../../services/health/sessionFence';
 import {
+  cloudConnectFailureMessage,
+  cloudSessionLockedMessage,
   connectFailureMessage,
+  ctaLabelFor,
+  emptyImportMessage,
   INGEST_DISABLED_COPY,
   partialImportMessage,
+  permissionOutcomeMessage,
+  returnFromSettingsMessage,
+  settingsDidNotOpenMessage,
   type OnDeviceMessage,
 } from './onDeviceCopy';
 import {
@@ -116,6 +128,7 @@ export default function ConnectProviderSheet({
    * button is hidden and the person closes the sheet).
    */
   const [retry, setRetry] = useState<OnDeviceMessage['action']>('connect');
+  const [ctaOverride, setCtaOverride] = useState<string | undefined>(undefined);
   const [resumeTarget, setResumeTarget] = useState<{
     source: OnDeviceSource;
     connectionId: string;
@@ -132,21 +145,33 @@ export default function ConnectProviderSheet({
    * whoever is signed in by then.
    */
   const attemptRef = useRef<SessionFence | null>(null);
+  /**
+   * S-WEAR-3 (Sol B-317-6): synchronous attempt epoch. Bumped on every
+   * Continue tap and, synchronously, on close, provider change and unmount.
+   * A Connect run captures it BEFORE its first await and goes on only while
+   * it is unchanged, so closing the sheet while the signed-in person is
+   * still being read (before any fence exists) stops the run too: no
+   * permission prompt, registration, local grant or phone read.
+   */
+  const epochRef = useRef(0);
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+      epochRef.current += 1;
       attemptRef.current?.cancel();
       attemptRef.current = null;
     };
   }, []);
   useEffect(() => {
     // Closing the sheet (or switching provider) ends the run and its state.
+    epochRef.current += 1;
     attemptRef.current?.cancel();
     attemptRef.current = null;
     setError(null);
     setRetry('connect');
+    setCtaOverride(undefined);
     setResumeTarget(null);
     setImporting(false);
   }, [visible, provider]);
@@ -160,18 +185,30 @@ export default function ConnectProviderSheet({
     if (!mountedRef.current || message == null) return;
     setError(message.text);
     setRetry(message.action);
+    setCtaOverride(message.cta);
   }, []);
 
   const handleCloudConnect = useCallback(
-    async (target: WearableProvider) => {
-      const { authorizationUrl } = await startOauth.mutateAsync(target);
-      // Open the provider authorization URL in an in-app auth session. The
-      // server callback completes the exchange; the session closes when the
-      // server redirects back to RETURN_URL (or the user dismisses it).
-      const result = await WebBrowser.openAuthSessionAsync(
-        authorizationUrl,
-        RETURN_URL,
-      );
+    async (target: WearableProvider, epoch: number) => {
+      const name = configFor(target).displayName;
+      const current = () => mountedRef.current && epochRef.current === epoch;
+      let result: WebBrowser.WebBrowserAuthSessionResult;
+      try {
+        const { authorizationUrl } = await startOauth.mutateAsync(target);
+        if (!current()) return; // sheet closed while the link was minted
+        // Open the provider authorization URL in an in-app auth session. The
+        // server callback completes the exchange; the session closes when the
+        // server redirects back to RETURN_URL (or the user dismisses it).
+        result = await WebBrowser.openAuthSessionAsync(authorizationUrl, RETURN_URL);
+      } catch (err) {
+        // Sol B-317-8: map the status and machine code, never one generic line.
+        if (current()) showMessage(cloudConnectFailureMessage(err, name));
+        return;
+      }
+      if (result.type === 'locked') {
+        if (current()) showMessage(cloudSessionLockedMessage(name));
+        return;
+      }
       // Regardless of success/dismiss, re-read the authoritative connection
       // list — the server may have completed the connection even if the
       // in-app session reported a dismiss (e.g. redirect handled out-of-band).
@@ -193,7 +230,7 @@ export default function ConnectProviderSheet({
    * and a working Continue import / Try again action (Sol B-317-2).
    */
   const handleImportOutcome = useCallback(
-    (outcome: OnDeviceImportOutcome, name: string) => {
+    (outcome: OnDeviceImportOutcome, name: string, target: WearableProvider, firstRun: boolean) => {
       invalidate();
       if (!mountedRef.current) return;
       if (outcome.kind === 'disabled') {
@@ -220,6 +257,13 @@ export default function ConnectProviderSheet({
       }
       setResumeTarget(null);
       emitTutorialSignal('wearable_connected');
+      if (firstRun && outcome.postedCount === 0) {
+        // Connected, nothing to bring in (S-WEAR-3): say so and where to check,
+        // instead of closing as if data had arrived.
+        onConnected?.();
+        showMessage(emptyImportMessage(target, name));
+        return;
+      }
       onConnected?.();
       onClose();
     },
@@ -227,10 +271,15 @@ export default function ConnectProviderSheet({
   );
 
   const runImport = useCallback(
-    async (name: string, run: () => Promise<OnDeviceImportOutcome>) => {
+    async (
+      name: string,
+      target: WearableProvider,
+      firstRun: boolean,
+      run: () => Promise<OnDeviceImportOutcome>,
+    ) => {
       if (mountedRef.current) setImporting(true);
       try {
-        handleImportOutcome(await run(), name);
+        handleImportOutcome(await run(), name, target, firstRun);
       } catch (err) {
         invalidate();
         showMessage(connectFailureMessage(err, name));
@@ -242,21 +291,37 @@ export default function ConnectProviderSheet({
   );
 
   const handleOnDeviceConnect = useCallback(
-    async (target: WearableProvider) => {
+    async (target: WearableProvider, epoch: number) => {
       const name = configFor(target).displayName;
+      // Sol B-317-6: the attempt is live only while the sheet is mounted,
+      // visible and showing this provider (the epoch moves on any of those).
+      const current = () => mountedRef.current && epochRef.current === epoch;
       // Bind the run to the person who tapped, BEFORE the native prompt.
       let fence: SessionFence;
       try {
         fence = await beginOnDeviceConnect();
       } catch (err) {
-        showMessage(connectFailureMessage(err, name));
+        if (current()) showMessage(connectFailureMessage(err, name));
+        return;
+      }
+      if (!current()) {
+        // Closed while the signed-in person was being read: discard the late
+        // fence; nothing is prompted, registered, recorded or read.
+        fence.cancel();
         return;
       }
       attemptRef.current?.cancel();
       attemptRef.current = fence;
+      try {
+        // Sign-out may already have begun (it stops every fence at once).
+        fence.throwIfStopped();
+      } catch (err) {
+        showMessage(connectFailureMessage(err, name));
+        return;
+      }
 
       const outcome = await connectOnDeviceProvider(target);
-      if (attemptRef.current !== fence) return; // sheet closed meanwhile
+      if (attemptRef.current !== fence || !current()) return; // sheet closed meanwhile
       switch (outcome) {
         case 'disabled':
           showMessage({ text: HEALTH_CONNECT_DISABLED_MESSAGE, action: 'none' });
@@ -268,30 +333,27 @@ export default function ConnectProviderSheet({
           // real data. connectOnDevice re-checks the fence before every step.
           const source = deviceSourceFor(target);
           if (source == null) {
-            showMessage({ text: `${name} can't be connected on this device.`, action: 'none' });
+            showMessage(permissionOutcomeMessage('unsupported', target, name));
             return;
           }
-          await runImport(name, () => connectOnDevice(source, fence));
+          await runImport(name, target, true, () => connectOnDevice(source, fence));
           return;
         }
-        case 'denied':
-          showMessage({
-            text: `${name} access wasn't granted. Open ${name} permissions and allow access, then tap Continue.`,
-            action: 'connect',
-          });
-          return;
-        case 'unavailable':
-          showMessage({
-            text: `${name} isn't set up on this device yet. We've opened its settings. Finish setup there, then tap Continue.`,
-            action: 'connect',
-          });
-          return;
-        case 'unsupported':
-          showMessage({ text: `${name} can't be connected on this device.`, action: 'none' });
-          return;
+        default:
+          showMessage(permissionOutcomeMessage(outcome, target, name));
       }
     },
     [runImport, showMessage],
+  );
+
+  /** Open Health Connect permissions or its Play Store page (S-WEAR-3). */
+  const handleOpenExternal = useCallback(
+    async (kind: 'settings' | 'store', name: string) => {
+      const opened =
+        kind === 'settings' ? await openHealthConnectPermissions() : await openHealthConnectStore();
+      showMessage(opened ? returnFromSettingsMessage(name) : settingsDidNotOpenMessage(kind, name));
+    },
+    [showMessage],
   );
 
   const handleResume = useCallback(async () => {
@@ -308,7 +370,7 @@ export default function ConnectProviderSheet({
     setError(null);
     setRequestingOnDevice(true);
     try {
-      await runImport(name, () =>
+      await runImport(name, provider, false, () =>
         resumeOnDeviceImport(resumeTarget.source, resumeTarget.connectionId, fence),
       );
     } finally {
@@ -318,6 +380,7 @@ export default function ConnectProviderSheet({
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
+    const name = configFor(provider).displayName;
     if (isHealthConnectProviderDisabled(provider)) {
       setError(HEALTH_CONNECT_DISABLED_MESSAGE);
       setRetry('none');
@@ -327,36 +390,51 @@ export default function ConnectProviderSheet({
       await handleResume();
       return;
     }
+    if (retry === 'login') {
+      // The session ended: sign out cleanly so the person lands on Log in.
+      onClose();
+      await signOut();
+      return;
+    }
+    if (retry === 'open_settings' || retry === 'open_store') {
+      await handleOpenExternal(retry === 'open_settings' ? 'settings' : 'store', name);
+      return;
+    }
+    // A new attempt: bump the epoch synchronously, before any await.
+    epochRef.current += 1;
+    const epoch = epochRef.current;
     setError(null);
     setRetry('connect');
+    setCtaOverride(undefined);
     setResumeTarget(null);
 
+    setRequestingOnDevice(true);
     try {
       if (isOnDeviceProvider(provider)) {
-        setRequestingOnDevice(true);
-        await handleOnDeviceConnect(provider);
+        await handleOnDeviceConnect(provider, epoch);
       } else {
-        await handleCloudConnect(provider);
-      }
-    } catch {
-      // Cloud OAuth start failed (on-device failures are mapped above).
-      // Action-oriented copy; no token/secret material is ever surfaced (#12).
-      if (mountedRef.current) {
-        setError(
-          "We couldn't start the connection. Check your internet connection, then tap Continue.",
-        );
+        await handleCloudConnect(provider, epoch);
       }
     } finally {
       if (mountedRef.current) setRequestingOnDevice(false);
     }
-  }, [provider, retry, resumeTarget, handleResume, handleOnDeviceConnect, handleCloudConnect]);
+  }, [
+    provider,
+    retry,
+    resumeTarget,
+    handleResume,
+    handleOpenExternal,
+    handleOnDeviceConnect,
+    handleCloudConnect,
+    onClose,
+  ]);
 
   const ctaLabel =
     retry === 'resume' && resumeTarget != null
       ? resumeTarget.partial
         ? 'Continue import'
         : 'Try again'
-      : 'Continue';
+      : ctaLabelFor({ action: retry, cta: ctaOverride });
   const showCta = !buildDisabled && retry !== 'none';
   const continuing = startOauth.isPending || requestingOnDevice;
 
@@ -434,7 +512,9 @@ export default function ConnectProviderSheet({
                   accessibilityLabel={
                     ctaLabel === 'Continue'
                       ? `Continue connecting ${config.displayName}`
-                      : `${ctaLabel} for ${config.displayName}`
+                      : ctaLabel === 'Continue import' || ctaLabel === 'Try again'
+                        ? `${ctaLabel} for ${config.displayName}`
+                        : ctaLabel
                   }
                 >
                   {continuing ? (
@@ -473,9 +553,9 @@ export default function ConnectProviderSheet({
 export function onDeviceDisclosure(displayName: string): string {
   return (
     `When you continue, ${displayName} asks for permission on this phone. ` +
-    `We then bring in your last 30 days of ${displayName} data, and new data ` +
+    `The Growth Project then brings in your last 30 days of ${displayName} data, and new data ` +
     `each time you open Health, so your coach can personalize your training, ` +
-    `recovery, and check-ins.`
+    `recovery, and check-ins. Nothing is read or shared until you allow it.`
   );
 }
 

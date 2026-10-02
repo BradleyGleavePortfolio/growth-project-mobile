@@ -268,6 +268,17 @@ export interface PagedReadResult {
 }
 
 /**
+ * Stop check for a paged read (S-WEAR-3, Sol B-317-7). Structurally a
+ * {@link import('../sessionFence').SessionFence}: `assertCurrent` re-reads the
+ * signed-in person, `throwIfStopped` is the synchronous check that runs
+ * immediately before each native page request (no await in between).
+ */
+export interface PagedReadStop {
+  assertCurrent(): Promise<void>;
+  throwIfStopped(): void;
+}
+
+/**
  * Read records of a single type within `[startTime, endTime)`, following
  * `pageToken` for up to {@link MAX_READ_PAGES} pages, optionally resuming
  * from a token a previous run returned. Uses the library's `'between'`
@@ -282,6 +293,7 @@ export async function readRecordsPaged(
   recordType: HealthConnectRecordType,
   range: TimeRange,
   resumeFrom?: string,
+  stop?: PagedReadStop,
 ): Promise<PagedReadResult> {
   assertSupported();
   // The library accepts a record-type string + options; result is
@@ -300,6 +312,13 @@ export async function readRecordsPaged(
   let pageToken: string | undefined =
     typeof resumeFrom === 'string' && resumeFrom.length > 0 ? resumeFrom : undefined;
   for (let page = 0; page < MAX_READ_PAGES; page += 1) {
+    // S-WEAR-3 (Sol B-317-7): no new page starts after sign-out, an account
+    // switch or a cancelled Connect. A request already handed to the native
+    // module is not undone; its records are dropped by the caller.
+    if (stop) {
+      await stop.assertCurrent();
+      stop.throwIfStopped();
+    }
     const result = await read(recordType, {
       timeRangeFilter: {
         operator: 'between',

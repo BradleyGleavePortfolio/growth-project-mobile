@@ -19,7 +19,7 @@ import {
   type OnDeviceScope,
   type SyncProgress,
 } from '../onDeviceState';
-import { OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
+import { isOnDeviceStop, OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
 import { logger } from '../../../utils/logger';
 import {
   HealthConnectPermissionDeniedError,
@@ -162,11 +162,17 @@ export async function syncHealthConnect(
   if (fence.userId !== scope.userId) throw new OnDeviceSessionChangedError();
   await fence.assertCurrent();
 
+  // S-WEAR-3 (Sol B-317-7): the synchronous check runs immediately before
+  // every native call, so nothing new starts once sign-out has begun.
+  fence.throwIfStopped();
   await client.initialize();
 
+  fence.throwIfStopped();
   let grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
   if (grantedRecordTypes.length === 0) {
+    fence.throwIfStopped();
     await client.requestPermission();
+    fence.throwIfStopped();
     grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
   }
   if (grantedRecordTypes.length === 0) {
@@ -191,13 +197,18 @@ export async function syncHealthConnect(
   let earliest = now.getTime();
 
   for (const recordType of grantedRecordTypes) {
+    // S-WEAR-3 (Sol B-317-7): re-check before every record type, including
+    // the first one after the awaited progress read.
+    await fence.assertCurrent();
     const resume = progress.resume[recordType];
     const range = resume
       ? { startTime: resume.startTime, endTime: resume.endTime }
       : { startTime: typeWindowStart(progress, recordType, now).toISOString(), endTime: now.toISOString() };
     earliest = Math.min(earliest, Date.parse(range.startTime));
     try {
-      const read = await client.readRecordsPaged(recordType, range, resume?.pageToken);
+      const read = await client.readRecordsPaged(recordType, range, resume?.pageToken, fence);
+      // A page that was already in flight when the session stopped is dropped.
+      fence.throwIfStopped();
       byType[recordType] = read.records;
       if (read.nextPageToken) {
         next.resume[recordType] = { ...range, pageToken: read.nextPageToken };
@@ -207,6 +218,9 @@ export async function syncHealthConnect(
         next.completedThrough[recordType] = range.endTime;
       }
     } catch (err) {
+      // A stop (sign-out, account switch, cancelled Connect) ends the whole
+      // run; it is never an ordinary per-type read failure (Sol B-317-7).
+      if (isOnDeviceStop(err)) throw err;
       // Degrade per type (#50) but never count it as read: keep its progress.
       // A failed RESUME drops the token (it may have expired) so the next run
       // re-reads that type's window from its saved progress.
@@ -221,6 +235,7 @@ export async function syncHealthConnect(
     }
   }
 
+  fence.throwIfStopped();
   const ctx: NormalizeContext = { connectionId: scope.connectionId };
   const samples: NormalizedSample[] = normalizeAll(ctx, byType);
 

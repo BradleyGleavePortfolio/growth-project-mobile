@@ -65,7 +65,12 @@ const SAMPLE_READ: HealthKitReadResult = {
 
 /** A fence that always passes (the signed-in person is SCOPE's user). */
 function okFence(userId: string = SCOPE.userId): SessionFence {
-  return { userId, assertCurrent: jest.fn(async () => undefined), cancel: jest.fn() };
+  return {
+    userId,
+    assertCurrent: jest.fn(async () => undefined),
+    throwIfStopped: jest.fn(),
+    cancel: jest.fn(),
+  };
 }
 
 const OPTS = { scope: SCOPE, now: NOW, fence: okFence() };
@@ -223,6 +228,7 @@ describe('HealthKitSyncService.sync — read window', () => {
         checks += 1;
         if (checks >= 4) throw new OnDeviceSessionChangedError();
       }),
+      throwIfStopped: jest.fn(),
       cancel: jest.fn(),
     };
     const svc = new HealthKitSyncService(makeClient({ heartRate }) as never);
@@ -251,6 +257,7 @@ describe('HealthKitSyncService.sync — A-317-1 fence (round 3)', () => {
         calls += 1;
         if (calls >= 2) throw new OnDeviceSessionChangedError();
       }),
+      throwIfStopped: jest.fn(),
       cancel: jest.fn(),
     };
     const client = makeClient(SAMPLE_READ);
@@ -258,6 +265,54 @@ describe('HealthKitSyncService.sync — A-317-1 fence (round 3)', () => {
       new HealthKitSyncService(client as never).sync({ ...OPTS, fence }),
     ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
     expect(client.requestAuth).toHaveBeenCalledTimes(1);
+    expect(client.readSamples).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+});
+
+describe('HealthKitSyncService.sync — S-WEAR-3 (Sol B-317-7) sign-out stop', () => {
+  it('drops results that arrive after sign-out began: nothing normalized, sent or saved', async () => {
+    let stopped = false;
+    const fence: SessionFence = {
+      userId: SCOPE.userId,
+      assertCurrent: jest.fn(async () => {
+        if (stopped) throw new OnDeviceSessionChangedError();
+      }),
+      throwIfStopped: jest.fn(() => {
+        if (stopped) throw new OnDeviceSessionChangedError();
+      }),
+      cancel: jest.fn(),
+    };
+    const client = makeClient(SAMPLE_READ);
+    client.readSamples.mockImplementation(async () => {
+      stopped = true; // the person tapped Log out while the queries ran
+      return SAMPLE_READ;
+    });
+    await expect(
+      new HealthKitSyncService(client as never).sync({ ...OPTS, fence }),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(client.readSamples).toHaveBeenCalledTimes(1);
+    expect(mockPost).not.toHaveBeenCalled();
+    expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
+  });
+
+  it('starts no native query when sign-out began during the permission sheet', async () => {
+    let stopped = false;
+    const fence: SessionFence = {
+      userId: SCOPE.userId,
+      assertCurrent: jest.fn(async () => undefined),
+      throwIfStopped: jest.fn(() => {
+        if (stopped) throw new OnDeviceSessionChangedError();
+      }),
+      cancel: jest.fn(),
+    };
+    const client = makeClient(SAMPLE_READ);
+    client.requestAuth.mockImplementation(async () => {
+      stopped = true;
+    });
+    await expect(
+      new HealthKitSyncService(client as never).sync({ ...OPTS, fence }),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
     expect(client.readSamples).not.toHaveBeenCalled();
     expect(mockPost).not.toHaveBeenCalled();
   });

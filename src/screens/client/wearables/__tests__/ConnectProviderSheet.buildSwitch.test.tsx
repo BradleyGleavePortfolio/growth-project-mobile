@@ -32,6 +32,7 @@ jest.mock('../../../../services/health/onDeviceSync', () => {
     beginOnDeviceConnect: async () => ({
       userId: 'u1',
       assertCurrent: async () => undefined,
+      throwIfStopped: () => undefined,
       cancel: () => undefined,
     }),
     connectOnDevice: (...args: unknown[]) => mockImport(...args),

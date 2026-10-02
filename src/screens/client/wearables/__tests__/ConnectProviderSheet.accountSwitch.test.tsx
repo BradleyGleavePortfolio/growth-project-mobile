@@ -38,12 +38,22 @@ const mockPrompt = jest.fn(
 );
 jest.mock('../../../../services/health/onDeviceConnect', () => ({
   connectOnDeviceProvider: () => mockPrompt(),
+  openHealthConnectPermissions: jest.fn(),
+  openHealthConnectStore: jest.fn(),
 }));
 
-// Who the identity cache says is signed in right now.
+jest.mock('../../../../services/authActions', () => ({ signOut: jest.fn() }));
+
+// Who the identity cache says is signed in right now. With mockDeferIdentity
+// the read waits until the test releases it (Sol B-317-6).
 let mockCurrentUser: string | null = 'user-a';
+let mockDeferIdentity = false;
+const mockIdentityWaiters: Array<() => void> = [];
 jest.mock('../../../../lib/userCache', () => ({
-  readUserCache: jest.fn(async () => (mockCurrentUser ? { id: mockCurrentUser } : null)),
+  readUserCache: jest.fn(async () => {
+    if (mockDeferIdentity) await new Promise<void>((r) => mockIdentityWaiters.push(r));
+    return mockCurrentUser ? { id: mockCurrentUser } : null;
+  }),
 }));
 
 // Registration would succeed for whoever's JWT is attached (B after a switch).
@@ -95,6 +105,8 @@ function registered(userId: string) {
 beforeEach(async () => {
   await AsyncStorage.clear();
   mockCurrentUser = 'user-a';
+  mockDeferIdentity = false;
+  mockIdentityWaiters.length = 0;
   mockPrompt.mockClear();
   mockRegister.mockReset();
   mockRegister.mockImplementation(async () => registered(mockCurrentUser ?? 'nobody'));
@@ -177,5 +189,63 @@ describe('A-317-1: a session change while the permission prompt is open', () => 
       connectionId: 'conn-user-a',
       source: 'APPLE_HEALTHKIT',
     });
+  });
+});
+
+/**
+ * Sol B-317-6 (AUD-SOL-5): closing, unmounting or switching provider while
+ * the identity read begun by Continue is still pending. Before the fix the
+ * late continuation created and installed a fence anyway and went on to the
+ * permission prompt, registration, local grant and phone sync for the
+ * original person. Now: zero prompt, registration, grant and phone read.
+ */
+describe('B-317-6: cancelling before the fence exists', () => {
+  it.each(['hide', 'unmount', 'provider change'])(
+    '%s while the signed-in person is being read: nothing is prompted, registered, recorded or read',
+    async (how) => {
+      mockDeferIdentity = true;
+      const onClose = jest.fn();
+      const view = await render(
+        <ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />,
+      );
+      const pressed = Promise.resolve(
+        fireEvent.press(screen.getByLabelText('Continue connecting Apple Health')),
+      );
+      await waitFor(() => expect(mockIdentityWaiters.length).toBe(1));
+
+      if (how === 'hide') {
+        await view.rerender(
+          <ConnectProviderSheet provider="APPLE_HEALTHKIT" visible={false} onClose={onClose} />,
+        );
+      } else if (how === 'unmount') {
+        await view.unmount();
+      } else {
+        await view.rerender(<ConnectProviderSheet provider="OURA" visible onClose={onClose} />);
+      }
+
+      // The same person, still signed in, with access that would be granted.
+      mockDeferIdentity = false;
+      mockIdentityWaiters.splice(0).forEach((release) => release());
+      await pressed;
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(mockPrompt).not.toHaveBeenCalled();
+      await expectNothingHappened();
+    },
+  );
+
+  it('control: with the sheet left open, the same deferred read goes on to the prompt', async () => {
+    mockDeferIdentity = true;
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={jest.fn()} />);
+    const pressed = Promise.resolve(
+      fireEvent.press(screen.getByLabelText('Continue connecting Apple Health')),
+    );
+    await waitFor(() => expect(mockIdentityWaiters.length).toBe(1));
+    mockDeferIdentity = false;
+    mockIdentityWaiters.splice(0).forEach((release) => release());
+    await waitFor(() => expect(mockPrompt).toHaveBeenCalledTimes(1));
+    mockResolvePrompt('granted');
+    await pressed;
+    await waitFor(() => expect(mockHealthKitSync).toHaveBeenCalledTimes(1));
   });
 });

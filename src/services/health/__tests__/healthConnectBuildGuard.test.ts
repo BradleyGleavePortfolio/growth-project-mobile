@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 jest.mock('expo-constants', () => ({
   __esModule: true,
@@ -28,10 +27,8 @@ import {
 import { connectOnDeviceProvider } from '../onDeviceConnect';
 import * as hc from '../healthConnect/healthConnectClient';
 import { syncHealthConnect } from '../healthConnect/healthConnectSyncService';
-import * as samsung from '../samsungHealth/samsungHealthClient';
 
 const originalOS = Platform.OS;
-const storageRead = jest.spyOn(AsyncStorage, 'getItem');
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
 }
@@ -97,30 +94,20 @@ test('every HC read/permission entry point rejects before the unlinked native mo
     () =>
       syncHealthConnect(
         { userId: 'u1', connectionId: 'c1', source: 'HEALTH_CONNECT' },
-        { fence: { userId: 'u1', assertCurrent: async () => undefined, cancel: () => undefined } },
+        {
+          fence: {
+            userId: 'u1',
+            assertCurrent: async () => undefined,
+            throwIfStopped: () => undefined,
+            cancel: () => undefined,
+          },
+        },
       ),
   ]) {
     await expect(call()).rejects.toBeInstanceOf(HealthConnectDisabledError);
   }
   expect(mockNativeEvaluation).not.toHaveBeenCalled();
   expect(mockPost).not.toHaveBeenCalled();
-});
-
-test('every Samsung bridge/read entry point is also guarded', async () => {
-  expect(() => samsung.getBridge()).toThrow(HealthConnectDisabledError);
-  for (const call of [
-    () => samsung.initialize(),
-    () => samsung.getGrantedRecordTypes(),
-    () =>
-      samsung.readRecords('Steps', {
-        timeRangeFilter: { operator: 'between', startTime: 'a', endTime: 'b' },
-      }),
-  ]) {
-    await expect(call()).rejects.toBeInstanceOf(HealthConnectDisabledError);
-  }
-  expect(mockNativeEvaluation).not.toHaveBeenCalled();
-  expect(mockPost).not.toHaveBeenCalled();
-  expect(storageRead).not.toHaveBeenCalled();
 });
 
 test('ON metadata enables only Android; iOS still connects Apple Health without evaluating HC', async () => {

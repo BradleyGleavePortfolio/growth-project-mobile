@@ -11,8 +11,11 @@ values keep Android Health Connect off. `preview` and `production` explicitly se
 Before that binary goes to a reviewed Play track, the owner completes the Play
 Console Health apps declaration for the read types listed in #317.
 
-OFF removes every `android.permission.health.*` declaration and the Samsung
-additional-health-data permission, adds manifest-merger removal rules through
+S-WEAR-3 (Opus C-317-5): the Samsung additional-health-data permission and
+`android.permission.ACTIVITY_RECOGNITION` are no longer declared and are
+blocked in every build, ON and OFF.
+
+OFF removes every `android.permission.health.*` declaration, adds manifest-merger removal rules through
 `android.blockedPermissions`, removes the Health Connect plugin and sets
 `extra.healthConnectEnabled=false`. The package and version code remain
 `com.growthproject.app` and `4`. This switch does not uninstall the dependency or

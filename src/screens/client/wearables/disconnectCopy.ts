@@ -69,7 +69,7 @@ export function disconnectFailureMessage(err: unknown, name: string): Disconnect
     const status = statusOf(err);
     if (status === null) {
       return {
-        text: `We couldn't reach The Growth Project, so ${name} is still connected. Check your internet connection, then tap Disconnect again.`,
+        text: `The Growth Project couldn't be reached, so ${name} is still connected. Check your internet connection, then tap Disconnect again.`,
         kind: 'retry',
       };
     }
@@ -104,7 +104,7 @@ export function disconnectFailureMessage(err: unknown, name: string): Disconnect
   });
   const ref = shortReference(requestId) ?? 'unavailable';
   return {
-    text: `We couldn't disconnect ${name} because of a problem on our side, so it is still connected. Reference ${ref}. Tap Disconnect again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
+    text: `${name} couldn't be disconnected because of an unexpected problem with The Growth Project, so it is still connected. Reference ${ref}. Tap Disconnect again in a few minutes, or write to ${WEARABLES_SUPPORT_EMAIL} and mention the reference.`,
     kind: 'retry',
   };
 }

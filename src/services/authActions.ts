@@ -22,6 +22,7 @@ import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
 import { ON_DEVICE_STATE_PREFIX } from './health/onDeviceState';
+import { stopOnDeviceHealthWork } from './health/sessionFence';
 import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
@@ -294,6 +295,12 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
 }
 
 export async function signOut(userId?: string | null): Promise<void> {
+  // S-WEAR-3 (Sol B-317-7): the first statement, before any await. Every
+  // running Apple Health / Health Connect read for this person stops here:
+  // no new native page, record type, upload or progress write starts after
+  // the person taps Log out (the `logout` event below comes much later).
+  stopOnDeviceHealthWork();
+
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.

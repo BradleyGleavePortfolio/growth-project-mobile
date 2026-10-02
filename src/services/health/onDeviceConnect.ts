@@ -16,22 +16,20 @@
  *            is reported back so the hub can re-read connection state.
  *   • Android → Health Connect via `react-native-health-connect`. We check the
  *            SDK status first; if Health Connect is installed we `initialize`
- *            and `requestPermission` for our read set, otherwise we route the
- *            user to the Health Connect settings/store entry point so the path
- *            is never a dead end.
+ *            and `requestPermission` for our read set. If it is missing or
+ *            needs an update the outcome says so and the sheet offers the
+ *            Play Store (nothing opens without a tap).
  *   • Samsung Health rides on Health Connect on Android (Samsung writes into
  *            Health Connect), so it shares the Android branch.
  *
- * Every public result is explicit — `granted`, `denied`, `unavailable`, or
- * `unsupported` — so the UI always renders a polished, actionable state and
- * never fails silently. Native errors are caught and surfaced as a typed
- * failure the sheet turns into a user-visible message with a retry.
+ * Every public result is explicit (see {@link OnDeviceConnectOutcome}) so the
+ * UI always renders a specific, actionable state and never fails silently.
  *
  * Platform guard: the native modules are absent off-platform, so each branch
  * short-circuits to an `unsupported` outcome instead of throwing.
  */
 
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import type { Permission as HealthConnectPermission } from 'react-native-health-connect';
 import type { WearableProvider } from '../../api/wearablesConnectionsApi';
 import { isHealthConnectProviderDisabled } from '../../config/healthConnect';
@@ -40,16 +38,41 @@ import { buildReadPermissions } from './healthConnect/healthConnectClient';
 
 /**
  * The outcome of an on-device connect attempt. Exhaustive on purpose so the
- * caller renders a deterministic, polished state for every branch:
- *   - granted     — the user authorized the requested read access.
- *   - denied      — the permission UI completed but access was not granted.
- *   - unavailable — the platform health store is not installed / not set up;
- *                   the user has been routed to where they can enable it.
- *   - unsupported — this provider cannot be connected on the current platform
- *                   (e.g. an Android-only source on iOS); render as informative.
+ * caller renders a deterministic, specific state for every branch
+ * (S-WEAR-3: one cause, one message, one working action):
+ *   - granted         — the user authorized the requested read access.
+ *   - denied          — the permission UI completed but nothing was allowed.
+ *   - unavailable     — Health Connect is not installed on this phone; the
+ *                       sheet offers Get Health Connect (Play Store).
+ *   - update_required — Health Connect is installed but needs an update; the
+ *                       sheet offers Update Health Connect (Play Store).
+ *   - unsupported     — this provider cannot be connected on this device
+ *                       (Apple Health on Android or iPad without Health,
+ *                       Health Connect on iOS).
+ *   - disabled        — this build ships without Health Connect.
+ *   - error           — the native permission screen failed to open; the
+ *                       sheet offers Try again with a reference.
  */
 export type OnDeviceConnectOutcome =
-  'granted' | 'denied' | 'unavailable' | 'unsupported' | 'disabled';
+  | 'granted'
+  | 'denied'
+  | 'unavailable'
+  | 'update_required'
+  | 'unsupported'
+  | 'disabled'
+  | 'error';
+
+/**
+ * Play Store entry for Health Connect (Android 13 and lower install it from
+ * Play; Android 14+ updates it there). The `url=healthconnect://onboarding`
+ * parameter is Google's documented onboarding return link.
+ */
+export const HEALTH_CONNECT_PLAY_STORE_URL =
+  'market://details?id=com.google.android.apps.healthdata&url=healthconnect%3A%2F%2Fonboarding';
+
+/** Web fallback when the Play Store app cannot open the market link. */
+export const HEALTH_CONNECT_PLAY_WEB_URL =
+  'https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata';
 
 /**
  * Health Connect read set. S14: the SAME set the sync service reads
@@ -75,8 +98,13 @@ async function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
   try {
     await healthKitClient.requestAuth(HEALTHKIT_READ_PERMISSIONS);
     return 'granted';
-  } catch {
-    return 'denied';
+  } catch (err) {
+    // HealthKit never tells an app what was declined, so a failure here is
+    // not a refusal. `react-native-health` rejects with "HealthKit data is
+    // not available" on devices without Health (some iPads); anything else
+    // means the permission screen could not open (S-WEAR-3).
+    const message = err instanceof Error ? err.message : String(err);
+    return /not available/i.test(message) ? 'unsupported' : 'error';
   }
 }
 
@@ -93,14 +121,16 @@ async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
   const {
     getSdkStatus,
     initialize: hcInitialize,
-    openHealthConnectSettings,
     requestPermission: hcRequestPermission,
     SdkAvailabilityStatus,
   } = hc;
   const status = await getSdkStatus();
+  if (status === SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
+    return 'update_required';
+  }
   if (status !== SdkAvailabilityStatus.SDK_AVAILABLE) {
-    // Not installed or needs a provider update — route the user there.
-    openHealthConnectSettings();
+    // Not installed (Android 13 and lower). Nothing opens on its own: the
+    // sheet explains and offers Get Health Connect.
     return 'unavailable';
   }
 
@@ -130,8 +160,40 @@ export async function connectOnDeviceProvider(
     // Not an on-device provider — caller should have routed to OAuth.
     return 'unsupported';
   } catch {
-    // Surface as a denied/needs-retry outcome; the sheet renders a polished,
-    // user-visible error with a retry. No token/secret material is involved.
-    return 'denied';
+    // The native permission screen failed to open (not a refusal). The sheet
+    // shows Try again with a reference. No token/secret material is involved.
+    return 'error';
+  }
+}
+
+/**
+ * Open Health Connect's own settings so the person can allow access after a
+ * refusal (Android stops showing the permission dialog after two refusals).
+ * Resolves false when it could not open (the sheet then says where to go).
+ */
+export async function openHealthConnectPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android' || isHealthConnectProviderDisabled('HEALTH_CONNECT')) return false;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const hc: typeof import('react-native-health-connect') = require('react-native-health-connect');
+    hc.openHealthConnectSettings();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Open the Health Connect Play Store page (install or update). */
+export async function openHealthConnectStore(): Promise<boolean> {
+  try {
+    await Linking.openURL(HEALTH_CONNECT_PLAY_STORE_URL);
+    return true;
+  } catch {
+    try {
+      await Linking.openURL(HEALTH_CONNECT_PLAY_WEB_URL);
+      return true;
+    } catch {
+      return false;
+    }
   }
 }

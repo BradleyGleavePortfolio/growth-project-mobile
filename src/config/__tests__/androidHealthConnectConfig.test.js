@@ -41,10 +41,36 @@ test.each([undefined, '', '0', 'false', 'true', 'unexpected'])(
   },
 );
 
+const NEVER_DECLARED = [SAMSUNG, 'android.permission.ACTIVITY_RECOGNITION'];
+
+test('S-WEAR-3 (Opus C-317-5): no Samsung sensor or activity-recognition permission is declared; both are blocked in every build', () => {
+  expect(app.android.permissions).not.toContain(SAMSUNG);
+  expect(app.android.permissions).not.toContain('android.permission.ACTIVITY_RECOGNITION');
+  for (const value of ['1', '0', undefined]) {
+    if (value === undefined) delete process.env.TGP_ANDROID_HEALTH_CONNECT;
+    else process.env.TGP_ANDROID_HEALTH_CONNECT = value;
+    const result = configure();
+    for (const name of NEVER_DECLARED) {
+      expect(result.android.permissions).not.toContain(name);
+      expect(result.android.blockedPermissions).toContain(name);
+    }
+  }
+  // A config that still lists them (an old app.json) is cleaned in both modes.
+  const legacy = {
+    ...app,
+    android: { ...app.android, permissions: [...app.android.permissions, ...NEVER_DECLARED] },
+  };
+  process.env.TGP_ANDROID_HEALTH_CONNECT = '1';
+  expect(configure({ config: legacy }).android.permissions).toEqual(app.android.permissions);
+});
+
 test('ON preserves every Android declaration, all plugins and all iOS settings', () => {
   process.env.TGP_ANDROID_HEALTH_CONNECT = '1';
   const result = configure();
-  expect(result.android).toEqual(app.android);
+  expect(result.android).toEqual({
+    ...app.android,
+    blockedPermissions: [...(app.android.blockedPermissions ?? []), ...NEVER_DECLARED],
+  });
   expect(result.plugins).toEqual(app.plugins);
   expect(result.ios).toEqual(app.ios);
   expect(result.extra).toEqual({ ...app.extra, healthConnectEnabled: true });
@@ -93,7 +119,10 @@ test('OFF handles future #317 permissions/plugins, tuples, existing blocks, and 
 
   process.env.TGP_ANDROID_HEALTH_CONNECT = '1';
   const enabled = configure({ config: input });
-  expect(enabled.android).toEqual(input.android);
+  expect(enabled.android.permissions).toEqual(input.android.permissions);
+  expect(enabled.android.blockedPermissions).toEqual(
+    expect.arrayContaining([...input.android.blockedPermissions, ...NEVER_DECLARED]),
+  );
   expect(enabled.plugins).toEqual(input.plugins);
 });
 

@@ -39,14 +39,33 @@ jest.mock('expo-web-browser', () => ({
 }));
 
 const mockConnectOnDevice = jest.fn();
+const mockOpenHcPermissions = jest.fn(async () => true);
+const mockOpenHcStore = jest.fn(async () => true);
 jest.mock('../../../../services/health/onDeviceConnect', () => ({
   connectOnDeviceProvider: (...args: unknown[]) => mockConnectOnDevice(...args),
+  openHealthConnectPermissions: () => mockOpenHcPermissions(),
+  openHealthConnectStore: () => mockOpenHcStore(),
+}));
+
+const mockSignOut = jest.fn(async () => undefined);
+jest.mock('../../../../services/authActions', () => ({
+  signOut: () => mockSignOut(),
+}));
+
+const mockReport = jest.fn();
+jest.mock('../../../../lib/consultation/report', () => ({
+  reportUnexpected: (...args: unknown[]) => mockReport(...args),
 }));
 
 // S14: the on-device grant now registers the source and imports history.
 const mockImportHistory = jest.fn();
 const mockResume = jest.fn();
-const mockFence = { userId: 'user-a', assertCurrent: jest.fn(async () => undefined), cancel: jest.fn() };
+const mockFence = {
+  userId: 'user-a',
+  assertCurrent: jest.fn(async () => undefined),
+  throwIfStopped: jest.fn(),
+  cancel: jest.fn(),
+};
 const mockBegin = jest.fn(async () => mockFence);
 jest.mock('../../../../services/health/onDeviceSync', () => {
   const actual = jest.requireActual('../../../../services/health/onDeviceSync');
@@ -83,6 +102,11 @@ beforeEach(() => {
   mockResume.mockReset();
   mockBegin.mockClear();
   mockFence.cancel.mockClear();
+  mockFence.throwIfStopped.mockReset();
+  mockOpenHcPermissions.mockClear();
+  mockOpenHcStore.mockClear();
+  mockSignOut.mockClear();
+  mockReport.mockClear();
   mockImportHistory.mockResolvedValue({
     kind: 'imported',
     source: 'APPLE_HEALTHKIT',
@@ -125,19 +149,94 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
     expect(mockConnectOnDevice).not.toHaveBeenCalled();
   });
 
-  it('shows a user-visible error when starting OAuth fails', async () => {
-    mockStartOauthMutateAsync.mockRejectedValue(new Error('network'));
+});
+
+/**
+ * Sol B-317-8: a failed cloud connect reads the HTTP status and machine code.
+ * Before the fix every failure (401, 500, ...) said "check your internet".
+ */
+function httpError(status: number | null, data: Record<string, unknown> = {}, requestId?: string) {
+  return Object.assign(new Error('Request failed'), {
+    isAxiosError: true,
+    config: { headers: requestId ? { 'x-request-id': requestId } : {} },
+    response: status === null ? undefined : { status, data, headers: {} },
+  });
+}
+
+describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => {
+  async function pressOura() {
     await render(<ConnectProviderSheet provider="OURA" visible onClose={jest.fn()} />);
-
     await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+  }
 
+  it('a real network failure gives internet advice and Continue', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(null));
+    await pressOura();
     await waitFor(() =>
       expect(
         screen.getByText(
-          "We couldn't start the connection. Check your internet connection, then tap Continue.",
+          "The Growth Project couldn't be reached, so Oura isn't connected yet. Check your internet connection, then tap Continue.",
         ),
       ).toBeTruthy(),
     );
+    expect(screen.getByLabelText('Continue connecting Oura')).toBeTruthy();
+    expect(mockReport).not.toHaveBeenCalled();
+  });
+
+  it('401 says the session ended and Log in again signs out', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(401));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/Your session has ended, so Oura isn't connected/)).toBeTruthy());
+    expect(screen.queryByText(/internet/)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Log in again'));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('403 says client accounts only, with no retry button', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(403));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/client account only/)).toBeTruthy());
+    expect(screen.queryByLabelText('Continue connecting Oura')).toBeNull();
+  });
+
+  it('429 asks to wait a minute', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(429));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/Too many tries in a short time/)).toBeTruthy());
+  });
+
+  it('503 wearables_cloud_disabled says it is not switched on yet', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(503, { code: 'wearables_cloud_disabled' }));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/Connecting Oura isn't switched on yet/)).toBeTruthy());
+    expect(mockReport).not.toHaveBeenCalled();
+  });
+
+  it('500 shows a reference and the support address and reports to Sentry', async () => {
+    mockStartOauthMutateAsync.mockRejectedValue(httpError(500, {}, 'abcd1234-ffff'));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/Reference abcd1234/)).toBeTruthy());
+    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
+    expect(screen.queryByText(/internet/)).toBeNull();
+    expect(mockReport).toHaveBeenCalledWith(
+      'wearables.cloud_connect',
+      expect.objectContaining({ status: 500, requestId: 'abcd1234-ffff' }),
+    );
+  });
+
+  it('a sign-in window that fails to open shows a reference', async () => {
+    mockStartOauthMutateAsync.mockResolvedValue({ authorizationUrl: 'https://x.example', state: 's' });
+    mockOpenAuthSessionAsync.mockRejectedValue(new Error('no browser'));
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/sign-in window didn't open/)).toBeTruthy());
+    expect(mockReport).toHaveBeenCalledWith('wearables.cloud_connect_browser', expect.anything());
+  });
+
+  it('a locked auth session says another sign-in window is open', async () => {
+    mockStartOauthMutateAsync.mockResolvedValue({ authorizationUrl: 'https://x.example', state: 's' });
+    mockOpenAuthSessionAsync.mockResolvedValue({ type: 'locked' });
+    await pressOura();
+    await waitFor(() => expect(screen.getByText(/Another sign-in window is already open/)).toBeTruthy());
   });
 });
 
@@ -170,9 +269,9 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() =>
-      expect(screen.getByText(/history didn't finish coming in because of a problem on our side/)).toBeTruthy(),
+      expect(screen.getByText(/history didn't finish coming in because of an unexpected problem/)).toBeTruthy(),
     );
-    expect(screen.getByText(/hello@thegrowthproject.app/)).toBeTruthy();
+    expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy();
     expect(mockInvalidate).toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -187,7 +286,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() =>
-      expect(screen.getByText(/We couldn't reach The Growth Project to connect Apple Health/)).toBeTruthy(),
+      expect(screen.getByText(/couldn't be reached, so Apple Health isn't connected yet/)).toBeTruthy(),
     );
     expect(screen.getByText('Continue')).toBeTruthy();
   });
@@ -216,7 +315,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     );
 
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
-    await waitFor(() => expect(screen.getByText(/We brought in part of your last 30 days/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/part of your last 30 days is in/)).toBeTruthy());
     expect(onClose).not.toHaveBeenCalled();
     expect(onConnected).not.toHaveBeenCalled();
 
@@ -239,7 +338,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />);
 
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
-    await waitFor(() => expect(screen.getByText(/we couldn't read your history yet/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/your history couldn't be read yet/)).toBeTruthy());
     expect(screen.getByLabelText('Try again for Apple Health')).toBeTruthy();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -262,7 +361,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await waitFor(() => expect(screen.getByLabelText('Continue import for Apple Health')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Continue import for Apple Health'));
     await waitFor(() => expect(mockResume).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.getByText(/We brought in part of your last 30 days/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/part of your last 30 days is in/)).toBeTruthy());
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -346,61 +445,113 @@ describe('ConnectProviderSheet — on-device provider', () => {
     expect(tutorialSignals).toEqual(['wearable_connected']);
   });
 
-  it('renders a polished error and stays open when access is denied', async () => {
+  it('Apple Health: a refusal stays open with Continue and is never counted as connected', async () => {
     mockConnectOnDevice.mockResolvedValue('denied');
     const onClose = jest.fn();
-
-    await render(
-      <ConnectProviderSheet
-        provider="APPLE_HEALTHKIT"
-        visible
-        onClose={onClose}
-      />,
-    );
-
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />);
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
-
-    await waitFor(() =>
-      expect(screen.getByText(/access wasn't granted/i)).toBeTruthy(),
-    );
+    await waitFor(() => expect(screen.getByText(/Apple Health access wasn't allowed, so nothing was read/)).toBeTruthy());
     expect(onClose).not.toHaveBeenCalled();
-    // A denial is never counted as connected.
     expect(tutorialSignals).toEqual([]);
   });
 
-  it('explains next steps when the device store is not set up', async () => {
-    mockConnectOnDevice.mockResolvedValue('unavailable');
-    await render(
-      <ConnectProviderSheet
-        provider="HEALTH_CONNECT"
-        visible
-        onClose={jest.fn()}
-      />,
-    );
-
+  it('Health Connect: a refusal offers Open Health Connect, then Continue', async () => {
+    mockConnectOnDevice.mockResolvedValue('denied');
+    await render(<ConnectProviderSheet provider="HEALTH_CONNECT" visible onClose={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
-
+    await waitFor(() => expect(screen.getByText(/choose App permissions, then The Growth Project/)).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Open Health Connect'));
+    expect(mockOpenHcPermissions).toHaveBeenCalledTimes(1);
     await waitFor(() =>
-      expect(screen.getByText(/isn't set up on this device yet/i)).toBeTruthy(),
+      expect(screen.getByText('When Health Connect access is set up, tap Continue to connect.')).toBeTruthy(),
     );
+    expect(screen.getByLabelText('Continue connecting Health Connect')).toBeTruthy();
+    // Nothing was prompted again or imported by opening settings.
+    expect(mockConnectOnDevice).toHaveBeenCalledTimes(1);
+    expect(mockImportHistory).not.toHaveBeenCalled();
+  });
+
+  it('Health Connect not installed: Get Health Connect opens the Play Store (nothing opens on its own)', async () => {
+    mockConnectOnDevice.mockResolvedValue('unavailable');
+    await render(<ConnectProviderSheet provider="HEALTH_CONNECT" visible onClose={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
+    await waitFor(() => expect(screen.getByText(/Health Connect isn't installed on this phone/)).toBeTruthy());
+    expect(mockOpenHcStore).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Get Health Connect'));
+    expect(mockOpenHcStore).toHaveBeenCalledTimes(1);
+  });
+
+  it('Health Connect needs an update: Update Health Connect; a store that does not open says where to go', async () => {
+    mockConnectOnDevice.mockResolvedValue('update_required');
+    mockOpenHcStore.mockResolvedValueOnce(false);
+    await render(<ConnectProviderSheet provider="SAMSUNG_HEALTH" visible onClose={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText(/Continue connecting Samsung Health/));
+    await waitFor(() => expect(screen.getByText(/Samsung Health shares its data through Health Connect/)).toBeTruthy());
+    expect(screen.getByText(/Health Connect needs an update/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Update Health Connect'));
+    await waitFor(() => expect(screen.getByText(/The Play Store didn't open/)).toBeTruthy());
+  });
+
+  it('a permission screen that fails to open shows Continue with a reference and reports it', async () => {
+    mockConnectOnDevice.mockResolvedValue('error');
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+    await waitFor(() => expect(screen.getByText(/permission screen didn't open, so nothing was read/)).toBeTruthy());
+    expect(screen.getByText(/mention reference [A-Za-z0-9-]{8}/)).toBeTruthy();
+    expect(mockReport).toHaveBeenCalledWith(
+      'wearables.on_device_permission',
+      expect.objectContaining({ code: 'native_permission_error' }),
+    );
+    expect(screen.getByLabelText('Continue connecting Apple Health')).toBeTruthy();
   });
 
   it('states clearly when the provider is unsupported on this device', async () => {
     mockConnectOnDevice.mockResolvedValue('unsupported');
-    await render(
-      <ConnectProviderSheet
-        provider="HEALTH_CONNECT"
-        visible
-        onClose={jest.fn()}
-      />,
-    );
-
+    await render(<ConnectProviderSheet provider="HEALTH_CONNECT" visible onClose={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
-
     await waitFor(() =>
       expect(
-        screen.getByText("Health Connect can't be connected on this device."),
+        screen.getByText('Health Connect works on Android phones only. On this iPhone, connect Apple Health instead.'),
       ).toBeTruthy(),
     );
+    expect(screen.queryByLabelText('Continue connecting Health Connect')).toBeNull();
+  });
+
+  it('a connect that found nothing to bring in says so and where to check, instead of closing', async () => {
+    mockConnectOnDevice.mockResolvedValue('granted');
+    mockImportHistory.mockResolvedValue({
+      kind: 'imported',
+      source: 'APPLE_HEALTHKIT',
+      connectionId: 'conn-a',
+      postedCount: 0,
+      complete: true,
+    });
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+    await waitFor(() =>
+      expect(screen.getByText(/no data from the last 30 days to bring in/)).toBeTruthy(),
+    );
+    expect(screen.getByText(/open the Health app, tap your profile picture/)).toBeTruthy();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Close')).toBeTruthy();
+    expect(tutorialSignals).toEqual(['wearable_connected']);
+  });
+
+  it('a sign-out that began before the prompt opens stops the run: no prompt', async () => {
+    mockFence.throwIfStopped.mockImplementation(() => {
+      const { OnDeviceSessionChangedError } = jest.requireActual('../../../../services/health/sessionFence');
+      throw new OnDeviceSessionChangedError();
+    });
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+    await waitFor(() => expect(screen.getByText(/nothing was brought in/)).toBeTruthy());
+    expect(mockConnectOnDevice).not.toHaveBeenCalled();
+    expect(mockImportHistory).not.toHaveBeenCalled();
+  });
+
+  it('the disclosure says nothing is read or shared until the person allows it', () => {
+    expect(onDeviceDisclosure('Apple Health')).toContain('Nothing is read or shared until you allow it.');
+    expect(onDeviceDisclosure('Apple Health')).not.toMatch(/\bwe\b/i);
   });
 });

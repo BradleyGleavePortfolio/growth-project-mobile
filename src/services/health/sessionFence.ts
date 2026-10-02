@@ -38,6 +38,20 @@ authEvents.onAuthChange(() => {
   generation += 1;
 });
 
+/**
+ * S-WEAR-3 (Sol B-317-7): stop every running on-device health run NOW.
+ *
+ * `signOut()` calls this as its very first, synchronous statement. The
+ * `logout` auth event is emitted only at the END of sign-out (after the push
+ * token, storage and cache work), so without this call a Health Connect read
+ * could keep starting new pages and record types for the signing-out person
+ * for that whole time. After this call every fence fails its next check:
+ * no new native page, record type, request or progress write starts.
+ */
+export function stopOnDeviceHealthWork(): void {
+  generation += 1;
+}
+
 /** Current auth generation (tests). */
 export function currentAuthGeneration(): number {
   return generation;
@@ -57,6 +71,14 @@ export interface SessionFence {
   readonly userId: string;
   /** Throws {@link OnDeviceSessionChangedError} if the session moved on. */
   assertCurrent(): Promise<void>;
+  /**
+   * Synchronous check (S-WEAR-3, Sol B-317-7): throws
+   * {@link OnDeviceSessionChangedError} when the run was cancelled or any auth
+   * event (including the start of sign-out) happened since the fence was
+   * taken. Called immediately before every native read starts, so there is
+   * no await between the check and the read.
+   */
+  throwIfStopped(): void;
   /**
    * Stop this run for good (the Connect sheet closed or unmounted). Every
    * later {@link assertCurrent} throws with reason `cancelled`.
@@ -81,6 +103,9 @@ function fenceFrom(
       const now = await readUserId();
       check();
       if (now !== userId) throw new OnDeviceSessionChangedError();
+    },
+    throwIfStopped() {
+      check();
     },
     cancel() {
       cancelled = true;
@@ -114,4 +139,9 @@ export async function beginSessionFence(
   const userId = await readUserId();
   if (!userId || generation !== startedAt) return null;
   return fenceFrom(userId, startedAt, readUserId);
+}
+
+/** True for the error a stopped fence throws (session change or cancel). */
+export function isOnDeviceStop(err: unknown): err is OnDeviceSessionChangedError {
+  return err instanceof OnDeviceSessionChangedError;
 }

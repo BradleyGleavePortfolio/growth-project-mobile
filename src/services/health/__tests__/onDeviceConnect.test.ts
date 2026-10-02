@@ -8,7 +8,7 @@
  * isolation.
  */
 
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { extra: { healthConnectEnabled: true } } },
@@ -21,7 +21,13 @@ import {
   requestPermission as hcRequestPermission,
   SdkAvailabilityStatus,
 } from 'react-native-health-connect';
-import { connectOnDeviceProvider } from '../onDeviceConnect';
+import {
+  connectOnDeviceProvider,
+  HEALTH_CONNECT_PLAY_STORE_URL,
+  HEALTH_CONNECT_PLAY_WEB_URL,
+  openHealthConnectPermissions,
+  openHealthConnectStore,
+} from '../onDeviceConnect';
 
 const mockedHK = AppleHealthKit as jest.Mocked<typeof AppleHealthKit>;
 const mockedGetSdkStatus = getSdkStatus as jest.Mock;
@@ -56,14 +62,27 @@ describe('connectOnDeviceProvider — Apple HealthKit (iOS)', () => {
     expect(mockedHK.initHealthKit).toHaveBeenCalledTimes(1);
   });
 
-  it('returns "denied" when initHealthKit reports an error', async () => {
+  // S-WEAR-3: HealthKit never reports a refusal, so an initHealthKit error is
+  // a failure to open the permission screen, not a denial.
+  it('returns "error" when initHealthKit reports an error', async () => {
     setPlatform('ios');
     (mockedHK.initHealthKit as jest.Mock).mockImplementation(
       (_perms, cb: (e: string) => void) => cb('permission error'),
     );
 
     await expect(connectOnDeviceProvider('APPLE_HEALTHKIT')).resolves.toBe(
-      'denied',
+      'error',
+    );
+  });
+
+  it('returns "unsupported" when the device has no Health data store', async () => {
+    setPlatform('ios');
+    (mockedHK.initHealthKit as jest.Mock).mockImplementation(
+      (_perms, cb: (e: string) => void) => cb('HealthKit data is not available'),
+    );
+
+    await expect(connectOnDeviceProvider('APPLE_HEALTHKIT')).resolves.toBe(
+      'unsupported',
     );
   });
 
@@ -104,7 +123,7 @@ describe('connectOnDeviceProvider — Health Connect / Samsung (Android)', () =>
     );
   });
 
-  it('returns "unavailable" and opens settings when the SDK is not available', async () => {
+  it('returns "unavailable" when Health Connect is not installed, opening nothing on its own', async () => {
     setPlatform('android');
     mockedGetSdkStatus.mockResolvedValue(
       SdkAvailabilityStatus.SDK_UNAVAILABLE,
@@ -113,7 +132,19 @@ describe('connectOnDeviceProvider — Health Connect / Samsung (Android)', () =>
     await expect(connectOnDeviceProvider('HEALTH_CONNECT')).resolves.toBe(
       'unavailable',
     );
-    expect(mockedOpenSettings).toHaveBeenCalledTimes(1);
+    expect(mockedOpenSettings).not.toHaveBeenCalled();
+    expect(mockedRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it('returns "update_required" when Health Connect needs an update', async () => {
+    setPlatform('android');
+    mockedGetSdkStatus.mockResolvedValue(
+      SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED,
+    );
+
+    await expect(connectOnDeviceProvider('HEALTH_CONNECT')).resolves.toBe(
+      'update_required',
+    );
     expect(mockedRequestPermission).not.toHaveBeenCalled();
   });
 
@@ -139,13 +170,38 @@ describe('connectOnDeviceProvider — Health Connect / Samsung (Android)', () =>
     expect(mockedGetSdkStatus).not.toHaveBeenCalled();
   });
 
-  it('returns "denied" (never throws) when a native call rejects', async () => {
+  it('returns "error" (never throws) when a native call rejects', async () => {
     setPlatform('android');
     mockedGetSdkStatus.mockRejectedValue(new Error('native boom'));
 
     await expect(connectOnDeviceProvider('HEALTH_CONNECT')).resolves.toBe(
-      'denied',
+      'error',
     );
+  });
+});
+
+describe('S-WEAR-3: opening Health Connect settings and the Play Store', () => {
+  it('opens Health Connect settings on Android', async () => {
+    setPlatform('android');
+    await expect(openHealthConnectPermissions()).resolves.toBe(true);
+    expect(mockedOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('does nothing on iOS', async () => {
+    setPlatform('ios');
+    await expect(openHealthConnectPermissions()).resolves.toBe(false);
+    expect(mockedOpenSettings).not.toHaveBeenCalled();
+  });
+
+  it('opens the Play Store, falling back to the web page', async () => {
+    const open = jest.spyOn(Linking, 'openURL');
+    open.mockRejectedValueOnce(new Error('no market')).mockResolvedValueOnce(true);
+    await expect(openHealthConnectStore()).resolves.toBe(true);
+    expect(open).toHaveBeenNthCalledWith(1, HEALTH_CONNECT_PLAY_STORE_URL);
+    expect(open).toHaveBeenNthCalledWith(2, HEALTH_CONNECT_PLAY_WEB_URL);
+    open.mockRejectedValue(new Error('none'));
+    await expect(openHealthConnectStore()).resolves.toBe(false);
+    open.mockRestore();
   });
 });
 

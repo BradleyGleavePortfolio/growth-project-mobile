@@ -201,12 +201,19 @@ export class HealthKitSyncService {
     const since = windowStart(progress, until);
 
     // 1) Ensure read authorization (presents the consent sheet on first run).
+    fence.throwIfStopped();
     await this.client.requestAuth(permissions);
 
     // 2) Read raw samples for the window, only if the same person is still
-    //    signed in after the (possible) permission sheet.
+    //    signed in after the (possible) permission sheet. The synchronous
+    //    check runs immediately before the native queries start (S-WEAR-3,
+    //    Sol B-317-7); every metric query starts in that same tick, so no
+    //    new read can start after sign-out begins. Results that arrive after
+    //    a stop are dropped, never normalized or sent.
     await fence.assertCurrent();
+    fence.throwIfStopped();
     const raw = await this.client.readSamples({ since, until });
+    fence.throwIfStopped();
     const failedMetrics = [...(raw.failed ?? [])];
 
     // 3) Normalize to the canonical wire contract.

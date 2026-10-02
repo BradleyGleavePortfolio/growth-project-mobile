@@ -102,6 +102,16 @@ jest.mock('../../../../services/health/onDeviceSync', () => {
   };
 });
 
+const mockSignOut = jest.fn(async () => undefined);
+jest.mock('../../../../services/authActions', () => ({
+  signOut: () => mockSignOut(),
+}));
+const mockOpenHcPermissions = jest.fn(async () => true);
+jest.mock('../../../../services/health/onDeviceConnect', () => ({
+  openHealthConnectPermissions: () => mockOpenHcPermissions(),
+  openHealthConnectStore: jest.fn(async () => true),
+}));
+
 const mockReportUnexpected = jest.fn();
 jest.mock('../../../../lib/consultation/report', () => ({
   reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
@@ -271,8 +281,41 @@ describe('WearablesShell', () => {
   it('an unexpected refresh failure shows a reference and support path, and is reported', async () => {
     mockImportHistory.mockRejectedValue(new Error('boom'));
     await render(<WearablesShell />);
-    await waitFor(() => expect(screen.getByText(/hello@thegrowthproject.app/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Bradleyapple1031@gmail.com/)).toBeTruthy());
     expect(mockReportUnexpected).toHaveBeenCalled();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
+  });
+
+  // S-WEAR-3: the notice button does what its copy says.
+  it('a session that ended during refresh offers Log in again, which signs out', async () => {
+    const { OnDeviceStepError } = jest.requireActual('../../../../services/health/onDeviceSync');
+    const expired = Object.assign(new Error('401'), {
+      isAxiosError: true,
+      config: { headers: {} },
+      response: { status: 401, data: {}, headers: {} },
+    });
+    mockImportHistory.mockRejectedValue(new OnDeviceStepError('import', expired));
+    mockSignOut.mockClear();
+    await render(<WearablesShell />);
+    await waitFor(() => expect(screen.getByText(/your session ended before your history came in/)).toBeTruthy());
+    expect(screen.queryByLabelText('Try again to sync Apple Health')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Log in again'));
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    expect(mockImportHistory).toHaveBeenCalledTimes(1);
+  });
+
+  it('a connection no longer linked to the account offers Reconnect (Connections), not a refresh retry', async () => {
+    const { OnDeviceStepError } = jest.requireActual('../../../../services/health/onDeviceSync');
+    const forbidden = Object.assign(new Error('403'), {
+      isAxiosError: true,
+      config: { headers: {} },
+      response: { status: 403, data: { code: 'wearables_connection_forbidden' }, headers: {} },
+    });
+    mockImportHistory.mockRejectedValue(new OnDeviceStepError('import', forbidden));
+    mockNavigate.mockClear();
+    await render(<WearablesShell />);
+    await waitFor(() => expect(screen.getByText(/no longer linked to your account/)).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
+    expect(mockNavigate).toHaveBeenCalledWith('Connections');
   });
 });

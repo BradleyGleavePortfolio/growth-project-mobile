@@ -17,6 +17,17 @@ jest.mock('../../../../utils/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
+// The native Health Connect module (used only by the real-client B-317-7 test).
+jest.mock('react-native-health-connect', () => ({
+  readRecords: jest.fn(),
+}));
+
+// Who the identity cache says is signed in (real fence in the B-317-7 test).
+let mockSignedIn: string | null = 'user-a';
+jest.mock('../../../../lib/userCache', () => ({
+  readUserCache: jest.fn(async () => (mockSignedIn ? { id: mockSignedIn } : null)),
+}));
+
 import { HealthConnectPermissionDeniedError, HealthConnectUnsupportedError } from '../errors';
 import {
   DEFAULT_BACKFILL_DAYS,
@@ -26,7 +37,15 @@ import {
 } from '../healthConnectSyncService';
 import { HEALTH_CONNECT_RECORD_TYPES, type PagedReadResult } from '../healthConnectClient';
 import { getSyncProgress, setSyncProgress, type OnDeviceScope } from '../../onDeviceState';
-import { OnDeviceSessionChangedError, type SessionFence } from '../../sessionFence';
+import * as hcNative from 'react-native-health-connect';
+import * as realClient from '../healthConnectClient';
+import {
+  beginSessionFence,
+  OnDeviceSessionChangedError,
+  stopOnDeviceHealthWork,
+  type SessionFence,
+} from '../../sessionFence';
+import { authEvents } from '../../../../utils/authEvents';
 
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
@@ -76,7 +95,12 @@ function makeDeps(
 }
 
 function okFence(userId: string = SCOPE.userId): SessionFence {
-  return { userId, assertCurrent: jest.fn(async () => undefined), cancel: jest.fn() };
+  return {
+    userId,
+    assertCurrent: jest.fn(async () => undefined),
+    throwIfStopped: jest.fn(),
+    cancel: jest.fn(),
+  };
 }
 
 beforeEach(async () => {
@@ -113,7 +137,12 @@ describe('permission-denied path', () => {
     const res = await syncHealthConnect(SCOPE, makeDeps(client));
     expect(res.grantedRecordTypes).toEqual(['Steps']);
     expect(client.readRecordsPaged).toHaveBeenCalledTimes(1);
-    expect(client.readRecordsPaged).toHaveBeenCalledWith('Steps', expect.anything(), undefined);
+    expect(client.readRecordsPaged).toHaveBeenCalledWith(
+      'Steps',
+      expect.anything(),
+      undefined,
+      expect.objectContaining({ throwIfStopped: expect.any(Function) }),
+    );
     expect(res.normalizedCount).toBe(1);
     expect(res.complete).toBe(true);
   });
@@ -181,6 +210,7 @@ describe('B-317-2 completeness', () => {
       'Steps',
       { startTime: IMPORT_START, endTime: NOW.toISOString() },
       'tok-21',
+      expect.anything(),
     );
     expect(res2.complete).toBe(true);
     const after = await getSyncProgress(SCOPE);
@@ -265,6 +295,7 @@ describe('normalize → POST → persist', () => {
     const fence: SessionFence = {
       userId: SCOPE.userId,
       assertCurrent: jest.fn().mockRejectedValue(new OnDeviceSessionChangedError()),
+      throwIfStopped: jest.fn(),
       cancel: jest.fn(),
     };
     const ingest = jest.fn(
@@ -298,6 +329,7 @@ describe('A-317-1 round 3: the fence is required and checked before the phone is
         calls += 1;
         if (calls >= 2) throw new OnDeviceSessionChangedError();
       }),
+      throwIfStopped: jest.fn(),
       cancel: jest.fn(),
     };
     const ingest = jest.fn();
@@ -307,5 +339,88 @@ describe('A-317-1 round 3: the fence is required and checked before the phone is
     ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
     expect(client.readRecordsPaged).not.toHaveBeenCalled();
     expect(ingest).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * S-WEAR-3 (Sol B-317-7, AUD-SOL-5 reproduction): the REAL paged client, the
+ * REAL session fence and the REAL auth events. Grant Steps, HeartRate and
+ * Weight; sign out while the first native Steps read is in flight and
+ * returns a continuation token. Before the fix the run went on to start
+ * Steps page 2, HeartRate and Weight (4 native calls). Now no new page or
+ * record type starts: exactly 1 native call, nothing posted, no progress.
+ */
+describe('B-317-7: no native read starts after sign-out', () => {
+  const mockNativeRead = hcNative.readRecords as jest.Mock;
+  const client = {
+    ...makeClient({ getGrantedPermissions: grantOnly('Steps', 'HeartRate', 'Weight') }),
+    readRecordsPaged: realClient.readRecordsPaged,
+  };
+
+  beforeEach(() => {
+    mockSignedIn = 'user-a';
+    mockNativeRead.mockReset();
+  });
+
+  it.each([
+    ['the start of sign-out (stopOnDeviceHealthWork)', () => stopOnDeviceHealthWork()],
+    ['the logout auth event', () => authEvents.emit('logout')],
+    ['an account switch', () => {
+      mockSignedIn = 'user-b';
+      authEvents.emit('login');
+    }],
+  ])('%s during Steps page 1: 1 native call, nothing sent or saved', async (_label, stop) => {
+    mockNativeRead.mockImplementation(async () => {
+      stop();
+      return { records: [{ startTime: NOW.toISOString(), endTime: NOW.toISOString(), count: 3 }], pageToken: 'p2' };
+    });
+    const fence = await beginSessionFence();
+    expect(fence).not.toBeNull();
+    const ingest = jest.fn().mockResolvedValue({ inserted: 0, skipped: 0 });
+    await expect(
+      syncHealthConnect(SCOPE, {
+        client: client as never,
+        ingestApi: { ingest },
+        now: () => NOW,
+        fence: fence as SessionFence,
+      }),
+    ).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(mockNativeRead).toHaveBeenCalledTimes(1);
+    expect(ingest).not.toHaveBeenCalled();
+    expect(await getSyncProgress(SCOPE)).toEqual({ v: 1, completedThrough: {}, resume: {} });
+  });
+
+  it('a cancelled Connect (sheet closed) stops between record types too', async () => {
+    const fence = (await beginSessionFence()) as SessionFence;
+    mockNativeRead.mockImplementation(async () => {
+      fence.cancel();
+      return { records: [] };
+    });
+    const ingest = jest.fn();
+    await expect(
+      syncHealthConnect(SCOPE, {
+        client: client as never,
+        ingestApi: { ingest },
+        now: () => NOW,
+        fence,
+      }),
+    ).rejects.toMatchObject({ reason: 'cancelled' });
+    expect(mockNativeRead).toHaveBeenCalledTimes(1);
+    expect(ingest).not.toHaveBeenCalled();
+  });
+
+  it('control: with no stop, every page and type is read', async () => {
+    mockNativeRead
+      .mockResolvedValueOnce({ records: [], pageToken: 'p2' })
+      .mockResolvedValue({ records: [] });
+    const fence = (await beginSessionFence()) as SessionFence;
+    const res = await syncHealthConnect(SCOPE, {
+      client: client as never,
+      ingestApi: { ingest: jest.fn().mockResolvedValue({ inserted: 0, skipped: 0 }) },
+      now: () => NOW,
+      fence,
+    });
+    expect(mockNativeRead).toHaveBeenCalledTimes(4);
+    expect(res.complete).toBe(true);
   });
 });
