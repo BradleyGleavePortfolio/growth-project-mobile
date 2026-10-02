@@ -4,8 +4,10 @@
  *
  *   consent_required, client  "AI help is off" + "Allow AI help", which opens
  *                             AiConsentSheet (box 2 of the D2 consent). After
- *                             a recorded grant the surface retries the request.
- *   consent_required, coach   "This client has not allowed AI help" + the
+ *                             a VERIFIED live grant the surface's onRetry runs
+ *                             (Roman: only re-sends when the turn was not
+ *                             already stored, B-326-3).
+ *   consent_required, coach   "AI help is off for this client" + the
  *                             coach can still coach as usual; "Try again".
  *   egress_blocked (503)      "AI help is paused on our side" + the short
  *                             reference, "Contact support" and "Copy reference".
@@ -42,6 +44,8 @@ export interface AiRefusalNoticeProps {
   onRetry?: () => void;
   /** Injected in tests. */
   consentApi?: AiConsentSheetApi;
+  /** Injected in tests: the signed-in user (identity fence of the grant). */
+  consentSessionUserId?: () => string | null;
   /** Overrides the navigator-based support path (tests, or a custom route). */
   onContactSupport?: () => void;
   /** Compact layout for small cards (wearable insight, triage). */
@@ -55,6 +59,7 @@ export default function AiRefusalNotice({
   surface,
   onRetry,
   consentApi,
+  consentSessionUserId,
   onContactSupport,
   compact = false,
   testID = 'ai-refusal',
@@ -155,6 +160,7 @@ export default function AiRefusalNotice({
           onClose={() => setSheetOpen(false)}
           onContactSupport={openSupport ? () => void openSupport() : undefined}
           api={consentApi}
+          {...(consentSessionUserId ? { sessionUserId: consentSessionUserId } : {})}
           testID={`${testID}-consent-sheet`}
         />
       ) : null}

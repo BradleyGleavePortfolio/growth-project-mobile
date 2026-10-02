@@ -148,16 +148,19 @@ export function aiRefusalCopy(
       return {
         title: 'AI help is off',
         body:
-          `${what} cannot use your information because you have not allowed AI help. ` +
+          // Neutral on purpose (Opus C-326-2): the 403 does not say whether
+          // AI help was never allowed or the wording changed and needs a new
+          // OK; the sheet says which once it reads the status.
+          `${what} cannot use your information because AI help is not on for your account. ` +
           'Your coach still sees your training information as usual. ' +
           'If you allow it, Roman and your coach’s AI tools can use your information, processed by Anthropic.',
         referenceLine: null,
       };
     }
     return {
-      title: 'This client has not allowed AI help',
+      title: 'AI help is off for this client',
       body:
-        `${what} ${isAre} off for this client because they have not allowed AI to use their information. ` +
+        `${what} ${isAre} off for this client because AI help is not on for their account. ` +
         'You still see their data and can coach them as usual. ' +
         'They can turn AI help on in their app under Settings > Privacy, then you can try again.',
       referenceLine: null,

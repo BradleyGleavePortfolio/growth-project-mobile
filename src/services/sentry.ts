@@ -91,6 +91,10 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   if (context) {
     Sentry.withScope((scope) => {
       Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+      // The support reference a person quotes is searchable as a tag (B-326-4).
+      if (typeof context.reference === 'string' && context.reference) {
+        scope.setTag('reference', context.reference);
+      }
       Sentry.captureException(err);
     });
   } else {

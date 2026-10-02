@@ -85,6 +85,8 @@ jest.mock('../screens/client/wearables/components/useReduceMotion', () => ({ use
 
 import AIGuideScreen from '../screens/client/AIGuideScreen';
 import RomanChatScreen from '../screens/roman/RomanChatScreen';
+import { captureError } from '../services/sentry';
+import { ROMAN_STORED_NO_REPLY } from '../components/roman/romanVoice';
 import { ClientWearableInsightPanel } from '../screens/client/wearables/ClientWearableInsightPanel';
 
 function httpError(status: number, data: Record<string, unknown>, headers: Record<string, string> = {}) {
@@ -140,7 +142,7 @@ describe('RomanChatScreen — R2b refusals', () => {
       romanState({ kind: 'aiRefused', message: 'x', refusal: { kind: 'consent_required' } }, 'coach'),
     );
     const r = await render(<RomanChatScreen surface="coach" />);
-    expect(r.getByTestId('roman-ai-refusal-title').props.children).toBe('This client has not allowed AI help');
+    expect(r.getByTestId('roman-ai-refusal-title').props.children).toBe('AI help is off for this client');
     expect(r.queryByTestId('roman-ai-refusal-allow')).toBeNull();
   });
 
@@ -156,6 +158,36 @@ describe('RomanChatScreen — R2b refusals', () => {
     expect(r.getByTestId('roman-ai-refusal-title').props.children).toBe('AI help is paused on our side');
     expect(r.getByTestId('roman-ai-refusal-reference').props.children).toBe('Reference: sse-ref-');
     expect(r.queryByTestId('roman-send-error')).toBeNull();
+  });
+});
+
+// Sol B-326-3 / Opus C-326-1: a refusal that came in the stream means the
+// server already stored the message. Recovery must not append it again.
+describe('RomanChatScreen — a refusal after the turn was stored (B-326-3)', () => {
+  it('coach Try again on a stored-turn refusal does not re-send; the screen explains how to ask again', async () => {
+    const state = romanState(
+      { kind: 'aiRefused', message: 'x', refusal: { kind: 'consent_required' }, turnStored: true },
+      'coach',
+    );
+    mockUseRomanChat.mockReturnValue(state);
+    const r = await render(<RomanChatScreen surface="coach" />);
+    await fireEvent.press(r.getByTestId('roman-ai-refusal-retry'));
+    expect(state.send).not.toHaveBeenCalled();
+    expect(state.clearSendError).toHaveBeenCalledTimes(1);
+  });
+
+  it('the pre-check refusal (nothing stored) still re-sends on Try again', async () => {
+    const state = romanState({ kind: 'aiRefused', message: 'x', refusal: { kind: 'consent_required' } }, 'coach');
+    mockUseRomanChat.mockReturnValue(state);
+    const r = await render(<RomanChatScreen surface="coach" />);
+    await fireEvent.press(r.getByTestId('roman-ai-refusal-retry'));
+    expect(state.send).toHaveBeenCalledTimes(1);
+  });
+
+  it('a stored turn without an answer (non-refusal) says it is saved, not that it failed to send', async () => {
+    mockUseRomanChat.mockReturnValue(romanState({ kind: 'unavailable', message: 'x', turnStored: true }));
+    const r = await render(<RomanChatScreen surface="client" />);
+    expect(r.getByText(ROMAN_STORED_NO_REPLY)).toBeTruthy();
   });
 });
 
@@ -194,6 +226,29 @@ describe('AIGuideScreen — R2b refusals', () => {
     );
     expect(r.getByText(/share reference unk-ref-/)).toBeTruthy();
     expect(r.queryByTestId('ai-guide-refusal')).toBeNull();
+  });
+
+  // Sol B-326-4: every unknown branch has a reference, shown and reported.
+  it('an empty 200 reply: the reference of THAT request is shown and is the one reported', async () => {
+    mockChat.mockResolvedValueOnce({ data: {}, headers: { 'x-request-id': 'empty-ref-9876' }, config: { headers: {} } });
+    const r = await send('Hello');
+    await waitFor(() => expect(r.getByText(/share reference empty-re/)).toBeTruthy());
+    const calls = (captureError as jest.Mock).mock.calls;
+    expect(calls[calls.length - 1][1]).toMatchObject({ surface: 'ai_guide', reference: 'empty-ref-9876' });
+  });
+
+  it('a 500 with no reference anywhere: a generated reference is shown and is the one reported', async () => {
+    mockChat.mockRejectedValueOnce(
+      Object.assign(new Error('Request failed with status code 500'), { isAxiosError: true, response: { status: 500, data: {}, headers: {} } }),
+    );
+    const r = await send('Hello');
+    await waitFor(() => expect(r.getByText(/share reference [A-Za-z0-9-]{8}\./)).toBeTruthy());
+    const shown = /share reference ([A-Za-z0-9-]{8})\./.exec(
+      String(r.getByText(/share reference/).props.children),
+    )?.[1];
+    const calls = (captureError as jest.Mock).mock.calls;
+    const reported = (calls[calls.length - 1][1] as { reference: string }).reference;
+    expect(shown && reported.startsWith(shown)).toBe(true);
   });
 });
 

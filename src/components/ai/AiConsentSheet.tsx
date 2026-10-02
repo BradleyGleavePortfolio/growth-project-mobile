@@ -13,6 +13,20 @@
  * the ledger stores exactly what was shown. Nothing is granted until the
  * person taps "Allow AI help"; "Not now" changes nothing. Every failure says
  * what happened and what to do next (owner rule 2026-10-01 13:34).
+ *
+ * One choice protocol with P0 and Settings (#310, Sol/Opus B-326-2): the
+ * grant goes through `grantAiChoiceAs`, i.e. the one ledger queue, fenced by
+ * the account that tapped Allow, and at its own turn it clears that account's
+ * pending onboarding "no", so an older "no" can never undo this newer "yes".
+ *
+ * Truthful outcomes (Sol/Opus B-326-1): the request is retried only after a
+ * VERIFIED live grant of the current version. A lost reply, a timeout, a 5xx,
+ * a 409 conflict or an unreadable success may still have been written, so the
+ * sheet re-reads GET /me/ai-consent once: live -> retry; definitively off ->
+ * "still off"; still unknown -> "could not confirm", never "off". "Still
+ * off" is said only when a 4xx refusal or the server's own status proves it.
+ * Every unknown failure shows a reference that is also on the Sentry event
+ * (B-326-4).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -27,9 +41,16 @@ import {
 } from 'react-native';
 import defaultAiConsentApi, {
   isLiveGrant,
+  type AiConsentOutcome,
   type AiConsentStatusResponse,
 } from '../../api/aiConsentApi';
-import { shortReference } from '../../utils/correlation';
+import {
+  AI_LEDGER_NOT_SENT,
+  grantAiChoiceAs,
+  isAmbiguousWriteOutcome,
+} from '../../lib/consultation/aiConsent';
+import { readUserCacheSync } from '../../lib/userCache';
+import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 
@@ -44,17 +65,33 @@ export interface AiConsentSheetProps {
   onContactSupport?: () => void;
   /** Injected in tests. */
   api?: AiConsentSheetApi;
+  /** The signed-in user right now (identity fence of the ledger queue). */
+  sessionUserId?: () => string | null;
   testID?: string;
+}
+
+const defaultSessionUserId = () => readUserCacheSync()?.id ?? null;
+
+interface ReadyCopy {
+  status: AiConsentStatusResponse;
+  paragraph: string;
+  label: string;
+  /** An older version was allowed and the wording changed (C-326-2). */
+  reconsent: boolean;
 }
 
 type Phase =
   | { kind: 'loading' }
-  | { kind: 'ready'; status: AiConsentStatusResponse; paragraph: string; label: string }
-  | { kind: 'saving'; status: AiConsentStatusResponse; paragraph: string; label: string }
+  | ({ kind: 'ready' } & ReadyCopy)
+  | ({ kind: 'saving' } & ReadyCopy)
+  | { kind: 'checking' }
   | { kind: 'already_on' }
   | { kind: 'unavailable' }
   | { kind: 'update_app' }
-  | { kind: 'failed'; reference: string | null; during: 'load' | 'save' };
+  | { kind: 'not_sent' }
+  /** The grant may or may not be on file; never described as off. */
+  | { kind: 'unconfirmed'; reference: string }
+  | { kind: 'failed'; reference: string; during: 'load' | 'save' };
 
 export const AI_CONSENT_SHEET_COPY = {
   title: 'Allow AI help',
@@ -69,7 +106,14 @@ export const AI_CONSENT_SHEET_COPY = {
   updateApp:
     'The wording for this choice has changed since this version of the app. Update the app from the App Store or Google Play, then allow AI help.',
   loadFailed: 'We could not load this choice, so nothing has changed. Check your connection and try again.',
-  saveFailed: 'We could not save your choice, so AI help is still off. Check your connection and try again.',
+  saveFailed:
+    'We could not save your choice, so AI help is still off. Try again, or contact support and share the reference below.',
+  unconfirmed:
+    'We could not confirm your choice, so it may or may not be saved. Try again to check, or see Settings > Privacy.',
+  checking: 'Checking whether your choice was saved',
+  reconsent: 'The AI help wording changed, so it needs your OK again.',
+  notSent:
+    'You were signed out before this choice was saved, so nothing changed. Sign in and choose again.',
   tryAgain: 'Try again',
   contactSupport: 'Contact support',
   close: 'Close',
@@ -94,6 +138,7 @@ export default function AiConsentSheet({
   onClose,
   onContactSupport,
   api = defaultAiConsentApi,
+  sessionUserId = defaultSessionUserId,
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
   const { colors } = useTheme();
@@ -107,6 +152,30 @@ export default function AiConsentSheet({
     };
   }, []);
 
+  /** Report an unknown failure once and return the reference to show (B-326-4). */
+  const reportUnknown = useCallback((what: string, ref: string | null | undefined, extra: Record<string, unknown> = {}) => {
+    const reference = diagnosticReference(ref);
+    captureError(new Error(what), { surface: 'ai_consent_sheet', reference, ...extra });
+    return reference;
+  }, []);
+
+  const readyFrom = useCallback(
+    (status: AiConsentStatusResponse): Phase => {
+      const copy = serverCopyOf(status);
+      if (!copy) {
+        // A status without the wording for its current version cannot be
+        // consented to honestly; never fall back to wording the server did
+        // not send.
+        const reference = reportUnknown('ai consent status without current copy', null, {
+          version: status.current_version,
+        });
+        return { kind: 'failed', reference, during: 'load' };
+      }
+      return { kind: 'ready', status, ...copy, reconsent: status.state === 'needs_reconsent' || status.needs_reconsent };
+    },
+    [reportUnknown],
+  );
+
   const load = useCallback(async () => {
     setPhase({ kind: 'loading' });
     const out = await api.getStatus();
@@ -114,56 +183,86 @@ export default function AiConsentSheet({
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
     if (out.kind === 'version_mismatch') return setPhase({ kind: 'update_app' });
     if (out.kind === 'error' || !out.status) {
-      const reference = out.kind === 'error' ? out.requestId ?? null : null;
-      captureError(new Error('ai consent status load failed'), { reference });
+      const reference = reportUnknown('ai consent status load failed', out.kind === 'error' ? out.requestId : null, {
+        status: out.kind === 'error' ? out.status : 200,
+      });
       return setPhase({ kind: 'failed', reference, during: 'load' });
     }
     const status = out.status;
     if (isLiveGrant(status, status.current_version)) return setPhase({ kind: 'already_on' });
-    const copy = serverCopyOf(status);
-    if (!copy) {
-      // A status without the wording for its current version cannot be
-      // consented to honestly; never fall back to wording the server did
-      // not send.
-      captureError(new Error('ai consent status without current copy'), {
-        version: status.current_version,
-      });
-      return setPhase({ kind: 'failed', reference: null, during: 'load' });
-    }
-    setPhase({ kind: 'ready', status, ...copy });
-  }, [api]);
+    setPhase(readyFrom(status));
+  }, [api, readyFrom, reportUnknown]);
 
   useEffect(() => {
     if (visible) void load();
   }, [visible, load]);
 
+  /**
+   * The grant may have been written but was not confirmed: read the ledger
+   * once. Live grant -> retry the request. The server's own status says off
+   * -> "still off" (or the new wording, when it changed). Still unknown ->
+   * "could not confirm".
+   */
+  const reconcile = useCallback(
+    async (sentVersion: string, firstRef: string | null | undefined) => {
+      setPhase({ kind: 'checking' });
+      const check = await api.getStatus();
+      if (!active.current) return;
+      if (check.kind === 'ok' && check.status) {
+        const st = check.status;
+        if (isLiveGrant(st, st.current_version)) {
+          onGranted();
+          return;
+        }
+        if (st.current_version !== sentVersion) {
+          // The wording changed under the request: show the new wording.
+          setPhase(readyFrom({ ...st, needs_reconsent: true }));
+          return;
+        }
+        const reference = reportUnknown('ai consent grant not on file after an unconfirmed write', firstRef, {
+          state: st.state,
+        });
+        setPhase({ kind: 'failed', reference, during: 'save' });
+        return;
+      }
+      const reference = reportUnknown('ai consent grant could not be confirmed', firstRef ?? (check.kind === 'error' ? check.requestId : null), {
+        check: check.kind,
+      });
+      setPhase({ kind: 'unconfirmed', reference });
+    },
+    [api, onGranted, readyFrom, reportUnknown],
+  );
+
   const allow = useCallback(async () => {
     if (phase.kind !== 'ready') return;
     const { status } = phase;
+    const version = status.current_version;
     setPhase({ ...phase, kind: 'saving' });
-    const out = await api.grantRoman({
-      version: status.current_version,
-      ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
-      platform: platformTag(),
-    });
+    const uid = sessionUserId();
+    const out: AiConsentOutcome | typeof AI_LEDGER_NOT_SENT = await grantAiChoiceAs(uid, sessionUserId, () =>
+      api.grantRoman({
+        version,
+        ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
+        platform: platformTag(),
+      }),
+    );
     if (!active.current) return;
-    if (out.kind === 'ok') {
-      // A reply without a readable status still means the POST succeeded
-      // (idempotent grant); a readable one must show the live grant.
-      if (out.status && !isLiveGrant(out.status, status.current_version)) {
-        captureError(new Error('ai consent grant did not report a live grant'), {
-          state: out.status.state,
-        });
-        return setPhase({ kind: 'failed', reference: null, during: 'save' });
-      }
+    if (out === AI_LEDGER_NOT_SENT) return setPhase({ kind: 'not_sent' });
+    if (out.kind === 'ok' && isLiveGrant(out.status, version)) {
       onGranted();
       return;
     }
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
     if (out.kind === 'version_mismatch') return setPhase({ kind: 'update_app' });
-    captureError(new Error('ai consent grant failed'), { status: out.status, code: out.code });
-    setPhase({ kind: 'failed', reference: out.requestId ?? null, during: 'save' });
-  }, [api, onGranted, phase]);
+    if (out.kind === 'error' && !isAmbiguousWriteOutcome(out)) {
+      // A 4xx refusal is answered before anything is written: still off.
+      const reference = reportUnknown('ai consent grant refused', out.requestId, { status: out.status, code: out.code });
+      return setPhase({ kind: 'failed', reference, during: 'save' });
+    }
+    // Possibly written: no reply, 408/409/5xx, or a success without a
+    // readable live grant (null or other status).
+    await reconcile(version, out.kind === 'error' ? out.requestId : null);
+  }, [api, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
 
   const renderBody = () => {
     switch (phase.kind) {
@@ -179,6 +278,11 @@ export default function AiConsentSheet({
         return (
           <>
             <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+              {phase.reconsent ? (
+                <Text style={styles.note} testID={`${testID}-reconsent`}>
+                  {AI_CONSENT_SHEET_COPY.reconsent}
+                </Text>
+              ) : null}
               <Text style={styles.paragraph} testID={`${testID}-paragraph`}>
                 {phase.paragraph}
               </Text>
@@ -190,7 +294,7 @@ export default function AiConsentSheet({
             </ScrollView>
             <TouchableOpacity
               style={[styles.primary, saving && styles.disabled]}
-              onPress={allow}
+              onPress={() => void allow()}
               disabled={saving}
               accessibilityRole="button"
               accessibilityLabel={AI_CONSENT_SHEET_COPY.allow}
@@ -233,6 +337,23 @@ export default function AiConsentSheet({
             </TouchableOpacity>
           </>
         );
+      case 'checking':
+        return (
+          <View style={styles.center} testID={`${testID}-checking`}>
+            <ActivityIndicator color={colors.primary} accessibilityLabel={AI_CONSENT_SHEET_COPY.checking} />
+          </View>
+        );
+      case 'not_sent':
+        return (
+          <>
+            <Text style={styles.message} accessibilityRole="alert" testID={`${testID}-not-sent`}>
+              {AI_CONSENT_SHEET_COPY.notSent}
+            </Text>
+            <TouchableOpacity style={styles.secondary} onPress={onClose} accessibilityRole="button">
+              <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.close}</Text>
+            </TouchableOpacity>
+          </>
+        );
       case 'update_app':
         return (
           <>
@@ -245,14 +366,19 @@ export default function AiConsentSheet({
           </>
         );
       case 'unavailable':
+      case 'unconfirmed':
       case 'failed': {
         const text =
           phase.kind === 'unavailable'
             ? AI_CONSENT_SHEET_COPY.unavailable
-            : phase.during === 'load'
-              ? AI_CONSENT_SHEET_COPY.loadFailed
-              : AI_CONSENT_SHEET_COPY.saveFailed;
-        const short = phase.kind === 'failed' ? shortReference(phase.reference) : null;
+            : phase.kind === 'unconfirmed'
+              ? AI_CONSENT_SHEET_COPY.unconfirmed
+              : phase.during === 'load'
+                ? AI_CONSENT_SHEET_COPY.loadFailed
+                : AI_CONSENT_SHEET_COPY.saveFailed;
+        const short = phase.kind === 'unavailable' ? null : shortReference(phase.reference);
+        // "Try again to check" re-reads the ledger; it never re-sends a write.
+        const retry = () => void load();
         return (
           <>
             <Text style={styles.message} accessibilityRole="alert" testID={`${testID}-${phase.kind}`}>
@@ -265,7 +391,7 @@ export default function AiConsentSheet({
             ) : null}
             <TouchableOpacity
               style={styles.primary}
-              onPress={() => void load()}
+              onPress={retry}
               accessibilityRole="button"
               accessibilityLabel={AI_CONSENT_SHEET_COPY.tryAgain}
               testID={`${testID}-try-again`}

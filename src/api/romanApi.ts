@@ -63,6 +63,7 @@ import api from '../services/api';
 import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
+import { captureError } from '../services/sentry';
 import {
   aiRefusalFromHttp,
   aiRefusalFromStreamCode,
@@ -200,18 +201,27 @@ export class RomanApiError extends Error {
   readonly retryAfterSeconds?: number;
   /** Present only for `aiRefused`: which refusal, with its support reference. */
   readonly refusal?: AiRefusal;
+  /**
+   * True when the failure came AFTER the server accepted the send (HTTP 200):
+   * the backend stores the user turn before it opens the stream, so the turn
+   * is already saved even though no answer came (Sol B-326-3). The client must
+   * keep it and must never append it again on its own.
+   */
+  readonly turnStored: boolean;
 
   constructor(
     kind: RomanErrorKind,
     message: string,
     retryAfterSeconds?: number,
     refusal?: AiRefusal,
+    turnStored = false,
   ) {
     super(message);
     this.name = 'RomanApiError';
     this.kind = kind;
     this.retryAfterSeconds = retryAfterSeconds;
     this.refusal = refusal;
+    this.turnStored = turnStored;
   }
 }
 
@@ -465,6 +475,8 @@ export async function sendMessage(
     throw new RomanApiError('offline', 'No connection to Roman right now.');
   }
 
+  // Set once the server answered 200: from then on the user turn is stored.
+  let accepted = false;
   try {
     if (!response.ok) {
       if (response.status === 404) {
@@ -494,6 +506,7 @@ export async function sendMessage(
       throw new RomanApiError('generic', 'That request did not complete.');
     }
 
+    accepted = true;
     const bodyText = await response.text();
     const { chunks, streamError } = parseSseChunks(bodyText);
 
@@ -504,11 +517,20 @@ export async function sendMessage(
       // itself is exactly { code, message }, backend B-626-2).
       const refusal = aiRefusalFromStreamCode(streamError, responseRequestId(response));
       if (refusal) {
-        throw new RomanApiError('aiRefused', streamError.message, undefined, refusal);
+        if (refusal.kind === 'egress_blocked') {
+          // C-326-3: an in-stream egress block is a server-side defect the
+          // backend does not report on this path; report it once, with the
+          // reference the person sees.
+          captureError(new Error('roman in-stream ai_egress_blocked'), {
+            surface: 'roman',
+            reference: refusal.reference,
+          });
+        }
+        throw new RomanApiError('aiRefused', streamError.message, undefined, refusal, true);
       }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
-      throw new RomanApiError(kind, streamError.message);
+      throw new RomanApiError(kind, streamError.message, undefined, undefined, true);
     }
 
     const done = chunks.find((c) => c.type === 'done');
@@ -525,7 +547,12 @@ export async function sendMessage(
     };
   } catch (err) {
     if (err instanceof RomanApiError || err instanceof RomanWireError) throw err;
-    throw toRomanApiError(err);
+    const mapped = toRomanApiError(err);
+    // A failure while reading an accepted (200) stream: the turn is stored.
+    if (accepted) {
+      throw new RomanApiError(mapped.kind, mapped.message, mapped.retryAfterSeconds, mapped.refusal, true);
+    }
+    throw mapped;
   } finally {
     clearTimeout(timeout);
   }

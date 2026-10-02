@@ -15,12 +15,25 @@ import AiRefusalNotice from '../AiRefusalNotice';
 import { AI_CONSENT_SHEET_COPY, type AiConsentSheetApi } from '../AiConsentSheet';
 import { openSupportFrom, type SupportNav } from '../useOpenSupport';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
+import {
+  AI_CONSENT_CHECKBOX_LABEL,
+  AI_CONSENT_COPY_SHA256,
+  AI_CONSENT_PARAGRAPH,
+} from '../../../lib/consultation/copy';
+import { AI_CONSENT_VERSION } from '../../../lib/consultation/consentVersion';
+import { resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
+import { captureError } from '../../../services/sentry';
 
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 
-const PARAGRAPH = 'Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider.';
-const LABEL = 'Optional: I allow Roman and my coach’s AI tools to use my information, processed by Anthropic.';
+// The real client-ai-v4 copy, byte-identical to backend #635 (paragraph
+// sha256 56d14fb9..., label 77da153d..., combined fbf82140...).
+const PARAGRAPH = AI_CONSENT_PARAGRAPH;
+const LABEL = AI_CONSENT_CHECKBOX_LABEL;
+const V4 = AI_CONSENT_VERSION;
+const UID = 'client-1';
+const sessionUserId = () => UID;
 
 function status(overrides: Partial<AiConsentStatusResponse> = {}): AiConsentStatusResponse {
   return {
@@ -31,29 +44,39 @@ function status(overrides: Partial<AiConsentStatusResponse> = {}): AiConsentStat
     version: null,
     granted_at: null,
     withdrawn_at: null,
-    current_version: 'client-ai-v3',
+    current_version: V4,
     needs_reconsent: false,
     copy: {
-      version: 'client-ai-v3',
-      paragraph: { text: PARAGRAPH, sha256: 'a'.repeat(64) },
-      box_label: { text: LABEL, sha256: 'b'.repeat(64) },
-      sha256: 'c'.repeat(64),
+      version: V4,
+      paragraph: { text: PARAGRAPH, sha256: '56d14fb96b9f7b6abdd43242f5ce9eaee419bc0d9fb4302bc283ecc1529d430b' },
+      box_label: { text: LABEL, sha256: '77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba' },
+      sha256: AI_CONSENT_COPY_SHA256,
     },
     ...overrides,
   };
 }
 
-const GRANTED = status({ granted: true, state: 'granted', version: 'client-ai-v3', granted_at: '2026-10-01T00:00:00Z' });
+const GRANTED = status({ granted: true, state: 'granted', version: V4, granted_at: '2026-10-01T00:00:00Z' });
 
-function fakeApi(getStatus: AiConsentOutcome, grant: AiConsentOutcome = { kind: 'ok', status: GRANTED }) {
+/** `getStatus` answers in order (the last answer repeats). */
+function fakeApi(
+  getStatus: AiConsentOutcome | AiConsentOutcome[],
+  grant: AiConsentOutcome = { kind: 'ok', status: GRANTED },
+) {
+  const answers = Array.isArray(getStatus) ? [...getStatus] : [getStatus];
   const api = {
-    getStatus: jest.fn(async () => getStatus),
+    getStatus: jest.fn(async () => (answers.length > 1 ? answers.shift()! : answers[0])),
     grantRoman: jest.fn(async () => grant),
   };
   return api as typeof api & AiConsentSheetApi;
 }
 
 describe('AiRefusalNotice — client consent_required', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetAiLedgerWritesForTests();
+  });
+
   it('Allow AI help -> server copy -> grant with version, sha256 and platform -> retries the request', async () => {
     const api = fakeApi({ kind: 'ok', status: status() });
     const onRetry = jest.fn();
@@ -63,7 +86,7 @@ describe('AiRefusalNotice — client consent_required', () => {
         audience="client"
         surface="roman"
         onRetry={onRetry}
-        consentApi={api}
+        consentApi={api} consentSessionUserId={sessionUserId}
         testID="n"
       />,
     );
@@ -78,8 +101,8 @@ describe('AiRefusalNotice — client consent_required', () => {
     await fireEvent.press(r.getByTestId('n-consent-sheet-allow'));
     await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
     expect(api.grantRoman).toHaveBeenCalledWith({
-      version: 'client-ai-v3',
-      copy_sha256: 'c'.repeat(64),
+      version: V4,
+      copy_sha256: AI_CONSENT_COPY_SHA256,
       platform: expect.stringMatching(/^(ios|android|web)$/),
     });
   });
@@ -88,7 +111,7 @@ describe('AiRefusalNotice — client consent_required', () => {
     const api = fakeApi({ kind: 'ok', status: status() });
     const onRetry = jest.fn();
     const r = await render(
-      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="guide" onRetry={onRetry} consentApi={api} testID="n" />,
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="guide" onRetry={onRetry} consentApi={api} consentSessionUserId={sessionUserId} testID="n" />,
     );
     await fireEvent.press(r.getByTestId('n-allow'));
     await waitFor(() => expect(r.getByTestId('n-consent-sheet-not-now')).toBeTruthy());
@@ -101,7 +124,7 @@ describe('AiRefusalNotice — client consent_required', () => {
     const api = fakeApi({ kind: 'ok', status: GRANTED });
     const onRetry = jest.fn();
     const r = await render(
-      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="insight" onRetry={onRetry} consentApi={api} testID="n" />,
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="insight" onRetry={onRetry} consentApi={api} consentSessionUserId={sessionUserId} testID="n" />,
     );
     await fireEvent.press(r.getByTestId('n-allow'));
     await waitFor(() => expect(r.getByTestId('n-consent-sheet-already-on')).toBeTruthy());
@@ -117,7 +140,7 @@ describe('AiRefusalNotice — client consent_required', () => {
   ])('status %s: specific copy, nothing granted', async (_name, outcome, text) => {
     const api = fakeApi(outcome);
     const r = await render(
-      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} onContactSupport={jest.fn()} testID="n" />,
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} consentSessionUserId={sessionUserId} onContactSupport={jest.fn()} testID="n" />,
     );
     await fireEvent.press(r.getByTestId('n-allow'));
     await waitFor(() => expect(r.getByText(text)).toBeTruthy());
@@ -131,25 +154,120 @@ describe('AiRefusalNotice — client consent_required', () => {
   it('a status without the current wording is never consented to (no fallback copy)', async () => {
     const api = fakeApi({ kind: 'ok', status: status({ copy: null }) });
     const r = await render(
-      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} testID="n" />,
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} consentSessionUserId={sessionUserId} testID="n" />,
     );
     await fireEvent.press(r.getByTestId('n-allow'));
     await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.loadFailed)).toBeTruthy());
     expect(r.queryByTestId('n-consent-sheet-allow')).toBeNull();
   });
 
-  it('a failed grant keeps AI help off, says so, and offers Try again', async () => {
-    const api = fakeApi({ kind: 'ok', status: status() }, { kind: 'error', status: 500, requestId: 'grant-ref-99' });
-    const onRetry = jest.fn();
+  async function openAndAllow(api: ReturnType<typeof fakeApi>, onRetry = jest.fn()) {
     const r = await render(
-      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" onRetry={onRetry} consentApi={api} testID="n" />,
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" onRetry={onRetry} consentApi={api} consentSessionUserId={sessionUserId} onContactSupport={jest.fn()} testID="n" />,
     );
     await fireEvent.press(r.getByTestId('n-allow'));
     await waitFor(() => expect(r.getByTestId('n-consent-sheet-allow')).toBeTruthy());
     await fireEvent.press(r.getByTestId('n-consent-sheet-allow'));
-    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
-    expect(r.getByTestId('n-consent-sheet-try-again')).toBeTruthy();
+    return { r, onRetry };
+  }
+
+  // Sol/Opus B-326-1: an error is not proof that nothing was written.
+  it('committed but the reply was lost (500): re-reads the ledger, finds the live grant, retries once', async () => {
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'ok', status: GRANTED }], {
+      kind: 'error',
+      status: 500,
+      requestId: 'grant-ref-99',
+    });
+    const { onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(onRetry).toHaveBeenCalledTimes(1));
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('no reply at all, ledger unreadable: "could not confirm", never "still off", with a reported reference', async () => {
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'error', status: null }], { kind: 'error', status: null });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.unconfirmed)).toBeTruthy());
+    expect(r.queryByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeNull();
     expect(onRetry).not.toHaveBeenCalled();
+    const shown = String(r.getByTestId('n-consent-sheet-reference').props.children).replace('Reference: ', '');
+    const reported = (captureError as jest.Mock).mock.calls.map((c) => (c[1] as { reference?: string }).reference);
+    expect(reported.some((ref) => typeof ref === 'string' && ref.startsWith(shown))).toBe(true);
+    expect(r.getByTestId('n-consent-sheet-try-again')).toBeTruthy();
+    expect(r.getByTestId('n-consent-sheet-support')).toBeTruthy();
+  });
+
+  it('5xx and the ledger then says not granted: "still off" (proven by the server), Try again re-reads, no retry', async () => {
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'ok', status: status() }], { kind: 'error', status: 502 });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
+    expect(r.getByTestId('n-consent-sheet-reference')).toBeTruthy();
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(api.grantRoman).toHaveBeenCalledTimes(1);
+  });
+
+  it('a success with no readable status is NOT a live grant: it is checked first', async () => {
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'ok', status: status() }], { kind: 'ok', status: null });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
+    expect(onRetry).not.toHaveBeenCalled();
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('a success whose status is not a live grant (withdrawn meanwhile) is checked, then reported off', async () => {
+    const withdrawn = status({ state: 'withdrawn', version: V4, withdrawn_at: '2026-10-02T00:00:00Z' });
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'ok', status: withdrawn }], { kind: 'ok', status: withdrawn });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('the wording changed under the request: shows the new wording with the reconsent line, no retry', async () => {
+    const v5 = status({
+      current_version: 'client-ai-v5',
+      copy: { version: 'client-ai-v5', paragraph: { text: 'New paragraph.', sha256: 'd'.repeat(64) }, box_label: { text: 'New label.', sha256: 'e'.repeat(64) }, sha256: 'f'.repeat(64) },
+    });
+    const api = fakeApi([{ kind: 'ok', status: status() }, { kind: 'ok', status: v5 }], { kind: 'error', status: 504 });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByTestId('n-consent-sheet-paragraph').props.children).toBe('New paragraph.'));
+    expect(r.getByTestId('n-consent-sheet-reconsent').props.children).toBe(AI_CONSENT_SHEET_COPY.reconsent);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('a definitive 4xx refusal: still off with a reference, no ledger re-read needed', async () => {
+    const api = fakeApi({ kind: 'ok', status: status() }, { kind: 'error', status: 400, code: 'BAD_REQUEST' });
+    const { r, onRetry } = await openAndAllow(api);
+    await waitFor(() => expect(r.getByText(AI_CONSENT_SHEET_COPY.saveFailed)).toBeTruthy());
+    expect(r.getByTestId('n-consent-sheet-reference')).toBeTruthy();
+    expect(api.getStatus).toHaveBeenCalledTimes(1);
+    expect(onRetry).not.toHaveBeenCalled();
+  });
+
+  it('needs_reconsent (an older version was allowed): the sheet says the wording changed (C-326-2)', async () => {
+    const api = fakeApi({ kind: 'ok', status: status({ state: 'needs_reconsent', needs_reconsent: true, version: 'client-ai-v3' }) });
+    const r = await render(
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} consentSessionUserId={sessionUserId} testID="n" />,
+    );
+    await fireEvent.press(r.getByTestId('n-allow'));
+    await waitFor(() => expect(r.getByTestId('n-consent-sheet-reconsent')).toBeTruthy());
+    expect(r.getByTestId('n-consent-sheet-paragraph').props.children).toBe(PARAGRAPH);
+  });
+
+  // Sol B-326-4: every unknown branch shows a reference that is also reported.
+  it.each<[string, AiConsentOutcome]>([
+    ['load error without any request reference', { kind: 'error', status: 500 }],
+    ['status without the current wording', { kind: 'ok', status: status({ copy: null }) }],
+  ])('%s: a generated reference is shown and is the one on the Sentry event', async (_n, outcome) => {
+    const api = fakeApi(outcome);
+    const r = await render(
+      <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="client" surface="roman" consentApi={api} consentSessionUserId={sessionUserId} onContactSupport={jest.fn()} testID="n" />,
+    );
+    await fireEvent.press(r.getByTestId('n-allow'));
+    await waitFor(() => expect(r.getByTestId('n-consent-sheet-reference')).toBeTruthy());
+    const shown = String(r.getByTestId('n-consent-sheet-reference').props.children).replace('Reference: ', '');
+    expect(shown).toMatch(/^[A-Za-z0-9-]{8}$/);
+    const reported = (captureError as jest.Mock).mock.calls.map((c) => (c[1] as { reference?: string }).reference);
+    expect(reported.some((ref) => typeof ref === 'string' && ref.startsWith(shown))).toBe(true);
+    expect(r.getByTestId('n-consent-sheet-support')).toBeTruthy();
   });
 });
 
@@ -159,7 +277,7 @@ describe('AiRefusalNotice — coach consent_required', () => {
     const r = await render(
       <AiRefusalNotice refusal={{ kind: 'consent_required' }} audience="coach" surface="draft" onRetry={onRetry} testID="n" />,
     );
-    expect(r.getByTestId('n-title').props.children).toBe('This client has not allowed AI help');
+    expect(r.getByTestId('n-title').props.children).toBe('AI help is off for this client');
     expect(r.getByTestId('n-body').props.children).toContain('You still see their data and can coach them as usual');
     expect(r.queryByTestId('n-allow')).toBeNull();
     await fireEvent.press(r.getByTestId('n-retry'));

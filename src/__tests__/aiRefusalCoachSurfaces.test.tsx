@@ -117,7 +117,7 @@ describe('CoachAiSection — R2b refusals', () => {
     const r = await openInsightForm();
     await pressSubmit(r);
     await waitFor(() => expect(r.getByTestId('coach-ai-refusal')).toBeTruthy());
-    expect(r.getByTestId('coach-ai-refusal-title').props.children).toBe('This client has not allowed AI help');
+    expect(r.getByTestId('coach-ai-refusal-title').props.children).toBe('AI help is off for this client');
     expect(r.queryByText(COACH_MESSAGE)).toBeNull();
     mockedPost.mockRejectedValueOnce(consentError());
     await fireEvent.press(r.getByTestId('coach-ai-refusal-retry'));

@@ -28,7 +28,7 @@ import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
-import { shortReference, supportReferenceOf } from '../../utils/correlation';
+import { shortReference, supportReferenceOf, diagnosticReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
@@ -83,6 +83,22 @@ function TypingIndicator() {
       </View>
     </View>
   );
+}
+
+
+/**
+ * A 200 from the guide with no reply text. Carries the response so the
+ * request's reference survives into the failure branch.
+ */
+class EmptyGuideReplyError extends Error {
+  readonly response: unknown;
+  readonly config: unknown;
+  constructor(response: { config?: unknown } | null | undefined) {
+    super('Empty API response');
+    this.name = 'EmptyGuideReplyError';
+    this.response = response ?? undefined;
+    this.config = response?.config;
+  }
 }
 
 export default function AIGuideScreen() {
@@ -170,7 +186,9 @@ export default function AIGuideScreen() {
         aiText = response.data?.reply || response.data?.message || response.data?.response || '';
 
         if (!aiText) {
-          throw new Error('Empty API response');
+          // Keep the response, so the reference of THIS request is shown and
+          // reported (Sol B-326-4).
+          throw new EmptyGuideReplyError(response);
         }
 
         // Successful network call — clear any previous offline state.
@@ -232,8 +250,11 @@ export default function AIGuideScreen() {
         // P0-aiGuide / R18)
         // Owner rule 2026-10-01 13:34: an unknown failure says what happened,
         // the next step, and a short reference for support, and is reported.
-        const ref = shortReference(supportReferenceOf(err));
-        captureError(err, { surface: 'ai_guide', reference: ref });
+        // B-326-4: always a reference. The request's own when known,
+        // otherwise a generated one; the same value goes to Sentry.
+        const fullRef = diagnosticReference(supportReferenceOf(err));
+        const ref = shortReference(fullRef);
+        captureError(err, { surface: 'ai_guide', reference: fullRef });
         aiText =
           'Guidance could not answer this time because of a problem on our side. ' +
           'Send your message again in a minute. If it keeps happening, contact support' +

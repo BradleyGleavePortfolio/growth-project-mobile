@@ -10,11 +10,14 @@
  *     { code, message } (backend B-626-2 keeps the frame exactly that shape).
  */
 import { parseSseChunks, RomanApiError, RomanWireError, sendMessage } from '../romanApi';
+import { captureError } from '../../services/sentry';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(), post: jest.fn(), delete: jest.fn() },
 }));
+
+jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 
 jest.mock('../../services/secureStorage', () => ({
   secureStorage: { getItem: jest.fn(async () => 'test-token') },
@@ -135,5 +138,57 @@ describe('strict SSE error parser (unchanged contract)', () => {
   it('a drifted frame through sendMessage is a RomanWireError, not a refusal', async () => {
     mockFetchOnce({ text: `event: error\ndata: ${JSON.stringify({ ...CONSENT, requestId: 'r1' })}\n\n` });
     await expect(sendMessage(SESSION_ID, 'hi')).rejects.toBeInstanceOf(RomanWireError);
+  });
+});
+
+// Sol B-326-3 / Opus C-326-1: the backend stores the user turn BEFORE it opens
+// the stream, so every failure after HTTP 200 carries turnStored; a refusal
+// answered over HTTP (the pre-check) does not. C-326-3: an in-stream egress
+// block is reported to Sentry once, with the reference the person sees.
+describe('romanApi.sendMessage — was the user turn stored?', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('HTTP 403 pre-check refusal: turnStored false (nothing was stored)', async () => {
+    mockFetchOnce({ ok: false, status: 403, text: JSON.stringify(CONSENT) });
+    const err = await failureOf(sendMessage(SESSION_ID, 'hi'));
+    expect(err).toBeInstanceOf(RomanApiError);
+    expect((err as RomanApiError).turnStored).toBe(false);
+  });
+
+  it('in-stream consent refusal: turnStored true', async () => {
+    mockFetchOnce({ text: `event: error\ndata: ${JSON.stringify(CONSENT)}\n\n` });
+    const err = await failureOf(sendMessage(SESSION_ID, 'hi'));
+    expect((err as RomanApiError).turnStored).toBe(true);
+    expect(captureError).not.toHaveBeenCalled();
+  });
+
+  it('in-stream ROMAN_UNAVAILABLE: turnStored true', async () => {
+    mockFetchOnce({
+      text: 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n',
+    });
+    const err = await failureOf(sendMessage(SESSION_ID, 'hi'));
+    expect((err as RomanApiError).turnStored).toBe(true);
+  });
+
+  it('a 200 whose body cannot be read: turnStored true', async () => {
+    const response: Pick<Response, 'ok' | 'status' | 'headers' | 'text'> = {
+      ok: true,
+      status: 200,
+      headers: { get: (_k: string) => null } as Headers,
+      text: async () => {
+        throw new TypeError('Network request failed');
+      },
+    };
+    global.fetch = jest.fn(async () => response as Response);
+    const err = await failureOf(sendMessage(SESSION_ID, 'hi'));
+    expect(err).toBeInstanceOf(RomanApiError);
+    expect((err as RomanApiError).turnStored).toBe(true);
+  });
+
+  it('in-stream egress block: reported once with the X-Request-ID reference', async () => {
+    mockFetchOnce({ text: `event: error\ndata: ${JSON.stringify(EGRESS)}\n\n`, headers: { 'x-request-id': 'sse-ref-0042' } });
+    await failureOf(sendMessage(SESSION_ID, 'hi'));
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect((captureError as jest.Mock).mock.calls[0][1]).toMatchObject({ surface: 'roman', reference: 'sse-ref-0042' });
   });
 });

@@ -132,10 +132,11 @@ describe('aiRefusalCopy (owner copy rules)', () => {
     }
   }
 
-  it('client consent: AI is off because they have not allowed it, and the coach still sees their data', () => {
+  it('client consent: AI help is not on (neutral: never allowed OR wording changed, C-326-2), and the coach still sees their data', () => {
     const copy = aiRefusalCopy({ kind: 'consent_required' }, 'client', 'roman');
     expect(copy.title).toBe('AI help is off');
-    expect(copy.body).toContain('you have not allowed AI help');
+    expect(copy.body).toContain('because AI help is not on for your account');
+    expect(copy.body).not.toContain('you have not allowed');
     expect(copy.body).toContain('Your coach still sees your training information as usual');
     expect(copy.body).toContain('Anthropic');
     expect(copy.referenceLine).toBeNull();
@@ -143,8 +144,8 @@ describe('aiRefusalCopy (owner copy rules)', () => {
 
   it('coach consent: the client has not allowed it, the coach still coaches, where the client turns it on', () => {
     const copy = aiRefusalCopy({ kind: 'consent_required' }, 'coach', 'draft');
-    expect(copy.title).toBe('This client has not allowed AI help');
-    expect(copy.body).toContain('AI drafts are off for this client');
+    expect(copy.title).toBe('AI help is off for this client');
+    expect(copy.body).toContain('AI drafts are off for this client because AI help is not on for their account');
     expect(copy.body).toContain('You still see their data and can coach them as usual');
     expect(copy.body).toContain('Settings > Privacy');
     expect(aiRefusalCopy({ kind: 'consent_required' }, 'coach', 'insight').body).toContain('AI insights are off');

@@ -20,6 +20,7 @@ import {
   listMessages,
   openOrResumeSession,
   RomanApiError,
+  RomanWireError,
   sendMessage,
   type RomanAssistantReply,
   type RomanMessage,
@@ -45,6 +46,12 @@ export interface RomanSendError {
   retryAfterSeconds?: number;
   /** R2b refusal (kind `aiRefused`): consent required or egress blocked. */
   refusal?: AiRefusal;
+  /**
+   * The server had already stored the user turn when this failed (an
+   * in-stream error after HTTP 200). The turn stays in the thread; nothing
+   * may append it again automatically (Sol B-326-3, Opus C-326-1).
+   */
+  turnStored?: boolean;
 }
 
 /**
@@ -52,9 +59,12 @@ export interface RomanSendError {
  * modes the R1 code audit (F5) requires us to keep separate:
  *   - 'sent'        — the turn persisted; clear the composer.
  *   - 'send-failed' — the turn did NOT persist; keep the draft for retry.
+ *   - 'stored-no-reply' — the server stored the turn, then failed before
+ *                     answering (in-stream refusal or error). The turn stays;
+ *                     the thread is re-read from the server (B-326-3).
  *   - 'noop'        — nothing was sent (empty/duplicate guard).
  */
-export type RomanSendOutcome = 'sent' | 'send-failed' | 'noop';
+export type RomanSendOutcome = 'sent' | 'send-failed' | 'stored-no-reply' | 'noop';
 
 export interface UseRomanChatResult {
   phase: RomanChatPhase;
@@ -183,10 +193,40 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
     try {
       reply = await sendMessage(s.id, trimmed);
     } catch (err) {
+      logger.warn('useRomanChat.send', err);
+      // After an HTTP 200 the backend has stored the user turn before the
+      // stream failed (in-stream refusal, ROMAN_UNAVAILABLE, a cut stream).
+      // Keep the turn and re-read the thread from the server; never roll it
+      // back, or a retry would store it twice (Sol B-326-3, Opus C-326-1).
+      const stored =
+        (err instanceof RomanApiError && err.turnStored) || err instanceof RomanWireError;
+      if (stored) {
+        if (active.current) {
+          const e = err instanceof RomanApiError ? err : null;
+          setSendError({
+            kind: e?.kind ?? 'generic',
+            message: e?.message ?? 'Roman could not finish this answer.',
+            ...(e?.refusal ? { refusal: e.refusal } : {}),
+            turnStored: true,
+          });
+        }
+        try {
+          const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+          if (active.current) {
+            setMessages([...page.messages].reverse());
+            setNextCursor(page.nextCursor);
+          }
+        } catch (refreshErr) {
+          // The optimistic turn stays visible; the next reload reconciles it.
+          logger.warn('useRomanChat.send.storedRefresh', refreshErr);
+        }
+        sendingRef.current = false;
+        if (active.current) setSending(false);
+        return 'stored-no-reply';
+      }
       // The SEND failed: the backend did not persist the turn. Roll the
       // optimistic user turn back and surface a retryable send error. The
       // screen preserves the draft so the user can send it again.
-      logger.warn('useRomanChat.send', err);
       if (active.current) {
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         const e = err instanceof RomanApiError ? err : null;
