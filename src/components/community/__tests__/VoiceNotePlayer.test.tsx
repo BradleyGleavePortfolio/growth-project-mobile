@@ -17,8 +17,18 @@ jest.mock('../../../theme/useTheme', () => {
   };
 });
 
+// HapticPressable is replaced by a plain host element that keeps every prop
+// (onPress included), so a test can deliver two taps inside one frame.
+jest.mock('../../HapticPressable', () => {
+  const ReactActual = jest.requireActual('react');
+  return {
+    __esModule: true,
+    default: ({ children, ...props }: { children?: unknown }) =>
+      ReactActual.createElement('HapticPressableHost', props, children),
+  };
+});
+
 import VoiceNotePlayer from '../VoiceNotePlayer';
-import HapticPressable from '../../HapticPressable';
 import type {
   VoicePlaybackPort,
   VoicePlaybackHandle,
@@ -238,7 +248,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
   it('two taps before the load resolves create one player, play it once and release it on unmount', async () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
-    const toggle = screen.UNSAFE_getByType(HapticPressable);
+    const toggle = screen.getByTestId('voice-player-toggle');
     pressTwiceSynchronously(toggle);
     expect(port.load).toHaveBeenCalledTimes(1);
     await act(async () => {
@@ -246,7 +256,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     });
     expect(handles).toHaveLength(1);
     expect(handles[0].play).toHaveBeenCalledTimes(1);
-    screen.unmount();
+    await screen.unmount();
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
   });
 
@@ -267,7 +277,7 @@ describe('B-314-8: one native player per control, never orphaned', () => {
   it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
-    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
+    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
     await screen.rerender(
       <VoiceNotePlayer url={`${URL}?fresh=1`} durationMs={4000} playback={port} />,
     );
@@ -277,22 +287,22 @@ describe('B-314-8: one native player per control, never orphaned', () => {
     // The stale handle was released, never played.
     expect(handles[0].unload).toHaveBeenCalledTimes(1);
     expect(handles[0].play).not.toHaveBeenCalled();
-    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
+    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
     expect(port.load).toHaveBeenCalledTimes(2);
     expect(port.load).toHaveBeenLastCalledWith(`${URL}?fresh=1`, expect.any(Object));
     await act(async () => {
       resolvers[1]();
     });
     expect(handles[1].play).toHaveBeenCalledTimes(1);
-    screen.unmount();
+    await screen.unmount();
     expect(handles[1].unload).toHaveBeenCalledTimes(1);
   });
 
   it('unmount while loading releases the handle when it arrives', async () => {
     const { port, handles, resolvers } = heldPlayback();
     const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
-    pressTwiceSynchronously(screen.UNSAFE_getByType(HapticPressable));
-    screen.unmount();
+    pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await screen.unmount();
     await act(async () => {
       resolvers[0]();
     });

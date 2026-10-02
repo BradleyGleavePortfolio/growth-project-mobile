@@ -246,7 +246,7 @@ describe('B-314-7: the default native adapter restores playback mode and owns la
     await act(async () => {
       pending = result.current.start();
     });
-    unmount();
+    await unmount();
     await act(async () => {
       release();
       await pending;

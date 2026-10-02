@@ -68,7 +68,7 @@ describe('B-314-7: a start in flight is owned and fenced', () => {
     });
     expect(p.start).toHaveBeenCalledTimes(1);
     const intervalsBefore = setIntervalSpy.mock.calls.length;
-    unmount();
+    await unmount();
     await act(async () => {
       held.resolve();
       await pending;
@@ -86,7 +86,7 @@ describe('B-314-7: a start in flight is owned and fenced', () => {
     await act(async () => {
       pending = result.current.start();
     });
-    unmount();
+    await unmount();
     await act(async () => {
       held.resolve('granted');
       await pending;
