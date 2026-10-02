@@ -99,10 +99,11 @@ jest.mock('@react-native-community/netinfo', () => {
 
 // Phase 11 Track 9 — Mock crisp-sdk-react-native in all tests.
 // The package bundles native modules that are unavailable in the Jest runner.
+// The mock mirrors the package's real exports (0.4.3 ships its own types; there
+// is no hide(), so the mock does not invent one).
 jest.mock('crisp-sdk-react-native', () => ({
   configure: jest.fn(),
   show: jest.fn(),
-  hide: jest.fn(),
   setUserEmail: jest.fn(),
   setUserNickname: jest.fn(),
   setUserPhone: jest.fn(),

@@ -10,7 +10,8 @@
  *   2. User selects a package
  *   3. POST /v1/checkout/sessions { package_id, idempotency_key } →
  *        { stripe_client_secret, stripe_ephemeral_key }
- *      (publishable key comes from EXPO_PUBLIC_STRIPE_PK env)
+ *      (publishable key comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY, falling
+ *      back to the legacy EXPO_PUBLIC_STRIPE_PK)
  *   4. stripe.initPaymentSheet() + stripe.presentPaymentSheet()
  *   5. Completed → onPaymentSuccess(); Cancel → stay on sheet; Error → inline
  *
@@ -41,6 +42,7 @@ import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { resolveStripePublishableKey } from '../config/stripe';
 
 // Deferred: install @stripe/stripe-react-native when the native build is
 // configured. When the package is available, replace this dynamic resolver
@@ -274,8 +276,9 @@ export default function PackageSelectionSheet({
     // R29: backend contract is POST /v1/checkout/sessions with
     // { package_id, idempotency_key }; response is
     // { stripe_client_secret, stripe_ephemeral_key }. Publishable key
-    // comes from EXPO_PUBLIC_STRIPE_PK.
-    const publishableKey = process.env.EXPO_PUBLIC_STRIPE_PK ?? '';
+    // comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (the name EAS stores),
+    // with the legacy EXPO_PUBLIC_STRIPE_PK as a fallback.
+    const publishableKey = resolveStripePublishableKey();
     if (!publishableKey) {
       setError('Payment is not available right now. Please try again later.');
       setPaying(false);

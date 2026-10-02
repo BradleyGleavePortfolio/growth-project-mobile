@@ -25,8 +25,8 @@ describe('pending invite key contract', () => {
   });
 
   it('what the writer stores, the Home banner reader sees', async () => {
-    await writePendingInviteCode('GP-PNW1');
-    expect(await readPendingInviteCode()).toBe('GP-PNW1');
+    await writePendingInviteCode('GP-TEST1');
+    expect(await readPendingInviteCode()).toBe('GP-TEST1');
   });
 
   it('sign-out still wipes the key the helper writes (R15)', () => {
