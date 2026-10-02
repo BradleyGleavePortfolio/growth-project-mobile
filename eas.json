@@ -43,6 +43,8 @@
     },
     "clinic": {
       "extends": "production",
+      "channel": "clinic",
+      "environment": "production",
       "env": {
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",

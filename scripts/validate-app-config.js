@@ -41,6 +41,8 @@
 
 const fs = require('fs');
 const path = require('path');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resolveProfile } = require('./eas-profile');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_JSON = path.join(ROOT, 'app.json');
@@ -694,7 +696,16 @@ function writeReleaseBlockerMd() {
 // reaches exactly the builds it is meant for. eas.json / package.json are
 // optional here (the mutation tests run on a partial copy of the repo).
 const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER'];
-const EXPECTED_CHANNELS = { preview: 'preview', production: 'production' };
+// profile -> the channel its binaries read and the EAS environment an update
+// for that channel is exported with (resolved through `extends`). The clinic
+// binary has its own channel: it is built with clinic-only EXPO_PUBLIC_FF_*
+// values in eas.json, and an update exported for `production` would turn
+// those features off on clinic devices.
+const EXPECTED_CHANNELS = {
+  preview: { channel: 'preview', environment: 'preview' },
+  production: { channel: 'production', environment: 'production' },
+  clinic: { channel: 'clinic', environment: 'production' },
+};
 
 function validateUpdates(app) {
   const expo = (app && app.expo) || {};
@@ -753,11 +764,14 @@ function validateUpdates(app) {
   } else if (updates.url !== expectedUrl) {
     fail(`app.json: expo.updates.url must be ${expectedUrl} (EAS Update for this project), got ${JSON.stringify(updates.url)}`);
   }
-  if (updates.enabled === false) {
-    warn('app.json: expo.updates.enabled is false — over-the-air fixes will not reach this binary');
+  // Audit #305 C4: enforce the accepted production behaviour, not only a
+  // "valid" configuration: OTA on, a background check on every cold start.
+  if (updates.enabled !== true) {
+    fail(`app.json: expo.updates.enabled must be true (over-the-air fixes must reach this binary), got ${JSON.stringify(updates.enabled)}`);
   }
-  if (updates.checkAutomatically != null && !CHECK_AUTOMATICALLY.includes(updates.checkAutomatically)) {
-    fail(`app.json: expo.updates.checkAutomatically must be one of ${CHECK_AUTOMATICALLY.join(', ')}, got ${JSON.stringify(updates.checkAutomatically)}`);
+  if (updates.checkAutomatically !== 'ON_LOAD') {
+    const known = CHECK_AUTOMATICALLY.includes(updates.checkAutomatically) ? '' : ` (valid values: ${CHECK_AUTOMATICALLY.join(', ')})`;
+    fail(`app.json: expo.updates.checkAutomatically must be "ON_LOAD" (check in the background on every cold start)${known}, got ${JSON.stringify(updates.checkAutomatically)}`);
   }
   if (updates.disableAntiBrickingMeasures === true) {
     fail('app.json: expo.updates.disableAntiBrickingMeasures must not be true (keeps the embedded-update rollback path)');
@@ -773,23 +787,48 @@ function validateUpdates(app) {
   if (fs.existsSync(easPath)) {
     const eas = readJson(easPath);
     const build = (eas && eas.build) || {};
-    for (const [profile, channel] of Object.entries(EXPECTED_CHANNELS)) {
+    for (const [profile, want] of Object.entries(EXPECTED_CHANNELS)) {
       if (!build[profile]) {
         // Re-audit #305 C1: a deleted OTA profile must not pass silently.
-        if (profile === 'preview' || profile === 'production') fail(`eas.json: build.${profile} is required (OTA channel "${channel}")`);
+        fail(`eas.json: build.${profile} is required (OTA channel "${want.channel}")`);
         continue;
       }
-      if ((profile === 'preview' || profile === 'production') && build[profile].environment !== channel) {
-        fail(`eas.json: build.${profile}.environment must be "${channel}" (matches its channel and the update --environment), got ${JSON.stringify(build[profile].environment)}`);
+      let eff;
+      try {
+        eff = resolveProfile(eas, profile);
+      } catch (e) {
+        fail(`eas.json: build.${profile} cannot be resolved (${e.message})`);
+        continue;
       }
-      if (build[profile].channel !== channel) {
-        fail(`eas.json: build.${profile}.channel must be "${channel}" for EAS Update, got ${JSON.stringify(build[profile].channel)}`);
+      if (eff.environment !== want.environment) {
+        fail(`eas.json: build.${profile}.environment must be "${want.environment}" (the --environment its updates are exported with), got ${JSON.stringify(eff.environment)}`);
+      }
+      if (eff.channel !== want.channel) {
+        fail(`eas.json: build.${profile}.channel must be "${want.channel}" for EAS Update, got ${JSON.stringify(eff.channel)}`);
       }
       // Audit #305 A1/B1: the iOS non-P2P purchase hide flag must be on in
-      // every OTA-capable store/internal profile.
-      const flag = ((build[profile].env || {}).EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES);
+      // every OTA-capable store/internal profile (after `extends`).
+      const flag = (eff.env || {}).EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES;
       if (flag !== 'true') {
         fail(`eas.json: build.${profile}.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true", got ${JSON.stringify(flag)}`);
+      }
+    }
+    // One binary population per channel: two profiles on the same channel
+    // would receive each other's updates (built with different env).
+    const owners = {};
+    for (const name of Object.keys(build)) {
+      let eff;
+      try {
+        eff = resolveProfile(eas, name);
+      } catch (e) {
+        fail(`eas.json: build.${name} cannot be resolved (${e.message})`);
+        continue;
+      }
+      if (typeof eff.channel === 'string' && eff.channel) (owners[eff.channel] = owners[eff.channel] || []).push(name);
+    }
+    for (const [channel, names] of Object.entries(owners)) {
+      if (names.length > 1) {
+        fail(`eas.json: channel "${channel}" is used by ${names.join(', ')}; each update channel must belong to exactly one build profile`);
       }
     }
   }

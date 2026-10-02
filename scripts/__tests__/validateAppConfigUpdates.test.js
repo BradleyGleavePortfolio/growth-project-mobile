@@ -17,6 +17,8 @@ function makeWorkspace() {
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs', 'well-known'), { recursive: true });
   fs.copyFileSync(VALIDATOR, path.join(dir, 'scripts', 'validate-app-config.js'));
+  // The validator resolves eas.json `extends` through scripts/eas-profile.js.
+  fs.copyFileSync(path.join(REPO_ROOT, 'scripts', 'eas-profile.js'), path.join(dir, 'scripts', 'eas-profile.js'));
   for (const f of ['app.json', '.env.example', 'eas.json', 'package.json', 'fingerprint.config.js']) {
     fs.copyFileSync(path.join(REPO_ROOT, f), path.join(dir, f));
   }
@@ -65,6 +67,8 @@ describe('validate-app-config — EAS Update gate', () => {
     });
     expect(eas.build.production.channel).toBe('production');
     expect(eas.build.preview.channel).toBe('preview');
+    expect(eas.build.clinic.channel).toBe('clinic');
+    expect(eas.build.clinic.environment).toBe('production');
     expect(app.ios.buildNumber).toBe('6');
     expect(app.android.versionCode).toBe(5);
     withWorkspace((dir) => {
@@ -135,6 +139,19 @@ describe('validate-app-config — EAS Update gate', () => {
       ['production environment → preview', 'eas.json', (j) => { j.build.production.environment = 'preview'; }, /build\.production\.environment must be "production"/],
       ['preview environment missing', 'eas.json', (j) => { delete j.build.preview.environment; }, /build\.preview\.environment must be "preview"/],
       ['production profile deleted', 'eas.json', (j) => { delete j.build.production; }, /build\.production is required/],
+      // S-RELEASE-MOB: the clinic binary has its own channel (built with clinic-only flags).
+      ['clinic profile deleted', 'eas.json', (j) => { delete j.build.clinic; }, /build\.clinic is required/],
+      ['clinic inherits the production channel', 'eas.json', (j) => { delete j.build.clinic.channel; }, /build\.clinic\.channel must be "clinic"/],
+      ['clinic shares the production channel', 'eas.json', (j) => { j.build.clinic.channel = 'production'; }, /channel "production" is used by production, clinic/],
+      ['clinic on the preview environment', 'eas.json', (j) => { j.build.clinic.environment = 'preview'; }, /build\.clinic\.environment must be "production"/],
+      ['clinic overrides the hide flag', 'eas.json', (j) => { j.build.clinic.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES = 'false'; }, /build\.clinic\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
+      ['clinic extends a missing profile', 'eas.json', (j) => { j.build.clinic.extends = 'store'; }, /build\.clinic cannot be resolved/],
+      ['a dev profile joins a store channel', 'eas.json', (j) => { j.build.development.channel = 'clinic'; }, /channel "clinic" is used by development, clinic/],
+      // Audit #305 C4: the accepted launch behaviour is enforced, not just "valid".
+      ['updates disabled', 'app.json', (j) => { j.expo.updates.enabled = false; }, /expo\.updates\.enabled must be true/],
+      ['update check only on Wi-Fi', 'app.json', (j) => { j.expo.updates.checkAutomatically = 'WIFI_ONLY'; }, /checkAutomatically must be "ON_LOAD"/],
+      ['update check never', 'app.json', (j) => { j.expo.updates.checkAutomatically = 'NEVER'; }, /checkAutomatically must be "ON_LOAD"/],
+      ['update check unknown value', 'app.json', (j) => { j.expo.updates.checkAutomatically = 'ALWAYS'; }, /valid values: ON_LOAD/],
     ];
     it.each(cases)('rejects %s', (_name, file, fn, re) => {
       withWorkspace((dir) => {

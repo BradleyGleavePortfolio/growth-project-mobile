@@ -185,6 +185,8 @@ function makeWorkspace() {
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs', 'well-known'), { recursive: true });
   fs.copyFileSync(VALIDATOR, path.join(dir, 'scripts', 'validate-app-config.js'));
+  // The validator resolves eas.json `extends` through scripts/eas-profile.js.
+  fs.copyFileSync(path.join(REPO_ROOT, 'scripts', 'eas-profile.js'), path.join(dir, 'scripts', 'eas-profile.js'));
   fs.copyFileSync(
     path.join(REPO_ROOT, 'app.json'),
     path.join(dir, 'app.json'),

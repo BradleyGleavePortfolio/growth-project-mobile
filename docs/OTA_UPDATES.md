@@ -10,19 +10,29 @@ builds without a new App Store review.
 | `expo-updates` | `~56.0.28` (SDK 56 pin from `npx expo install`) | native module, ships in the binary |
 | `expo.runtimeVersion` | `{ "policy": "fingerprint" }` | see below |
 | `expo.updates.url` | `https://u.expo.dev/a12c3345-cc8c-4c2c-9c57-711c10a57c1c` | this project's EAS projectId |
-| `expo.updates.checkAutomatically` | `ON_LOAD` | check on every cold start |
+| `expo.updates.enabled` | `true` | OTA on (the validator fails on anything else) |
+| `expo.updates.checkAutomatically` | `ON_LOAD` | check in the background on every cold start (the validator fails on any other mode) |
 | `expo.updates.fallbackToCacheTimeout` | `0` | never block launch on the network; a downloaded update applies on the next launch |
 | `eas.json build.production.channel` | `production` | store builds read the `production` channel |
+| `eas.json build.clinic.channel` | `clinic` (environment `production`) | the clinic binary reads its own channel; it is built with clinic-only `EXPO_PUBLIC_FF_*` values, so it must never receive a `production` update |
 | `eas.json build.preview.channel` | `preview` | internal builds read the `preview` channel |
 | `development` profile | no channel | dev client loads from Metro |
+
+### Launch never waits, offline never crashes
+
+- `fallbackToCacheTimeout: 0`: the app always starts on the bundle it already has (embedded or a previously downloaded update). The update check runs natively in the background after launch.
+- `checkAutomatically: ON_LOAD` with no JS update code: the app does not call `expo-updates` from JavaScript, so a failed or offline check has no JS code path that can throw. A failed download is discarded natively; the next cold start tries again.
+- Anti-bricking and the embedded update stay on (`disableAntiBrickingMeasures` / `useEmbeddedUpdate: false` are rejected), so an update that crashes on launch rolls back to the embedded bundle (Expo error recovery, best-effort; see the device checks below).
 
 `npm run validate:config` fails on any of these:
 - `runtimeVersion` is anything other than `{ "policy": "fingerprint" }`, including a per-platform override.
 - `disableAntiBrickingMeasures: true` or `useEmbeddedUpdate: false`.
 - `fallbackToCacheTimeout` is not 0.
 - A wrong updates URL or channel.
-- `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is not `"true"` in the preview/production build profiles.
-- The `preview`/`production` build profile is missing, or its `environment` differs from its channel.
+- `updates.enabled` is not `true`, or `checkAutomatically` is not `ON_LOAD` (audit C4).
+- `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is not `"true"` in the preview/production/clinic build profiles (after `extends`).
+- The `preview`/`production`/`clinic` build profile is missing, its channel is wrong, or its `environment` is not `preview`/`production`/`production`.
+- Two build profiles share a channel (each channel is one binary population).
 - `fingerprint.config.js` is missing, fails to load, or no longer lists `src/config/purchaseSurfaces.ts` in `extraSources`.
 
 Mutation tests: `scripts/__tests__/validateAppConfigUpdates.test.js`.
@@ -73,22 +83,24 @@ fingerprint source is byte-identical:
 The Expo project owner (`the-growth-project` account) must enable EAS Update
 for the project once (expo.dev → project → Updates, or `eas update:configure`
 run by an account member). No code secret is required; the app only needs the
-public updates URL already in `app.json`. Builds made before this PR (≤ #5)
-do not contain `expo-updates` and never receive updates.
+public updates URL already in `app.json`. Binaries built before this PR merges
+do not contain `expo-updates` and never receive updates; the first binary built
+from main after the merge is the first OTA-capable one (any profile).
 
 ## Publishing (operator)
 
 Always publish through the guard:
 
 ```
+npm run update:publish -- --channel clinic --environment production --message "<what changed>"       # clinic binary
 npm run update:publish -- --channel production --environment production --message "<what changed>"   # store builds
 npm run update:publish -- --channel preview --environment preview --message "<what changed>"          # internal builds
 # add --dry-run to run every check without publishing
 ```
 
 The guard (`scripts/eas-update-guard.js`) runs
-`eas update --channel <c> --environment <c> --message <m>` only when all of these hold:
-1. `--environment` is given and equals the channel. SDK 55+ requires it.
+`eas update --channel <c> --environment <e> --message <m>` only when all of these hold:
+1. Exactly one eas.json build profile uses the channel, and `--environment` is given and equals that profile's `environment` (after `extends`; `clinic` → `production`). SDK 55+ requires it.
 2. `src/config/purchaseSurfaces.ts` matches the reviewed hash in `scripts/purchase-policy.sha256`.
 3. The **remote** EAS project variable `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` in that environment is exactly `"true"`.
    - **Lookup:** `eas env:get <env> --variable-name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES --format short --scope project --non-interactive`, with the flag stripped from the child's environment.
@@ -96,6 +108,8 @@ The guard (`scripts/eas-update-guard.js`) runs
    - **Refusals (fail closed):** a missing variable (eas-cli prints "not found" and still exits 0), an empty, masked (sensitive/secret) or duplicate value, or a failed lookup.
    - **Why not `eas env:exec`:** it merges the parent shell env and skips absent remote values, so a locally exported `true` could pass as remote. The guard therefore never trusts the local shell.
 4. The local shell does not set the flag to anything other than `"true"`. The publish child also runs without the local flag, so the bundle takes the EAS environment's value.
+5. **Build parity.** The publish child gets the target profile's resolved `eas.json` env (for `clinic`: the production values plus every clinic flag, and `TGP_ANDROID_HEALTH_CONNECT=0`, which also keeps the Expo config and so the runtime fingerprint equal to the build's). Every other `EXPO_PUBLIC_*` in the local shell is dropped. eas-cli exports with `{ ...process.env, ...EAS environment }`, so an EAS variable wins over the shell: the guard reads `eas env:list <env> --format short` for the project and the account scope and refuses when any of those names exists there with a different, masked or duplicated value.
+6. Every `kind: "required"` name in `config/expected-env.json` is present in the EAS environment or the profile env.
 
 Tests: `scripts/__tests__/easUpdateGuard.test.js` drives `main()` end to end with an injected runner. No refusal case reaches `eas update`.
 
@@ -104,7 +118,7 @@ The unguarded equivalent, for reference only, is
 
 ### Build env vs update env (purchase-critical)
 
-`eas.json` `build.<profile>.env` applies to **builds only**. `eas update` exports the JS bundle with the variables of the **EAS environment** named by `--environment`, and does not use `eas.json` env. Every `EXPO_PUBLIC_*` value is inlined into that bundle again. Before the first publish, provision these release-critical variables in EAS for **both** `preview` and `production`:
+`eas.json` `build.<profile>.env` applies to **builds only**. `eas update` exports the JS bundle with the variables of the **EAS environment** named by `--environment`, and does not use `eas.json` env. Every `EXPO_PUBLIC_*` value is inlined into that bundle again. The guard closes that gap by passing the profile env to the export (step 5); a raw `eas update` would not, and on the clinic channel it would ship with every clinic flag off. Before the first publish, provision these release-critical variables in EAS for **both** `preview` and `production`:
 
 | Variable | Value |
 |---|---|
@@ -130,8 +144,8 @@ Update code signing is **not** configured. Updates are authenticated by EAS acco
 
 ### Before the first production publish (device checks)
 
-1. Build 6 starts offline (embedded bundle).
-2. A preview update is received on a later launch.
+1. The first OTA-capable build starts offline (embedded bundle), in airplane mode, twice.
+2. A preview update is received on a later launch (and a clinic update reaches only the clinic binary).
 3. An update that fails early recovers to the embedded bundle.
 4. An operator rollback (`eas update:rollback`) reaches the device.
 
@@ -139,3 +153,11 @@ Expo error recovery is best-effort. None of these checks is covered by Jest or t
 
 Only JavaScript/asset changes can ship this way. Native changes (new native
 module, permissions, plugins, build numbers) need a new binary.
+
+## Release procedure (operator-run)
+
+1. Merge the JS fix to `main` (green required checks, audit). Check out that exact commit, clean tree.
+2. Confirm the runtime matches the installed binary: `npx expo-updates runtimeversion:resolve --platform ios` (and `android`) equals the runtime shown for the target build on expo.dev. If not, the change touched native inputs: ship a new binary instead.
+3. `npm run update:publish -- --channel <clinic|production|preview> --environment <its environment> --message "<what changed>" --dry-run`, then the same without `--dry-run`.
+4. Publish to `preview` first and install it on a preview build; then the target channel. For a risky change use `--rollout-percentage` with the raw command only after the dry run passed.
+5. Watch Sentry for the new release; roll back with `eas update:rollback` (or republish the previous commit through the guard).
