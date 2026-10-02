@@ -11,7 +11,8 @@ const fail: AiConsentOutcome = { kind: 'error', status: 500 };
 describe('grantRomanWithRetry / withdrawRomanWithRetry', () => {
   it('retries once on a failure', async () => {
     const grant = jest.fn(async () => fail);
-    await expect(grantRomanWithRetry(grant)).resolves.toBe('failed');
+    // A 500 does not prove the grant was not written: unconfirmed (Sol B-310-5).
+    await expect(grantRomanWithRetry(grant)).resolves.toBe('unconfirmed');
     expect(grant).toHaveBeenCalledTimes(2);
     const withdraw = jest.fn(async () => fail);
     await expect(withdrawRomanWithRetry(withdraw)).resolves.toBe('failed');
@@ -24,7 +25,7 @@ describe('grantRomanWithRetry / withdrawRomanWithRetry', () => {
       live = false;
       return fail;
     });
-    await expect(grantRomanWithRetry(grant, () => live)).resolves.toBe('failed');
+    await expect(grantRomanWithRetry(grant, () => live)).resolves.toBe('unconfirmed');
     expect(grant).toHaveBeenCalledTimes(1);
     live = true;
     const withdraw = jest.fn(async () => {

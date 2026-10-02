@@ -338,19 +338,38 @@ export function firstSessionLine(c1: unknown, now: Date = new Date()): string | 
 }
 
 /**
- * Shown when unticking box 2 on a return to P0 could not be confirmed after
- * one retry (Opus B-310-2). Box 2 stays ticked, because the grant stands.
+ * Shown once when unticking box 2 could not be confirmed after one retry
+ * (Opus B-310-2, Sol B-310-5). Box 2 shows the client's choice (unticked);
+ * the withdrawal stays pending and is retried on the next save, the next
+ * launch and in Settings. It says "not confirmed" because nothing proves
+ * either state: the grant may or may not be on file.
  */
 export const AI_WITHDRAW_NOTICE = {
   title: 'Roman and AI',
-  body: 'I could not change your Roman and AI choice just now, so it is still allowed. You can change it at any time in Settings > Privacy > Roman and AI.',
+  body: 'I could not confirm that Roman and AI is switched off yet, so it may still be allowed for now. I will keep trying, including the next time you open the app. You can also switch it off in Settings > Privacy > Roman and AI.',
+} as const;
+
+/** Under box 2 on P0 while that withdrawal is not confirmed (Sol B-310-5). */
+export const AI_WITHDRAW_UNCONFIRMED_LINE =
+  'Switching this off is not confirmed yet. I will keep trying. You can check it in Settings > Privacy > Roman and AI.';
+
+/**
+ * Shown when a ticked box 2 was sent but no answer confirmed or refused it
+ * (lost response, timeout, server error: Sol B-310-5). The grant may be on
+ * file, so this never says it is off; box 2 stays ticked as chosen.
+ */
+export const AI_GRANT_UNCONFIRMED_NOTICE = {
+  title: 'Roman and AI',
+  body: 'I could not confirm your Roman and AI choice just now, so it may or may not be saved yet. Your training is not affected. You can check or change it at any time in Settings > Privacy > Roman and AI.',
 } as const;
 
 /**
- * Shown when a ticked box 2 could not be recorded on the ledger after one
- * retry (Opus C-310-6). Never shown while the ledger is not deployed or
- * switched off (404 / 503: skipped silently by contract). Box 2 shows
- * unticked again, because nothing was recorded.
+ * Shown when the ledger refused a ticked box 2 (Opus C-310-6): a 4xx such as
+ * 400 / 401 / 403 / 429, answered before anything is written. Never shown
+ * while the ledger is not deployed or switched off (404 / 503: skipped
+ * silently by contract), nor when the answer was lost (see
+ * AI_GRANT_UNCONFIRMED_NOTICE). Box 2 shows unticked again, because nothing
+ * was recorded.
  */
 export const AI_GRANT_NOTICE = {
   title: 'Roman and AI',

@@ -38,7 +38,8 @@ import {
   writeLocalState,
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
-import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_WITHDRAW_NOTICE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
+import { aiWithdrawalPendingKey, resetAiLedgerWritesForTests } from '../../../lib/consultation/aiConsent';
+import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, AI_WITHDRAW_UNCONFIRMED_LINE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -89,8 +90,12 @@ function renderFlow(api: ConsultationApi, props: Partial<React.ComponentProps<ty
   return render(flowElement(api, props));
 }
 
-/** An app restart: the flow is mounted afresh (new key) and reads the draft again. */
+/**
+ * An app restart: the flow is mounted afresh (new key) and reads the draft
+ * again; module state (the ledger write queue) starts empty, as in a new process.
+ */
 function restartFlow(r: Awaited<ReturnType<typeof renderFlow>>, api: ConsultationApi, n = 2) {
+  resetAiLedgerWritesForTests();
   return r.rerender(<React.Fragment key={`restart-${n}`}>{flowElement(api)}</React.Fragment>);
 }
 
@@ -647,10 +652,11 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
   });
 
-  it('a grant that was never confirmed shows unticked after a restart', async () => {
-    const api = makeApi({ grantRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
+  it('a grant the server refused shows unticked after a restart', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ grantRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 403 })) });
     const r1 = await continueWithBothBoxes(api);
-    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
     await tick();
     const r = r1;
     await restartFlow(r, api);
@@ -658,6 +664,26 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     await fireEvent.press(r.getByTestId('consult-back'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(aiBox(r)).toBe(false);
+    expect((await readLocalState('u1', NOW))?.aiAttempted).toBeUndefined();
+    alert.mockRestore();
+  });
+
+  it('a grant whose answers were lost stays the client\'s choice after a restart: may be on file, never shown as off (B-310-5)', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ grantRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
+    const r1 = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    const saved = await readLocalState('u1', NOW);
+    expect(saved?.aiWant).toBe(true);
+    expect(saved?.aiAttempted).toBe(true);
+    const r = r1;
+    await restartFlow(r, api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    alert.mockRestore();
   });
 
   it('GET /me/ai-consent is the truth when it answers: granted ticks box 2', async () => {
@@ -700,7 +726,7 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     expect(saved?.aiWant).toBeUndefined();
   });
 
-  it('unticking on a return: DELETE with exactly one retry; still unconfirmed shows a calm notice, box 2 stays ticked', async () => {
+  it('unticking on a return: DELETE with exactly one retry; still unconfirmed says so, and the withdrawal stays wanted (B-310-5)', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const api = makeApi({ withdrawRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
     await seedLocal({ P0: fullAnswers().P0 }, 'G1', { aiRoman: true });
@@ -714,11 +740,19 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_WITHDRAW_NOTICE.title, AI_WITHDRAW_NOTICE.body));
     expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(2);
-    expect(AI_WITHDRAW_NOTICE.body).toMatch(/Settings > Privacy > Roman and AI\.$/);
+    expect(AI_WITHDRAW_NOTICE.body).toMatch(/could not confirm.*switched off yet.*may still be allowed.*Settings > Privacy > Roman and AI\.$/);
+    expect(AI_WITHDRAW_NOTICE.body).not.toMatch(/!|went wrong|is off|switched off\./);
+    // Box 2 shows the client's choice and says the withdrawal is not confirmed;
+    // the draft keeps the wanted withdrawal and the confirmed grant, and the
+    // per-user marker keeps it beyond the draft.
     await fireEvent.press(r.getByTestId('consult-back'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
-    expect(aiBox(r)).toBe(true);
-    expect((await readLocalState('u1', NOW))?.aiRoman).toBe(true);
+    expect(aiBox(r)).toBe(false);
+    expect(r.getByTestId('consent-ai-unconfirmed').props.children).toBe(AI_WITHDRAW_UNCONFIRMED_LINE);
+    const saved = await readLocalState('u1', NOW);
+    expect(saved?.aiRoman).toBe(true);
+    expect(saved?.aiWant).toBe(false);
+    expect(await AsyncStorage.getItem(aiWithdrawalPendingKey('u1'))).not.toBeNull();
     alert.mockRestore();
   });
 
@@ -804,12 +838,28 @@ describe('B-310-3 / C-310-6 / C-310-7 the latest box 2 choice wins', () => {
     expect(api.grantRomanConsent).not.toHaveBeenCalled();
   });
 
-  it('C-310-6: a grant that could not be saved says so calmly and points to Settings', async () => {
+  it('C-310-6 / B-310-5: a grant whose answer was lost says "not confirmed", never that it is off; box 2 stays ticked', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const api = makeApi({ grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 500 })) });
     const r = await continueWithBothBoxes(api);
-    await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_GRANT_NOTICE.title, AI_GRANT_NOTICE.body));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_GRANT_UNCONFIRMED_NOTICE.title, AI_GRANT_UNCONFIRMED_NOTICE.body));
     expect(api.grantRomanConsent).toHaveBeenCalledTimes(2);
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(AI_GRANT_UNCONFIRMED_NOTICE.body).toMatch(/could not confirm.*may or may not be saved.*Settings > Privacy > Roman and AI\.$/);
+    expect(AI_GRANT_UNCONFIRMED_NOTICE.body).not.toMatch(/!|went wrong|not allowed/);
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    expect((await readLocalState('u1', NOW))?.aiAttempted).toBe(true);
+    alert.mockRestore();
+  });
+
+  it('C-310-6: a grant the server refused (403) says so calmly and points to Settings', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 403 })) });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_GRANT_NOTICE.title, AI_GRANT_NOTICE.body));
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
     expect(AI_GRANT_NOTICE.body).toMatch(/not allowed yet.*Settings > Privacy > Roman and AI\.$/);
     expect(AI_GRANT_NOTICE.body).not.toMatch(/!|went wrong/);
     // Box 2 falls back to the confirmed state.

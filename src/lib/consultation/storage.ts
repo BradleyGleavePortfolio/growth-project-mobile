@@ -63,10 +63,18 @@ export interface LocalConsultationState {
    * Box 2 as the client last CHOSE it on P0 (ticked or unticked, then
    * Continue) while the ledger has not yet confirmed that choice (Sol / Opus
    * B-310-3). Kept so a choice made just before the app closes is still
-   * carried out on the next launch; removed once the ledger confirms it or
-   * it definitively fails. A yes/no flag, not health data.
+   * carried out on the next launch; removed once the ledger confirms it. A
+   * wanted grant is also removed when it definitively fails; a wanted
+   * withdrawal stays until a DELETE is confirmed (Sol B-310-5). A yes/no
+   * flag, not health data.
    */
   aiWant?: boolean;
+  /**
+   * True while a box 2 grant was sent from this device without a confirmed
+   * answer (no response, timeout, server error: Sol B-310-5). The grant may
+   * be on file, so a later "no" is withdrawn even when nothing is confirmed.
+   */
+  aiAttempted?: boolean;
 }
 
 export type DraftWrite = Omit<LocalConsultationState, 'version' | 'updatedAt'>;
@@ -79,6 +87,11 @@ export function aiRomanOf(state: LocalConsultationState | null | undefined): boo
 /** The client's latest unconfirmed box 2 choice in a stored draft (none unless a real boolean). */
 export function aiWantOf(state: LocalConsultationState | null | undefined): boolean | null {
   return typeof state?.aiWant === 'boolean' ? state.aiWant : null;
+}
+
+/** Whether a stored draft records a grant sent without a confirmed answer. */
+export function aiAttemptedOf(state: LocalConsultationState | null | undefined): boolean {
+  return state?.aiAttempted === true;
 }
 
 const persistAvailable = () => Platform.OS !== 'web';

@@ -147,7 +147,7 @@ const CONSULTED = {
   email: 'c@example.com',
   role: 'student',
   name: 'Cam',
-  profile: { onboarding_completed: true, day_one_completed: false },
+  profile: { onboardingCompleted: true, day_one_completed: false },
 };
 
 async function seed(user: object, localOnboardingDone: boolean) {
@@ -212,7 +212,7 @@ describe('RootNavigator with the flag off (unchanged)', () => {
 
   it('Day-1 done but the win not: the Day-1 win', async () => {
     mockConsultFlag = false;
-    await seed({ ...CONSULTED, profile: { onboarding_completed: true, day_one_completed: true } }, true);
+    await seed({ ...CONSULTED, profile: { onboardingCompleted: true, day_one_completed: true } }, true);
     const r = await mount();
     await r.findByTestId('day1-win');
   });

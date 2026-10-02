@@ -38,7 +38,7 @@ export default function ConsultationOnboardingNavigator() {
   const onFinished = useCallback(async (_result: CompleteOnboardingResponse) => {
     try {
       await AsyncStorage.setItem('onboarding_complete', 'true');
-      await patchUserCache({ profile: { onboarding_completed: true } });
+      await patchUserCache({ profile: { onboardingCompleted: true } });
     } catch (err) {
       logger.warn('ConsultationOnboarding', 'could not store completion flag', err);
     }

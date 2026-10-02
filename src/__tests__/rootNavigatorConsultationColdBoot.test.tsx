@@ -180,7 +180,7 @@ const SERVER_DONE = {
   email: 'c@example.com',
   role: 'student',
   name: 'Cam',
-  profile: { onboarding_completed: true, day_one_completed: false },
+  profile: { onboardingCompleted: true, day_one_completed: false },
 };
 
 const RESULT = {
@@ -292,7 +292,7 @@ describe('B-310-4: cold boot after the server completed the consultation', () =>
     mockConsultFlag = false;
     await AsyncStorage.setItem(
       'prefs:auth.user_data',
-      JSON.stringify({ ...SERVER_DONE, profile: { onboarding_completed: true, day_one_completed: true } }),
+      JSON.stringify({ ...SERVER_DONE, profile: { onboardingCompleted: true, day_one_completed: true } }),
     );
     mockFirstWin.mockResolvedValue({ data: { completed: true } });
     const r = await mount();

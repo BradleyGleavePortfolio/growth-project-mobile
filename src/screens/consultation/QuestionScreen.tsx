@@ -27,6 +27,7 @@ import {
 import {
   AI_CONSENT_CHECKBOX_LABEL,
   AI_CONSENT_PARAGRAPH,
+  AI_WITHDRAW_UNCONFIRMED_LINE,
   CONSENT_CHECKBOX_LABEL,
   CONSENT_COPY_SHA256,
   CONSENT_FOOTER,
@@ -73,9 +74,11 @@ export interface QuestionScreenProps {
    * ledger is catching up, else the confirmed ledger state). `aiReady`:
    * false while the saved choice is still being read and nothing is known
    * on this device yet (Opus C-310-7), so an untouched box is never mistaken
-   * for a choice.
+   * for a choice. `aiUnconfirmed`: the client said no to box 2 and the
+   * ledger has not confirmed the withdrawal yet (Sol B-310-5), so P0 says
+   * it is not confirmed rather than that it is off.
    */
-  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean; aiReady?: boolean };
+  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean; aiReady?: boolean; aiUnconfirmed?: boolean };
 }
 
 const MONTHS = [
@@ -517,6 +520,11 @@ function ConsentBody(props: BodyProps) {
         hint={aiReady ? undefined : 'Checking your saved choice'}
         testID="consent-ai-checkbox"
       />
+      {state?.aiUnconfirmed && !aiChecked ? (
+        <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unconfirmed">
+          {AI_WITHDRAW_UNCONFIRMED_LINE}
+        </Text>
+      ) : null}
       <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
       {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
           Not part of the consent text or its hash; opening it sends nothing. */}

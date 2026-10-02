@@ -9,6 +9,7 @@ import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiC
 import type { ConsultationApi } from '../../../screens/consultation/ConsultationFlow';
 import { AI_CONSENT_VERSION } from '../consentVersion';
 import { writeLocalState } from '../storage';
+import { resetAiLedgerWritesForTests } from '../aiConsent';
 import type { Answers } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
@@ -63,7 +64,7 @@ export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mo
 export async function seedLocal(
   answers: Answers,
   screenId: string,
-  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null; aiRoman?: boolean; aiWant?: boolean } = {},
+  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null; aiRoman?: boolean; aiWant?: boolean; aiAttempted?: boolean } = {},
 ) {
   await writeLocalState(opts.userId ?? 'u1', {
     answers,
@@ -73,11 +74,13 @@ export async function seedLocal(
     synced: opts.synced ?? null,
     ...(opts.aiRoman === undefined ? {} : { aiRoman: opts.aiRoman }),
     ...(opts.aiWant === undefined ? {} : { aiWant: opts.aiWant }),
+    ...(opts.aiAttempted === undefined ? {} : { aiAttempted: opts.aiAttempted }),
   });
 }
 
-/** Clear AsyncStorage and the SecureStore mock between tests. */
+/** Clear AsyncStorage, the SecureStore mock and the ledger write queue between tests. */
 export async function resetStores() {
+  resetAiLedgerWritesForTests();
   await AsyncStorage.clear();
   const store: unknown = Reflect.get(SecureStore, '__store');
   if (store instanceof Map) store.clear();

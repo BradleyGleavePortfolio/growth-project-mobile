@@ -56,8 +56,15 @@ import {
   httpStatusOf,
 } from '../../api/consultationApi';
 import { aiConsentApi, isLiveGrant } from '../../api/aiConsentApi';
-import { grantRomanWithRetry, withdrawRomanWithRetry } from '../../lib/consultation/aiConsent';
-import { AI_GRANT_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
+import {
+  clearAiWithdrawalPending,
+  grantRomanWithRetry,
+  markAiWithdrawalPending,
+  readAiWithdrawalPending,
+  runAiLedgerWrite,
+  withdrawRomanWithRetry,
+} from '../../lib/consultation/aiConsent';
+import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
 import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
@@ -77,6 +84,7 @@ import {
   resumeScreenId,
 } from '../../lib/consultation/engine';
 import {
+  aiAttemptedOf,
   aiRomanOf,
   aiWantOf,
   DraftHandle,
@@ -233,13 +241,30 @@ export default function ConsultationFlow({
    *     (B-310-1). Withdrawals never wait.
    *   - `aiChain`: one request at a time; each step decides what to send
    *     only when it runs, from the latest `aiWant` and `aiConfirmed`.
+   *   - `aiAttempted` (Sol B-310-5): a grant was sent and its answer does
+   *     not prove it was not written (lost response, timeout, server error).
+   *     It counts as possibly on file: a later "no" is withdrawn with an
+   *     idempotent DELETE even though no grant was ever confirmed.
+   *     Persisted in the draft (`aiAttempted`).
+   *   - A wanted withdrawal stays wanted until a DELETE is confirmed: in the
+   *     draft, and under its own per-user key that outlives the draft
+   *     (finish, restart), drained by the client app and Settings.
    * P0 shows `aiWant` when there is one, otherwise `aiConfirmed`.
    */
   const aiConfirmed = useRef<boolean | null>(null);
   /** Whether `aiConfirmed` came from the server on this load (not only the draft). */
   const aiFresh = useRef(false);
   const aiWant = useRef<boolean | null>(null);
+  const aiAttempted = useRef(false);
+  /** The pending-withdrawal marker this flow wrote (cleared only by its own confirmation). */
+  const aiPendingStamp = useRef<string | null>(null);
   const [aiShown, setAiShown] = useState(false);
+  /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
+  const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
+  /** Each box 2 notice is shown once per load, however often a retry fails. */
+  const aiNoticed = useRef<Set<string>>(new Set());
+  /** A withdrawal attempt (with its one retry) ended unconfirmed: the next save that lands tries again. */
+  const aiWithdrawRetryDue = useRef(false);
   /** False while nothing is known on this device and GET has not answered (C-310-7). */
   const [aiReady, setAiReady] = useState(false);
   const aiReadyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -280,6 +305,7 @@ export default function ConsultationFlow({
         synced: synced.current,
         ...(aiConfirmed.current === null ? {} : { aiRoman: aiConfirmed.current }),
         ...(aiWant.current === null ? {} : { aiWant: aiWant.current }),
+        ...(aiAttempted.current ? { aiAttempted: true } : {}),
       });
     },
     [],
@@ -444,7 +470,12 @@ export default function ConsultationFlow({
     aiConfirmed.current = null;
     aiFresh.current = false;
     aiWant.current = null;
+    aiAttempted.current = false;
+    aiPendingStamp.current = null;
+    aiNoticed.current = new Set();
+    aiWithdrawRetryDue.current = false;
     setAiShown(false);
+    setAiUnconfirmed(false);
     setAiReady(false);
     aiHeld.current = false;
     aiRequests.current = 0;
@@ -466,6 +497,18 @@ export default function ConsultationFlow({
       // the ledger itself when it answers.
       aiConfirmed.current = aiRomanOf(local);
       aiWant.current = aiWantOf(local);
+      aiAttempted.current = aiAttemptedOf(local);
+      // A withdrawal that outlived the draft (or its last write) is still
+      // wanted, unless the draft holds a newer choice (Sol B-310-5).
+      const pending = await readAiWithdrawalPending(userId);
+      if (!live()) return;
+      if (pending && aiWant.current === null) {
+        aiWant.current = false;
+        aiAttempted.current = true;
+      }
+      if (pending && aiWant.current === false) aiPendingStamp.current = pending;
+      // The draft's newer yes supersedes an older pending no.
+      if (pending && aiWant.current === true) void clearAiWithdrawalPending(userId);
       // A wanted grant waits for a save that lands box 1, except after
       // completion, which the server grants only with box 1 on file.
       const completed = !!(server?.completed && server.result);
@@ -523,6 +566,13 @@ export default function ConsultationFlow({
   /** Box 2 on P0: the latest unconfirmed choice, else the confirmed state. */
   function showAi() {
     setAiShown(aiWant.current ?? aiConfirmed.current === true);
+    setAiUnconfirmed(aiWant.current === false && (aiConfirmed.current === true || aiAttempted.current));
+  }
+
+  function noticeOnce(key: string, notice: { title: string; body: string }) {
+    if (aiNoticed.current.has(key)) return;
+    aiNoticed.current.add(key);
+    Alert.alert(notice.title, notice.body);
   }
 
   function markAiReady() {
@@ -537,11 +587,15 @@ export default function ConsultationFlow({
     if (p !== 'loading' && p !== 'macro' && p !== 'plan') persistLocal(answersRef.current, lastPersistedId.current);
   }
 
-  /** Record a confirmed ledger state (B-310-2); a choice it satisfies is done. */
-  function setAiConfirmed(v: boolean) {
+  /**
+   * Record a confirmed ledger state (B-310-2); a choice it satisfies is done.
+   * A read never settles a wanted withdrawal while a grant was attempted
+   * without an answer: only a confirmed DELETE does (B-310-5).
+   */
+  function setAiConfirmed(v: boolean, fromRead = false) {
     aiConfirmed.current = v;
     aiFresh.current = true;
-    if (aiWant.current === v) aiWant.current = null;
+    if (aiWant.current === v && !(fromRead && v === false && aiAttempted.current)) aiWant.current = null;
     showAi();
     persistAi();
   }
@@ -576,7 +630,7 @@ export default function ConsultationFlow({
       const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION));
+        setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION), true);
         reconcileAi(gen);
       }
     } catch {
@@ -587,12 +641,20 @@ export default function ConsultationFlow({
   }
 
   /**
-   * Queue one reconcile step (B-310-3). The step decides when it runs, after
-   * every earlier request settled: grant when the latest choice is yes, the
-   * ledger is not confirmed granted and box 1 has landed; withdraw when the
-   * latest choice is no and the ledger is confirmed granted; otherwise
-   * nothing. A choice the ledger cannot take is dropped, so box 2 falls back
-   * to the confirmed state, with a calm notice (B-310-2, C-310-6).
+   * Queue one reconcile step (B-310-3, B-310-5). The step decides when it
+   * runs, after every earlier request settled:
+   *   - yes, not confirmed granted, box 1 landed: grant. The retry goes out
+   *     only while yes is still the latest choice. A grant whose answer is
+   *     ambiguous counts as possibly on file (`aiAttempted`).
+   *   - no, and the ledger is confirmed granted OR a grant was attempted
+   *     without a confirmed answer: withdraw (idempotent DELETE). The
+   *     withdrawal stays wanted until a DELETE is confirmed (draft plus a
+   *     per-user marker that outlives finish and restarts).
+   *   - otherwise nothing.
+   * A grant the ledger refused is dropped, so box 2 falls back to the
+   * confirmed state, with a calm notice (B-310-2, C-310-6). A grant with an
+   * ambiguous answer stays chosen (box 2 ticked) with a "not confirmed"
+   * notice, because it may be on file.
    */
   function reconcileAi(gen: number) {
     aiChain.current = aiChain.current
@@ -601,7 +663,7 @@ export default function ConsultationFlow({
         const want = aiWant.current;
         const have = aiConfirmed.current;
         if (want === null) return;
-        if (want === have) {
+        if (want === have && !(want === false && aiAttempted.current)) {
           // Matches what the server said on this load: done. Matches only
           // the draft: kept until the server answers, so a grant made
           // elsewhere that a slow GET reports is still withdrawn (B-310-3).
@@ -611,42 +673,90 @@ export default function ConsultationFlow({
         if (want) {
           if (aiHeld.current) return; // sent by onSaveOk once box 1 lands
           aiRequests.current += 1;
-          // The retry is re-checked too: it must never go out under another user's session.
-          const result = await grantRomanWithRetry(api.grantRomanConsent, () => aiLive(gen));
+          // Possibly on file from the moment it is sent (B-310-5).
+          aiAttempted.current = true;
+          persistAi();
+          // Each attempt, the retry included, needs the same signed-in user
+          // and yes still being the latest choice (B-310-5).
+          const result = await runAiLedgerWrite(() =>
+            grantRomanWithRetry(api.grantRomanConsent, () => aiLive(gen) && aiWant.current === true),
+          );
           if (!aiLive(gen)) return;
           if (result === 'granted') {
+            aiAttempted.current = false;
             setAiConfirmed(true);
             return;
           }
-          if (aiWant.current === true) setAiWant(null);
+          if (result !== 'unconfirmed') aiAttempted.current = false;
+          if (aiWant.current !== true) {
+            // A newer "no" is queued behind this step; it withdraws whatever this grant left.
+            showAi();
+            persistAi();
+            return;
+          }
+          if (result === 'unconfirmed') {
+            // May be on file: box 2 keeps showing the client's yes (never an
+            // unticked box over a live grant), the next launch tries again,
+            // and a later untick withdraws it.
+            showAi();
+            persistAi();
+            logger.warn('ConsultationFlow', 'optional AI choice not confirmed; kept as chosen');
+            noticeOnce('grant-unconfirmed', AI_GRANT_UNCONFIRMED_NOTICE);
+            return;
+          }
+          setAiWant(null);
           if (result === 'unavailable') return; // ledger off: skipped silently
           logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
-          Alert.alert(AI_GRANT_NOTICE.title, AI_GRANT_NOTICE.body);
+          noticeOnce('grant', AI_GRANT_NOTICE);
           return;
         }
-        // No: nothing is known to be on file yet. The choice stays, so a
-        // grant that a later GET reports is still withdrawn.
-        if (have !== true) return;
+        // No: nothing can be on file (no confirmed grant, no grant attempted
+        // without an answer). The choice stays, so a grant that a later GET
+        // reports is still withdrawn.
+        if (have !== true && !aiAttempted.current) return;
         aiRequests.current += 1;
-        const result = await withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen));
+        if (!aiPendingStamp.current) aiPendingStamp.current = await markAiWithdrawalPending(userId);
+        if (!aiLive(gen)) return;
+        aiWithdrawRetryDue.current = false;
+        const result = await runAiLedgerWrite(() =>
+          withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen) && aiWant.current === false),
+        );
         if (!aiLive(gen)) return;
         if (result === 'withdrawn') {
+          aiAttempted.current = false;
+          const stamp = aiPendingStamp.current;
+          aiPendingStamp.current = null;
+          await clearAiWithdrawalPending(userId, stamp);
           setAiConfirmed(false);
           return;
         }
-        // Box 2 shows ticked again: the grant stands until a withdrawal is confirmed.
-        if (aiWant.current === false) setAiWant(null);
-        logger.warn('ConsultationFlow', 'optional AI withdrawal not confirmed; left for Settings');
-        Alert.alert(AI_WITHDRAW_NOTICE.title, AI_WITHDRAW_NOTICE.body);
+        if (aiWant.current !== false) return; // a newer "yes" took over
+        // Not confirmed: the withdrawal stays wanted (draft and marker) and
+        // is retried on the next save, the next launch, and in Settings.
+        aiWithdrawRetryDue.current = true;
+        showAi();
+        persistAi();
+        logger.warn('ConsultationFlow', 'optional AI withdrawal not confirmed; kept pending');
+        noticeOnce('withdraw', AI_WITHDRAW_NOTICE);
       })
       .catch(() => undefined);
   }
 
   // A held grant goes after the next save that lands the agreement (B-310-1).
+  // A withdrawal that is still not confirmed is retried after each save that
+  // lands, when the connection is evidently back (B-310-5).
   onSaveOk.current = () => {
-    if (!aiHeld.current) return;
-    aiHeld.current = false;
-    reconcileAi(generation.current);
+    if (aiHeld.current) {
+      aiHeld.current = false;
+      reconcileAi(generation.current);
+      return;
+    }
+    // Only after an attempt ended unconfirmed, so a save that lands while
+    // the first attempt is still out never doubles it.
+    if (aiWithdrawRetryDue.current && aiWant.current === false) {
+      aiWithdrawRetryDue.current = false;
+      reconcileAi(generation.current);
+    }
   };
 
   /**
@@ -665,6 +775,17 @@ export default function ConsultationFlow({
     (choice: boolean | null) => {
       if (choice === null) return;
       aiHeld.current = choice;
+      if (choice) {
+        // A newer yes supersedes any withdrawal still pending from earlier.
+        aiPendingStamp.current = null;
+        void clearAiWithdrawalPending(userId);
+      } else if ((aiConfirmed.current === true || aiAttempted.current) && !aiPendingStamp.current) {
+        // Something may be on file: keep the "no" beyond this draft at once,
+        // so finishing or closing the app before the DELETE runs cannot lose it.
+        void markAiWithdrawalPending(userId).then((stamp) => {
+          if (stamp && aiWant.current === false && !aiPendingStamp.current) aiPendingStamp.current = stamp;
+        });
+      }
       setAiWant(choice);
       if (!choice) reconcileAi(generation.current);
     },
@@ -980,7 +1101,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed }}
       />
     );
   }

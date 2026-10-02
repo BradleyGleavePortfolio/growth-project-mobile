@@ -137,6 +137,7 @@ import { withProtectedScreen } from '../entitlements/withProtectedScreen';
 // Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
+import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -552,6 +553,9 @@ const TUTORIAL_TABS = [
 ];
 
 export default function ClientNavigator() {
+  // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
+  // has not confirmed yet is sent when the app opens.
+  useAiWithdrawalDrain();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.

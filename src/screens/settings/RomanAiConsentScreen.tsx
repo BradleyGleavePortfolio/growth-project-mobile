@@ -12,6 +12,12 @@
  *
  * While the consent ledger is not deployed (404 / 503) the screen says the
  * choice is unavailable right now and records nothing.
+ *
+ * Sol B-310-5: a "no" given during onboarding that the ledger has not
+ * confirmed yet is sent first when this screen opens (behind any ledger write
+ * already queued); if it still does not go through, the screen says so.
+ * Allow here is a newer choice and clears that pending "no" before it is
+ * sent; a confirmed Withdraw here settles it.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -20,7 +26,14 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { aiConsentApi as defaultApi, AiConsentOutcome, AiConsentStatusResponse } from '../../api/aiConsentApi';
-import { romanGrantBody } from '../../lib/consultation/aiConsent';
+import {
+  clearAiWithdrawalPending,
+  drainAiWithdrawal,
+  readAiWithdrawalPending,
+  romanGrantBody,
+  runAiLedgerWrite,
+} from '../../lib/consultation/aiConsent';
+import { readUserCacheSync } from '../../lib/userCache';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH, SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { reportUnexpected } from '../../lib/consultation/report';
@@ -66,6 +79,8 @@ export const ROMAN_AI_COPY = {
   accountLine:
     'Your training agreement, and The Growth Project and your coach using your information to coach you, stay in place while you have an account. To stop all collection, delete your account in Settings > Account > Delete account.',
   deleteAccount: 'Delete account',
+  pendingWithdraw:
+    'You switched Roman and AI off during setup, and that is not confirmed yet, so the choice above may still be in place. Tap Withdraw to try again now.',
 } as const;
 
 /**
@@ -113,18 +128,25 @@ export function actionNoticeOf(out: Extract<AiConsentOutcome, { kind: 'error' }>
   return ROMAN_AI_COPY.actionServer(shortReference(out.requestId));
 }
 
+const defaultSessionUserId = () => readUserCacheSync()?.id ?? null;
+
 export default function RomanAiConsentScreen({
   navigation,
   api = defaultApi,
+  sessionUserId = defaultSessionUserId,
 }: {
   navigation: NavigationProp<ParamListBase>;
   api?: RomanAiConsentApi;
+  /** The signed-in user right now (pending onboarding withdrawal, B-310-5). */
+  sessionUserId?: () => string | null;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [view, setView] = useState<View_>({ phase: 'loading' });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  /** An onboarding "no" that is still not confirmed after trying again here. */
+  const [pendingWithdraw, setPendingWithdraw] = useState(false);
   const mounted = useRef(true);
   useEffect(() => () => {
     mounted.current = false;
@@ -133,6 +155,14 @@ export default function RomanAiConsentScreen({
   const load = useCallback(async () => {
     setView({ phase: 'loading' });
     setNotice(null);
+    const uid = sessionUserId();
+    if (await readAiWithdrawalPending(uid)) {
+      const drained = await drainAiWithdrawal(uid, api.withdrawRoman, () => sessionUserId() === uid);
+      if (!mounted.current) return;
+      setPendingWithdraw(drained === 'failed');
+    } else {
+      setPendingWithdraw(false);
+    }
     const out = await api.getStatus();
     if (!mounted.current) return;
     if (out.kind === 'ok' && out.status) {
@@ -146,7 +176,7 @@ export default function RomanAiConsentScreen({
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out));
-  }, [api]);
+  }, [api, sessionUserId]);
 
   useEffect(() => {
     void load();
@@ -157,7 +187,19 @@ export default function RomanAiConsentScreen({
       if (busy) return;
       setBusy(true);
       setNotice(null);
-      const out = kind === 'allow' ? await api.grantRoman(romanGrantBody()) : await api.withdrawRoman();
+      const uid = sessionUserId();
+      // Allow is newer than any pending onboarding "no": that "no" must never undo it.
+      if (kind === 'allow') {
+        await clearAiWithdrawalPending(uid);
+        setPendingWithdraw(false);
+      }
+      const out = await runAiLedgerWrite(() =>
+        kind === 'allow' ? api.grantRoman(romanGrantBody()) : api.withdrawRoman(),
+      );
+      if (kind === 'withdraw' && out.kind === 'ok') {
+        await clearAiWithdrawalPending(uid);
+        if (mounted.current) setPendingWithdraw(false);
+      }
       if (!mounted.current) return;
       setBusy(false);
       if (out.kind === 'ok') {
@@ -180,7 +222,7 @@ export default function RomanAiConsentScreen({
       await load();
       if (mounted.current) setNotice(notice);
     },
-    [api, busy, load],
+    [api, busy, load, sessionUserId],
   );
 
   const confirmAllow = () =>
@@ -246,6 +288,11 @@ export default function RomanAiConsentScreen({
         {choice === 'not_allowed' || choice === 'reconsent'
           ? button(ROMAN_AI_COPY.allow, confirmAllow, 'roman-ai-allow')
           : null}
+        {withdrawable && pendingWithdraw ? (
+          <Text style={styles.body} accessibilityLiveRegion="polite" testID="roman-ai-pending-withdraw">
+            {ROMAN_AI_COPY.pendingWithdraw}
+          </Text>
+        ) : null}
         {withdrawable ? button(ROMAN_AI_COPY.withdraw, confirmWithdraw, 'roman-ai-withdraw', true) : null}
         {busy ? <ActivityIndicator color={colors.primary} accessibilityLabel="Saving your choice" /> : null}
       </View>
