@@ -27,6 +27,7 @@ import {
 import {
   AI_CONSENT_CHECKBOX_LABEL,
   AI_CONSENT_PARAGRAPH,
+  AI_CHOICE_UNKNOWN_LINE,
   AI_WITHDRAW_UNCONFIRMED_LINE,
   CONSENT_CHECKBOX_LABEL,
   CONSENT_COPY_SHA256,
@@ -76,9 +77,17 @@ export interface QuestionScreenProps {
    * on this device yet (Opus C-310-7), so an untouched box is never mistaken
    * for a choice. `aiUnconfirmed`: the client said no to box 2 and the
    * ledger has not confirmed the withdrawal yet (Sol B-310-5), so P0 says
-   * it is not confirmed rather than that it is off.
+   * it is not confirmed rather than that it is off. `aiUnknown`: the saved
+   * choice could not be read in time (C-310-9): P0 says so and where to
+   * check it; box 2 stays optional and untouched sends nothing.
    */
-  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean; aiReady?: boolean; aiUnconfirmed?: boolean };
+  consent?: {
+    error: 'version_mismatch' | null;
+    aiAllowed?: boolean;
+    aiReady?: boolean;
+    aiUnconfirmed?: boolean;
+    aiUnknown?: boolean;
+  };
 }
 
 const MONTHS = [
@@ -520,6 +529,11 @@ function ConsentBody(props: BodyProps) {
         hint={aiReady ? undefined : 'Checking your saved choice'}
         testID="consent-ai-checkbox"
       />
+      {state?.aiUnknown && !aiTouched.current ? (
+        <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unknown">
+          {AI_CHOICE_UNKNOWN_LINE}
+        </Text>
+      ) : null}
       {state?.aiUnconfirmed && !aiChecked ? (
         <Text style={[s.mutedSmall, { marginTop: 8 }]} accessibilityLiveRegion="polite" testID="consent-ai-unconfirmed">
           {AI_WITHDRAW_UNCONFIRMED_LINE}
