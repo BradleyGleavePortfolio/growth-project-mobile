@@ -36,6 +36,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
+  EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
   EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES: process.env.EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES,
   EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS,
@@ -87,6 +88,18 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FEATURE_BLOODWORK
    */
   bloodwork: readFlag('EXPO_PUBLIC_FEATURE_BLOODWORK', false),
+
+  // ─── Consultation onboarding (consult-v1) ────────────────────────────────
+  /**
+   * The full personal-training consultation (chapters 0-8, single P0
+   * "I agree" box, readiness screening, summary, macro and plan reveals)
+   * replaces the lean flow for new clients. OFF by default in every general
+   * build (not `isDev`), ON only in the `clinic` EAS build profile. Rollback
+   * is this flag: off mounts the lean flow exactly as before.
+   *
+   * env: EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING
+   */
+  consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
 
   // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
   /**
