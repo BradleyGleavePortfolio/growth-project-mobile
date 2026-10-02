@@ -53,6 +53,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
@@ -231,6 +232,7 @@ export default function RomanChatScreen({
       <Text style={styles.headerTitle} accessibilityRole="header">
         Roman
       </Text>
+      <RomanConversationsButton />
     </View>
   );
 

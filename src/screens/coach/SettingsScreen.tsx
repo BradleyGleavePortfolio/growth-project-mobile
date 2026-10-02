@@ -640,6 +640,26 @@ export default function SettingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        {/* Roman chat history (backend #635): a coach's own Roman chats are
+            kept until they delete them or their account. Shown in builds
+            where Roman exists, like the client Roman and AI row. */}
+        {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('RomanConversations')}
+            accessibilityRole="button"
+            accessibilityLabel="Your conversations with Roman"
+            accessibilityHint="See, open and delete your past conversations with Roman"
+            testID="coach-settings-roman-conversations"
+          >
+            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Your conversations with Roman</Text>
+              <Text style={styles.rowSubLabel}>Kept until you delete them or your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Stage 3 — cross-pillar federated coach surface. Settings row
