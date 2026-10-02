@@ -152,7 +152,7 @@ describe("coachSetupApi", () => {
     await advanceWizardTo(4, { invite_shared: true });
     expect(mockPost.mock.calls).toEqual([
       ["/coach/onboarding/steps/3", {}],
-      ["/coach/onboarding/steps/4", { data: { invite_shared: true } }],
+      ["/coach/onboarding/steps/4", { invite_shared: true }],
     ]);
   });
 
@@ -166,7 +166,7 @@ describe("coachSetupApi", () => {
     await advanceWizardTo(1, { practice_name: "North" });
     expect(mockPost.mock.calls).toEqual([
       ["/coach/onboarding/start"],
-      ["/coach/onboarding/steps/1", { data: { practice_name: "North" } }],
+      ["/coach/onboarding/steps/1", { practice_name: "North" }],
     ]);
   });
 });
