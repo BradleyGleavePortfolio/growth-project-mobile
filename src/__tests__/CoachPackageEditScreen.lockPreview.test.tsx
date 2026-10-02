@@ -66,6 +66,8 @@ jest.mock('../services/authActions', () => ({
 }));
 
 const mockUpdate = jest.fn();
+const mockPublish = jest.fn();
+const mockUnpublish = jest.fn();
 jest.mock('../api/packagesApi', () => {
   const actual = jest.requireActual('../api/packagesApi');
   return {
@@ -74,12 +76,15 @@ jest.mock('../api/packagesApi', () => {
       update: (...a: unknown[]) => mockUpdate(...a),
       create: jest.fn(),
       archive: jest.fn(),
+      publish: (...a: unknown[]) => mockPublish(...a),
+      unpublish: (...a: unknown[]) => mockUnpublish(...a),
     },
   };
 });
 
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import type { CoachPackage } from '../api/packagesApi';
+import { toBackendUpdate } from '../api/packagesApi';
 
 function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
   return {
@@ -405,5 +410,94 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     await fireEvent.press(getByLabelText('Save changes'));
     expect(mockUpdate).not.toHaveBeenCalled();
     expect(getAllByText('Paid packages start at $19.99, or make it free.').length).toBeGreaterThan(0);
+  });
+});
+
+// S-FEE round 4 (#321 B-321-3 and publish/unpublish).
+describe('CoachPackageEditScreen — billing edits and publishing', () => {
+  beforeEach(() => {
+    mockUpdate.mockReset();
+    mockPublish.mockReset();
+    mockUnpublish.mockReset();
+    (Alert.alert as jest.Mock).mockClear();
+  });
+
+  it('an edit-mode billing change reaches the PATCH body', async () => {
+    mockUpdate.mockResolvedValue({ data: pkg({ billingInterval: 'one_time' }) });
+    const props = makeProps(pkg());
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('One-time'));
+    await fireEvent.press(getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const [id, input] = mockUpdate.mock.calls[0];
+    expect(id).toBe('pkg_1');
+    expect(input.billingInterval).toBe('one_time');
+    // The real request builder turns the screen's input into the PATCH body.
+    expect(toBackendUpdate(input)).toMatchObject({
+      billing_type: 'one_time',
+      billing_interval: null,
+      amount_cents: 9900,
+    });
+    await waitFor(() =>
+      expect((Alert.alert as jest.Mock).mock.calls.some((c) => c[1] === 'Changes saved.')).toBe(true),
+    );
+  });
+
+  it('a name-only edit does not send billing fields', async () => {
+    mockUpdate.mockResolvedValue({ data: pkg({ billingInterval: 'yearly' }) });
+    const props = makeProps(pkg({ billingInterval: 'yearly' }));
+    const { getByLabelText, getByDisplayValue } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.changeText(getByDisplayValue('Strength Builder'), 'Strength Plus');
+    await fireEvent.press(getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const input = mockUpdate.mock.calls[0][1];
+    expect(input.title).toBe('Strength Plus');
+    expect(input.billingInterval).toBeUndefined();
+    expect(input.intervalCount).toBeUndefined();
+  });
+
+  it('a draft shows Publish; publishing calls the API and says it is on sale', async () => {
+    mockPublish.mockResolvedValue({ data: pkg({ status: 'active' }) });
+    const props = makeProps(pkg({ status: 'draft' }));
+    const { getByLabelText, getByTestId } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(getByTestId('package-publish-state').props.children).toMatch(/^Draft\./);
+    await fireEvent.press(getByLabelText('Publish package'));
+    await waitFor(() => expect(mockPublish).toHaveBeenCalledWith('pkg_1'));
+    await waitFor(() =>
+      expect((Alert.alert as jest.Mock).mock.calls.some((c) => c[0] === 'Package published')).toBe(true),
+    );
+    expect(getByLabelText('Unpublish package')).toBeTruthy();
+  });
+
+  it('a first publish below $19.99 shows the floor copy with the price fix', async () => {
+    mockPublish.mockRejectedValue({
+      response: { status: 400, data: { code: 'PACKAGE_PRICE_BELOW_MINIMUM', message: 'Paid packages start at $19.99, or make it free.' } },
+    });
+    const props = makeProps(pkg({ status: 'draft', priceCents: 1000 }));
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Publish package'));
+    await waitFor(() => {
+      const c = (Alert.alert as jest.Mock).mock.calls.find((x) => x[0] === 'Check the price');
+      expect(c?.[1]).toBe('Paid packages start at $19.99, or make it free.');
+    });
+  });
+
+  it('an on-sale package can be unpublished', async () => {
+    mockUnpublish.mockResolvedValue({ data: pkg({ status: 'draft' }) });
+    const props = makeProps(pkg({ status: 'active' }));
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Unpublish package'));
+    await waitFor(() => expect(mockUnpublish).toHaveBeenCalledWith('pkg_1'));
+    expect(getByLabelText('Publish package')).toBeTruthy();
   });
 });

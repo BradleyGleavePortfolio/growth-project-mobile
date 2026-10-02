@@ -99,4 +99,51 @@ describe('describePackageSaveFailure', () => {
     const ctx = JSON.stringify(mockCaptureError.mock.calls[0][1]);
     expect(ctx).not.toMatch(/1999|Secret plan|Bearer/);
   });
+
+  // S-FEE round 4 (#321 C-321-2).
+  it('a 400 without PACKAGE_INVALID shows the fallback, never raw validator text', () => {
+    const raw = [
+      http(400, { message: ['property price should not exist'], error: 'Bad Request', statusCode: 400 }),
+      http(400, { message: 'currency must be one of the following values: usd, gbp', error: 'Bad Request' }),
+      http(400, { message: 'Validation failed (uuid is expected)', code: 'SOMETHING_ELSE' }),
+    ];
+    for (const err of raw) {
+      const f = describePackageSaveFailure(err, 'create');
+      expect(f.kind).toBe('invalid');
+      expect(f.action).toBe('fix_input');
+      expect(f.message).toBe(
+        'One of the fields is not valid. Check the price, billing and trial days, then save again.',
+      );
+      expect(f.message).not.toMatch(/should not exist|must be one of|uuid/);
+    }
+  });
+
+  it('PACKAGE_INVALID from the backend filter keeps its coach-facing copy', () => {
+    const f = describePackageSaveFailure(
+      http(400, {
+        code: 'PACKAGE_INVALID',
+        error: 'PACKAGE_INVALID',
+        message: 'Remove price: packages do not accept that field.',
+      }),
+      'create',
+    );
+    expect([f.kind, f.action]).toEqual(['invalid', 'fix_input']);
+    expect(f.message).toBe('Remove price: packages do not accept that field.');
+  });
+
+  it('publish and unpublish failures name the action that did not happen', () => {
+    const below = describePackageSaveFailure(
+      http(400, { code: 'PACKAGE_PRICE_BELOW_MINIMUM', message: 'Paid packages start at $19.99, or make it free.' }),
+      'publish',
+    );
+    expect([below.kind, below.action]).toEqual(['price', 'fix_price']);
+    expect(below.message).toBe('Paid packages start at $19.99, or make it free.');
+    const offline = describePackageSaveFailure(
+      { isAxiosError: true, code: 'ERR_NETWORK', message: 'Network Error' },
+      'publish',
+    );
+    expect(offline.message).toMatch(/The package is not on sale yet\./);
+    const session = describePackageSaveFailure(http(401, {}), 'unpublish');
+    expect(session.message).toMatch(/The package is still on sale\. Sign in again, then unpublish the package\./);
+  });
 });

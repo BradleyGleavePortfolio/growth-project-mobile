@@ -96,6 +96,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [featuresText, setFeaturesText] = useState('');
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -173,7 +174,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   // Retry from the failure dialog runs the latest save (current form state).
   const handleSaveRef = useRef<() => Promise<void>>(async () => undefined);
   const showSaveFailure = useCallback(
-    (f: PackageSaveFailure) => {
+    (f: PackageSaveFailure, retry: () => void = () => void handleSaveRef.current()) => {
       warningTap();
       setError(f.message);
       const close = { text: 'Close', style: 'cancel' as const };
@@ -184,7 +185,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       const buttons: Array<{ text: string; style?: 'cancel'; onPress?: () => void }> = [];
       switch (f.action) {
         case 'retry':
-          buttons.push({ text: 'Try again', onPress: () => void handleSaveRef.current() });
+          buttons.push({ text: 'Try again', onPress: retry });
           if (f.support) buttons.push(support);
           buttons.push(close);
           break;
@@ -221,7 +222,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       if (isEdit && original) {
-        const updated: PackageUpdateInput = v.payload;
+        // #321 (B-321-3): billing goes to the backend only when the coach
+        // changed it, so a name or description edit never touches the price
+        // configuration (no pricing lock, no floor re-check, no cadence drift).
+        const { billingInterval: nextInterval, intervalCount, ...rest } = v.payload;
+        const updated: PackageUpdateInput =
+          nextInterval !== original.billingInterval
+            ? { ...rest, billingInterval: nextInterval, intervalCount }
+            : rest;
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
         successTap();
@@ -253,6 +261,44 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     }
   }, [validate, isEdit, original, navigation, showSaveFailure]);
   handleSaveRef.current = handleSave;
+
+  // Round 4: drafts are not on sale until the coach publishes them (backend
+  // POST :id/publish applies the $19.99 floor to a first publish).
+  const handlePublishToggleRef = useRef<() => Promise<void>>(async () => undefined);
+  const handlePublishToggle = useCallback(async () => {
+    if (!original) return;
+    const mode = original.status === 'draft' ? 'publish' : 'unpublish';
+    mediumTap();
+    setError('');
+    setPublishing(true);
+    try {
+      const res =
+        mode === 'publish'
+          ? await coachPackagesApi.publish(original.id)
+          : await coachPackagesApi.unpublish(original.id);
+      setOriginal(res.data);
+      successTap();
+      track(mode === 'publish' ? 'coach_package_published' : 'coach_package_unpublished', {
+        package_id: original.id,
+      });
+      if (mode === 'publish') {
+        Alert.alert('Package published', 'Clients can now buy this package.');
+      } else {
+        Alert.alert(
+          'Package unpublished',
+          'New clients cannot buy it now. Current clients keep their access.',
+        );
+      }
+    } catch (err) {
+      showSaveFailure(
+        describePackageSaveFailure(err, mode),
+        () => void handlePublishToggleRef.current(),
+      );
+    } finally {
+      setPublishing(false);
+    }
+  }, [original, showSaveFailure]);
+  handlePublishToggleRef.current = handlePublishToggle;
 
   const handleArchive = useCallback(() => {
     if (!original) return;
@@ -559,6 +605,40 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 </Text>
               </View>
             )}
+
+            {!archived ? (
+              <>
+                <Text style={styles.priceHelperText} testID="package-publish-state">
+                  {original.status === 'draft'
+                    ? 'Draft. Clients can buy this package after you publish it.'
+                    : 'On sale. Unpublishing stops new sales; current clients keep access.'}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.secondaryBtn, publishing && styles.primaryBtnDisabled]}
+                  onPress={() => void handlePublishToggle()}
+                  disabled={publishing}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    original.status === 'draft' ? 'Publish package' : 'Unpublish package'
+                  }
+                >
+                  {publishing ? (
+                    <ActivityIndicator color={semanticColors.accent} />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name={original.status === 'draft' ? 'storefront-outline' : 'eye-off-outline'}
+                        size={18}
+                        color={semanticColors.accent}
+                      />
+                      <Text style={styles.secondaryBtnText}>
+                        {original.status === 'draft' ? 'Publish package' : 'Unpublish package'}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.tertiaryBtn, archiving && styles.primaryBtnDisabled]}

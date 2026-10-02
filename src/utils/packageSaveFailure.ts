@@ -31,7 +31,9 @@ import {
 } from './packagePrice';
 import { captureError } from '../services/sentry';
 
-export type PackageSaveMode = 'create' | 'update';
+// publish / unpublish (round 4): the same classification for the editor's
+// Publish and Unpublish controls.
+export type PackageSaveMode = 'create' | 'update' | 'publish' | 'unpublish';
 
 export type PackageSaveFailureKind =
   | 'network'
@@ -80,8 +82,28 @@ const TIMEOUT_CODES = new Set(['ECONNABORTED', 'ETIMEDOUT']);
 const KEPT = 'Your changes are still here.';
 
 function savedWhat(mode: PackageSaveMode): string {
-  return mode === 'create' ? 'The package was not created.' : 'Your changes were not saved.';
+  switch (mode) {
+    case 'create':
+      return 'The package was not created.';
+    case 'publish':
+      return 'The package is not on sale yet.';
+    case 'unpublish':
+      return 'The package is still on sale.';
+    default:
+      return 'Your changes were not saved.';
+  }
 }
+
+/** What to do once the cause is fixed, in the words of this action. */
+function doAgain(mode: PackageSaveMode): string {
+  if (mode === 'publish') return 'publish the package';
+  if (mode === 'unpublish') return 'unpublish the package';
+  return 'save the package';
+}
+
+/** The DTO's generic 400 text is for developers; coaches get this instead. */
+const INVALID_FALLBACK =
+  'One of the fields is not valid. Check the price, billing and trial days, then save again.';
 
 function backendMessage(raw: string, fallback: string): string {
   const m = raw.trim();
@@ -142,7 +164,7 @@ export function describePackageSaveFailure(
     return {
       kind: 'session',
       title: 'Please sign in again',
-      message: `Your session has ended. ${savedWhat(mode)} Sign in again, then save the package.`,
+      message: `Your session has ended. ${savedWhat(mode)} Sign in again, then ${doAgain(mode)}.`,
       action: 'sign_in',
       support: false,
       reference: null,
@@ -200,7 +222,7 @@ export function describePackageSaveFailure(
     return {
       kind: 'subscription',
       title: 'Your plan is not active',
-      message: `Saving packages needs an active coaching plan. ${savedWhat(mode)} Open Billing to update your plan, then save again.`,
+      message: `Changing packages needs an active coaching plan. ${savedWhat(mode)} Open Billing to update your plan, then ${doAgain(mode)}.`,
       action: 'billing',
       support: false,
       reference: null,
@@ -233,7 +255,7 @@ export function describePackageSaveFailure(
     return {
       kind: 'rate_limited',
       title: 'Too many saves',
-      message: `Too many saves in a short time. ${KEPT} Wait a minute, then save again.`,
+      message: `Too many requests in a short time. ${KEPT} Wait a minute, then ${doAgain(mode)}.`,
       action: 'wait',
       support: false,
       reference: null,
@@ -244,10 +266,13 @@ export function describePackageSaveFailure(
     return {
       kind: 'invalid',
       title: 'Check the package details',
-      message: backendMessage(
-        detail.message,
-        'One of the fields is not valid. Check the price, billing and trial days, then save again.',
-      ),
+      // #321 (C-321-2): only a PACKAGE_INVALID body carries copy written for
+      // coaches (backend #629 round 4 names the field and the next action).
+      // A 400 without that code is raw validator text: use the fallback.
+      message:
+        code === 'PACKAGE_INVALID'
+          ? backendMessage(detail.message, INVALID_FALLBACK)
+          : INVALID_FALLBACK,
       action: 'fix_input',
       support: false,
       reference: null,
