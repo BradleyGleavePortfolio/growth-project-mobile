@@ -27,8 +27,10 @@ import { failureReference, isNetworkFailure } from './authFailure';
 import {
   PACKAGE_FREE_ONE_TIME_MESSAGE,
   PACKAGE_PRICE_ERROR_CODES,
-  PACKAGE_PRICE_HELPER,
+  PACKAGE_RECURRING_PRICE_HELPER,
+  packagePriceHelper,
 } from './packagePrice';
+import type { PackageBillingInterval } from '../api/packagesApi';
 import { captureError } from '../services/sentry';
 
 // publish / unpublish (round 4): the same classification for the editor's
@@ -111,14 +113,22 @@ function invalidFallback(mode: PackageSaveMode): string {
  * fields ("amount_cents", "interval = week | month | year"), so they are never
  * shown as they are. The field they are about picks plain app copy instead.
  */
-export function plainPackageInvalidMessage(raw: unknown, mode: PackageSaveMode): string {
+export function plainPackageInvalidMessage(
+  raw: unknown,
+  mode: PackageSaveMode,
+  billingInterval?: PackageBillingInterval,
+): string {
   const m = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(' ') : '';
   const then = `then ${doAgain(mode)}`;
   if (/\bname\b/i.test(m)) {
     return `Give the package a name of 120 characters or fewer, ${then}.`;
   }
   if (/amount|price|cents/i.test(m)) {
-    return `Enter the price in dollars and cents, for example 19.99, or 0 to make it free, ${then}.`;
+    // C-321-7: $0 is free only on a one-time package (backend #629). When the
+    // billing option is unknown, the copy does not offer $0 either.
+    return billingInterval === 'one_time'
+      ? `Enter the price in dollars and cents, for example 19.99, or 0 to make it free, ${then}.`
+      : `Enter the price in dollars and cents, for example 19.99. ${PACKAGE_RECURRING_PRICE_HELPER} ${capitalise(then)}.`;
   }
   if (/interval|billing|recurring|one_time/i.test(m)) {
     return `Choose how clients pay: One-time, Monthly, Quarterly or Yearly, ${then}.`;
@@ -130,6 +140,10 @@ export function plainPackageInvalidMessage(raw: unknown, mode: PackageSaveMode):
     return `Shorten the description, ${then}.`;
   }
   return invalidFallback(mode);
+}
+
+function capitalise(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /** Failure titles name the action the coach tried (C-321-4). */
@@ -174,6 +188,8 @@ export function reportPackageSaveFailure(
 export function describePackageSaveFailure(
   err: unknown,
   mode: PackageSaveMode,
+  /** The billing option of the package being saved (C-321-7 price copy). */
+  billingInterval?: PackageBillingInterval,
 ): PackageSaveFailure {
   const detail = toAuthErrorDetail(err);
   const { status, code } = detail;
@@ -213,12 +229,23 @@ export function describePackageSaveFailure(
   }
 
   if (code && PACKAGE_PRICE_ERROR_CODES.has(code)) {
+    const recurring = billingInterval !== undefined && billingInterval !== 'one_time';
     const fallback =
-      code === 'PACKAGE_FREE_MUST_BE_ONE_TIME' ? PACKAGE_FREE_ONE_TIME_MESSAGE : PACKAGE_PRICE_HELPER;
+      code === 'PACKAGE_FREE_MUST_BE_ONE_TIME'
+        ? PACKAGE_FREE_ONE_TIME_MESSAGE
+        : code === 'PACKAGE_RECURRING_PRICE_BELOW_MINIMUM'
+          ? PACKAGE_RECURRING_PRICE_HELPER
+          : packagePriceHelper(billingInterval ?? 'one_time');
+    // C-321-7: a recurring package is never offered $0, whatever the
+    // server's generic minimum text says.
+    const message =
+      recurring && code === 'PACKAGE_PRICE_BELOW_MINIMUM'
+        ? PACKAGE_RECURRING_PRICE_HELPER
+        : backendMessage(detail.message, fallback);
     return {
       kind: 'price',
       title: 'Check the price',
-      message: backendMessage(detail.message, fallback),
+      message,
       action: 'fix_price',
       support: false,
       reference: null,
@@ -312,7 +339,7 @@ export function describePackageSaveFailure(
       // about picks plain app copy.
       message:
         code === 'PACKAGE_INVALID'
-          ? plainPackageInvalidMessage(detail.message, mode)
+          ? plainPackageInvalidMessage(detail.message, mode, billingInterval)
           : invalidFallback(mode),
       action: 'fix_input',
       support: false,

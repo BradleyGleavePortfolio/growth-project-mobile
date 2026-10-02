@@ -191,10 +191,26 @@ describe('CoachPackageEditScreen — preview as buyer', () => {
 
 describe('CoachPackageEditScreen — S-FEE price rule ($19.99 minimum or free)', () => {
   it('shows the price rule under the price field', async () => {
-    const props = makeProps(pkg());
+    const props = makeProps(pkg({ billingInterval: 'one_time' }));
     const { getByTestId } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
+    expect(getByTestId('package-price-helper').props.children).toBe(
+      'Paid packages start at $19.99, or make it free.',
+    );
+  });
+
+  // C-321-7: free is $0 on a one-time package only, so a recurring package's
+  // helper never offers $0.
+  it('C-321-7: a recurring package is never offered $0 under the price field', async () => {
+    const props = makeProps(pkg({ billingInterval: 'monthly' }));
+    const { getByTestId, getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(getByTestId('package-price-helper').props.children).toBe(
+      'Recurring packages start at $19.99.',
+    );
+    await fireEvent.press(getByLabelText('One-time'));
     expect(getByTestId('package-price-helper').props.children).toBe(
       'Paid packages start at $19.99, or make it free.',
     );
@@ -209,7 +225,7 @@ describe('CoachPackageEditScreen — S-FEE price rule ($19.99 minimum or free)',
     await fireEvent.press(getByLabelText('Save changes'));
     expect(mockUpdate).not.toHaveBeenCalled();
     // Inline under the field and as the save error.
-    expect(getAllByText('Paid packages start at $19.99, or make it free.').length).toBe(2);
+    expect(getAllByText('Recurring packages start at $19.99.').length).toBe(2);
   });
 
   it('blocks a free recurring package with the one-time message', async () => {
@@ -383,9 +399,26 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     });
     const a = lastAlert();
     expect(a.title).toBe('Check the price');
-    expect(a.message).toBe('Paid packages start at $19.99, or make it free.');
+    // C-321-7: the package is monthly, so $0 is not offered.
+    expect(a.message).toBe('Recurring packages start at $19.99.');
     expect(a.buttons.map((b) => b.text)).toEqual(['OK']);
     expect(mockCaptureError).not.toHaveBeenCalled();
+  });
+
+  it('C-321-7: a one-time package keeps the server price copy that offers free', async () => {
+    await saveWith(
+      {
+        response: {
+          status: 400,
+          data: {
+            code: 'PACKAGE_PRICE_BELOW_MINIMUM',
+            message: 'Paid packages start at $19.99, or make it free.',
+          },
+        },
+      },
+      pkg({ billingInterval: 'one_time' }),
+    );
+    expect(lastAlert().message).toBe('Paid packages start at $19.99, or make it free.');
   });
 
   it.each([
@@ -410,7 +443,7 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     await fireEvent.press(getByLabelText('Yearly'));
     await fireEvent.press(getByLabelText('Save changes'));
     expect(mockUpdate).not.toHaveBeenCalled();
-    expect(getAllByText('Paid packages start at $19.99, or make it free.').length).toBeGreaterThan(0);
+    expect(getAllByText('Recurring packages start at $19.99.').length).toBeGreaterThan(0);
   });
 });
 
@@ -487,7 +520,8 @@ describe('CoachPackageEditScreen — billing edits and publishing', () => {
     await fireEvent.press(getByLabelText('Publish package'));
     await waitFor(() => {
       const c = (Alert.alert as jest.Mock).mock.calls.find((x) => x[0] === 'Check the price');
-      expect(c?.[1]).toBe('Paid packages start at $19.99, or make it free.');
+      // C-321-7: the draft is monthly, so the copy does not offer $0.
+      expect(c?.[1]).toBe('Recurring packages start at $19.99.');
     });
   });
 

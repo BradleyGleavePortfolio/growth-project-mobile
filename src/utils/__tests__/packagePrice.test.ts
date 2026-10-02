@@ -1,7 +1,9 @@
 import {
   PACKAGE_FREE_ONE_TIME_MESSAGE,
   PACKAGE_PRICE_HELPER,
+  PACKAGE_RECURRING_PRICE_HELPER,
   PAID_PACKAGE_MIN_CENTS,
+  packagePriceHelper,
   packagePriceIssue,
 } from "../packagePrice";
 
@@ -15,9 +17,20 @@ describe("packagePriceIssue (S-FEE $19.99 minimum or free)", () => {
 
   it("rejects a paid price under $19.99 with the owner copy", () => {
     expect(packagePriceIssue(1998, "one_time")).toBe(PACKAGE_PRICE_HELPER);
-    expect(packagePriceIssue(50, "monthly")).toBe(
+    expect(packagePriceIssue(50, "one_time")).toBe(
       "Paid packages start at $19.99, or make it free.",
     );
+  });
+
+  it("C-321-7: a recurring price under $19.99 is never offered $0", () => {
+    expect(packagePriceIssue(50, "monthly")).toBe(
+      "Recurring packages start at $19.99.",
+    );
+    expect(packagePriceIssue(null, "yearly")).toBe(
+      "Enter a price of $19.99 or more, for example 19.99.",
+    );
+    expect(packagePriceHelper("quarterly")).toBe(PACKAGE_RECURRING_PRICE_HELPER);
+    expect(packagePriceHelper("one_time")).toBe(PACKAGE_PRICE_HELPER);
   });
 
   it("allows $0 only as a one-time free package", () => {
@@ -34,7 +47,7 @@ describe("packagePriceIssue (S-FEE $19.99 minimum or free)", () => {
   it("C-321-1: a new billing interval at the old price is a new price (floor applies)", () => {
     const saved = { priceCents: 1000, billingInterval: "monthly" as const };
     expect(packagePriceIssue(1000, "monthly", saved)).toBeNull();
-    expect(packagePriceIssue(1000, "yearly", saved)).toBe(PACKAGE_PRICE_HELPER);
+    expect(packagePriceIssue(1000, "yearly", saved)).toBe(PACKAGE_RECURRING_PRICE_HELPER);
     expect(packagePriceIssue(1000, "one_time", saved)).toBe(PACKAGE_PRICE_HELPER);
     expect(packagePriceIssue(1999, "yearly", saved)).toBeNull();
   });

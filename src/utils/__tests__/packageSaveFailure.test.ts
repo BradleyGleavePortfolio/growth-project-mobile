@@ -158,11 +158,46 @@ describe('describePackageSaveFailure', () => {
       const f = describePackageSaveFailure(
         http(400, { code: 'PACKAGE_INVALID', error: 'PACKAGE_INVALID', message }),
         mode,
+        'one_time',
       );
       expect([f.kind, f.action, f.title]).toEqual(['invalid', 'fix_input', 'Check the package details']);
       expect(f.message).toBe(expected);
       expect(f.message).not.toMatch(/_|\||=|≥/);
     }
+  });
+
+  // C-321-7: free is exactly $0 on a one-time package only (backend #629).
+  it('C-321-7: price copy offers $0 only for a one-time package', () => {
+    const invalid = http(400, {
+      code: 'PACKAGE_INVALID',
+      message: 'amount_cents must be a whole number of cents, for example 1999 for $19.99.',
+    });
+    expect(describePackageSaveFailure(invalid, 'create', 'one_time').message).toBe(
+      'Enter the price in dollars and cents, for example 19.99, or 0 to make it free, then save the package.',
+    );
+    for (const interval of ['weekly', 'monthly', 'quarterly', 'yearly'] as const) {
+      const f = describePackageSaveFailure(invalid, 'publish', interval);
+      expect(f.message).toBe(
+        'Enter the price in dollars and cents, for example 19.99. Recurring packages start at $19.99. Then publish the package.',
+      );
+      expect(f.message).not.toMatch(/free|\b0\b/);
+    }
+    // Unknown billing option: $0 is not offered either.
+    expect(describePackageSaveFailure(invalid, 'update').message).not.toMatch(/free/);
+    const below = http(400, {
+      code: 'PACKAGE_PRICE_BELOW_MINIMUM',
+      message: 'Paid packages start at $19.99, or make it free.',
+    });
+    expect(describePackageSaveFailure(below, 'update', 'monthly').message).toBe(
+      'Recurring packages start at $19.99.',
+    );
+    expect(describePackageSaveFailure(below, 'update', 'one_time').message).toBe(
+      'Paid packages start at $19.99, or make it free.',
+    );
+    const recurring = http(400, { code: 'PACKAGE_RECURRING_PRICE_BELOW_MINIMUM' });
+    expect(describePackageSaveFailure(recurring, 'update', 'monthly').message).toBe(
+      'Recurring packages start at $19.99.',
+    );
   });
 
   it('failure titles name the action that was tried (C-321-4)', () => {

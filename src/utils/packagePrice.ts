@@ -13,6 +13,21 @@ export const PACKAGE_PRICE_HELPER =
   "Paid packages start at $19.99, or make it free.";
 export const PACKAGE_FREE_ONE_TIME_MESSAGE =
   "Free packages are one-time. Switch billing to One-time, or set a price of $19.99 or more.";
+/**
+ * C-321-7: free means exactly $0 on a one-time package only (backend #629),
+ * so recurring copy never offers $0.
+ */
+export const PACKAGE_RECURRING_PRICE_HELPER =
+  "Recurring packages start at $19.99.";
+
+/** The helper line under the price field for this billing option. */
+export function packagePriceHelper(
+  billingInterval: PackageBillingInterval,
+): string {
+  return billingInterval === "one_time"
+    ? PACKAGE_PRICE_HELPER
+    : PACKAGE_RECURRING_PRICE_HELPER;
+}
 
 /** The saved price configuration of the package being edited. */
 export interface SavedPackagePrice {
@@ -33,7 +48,9 @@ export function packagePriceIssue(
   saved?: SavedPackagePrice | null,
 ): string | null {
   if (cents == null)
-    return "Enter a price, for example 19.99, or 0 to make it free.";
+    return billingInterval === "one_time"
+      ? "Enter a price, for example 19.99, or 0 to make it free."
+      : "Enter a price of $19.99 or more, for example 19.99.";
   if (cents === 0) {
     return billingInterval === "one_time"
       ? null
@@ -44,7 +61,7 @@ export function packagePriceIssue(
     cents === saved.priceCents &&
     billingInterval === saved.billingInterval;
   if (cents < PAID_PACKAGE_MIN_CENTS && !unchanged) {
-    return PACKAGE_PRICE_HELPER;
+    return packagePriceHelper(billingInterval);
   }
   return null;
 }

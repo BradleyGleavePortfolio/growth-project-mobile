@@ -43,7 +43,7 @@ import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
-import { PACKAGE_PRICE_HELPER, packagePriceIssue } from '../../../utils/packagePrice';
+import { packagePriceHelper, packagePriceIssue } from '../../../utils/packagePrice';
 import {
   describePackageSaveFailure,
   type PackageSaveFailure,
@@ -254,11 +254,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       // #321 (Sol B-321-1): status + machine code decide the message and
       // the next action; unknown failures carry a reference (request_id)
       // and are reported to Sentry. The form keeps the coach's edits.
-      showSaveFailure(describePackageSaveFailure(err, isEdit ? 'update' : 'create'));
+      showSaveFailure(describePackageSaveFailure(err, isEdit ? 'update' : 'create', billingInterval));
     } finally {
       setSaving(false);
     }
-  }, [validate, isEdit, original, navigation, showSaveFailure]);
+  }, [validate, isEdit, original, navigation, showSaveFailure, billingInterval]);
   handleSaveRef.current = handleSave;
 
   // Round 4: drafts are not on sale until the coach publishes them (backend
@@ -295,7 +295,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       }
     } catch (err) {
       showSaveFailure(
-        describePackageSaveFailure(err, mode),
+        describePackageSaveFailure(err, mode, original.billingInterval),
         () => void handlePublishToggleRef.current(),
       );
     } finally {
@@ -480,7 +480,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           testID="package-price-helper"
           style={priceInlineIssue ? styles.priceIssueText : styles.priceHelperText}
         >
-          {priceInlineIssue ?? PACKAGE_PRICE_HELPER}
+          {priceInlineIssue ?? packagePriceHelper(billingInterval)}
         </Text>
 
         <Label semanticColors={semanticColors} tokens={tokens}>Billing</Label>
