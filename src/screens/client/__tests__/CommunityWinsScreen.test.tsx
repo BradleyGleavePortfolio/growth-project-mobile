@@ -58,8 +58,13 @@ jest.mock('../../../api/communityWinsApi', () => ({
     deleteWin: (...a: unknown[]) => mockDeleteWin(...a),
   },
 }));
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
 const mockReport = jest.fn();
 const mockBlock = jest.fn();
+const mockListNotices = jest.fn();
 jest.mock('../../../api/communitySafetyApi', () => {
   const actual = jest.requireActual('../../../api/communitySafetyApi');
   return {
@@ -67,6 +72,7 @@ jest.mock('../../../api/communitySafetyApi', () => {
     communitySafetyApi: {
       report: (...a: unknown[]) => mockReport(...a),
       block: (...a: unknown[]) => mockBlock(...a),
+      listNotices: () => mockListNotices(),
     },
   };
 });
@@ -107,6 +113,8 @@ beforeEach(() => {
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
   mockCapture.mockReset();
+  mockNavigate.mockReset();
+  mockListNotices.mockReset().mockResolvedValue({ notices: [], unread_count: 0 });
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(() => alertSpy.mockRestore());
@@ -207,5 +215,30 @@ describe('More > Community wins', () => {
     const { findByText } = await renderScreen();
     const el = await findByText(/Share something you are proud of/);
     expect(String(el.props.children)).not.toMatch(/!|Be the first/);
+  });
+});
+
+describe('More > Community wins: Community safety is reachable here (B-314-4)', () => {
+  it('opens Community safety from the wins screen', async () => {
+    const { findByTestId, queryByTestId } = await renderScreen();
+    await fireEvent.press(await findByTestId('wins-open-safety'));
+    expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
+    expect(queryByTestId('wins-notice-banner')).toBeNull();
+  });
+
+  it('shows a banner while a moderator notice is unread, and it opens Community safety', async () => {
+    mockListNotices.mockResolvedValue({
+      notices: [
+        { id: 'n-1', action: 'warn', message: 'Warning text', created_at: '2026-10-01T00:00:00Z', read: false },
+      ],
+      unread_count: 1,
+    });
+    const { findByTestId } = await renderScreen();
+    const banner = await findByTestId('wins-notice-banner');
+    expect(banner.props.accessibilityLabel).toBe(
+      'You have a notice from a moderator. Open Community safety to read it.',
+    );
+    await fireEvent.press(banner);
+    expect(mockNavigate).toHaveBeenCalledWith('CommunitySafety');
   });
 });

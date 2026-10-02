@@ -156,6 +156,7 @@ export default function VoiceNotesSection({
               <VoiceNotePlayer
                 url={note.url}
                 durationMs={note.duration_ms}
+                onPlaybackError={() => void feed.refetch()}
                 testID={`${testID}-player-${note.id}`}
               />
             </View>

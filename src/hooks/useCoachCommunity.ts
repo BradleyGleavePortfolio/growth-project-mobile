@@ -29,6 +29,7 @@ import {
   type CoachCohortDetail,
   type CoachCohortMember,
   type CoachFlaggedItem,
+  type CoachModerationOutcome,
   type CoachModerationAction,
   type CoachEmptyStatesResponse,
   type CoachEmptyStateSurfaceKey,
@@ -409,7 +410,11 @@ export interface ModerateFlaggedVars {
  * flagged-today count decremented; both roll back on failure. The
  * confirmation modal gates this before it fires.
  */
-export function useModerateFlagged(): UseMutationResult<void, unknown, ModerateFlaggedVars> {
+export function useModerateFlagged(): UseMutationResult<
+  CoachModerationOutcome,
+  unknown,
+  ModerateFlaggedVars
+> {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ item, action }: ModerateFlaggedVars) =>

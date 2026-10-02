@@ -57,7 +57,11 @@ import {
   useModerateFlagged,
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
-import type { CoachFlaggedItem, CoachModerationAction } from '../../api/coachCommunityApi';
+import type {
+  CoachFlaggedItem,
+  CoachModerationAction,
+  CoachModerationOutcome,
+} from '../../api/coachCommunityApi';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
 
 /** Reviewer-facing noun for each reported content type. */
@@ -102,12 +106,34 @@ const DECISIONS: ReadonlyArray<{
   { action: 'ban', label: 'Ban', destructive: true },
 ];
 
-const DONE_COPY: Record<CoachModerationAction, string> = {
-  hide: 'Hidden.',
-  warn: 'Warning sent.',
-  ban: 'Member removed.',
-  dismiss: 'Report dismissed.',
-};
+/**
+ * Confirmation copy after a decision, from what the backend actually did
+ * (B-314-6). A stored notice is the member's record (they read it in
+ * Community safety); a push is only ever attempted on top, so the copy never
+ * says a warning was "sent" or "delivered".
+ */
+export function moderationDoneCopy(
+  action: CoachModerationAction,
+  outcome: CoachModerationOutcome | undefined,
+): string {
+  const stored = outcome?.memberNotice?.stored === true;
+  switch (action) {
+    case 'dismiss':
+      return 'Report dismissed.';
+    case 'hide':
+      return stored
+        ? 'Hidden. The member can read why in Community safety in the app.'
+        : 'Hidden. The member was not given a notice, so tell them directly if they need to know why.';
+    case 'warn':
+      return stored
+        ? 'Warning saved. The member reads it in Community safety in the app.'
+        : 'The report is closed, but the warning was not saved for the member. Message them directly with the warning.';
+    case 'ban':
+      return stored
+        ? 'Member removed. They can read why in Community safety in the app.'
+        : 'Member removed. They were not given a notice, so tell them directly if they need to know why.';
+  }
+}
 
 function confirmCopy(d: PendingDecision): {
   title: string;
@@ -125,7 +151,7 @@ function confirmCopy(d: PendingDecision): {
     case 'warn':
       return {
         title: 'Warn this member',
-        body: `Send ${d.item.author_name} a warning about ${what}? They keep their access.`,
+        body: `Warn ${d.item.author_name} about ${what}? They keep their access, and the warning is saved for them to read in Community safety.`,
         confirm: 'Warn',
       };
     case 'ban':
@@ -158,6 +184,8 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
   const [pending, setPending] = useState<PendingDecision | null>(null);
 
   const items = flagged.data ?? [];
+  // Stable (react-query): a failed voice player fetches fresh signed links.
+  const refetchFlagged = flagged.refetch;
   const isEmpty = !flagged.isLoading && !flagged.isError && items.length === 0;
   // Described once per error (an unexpected one is reported to Sentry once).
   const queueFailure = useMemo(
@@ -169,7 +197,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
     if (!pending) return;
     const { action } = pending;
     moderate.mutate(pending, {
-      onSuccess: () => completion.show(DONE_COPY[action]),
+      onSuccess: (outcome) => completion.show(moderationDoneCopy(action, outcome)),
       // The hook rolls the optimistic removal back; say what happened.
       onError: (err: unknown) => {
         const failure = describeCommunityFailure(err, 'moderate');
@@ -262,6 +290,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
               <VoiceNotePlayer
                 url={voice.url}
                 durationMs={voice.duration_ms}
+                onPlaybackError={() => void refetchFlagged()}
                 testID={`coach-community-flagged-player-${item.id}`}
               />
               <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
@@ -303,7 +332,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
         </View>
       );
     },
-    [semanticColors, onOpenPost],
+    [semanticColors, onOpenPost, refetchFlagged],
   );
 
   if (flagged.isLoading) {

@@ -216,6 +216,7 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
         <VoiceNotePlayer
           url={data.url}
           durationMs={data.duration_ms}
+          onPlaybackError={() => void note.refetch()}
           testID="community-voice-detail-player"
         />
 

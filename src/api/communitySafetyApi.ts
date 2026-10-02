@@ -101,6 +101,37 @@ const BlockResultSchema = z
   .object({ blocked_user_id: z.string(), blocked: z.boolean() })
   .passthrough();
 
+/**
+ * A moderation notice addressed to the signed-in member (B-610-4 / B-314-6):
+ * GET /community/safety/notices. Written by the backend in the same
+ * transaction as the coach's hide / warn / ban, so it exists whether or not
+ * the member allows push. `message` is the member-facing copy.
+ */
+export const CommunityModerationNoticeSchema = z
+  .object({
+    id: z.string(),
+    action: z.enum(['hide', 'warn', 'ban']),
+    message: z.string(),
+    created_at: z.string(),
+    read: z.boolean(),
+  })
+  .passthrough();
+export type CommunityModerationNotice = z.infer<typeof CommunityModerationNoticeSchema>;
+
+const NoticeListSchema = z
+  .object({ notices: z.array(CommunityModerationNoticeSchema), unread_count: z.number() })
+  .passthrough();
+export type CommunityModerationNoticeList = z.infer<typeof NoticeListSchema>;
+
+/** React Query keys for the safety surface (under ['community'], so a block refetches them). */
+export const communitySafetyKeys = {
+  info: ['community', 'safety', 'info'] as const,
+  blocks: ['community', 'safety', 'blocks'] as const,
+  notices: ['community', 'safety', 'notices'] as const,
+};
+
+const NoticeReadSchema = z.object({ id: z.string(), read: z.literal(true) }).passthrough();
+
 function idempotentHeaders(): { headers: Record<string, string> } {
   return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
 }
@@ -138,6 +169,24 @@ export const communitySafetyApi = {
       BlockResultSchema,
       () => api.delete<unknown>(`/community/blocks/${userId}`),
       'community unblock',
+    ).then(() => undefined);
+  },
+
+  /** GET /community/safety/notices — the member's own moderation notices, newest first. */
+  listNotices(): Promise<CommunityModerationNoticeList> {
+    return call(
+      NoticeListSchema,
+      () => api.get<unknown>('/community/safety/notices'),
+      'community notices',
+    );
+  },
+
+  /** POST /community/safety/notices/:id/read — mark one of the member's notices read. */
+  markNoticeRead(noticeId: string): Promise<void> {
+    return call(
+      NoticeReadSchema,
+      () => api.post<unknown>(`/community/safety/notices/${noticeId}/read`, {}),
+      'community notice read',
     ).then(() => undefined);
   },
 

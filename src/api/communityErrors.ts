@@ -4,9 +4,11 @@
  *
  * Every failure says what happened and offers a working next step:
  *   - known backend machine codes map to specific copy (block, DM, post,
- *     moderation, content filter); the backend's own human `message` wins for
- *     the codes whose message is written for members (content filter, block,
- *     DM blocked);
+ *     moderation, content filter, voice, notices); the backend's own human
+ *     `message` wins for the codes whose message is written for members
+ *     (content filter, block, DM, voice upload checks). A blocked member's DM
+ *     attempt gets the same `community.dm.not_found` as a member who left, so
+ *     the block is never disclosed (there is no `community.dm.blocked`);
  *   - known HTTP statuses (401, 403, 404, 409, 410, 429, offline) map to
  *     specific copy;
  *   - anything else shows a short reference (the server's X-Request-ID, or the
@@ -31,6 +33,7 @@ export type CommunityAction =
   | 'block'
   | 'unblock'
   | 'load_blocks'
+  | 'load_notices'
   | 'send_reply'
   | 'send_message'
   | 'send_post'
@@ -64,6 +67,7 @@ const TITLES: Record<CommunityAction, string> = {
   block: 'Not blocked',
   unblock: 'Not unblocked',
   load_blocks: 'Block list not loaded',
+  load_notices: 'Notices not loaded',
   send_reply: 'Reply not sent',
   send_message: 'Message not sent',
   send_post: 'Post not shared',
@@ -85,6 +89,7 @@ const VERBS: Record<CommunityAction, string> = {
   block: 'block this member',
   unblock: 'unblock this member',
   load_blocks: 'load your block list',
+  load_notices: 'load your notices',
   send_reply: 'send your reply',
   send_message: 'send your message',
   send_post: 'share your post',
@@ -107,13 +112,18 @@ const SERVER_WORDED = new Set([
   'community.block.self',
   'community.block.not_found',
   'community.block.workspace_coach',
-  'community.dm.blocked',
   'community.dm.blocked_by_you',
+  'community.dm.not_found',
   'community.win.removed_member',
   'community.voice.dm_not_supported',
   'community.voice.not_author',
   'community.voice.duration_out_of_range',
   'community.voice.not_entitled',
+  'community.voice.upload_missing',
+  'community.voice.upload_mismatch',
+  'community.voice.already_posted',
+  'community.voice.storage_unavailable',
+  'community.notice.not_found',
 ]);
 
 /** Local copy for known machine codes (used when the server sent no message). */
@@ -125,8 +135,6 @@ const BY_CODE: Record<string, string> = {
     'This member could not be found in your community. They may have left. Go back and refresh.',
   'community.block.workspace_coach':
     'You cannot block your coach. You can report a message or post, or email the safety contact in Community safety.',
-  'community.dm.blocked':
-    'You cannot message this member. If you need help, email the safety contact in Community safety.',
   'community.dm.blocked_by_you':
     'You blocked this member. To message them again, unblock them in Community safety.',
   'community.dm.disabled':
@@ -174,7 +182,26 @@ const BY_CODE: Record<string, string> = {
     'A voice note can go to one space at a time. Choose one space, then send it again.',
   'community.voice.not_entitled':
     'Voice notes are not included in your current plan. You can post a text message instead, or ask your coach about your plan.',
+  'community.voice.upload_missing':
+    'We could not find the uploaded recording. Check your connection, record the voice note again, then send it.',
+  'community.voice.upload_mismatch':
+    'The uploaded recording does not match what was recorded. Record the voice note again in the app, then send it.',
+  'community.voice.already_posted':
+    'This recording was already posted. Refresh to see it, or record a new voice note.',
+  'community.voice.storage_unavailable':
+    'Voice notes cannot be checked right now. Your recording was not posted. Try sending it again in a minute.',
+  'community.notice.not_found':
+    'This notice could not be found. Refresh Community safety to see your notices.',
 };
+
+/**
+ * Every machine code this module maps, for the contract test against the
+ * codes the backend emits (C-314-4: a mapped code the server never sends is
+ * dead copy that hides a contract drift).
+ */
+export const MAPPED_COMMUNITY_CODES: ReadonlyArray<string> = Array.from(
+  new Set([...SERVER_WORDED, ...Object.keys(BY_CODE)]),
+);
 
 interface ErrorBody {
   code?: unknown;

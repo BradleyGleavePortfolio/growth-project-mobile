@@ -13,6 +13,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { SkeletonCard } from '../../components/SkeletonLoader';
 import SafetyMenu from '../../components/community/SafetyMenu';
@@ -20,6 +23,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import type { IoniconName } from '../../types/common';
 import { communityWinsApi, type CommunityWin } from '../../api/communityWinsApi';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { communitySafetyApi, communitySafetyKeys } from '../../api/communitySafetyApi';
 
 /**
  * CommunityScreen (More > Community) — member wins.
@@ -31,6 +35,10 @@ import { describeCommunityFailure } from '../../api/communityErrors';
  * to the coach's moderation queue (reviewed within 24 hours). Wins are shared
  * only with teammates in the coach's community; there is no public feed.
  * Other members appear by first name only.
+ *
+ * Wins are live whether or not the Community tab is on, so Community safety
+ * (guidelines, safety contact, block list, moderation notices) opens from
+ * here too (B-314-4), with a banner while a moderator notice is unread.
  */
 
 /** Query key under ['community'] so a block refetches it with every community surface. */
@@ -60,6 +68,14 @@ export default function CommunityScreen() {
   const [winTitle, setWinTitle] = useState('');
   const [winDesc, setWinDesc] = useState('');
   const [postError, setPostError] = useState<string | null>(null);
+
+  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList, 'Community'>>();
+  const notices = useQuery({
+    queryKey: communitySafetyKeys.notices,
+    queryFn: () => communitySafetyApi.listNotices(),
+  });
+  const unreadNotices = notices.data?.unread_count ?? 0;
+  const openSafety = useCallback(() => navigation.navigate('CommunitySafety'), [navigation]);
 
   const wins = useQuery<CommunityWin[]>({
     queryKey: [...WINS_QUERY_KEY, viewerId],
@@ -122,6 +138,32 @@ export default function CommunityScreen() {
           <Text style={styles.shareWinText}>Share a win</Text>
         </TouchableOpacity>
       </View>
+
+      {unreadNotices > 0 ? (
+        <TouchableOpacity
+          style={styles.noticeBanner}
+          onPress={openSafety}
+          accessibilityRole="button"
+          accessibilityLabel="You have a notice from a moderator. Open Community safety to read it."
+          testID="wins-notice-banner"
+        >
+          <Ionicons name="alert-circle-outline" size={18} color={colors.textPrimary} />
+          <Text style={styles.noticeBannerText}>
+            You have a notice from a moderator. Open Community safety to read it.
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity
+        style={styles.safetyRow}
+        onPress={openSafety}
+        accessibilityRole="button"
+        accessibilityLabel="Community safety: guidelines, safety contact and blocked members"
+        testID="wins-open-safety"
+      >
+        <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+        <Text style={styles.safetyRowText}>Community safety</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </TouchableOpacity>
 
       <FlatList
         data={wins.data || []}
@@ -321,6 +363,42 @@ const makeStyles = (colors: ThemeColors) =>
       textTransform: 'uppercase',
       color: colors.textMuted,
       marginTop: 8,
+    },
+    noticeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 24,
+      marginBottom: 8,
+      padding: 12,
+      minHeight: 44,
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.warning,
+      backgroundColor: colors.surface,
+    },
+    noticeBannerText: {
+      flex: 1,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    safetyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 24,
+      marginBottom: 8,
+      minHeight: 44,
+    },
+    safetyRowText: {
+      flex: 1,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.primary,
     },
     shareWinBtn: {
       flexDirection: 'row',

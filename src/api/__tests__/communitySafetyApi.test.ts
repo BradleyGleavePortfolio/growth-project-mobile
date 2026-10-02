@@ -141,8 +141,8 @@ describe('error helpers', () => {
   });
 
   it('communityErrorCode + blockErrorMessage branch on server codes', () => {
-    expect(communityErrorCode(axiosError(403, { code: 'community.dm.blocked' }))).toBe(
-      'community.dm.blocked',
+    expect(communityErrorCode(axiosError(403, { code: 'community.dm.blocked_by_you' }))).toBe(
+      'community.dm.blocked_by_you',
     );
     expect(blockErrorMessage(axiosError(403, { code: 'community.block.workspace_coach' }))).toMatch(
       /cannot block your coach/,

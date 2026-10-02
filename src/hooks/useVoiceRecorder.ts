@@ -1,7 +1,8 @@
 /**
  * useVoiceRecorder — the v3-3 recording state machine for the community
- * voice-note composer. Wraps a VoiceRecorderPort (injectable for tests; the
- * resolved adapter at runtime) and exposes a small, explicit state machine:
+ * voice-note composer. Wraps a VoiceRecorderPort (injectable for tests; at
+ * runtime the native expo-audio recorder from useNativeVoiceRecorder, B-314-2)
+ * and exposes a small, explicit state machine:
  *
  *   unavailable → (no recorder bundled on this build; calm message, no button)
  *   idle        → ready to record (permission granted or undetermined)
@@ -32,6 +33,7 @@ import {
   type VoiceRecorderPort,
   type VoiceRecordingResult,
 } from './voiceRecorderPort';
+import { reportVoiceAudioCleanup, useNativeVoiceRecorder } from '../services/voiceAudio';
 
 export type VoiceRecorderStatus =
   | 'unavailable'
@@ -43,7 +45,7 @@ export type VoiceRecorderStatus =
   | 'error';
 
 export interface UseVoiceRecorderOptions {
-  /** Inject a port for tests; defaults to the resolved runtime adapter. */
+  /** Inject a port for tests; defaults to the native expo-audio recorder. */
   recorder?: VoiceRecorderPort;
   /** Hard cap in ms; defaults to the server max (5 min). */
   maxDurationMs?: number;
@@ -80,7 +82,10 @@ const TICK_MS = 100;
 export function useVoiceRecorder(
   options: UseVoiceRecorderOptions = {},
 ): VoiceRecorderState {
-  const recorder = options.recorder ?? resolveVoiceRecorder();
+  // Called on every render (stable hook order: the native implementation is
+  // fixed per process), even when a test injects its own recorder.
+  const native = useNativeVoiceRecorder();
+  const recorder = options.recorder ?? resolveVoiceRecorder(native);
   const maxDurationMs = options.maxDurationMs ?? RECORDER_MAX_DURATION_MS;
 
   const [status, setStatus] = useState<VoiceRecorderStatus>(
@@ -104,8 +109,20 @@ export function useVoiceRecorder(
     startedAtRef.current = null;
   }, []);
 
-  // Always clear the interval on unmount so a backgrounded composer never leaks.
-  useEffect(() => clearTick, [clearTick]);
+  // Always clear the interval on unmount so a backgrounded composer never
+  // leaks, and release the microphone if the composer closes mid-recording.
+  const recorderRef = useRef(recorder);
+  recorderRef.current = recorder;
+  useEffect(
+    () => () => {
+      const wasRecording = startedAtRef.current !== null;
+      clearTick();
+      if (wasRecording) {
+        void recorderRef.current.cancel().catch(reportVoiceAudioCleanup('recorder_unmount_cancel'));
+      }
+    },
+    [clearTick],
+  );
 
   const finalize = useCallback(async () => {
     if (stoppingRef.current) return;

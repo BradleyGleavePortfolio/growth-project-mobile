@@ -32,7 +32,7 @@
  * resolve without standing up the full ThemeProvider.
  */
 import React from 'react';
-import { render, fireEvent, configure } from '@testing-library/react-native';
+import { render, fireEvent, configure, act } from '@testing-library/react-native';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -806,6 +806,43 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
         { item: expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc' }), action },
         expect.objectContaining({ onSuccess: expect.any(Function) }),
       );
+    },
+  );
+
+  it.each([
+    ['warn', true, 'Warning saved. The member reads it in Community safety in the app.'],
+    ['hide', true, 'Hidden. The member can read why in Community safety in the app.'],
+    ['ban', true, 'Member removed. They can read why in Community safety in the app.'],
+    [
+      'warn',
+      false,
+      'The report is closed, but the warning was not saved for the member. Message them directly with the warning.',
+    ],
+  ] as const)(
+    'B-314-6: %s with a stored notice = %s says only what the backend did',
+    async (action, stored, copy) => {
+      mockState.flagged = {
+        data: [flaggedItem()],
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId, findByText, queryByText } = await render(
+        <CoachCommunityModerationScreen />,
+      );
+      await fireEvent.press(
+        getByTestId(`coach-community-flagged-${action}-cccccccc-cccc-cccc-cccc-cccccccccccc`),
+      );
+      await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
+      const opts = mockHideMutate.mock.calls[0][1] as {
+        onSuccess: (o: unknown) => void;
+      };
+      await act(async () => {
+        opts.onSuccess({ memberNotice: { stored, push: stored ? 'attempted' : 'not_sent' } });
+      });
+      expect(await findByText(copy)).toBeTruthy();
+      expect(queryByText('Warning sent.')).toBeNull();
     },
   );
 

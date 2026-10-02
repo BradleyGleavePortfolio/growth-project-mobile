@@ -33,9 +33,14 @@ jest.mock('../../../components/community', () => {
 });
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
+const mockSetString = jest.fn();
+jest.mock('expo-clipboard', () => ({ setStringAsync: (v: string) => mockSetString(v) }));
+
 const mockGetInfo = jest.fn();
 const mockListBlocks = jest.fn();
 const mockUnblock = jest.fn();
+const mockListNotices = jest.fn();
+const mockMarkRead = jest.fn();
 jest.mock('../../../api/communitySafetyApi', () => {
   const actual = jest.requireActual('../../../api/communitySafetyApi');
   return {
@@ -44,6 +49,8 @@ jest.mock('../../../api/communitySafetyApi', () => {
       getSafetyInfo: () => mockGetInfo(),
       listBlocks: () => mockListBlocks(),
       unblock: (id: string) => mockUnblock(id),
+      listNotices: () => mockListNotices(),
+      markNoticeRead: (id: string) => mockMarkRead(id),
     },
   };
 });
@@ -75,6 +82,9 @@ beforeEach(() => {
   mockGetInfo.mockReset();
   mockListBlocks.mockReset();
   mockUnblock.mockReset().mockResolvedValue(undefined);
+  mockListNotices.mockReset().mockResolvedValue({ notices: [], unread_count: 0 });
+  mockMarkRead.mockReset().mockResolvedValue(undefined);
+  mockSetString.mockReset().mockResolvedValue(true);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(() => alertSpy.mockRestore());
@@ -129,5 +139,121 @@ describe('CommunitySafetyScreen', () => {
       buttons.find((b) => b.text === 'Unblock')?.onPress?.();
     });
     await waitFor(() => expect(mockUnblock).toHaveBeenCalledWith('u-1'));
+  });
+});
+
+describe('CommunitySafetyScreen — safety email when no mail app opens (B-314-3)', () => {
+  beforeEach(() => {
+    mockGetInfo.mockResolvedValue({
+      contact_email: 'safety@example.test',
+      report_reasons: [],
+      guidelines: ['Be kind.'],
+      response_commitment: 'Reviewed within 24 hours.',
+    });
+    mockListBlocks.mockResolvedValue([]);
+  });
+
+  it('keeps the address usable: what happened, selectable address, copy and retry', async () => {
+    const open = jest
+      .spyOn(Linking, 'openURL')
+      .mockRejectedValueOnce(new Error('No Activity found to handle Intent'))
+      .mockResolvedValueOnce(true);
+    const { getByTestId, findByTestId, findByText, queryByTestId } = await renderScreen();
+    // The server contact has loaded (not the fallback address).
+    await findByText('safety@example.test');
+
+    fireEvent.press(getByTestId('community-safety-email'));
+    const status = await findByTestId('community-safety-email-status');
+    expect(status.props.children).toBe(
+      'No email app opened on this device. Copy the address and email us from any email app or device.',
+    );
+    const address = getByTestId('community-safety-email-address');
+    expect(address.props.selectable).toBe(true);
+    expect(address.props.children).toBe('safety@example.test');
+
+    fireEvent.press(getByTestId('community-safety-email-copy'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('safety@example.test'));
+    await waitFor(() =>
+      expect(getByTestId('community-safety-email-status').props.children).toBe(
+        'Address copied. Paste it into any email app to write to safety@example.test.',
+      ),
+    );
+
+    // Try again: this time a mail app opens, so the fallback goes away.
+    fireEvent.press(getByTestId('community-safety-email-retry'));
+    await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
+    expect(open).toHaveBeenLastCalledWith('mailto:safety@example.test?subject=Community%20safety');
+    await waitFor(() => expect(queryByTestId('community-safety-email-fallback')).toBeNull());
+    open.mockRestore();
+  });
+
+  it('says how to select the address when copying fails too', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no handler'));
+    mockSetString.mockRejectedValueOnce(new Error('clipboard unavailable'));
+    const { getByTestId, findByTestId, findByText } = await renderScreen();
+    await findByText('safety@example.test');
+    fireEvent.press(getByTestId('community-safety-email'));
+    await findByTestId('community-safety-email-copy');
+    fireEvent.press(getByTestId('community-safety-email-copy'));
+    await waitFor(() =>
+      expect(getByTestId('community-safety-email-status').props.children).toBe(
+        'The address could not be copied. Press and hold it to select it: safety@example.test',
+      ),
+    );
+    open.mockRestore();
+  });
+});
+
+describe('CommunitySafetyScreen — moderation notices (B-314-6)', () => {
+  beforeEach(() => {
+    mockGetInfo.mockResolvedValue({
+      contact_email: 'safety@example.test',
+      report_reasons: [],
+      guidelines: ['Be kind.'],
+      response_commitment: 'Reviewed within 24 hours.',
+    });
+    mockListBlocks.mockResolvedValue([]);
+  });
+
+  it('shows the member their warning and marks unread notices read once', async () => {
+    mockListNotices.mockResolvedValue({
+      notices: [
+        {
+          id: 'n-1',
+          action: 'warn',
+          message: 'Your coach or The Growth Project team reviewed a report and is giving you a warning.',
+          created_at: '2026-10-01T10:00:00.000Z',
+          read: false,
+        },
+        {
+          id: 'n-0',
+          action: 'hide',
+          message: 'Something you shared was removed.',
+          created_at: '2026-09-20T10:00:00.000Z',
+          read: true,
+        },
+      ],
+      unread_count: 1,
+    });
+    const { findByTestId, getByText } = await renderScreen();
+    await findByTestId('community-safety-notice-n-1');
+    expect(getByText('Warning from a moderator')).toBeTruthy();
+    expect(
+      getByText('Your coach or The Growth Project team reviewed a report and is giving you a warning.'),
+    ).toBeTruthy();
+    expect(getByText('Something you shared was removed')).toBeTruthy();
+    await waitFor(() => expect(mockMarkRead).toHaveBeenCalledWith('n-1'));
+    expect(mockMarkRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed notices load says what happened and retries', async () => {
+    mockListNotices
+      .mockRejectedValueOnce(Object.assign(new Error('offline'), { isAxiosError: true }))
+      .mockResolvedValueOnce({ notices: [], unread_count: 0 });
+    const { findByTestId, getByTestId, queryByTestId } = await renderScreen();
+    await findByTestId('community-safety-notices-error');
+    fireEvent.press(getByTestId('community-safety-notices-retry'));
+    await waitFor(() => expect(queryByTestId('community-safety-notices-error')).toBeNull());
+    expect(mockListNotices).toHaveBeenCalledTimes(2);
   });
 });

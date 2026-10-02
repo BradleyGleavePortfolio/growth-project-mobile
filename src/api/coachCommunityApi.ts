@@ -179,6 +179,26 @@ export const CoachFlaggedMediaSchema = z
   .passthrough();
 export type CoachFlaggedMedia = z.infer<typeof CoachFlaggedMediaSchema>;
 
+/**
+ * What the affected member was told after hide / warn / ban (B-610-4,
+ * B-314-6). `stored` means the backend wrote a member-readable notice in the
+ * same transaction (they read it in Community safety); `push` is only ever an
+ * attempted extra, never a promise of delivery. Absent for dismiss.
+ */
+export const CoachModerationMemberNoticeSchema = z
+  .object({ stored: z.boolean(), push: z.enum(['attempted', 'not_sent']) })
+  .passthrough();
+export type CoachModerationMemberNotice = z.infer<typeof CoachModerationMemberNoticeSchema>;
+
+const ModerationDecisionResponseSchema = z
+  .object({ member_notice: CoachModerationMemberNoticeSchema.optional() })
+  .passthrough();
+
+/** The result of a moderation decision the queue needs for its confirmation copy. */
+export interface CoachModerationOutcome {
+  memberNotice: CoachModerationMemberNotice | null;
+}
+
 /** A single flagged-content item awaiting a moderation decision. */
 export const CoachFlaggedItemSchema = z
   .object({
@@ -674,14 +694,18 @@ export const coachCommunityApi = {
    * Destructive actions are always confirmed in the UI first. Idempotent (R19).
    * Replaces the never-implemented POST /community/{posts,messages}/:id/hide.
    */
-  actOnItem(itemId: string, action: CoachModerationAction, notes?: string): Promise<void> {
-    return call(z.unknown(), () =>
+  actOnItem(
+    itemId: string,
+    action: CoachModerationAction,
+    notes?: string,
+  ): Promise<CoachModerationOutcome> {
+    return call(ModerationDecisionResponseSchema, () =>
       api.patch<unknown>(
         `/community/moderation/items/${itemId}`,
         notes ? { action, notes } : { action },
         idempotentHeaders(),
       ),
-    ).then(() => undefined);
+    ).then((r) => ({ memberNotice: r.member_notice ?? null }));
   },
 };
 
