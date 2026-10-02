@@ -10,11 +10,14 @@
  * request is in flight. A slot taken by someone else a moment earlier
  * returns 409 and the list refreshes.
  *
- * `welcome: true` preselects the day-1 seeded welcome offering. If it was
- * renamed, the client chooses from the coach's active offerings explicitly.
+ * `welcome: true` preselects the coach's welcome type from the persistent
+ * server marker (my-coaches `welcome`, SessionType.is_welcome); the day-1
+ * seed name is only a fallback for an older backend. When the welcome call
+ * is already booked or done, the screen says so (and satisfies the tutorial
+ * step) instead of offering a second booking.
  * No open times provides a refresh and a working coach-message action.
  */
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -36,7 +39,7 @@ import {
   type Slot,
 } from '../../../calendar/calendarTime';
 import { addSessionToPhoneCalendar, phoneCalendarResultMessage } from '../../../calendar/phoneCalendar';
-import { bookingOutcomeUncertain, calendarErrorMessage } from '../../../calendar/schedulingErrors';
+import { bookingOutcomeUncertain, calendarErrorMessage, shouldRefreshSlots } from '../../../calendar/schedulingErrors';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
@@ -55,7 +58,23 @@ export function bookedMessage(session: CoachingSession, coachName: string, moved
     return `Requested, waiting for your coach. Check Calendar to see when ${coachName} confirms.`;
   }
   if (session.status === 'pending_provider') return 'Your time is reserved. The call link is being prepared. Open Calendar to check its status.';
-  return moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in Calendar.`;
+  const base = moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in Calendar.`;
+  return session.meeting_link_status === 'pending'
+    ? `${base} ${coachName} will add the call link before it starts.`
+    : base;
+}
+
+/** Welcome type for a coach: server marker first, day-1 seed name as fallback. */
+export function pickWelcomeType<T extends { id: string; name: string; is_welcome?: boolean }>(
+  list: readonly T[],
+  markerTypeId: string | null | undefined,
+): T | null {
+  return (
+    (markerTypeId ? list.find((t) => t.id === markerTypeId) : undefined) ??
+    list.find((t) => t.is_welcome === true) ??
+    list.find((t) => t.name === 'Quick initialization') ??
+    null
+  );
 }
 
 export default function CalendarBookScreen({ route, navigation }: Props) {
@@ -72,17 +91,26 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
   const types = useBookableTypes(coachId);
 
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const welcomeInfo = coach?.welcome ?? null;
   const type = useMemo(() => {
     const list = (types.data ?? []).filter((t) => !t.archived_at);
-    // Day-1 seed uses this approved name. Renamed offerings remain available
-    // through explicit selection instead of inferring a welcome call by length.
-    if (params.welcome && !selectedTypeId) return list.find((t) => t.name === 'Quick initialization') ?? null;
+    // The server marks the welcome type; renamed offerings stay bookable by
+    // explicit selection instead of inferring a welcome call by length.
+    if (params.welcome && !selectedTypeId) return pickWelcomeType(list, welcomeInfo?.session_type_id);
     const id = selectedTypeId ?? params.sessionTypeId ?? moving.data?.session_type_id ?? undefined;
     return list.find((t) => t.id === id) ?? null;
-  }, [types.data, params.welcome, params.sessionTypeId, moving.data?.session_type_id, selectedTypeId]);
+  }, [types.data, params.welcome, params.sessionTypeId, moving.data?.session_type_id, selectedTypeId, welcomeInfo?.session_type_id]);
+
+  // Persistent marker: the welcome call is already booked (upcoming) or done.
+  const welcomeDone =
+    !!params.welcome && !params.rescheduleSessionId && !selectedTypeId && !!welcomeInfo &&
+    (!!welcomeInfo.active_session_id || !!welcomeInfo.completed_at);
+  useEffect(() => {
+    if (welcomeDone) emitTutorialSignal('welcome_call_booked');
+  }, [welcomeDone]);
 
   const [fromIso] = useState(() => nowToMinuteIso());
-  const slotsQ = useOpenSlots(coachId, type?.duration_minutes, fromIso);
+  const slotsQ = useOpenSlots(coachId, type, fromIso);
   const days = useMemo(() => {
     const own = moving.data;
     const slots = (slotsQ.data?.slots ?? []).filter((s) => !own || s.start_at !== own.start_at);
@@ -122,7 +150,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
     const onError = (err: unknown) => {
       setError(bookingErrorMessage(err));
       if (bookingOutcomeUncertain(err)) setVerifyBooking(true);
-      if (schedulingErrorStatus(err) === 409) {
+      if (shouldRefreshSlots(err) || schedulingErrorStatus(err) === 409) {
         setPicked(null);
         void slotsQ.refetch();
       }
@@ -178,6 +206,31 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
           onPress={() => navigation.navigate('CalendarSession', { sessionId: done.id })}
           testID="calendar-book-finish"
         />
+      </View>,
+    );
+  }
+
+  if (welcomeDone && welcomeInfo) {
+    const upcomingId = welcomeInfo.active_session_id;
+    const startAt = welcomeInfo.active_session_start_at;
+    return screen(
+      <View testID="calendar-welcome-done">
+        <Title>{`Welcome call with ${coachName}`}</Title>
+        <Body>
+          {upcomingId && startAt
+            ? welcomeInfo.active_session_status === 'requested'
+              ? `You asked for ${formatWhen(startAt, clientTz)}. ${coachName} will confirm it.`
+              : `It is booked for ${formatWhen(startAt, clientTz)}.`
+            : `You have had your welcome call with ${coachName}. Book other sessions from Calendar.`}
+        </Body>
+        {upcomingId ? (
+          <PrimaryButton
+            label="Open the session"
+            onPress={() => navigation.navigate('CalendarSession', { sessionId: upcomingId })}
+            testID="calendar-welcome-open"
+          />
+        ) : null}
+        <SecondaryButton label="See Calendar" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-welcome-home" />
       </View>,
     );
   }

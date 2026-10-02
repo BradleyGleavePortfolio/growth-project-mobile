@@ -22,6 +22,7 @@ import {
   flushPendingPushTap,
   MAX_SEEN_IDS,
   pushSessionFor,
+  routeInAppNotification,
   routePushTap,
   setPushSession,
   PushNavigator,
@@ -129,6 +130,35 @@ describe('pushTapRouter', () => {
       setPushSession(STUDENT_A);
       routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb3');
       expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: { sessionId: 's-1' } });
+    });
+
+    it('in-app center rows use the same role-aware table (client and coach)', () => {
+      const clientNav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(clientNav);
+      setPushSession(STUDENT_A);
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(clientNav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-9' } });
+
+      const coachNav = makeNav(COACH_TABS);
+      attachPushNavigator(coachNav);
+      setPushSession(COACH_A);
+      expect(routeInAppNotification('CoachBookingInbox', { sessionId: 's-9' })).toBe(true);
+      expect(coachNav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBookingInbox', params: { sessionId: 's-9' } });
+    });
+
+    it('in-app routing refuses when not in the app or the name is not routable', () => {
+      const nav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(nav);
+      setPushSession({ kind: 'signedOut' });
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(false);
+      setPushSession(STUDENT_A);
+      expect(routeInAppNotification('not a screen', {})).toBe(false);
+      expect(routeInAppNotification(undefined, {})).toBe(false);
+      expect(nav.navigate).not.toHaveBeenCalled();
+      // Not dedupe-bound: the same row can be opened twice.
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(nav.navigate).toHaveBeenCalledTimes(2);
     });
 
     it('coach CoachBookingInbox -> Clients stack booking inbox', () => {

@@ -1,10 +1,12 @@
 /**
  * CoachAppointmentTypesScreen — S-SCHED appointment types manager.
  *
- * Create, edit and archive the appointment types clients book from: name,
- * description, length and confirmed right away (auto-approve), using the
- * existing DTO. Types archived during this visit can be restored before
- * leaving. A separate backend contract is needed to list archive history.
+ * Create, edit, archive and restore the appointment types clients book
+ * from: name, description, length, confirmed right away (auto-approve),
+ * S-SCHED-2 welcome call marker (one per coach; marking one clears the
+ * other) and a default call link used when a session has no other link.
+ * Archived types come from the server (include_archived) so they can be
+ * restored at any time.
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -19,7 +21,7 @@ import {
 } from 'react-native';
 import type { RouteProp } from '@react-navigation/native';
 import type { SessionType } from '../../api/schedulingApi';
-import { useBookableTypes } from '../../hooks/useCalendar';
+import { useCoachAppointmentTypes } from '../../hooks/useCalendar';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import { useCreateSessionType, useUpdateSessionType } from '../../hooks/useScheduling';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -35,10 +37,12 @@ export interface TypeDraft {
   description: string;
   duration: string;
   autoApprove: boolean;
+  isWelcome: boolean;
+  defaultLink: string;
 }
 
 export function emptyDraft(): TypeDraft {
-  return { name: '', description: '', duration: '30', autoApprove: false };
+  return { name: '', description: '', duration: '30', autoApprove: false, isWelcome: false, defaultLink: '' };
 }
 
 export function draftFrom(t: SessionType): TypeDraft {
@@ -47,7 +51,21 @@ export function draftFrom(t: SessionType): TypeDraft {
     description: t.description ?? '',
     duration: String(t.duration_minutes),
     autoApprove: t.auto_approve,
+    isWelcome: t.is_welcome === true,
+    defaultLink: t.default_meeting_url ?? '',
   };
+}
+
+/** True for a complete https link without embedded credentials. */
+export function isHttpsLink(raw: string): boolean {
+  const url = raw.trim();
+  if (url.length === 0 || url.length > 500) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && !!parsed.hostname && !parsed.username && !parsed.password;
+  } catch {
+    return false;
+  }
 }
 
 /** Returns an error message, or null when the draft can be saved. */
@@ -57,6 +75,9 @@ export function validateDraft(d: TypeDraft): string | null {
   const n = Number(d.duration);
   if (!Number.isInteger(n) || n < 5 || n > 480) return 'Length must be between 5 and 480 minutes.';
   if (d.description.length > 2000) return 'Keep the description under 2000 characters.';
+  if (d.defaultLink.trim().length > 0 && !isHttpsLink(d.defaultLink)) {
+    return 'Enter a complete https call link without a password, or leave the call link empty.';
+  }
   return null;
 }
 
@@ -64,15 +85,12 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
   const { colors } = useTheme();
   const me = useCurrentUser();
   const coachId = route?.params?.coachId ?? me?.id;
-  const q = useBookableTypes(coachId);
+  const q = useCoachAppointmentTypes(coachId);
   const create = useCreateSessionType();
   const update = useUpdateSessionType();
   const [editing, setEditing] = useState<SessionType | 'new' | null>(null);
   const [draft, setDraft] = useState<TypeDraft>(emptyDraft());
   const [error, setError] = useState<string | null>(null);
-  // Existing server lists active types only. Keep rows archived during this
-  // visit visible so a coach can undo; do not pretend to list all history.
-  const [archivedHere, setArchivedHere] = useState<SessionType[]>([]);
   const saving = useRef(false);
 
   const open = (t: SessionType | 'new') => {
@@ -89,11 +107,18 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
       return;
     }
     saving.current = true;
+    const link = draft.defaultLink.trim();
+    const linkValue = link.length > 0 ? link : null;
+    const before = editing === 'new' ? null : editing;
+    // Welcome marker and default link are sent only when they carry a value
+    // or change, so an unchanged edit keeps the existing DTO shape.
     const common = {
       name: draft.name.trim(),
       description: draft.description.trim(),
       duration_minutes: Number(draft.duration),
       auto_approve: draft.autoApprove,
+      ...(draft.isWelcome !== (before?.is_welcome === true) ? { is_welcome: draft.isWelcome } : {}),
+      ...(linkValue !== (before?.default_meeting_url ?? null) ? { default_meeting_url: linkValue } : {}),
     };
     const done = {
       onSuccess: () => setEditing(null),
@@ -117,19 +142,14 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
     saving.current = true;
     setError(null);
     update.mutate({ id: t.id, input: { archived } }, {
-      onSuccess: (saved) => {
-        setArchivedHere((rows) => [
-          ...rows.filter((row) => row.id !== saved.id),
-          ...(archived ? [saved] : []),
-        ]);
-      },
       onError: (err: unknown) => setError(calendarErrorMessage(err, archived ? 'archive the appointment type' : 'restore the appointment type')),
       onSettled: () => { saving.current = false; },
     });
   };
 
-  const archivedIds = new Set(archivedHere.map((row) => row.id));
-  const rows = [...(q.data ?? []).filter((row) => !row.archived_at && !archivedIds.has(row.id)), ...archivedHere];
+  const all = q.data ?? [];
+  const archivedRows = all.filter((row) => !!row.archived_at);
+  const rows = [...all.filter((row) => !row.archived_at), ...archivedRows];
   const busy = create.isPending || update.isPending;
 
   return (
@@ -172,6 +192,16 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
           <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
             {`${t.duration_minutes} minutes. ${t.auto_approve ? 'Confirmed right away.' : 'You confirm each request.'}`}
           </Text>
+          {t.is_welcome && !t.archived_at ? (
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]} testID={`coach-type-welcome-${t.id}`}>
+              Welcome call. New clients are asked to book this one first.
+            </Text>
+          ) : null}
+          {!t.archived_at ? (
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+              {t.default_meeting_url ? 'Default call link set.' : 'No default call link. You add a link to each session.'}
+            </Text>
+          ) : null}
           <View style={styles.actions}>
             <Pressable onPress={() => open(t)} accessibilityRole="button" accessibilityLabel={`Edit ${t.name}`} style={[styles.secondary, { borderColor: colors.textPrimary }]} testID={`coach-type-edit-${t.id}`}>
               <Text style={[typography.body, { color: colors.textPrimary }]}>Edit</Text>
@@ -189,7 +219,7 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
           </View>
         </View>
       ))}
-      {archivedHere.length ? <Text style={[typography.bodySmall, { color: colors.textMuted }]}>Types archived during this visit can be restored here until you leave this screen.</Text> : null}
+      {archivedRows.length ? <Text style={[typography.bodySmall, { color: colors.textMuted }]}>Archived types stay here so you can restore them. Clients cannot book them.</Text> : null}
       {!editing && error ? <Text accessibilityLiveRegion="polite" style={[typography.bodySmall, { color: colors.error }]}>{error}</Text> : null}
 
       <Modal visible={editing !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!busy) setEditing(null); }}>
@@ -214,6 +244,32 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
             <Text style={[typography.body, { color: colors.textPrimary, flex: 1 }]}>Confirm right away (no approval)</Text>
             <Switch value={draft.autoApprove} onValueChange={(autoApprove) => setDraft({ ...draft, autoApprove })} accessibilityLabel="Confirm right away" testID="coach-type-auto" />
           </View>
+          <View style={styles.switchRow}>
+            <Text style={[typography.body, { color: colors.textPrimary, flex: 1 }]}>Welcome call (new clients book this first)</Text>
+            <Switch value={draft.isWelcome} onValueChange={(isWelcome) => setDraft({ ...draft, isWelcome })} accessibilityLabel="Welcome call" testID="coach-type-welcome" />
+          </View>
+          {draft.isWelcome ? (
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+              Only one type can be the welcome call. Saving this one moves the welcome call here.
+            </Text>
+          ) : null}
+          <Text style={[styles.label, { color: colors.textMuted }]}>Default call link (optional)</Text>
+          <TextInput
+            value={draft.defaultLink}
+            onChangeText={(defaultLink) => setDraft({ ...draft, defaultLink })}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+            maxLength={500}
+            placeholder="https://your-call-link"
+            placeholderTextColor={colors.textMuted}
+            accessibilityLabel="Default call link"
+            style={[styles.input, { color: colors.textPrimary, borderColor: colors.border }]}
+            testID="coach-type-link"
+          />
+          <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+            Used for sessions of this type that have no other call link. Clients see it only on confirmed sessions.
+          </Text>
           {error ? <Text style={[typography.bodySmall, { color: colors.error, marginTop: spacing.md }]} testID="coach-type-error" accessibilityLiveRegion="polite">{error}</Text> : null}
           <Pressable onPress={save} disabled={busy} accessibilityRole="button" accessibilityLabel="Save" accessibilityState={{ disabled: busy, busy }} style={[styles.primary, { backgroundColor: colors.textPrimary, opacity: busy ? 0.6 : 1 }]} testID="coach-type-save">
             <Text style={[typography.bodyMd, { color: colors.background }]}>Save</Text>

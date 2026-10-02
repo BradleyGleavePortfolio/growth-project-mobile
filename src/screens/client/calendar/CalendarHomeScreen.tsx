@@ -2,9 +2,11 @@
  * CalendarHomeScreen — S-SCHED client Calendar tab root.
  *
  * My coaches -> each coach's approved appointment types -> book; then
- * Upcoming sessions with their status. Times are in the client's own time
- * zone. Empty and failed states give recovery actions instead of a fake
- * empty schedule. Phone-calendar exports are explicit user-controlled copies.
+ * Upcoming sessions with their status, then Past sessions (paged). The
+ * welcome call card reads the persistent server marker (book / booked /
+ * done). Times are in the client's own time zone. Empty and failed states
+ * give recovery actions instead of a fake empty schedule. Phone-calendar
+ * exports are explicit user-controlled copies.
  */
 import React, { useMemo, useState } from 'react';
 import { Linking, RefreshControl, ScrollView, View } from 'react-native';
@@ -13,7 +15,7 @@ import { useNavigation, type NavigationProp, type ParamListBase } from '@react-n
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BookableCoach, CoachingSession, SessionType } from '../../../api/schedulingApi';
 import { resolveClientTimezone } from '../../../api/schedulingApi';
-import { useBookableTypes, useMyCoaches, useMySessions } from '../../../hooks/useCalendar';
+import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
@@ -72,13 +74,61 @@ function CoachTypes({
           accessibilityHint="Shows open times"
           testID={`calendar-type-${t.id}`}
         >
-          <Body>{t.name}</Body>
+          <Body>{t.is_welcome ? `${t.name} (welcome call)` : t.name}</Body>
           <Note text={`${t.duration_minutes} minutes. ${t.auto_approve ? 'Confirmed right away.' : `${coach.name} confirms each request.`}`} />
           {t.description ? <Note text={t.description} /> : null}
         </Card>
       ))}
     </View>
   );
+}
+
+/** Persistent welcome-call marker for one coach: book it, see it, or done. */
+function WelcomeCard({
+  coach,
+  onBook,
+  onOpen,
+}: {
+  coach: BookableCoach;
+  onBook: () => void;
+  onOpen: (sessionId: string) => void;
+}) {
+  const w = coach.welcome;
+  if (!w) return null;
+  if (w.active_session_id && w.active_session_start_at) {
+    const id = w.active_session_id;
+    const when = formatWhen(w.active_session_start_at);
+    return (
+      <Card
+        onPress={() => onOpen(id)}
+        accessibilityLabel={`Welcome call with ${coach.name}, ${when}. ${statusLabel(w.active_session_status ?? 'scheduled')}.`}
+        accessibilityHint="Opens the session"
+        testID={`calendar-welcome-booked-${coach.coach_id}`}
+      >
+        <Body>{`Welcome call with ${coach.name}`}</Body>
+        <Note text={`${when}. ${statusLabel(w.active_session_status ?? 'scheduled')}.`} />
+      </Card>
+    );
+  }
+  if (w.completed_at) return null;
+  return (
+    <Card
+      onPress={onBook}
+      accessibilityLabel={`Book your welcome call with ${coach.name}, ${w.duration_minutes} minutes`}
+      accessibilityHint="Shows open times"
+      testID={`calendar-welcome-book-${coach.coach_id}`}
+    >
+      <Body>{`Book your welcome call with ${coach.name}`}</Body>
+      <Note text={`${w.name}, ${w.duration_minutes} minutes.`} />
+    </Card>
+  );
+}
+
+function linkNote(s: CoachingSession): string | null {
+  // pending_provider already reads "call link is being prepared".
+  if (s.status !== 'scheduled') return null;
+  if (s.meeting_link_status === 'pending') return 'Your coach will add the call link before it starts.';
+  return null;
 }
 
 function SessionRow({
@@ -91,6 +141,7 @@ function SessionRow({
   onPress: () => void;
 }) {
   const coachClock = coachTimeLabel(s.start_at, coachTz);
+  const link = linkNote(s);
   return (
     <Card
       onPress={onPress}
@@ -102,7 +153,48 @@ function SessionRow({
       <Note text={`${formatWhen(s.start_at)}. ${formatRange(s.start_at, s.end_at)}.`} />
       {coachClock ? <Note text={coachClock} /> : null}
       <Note text={statusLabel(s.status)} />
+      {link ? <Note text={link} /> : null}
     </Card>
+  );
+}
+
+function PastSessions({ onOpen }: { onOpen: (sessionId: string) => void }) {
+  const past = usePastSessions();
+  const rows = (past.data?.pages ?? []).flat();
+  return (
+    <Section title="Past sessions">
+      {past.isLoading ? <Note text="Loading past sessions." /> : null}
+      {past.isError ? (
+        <View>
+          <Note text={calendarErrorMessage(past.error, 'load past sessions')} testID="calendar-past-error" />
+          <SecondaryButton label="Refresh past sessions" onPress={() => void past.refetch()} />
+        </View>
+      ) : null}
+      {!past.isLoading && !past.isError && rows.length === 0 ? (
+        <Note text="Sessions you have had appear here, with any recap from your coach." testID="calendar-past-empty" />
+      ) : null}
+      {rows.map((s) => (
+        <Card
+          key={s.id}
+          onPress={() => onOpen(s.id)}
+          accessibilityLabel={`${s.title}. ${formatWhen(s.start_at)}. ${statusLabel(s.status)}.`}
+          accessibilityHint="Opens the session"
+          testID={`calendar-past-${s.id}`}
+        >
+          <Body>{s.title}</Body>
+          <Note text={`${formatWhen(s.start_at)}. ${statusLabel(s.status)}.`} />
+          {s.client_recap_md ? <Note text="Recap from your coach inside." /> : null}
+        </Card>
+      ))}
+      {past.hasNextPage ? (
+        <SecondaryButton
+          label="Show earlier sessions"
+          onPress={() => void past.fetchNextPage()}
+          disabled={past.isFetchingNextPage}
+          testID="calendar-past-more"
+        />
+      ) : null}
+    </Section>
   );
 }
 
@@ -155,6 +247,14 @@ export default function CalendarHomeScreen({ navigation }: Props) {
             </View>
           ) : null}
           {(coaches.data ?? []).map((c) => (
+            <WelcomeCard
+              key={`welcome-${c.coach_id}`}
+              coach={c}
+              onBook={() => navigation.navigate('CalendarBook', { coachId: c.coach_id, welcome: true })}
+              onOpen={(sessionId) => navigation.navigate('CalendarSession', { sessionId })}
+            />
+          ))}
+          {(coaches.data ?? []).map((c) => (
             <CoachTypes
               key={c.coach_id}
               coach={c}
@@ -189,6 +289,8 @@ export default function CalendarHomeScreen({ navigation }: Props) {
             />
           ))}
         </Section>
+
+        <PastSessions onOpen={(sessionId) => navigation.navigate('CalendarSession', { sessionId })} />
       </ScrollView>
     </SafeAreaView>
   );

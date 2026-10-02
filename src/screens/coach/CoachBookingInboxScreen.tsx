@@ -203,7 +203,7 @@ export default function CoachBookingInboxScreen() {
                 { color: colors.textMuted, marginTop: spacing.xs },
               ]}
             >
-              Client: {s.client_id ?? 'unknown'}
+              {s.client_name ? `Client: ${s.client_name}` : 'Client not named on this request'}
             </Text>
             <View style={styles.actions}>
               <TouchableOpacity
@@ -266,7 +266,7 @@ export default function CoachBookingInboxScreen() {
               {formatRange(s.start_at, s.end_at)}
             </Text>
             <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
-              {s.status === 'pending_provider' ? 'Call link is being prepared.' : 'Confirmed.'}
+              {agendaLine(s)}
             </Text>
             <CoachSessionActions session={s} />
           </View>
@@ -274,6 +274,16 @@ export default function CoachBookingInboxScreen() {
       )}
     </ScrollView>
   );
+}
+
+/** Coach agenda status line; a missing call link is a clear next action. */
+export function agendaLine(s: CoachingSession): string {
+  const who = s.client_name ? ` with ${s.client_name}` : '';
+  if (s.meeting_link_status === 'pending' || (s.meeting_link_status === undefined && !resolveVideoUrl(s.video_url))) {
+    return `Confirmed${who}. No call link yet. Add one below so your client can join.`;
+  }
+  if (s.status === 'pending_provider') return `Confirmed${who}. Call link is being prepared.`;
+  return `Confirmed${who}. Call link ready.`;
 }
 
 function formatRange(startIso: string, endIso: string): string {

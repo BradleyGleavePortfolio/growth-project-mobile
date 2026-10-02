@@ -38,8 +38,24 @@ export function canJoin(s: CoachingSession, now: number = Date.now()): boolean {
 export function canChange(s: CoachingSession, now: number = Date.now()): boolean {
   if (!LIVE_STATUSES.has(s.status)) return false;
   if (s.cancellable !== undefined) return s.cancellable;
-  // Existing server locks client changes inside 24 hours.
+  // Older backend without server flags: keep the conservative 24-hour lock.
   return new Date(s.start_at).getTime() - now > 24 * 60 * 60 * 1000;
+}
+
+/** Server rule first (S-SCHED-2 `reschedulable`), else the cancel rule. */
+export function canReschedule(s: CoachingSession, now: number = Date.now()): boolean {
+  if (s.reschedulable !== undefined) return s.reschedulable && canChange(s, now);
+  return canChange(s, now) && (s.status === 'requested' || s.status === 'scheduled');
+}
+
+/** Calm, specific call-link line for the client, or null when not needed. */
+export function clientLinkLine(s: CoachingSession, coachName: string, hasLink: boolean): string | null {
+  if (s.status === 'requested') return `The call link appears here once ${coachName} confirms.`;
+  // pending_provider already reads "call link is being prepared".
+  if (s.status !== 'scheduled') return null;
+  if (hasLink) return null;
+  const pending = s.meeting_link_status === undefined || s.meeting_link_status === 'pending';
+  return pending ? `${coachName} will add the call link before the session. You do not need to do anything.` : null;
 }
 
 export default function CalendarSessionScreen({ route, navigation }: Props) {
@@ -86,11 +102,13 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
 
   const s = q.data;
   const coach = coaches.data?.find((c) => c.coach_id === s.coach_id);
-  const coachName = coach?.name ?? 'your coach';
+  const coachName = coach?.name ?? s.coach_name ?? 'your coach';
   const coachClock = coachTimeLabel(s.start_at, coach?.timezone, clientTz);
   const link = resolveVideoUrl(s.video_url);
   const changeable = canChange(s, now);
+  const movable = canReschedule(s, now);
   const live = LIVE_STATUSES.has(s.status) && new Date(s.end_at).getTime() > Date.now();
+  const linkLine = live ? clientLinkLine(s, coachName, !!link) : null;
 
   const onCancel = () => {
     if (cancelling.current) return;
@@ -143,16 +161,23 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
       {s.status === 'scheduled' && link && !canJoin(s, now) && live ? (
         <Note text="Join opens 15 minutes before the start." />
       ) : null}
-      {s.status === 'scheduled' && !link && live ? (
-        <Note text={`${coachName} will add the call link before the session.`} />
-      ) : null}
+      {linkLine ? <Note text={linkLine} testID="calendar-session-link-pending" /> : null}
 
       {live && s.status === 'scheduled' ? (
         <SecondaryButton label="Add to my calendar" onPress={() => void onAdd()} testID="calendar-add-phone" />
       ) : null}
-      {live && !changeable ? <Note text="Changes are locked within 24 hours of the start. Message your coach if you need help changing this session." /> : null}
+      {live && !changeable ? (
+        <Note
+          text={
+            s.cancellable === false
+              ? 'This session has started, so it can no longer be changed here. Message your coach if you need help.'
+              : 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.'
+          }
+        />
+      ) : null}
       {changeable ? (
         <>
+          {movable ? (
           <SecondaryButton
             label="Reschedule"
             onPress={() =>
@@ -164,6 +189,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
             }
             testID="calendar-reschedule"
           />
+          ) : null}
           <SecondaryButton label="Cancel session" onPress={onCancel} disabled={cancel.isPending} testID="calendar-cancel" />
         </>
       ) : null}

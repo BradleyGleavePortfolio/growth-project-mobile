@@ -19,18 +19,39 @@ function referenceFor(err: unknown): string {
   return ref;
 }
 
+/**
+ * S-SCHED-2 backend scheduling codes -> plain next-step copy. Every entry says
+ * what happened and what to do next; the server message is never shown raw.
+ */
+export const SCHEDULING_CODE_MESSAGES: Readonly<Record<string, string>> = {
+  SLOT_TAKEN: 'Someone just booked that time. Refresh open times and pick another time.',
+  SLOT_UNAVAILABLE: 'That time is no longer open. Refresh open times and pick another time.',
+  SESSION_IN_PAST: 'That time is too close or has passed. Refresh open times and choose a later time.',
+  BEYOND_BOOKING_HORIZON: 'That time is too far ahead to book yet. Choose a time within the next four months.',
+  INVALID_TIME: 'That time could not be read. Refresh open times and pick a time from the list.',
+  DURATION_MISMATCH: 'That time does not match the length of this appointment type. Refresh open times and pick a time from the list.',
+  SESSION_TYPE_REQUIRED: 'Choose an appointment type first, then pick a time.',
+  SESSION_TYPE_UNAVAILABLE: 'This appointment type is no longer offered. Go back to Calendar and choose another type.',
+  PENDING_REQUEST_LIMIT: 'You already have several requests waiting for your coach. Wait for a reply, or cancel one in Calendar, then request another time.',
+  WELCOME_ALREADY_BOOKED: 'Your welcome call is already booked. Open Calendar to see it or move it.',
+  CALENDAR_BUSY: "Your coach's calendar is busy with other bookings right now. Wait a few seconds, then pick the time again.",
+  SESSION_STATE_CHANGED: 'This session changed a moment ago. Refresh Calendar to see where it stands now.',
+  SESSION_NOT_ACTIVE: 'This session is no longer active. Refresh Calendar to see your current sessions.',
+  SESSION_STARTED: 'This session has already started, so it can no longer be changed here. Message your coach if you need help.',
+  COACH_NOT_BOOKABLE: 'You can book only with the coach you are matched with. Open Calendar to see your coach.',
+  COACH_NOT_FOUND: 'This coach is not available for booking. Open Calendar to see your coach.',
+  SESSION_NOT_FOUND: 'This session is not available to you. Open Calendar to find your sessions.',
+  NOT_SESSION_PARTICIPANT: 'You can no longer change this session from here. Message your coach to change it.',
+  INVALID_MEETING_LINK: 'Enter a complete https call link, then save it again.',
+  COACH_NOT_ASSIGNED: 'You are not matched with a coach yet. Ask your coach for an invite code, then open Accept invite in Profile and more.',
+};
+
 /** Error diagnostics contain no payload, URL, token, user text or raw axios error. */
 export function calendarErrorMessage(err: unknown, operation: string): string {
   const status = schedulingErrorStatus(err);
   const code = schedulingErrorCode(err);
-  if (code === 'SLOT_TAKEN' || code === 'SLOT_UNAVAILABLE') {
-    return 'That time is taken or no longer open. Refresh open times and pick another time.';
-  }
-  if (code === 'SESSION_IN_PAST') {
-    return 'That time is too close or has passed. Refresh open times and choose a later time.';
-  }
-  if (code === 'COACH_NOT_ASSIGNED') {
-    return 'You are not matched with a coach yet. Ask your coach for an invite code, then open Accept invite in Profile and more.';
+  if (code && Object.prototype.hasOwnProperty.call(SCHEDULING_CODE_MESSAGES, code)) {
+    return SCHEDULING_CODE_MESSAGES[code];
   }
   if (status === 401) return `Your login expired before we could ${operation}. Log in again, then check Calendar.`;
   if (status === 402) return `Your coaching plan does not allow this scheduling action. Open Membership in Profile and more, or message your coach.`;
@@ -63,5 +84,15 @@ export function calendarErrorMessage(err: unknown, operation: string): string {
 
 export function bookingOutcomeUncertain(err: unknown): boolean {
   const status = schedulingErrorStatus(err);
+  // CALENDAR_BUSY (503) is a definite "not booked": the lock wait timed out
+  // before anything was written.
+  if (schedulingErrorCode(err) === 'CALENDAR_BUSY') return false;
   return status === null || status >= 500;
+}
+
+/** Codes after which the open-times list should be refreshed. */
+export function shouldRefreshSlots(err: unknown): boolean {
+  const code = schedulingErrorCode(err);
+  if (code === 'SLOT_TAKEN' || code === 'SLOT_UNAVAILABLE' || code === 'SESSION_IN_PAST' || code === 'DURATION_MISMATCH' || code === 'INVALID_TIME') return true;
+  return schedulingErrorStatus(err) === 409;
 }

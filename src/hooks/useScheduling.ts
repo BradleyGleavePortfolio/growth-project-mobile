@@ -92,6 +92,7 @@ export function useCreateSessionType() {
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessionTypes', created.coach_id],
       });
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
     },
   });
 }
@@ -105,9 +106,19 @@ export function useUpdateSessionType() {
   >({
     mutationFn: ({ id, input }) => schedulingApi.updateSessionType(id, input),
     onSuccess: (updated) => {
+      // Show the saved row at once (archive/restore, welcome move) while the
+      // lists refetch. The server keeps one welcome type per coach.
+      qc.setQueriesData<SessionType[]>(
+        { queryKey: ['scheduling', 'sessionTypes', updated.coach_id] },
+        (rows) =>
+          rows?.map((row) =>
+            row.id === updated.id ? updated : updated.is_welcome ? { ...row, is_welcome: false } : row,
+          ),
+      );
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessionTypes', updated.coach_id],
       });
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
     },
   });
 }
@@ -134,6 +145,8 @@ export function useRequestSession() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
     },
   });
 }
@@ -144,6 +157,8 @@ export function useApproveSession() {
     mutationFn: ({ id }) => schedulingApi.approveSession(id),
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });
@@ -161,6 +176,8 @@ export function useDeclineSession() {
     mutationFn: ({ id, input }) => schedulingApi.declineSession(id, input),
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });
@@ -182,6 +199,8 @@ export function useCancelSession() {
     },
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });
@@ -203,6 +222,8 @@ export function useRescheduleSession() {
     },
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });
@@ -220,6 +241,8 @@ export function useCompleteSession() {
     mutationFn: ({ id, input }) => schedulingApi.completeSession(id, input),
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });
@@ -237,6 +260,8 @@ export function useMarkNoShow() {
     mutationFn: ({ id, input }) => schedulingApi.markNoShow(id, input),
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
+      // Welcome-call marker (book / booked / done) lives on my-coaches.
+      qc.invalidateQueries({ queryKey: ['scheduling', 'myCoaches'] });
       qc.invalidateQueries({
         queryKey: ['scheduling', 'sessions', session.id],
       });

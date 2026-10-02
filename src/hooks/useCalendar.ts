@@ -4,12 +4,14 @@
  * Builds on useScheduling.ts (same query-key namespace) so the existing
  * mutations' invalidations keep these lists fresh:
  *   ['scheduling', 'myCoaches']
- *   ['scheduling', 'openSlots', coachId, durationMinutes, from]
+ *   ['scheduling', 'openSlots', coachId, sessionTypeId, durationMinutes, from]
  *   ['scheduling', 'sessions', 'me', { limit }]
- *   ['scheduling', 'sessionTypes', coachId]
+ *   ['scheduling', 'sessions', 'me', 'past']
+ *   ['scheduling', 'sessionTypes', coachId]            (bookable, active only)
+ *   ['scheduling', 'sessionTypes', coachId, 'all']     (owning coach, with archived)
  *   ['scheduling', 'overrides']
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   schedulingApi,
   type AvailabilityOverride,
@@ -64,17 +66,30 @@ export function useBookableTypes(coachId: string | undefined) {
   });
 }
 
+/** Every appointment type of the signed-in coach, archived ones included. */
+export function useCoachAppointmentTypes(coachId: string | undefined) {
+  return useQuery<SessionType[]>({
+    queryKey: ['scheduling', 'sessionTypes', coachId, 'all'],
+    queryFn: () => schedulingApi.listSessionTypes(coachId as string, { includeArchived: true }),
+    enabled: !!coachId,
+    staleTime: THIRTY_S_MS,
+  });
+}
+
 /**
  * Open slots for one appointment type over the next 14 days (from now). The
- * `from` key is rounded to the minute so re-renders do not refetch.
+ * server sizes them to the type and honours type-scoped hours. The `from`
+ * key is rounded to the minute so re-renders do not refetch.
  */
 export function useOpenSlots(
   coachId: string | undefined,
-  durationMinutes: number | undefined,
+  type: Pick<SessionType, 'id' | 'duration_minutes'> | null | undefined,
   fromIso: string,
 ) {
+  const sessionTypeId = type?.id;
+  const durationMinutes = type?.duration_minutes;
   return useQuery<OpenSlotsPayload>({
-    queryKey: ['scheduling', 'openSlots', coachId, durationMinutes, fromIso],
+    queryKey: ['scheduling', 'openSlots', coachId, sessionTypeId, durationMinutes, fromIso],
     queryFn: () => {
       const from = new Date(fromIso);
       const to = new Date(from.getTime() + OPEN_SLOTS_RANGE_DAYS * 24 * 60 * 60 * 1000);
@@ -82,6 +97,7 @@ export function useOpenSlots(
         from: from.toISOString(),
         to: to.toISOString(),
         durationMinutes: durationMinutes as number,
+        sessionTypeId,
       });
     },
     enabled: !!coachId && !!durationMinutes,
@@ -98,6 +114,25 @@ export function useMySessions(limit = 50) {
     staleTime: THIRTY_S_MS,
     refetchOnMount: 'always',
     refetchInterval: THIRTY_S_MS,
+  });
+}
+
+export const PAST_SESSIONS_PAGE = 20;
+
+/** Ended sessions, newest first, paged by the last row's start time. */
+export function usePastSessions(enabled = true) {
+  return useInfiniteQuery<CoachingSession[], Error>({
+    queryKey: ['scheduling', 'sessions', 'me', 'past'],
+    queryFn: ({ pageParam }) =>
+      schedulingApi.listMySessions(PAST_SESSIONS_PAGE, {
+        scope: 'past',
+        before: typeof pageParam === 'string' ? pageParam : undefined,
+      }),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) =>
+      last.length < PAST_SESSIONS_PAGE ? undefined : last[last.length - 1]?.start_at,
+    enabled,
+    staleTime: FIVE_MIN_MS,
   });
 }
 

@@ -60,10 +60,34 @@ import { emitTutorialSignal } from '../../../../tutorial/tutorialEvents';
 import CalendarHomeScreen from '../CalendarHomeScreen';
 import CalendarBookScreen, { bookingErrorMessage } from '../CalendarBookScreen';
 import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
+import { pickWelcomeType } from '../CalendarBookScreen';
+
+describe('pickWelcomeType', () => {
+  const list = [
+    { id: 'a', name: 'Quick initialization' },
+    { id: 'b', name: 'Renamed welcome', is_welcome: true },
+    { id: 'c', name: 'Other' },
+  ];
+  it('marker id first, then is_welcome, then the seed name', () => {
+    expect(pickWelcomeType(list, 'c')?.id).toBe('c');
+    expect(pickWelcomeType(list, null)?.id).toBe('b');
+    expect(pickWelcomeType([list[0], list[2]], undefined)?.id).toBe('a');
+    expect(pickWelcomeType([list[2]], 'missing')).toBeNull();
+  });
+});
 
 const api = schedulingApi as jest.Mocked<typeof schedulingApi>;
 
 const COACH = { coach_id: 'coach-1', name: 'Bradley', timezone: 'America/New_York' };
+const WELCOME = {
+  session_type_id: 'st-w',
+  name: 'Quick initialization',
+  duration_minutes: 15,
+  active_session_id: null,
+  active_session_status: null,
+  active_session_start_at: null,
+  completed_at: null,
+};
 function type(over: Partial<SessionType> = {}): SessionType {
   return {
     id: 'st-1',
@@ -174,8 +198,70 @@ describe('CalendarHomeScreen', () => {
     expect(api.listMySessions).toHaveBeenCalledWith(50);
   });
 
+  it('welcome card: not booked yet -> books in welcome mode', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: WELCOME }]);
+    const n = nav();
+    const r = await renderQ(<CalendarHomeScreen {...homeProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-welcome-book-coach-1')).toBeTruthy());
+    expect(r.getByText('Book your welcome call with Bradley')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('calendar-welcome-book-coach-1'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', welcome: true });
+  });
+
+  it('welcome card: booked -> shows its status and opens the session; done -> no card', async () => {
+    api.listMyCoaches.mockResolvedValue([
+      { ...COACH, welcome: { ...WELCOME, active_session_id: 'sess-w', active_session_status: 'requested', active_session_start_at: '2030-10-07T16:00:00.000Z' } },
+    ]);
+    const n = nav();
+    const r = await renderQ(<CalendarHomeScreen {...homeProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-welcome-booked-coach-1')).toBeTruthy());
+    expect(r.getByText(/Requested, waiting for your coach/)).toBeTruthy();
+    await fireEvent.press(r.getByTestId('calendar-welcome-booked-coach-1'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarSession', { sessionId: 'sess-w' });
+    await cleanup();
+
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: { ...WELCOME, completed_at: '2030-09-01T10:00:00.000Z' } }]);
+    const r2 = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r2.getByTestId('calendar-type-st-1')).toBeTruthy());
+    expect(r2.queryByTestId('calendar-welcome-book-coach-1')).toBeNull();
+    expect(r2.queryByTestId('calendar-welcome-booked-coach-1')).toBeNull();
+  });
+
+  it('a confirmed session without a call link reads calm, not broken', async () => {
+    api.listMySessions.mockImplementation(async (_l, opts) => (opts?.scope === 'past' ? [] : [sess({ meeting_link_status: 'pending' })]));
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-session-sess-1')).toBeTruthy());
+    expect(r.getByText('Your coach will add the call link before it starts.')).toBeTruthy();
+  });
+
+  it('past sessions: newest first, Show earlier pages with the before cursor', async () => {
+    const page1 = Array.from({ length: 20 }, (_, i) =>
+      sess({ id: `past-${i}`, status: 'completed', start_at: new Date(Date.UTC(2026, 8, 30 - i, 16)).toISOString(), end_at: new Date(Date.UTC(2026, 8, 30 - i, 17)).toISOString() }),
+    );
+    const page2 = [sess({ id: 'past-old', status: 'completed', start_at: '2026-08-01T16:00:00.000Z', end_at: '2026-08-01T17:00:00.000Z', client_recap_md: 'Nice work.' })];
+    api.listMySessions.mockImplementation(async (_l, opts) => {
+      if (opts?.scope !== 'past') return [];
+      return opts.before ? page2 : page1;
+    });
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-past-past-0')).toBeTruthy());
+    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: undefined });
+    await fireEvent.press(r.getByTestId('calendar-past-more'));
+    await waitFor(() => expect(r.getByTestId('calendar-past-past-old')).toBeTruthy());
+    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: page1[19].start_at });
+    expect(r.getByText('Recap from your coach inside.')).toBeTruthy();
+    expect(r.queryByTestId('calendar-past-more')).toBeNull();
+  });
+
+  it('no past sessions -> a plain note', async () => {
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-past-empty')).toBeTruthy());
+  });
+
   it('failed sessions never pretend to be an empty schedule', async () => {
-    api.listMySessions.mockRejectedValue({ response: { status: 401 } });
+    api.listMySessions.mockImplementation((_l, opts) =>
+      opts?.scope === 'past' ? Promise.resolve([]) : Promise.reject({ response: { status: 401 } }),
+    );
     const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
     await waitFor(() => expect(r.getByTestId('calendar-sessions-error')).toBeTruthy());
     expect(r.getByText(/login expired/)).toBeTruthy();
@@ -229,7 +315,7 @@ describe('CalendarBookScreen', () => {
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await waitFor(() => expect(r.getByTestId('calendar-book-error')).toBeTruthy());
-    expect(r.getByText('That time is taken or no longer open. Refresh open times and pick another time.')).toBeTruthy();
+    expect(r.getByText('Someone just booked that time. Refresh open times and pick another time.')).toBeTruthy();
     await waitFor(() => expect(api.getOpenSlots.mock.calls.length).toBeGreaterThanOrEqual(2));
   });
 
@@ -245,6 +331,60 @@ describe('CalendarBookScreen', () => {
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await waitFor(() => expect(emitTutorialSignal).toHaveBeenCalledWith('welcome_call_booked'));
+  });
+
+  it('welcome mode follows the server marker even when the type was renamed', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: { ...WELCOME, session_type_id: 'st-renamed', name: 'First chat', duration_minutes: 25 } }]);
+    api.listSessionTypes.mockResolvedValue([
+      type({ id: 'st-qa', name: 'Quick Q/A Call' }),
+      type({ id: 'st-renamed', name: 'First chat', duration_minutes: 25, is_welcome: true }),
+    ]);
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true })} />);
+    await waitFor(() => expect(r.getByText('Book your welcome call with Bradley')).toBeTruthy());
+    expect(api.getOpenSlots).toHaveBeenCalledWith('coach-1', expect.objectContaining({ durationMinutes: 25, sessionTypeId: 'st-renamed' }));
+  });
+
+  it('welcome already booked -> shows it, satisfies the tutorial step, offers no second booking', async () => {
+    api.listMyCoaches.mockResolvedValue([
+      { ...COACH, welcome: { ...WELCOME, active_session_id: 'sess-w', active_session_status: 'scheduled', active_session_start_at: '2030-10-07T16:00:00.000Z' } },
+    ]);
+    api.listSessionTypes.mockResolvedValue([type({ id: 'st-w', name: 'Quick initialization', duration_minutes: 15, is_welcome: true })]);
+    const n = nav();
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true }, n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-welcome-done')).toBeTruthy());
+    expect(r.getByText(/It is booked for/)).toBeTruthy();
+    expect(emitTutorialSignal).toHaveBeenCalledWith('welcome_call_booked');
+    expect(r.queryByTestId('calendar-submit')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-welcome-open'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarSession', { sessionId: 'sess-w' });
+  });
+
+  it('welcome already done -> plain note and the tutorial step is satisfied', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: { ...WELCOME, completed_at: '2030-09-01T10:00:00.000Z' } }]);
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-welcome-done')).toBeTruthy());
+    expect(r.getByText(/You have had your welcome call with Bradley/)).toBeTruthy();
+    expect(emitTutorialSignal).toHaveBeenCalledWith('welcome_call_booked');
+    expect(r.queryByTestId('calendar-welcome-open')).toBeNull();
+  });
+
+  it('pending request limit and busy calendar get their own next step', async () => {
+    api.requestSession.mockRejectedValueOnce({ response: { status: 409, data: { code: 'PENDING_REQUEST_LIMIT' } } });
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
+    await fireEvent.press(r.getByTestId('calendar-submit'));
+    await waitFor(() => expect(r.getByText(/several requests waiting for your coach/)).toBeTruthy());
+    expect(bookingErrorMessage({ response: { status: 503, data: { code: 'CALENDAR_BUSY' } } })).toMatch(/Wait a few seconds/);
+  });
+
+  it('a booking with no call link yet says the coach will add it', async () => {
+    api.requestSession.mockResolvedValue(sess({ meeting_link_status: 'pending' }));
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
+    await fireEvent.press(r.getByTestId('calendar-submit'));
+    await waitFor(() => expect(r.getByText('Booked. Bradley will see it in Calendar. Bradley will add the call link before it starts.')).toBeTruthy());
   });
 
   it('welcome mode without a welcome type falls back to Calendar and Message your coach', async () => {
@@ -351,6 +491,23 @@ describe('CalendarSessionScreen', () => {
     await waitFor(() => expect(api.cancelSession).toHaveBeenCalledWith('sess-1', undefined));
     await waitFor(() => expect(r.getByText(/remove that copy/)).toBeTruthy());
     alert.mockRestore();
+  });
+
+  it('server flags: cancel allowed, reschedule not; pending link reads calm', async () => {
+    api.getSession.mockResolvedValue(sess({ cancellable: true, reschedulable: false, meeting_link_status: 'pending' }));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-cancel')).toBeTruthy());
+    expect(r.queryByTestId('calendar-reschedule')).toBeNull();
+    expect(r.getByTestId('calendar-session-link-pending')).toBeTruthy();
+    expect(r.getByText(/will add the call link before the session/)).toBeTruthy();
+  });
+
+  it('a started session (server says not cancellable) explains why it is locked', async () => {
+    api.getSession.mockResolvedValue(sess({ cancellable: false, reschedulable: false }));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
+    expect(r.getByText(/has started, so it can no longer be changed here/)).toBeTruthy();
+    expect(r.queryByTestId('calendar-cancel')).toBeNull();
   });
 
   it('a past or cancelled session offers no reschedule or cancel', async () => {

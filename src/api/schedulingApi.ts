@@ -20,8 +20,15 @@
  * booked sessions, the appointment type length and the coach time zone),
  * coach time-off overrides (`/scheduling/coach/availability-overrides`),
  * coach identity via the existing `/v1/clients/me/coach` endpoint.
- * Native scheduling uses only existing contracts; archived-type listing,
- * history and persistent welcome markers require a separate backend slice.
+ *
+ * S-SCHED-2 (backend lifecycle slice): `GET /scheduling/my-coaches` (head
+ * coach + sub-coach, timezone, persistent welcome marker), open slots per
+ * appointment type (`session_type_id`), past sessions (`scope=past`),
+ * archived-type listing for the owning coach (`include_archived=true`),
+ * per-type default meeting link and a server SessionView (`meeting_link_status`,
+ * `cancellable`, `reschedulable`, type summary, both names). Every new field
+ * is optional here so an older backend still renders; the legacy coach
+ * identity endpoint is the fallback when my-coaches is not deployed yet.
  *
  * Not covered: the Google OAuth browser flow (Google Calendar sync stays
  * off and is not a dependency of native scheduling).
@@ -111,6 +118,13 @@ export interface SessionType {
   archived_at: string | null;
   created_at: string;
   updated_at: string;
+  /** S-SCHED-2: the coach's welcome call type (at most one active per coach). */
+  is_welcome?: boolean;
+  /**
+   * S-SCHED-2: https link used when a session of this type has no other call
+   * link. Only the owning coach receives it; clients read null.
+   */
+  default_meeting_url?: string | null;
 }
 
 export interface CreateSessionTypeInput {
@@ -119,6 +133,9 @@ export interface CreateSessionTypeInput {
   duration_minutes: number;
   auto_approve?: boolean;
   default_video_provider?: SchedulingVideoProvider;
+  is_welcome?: boolean;
+  /** https only; empty string or null clears it. */
+  default_meeting_url?: string | null;
 }
 
 export interface UpdateSessionTypeInput {
@@ -128,14 +145,34 @@ export interface UpdateSessionTypeInput {
   auto_approve?: boolean;
   default_video_provider?: SchedulingVideoProvider;
   archived?: boolean;
+  is_welcome?: boolean;
+  default_meeting_url?: string | null;
 }
 
-/** Assigned coach identity adapted from GET /v1/clients/me/coach. */
+/** The client's welcome call state with one coach (persistent marker). */
+export interface WelcomeCallInfo {
+  session_type_id: string;
+  name: string;
+  duration_minutes: number;
+  /** Upcoming welcome booking, if any. */
+  active_session_id: string | null;
+  active_session_status: SchedulingSessionStatus | null;
+  active_session_start_at: string | null;
+  /** When the most recent welcome call was completed, else null. */
+  completed_at: string | null;
+}
+
+/** A coach the client may book (GET /scheduling/my-coaches). */
 export interface BookableCoach {
   coach_id: string;
   name: string;
-  /** Identity endpoint omits the zone; open-slots supplies the authoritative zone. */
+  /** Coach zone. Null only on the legacy identity fallback. */
   timezone: string | null;
+  avatar_url?: string | null;
+  relationship?: 'head_coach' | 'sub_coach';
+  bookable_type_count?: number;
+  /** Null when the coach has no welcome type; undefined on the legacy fallback. */
+  welcome?: WelcomeCallInfo | null;
 }
 
 /** GET /scheduling/coaches/:coachId/open-slots */
@@ -144,7 +181,16 @@ export interface OpenSlotsPayload {
   timezone: string;
   generated_at: string;
   slots: { start_at: string; end_at: string }[];
+  /** S-SCHED-2: echoed when slots were computed for one appointment type. */
+  session_type_id?: string | null;
+  duration_minutes?: number;
 }
+
+/** Server-derived call link state on a session (S-SCHED-2 SessionView). */
+export type MeetingLinkStatus = 'ready' | 'pending' | 'awaiting_approval' | 'none';
+
+/** Session list scope for GET /scheduling/sessions. */
+export type SessionListScope = 'upcoming' | 'past';
 
 export type AvailabilityOverrideKind = 'holiday' | 'block' | 'extra';
 
@@ -250,6 +296,19 @@ export interface CoachingSession {
   // older backend builds may omit it; the client falls back to the
   // device-clock lockout only when this is undefined.
   cancellable?: boolean;
+  // S-SCHED-2 SessionView (optional so older backends still render).
+  reschedulable?: boolean;
+  meeting_link_status?: MeetingLinkStatus;
+  session_type?: {
+    id: string;
+    name: string;
+    duration_minutes: number;
+    auto_approve: boolean;
+    is_welcome: boolean;
+    archived: boolean;
+  } | null;
+  coach_name?: string | null;
+  client_name?: string | null;
 }
 
 export interface RequestSessionInput {
@@ -297,8 +356,16 @@ export const schedulingApi = {
     return res.data;
   },
 
-  // Bookable coaches (client)
+  // Bookable coaches (client): head coach first, then an assigned sub-coach.
   listMyCoaches: async (): Promise<BookableCoach[]> => {
+    try {
+      const res = await api.get<BookableCoach[]>('/scheduling/my-coaches');
+      return Array.isArray(res.data) ? res.data : [];
+    } catch (err) {
+      // Older backend without the route: a bare 404 (no scheduling code).
+      // Fall back to the legacy identity endpoint so Calendar still works.
+      if (schedulingErrorStatus(err) !== 404 || schedulingErrorCode(err) !== null) throw err;
+    }
     try {
       const res = await api.get<{ id: string; name: string }>('/v1/clients/me/coach');
       return [{ coach_id: res.data.id, name: res.data.name, timezone: null }];
@@ -310,23 +377,28 @@ export const schedulingApi = {
     }
   },
 
-  // Session types
+  // Session types. Archived types are listed only for the owning coach.
   listSessionTypes: async (
     coachId: string,
+    opts: { includeArchived?: boolean } = {},
   ): Promise<SessionType[]> => {
-    const res = await api.get<SessionType[]>(
-      `/scheduling/coaches/${encodeURIComponent(coachId)}/session-types`,
-    );
+    const url = `/scheduling/coaches/${encodeURIComponent(coachId)}/session-types`;
+    const res = opts.includeArchived
+      ? await api.get<SessionType[]>(url, { params: { include_archived: 'true' } })
+      : await api.get<SessionType[]>(url);
     return res.data;
   },
 
-  // Open slots (server-computed; max 14-day range)
+  // Open slots (server-computed; max 14-day range). With a session type the
+  // server sizes slots to that type and honours type-scoped hours; the
+  // duration is still sent for older backends that ignore session_type_id.
   getOpenSlots: async (
     coachId: string,
-    args: { from: string; to: string; durationMinutes: number },
+    args: { from: string; to: string; durationMinutes: number; sessionTypeId?: string },
   ): Promise<OpenSlotsPayload> => {
     const params: Record<string, string> = { from: args.from, to: args.to };
     params.duration_minutes = String(args.durationMinutes);
+    if (args.sessionTypeId) params.session_type_id = args.sessionTypeId;
     const res = await api.get<OpenSlotsPayload>(
       `/scheduling/coaches/${encodeURIComponent(coachId)}/open-slots`,
       { params },
@@ -396,12 +468,16 @@ export const schedulingApi = {
     return res.data;
   },
 
-  // Sessions
+  // Sessions. scope=upcoming (default): not ended, soonest first.
+  // scope=past: ended, newest first; page with before=<start_at of last row>.
   listMySessions: async (
     limit?: number,
+    opts: { scope?: SessionListScope; before?: string } = {},
   ): Promise<CoachingSession[]> => {
     const p: Record<string, string> = {};
     if (limit !== undefined) p.limit = String(limit);
+    if (opts.scope === 'past') p.scope = 'past';
+    if (opts.before) p.before = opts.before;
     const params = Object.keys(p).length > 0 ? p : undefined;
     const res = await api.get<CoachingSession[]>('/scheduling/sessions', {
       params,

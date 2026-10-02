@@ -1,6 +1,11 @@
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 import { captureError } from '../../services/sentry';
-import { bookingOutcomeUncertain, calendarErrorMessage } from '../schedulingErrors';
+import {
+  SCHEDULING_CODE_MESSAGES,
+  bookingOutcomeUncertain,
+  calendarErrorMessage,
+  shouldRefreshSlots,
+} from '../schedulingErrors';
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -37,4 +42,34 @@ it('unknown failures carry a short server reference and redact raw diagnostic co
   const [, metadata] = jest.mocked(captureError).mock.calls[0];
   expect(metadata).toEqual({ area: 'calendar', status: 500, code: null, request_id: 'req-12345678' });
   expect(JSON.stringify(metadata)).not.toMatch(/secret|not diagnostic|Authorization/);
+});
+
+// S-SCHED-2: every backend scheduling code has its own next-step copy.
+const BACKEND_CODES = [
+  'SESSION_TYPE_REQUIRED', 'SESSION_TYPE_UNAVAILABLE', 'DURATION_MISMATCH', 'SESSION_IN_PAST',
+  'BEYOND_BOOKING_HORIZON', 'INVALID_TIME', 'SLOT_UNAVAILABLE', 'SLOT_TAKEN', 'CALENDAR_BUSY',
+  'PENDING_REQUEST_LIMIT', 'WELCOME_ALREADY_BOOKED', 'SESSION_STATE_CHANGED', 'SESSION_NOT_ACTIVE',
+  'SESSION_STARTED', 'COACH_NOT_BOOKABLE', 'COACH_NOT_FOUND', 'SESSION_NOT_FOUND',
+  'NOT_SESSION_PARTICIPANT', 'INVALID_MEETING_LINK',
+];
+
+it.each(BACKEND_CODES)('backend code %s has plain, specific copy', (code) => {
+  const msg = calendarErrorMessage({ response: { status: 409, data: { code, error: code, message: 'server text' } } }, 'book');
+  expect(msg).toBe(SCHEDULING_CODE_MESSAGES[code]);
+  expect(msg).not.toMatch(/!|Something went wrong|server text/);
+  // A complete sentence that names the next step, not a bare status.
+  expect(msg).toMatch(/\.$/);
+  expect(msg.length).toBeGreaterThan(30);
+});
+
+it('reads the code from `error` when only that is present', () => {
+  expect(calendarErrorMessage({ response: { status: 409, data: { error: 'SLOT_TAKEN' } } }, 'book')).toMatch(/Someone just booked/);
+});
+
+it('CALENDAR_BUSY is a definite not-booked; slot codes refresh the list', () => {
+  const busy = { response: { status: 503, data: { code: 'CALENDAR_BUSY' } } };
+  expect(bookingOutcomeUncertain(busy)).toBe(false);
+  expect(shouldRefreshSlots({ response: { status: 409, data: { code: 'SLOT_TAKEN' } } })).toBe(true);
+  expect(shouldRefreshSlots({ response: { status: 400, data: { code: 'SLOT_UNAVAILABLE' } } })).toBe(true);
+  expect(shouldRefreshSlots({ response: { status: 400, data: { code: 'PENDING_REQUEST_LIMIT' } } })).toBe(false);
 });

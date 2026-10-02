@@ -1,6 +1,7 @@
 /**
- * S-SCHED existing-contract coach settings: create/edit appointment types,
- * archive/undo during this visit, agenda call-link entry, server-zone weekly
+ * S-SCHED coach settings: create/edit appointment types (S-SCHED-2 welcome
+ * marker + default call link), archive/restore from the server list
+ * (include_archived), agenda call-link entry and status, server-zone weekly
  * hours, and time off (blocked hours, date validation, confirmed removal).
  */
 import React from 'react';
@@ -38,7 +39,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 
 import { schedulingApi } from '../../../api/schedulingApi';
-import CoachAppointmentTypesScreen, { validateDraft, emptyDraft } from '../CoachAppointmentTypesScreen';
+import CoachAppointmentTypesScreen, { validateDraft, emptyDraft, isHttpsLink } from '../CoachAppointmentTypesScreen';
 import CoachTimeOffScreen, { describeOverride, validateTimeOff } from '../CoachTimeOffScreen';
 import CoachBookingInboxScreen from '../CoachBookingInboxScreen';
 import CoachAvailabilityEditorScreen from '../CoachAvailabilityEditorScreen';
@@ -114,10 +115,52 @@ describe('Coach native scheduling agenda', () => {
 });
 
 describe('CoachAppointmentTypesScreen', () => {
-  it('lists active types on the existing contract', async () => {
+  it('lists every type of the coach, archived ones included, for restore', async () => {
+    api.listSessionTypes.mockResolvedValue([T, { ...T, id: 'st-old', name: 'Old call', archived_at: '2026-09-01T00:00:00Z' }]);
     const r = await renderQ(<CoachAppointmentTypesScreen />);
     await waitFor(() => expect(r.getByTestId('coach-type-st-1')).toBeTruthy());
-    expect(api.listSessionTypes).toHaveBeenCalledWith('coach-1');
+    expect(api.listSessionTypes).toHaveBeenCalledWith('coach-1', { includeArchived: true });
+    expect(r.getByText('Old call (archived)')).toBeTruthy();
+    expect(r.getByText(/Archived types stay here so you can restore them/)).toBeTruthy();
+  });
+
+  it('marks a type as the welcome call and sets a default call link; empty clears it', async () => {
+    api.listSessionTypes.mockResolvedValue([{ ...T, default_meeting_url: 'https://meet.example/old' }]);
+    const r = await renderQ(<CoachAppointmentTypesScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-type-edit-st-1')).toBeTruthy());
+    expect(r.getByText('Default call link set.')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('coach-type-edit-st-1'));
+    await fireEvent(r.getByTestId('coach-type-welcome'), 'valueChange', true);
+    expect(r.getByText(/Only one type can be the welcome call/)).toBeTruthy();
+    await fireEvent.changeText(r.getByTestId('coach-type-link'), 'http://unsafe.example');
+    await fireEvent.press(r.getByTestId('coach-type-save'));
+    expect(api.updateSessionType).not.toHaveBeenCalled();
+    expect(r.getByText(/Enter a complete https call link without a password, or leave the call link empty/)).toBeTruthy();
+    await fireEvent.changeText(r.getByTestId('coach-type-link'), '');
+    await fireEvent.press(r.getByTestId('coach-type-save'));
+    await waitFor(() =>
+      expect(api.updateSessionType).toHaveBeenCalledWith('st-1', expect.objectContaining({ is_welcome: true, default_meeting_url: null })),
+    );
+  });
+
+  it('an unchanged edit does not send the welcome or link fields', async () => {
+    const r = await renderQ(<CoachAppointmentTypesScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-type-edit-st-1')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('coach-type-edit-st-1'));
+    await fireEvent.press(r.getByTestId('coach-type-save'));
+    await waitFor(() => expect(api.updateSessionType).toHaveBeenCalledTimes(1));
+    const input = api.updateSessionType.mock.calls[0][1];
+    expect(input).not.toHaveProperty('is_welcome');
+    expect(input).not.toHaveProperty('default_meeting_url');
+  });
+
+  it('validates the default call link', () => {
+    expect(isHttpsLink('https://meet.example/room')).toBe(true);
+    expect(isHttpsLink('http://meet.example/room')).toBe(false);
+    expect(isHttpsLink('https://user:pw@meet.example/room')).toBe(false);
+    expect(isHttpsLink('not a link')).toBe(false);
+    expect(validateDraft({ ...emptyDraft(), name: 'A', defaultLink: '' })).toBeNull();
+    expect(validateDraft({ ...emptyDraft(), name: 'A', defaultLink: 'https://meet.example/a' })).toBeNull();
   });
 
   it('creates an editable appointment with manual video on the existing DTO', async () => {
@@ -138,7 +181,14 @@ describe('CoachAppointmentTypesScreen', () => {
     });
   });
 
-  it('editing saves settings; archive and undo during the visit toggle', async () => {
+  it('editing saves settings; archive and restore toggle against the server list', async () => {
+    let rows: SessionType[] = [T];
+    api.listSessionTypes.mockImplementation(async () => rows);
+    api.updateSessionType.mockImplementation(async (id, input) => {
+      const saved = { ...T, ...input, id, archived_at: input.archived ? '2026-10-01T00:00:00Z' : null };
+      rows = rows.map((row) => (row.id === id ? saved : row));
+      return saved;
+    });
     const r = await renderQ(<CoachAppointmentTypesScreen />);
     await waitFor(() => expect(r.getByTestId('coach-type-edit-st-1')).toBeTruthy());
     await fireEvent.press(r.getByTestId('coach-type-edit-st-1'));
