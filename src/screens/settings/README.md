@@ -71,3 +71,63 @@ Coverage:
 - Navigation: back and "Cancel — keep my account"
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
+
+### DataExportScreen
+
+`DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.
+
+**State machine**
+
+```
+         mount
+           │
+           ▼
+        loading  ──loadStatus── ─── 404 ──► idle
+           │                          ├── PENDING/RUNNING ──► polling
+           │                          ├── READY + download_available ──► ready
+           │                          ├── READY, no stored file ──► unavailable
+           │                          ├── FAILED ──────────► failed (Request my data)
+           │                          ├── EXPIRED ─────────► expired
+           │                          └── error ───────────► failed (Check again)
+           │
+        idle ──press "Request"──► requesting ──success──► polling
+                                              ├── 409 IN_PROGRESS ──► reload (polling)
+                                              ├── 409 RATE_LIMITED ──► reload (ready + notice)
+                                              └── other error ──► failed (Request my data)
+
+        polling ──poll every 5s── ─── READY ──► ready / unavailable
+                                       ├── FAILED ──► failed
+                                       ├── EXPIRED ──► expired
+                                       └── 3 errors in a row ──► failed (Check again)
+
+        ready ──press "Download"──► POST /download-link (fresh 5-minute link)
+                                     ├── ok ──► Linking.openURL (browser saves the file)
+                                     ├── 410 EXPIRED ──► expired
+                                     ├── 410 FILE_MISSING ──► unavailable
+                                     ├── 409 NOT_READY / 404 ──► reload
+                                     └── other error ──► ready + notice (Download stays)
+              ──press "Request new"──► requesting (hidden until next_request_at)
+
+        unavailable ──press "Request a new export"──► requesting
+        failed ──press "Request my data" / "Check again"──► requesting / loading
+               ──press "Cancel"──► idle
+        expired ──press "Request new"──► requesting
+```
+
+Every failure names what happened and the next step that works. Unknown
+failures show the server `request_id` as "Reference: ..." with the support
+address and are sent to Sentry; offline, ended session, storage down and
+throttling each have their own copy.
+
+---
+
+**API surface** (`src/services/dataExportApi.ts`)
+
+| Method | Path | Status |
+|--------|------|--------|
+| `POST` | `/v1/me/data-export/request` | LIVE |
+| `GET` | `/v1/me/data-export/status` | LIVE |
+| `POST` | `/v1/me/data-export/download-link` | LIVE with backend B-EXPORT (fresh 5-minute link per tap) |
+| `GET` | `/v1/me/data-export/download?token=<jwt>` | Opened via `Linking.openURL` (browser); streamed from the private bucket |
+
+Reached from the "Data export" row in the client and coach Settings screens.
