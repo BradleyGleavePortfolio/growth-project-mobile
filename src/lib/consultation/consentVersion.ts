@@ -24,6 +24,11 @@
  */
 export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v3' as const;
 
+// Title of the consent screen (P0). Lives here, a module with no imports, so
+// the screen definition (definitions.ts) and the hashed copy (copy.ts) share
+// one literal without an import cycle (Opus C-310-13).
+export const CONSENT_TITLE = 'Before we start';
+
 /**
  * Server copy version of the box 2 AI processing paragraph and label (R2a).
  * v4 (backend #635): paragraph 4's retention sentence now says Roman chats

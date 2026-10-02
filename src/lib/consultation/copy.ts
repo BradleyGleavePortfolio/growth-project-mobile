@@ -15,10 +15,10 @@
  */
 import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
+import { CONSENT_TITLE } from './consentVersion';
 
 export { CONSULT_CONSENT_COPY_VERSION, CONSENT_BINDING, AI_CONSENT_VERSION, WAIVER_VERSION } from './consentVersion';
-
-export const CONSENT_TITLE = 'Before we start';
+export { CONSENT_TITLE };
 
 /** Paragraphs 1-3: shown above box 1 (waiver, collection and use for coaching). */
 export const CONSENT_PARAGRAPHS: readonly string[] = [
