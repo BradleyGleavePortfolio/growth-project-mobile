@@ -121,8 +121,9 @@ export async function withdrawRomanWithRetry(
 // any moment. So the wanted withdrawal is also kept under its own per-user
 // key until a DELETE is confirmed, and drained when the client app opens
 // (useAiWithdrawalDrain) and when Settings > Privacy > Roman and AI opens. A
-// newer "yes" (on P0 or in Settings) clears it first, so an old "no" can
-// never undo a newer choice. The value holds a timestamp only.
+// newer "yes" (on P0, or in Settings at the grant's own queue turn) clears
+// it, so an old "no" can never undo a newer choice. The value holds a
+// timestamp only.
 
 const PENDING_PREFIX = 'consultation_ai_withdraw_pending:';
 
@@ -199,6 +200,65 @@ export function runAiLedgerWrite<T>(fn: () => Promise<T>): Promise<T> {
     () => undefined,
   );
   return run;
+}
+
+/** What a fenced ledger write returns when it never went out. */
+export const AI_LEDGER_NOT_SENT = 'not_sent' as const;
+export type AiLedgerNotSent = typeof AI_LEDGER_NOT_SENT;
+
+/**
+ * A ledger write the client chose as `userId`, fenced by identity (Sol
+ * B-310-7). It waits its turn in the one queue, and right before dispatch,
+ * and again after any await, checks that `userId` is still the signed-in
+ * user. If not (signed out, or another account signed in while it waited),
+ * nothing is sent under the other session and AI_LEDGER_NOT_SENT returns.
+ */
+export function runAiLedgerWriteAs<T>(
+  userId: string | null | undefined,
+  sessionUserId: () => string | null,
+  fn: (stillSameUser: () => boolean) => Promise<T>,
+): Promise<T | AiLedgerNotSent> {
+  if (!userId) return Promise.resolve(AI_LEDGER_NOT_SENT);
+  const same = () => sessionUserId() === userId;
+  return runAiLedgerWrite(async () => (same() ? fn(same) : AI_LEDGER_NOT_SENT));
+}
+
+/**
+ * An explicit "yes" to box 2 from Settings or the AI help sheet (#326),
+ * through the one queue and the identity fence. At this write's own turn
+ * (after every write queued before it, so an older drain has already run)
+ * it clears this user's pending withdrawal, so that older "no" can never
+ * undo the newer "yes" (B-326-2), and then sends the grant. Another
+ * account's marker is never touched. If the user changed before the turn,
+ * nothing is cleared or sent: the older "no" stays wanted, which keeps AI
+ * off rather than on.
+ */
+export function grantAiChoiceAs(
+  userId: string | null | undefined,
+  sessionUserId: () => string | null,
+  grant: () => Promise<AiConsentOutcome>,
+): Promise<AiConsentOutcome | AiLedgerNotSent> {
+  return runAiLedgerWriteAs(userId, sessionUserId, async (same) => {
+    await clearAiWithdrawalPending(userId);
+    if (!same()) return AI_LEDGER_NOT_SENT;
+    return grant();
+  });
+}
+
+/**
+ * An explicit "no" to box 2 from Settings, through the one queue and the
+ * identity fence. A confirmed DELETE clears this user's pending withdrawal.
+ */
+export function withdrawAiChoiceAs(
+  userId: string | null | undefined,
+  sessionUserId: () => string | null,
+  withdraw: () => Promise<AiConsentOutcome>,
+): Promise<AiConsentOutcome | AiLedgerNotSent> {
+  return runAiLedgerWriteAs(userId, sessionUserId, async () => {
+    const out = await withdraw();
+    if (out.kind === 'ok') await clearAiWithdrawalPending(userId);
+    return out;
+  });
 }
 
 /** Tests only: a fresh queue, as after an app restart (module state is per process). */

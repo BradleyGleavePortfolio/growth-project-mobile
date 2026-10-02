@@ -258,6 +258,8 @@ export default function ConsultationFlow({
   const aiAttempted = useRef(false);
   /** The pending-withdrawal marker this flow wrote (cleared only by its own confirmation). */
   const aiPendingStamp = useRef<string | null>(null);
+  /** The one in-flight marker write, shared by the toggle and the queued step (C-310-11). */
+  const aiPendingMarking = useRef<Promise<string | null> | null>(null);
   const [aiShown, setAiShown] = useState(false);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
@@ -472,6 +474,7 @@ export default function ConsultationFlow({
     aiWant.current = null;
     aiAttempted.current = false;
     aiPendingStamp.current = null;
+    aiPendingMarking.current = null;
     aiNoticed.current = new Set();
     aiWithdrawRetryDue.current = false;
     setAiShown(false);
@@ -715,7 +718,7 @@ export default function ConsultationFlow({
         // reports is still withdrawn.
         if (have !== true && !aiAttempted.current) return;
         aiRequests.current += 1;
-        if (!aiPendingStamp.current) aiPendingStamp.current = await markAiWithdrawalPending(userId);
+        await markAiPendingOnce();
         if (!aiLive(gen)) return;
         aiWithdrawRetryDue.current = false;
         const result = await runAiLedgerWrite(() =>
@@ -771,20 +774,38 @@ export default function ConsultationFlow({
    * Called after the P0 save is queued, so a rejection of that save always
    * comes after this.
    */
+  /**
+   * Write this user's pending-withdrawal marker once (C-310-11): the toggle
+   * handler and the queued step share one in-flight write, so there is never
+   * a second stamp that the stamp-scoped clear would leave behind.
+   */
+  function markAiPendingOnce(): Promise<string | null> {
+    if (aiPendingStamp.current) return Promise.resolve(aiPendingStamp.current);
+    if (!aiPendingMarking.current) {
+      const marking: Promise<string | null> = markAiWithdrawalPending(userId).then((stamp) => {
+        if (aiPendingMarking.current === marking) aiPendingMarking.current = null;
+        if (stamp && aiWant.current === false && !aiPendingStamp.current) aiPendingStamp.current = stamp;
+        return aiPendingStamp.current;
+      });
+      aiPendingMarking.current = marking;
+    }
+    return aiPendingMarking.current;
+  }
+
   const recordAiChoice = useCallback(
     (choice: boolean | null) => {
       if (choice === null) return;
       aiHeld.current = choice;
       if (choice) {
-        // A newer yes supersedes any withdrawal still pending from earlier.
+        // A newer yes supersedes any withdrawal still pending from earlier;
+        // cleared after a marker write still in flight, so it cannot land later.
         aiPendingStamp.current = null;
-        void clearAiWithdrawalPending(userId);
-      } else if ((aiConfirmed.current === true || aiAttempted.current) && !aiPendingStamp.current) {
+        const marking = aiPendingMarking.current ?? Promise.resolve(null);
+        void marking.then(() => clearAiWithdrawalPending(userId));
+      } else if (aiConfirmed.current === true || aiAttempted.current) {
         // Something may be on file: keep the "no" beyond this draft at once,
         // so finishing or closing the app before the DELETE runs cannot lose it.
-        void markAiWithdrawalPending(userId).then((stamp) => {
-          if (stamp && aiWant.current === false && !aiPendingStamp.current) aiPendingStamp.current = stamp;
-        });
+        void markAiPendingOnce();
       }
       setAiWant(choice);
       if (!choice) reconcileAi(generation.current);

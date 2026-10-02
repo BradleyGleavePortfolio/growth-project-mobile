@@ -44,7 +44,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id:
 jest.mock('../../../tutorial/tutorialStore', () => ({ startClientTutorial: jest.fn(() => true) }));
 
 const LOST: AiConsentOutcome = { kind: 'error', status: null };
-const WITHDRAWN: AiConsentOutcome = { kind: 'ok', status: aiStatus({ state: 'withdrawn', version: 'client-ai-v3' }) };
+const WITHDRAWN: AiConsentOutcome = { kind: 'ok', status: aiStatus({ state: 'withdrawn', version: 'client-ai-v4' }) };
 
 /** The ledger as the server sees it. */
 function ledger() {
@@ -177,6 +177,28 @@ describe('B-310-5 a lost grant response never defeats a newer no', () => {
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(aiBox(r)).toBe(false);
     expect(r.queryByTestId('consent-ai-unconfirmed')).toBeNull();
+  });
+
+  it('C-310-11: a no after a possibly written grant writes the pending marker once (toggle and queued step share it)', async () => {
+    const l = ledger();
+    const grantRomanConsent = jest.fn(l.lostGrant);
+    const withdrawRomanConsent = jest.fn(async (): Promise<AiConsentOutcome> => LOST);
+    const api = makeApi({ grantRomanConsent, withdrawRomanConsent });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    const setItem = jest.spyOn(AsyncStorage, 'setItem');
+    try {
+      await untickOnReturn(r);
+      await waitFor(() => expect(withdrawRomanConsent).toHaveBeenCalled());
+      await tick();
+      await tick();
+      const markerWrites = setItem.mock.calls.filter(([key]) => key === aiWithdrawalPendingKey('u1'));
+      expect(markerWrites).toHaveLength(1);
+      expect(await pendingMarker()).toBe(markerWrites[0][1]);
+    } finally {
+      setItem.mockRestore();
+    }
   });
 
   it('both grant answers lost before the return: box 2 still shows yes (never unticked over a possible grant); unticking withdraws it', async () => {

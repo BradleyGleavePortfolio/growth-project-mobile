@@ -5,7 +5,10 @@
  *
  * P0 copy is consent copy (D2 contract, ops/CONSENT_D2_CONTRACT.md, copy v2
  * approved by the owner 2026-10-01 09:07, implemented verbatim with straight
- * apostrophes so the R2a server copy hashes match). Any change to the P0 paragraphs, either box label
+ * apostrophes so the R2a server copy hashes match). Paragraph 4's last
+ * sentence is the client-ai-v4 retention line (owner 2026-10-01 20:32: Roman
+ * chats are kept until the client deletes them or their account; backend
+ * #635), which moved P0 to consult-consent-v3. Any change to the P0 paragraphs, either box label
  * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
  * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
@@ -30,7 +33,7 @@ export const CONSENT_CHECKBOX_LABEL =
 
 /** Paragraph 4: shown above box 2, and again in Settings > Privacy > Roman and AI. */
 export const AI_CONSENT_PARAGRAPH =
-  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client's, and never your coach's private notes. Your conversations with Roman are private from your coach, kept for 180 days, and you can delete them at any time.";
+  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client's, and never your coach's private notes. Your conversations with Roman are private from your coach and are kept until you delete them or delete your account.";
 
 /** Box 2 (optional, unticked by default). */
 export const AI_CONSENT_CHECKBOX_LABEL =
@@ -58,7 +61,7 @@ export function consentCopyText(): string {
 /**
  * Exact text box 2 covers (paragraph 4 and the box 2 label). Its sha256 is
  * the `copy_sha256` of POST /me/ai-consent/roman; the R2a server copy for
- * `client-ai-v3` must hash to the same value.
+ * `client-ai-v4` must hash to the same value.
  */
 export function aiConsentCopyText(): string {
   return [AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL].join('\n\n');
@@ -70,8 +73,8 @@ export function aiConsentCopyText(): string {
  * without these (and the versions) changing too. Pinned rather than hashed
  * at runtime so the record never depends on a native digest call.
  */
-export const CONSENT_COPY_SHA256 = '154bd332c992e4e28ac58d1f1c40e856ff055581e383d85656f245853f55589f';
-export const AI_CONSENT_COPY_SHA256 = 'd8738c900ed2bfbb12b7ca6423132a532fc47e2cd0fe52854cc38e34c427840f';
+export const CONSENT_COPY_SHA256 = '79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9';
+export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4';
 
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {

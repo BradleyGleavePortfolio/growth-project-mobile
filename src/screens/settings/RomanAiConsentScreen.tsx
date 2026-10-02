@@ -27,11 +27,12 @@ import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { aiConsentApi as defaultApi, AiConsentOutcome, AiConsentStatusResponse } from '../../api/aiConsentApi';
 import {
-  clearAiWithdrawalPending,
+  AI_LEDGER_NOT_SENT,
   drainAiWithdrawal,
+  grantAiChoiceAs,
   readAiWithdrawalPending,
   romanGrantBody,
-  runAiLedgerWrite,
+  withdrawAiChoiceAs,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH, SUPPORT_EMAIL } from '../../lib/consultation/copy';
@@ -58,6 +59,7 @@ export const ROMAN_AI_COPY = {
   notAllowedBody: 'Roman and your coach\u2019s AI tools do not use your information. Your coaching, plan, messages and Roman\u2019s guided tour work as usual.',
   reconsentBody: 'The wording of this choice has changed since you last chose, so it is off for now. You can allow it again below.',
   updateApp: 'This choice has been updated since this version of the app. Please update the app to change it.',
+  notSent: 'You were signed out before this choice was saved, so nothing changed. Sign in and choose again.',
   unavailable: `The Roman and AI setting is switched off on our side at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
   loadOffline: 'I could not reach the server to load your choice. Check your connection, then tap Try again.',
   loadServer: (ref: string | null) =>
@@ -188,20 +190,21 @@ export default function RomanAiConsentScreen({
       setBusy(true);
       setNotice(null);
       const uid = sessionUserId();
-      // Allow is newer than any pending onboarding "no": that "no" must never undo it.
-      if (kind === 'allow') {
-        await clearAiWithdrawalPending(uid);
-        setPendingWithdraw(false);
-      }
-      const out = await runAiLedgerWrite(() =>
-        kind === 'allow' ? api.grantRoman(romanGrantBody()) : api.withdrawRoman(),
-      );
-      if (kind === 'withdraw' && out.kind === 'ok') {
-        await clearAiWithdrawalPending(uid);
-        if (mounted.current) setPendingWithdraw(false);
-      }
+      // One queue, fenced by the account that made the choice (Sol B-310-7):
+      // if that account is no longer signed in when the write's turn comes,
+      // nothing is sent under the new session. Allow is newer than any
+      // pending onboarding "no", so it clears that marker at its own turn.
+      const out =
+        kind === 'allow'
+          ? await grantAiChoiceAs(uid, sessionUserId, () => api.grantRoman(romanGrantBody()))
+          : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;
       setBusy(false);
+      if (out === AI_LEDGER_NOT_SENT) {
+        setNotice(ROMAN_AI_COPY.notSent);
+        return;
+      }
+      if (kind === 'allow' || out.kind === 'ok') setPendingWithdraw(false);
       if (out.kind === 'ok') {
         if (out.status) setView({ phase: 'ready', status: out.status });
         else await load();

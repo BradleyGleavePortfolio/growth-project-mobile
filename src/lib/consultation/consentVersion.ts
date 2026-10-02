@@ -17,15 +17,22 @@
 
 /**
  * Version of the P0 screen copy (both boxes). Backend #607 accepts only the
- * versions in CONSULT_CONSENT_COPY_VERSIONS (default bumped to
- * 'consult-consent-v2' with D2) and rejects any other P0 with 409
+ * versions in CONSULT_CONSENT_COPY_VERSIONS (default 'consult-consent-v2'
+ * with D2; it must become 'consult-consent-v3' with this copy) and rejects any other P0 with 409
  * consent_missing, so the two sides move together. Any change to the P0
  * text needs a new version here AND on the backend.
  */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v2' as const;
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v3' as const;
 
-/** Server copy version of the box 2 AI processing paragraph and label (R2a). */
-export const AI_CONSENT_VERSION = 'client-ai-v3' as const;
+/**
+ * Server copy version of the box 2 AI processing paragraph and label (R2a).
+ * v4 (backend #635): paragraph 4's retention sentence now says Roman chats
+ * are kept until the client deletes them or their account (owner 2026-10-01
+ * 20:32, OR-110-1); v3 said 180 days, which was never true. The P0 version
+ * moved to consult-consent-v3 with it, because the whole screen's text
+ * changed (backend #607 must accept consult-consent-v3).
+ */
+export const AI_CONSENT_VERSION = 'client-ai-v4' as const;
 
 /** Personal-training waiver version that box 1 records (via the intake). */
 export const WAIVER_VERSION = 'pt-waiver-v1' as const;

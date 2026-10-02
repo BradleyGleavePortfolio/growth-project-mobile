@@ -17,6 +17,14 @@ import { captureError } from '../../../services/sentry';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
 import { logger } from '../../../utils/logger';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  aiWithdrawalPendingKey,
+  markAiWithdrawalPending,
+  readAiWithdrawalPending,
+  resetAiLedgerWritesForTests,
+  runAiLedgerWrite,
+} from '../../../lib/consultation/aiConsent';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
@@ -39,14 +47,14 @@ function status(over: Partial<AiConsentStatusResponse> = {}): AiConsentStatusRes
     version: null,
     granted_at: null,
     withdrawn_at: null,
-    current_version: 'client-ai-v3',
+    current_version: 'client-ai-v4',
     needs_reconsent: false,
     copy: null,
     ...over,
   };
 }
-const ALLOWED = status({ granted: true, state: 'granted', version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z' });
-const WITHDRAWN = status({ state: 'withdrawn', version: 'client-ai-v3', withdrawn_at: '2026-10-01T11:00:00Z' });
+const ALLOWED = status({ granted: true, state: 'granted', version: 'client-ai-v4', granted_at: '2026-10-01T10:00:00Z' });
+const WITHDRAWN = status({ state: 'withdrawn', version: 'client-ai-v4', withdrawn_at: '2026-10-01T11:00:00Z' });
 
 function makeApi(first: AiConsentOutcome, over: Partial<Record<keyof RomanAiConsentApi, jest.Mock>> = {}) {
   return {
@@ -58,8 +66,11 @@ function makeApi(first: AiConsentOutcome, over: Partial<Record<keyof RomanAiCons
 }
 
 const navigation = { goBack: jest.fn(), navigate: jest.fn() };
+/** The signed-in account, as the screen's identity fence sees it (Sol B-310-7). */
+let signedIn: string | null = 'user-a';
+const sessionUserId = () => signedIn;
 const renderScreen = (api: RomanAiConsentApi) =>
-  render(<RomanAiConsentScreen navigation={navigation as never} api={api} />);
+  render(<RomanAiConsentScreen navigation={navigation as never} api={api} sessionUserId={sessionUserId} />);
 
 /** Press the confirm button of the most recent Alert. */
 function confirmLastAlert(label: string) {
@@ -71,6 +82,8 @@ function confirmLastAlert(label: string) {
 }
 
 beforeEach(() => {
+  signedIn = 'user-a';
+  resetAiLedgerWritesForTests();
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   navigation.navigate.mockClear();
   (logger.warn as jest.Mock).mockClear();
@@ -119,7 +132,7 @@ describe('RomanAiConsentScreen', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
     confirmLastAlert('Allow');
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
-    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v3', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(api.grantRoman).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
   });
 
   it.each([404, 503])('endpoint %s: "unavailable right now", nothing recorded, retry reloads', async () => {
@@ -215,7 +228,7 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('a newer server version: no Allow from this build, but a live grant can still be withdrawn', async () => {
-    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, version: 'client-ai-v4', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v5' });
     const r = await renderScreen(makeApi({ kind: 'ok', status: newer }));
     await waitFor(() => r.getByTestId('roman-ai-update_app'));
     expect(r.queryByTestId('roman-ai-allow')).toBeNull();
@@ -223,7 +236,7 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('a grant of earlier copy needs re-consent: Allow is offered, Withdraw too', async () => {
-    const old = status({ state: 'needs_reconsent', version: 'client-ai-v2', granted_at: '2026-09-01T10:00:00Z', needs_reconsent: true });
+    const old = status({ state: 'needs_reconsent', version: 'client-ai-v3', granted_at: '2026-09-01T10:00:00Z', needs_reconsent: true });
     const r = await renderScreen(makeApi({ kind: 'ok', status: old }));
     await waitFor(() => r.getByTestId('roman-ai-reconsent'));
     expect(r.getByTestId('roman-ai-allow')).toBeTruthy();
@@ -231,7 +244,7 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('C-310-2: a newer server version with no live grant reads Not allowed', async () => {
-    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, granted: false, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, granted: false, version: 'client-ai-v4', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v5' });
     const r = await renderScreen(makeApi({ kind: 'ok', status: newer }));
     await waitFor(() => r.getByTestId('roman-ai-update_app'));
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Not allowed');
@@ -247,7 +260,7 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('C-310-2: granted at the server\'s newer version (another device) reads Allowed', async () => {
-    const live = status({ state: 'granted', granted: true, version: 'client-ai-v4', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const live = status({ state: 'granted', granted: true, version: 'client-ai-v5', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v5' });
     const r = await renderScreen(makeApi({ kind: 'ok', status: live }));
     await waitFor(() => r.getByTestId('roman-ai-update_app'));
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
@@ -269,7 +282,7 @@ describe('RomanAiConsentScreen', () => {
 
   it('C-9: warns when the server copy for this version is not the app copy (hash or text)', async () => {
     const copy = (over: object = {}) => ({
-      version: 'client-ai-v3',
+      version: 'client-ai-v4',
       paragraph: { text: AI_CONSENT_PARAGRAPH, sha256: 'x' },
       box_label: { text: AI_CONSENT_CHECKBOX_LABEL, sha256: 'y' },
       sha256: AI_CONSENT_COPY_SHA256,
@@ -286,6 +299,81 @@ describe('RomanAiConsentScreen', () => {
       expect((logger.warn as jest.Mock).mock.calls.length).toBe(warns ? 1 : 0);
       await r.unmount();
     }
+  });
+
+  describe('Sol B-310-7: a queued choice never goes out under another account', () => {
+    /** Hold the one ledger queue until release() (a slow earlier write). */
+    function holdQueue() {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      void runAiLedgerWrite(() => gate);
+      return release;
+    }
+
+    it.each([
+      ['Allow', 'roman-ai-allow', WITHDRAWN],
+      ['Withdraw', 'roman-ai-withdraw', ALLOWED],
+    ] as const)('%s as A, sign out and in as B, release: nothing is sent, B\u2019s marker untouched', async (label, testID, start) => {
+      await AsyncStorage.removeItem(aiWithdrawalPendingKey('user-a'));
+      await AsyncStorage.removeItem(aiWithdrawalPendingKey('user-b'));
+      const bMarker = await markAiWithdrawalPending('user-b');
+      const api = makeApi({ kind: 'ok', status: start });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId(testID));
+      const release = holdQueue();
+      await fireEvent.press(r.getByTestId(testID));
+      confirmLastAlert(label);
+      signedIn = 'user-b';
+      release();
+      await waitFor(() => r.getByTestId('roman-ai-notice'));
+      expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.notSent);
+      expect(api.grantRoman).not.toHaveBeenCalled();
+      expect(api.withdrawRoman).not.toHaveBeenCalled();
+      expect(await readAiWithdrawalPending('user-b')).toBe(bMarker);
+    });
+
+    it('Allow as A with A\u2019s older pending no: the marker survives if B signed in first (AI stays off)', async () => {
+      const aMarker = await markAiWithdrawalPending('user-a');
+      const api = makeApi({ kind: 'ok', status: WITHDRAWN }, { withdrawRoman: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: null })) });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId('roman-ai-allow'));
+      const release = holdQueue();
+      await fireEvent.press(r.getByTestId('roman-ai-allow'));
+      confirmLastAlert('Allow');
+      signedIn = 'user-b';
+      release();
+      await waitFor(() => r.getByTestId('roman-ai-notice'));
+      expect(api.grantRoman).not.toHaveBeenCalled();
+      expect(await readAiWithdrawalPending('user-a')).toBe(aMarker);
+    });
+
+    it.each([
+      ['Allow', 'roman-ai-allow', WITHDRAWN, 'grantRoman'],
+      ['Withdraw', 'roman-ai-withdraw', ALLOWED, 'withdrawRoman'],
+    ] as const)('control: %s held behind an earlier write still goes out for the same account', async (label, testID, start, call) => {
+      const api = makeApi({ kind: 'ok', status: start });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId(testID));
+      const release = holdQueue();
+      await fireEvent.press(r.getByTestId(testID));
+      confirmLastAlert(label);
+      expect(api[call]).not.toHaveBeenCalled();
+      release();
+      await waitFor(() => expect(api[call]).toHaveBeenCalledTimes(1));
+    });
+
+    it('a newer Allow clears the same account\u2019s older pending no at its own turn', async () => {
+      await markAiWithdrawalPending('user-a');
+      const api = makeApi({ kind: 'ok', status: WITHDRAWN }, { withdrawRoman: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: null })) });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId('roman-ai-allow'));
+      await fireEvent.press(r.getByTestId('roman-ai-allow'));
+      confirmLastAlert('Allow');
+      await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
+      expect(await readAiWithdrawalPending('user-a')).toBeNull();
+    });
   });
 
   it('copy is plain: no exclamation marks, no medical claims', () => {

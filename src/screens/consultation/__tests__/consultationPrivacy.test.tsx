@@ -259,7 +259,7 @@ describe('A-02 consent-first PUT (backend #607)', () => {
     await waitFor(() => expect(api.save).toHaveBeenCalledTimes(1));
     const first = api.save.mock.calls[0][0];
     expect(Object.keys(first.answers)).toEqual(['P0']);
-    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v2', text_sha256: CONSENT_COPY_SHA256 });
+    expect(first.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v3', text_sha256: CONSENT_COPY_SHA256 });
     expect(first.answers.P0.copy_version).toBe(CONSULT_CONSENT_COPY_VERSION);
     // Only backend #607 P0 keys: box 2 is never part of the intake answer.
     expect(Object.keys(first.answers.P0).sort()).toEqual(['agreed', 'agreed_at', 'copy_version', 'text_sha256']);
@@ -429,7 +429,7 @@ describe('A-03 consent matches the displayed copy, fails closed', () => {
 // ── D2 box 2 ─────────────────────────────────────────────────────────────────
 
 describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, never blocking', () => {
-  it('ticked: POST /me/ai-consent/roman after the P0 save, with client-ai-v3 and the box 2 copy hash; the flow does not wait', async () => {
+  it('ticked: POST /me/ai-consent/roman after the P0 save, with client-ai-v4 and the box 2 copy hash; the flow does not wait', async () => {
     let release: (v: unknown) => void = () => undefined;
     const grantRomanConsent = jest.fn(() => new Promise((res) => { release = res; }));
     const api = makeApi({ grantRomanConsent });
@@ -442,7 +442,7 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
     await waitFor(() => r.getByTestId('consult-screen-G1'));
     await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
     expect(api.save.mock.invocationCallOrder[0]).toBeLessThan(grantRomanConsent.mock.invocationCallOrder[0]);
-    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v3', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
+    expect(grantRomanConsent).toHaveBeenCalledWith({ version: 'client-ai-v4', copy_sha256: AI_CONSENT_COPY_SHA256, platform: 'ios' });
     // Never on the intake: box 2 is not part of any PUT.
     for (const [body] of api.save.mock.calls) expect(JSON.stringify(body)).not.toMatch(/client-ai|anthropic/i);
     release({ kind: 'ok', status: null });
@@ -695,7 +695,7 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
   });
 
   it('GET /me/ai-consent is the truth when it answers: withdrawn unticks a draft that said allowed', async () => {
-    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus({ state: 'withdrawn', version: 'client-ai-v3' }) })) });
+    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus({ state: 'withdrawn', version: 'client-ai-v4' }) })) });
     await seedLocal({}, 'P0', { aiRoman: true });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-P0'));
@@ -815,7 +815,7 @@ describe('B-310-3 / C-310-6 / C-310-7 the latest box 2 choice wins', () => {
     const withdrawRomanConsent = jest
       .fn<Promise<AiConsentOutcome>, []>()
       .mockImplementationOnce(() => new Promise<AiConsentOutcome>(() => undefined))
-      .mockResolvedValue({ kind: 'ok', status: aiStatus({ state: 'withdrawn', version: 'client-ai-v3' }) });
+      .mockResolvedValue({ kind: 'ok', status: aiStatus({ state: 'withdrawn', version: 'client-ai-v4' }) });
     const api = makeApi({ withdrawRomanConsent });
     await seedLocal({ P0: fullAnswers().P0 }, 'G1', { aiRoman: true });
     const r = await renderFlow(api);

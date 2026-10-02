@@ -145,14 +145,14 @@ describe('ConsultationFlow', () => {
     expect(Object.keys(api.save.mock.calls[0][0].answers)).toEqual(['P0']);
     expect(api.save.mock.calls[0][0].answers.P0).toMatchObject({
       agreed: true,
-      copy_version: 'consult-consent-v2',
+      copy_version: 'consult-consent-v3',
       text_sha256: CONSENT_COPY_SHA256,
     });
     // Box 2 was left unticked: nothing goes to the AI consent ledger.
     expect(api.grantRomanConsent).not.toHaveBeenCalled();
 
     const stored = await readLocalState('u1', NOW);
-    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v2' });
+    expect(stored?.answers.P0).toMatchObject({ agreed: true, copy_version: 'consult-consent-v3' });
   });
 
   it('skips P8 when every screening answer is no', async () => {

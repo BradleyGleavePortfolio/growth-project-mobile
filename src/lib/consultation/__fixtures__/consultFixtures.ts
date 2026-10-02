@@ -26,7 +26,7 @@ export function fullAnswers(overrides: Answers = {}): Answers {
     N3: '3',
     N4: 'never',
     N5: ['time'],
-    P0: { agreed: true, copy_version: 'consult-consent-v2', agreed_at: '2026-09-30T19:00:00.000Z' },
+    P0: { agreed: true, copy_version: 'consult-consent-v3', agreed_at: '2026-09-30T19:00:00.000Z' },
     P1: 'no',
     P2: 'no',
     P3: 'no',

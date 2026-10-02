@@ -95,7 +95,24 @@ describe('definitions', () => {
     );
     expect(AI_CONSENT_PARAGRAPH).toMatch(/powered by Anthropic, a third-party AI provider/);
     expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach's private notes/);
-    expect(AI_CONSENT_PARAGRAPH).toMatch(/kept for 180 days/);
+    // client-ai-v4 (owner 2026-10-01 20:32, OR-110-1): no time limit; kept
+    // until the client deletes them or their account. Byte-equal to backend #635.
+    expect(AI_CONSENT_PARAGRAPH).toMatch(
+      /Your conversations with Roman are private from your coach and are kept until you delete them or delete your account\.$/,
+    );
+    expect(AI_CONSENT_PARAGRAPH).not.toMatch(/\b\d+\s*days?\b/i);
+    // Byte-for-byte the backend #635 CLIENT_AI_CONSENT_PARAGRAPH / BOX_LABEL.
+    expect(AI_CONSENT_PARAGRAPH).toBe(
+      'Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. ' +
+        'If you allow it, your information is sent to Anthropic so Roman can answer your questions ' +
+        'and your coach can use AI drafts about your training. ' +
+        "Only your own data is used, never another client's, and never your coach's private notes. " +
+        'Your conversations with Roman are private from your coach and are kept until you delete ' +
+        'them or delete your account.',
+    );
+    expect(AI_CONSENT_CHECKBOX_LABEL).toBe(
+      "Optional: I allow Roman and my coach's AI tools to use my information, processed by Anthropic.",
+    );
     expect(AI_CONSENT_CHECKBOX_LABEL).toMatch(/^Optional: I allow Roman/);
     expect(CONSENT_FOOTER).toMatch(/^Nothing is sent until you continue\./);
     expect(CONSENT_FOOTER).toMatch(/guided tour works either way/);
@@ -107,12 +124,12 @@ describe('definitions', () => {
     }
   });
 
-  it('versions are bound: consult-consent-v2 with client-ai-v3 and pt-waiver-v1', () => {
-    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v2');
-    expect(AI_CONSENT_VERSION).toBe('client-ai-v3');
+  it('versions are bound: consult-consent-v3 with client-ai-v4 and pt-waiver-v1', () => {
+    expect(CONSULT_CONSENT_COPY_VERSION).toBe('consult-consent-v3');
+    expect(AI_CONSENT_VERSION).toBe('client-ai-v4');
     expect(CONSENT_BINDING).toEqual({
-      copy_version: 'consult-consent-v2',
-      ai_consent_version: 'client-ai-v3',
+      copy_version: 'consult-consent-v3',
+      ai_consent_version: 'client-ai-v4',
       waiver_version: 'pt-waiver-v1',
     });
   });
@@ -124,12 +141,12 @@ describe('definitions', () => {
     expect(consentCopyText().startsWith('Before we start\n\nThe Growth Project provides')).toBe(true);
     expect(aiConsentCopyText()).toBe(`${AI_CONSENT_PARAGRAPH}\n\n${AI_CONSENT_CHECKBOX_LABEL}`);
     // Backend R2a (#622) pins the same text: paragraph 4, box 2 label and their join.
-    expect(sha(AI_CONSENT_PARAGRAPH)).toBe('77c0e7062adb29cf59a532b130e50d5b373789c3564972cc309d8361bf57227b');
+    expect(sha(AI_CONSENT_PARAGRAPH)).toBe('56d14fb96b9f7b6abdd43242f5ce9eaee419bc0d9fb4302bc283ecc1529d430b'); // backend #635 client-ai-v4 paragraph.sha256
     expect(sha(AI_CONSENT_CHECKBOX_LABEL)).toBe('77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba');
     // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
     // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
-    expect(CONSENT_COPY_SHA256).toBe('154bd332c992e4e28ac58d1f1c40e856ff055581e383d85656f245853f55589f');
-    expect(AI_CONSENT_COPY_SHA256).toBe('d8738c900ed2bfbb12b7ca6423132a532fc47e2cd0fe52854cc38e34c427840f');
+    expect(CONSENT_COPY_SHA256).toBe('79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9');
+    expect(AI_CONSENT_COPY_SHA256).toBe('fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4');
   });
 
   it('P8 gives guidance and a next step before the physician line', () => {
