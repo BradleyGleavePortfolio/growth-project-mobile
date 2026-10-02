@@ -30,6 +30,9 @@ export interface CurrentUser {
     diet_restrictions?: string[] | string;
     workout_days_per_week?: number;
     gym_membership?: string;
+    /** Backend field name (UserProfile.onboardingCompleted). Read it with profileOnboardingCompleted(). */
+    onboardingCompleted?: boolean | null;
+    /** Older payloads and fixtures only; the server sends onboardingCompleted. */
     onboarding_completed?: boolean;
     /** Day-1 onboarding terminal flag. Set by the final Ready screen. */
     day_one_completed?: boolean;

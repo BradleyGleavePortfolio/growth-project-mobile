@@ -9,12 +9,10 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
-import { errorMessage } from '../../types/common';
 import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -22,7 +20,16 @@ import { readUserCache, setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { getLastKnownSignupPolicy, loadSignupPolicy, UNKNOWN_SIGNUP_POLICY } from '../../lib/signupPolicy';
 import { inviteAttachErrorMessage } from '../../lib/inviteAttachOutcome';
+import {
+  clearSignupRoleNotice,
+  readSignupRoleNotice,
+  signupRoleNoticeMessage,
+  signupRoleNoticeNeedsSupport,
+  type SignupRoleNoticeKind,
+} from '../../lib/signupRoleNotice';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
+import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { typography } from '../../theme/tokens';
 
 type Props = {
@@ -30,13 +37,32 @@ type Props = {
   route?: RouteProp<AuthStackParamList, 'RoleSelection'>;
 };
 
-// Role selection is now a client-only flow. Coach and admin promotion are
-// handled by an OWNER from the web console — there is no self-serve coach
-// upgrade in the mobile app.
+// RoleSelection: the last signup step, reached after a session exists.
 //
-// Rationale: per-seat billing means a client cannot promote themselves into a
-// paid coach tier; only an admin can. Removing the in-app become-coach UI
-// closes the privilege-escalation gap that existed in the prior version.
+// Who sees it:
+//   - Clients (chose "I'm here to train", or arrived with an invite / QR code
+//     and are therefore always clients). They pair with a coach here: enter
+//     or paste a code, or continue without one when the live signup policy
+//     is codeless. This screen only ever selects the client ('student') role.
+//   - Retry: signup reported `invite_attached:false`, so the code is mandatory
+//     and the banner explains why (see inviteAttachError below).
+//   - A person whose signup role request did not end the way they chose
+//     (C13): they chose "I coach clients" but the server created a client
+//     account; or the Apple ID / Google account already existed so the
+//     choice did not apply; or Sign in with Apple / Google on the Login
+//     screen found no account and created a client one. The fact is shown
+//     here as a plain notice (`signupNotice` param, with the persisted copy
+//     from lib/signupRoleNotice as the fallback so a remount cannot lose it)
+//     and they continue as a client. We never self-promote to coach from
+//     the app.
+//
+// Who does NOT see it: a user whose server-returned `user.role` is 'coach'
+// (the backend honoured `intended_role: 'coach'`). CreateAccount finishes
+// auth directly and RootNavigator mounts CoachNavigator.
+//
+// Authorization: the role always comes from the server. `selectRole('coach')`
+// stays rejected by the backend (audit C3), and this screen never calls it.
+
 // Security (audit): never log an Axios error object; it can carry request
 // config / Authorization. Status and error class only.
 function logRedacted(label: string, err: unknown): void {
@@ -46,7 +72,7 @@ function logRedacted(label: string, err: unknown): void {
   console.warn(label, { status: status ?? null, kind });
 }
 
-export default function RoleSelectionScreen({ route }: Props) {
+export default function RoleSelectionScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Retry mode: signup created the account but the backend reported
@@ -55,6 +81,9 @@ export default function RoleSelectionScreen({ route }: Props) {
   // "continue without a coach" only when the live policy allows codeless.
   const attachRetryReason = route?.params?.inviteAttachError;
   const isAttachRetry = typeof attachRetryReason === 'string';
+  const [signupNotice, setSignupNotice] = useState<SignupRoleNoticeKind | null>(
+    route?.params?.signupNotice ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
@@ -63,7 +92,11 @@ export default function RoleSelectionScreen({ route }: Props) {
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
+  // #306 r5 (owner 13:34): Contact support next to an unknown failure.
+  const [errorSupport, setErrorSupport] = useState(false);
   const [cachedCoachId, setCachedCoachId] = useState<string | null>(null);
+  // The user already has a coach, so the only thing left is the notice.
+  const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -73,6 +106,15 @@ export default function RoleSelectionScreen({ route }: Props) {
       const { policy } = await loadSignupPolicy(() => authApi.getSignupPolicy());
       if (!mounted) return;
       setRequireInviteCode(policy.inviteCodeRequired);
+
+      // C13: a notice written by CreateAccount / Login survives a remount of
+      // the auth stack; the route param is only the fast path.
+      let noticeNow: SignupRoleNoticeKind | null = route?.params?.signupNotice ?? null;
+      if (!noticeNow) {
+        const stored = await readSignupRoleNotice();
+        if (mounted && stored) setSignupNotice(stored);
+        noticeNow = stored;
+      }
 
       // B4: never in retry mode. A failed attach to coach B must not be
       // silently skipped because the user is already linked to coach A; the
@@ -91,7 +133,15 @@ export default function RoleSelectionScreen({ route }: Props) {
         const u = await readUserCache();
       if (u) {
           if (mounted && u?.coach_id && !isAttachRetry) {
-            await AsyncStorage.removeItem('needs_role_selection');
+            // #306 r4 (Sol B2-R3 / C1): a user who already has a coach skips
+            // this step, but never past an unread signup notice; it is shown
+            // and acknowledged first.
+            if (noticeNow) {
+              setAcknowledgeOnly(true);
+              return;
+            }
+            await clearRoleSelectionPending();
+            await clearSignupRoleNotice();
             authEvents.emit();
             return;
           }
@@ -156,18 +206,21 @@ export default function RoleSelectionScreen({ route }: Props) {
     } catch (finErr) {
       logRedacted('selectRole finalize after attach failed', finErr);
     }
-    await AsyncStorage.removeItem('needs_role_selection');
+    await clearRoleSelectionPending();
+    await clearSignupRoleNotice();
     authEvents.emit();
   };
 
   const handleKeepCurrentCoach = async () => {
-    await AsyncStorage.removeItem('needs_role_selection');
+    await clearRoleSelectionPending();
+    await clearSignupRoleNotice();
     authEvents.emit();
   };
 
   const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
     if (inFlightRef.current) return;
     setError('');
+    setErrorSupport(false);
 
     // R3: already connected on the server; only finish locally.
     const confirmed = attachedRef.current;
@@ -219,7 +272,8 @@ export default function RoleSelectionScreen({ route }: Props) {
       } else {
         const res = await authApi.selectRole('student', undefined);
         await persistRole(res.data.role, res.data.coach_id);
-        await AsyncStorage.removeItem('needs_role_selection');
+        await clearRoleSelectionPending();
+        await clearSignupRoleNotice();
         authEvents.emit();
       }
     } catch (err) {
@@ -237,13 +291,23 @@ export default function RoleSelectionScreen({ route }: Props) {
       // A 4xx on the attach/select call is an invite problem (bad, expired,
       // used-up code, coach unavailable): show friendly copy, never the raw
       // server string.
-      const msg =
-        trimmed && status >= 400 && status < 500
-          ? inviteAttachErrorMessage(
-              r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
-            )
-          : errorMessage(err, 'Could not complete sign-up. Please try again.');
+      // #306 r5 (owner 13:34): never the raw server string, never a bare
+      // "try again". A connection problem says so; anything else unknown
+      // carries a reference and Contact support (utils/authFailure).
+      let unknownFailure = false;
+      let msg: string;
+      if (trimmed && status >= 400 && status < 500) {
+        msg = inviteAttachErrorMessage(
+          r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
+        );
+      } else if (isNetworkFailure(err)) {
+        msg = 'We couldn’t reach the server. Check your connection, then tap Continue again.';
+      } else {
+        msg = unknownAuthFailure(err, 'role_selection').message;
+        unknownFailure = true;
+      }
       setError(msg);
+      setErrorSupport(unknownFailure);
       if (isAttachRetry) Alert.alert('Coach not connected yet', msg);
       else Alert.alert('Sign-up unavailable', msg);
     } finally {
@@ -252,6 +316,47 @@ export default function RoleSelectionScreen({ route }: Props) {
     }
   };
 
+  const noticeBox = signupNotice ? (
+    <View style={styles.retryBox} accessible accessibilityRole="alert" testID="signup-role-notice">
+      <Text style={styles.retryText}>{signupRoleNoticeMessage(signupNotice)}</Text>
+      {signupRoleNoticeNeedsSupport(signupNotice) ? (
+        <Text
+          style={styles.supportLink}
+          accessibilityRole="link"
+          accessibilityLabel="Contact support"
+          testID="signup-role-notice-support"
+          onPress={() => navigation?.navigate('SupportInbox')}
+        >
+          Contact support
+        </Text>
+      ) : null}
+    </View>
+  ) : null;
+
+  if (acknowledgeOnly && signupNotice) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.header}>
+          <Text style={styles.title}>Before you continue</Text>
+          {noticeBox}
+        </View>
+        <View style={styles.cardsContainer}>
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={handleKeepCurrentCoach}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
+            testID="signup-role-notice-acknowledge"
+          >
+            <Text style={styles.continueText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -259,6 +364,7 @@ export default function RoleSelectionScreen({ route }: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
+        {noticeBox}
         {isAttachRetry ? (
           <View
             style={styles.retryBox}
@@ -325,6 +431,17 @@ export default function RoleSelectionScreen({ route }: Props) {
             </Text>
           ) : null}
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
+          {error && errorSupport ? (
+            <Text
+              style={styles.supportLink}
+              accessibilityRole="link"
+              accessibilityLabel="Contact support"
+              testID="role-error-support"
+              onPress={() => navigation?.navigate('SupportInbox')}
+            >
+              Contact support
+            </Text>
+          ) : null}
         </View>
 
         <TouchableOpacity
@@ -448,6 +565,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginVertical: 12,
   },
   retryText: { ...typography.bodySmall, color: colors.textPrimary },
+  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: 8 },
   skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
   continueBtn: {
     backgroundColor: colors.primary,

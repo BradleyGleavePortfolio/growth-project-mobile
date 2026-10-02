@@ -27,6 +27,7 @@ import {
   helpUrl,
 } from '../../config/env';
 import { trustCenterLinks } from '../trustCenterLinks';
+import { HELP_UNAVAILABLE_COPY } from '../settings/deletionErrors';
 
 jest.mock('../../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../../theme/tokens').default;
@@ -120,7 +121,10 @@ describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete ac
   it('uses the approved Settings labels', () => {
     expect(SCREEN_SRC).toContain('>Delete account</Text>');
     expect(SCREEN_SRC).toContain('accessibilityLabel="Delete account"');
-    expect(SCREEN_SRC).toContain("'Delete account',");
+    // Main #313: the row opens the shared Delete account screen (re-auth,
+    // exact date, cancel); there is no inline confirmation alert any more.
+    expect(SCREEN_SRC).toContain("navigation?.navigate?.('DeleteAccount')");
+    expect(SCREEN_SRC).not.toContain('deletionApi.requestDeletion');
     expect(SCREEN_SRC).not.toMatch(/Delete my account|Delete My Account/);
     expect(SCREEN_SRC).toContain('Open Privacy in Settings to track progress');
     expect(SCREEN_SRC).not.toContain('Data & Privacy');
@@ -176,6 +180,16 @@ describe('TrustCenterScreen render', () => {
     ).toBeTruthy();
     expect(screen.queryByText('Data residency')).toBeNull();
     expect(screen.queryByText('US East')).toBeNull();
+  });
+
+  it('the help centre link failure keeps main\'s specific copy with the support address', async () => {
+    openUrl.mockRejectedValueOnce(new Error('no browser'));
+    const screen = await render(<TrustCenterScreen navigation={{ goBack: jest.fn() }} />);
+    await waitFor(() => expect(screen.getByTestId('trust-link-help')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('trust-link-help'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith('Help unavailable', HELP_UNAVAILABLE_COPY),
+    );
   });
 
   it('alerts when a policy page cannot be opened', async () => {

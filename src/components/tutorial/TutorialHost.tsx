@@ -8,6 +8,11 @@
  *   - feed live `/me/macros/current` numbers to the macro card and step;
  *   - fall back to `GET /me/onboarding` for the payload when the tour was
  *     started without one (reinstall, or a caller that passed nothing);
+ *   - start a tour that never started after a consultation the server has
+ *     completed (Sol B-310-4): the app closed between the complete 200 and
+ *     "Show me around", the 200 was lost, or the client signed in again on
+ *     a fresh install. Only from `not_started`, so a finished or paused tour
+ *     on this device never restarts by itself;
  *   - treat an already-connected wearable (connections list) as the
  *     wearable gate's real action;
  *   - render the overlay.
@@ -27,6 +32,7 @@ import {
   hydrateTutorial,
   setTutorialLiveMacros,
   setTutorialPayload,
+  startClientTutorial,
   useTutorialStore,
 } from '../../tutorial/tutorialStore';
 import { currentGate } from '../../tutorial/tutorialMachine';
@@ -45,6 +51,7 @@ export function hasConnectedWearable(list: unknown): boolean {
 function TutorialEffects(): null {
   const user = useCurrentUser();
   const hydrated = useTutorialStore((s) => s.hydrated);
+  const tourUserId = useTutorialStore((s) => s.userId);
   const status = useTutorialStore((s) => s.tutorial.status);
   const hasPayload = useTutorialStore((s) => !!s.payload);
   const onWearableGate = useTutorialStore((s) => {
@@ -82,6 +89,28 @@ function TutorialEffects(): null {
       cancelled = true;
     };
   }, [hydrated, hasPayload, status]);
+
+  // Sol B-310-4: the hand-off from the consultation is recoverable. The
+  // server is the truth for completion (backend #607 `completed` comes from
+  // the intake, so clients who never did the consultation are not touched).
+  useEffect(() => {
+    if (!featureFlags.consultationOnboarding || !hydrated || status !== 'not_started' || !tourUserId) return;
+    let cancelled = false;
+    api
+      .get('/me/onboarding')
+      .then((res) => {
+        if (cancelled) return;
+        const now = useTutorialStore.getState();
+        if (now.userId !== tourUserId || now.tutorial.status !== 'not_started') return;
+        const data = res?.data as { completed?: unknown; result?: unknown } | null | undefined;
+        if (!data || data.completed !== true) return;
+        startClientTutorial(data.result ?? undefined);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [hydrated, status, tourUserId]);
 
   useEffect(() => {
     if (onWearableGate && hasConnectedWearable(connections.data)) {

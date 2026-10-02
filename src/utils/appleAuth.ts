@@ -28,8 +28,17 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { toAuthErrorDetail, type AuthErrorDetail } from './authErrorDetail';
 import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  COACH_SIGNUP_UNCONFIRMED,
+  classifyCoachSignupFailure,
+  isCoachSignupUnavailable,
+  postWithIntendedRole,
+  type IntendedRole,
+} from '../lib/intendedRole';
 
 /**
  * Request body for POST /auth/apple.
@@ -78,22 +87,89 @@ export interface AppleAuthResult {
   // silent (no error banner) on this case to match the Google flow.
   cancelled?: boolean;
   error?: string;
+  /**
+   * 'coach_signup_unavailable' (C13): the backend refused `intended_role`
+   * before any handler ran, so no account was created. CreateAccount shows
+   * plain copy and never falls back to a client account.
+   * 'coach_signup_unconfirmed' (#306 r3): a coach request got no server
+   * answer (network, timeout, 5xx); it may or may not have committed.
+   */
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE | typeof COACH_SIGNUP_UNCONFIRMED;
   // Invite-attach outcome (C03 contract). `invite_attached:false` means the
   // account exists but is not connected to the coach; callers route to the
   // enter-code retry step instead of continuing silently.
   invite_attached?: boolean;
   invite_attach_error?: string;
+  /**
+   * #306 r4: the email Apple shared on this sign-in (first authorisation
+   * only), returned with `coach_signup_unconfirmed` so the unconfirmed-attempt
+   * marker is scoped to this identity when Apple gives one.
+   */
+  provider_email?: string;
+  /**
+   * #306 r6 (Sol C-306-5): the stable Apple user id for this app
+   * (`credential.user`, the token's `sub`). Returned on success and on coach
+   * outcomes so the unconfirmed-attempt marker matches this Apple ID, not
+   * every Apple sign-in on the device.
+   */
+  provider_subject?: string;
+  /**
+   * #306 r6 (Sol B-306-5): the backend failure, sanitised (status, machine
+   * code, request id). Screens map and report from it; `error` stays the
+   * plain message for older callers.
+   */
+  error_detail?: AuthErrorDetail;
 }
 
 export interface AppleAuthOptions {
   // Forwarded to /auth/apple so a new (or existing) user can be attached to
   // the right coach during the upsert — matches the Google flow.
   inviteCode?: string;
+  /**
+   * Signup role choice (C13). Pass only when the live signup policy
+   * advertises `role_choice`. Omitted from the request when an invite code
+   * is present (always client).
+   */
+  intendedRole?: IntendedRole;
 }
 
 // Apple-specific cancel error code surfaced by expo-apple-authentication.
 // See https://docs.expo.dev/versions/latest/sdk/apple-authentication/
 const APPLE_CANCEL_CODE = 'ERR_REQUEST_CANCELED';
+
+/**
+ * The email in Apple's identity token (unverified decode, used only to scope
+ * the local unconfirmed-attempt marker to this Apple ID; the server verifies
+ * the token itself). Apple shares `credential.email` only on the first
+ * authorisation, but the token carries the (possibly relay) address on every
+ * sign-in once the email scope was granted (#306 r5, Opus C-306-1).
+ */
+function appleTokenClaims(token: string | null | undefined): { email?: unknown; sub?: unknown } | null {
+  if (typeof token !== 'string') return null;
+  const part = token.split('.')[1];
+  if (!part) return null;
+  try {
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const decode = (globalThis as { atob?: (s: string) => string }).atob;
+    if (typeof decode !== 'function') return null;
+    const payload: unknown = JSON.parse(decode(padded));
+    return payload && typeof payload === 'object' ? (payload as { email?: unknown; sub?: unknown }) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function emailFromAppleIdentityToken(token: string | null | undefined): string | undefined {
+  const email = appleTokenClaims(token)?.email;
+  return typeof email === 'string' && email.includes('@') ? email : undefined;
+}
+
+/** The token's `sub` (the stable Apple user id), same unverified decode (#306 r6). */
+export function subjectFromAppleIdentityToken(token: string | null | undefined): string | undefined {
+  const sub = appleTokenClaims(token)?.sub;
+  return typeof sub === 'string' && sub ? sub : undefined;
+}
 
 export async function isAppleAuthAvailable(): Promise<boolean> {
   if (Platform.OS !== 'ios') return false;
@@ -124,12 +200,18 @@ export async function signInWithApple(
     if (authErr?.code === APPLE_CANCEL_CODE) {
       return { success: false, cancelled: true };
     }
-    return { success: false, error: authErr?.message || 'Apple sign-in failed' };
+    // #306 r7: the native error code (for example ERR_REQUEST_FAILED) goes
+    // with the message, so an unknown sheet failure is reported with it.
+    return { success: false, error: authErr?.message || 'Apple sign-in failed', error_detail: toAuthErrorDetail(err) };
   }
 
   if (!credential?.identityToken) {
     return { success: false, error: 'No identity token returned from Apple' };
   }
+
+  const providerSubject =
+    (typeof credential.user === 'string' && credential.user ? credential.user : undefined) ??
+    subjectFromAppleIdentityToken(credential.identityToken);
 
   // Forward the identity token to the backend for verification + session mint.
   // The fullName fields are ONLY populated on the very first sign-in; the
@@ -144,7 +226,14 @@ export async function signInWithApple(
 
     // POST the identity token to /auth/apple. The backend verifies the JWT
     // against Apple's JWKS, upserts the user, and returns a Supabase session.
-    const response = await api.post('/auth/apple', body);
+    // With an invite code the user is always a client, so `intended_role`
+    // is omitted (server default). A coach request is never retried without
+    // the field; that failure is returned as `error_code`.
+    const response = await postWithIntendedRole(
+      (b) => api.post('/auth/apple', b),
+      body,
+      options.inviteCode ? undefined : options.intendedRole,
+    );
     const { access_token, refresh_token, user, is_new_user, invite_attached, invite_attach_error } =
       response.data ?? {};
 
@@ -163,15 +252,88 @@ export async function signInWithApple(
       access_token,
       user,
       is_new_user,
+      ...(providerSubject ? { provider_subject: providerSubject } : {}),
       ...(typeof invite_attached === 'boolean' ? { invite_attached } : {}),
       ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {
-    const apiErr = err as { response?: { data?: { message?: string } }; message?: string };
-    const msg =
-      apiErr?.response?.data?.message ||
-      apiErr?.message ||
-      'Apple sign-in failed';
-    return { success: false, error: msg };
+    const detail = toAuthErrorDetail(err);
+    const providerEmail =
+      (typeof credential.email === 'string' && credential.email ? credential.email : undefined) ??
+      emailFromAppleIdentityToken(credential.identityToken);
+    if (isCoachSignupUnavailable(err)) {
+      // #306 r5 (Sol B-306-1): the email lets the screen check this Apple
+      // ID's earlier unconfirmed attempt before saying "No account was created".
+      return {
+        success: false,
+        error: 'Coach sign-up is not available right now',
+        error_code: COACH_SIGNUP_UNAVAILABLE,
+        ...(providerEmail ? { provider_email: providerEmail } : {}),
+        ...(providerSubject ? { provider_subject: providerSubject } : {}),
+        error_detail: detail,
+      };
+    }
+    if (options.intendedRole === 'coach' && !options.inviteCode && classifyCoachSignupFailure(err) === 'unconfirmed') {
+      // #306 r3: same rule as Google. A coach request with no server answer
+      // (network, timeout, 5xx) may have committed; the outcome is unknown,
+      // never reported as a refusal or a generic failure.
+      return {
+        success: false,
+        error: 'Could not confirm the coach account',
+        error_code: COACH_SIGNUP_UNCONFIRMED,
+        ...(providerEmail ? { provider_email: providerEmail } : {}),
+        ...(providerSubject ? { provider_subject: providerSubject } : {}),
+        error_detail: detail,
+      };
+    }
+    // #306 r6 (Sol B-306-5): the status, code and request id travel with
+    // the message, so Login and CreateAccount can map a known failure and
+    // report an unknown one under the backend's reference.
+    return { success: false, error: detail.message || 'Apple sign-in failed', error_detail: detail };
+  }
+}
+
+// ── Re-authentication (account deletion, Apple 5.1.1(v)) ──────────────────────
+
+export interface AppleReauthResult {
+  success: boolean;
+  /** Fresh Apple identity token for POST /auth/recent-auth-token (provider=apple). */
+  identityToken?: string;
+  /**
+   * Single-use authorization code. Sent with POST /me/delete-account so the
+   * server can exchange it and revoke the user's Sign in with Apple tokens.
+   * Never logged or stored.
+   */
+  authorizationCode?: string | null;
+  cancelled?: boolean;
+  error?: string;
+}
+
+/**
+ * Show the native Sign in with Apple sheet to prove the user is present,
+ * WITHOUT creating a new app session (unlike signInWithApple, nothing is
+ * posted to /auth/apple and no tokens are stored). No name/email scopes are
+ * requested: the account already exists.
+ */
+export async function reauthenticateWithApple(): Promise<AppleReauthResult> {
+  if (Platform.OS !== 'ios') {
+    return { success: false, error: 'Apple sign-in is only available on iOS' };
+  }
+  try {
+    const credential = await AppleAuthentication.signInAsync({ requestedScopes: [] });
+    if (!credential?.identityToken) {
+      return { success: false, error: 'No identity token returned from Apple' };
+    }
+    return {
+      success: true,
+      identityToken: credential.identityToken,
+      authorizationCode: credential.authorizationCode ?? null,
+    };
+  } catch (err) {
+    const authErr = err as { code?: string; message?: string };
+    if (authErr?.code === APPLE_CANCEL_CODE) {
+      return { success: false, cancelled: true };
+    }
+    return { success: false, error: authErr?.message || 'Apple sign-in failed' };
   }
 }
