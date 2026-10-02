@@ -163,11 +163,21 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
         message:
           op === 'delete_all'
             ? 'Roman could not finish deleting your conversations. The ones already deleted stay deleted. Try again in a moment to delete the rest.'
-            : 'Roman could not finish deleting this conversation, so it was not changed. Try deleting it again in a moment.',
+            : 'Roman could not finish deleting this conversation. Delete it again in a moment to make sure. Deleting it twice is safe.',
         action: 'retry',
         reference: null,
         report: false,
       };
+    case 'query_invalid': {
+      // Only an outdated or modified app sends a query the server refuses.
+      const ref = shortReference(f.requestId);
+      return {
+        message: `This version of the app asked for your conversations in a way the server no longer accepts, so nothing was changed. Update the app, then try again. If it keeps happening, ${withRef(ref)}.`,
+        action: 'retry_support',
+        reference: ref,
+        report: true,
+      };
+    }
     case 'busy':
       return {
         message: 'There were too many requests in a row, so this one was not done. Wait a minute, then try again.',

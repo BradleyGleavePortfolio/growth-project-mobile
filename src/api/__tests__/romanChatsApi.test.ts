@@ -133,6 +133,11 @@ describe('failureOf: every status and machine code', () => {
     ['404 ROMAN_SESSION_NOT_FOUND', httpError(404, { code: 'ROMAN_SESSION_NOT_FOUND', message: 'x' }), { reason: 'not_found' }],
     ['404 without a code (route missing / chat switched off)', httpError(404, { statusCode: 404, message: 'Cannot GET /roman' }), { reason: 'route_missing' }],
     ['400 ROMAN_CURSOR_INVALID', httpError(400, { code: 'ROMAN_CURSOR_INVALID', message: 'x' }), { reason: 'cursor_invalid' }],
+    [
+      '400 ROMAN_SESSIONS_QUERY_INVALID (#635 fix round)',
+      httpError(400, { code: 'ROMAN_SESSIONS_QUERY_INVALID', message: 'x' }),
+      { reason: 'query_invalid', requestId: 'sent-req-1234' },
+    ],
     ['503 ROMAN_ERASE_INCOMPLETE', httpError(503, { code: 'ROMAN_ERASE_INCOMPLETE', message: 'x' }), { reason: 'erase_incomplete' }],
     ['429', httpError(429, { statusCode: 429, message: 'Too Many Requests' }), { reason: 'busy' }],
     [

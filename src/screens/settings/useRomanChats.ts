@@ -90,6 +90,8 @@ export function viewAndReport(op: RomanChatsOp, f: RomanChatsFailure): RomanChat
   const view = failureView(op, f);
   if (view.report && f.reason === 'unexpected') {
     reportUnexpected(`roman-chats ${WHERE[op]}`, { status: f.status, code: f.code, requestId: f.requestId });
+  } else if (view.report && f.reason === 'query_invalid') {
+    reportUnexpected(`roman-chats ${WHERE[op]}`, { status: 400, code: 'ROMAN_SESSIONS_QUERY_INVALID', requestId: f.requestId });
   }
   return view;
 }

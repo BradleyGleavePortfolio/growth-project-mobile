@@ -365,6 +365,7 @@ describe('copy for every mapped failure', () => {
     { reason: 'route_missing' },
     { reason: 'cursor_invalid' },
     { reason: 'erase_incomplete' },
+    { reason: 'query_invalid', requestId: 'req-1234567890' },
     { reason: 'busy' },
     { reason: 'unexpected', status: 500, code: null, requestId: 'req-1234567890' },
   ];
@@ -376,8 +377,8 @@ describe('copy for every mapped failure', () => {
       expect(v.message.length).toBeGreaterThan(20);
       expect(v.message).not.toMatch(/!|Something went wrong|^Please try again\.?$/);
       expect(v.message).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
-      expect(v.report).toBe(f.reason === 'unexpected');
-      if (f.reason === 'unexpected' || f.reason === 'not_allowed') {
+      expect(v.report).toBe(f.reason === 'unexpected' || f.reason === 'query_invalid');
+      if (f.reason === 'unexpected' || f.reason === 'not_allowed' || f.reason === 'query_invalid') {
         expect(v.message).toContain('reference req-1234');
         expect(v.action).toBe('retry_support');
       }
@@ -390,6 +391,9 @@ describe('copy for every mapped failure', () => {
     expect(failureView('delete_all', unknown).message).toMatch(/could not confirm/);
     expect(failureView('delete_one', { reason: 'offline' }).message).toMatch(/may not be deleted yet/);
     expect(failureView('delete_all', { reason: 'erase_incomplete' }).message).toMatch(/already deleted stay deleted/);
+    // 503 ROMAN_ERASE_INCOMPLETE also covers an unconfirmed erase (Sol B-635-4): never "not changed".
+    expect(failureView('delete_one', { reason: 'erase_incomplete' }).message).not.toMatch(/not changed/);
+    expect(failureView('delete_one', { reason: 'erase_incomplete' }).message).toMatch(/Deleting it twice is safe\./);
   });
 
   it('the screen copy has no exclamation marks', () => {

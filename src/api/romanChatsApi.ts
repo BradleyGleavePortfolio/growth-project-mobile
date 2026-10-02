@@ -37,6 +37,8 @@ const ID_MAX = 64;
 export const ROMAN_SESSION_NOT_FOUND = 'ROMAN_SESSION_NOT_FOUND';
 export const ROMAN_ERASE_INCOMPLETE = 'ROMAN_ERASE_INCOMPLETE';
 export const ROMAN_CURSOR_INVALID = 'ROMAN_CURSOR_INVALID';
+/** #635 fix round (Sol B-635-5): a list query the server does not accept. */
+export const ROMAN_SESSIONS_QUERY_INVALID = 'ROMAN_SESSIONS_QUERY_INVALID';
 
 const IdSchema = z.string().min(1).max(ID_MAX);
 const IsoSchema = z.string().datetime({ offset: true });
@@ -110,7 +112,15 @@ export type RomanChatsFailure =
   | { reason: 'route_missing' }
   /** 400 ROMAN_CURSOR_INVALID: the list is out of date. */
   | { reason: 'cursor_invalid' }
-  /** 503 ROMAN_ERASE_INCOMPLETE: the erase did not finish; retry is safe. */
+  /**
+   * 400 ROMAN_SESSIONS_QUERY_INVALID: the server does not accept this app's
+   * list query (an outdated app). Reported, with a reference.
+   */
+  | { reason: 'query_invalid'; requestId: string | null }
+  /**
+   * 503 ROMAN_ERASE_INCOMPLETE: the erase did not finish, or (#635 fix round,
+   * Sol B-635-4) could not be confirmed. Either way a repeat delete is safe.
+   */
   | { reason: 'erase_incomplete' }
   /** 429: too many requests in a row. */
   | { reason: 'busy' }
@@ -151,6 +161,7 @@ export function failureOf(err: unknown): RomanChatsFailure {
   if (status === 403) return { reason: 'not_allowed', requestId: supportReferenceOf(err) };
   if (status === 404) return code === ROMAN_SESSION_NOT_FOUND ? { reason: 'not_found' } : code ? unexpected(err, status, code) : { reason: 'route_missing' };
   if (status === 400 && code === ROMAN_CURSOR_INVALID) return { reason: 'cursor_invalid' };
+  if (status === 400 && code === ROMAN_SESSIONS_QUERY_INVALID) return { reason: 'query_invalid', requestId: supportReferenceOf(err) };
   if (status === 503 && code === ROMAN_ERASE_INCOMPLETE) return { reason: 'erase_incomplete' };
   if (status === 429) return { reason: 'busy' };
   return unexpected(err, status, code);
