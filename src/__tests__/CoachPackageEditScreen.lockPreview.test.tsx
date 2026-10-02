@@ -56,6 +56,15 @@ jest.mock('../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'u1', email: 'c@x.com', name: 'Coach Lee' }),
 }));
 
+const mockCaptureError = jest.fn();
+jest.mock('../services/sentry', () => ({
+  captureError: (...a: unknown[]) => mockCaptureError(...a),
+}));
+const mockSignOut = jest.fn(async () => undefined);
+jest.mock('../services/authActions', () => ({
+  signOut: () => mockSignOut(),
+}));
+
 const mockUpdate = jest.fn();
 jest.mock('../api/packagesApi', () => {
   const actual = jest.requireActual('../api/packagesApi');
@@ -96,8 +105,10 @@ function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
 }
 
 function makeProps(initialPackage: CoachPackage) {
+  const nav = { navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn() };
   return {
-    navigation: { navigate: jest.fn(), goBack: jest.fn(), dispatch: jest.fn() } as never,
+    nav,
+    navigation: nav as never,
     route: { params: { packageId: initialPackage.id, initialPackage } } as never,
   };
 }
@@ -241,5 +252,158 @@ describe('CoachPackageEditScreen — S-FEE price rule ($19.99 minimum or free)',
       expect(hit).toBeTruthy();
       expect(hit[1]).toMatch(/recurring price starts at \$19\.99/);
     });
+  });
+});
+
+// #321 fix round (Sol B-321-1): every save failure says what happened, keeps
+// the edits, and offers a working next action; unknown failures carry a
+// reference and reach Sentry. Real screen, real mapper.
+describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
+  type Button = { text: string; style?: string; onPress?: () => void };
+  const lastAlert = () => {
+    const calls = (Alert.alert as jest.Mock).mock.calls;
+    const c = calls[calls.length - 1];
+    return { title: c[0] as string, message: c[1] as string, buttons: (c[2] ?? []) as Button[] };
+  };
+  const press = (buttons: Button[], text: string) => {
+    const b = buttons.find((x) => x.text === text);
+    if (!b?.onPress) throw new Error(`no button ${text}`);
+    b.onPress();
+  };
+  async function saveWith(rejection: unknown, initial = pkg()) {
+    mockUpdate.mockRejectedValueOnce(rejection);
+    const props = makeProps(initial);
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Save changes'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+    return { ...screen, props };
+  }
+
+  it('500 with request_id: reference, Try again, Contact support, Sentry event under the same reference', async () => {
+    const { props, getByText } = await saveWith({
+      response: {
+        status: 500,
+        data: { statusCode: 500, message: 'Internal server error', error: 'Internal Server Error', request_id: 'sol321-reference' },
+      },
+    });
+    const a = lastAlert();
+    expect(a.title).toBe('Could not save the package');
+    expect(a.message).toBe(
+      'Your changes were not saved. There was a problem on our side. Your changes are still here. Tap Try again, or contact support and quote reference SOL321RE.',
+    );
+    expect(a.buttons.map((b) => b.text)).toEqual(['Try again', 'Contact support', 'Close']);
+    // the reference stays on screen after the dialog closes
+    expect(getByText(/quote reference SOL321RE/)).toBeTruthy();
+    expect(mockCaptureError).toHaveBeenCalledTimes(1);
+    const [event, ctx] = mockCaptureError.mock.calls[0];
+    expect((event as Error).message).toBe('package_save_update_failed');
+    expect(ctx).toEqual({
+      flow: 'package_save',
+      mode: 'update',
+      status: 500,
+      code: null,
+      reference: 'sol321-reference',
+    });
+    // never the request body or prices
+    expect(JSON.stringify(ctx)).not.toMatch(/9900|Strength Builder/);
+    press(a.buttons, 'Contact support');
+    expect(props.nav.navigate).toHaveBeenCalledWith('SupportInbox');
+    // Try again re-sends the current form and can succeed
+    mockUpdate.mockResolvedValueOnce({ data: pkg() });
+    press(a.buttons, 'Try again');
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(lastAlert().title).toBe('Package updated'));
+  });
+
+  it('network error: says nothing was saved, offers Try again, no Sentry noise', async () => {
+    await saveWith({ isAxiosError: true, code: 'ERR_NETWORK', message: 'Network Error' });
+    const a = lastAlert();
+    expect(a.title).toBe('No connection');
+    expect(a.message).toBe(
+      'We could not reach the server. Your changes were not saved. Your changes are still here. Check your connection, then tap Try again.',
+    );
+    expect(a.buttons.map((b) => b.text)).toEqual(['Try again', 'Close']);
+    expect(mockCaptureError).not.toHaveBeenCalled();
+    mockUpdate.mockResolvedValueOnce({ data: pkg() });
+    press(a.buttons, 'Try again');
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(2));
+  });
+
+  it('timeout: the server took too long, Try again', async () => {
+    await saveWith({ isAxiosError: true, code: 'ECONNABORTED', message: 'timeout of 15000ms exceeded' });
+    expect(lastAlert().title).toBe('The server took too long');
+    expect(lastAlert().buttons.map((b) => b.text)).toEqual(['Try again', 'Close']);
+  });
+
+  it('401: session ended, Sign in', async () => {
+    await saveWith({ response: { status: 401, data: { statusCode: 401, message: 'Unauthorized' } } });
+    const a = lastAlert();
+    expect(a.title).toBe('Please sign in again');
+    expect(a.message).toBe('Your session has ended. Your changes were not saved. Sign in again, then save the package.');
+    press(a.buttons, 'Sign in');
+    expect(mockSignOut).toHaveBeenCalled();
+  });
+
+  it('403 plan not active: Open billing', async () => {
+    const { props } = await saveWith({
+      response: { status: 403, data: { statusCode: 403, error: 'SUBSCRIPTION_INACTIVE', message: 'Subscription inactive' } },
+    });
+    press(lastAlert().buttons, 'Open billing');
+    expect(props.nav.navigate).toHaveBeenCalledWith('Billing');
+  });
+
+  it('404: package gone, Back to packages', async () => {
+    const { props } = await saveWith({
+      response: { status: 404, data: { statusCode: 404, code: 'PACKAGE_NOT_FOUND', error: 'PACKAGE_NOT_FOUND', message: 'No package with id pkg_1' } },
+    });
+    expect(lastAlert().title).toBe('Package not found');
+    press(lastAlert().buttons, 'Back to packages');
+    expect(props.nav.navigate).toHaveBeenCalledWith('CoachPackagesList');
+  });
+
+  it('reads the machine `code` (not only `error`): a price refusal with error "Bad Request" is still the price message', async () => {
+    await saveWith({
+      response: {
+        status: 400,
+        data: {
+          statusCode: 400,
+          code: 'PACKAGE_PRICE_BELOW_MINIMUM',
+          error: 'Bad Request',
+          message: 'Paid packages start at $19.99, or make it free.',
+        },
+      },
+    });
+    const a = lastAlert();
+    expect(a.title).toBe('Check the price');
+    expect(a.message).toBe('Paid packages start at $19.99, or make it free.');
+    expect(a.buttons.map((b) => b.text)).toEqual(['OK']);
+    expect(mockCaptureError).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['500 with an empty body', { response: { status: 500, data: {} } }],
+    ['502 with a text body', { response: { status: 502, data: 'Bad gateway' } }],
+    ['network error', { isAxiosError: true, code: 'ERR_NETWORK', message: 'Network Error' }],
+    ['429', { response: { status: 429, data: { message: 'ThrottlerException: Too Many Requests' } } }],
+  ])('never shows a generic message (%s)', async (_label, rejection) => {
+    await saveWith(rejection);
+    const a = lastAlert();
+    expect(a.message).not.toMatch(/Something went wrong|Please check your inputs and try again/);
+    expect(a.message).not.toMatch(/^Please try again\.?$/);
+    expect(a.message).not.toContain('!');
+    expect(a.buttons.length).toBeGreaterThan(0);
+  });
+
+  it('C-321-1: a package saved under $19.99 cannot change its billing interval without meeting the floor', async () => {
+    const props = makeProps(pkg({ priceCents: 1000, billingInterval: 'monthly' }));
+    const { getByLabelText, getAllByText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Yearly'));
+    await fireEvent.press(getByLabelText('Save changes'));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(getAllByText('Paid packages start at $19.99, or make it free.').length).toBeGreaterThan(0);
   });
 });

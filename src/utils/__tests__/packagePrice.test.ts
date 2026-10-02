@@ -26,8 +26,21 @@ describe("packagePriceIssue (S-FEE $19.99 minimum or free)", () => {
   });
 
   it("keeps an unchanged price saved before the rule editable", () => {
-    expect(packagePriceIssue(1000, "one_time", 1000)).toBeNull();
-    expect(packagePriceIssue(900, "one_time", 1000)).toBe(PACKAGE_PRICE_HELPER);
+    const saved = { priceCents: 1000, billingInterval: "one_time" as const };
+    expect(packagePriceIssue(1000, "one_time", saved)).toBeNull();
+    expect(packagePriceIssue(900, "one_time", saved)).toBe(PACKAGE_PRICE_HELPER);
+  });
+
+  it("C-321-1: a new billing interval at the old price is a new price (floor applies)", () => {
+    const saved = { priceCents: 1000, billingInterval: "monthly" as const };
+    expect(packagePriceIssue(1000, "monthly", saved)).toBeNull();
+    expect(packagePriceIssue(1000, "yearly", saved)).toBe(PACKAGE_PRICE_HELPER);
+    expect(packagePriceIssue(1000, "one_time", saved)).toBe(PACKAGE_PRICE_HELPER);
+    expect(packagePriceIssue(1999, "yearly", saved)).toBeNull();
+  });
+
+  it("a new package has no grandfathered price", () => {
+    expect(packagePriceIssue(1000, "one_time", null)).toBe(PACKAGE_PRICE_HELPER);
   });
 
   it("asks for a price when the field cannot be read", () => {

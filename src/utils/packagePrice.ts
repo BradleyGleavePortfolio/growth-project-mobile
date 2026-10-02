@@ -14,15 +14,23 @@ export const PACKAGE_PRICE_HELPER =
 export const PACKAGE_FREE_ONE_TIME_MESSAGE =
   "Free packages are one-time. Switch billing to One-time, or set a price of $19.99 or more.";
 
+/** The saved price configuration of the package being edited. */
+export interface SavedPackagePrice {
+  priceCents: number | null;
+  billingInterval: PackageBillingInterval;
+}
+
 /**
  * Returns the inline problem with a price, or null when it is allowed.
- * `previousCents` is the saved price when editing: a package saved below
- * $19.99 before the rule keeps working while its price is unchanged.
+ * `saved` is the package's saved price configuration when editing: a package
+ * saved below $19.99 before the rule keeps working only while its price AND
+ * billing interval are unchanged (C-321-1, matching backend C-629-1: a new
+ * cadence at the old price is a new price and must meet the floor).
  */
 export function packagePriceIssue(
   cents: number | null,
   billingInterval: PackageBillingInterval,
-  previousCents?: number | null,
+  saved?: SavedPackagePrice | null,
 ): string | null {
   if (cents == null)
     return "Enter a price, for example 19.99, or 0 to make it free.";
@@ -31,7 +39,11 @@ export function packagePriceIssue(
       ? null
       : PACKAGE_FREE_ONE_TIME_MESSAGE;
   }
-  if (cents < PAID_PACKAGE_MIN_CENTS && cents !== previousCents) {
+  const unchanged =
+    !!saved &&
+    cents === saved.priceCents &&
+    billingInterval === saved.billingInterval;
+  if (cents < PAID_PACKAGE_MIN_CENTS && !unchanged) {
     return PACKAGE_PRICE_HELPER;
   }
   return null;

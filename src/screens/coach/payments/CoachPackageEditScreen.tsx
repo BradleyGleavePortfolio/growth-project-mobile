@@ -7,7 +7,7 @@
  * inputs. Mode is derived from the `packageId` param: null → create.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -37,17 +37,18 @@ import {
   PackageCreateInput,
   PackageUpdateInput,
 } from '../../../api/packagesApi';
-import { errorCode, errorMessage } from '../../../types/common';
+import { errorMessage } from '../../../types/common';
 import { mediumTap, successTap, warningTap } from '../../../utils/haptics';
 import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
+import { PACKAGE_PRICE_HELPER, packagePriceIssue } from '../../../utils/packagePrice';
 import {
-  PACKAGE_PRICE_ERROR_CODES,
-  PACKAGE_PRICE_HELPER,
-  packagePriceIssue,
-} from '../../../utils/packagePrice';
+  describePackageSaveFailure,
+  type PackageSaveFailure,
+} from '../../../utils/packageSaveFailure';
+import { signOut } from '../../../services/authActions';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import PackageDetailSurface, {
@@ -136,7 +137,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       return { payload: null, message: 'Please give the package a name.' };
     }
     const cents = parseDollarsToCents(priceText);
-    const priceIssue = packagePriceIssue(cents, billingInterval, original?.priceCents);
+    const priceIssue = packagePriceIssue(cents, billingInterval, original);
     if (cents == null || priceIssue) {
       return { payload: null, message: priceIssue };
     }
@@ -168,6 +169,46 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       message: null,
     };
   }, [title, description, priceText, billingInterval, trialText, featuresText, original]);
+
+  // Retry from the failure dialog runs the latest save (current form state).
+  const handleSaveRef = useRef<() => Promise<void>>(async () => undefined);
+  const showSaveFailure = useCallback(
+    (f: PackageSaveFailure) => {
+      warningTap();
+      setError(f.message);
+      const close = { text: 'Close', style: 'cancel' as const };
+      const support = {
+        text: 'Contact support',
+        onPress: () => navigation.navigate('SupportInbox'),
+      };
+      const buttons: Array<{ text: string; style?: 'cancel'; onPress?: () => void }> = [];
+      switch (f.action) {
+        case 'retry':
+          buttons.push({ text: 'Try again', onPress: () => void handleSaveRef.current() });
+          if (f.support) buttons.push(support);
+          buttons.push(close);
+          break;
+        case 'sign_in':
+          buttons.push({ text: 'Sign in', onPress: () => void signOut() }, close);
+          break;
+        case 'billing':
+          buttons.push({ text: 'Open billing', onPress: () => navigation.navigate('Billing') }, close);
+          break;
+        case 'back_to_packages':
+          buttons.push({
+            text: 'Back to packages',
+            onPress: () => navigation.navigate('CoachPackagesList'),
+          });
+          if (f.support) buttons.push(support);
+          buttons.push(close);
+          break;
+        default:
+          buttons.push({ text: 'OK' });
+      }
+      Alert.alert(f.title, f.message, buttons);
+    },
+    [navigation],
+  );
 
   const handleSave = useCallback(async () => {
     const v = validate();
@@ -203,34 +244,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         return;
       }
     } catch (err) {
-      const code = errorCode(err);
-      if (code === 'PACKAGES_NOT_CONFIGURED') {
-        Alert.alert(
-          'Packages not enabled yet',
-          errorMessage(
-            err,
-            'The packages backend module is not deployed in this environment.',
-          ),
-        );
-      } else if (code && PACKAGE_PRICE_ERROR_CODES.has(code)) {
-        warningTap();
-        Alert.alert('Check the price', errorMessage(err, PACKAGE_PRICE_HELPER));
-      } else if (code === 'PACKAGE_PRICING_LOCKED') {
-        warningTap();
-        Alert.alert(
-          'Pricing is locked',
-          'Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.',
-        );
-      } else {
-        Alert.alert(
-          'Could not save',
-          errorMessage(err, 'Please check your inputs and try again.'),
-        );
-      }
+      // #321 (Sol B-321-1): status + machine code decide the message and
+      // the next action; unknown failures carry a reference (request_id)
+      // and are reported to Sentry. The form keeps the coach's edits.
+      showSaveFailure(describePackageSaveFailure(err, isEdit ? 'update' : 'create'));
     } finally {
       setSaving(false);
     }
-  }, [validate, isEdit, original, navigation]);
+  }, [validate, isEdit, original, navigation, showSaveFailure]);
+  handleSaveRef.current = handleSave;
 
   const handleArchive = useCallback(() => {
     if (!original) return;
@@ -253,7 +275,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             } catch (err) {
               Alert.alert(
                 'Could not archive',
-                errorMessage(err, 'Please try again.'),
+                errorMessage(
+                  err,
+                  'We could not archive the package. Check your connection, then tap Archive again.',
+                ),
               );
             } finally {
               setArchiving(false);
@@ -343,7 +368,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const archived = original?.status === 'archived';
   // S-FEE — inline price rule under the field, as the coach types.
   const priceInlineIssue = priceText.trim()
-    ? packagePriceIssue(parseDollarsToCents(priceText), billingInterval, original?.priceCents)
+    ? packagePriceIssue(parseDollarsToCents(priceText), billingInterval, original)
     : null;
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
