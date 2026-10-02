@@ -178,37 +178,90 @@ describe("B-329-1 first package retry never duplicates", () => {
     ).toHaveLength(2);
   });
 
-  it("create times out after the server committed it: the retry adopts the package", async () => {
-    mockList
-      .mockResolvedValueOnce({ data: [pkg({ id: "old", title: "Old" })] })
-      .mockResolvedValueOnce({
-        data: [pkg({ id: "old", title: "Old" }), pkg({ id: "pkg_new" })],
-      });
-    mockCreate.mockRejectedValueOnce(offline());
+  it("create times out: the retry re-sends the same key and body and never reads the list (OR-112-16)", async () => {
+    // The server replays the package it made for this key, so the retry
+    // gets pkg_new back. No list lookup, no heuristic adoption.
+    mockCreate
+      .mockRejectedValueOnce(offline())
+      .mockResolvedValueOnce({ data: pkg({ id: "pkg_new" }) });
     mockPost.mockResolvedValue({ data: {} });
     const { getByTestId, findByTestId, onCreated } = await renderForm();
     await fireEvent.press(getByTestId("first-package-create"));
     await findByTestId("first-package-error");
     await fireEvent.press(getByTestId("first-package-error-retry"));
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
-    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockList).not.toHaveBeenCalled();
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[1][1]).toBe(mockCreate.mock.calls[0][1]);
+    expect(mockCreate.mock.calls[1][0]).toEqual(mockCreate.mock.calls[0][0]);
     expect(mockPost).toHaveBeenCalledWith("/v1/coach/packages/pkg_new/publish");
     expect(onCreated.mock.calls[0][0].id).toBe("pkg_new");
   });
 
-  it("create timed out and nothing was committed: the retry creates once with the same key", async () => {
-    mockList.mockResolvedValue({ data: [] });
+  it("the coach edits the details after a timeout: the stored create is re-sent first, then that package is updated", async () => {
     mockCreate
       .mockRejectedValueOnce(offline())
-      .mockResolvedValueOnce({ data: pkg() });
+      .mockResolvedValueOnce({ data: pkg({ id: "pkg_1" }) });
+    mockUpdate.mockResolvedValue({ data: pkg({ id: "pkg_1" }) });
     mockPost.mockResolvedValue({ data: {} });
     const { getByTestId, findByTestId, onCreated } = await renderForm();
     await fireEvent.press(getByTestId("first-package-create"));
     await findByTestId("first-package-error");
-    await fireEvent.press(getByTestId("first-package-error-retry"));
+    await fireEvent.changeText(getByTestId("first-package-title"), "Renamed");
+    await fireEvent.press(getByTestId("first-package-create"));
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
     expect(mockCreate).toHaveBeenCalledTimes(2);
     expect(mockCreate.mock.calls[1][1]).toBe(mockCreate.mock.calls[0][1]);
+    expect(mockCreate.mock.calls[1][0].title).toBe("North coaching");
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "pkg_1",
+      expect.objectContaining({ title: "Renamed" }),
+    );
+  });
+
+  it("the first try is still running on the server (409): copy says so and the retry keeps the key", async () => {
+    mockCreate
+      .mockRejectedValueOnce(
+        httpError(409, {
+          code: "IDEMPOTENCY_IN_PROGRESS",
+          message: "Still saving.",
+        }),
+      )
+      .mockResolvedValueOnce({ data: pkg() });
+    mockPost.mockResolvedValue({ data: {} });
+    const { getByTestId, findByText, onCreated } = await renderForm();
+    await fireEvent.press(getByTestId("first-package-create"));
+    await findByText("Your package is still being saved");
+    await fireEvent.press(getByTestId("first-package-error-retry"));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(mockCreate.mock.calls[1][1]).toBe(mockCreate.mock.calls[0][1]);
+  });
+
+  it("a key the server already used names its package: the app adopts it instead of creating", async () => {
+    mockCreate.mockRejectedValueOnce(
+      httpError(422, { code: "IDEMPOTENCY_KEY_REUSED", package_id: "pkg_9" }),
+    );
+    mockPost.mockResolvedValue({ data: {} });
+    const { getByTestId, onCreated } = await renderForm();
+    await fireEvent.press(getByTestId("first-package-create"));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockPost).toHaveBeenCalledWith("/v1/coach/packages/pkg_9/publish");
+  });
+
+  it("a fast double tap sends one create", async () => {
+    let release: (v: unknown) => void = () => undefined;
+    mockCreate.mockImplementationOnce(
+      () => new Promise((r) => (release = r)),
+    );
+    mockPost.mockResolvedValue({ data: {} });
+    const { getByTestId, onCreated } = await renderForm();
+    fireEvent.press(getByTestId("first-package-create"));
+    fireEvent.press(getByTestId("first-package-create"));
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    release({ data: pkg() });
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
   it("a definitive 400 from create rotates the key for the next send", async () => {
@@ -326,7 +379,7 @@ describe("C-329-2 / C-329-4 checklist from server data", () => {
       await render(<CoachSetupChecklist onOpen={jest.fn()} />);
     await findByTestId("coach-setup-checklist-error");
     await findByText("You appear to be offline");
-    await findByText("We could not check this just now.");
+    await findByText("This could not be checked just now.");
     fail = false;
     await fireEvent.press(getByTestId("coach-setup-checklist-error-retry"));
     await findByText("Stripe is ready to pay you.");
