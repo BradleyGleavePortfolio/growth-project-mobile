@@ -102,8 +102,49 @@ function doAgain(mode: PackageSaveMode): string {
 }
 
 /** The DTO's generic 400 text is for developers; coaches get this instead. */
-const INVALID_FALLBACK =
-  'One of the fields is not valid. Check the price, billing and trial days, then save again.';
+function invalidFallback(mode: PackageSaveMode): string {
+  return `One of the details is not valid. Check the name, price and billing, then ${doAgain(mode)}.`;
+}
+
+/**
+ * #321 (Opus C-321-3, backend Sol C-629-4): PACKAGE_INVALID messages name API
+ * fields ("amount_cents", "interval = week | month | year"), so they are never
+ * shown as they are. The field they are about picks plain app copy instead.
+ */
+export function plainPackageInvalidMessage(raw: unknown, mode: PackageSaveMode): string {
+  const m = typeof raw === 'string' ? raw : Array.isArray(raw) ? raw.join(' ') : '';
+  const then = `then ${doAgain(mode)}`;
+  if (/\bname\b/i.test(m)) {
+    return `Give the package a name of 120 characters or fewer, ${then}.`;
+  }
+  if (/amount|price|cents/i.test(m)) {
+    return `Enter the price in dollars and cents, for example 19.99, or 0 to make it free, ${then}.`;
+  }
+  if (/interval|billing|recurring|one_time/i.test(m)) {
+    return `Choose how clients pay: One-time, Monthly, Quarterly or Yearly, ${then}.`;
+  }
+  if (/currency/i.test(m)) {
+    return `This package uses a currency the app cannot sell in. ${savedWhat(mode)} Contact support and we will fix the package.`;
+  }
+  if (/description/i.test(m)) {
+    return `Shorten the description, ${then}.`;
+  }
+  return invalidFallback(mode);
+}
+
+/** Failure titles name the action the coach tried (C-321-4). */
+function failedTitle(mode: PackageSaveMode): string {
+  switch (mode) {
+    case 'create':
+      return 'Could not create the package';
+    case 'publish':
+      return 'Could not publish the package';
+    case 'unpublish':
+      return 'Could not unpublish the package';
+    default:
+      return 'Could not save the package';
+  }
+}
 
 function backendMessage(raw: string, fallback: string): string {
   const m = raw.trim();
@@ -254,7 +295,7 @@ export function describePackageSaveFailure(
   if (status === 429) {
     return {
       kind: 'rate_limited',
-      title: 'Too many saves',
+      title: mode === 'publish' || mode === 'unpublish' ? 'Too many tries' : 'Too many saves',
       message: `Too many requests in a short time. ${KEPT} Wait a minute, then ${doAgain(mode)}.`,
       action: 'wait',
       support: false,
@@ -266,13 +307,13 @@ export function describePackageSaveFailure(
     return {
       kind: 'invalid',
       title: 'Check the package details',
-      // #321 (C-321-2): only a PACKAGE_INVALID body carries copy written for
-      // coaches (backend #629 round 4 names the field and the next action).
-      // A 400 without that code is raw validator text: use the fallback.
+      // #321 (C-321-2, C-321-3): neither raw validator text nor the backend's
+      // PACKAGE_INVALID text (it names API fields) is shown; the field it is
+      // about picks plain app copy.
       message:
         code === 'PACKAGE_INVALID'
-          ? backendMessage(detail.message, INVALID_FALLBACK)
-          : INVALID_FALLBACK,
+          ? plainPackageInvalidMessage(detail.message, mode)
+          : invalidFallback(mode),
       action: 'fix_input',
       support: false,
       reference: null,
@@ -283,7 +324,7 @@ export function describePackageSaveFailure(
   const ref = reportPackageSaveFailure(err, mode);
   return {
     kind: 'server',
-    title: 'Could not save the package',
+    title: failedTitle(mode),
     message: `${savedWhat(mode)} There was a problem on our side. ${KEPT} Tap Try again, or contact support and quote reference ${ref.short}.`,
     action: 'retry',
     support: true,

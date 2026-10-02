@@ -26,7 +26,9 @@ import api from '../services/api';
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { generateIdempotencyKey } from '../utils/idempotency';
 
-export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yearly';
+// 'weekly' is read-only in the app (C-321-5): a package created weekly on the
+// web keeps its weekly billing; the editor does not offer it as a new choice.
+export type PackageBillingInterval = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export type PackageStatus = 'draft' | 'active' | 'archived';
 
@@ -293,6 +295,7 @@ export function idemHeaders(key?: string): { headers: { 'Idempotency-Key': strin
 
 const BILLING_TYPE_FOR_INTERVAL: Record<PackageBillingInterval, 'one_time' | 'recurring'> = {
   one_time: 'one_time',
+  weekly: 'recurring',
   monthly: 'recurring',
   quarterly: 'recurring',
   yearly: 'recurring',
@@ -306,6 +309,9 @@ function toBackendIntervalFields(
 ): { billing_interval?: 'week' | 'month' | 'year'; billing_interval_count?: number } {
   if (interval === 'one_time') {
     return {};
+  }
+  if (interval === 'weekly') {
+    return { billing_interval: 'week', billing_interval_count: intervalCountInput ?? 1 };
   }
   if (interval === 'monthly') {
     return { billing_interval: 'month', billing_interval_count: intervalCountInput ?? 1 };
@@ -355,7 +361,7 @@ function fromBackendInterval(
   billingType: BackendPackageRow['billing_type'],
 ): PackageBillingInterval {
   if (billingType === 'one_time') return 'one_time';
-  if (raw === 'week') return 'monthly';
+  if (raw === 'week') return 'weekly';
   if (raw === 'month') {
     if (count >= 3 && count < 12) return 'quarterly';
     return 'monthly';
@@ -376,7 +382,8 @@ function statusOf(row: BackendPackageRow): PackageStatus {
   return 'active';
 }
 
-function fromBackend(row: BackendPackageRow): CoachPackage {
+/** Exported for tests (C-321-5 weekly mapping). */
+export function fromBackend(row: BackendPackageRow): CoachPackage {
   const count = row.billing_interval_count ?? row.interval_count ?? 1;
   // S-FEE round 4: the backend row carries `interval`; reading only
   // `billing_interval` showed every yearly package as monthly.

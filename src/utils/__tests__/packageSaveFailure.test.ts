@@ -112,23 +112,71 @@ describe('describePackageSaveFailure', () => {
       expect(f.kind).toBe('invalid');
       expect(f.action).toBe('fix_input');
       expect(f.message).toBe(
-        'One of the fields is not valid. Check the price, billing and trial days, then save again.',
+        'One of the details is not valid. Check the name, price and billing, then save the package.',
       );
       expect(f.message).not.toMatch(/should not exist|must be one of|uuid/);
     }
   });
 
-  it('PACKAGE_INVALID from the backend filter keeps its coach-facing copy', () => {
-    const f = describePackageSaveFailure(
-      http(400, {
-        code: 'PACKAGE_INVALID',
-        error: 'PACKAGE_INVALID',
-        message: 'Remove price: packages do not accept that field.',
-      }),
-      'create',
+  // S-FEE round 5 (#321 Opus C-321-3, backend Sol C-629-4): the backend's
+  // PACKAGE_INVALID text names API fields, so it is never shown as is.
+  it('PACKAGE_INVALID is shown in plain words chosen by the field, never the API text', () => {
+    const cases: Array<[string, 'create' | 'update' | 'publish' | 'unpublish', string]> = [
+      [
+        'recurring packages require interval = week | month | year',
+        'publish',
+        'Choose how clients pay: One-time, Monthly, Quarterly or Yearly, then publish the package.',
+      ],
+      [
+        'amount_cents must be a whole number of cents, for example 1999 for $19.99.',
+        'create',
+        'Enter the price in dollars and cents, for example 19.99, or 0 to make it free, then save the package.',
+      ],
+      ['name is required', 'create', 'Give the package a name of 120 characters or fewer, then save the package.'],
+      [
+        'name must be shorter than or equal to 120 characters. name must be a string.',
+        'update',
+        'Give the package a name of 120 characters or fewer, then save the package.',
+      ],
+      [
+        'currency must be a 3-letter ISO code',
+        'create',
+        'This package uses a currency the app cannot sell in. The package was not created. Contact support and we will fix the package.',
+      ],
+      [
+        'interval_count must be an integer ≥ 1',
+        'update',
+        'Choose how clients pay: One-time, Monthly, Quarterly or Yearly, then save the package.',
+      ],
+      [
+        'Check foo_bar and save again.',
+        'unpublish',
+        'One of the details is not valid. Check the name, price and billing, then unpublish the package.',
+      ],
+    ];
+    for (const [message, mode, expected] of cases) {
+      const f = describePackageSaveFailure(
+        http(400, { code: 'PACKAGE_INVALID', error: 'PACKAGE_INVALID', message }),
+        mode,
+      );
+      expect([f.kind, f.action, f.title]).toEqual(['invalid', 'fix_input', 'Check the package details']);
+      expect(f.message).toBe(expected);
+      expect(f.message).not.toMatch(/_|\||=|≥/);
+    }
+  });
+
+  it('failure titles name the action that was tried (C-321-4)', () => {
+    const titles = (['create', 'update', 'publish', 'unpublish'] as const).map(
+      (mode) => describePackageSaveFailure(http(500, { request_id: 'r-1' }), mode).title,
     );
-    expect([f.kind, f.action]).toEqual(['invalid', 'fix_input']);
-    expect(f.message).toBe('Remove price: packages do not accept that field.');
+    expect(titles).toEqual([
+      'Could not create the package',
+      'Could not save the package',
+      'Could not publish the package',
+      'Could not unpublish the package',
+    ]);
+    expect(describePackageSaveFailure(http(429, {}), 'publish').title).toBe('Too many tries');
+    expect(describePackageSaveFailure(http(429, {}), 'update').title).toBe('Too many saves');
   });
 
   it('publish and unpublish failures name the action that did not happen', () => {

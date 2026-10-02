@@ -71,6 +71,9 @@ interface Props {
   route: RouteProp<ParamList, 'CoachPackageEdit'>;
 }
 
+/** #321 (Opus B-321-5): Publish waits for a save when the form has edits. */
+export const SAVE_BEFORE_PUBLISH = 'Save your changes before you publish.';
+
 const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> = [
   { label: 'One-time', value: 'one_time' },
   { label: 'Monthly', value: 'monthly' },
@@ -92,8 +95,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [priceText, setPriceText] = useState('');
   const [billingInterval, setBillingInterval] =
     useState<PackageBillingInterval>('monthly');
-  const [trialText, setTrialText] = useState('');
-  const [featuresText, setFeaturesText] = useState('');
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [publishing, setPublishing] = useState(false);
@@ -116,8 +117,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       setDescription(initialPackage.description ?? '');
       setPriceText(((initialPackage.priceCents ?? 0) / 100).toFixed(2));
       setBillingInterval(initialPackage.billingInterval);
-      setTrialText(initialPackage.trialDays ? String(initialPackage.trialDays) : '');
-      setFeaturesText((initialPackage.features ?? []).join('\n'));
       setLoaded(true);
       return;
     }
@@ -142,34 +141,34 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     if (cents == null || priceIssue) {
       return { payload: null, message: priceIssue };
     }
-    const features = featuresText
-      .split('\n')
-      .map((f) => f.trim())
-      .filter(Boolean);
-    let trialDays: number | null = null;
-    if (trialText.trim()) {
-      const n = Number(trialText.trim());
-      if (!Number.isInteger(n) || n < 0 || n > 365) {
-        return {
-          payload: null,
-          message: 'Trial days must be a whole number between 0 and 365.',
-        };
-      }
-      trialDays = n;
-    }
+    // #321 (Opus B-321-4): trial days and features are not stored by the
+    // backend (no package column, no checkout trial), so the editor no
+    // longer offers them; every input on this screen reaches the request.
     return {
       payload: {
         title: trimmedTitle,
         description: description.trim() || null,
         priceCents: cents,
         billingInterval,
-        intervalCount: 1,
-        trialDays,
-        features,
+        intervalCount: billingInterval === 'weekly' ? original?.intervalCount ?? 1 : 1,
       },
       message: null,
     };
-  }, [title, description, priceText, billingInterval, trialText, featuresText, original]);
+  }, [title, description, priceText, billingInterval, original]);
+
+  // #321 (Opus B-321-5): the form differs from the saved row. Publishing
+  // then would put the SAVED price on sale while the screen shows another,
+  // so Publish waits until the coach saves.
+  const unsavedChanges = useMemo(() => {
+    if (!original) return false;
+    const cents = parseDollarsToCents(priceText);
+    return (
+      title.trim() !== (original.title ?? '').trim() ||
+      (description.trim() || null) !== ((original.description ?? '').trim() || null) ||
+      cents !== (original.priceCents ?? 0) ||
+      billingInterval !== original.billingInterval
+    );
+  }, [original, title, description, priceText, billingInterval]);
 
   // Retry from the failure dialog runs the latest save (current form state).
   const handleSaveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -268,6 +267,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const handlePublishToggle = useCallback(async () => {
     if (!original) return;
     const mode = original.status === 'draft' ? 'publish' : 'unpublish';
+    if (mode === 'publish' && unsavedChanges) {
+      warningTap();
+      setError(SAVE_BEFORE_PUBLISH);
+      return;
+    }
     mediumTap();
     setError('');
     setPublishing(true);
@@ -297,7 +301,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     } finally {
       setPublishing(false);
     }
-  }, [original, showSaveFailure]);
+  }, [original, showSaveFailure, unsavedChanges]);
   handlePublishToggleRef.current = handlePublishToggle;
 
   const handleArchive = useCallback(() => {
@@ -371,15 +375,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   // No network round-trip: everything here comes from local state + `original`.
   const previewViewModel = useMemo<PackageDetailViewModel>(() => {
     const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
-    const features = featuresText
-      .split('\n')
-      .map((f) => f.trim())
-      .filter(Boolean);
-    const trimmedTrial = trialText.trim();
-    const trialDays =
-      billingInterval !== 'one_time' && trimmedTrial && Number.isInteger(Number(trimmedTrial))
-        ? Number(trimmedTrial)
-        : null;
+    // B-321-4: the preview shows only what clients will really see.
     return {
       id: original?.id ?? 'preview',
       title: title.trim() || 'Untitled package',
@@ -388,14 +384,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       currency: original?.currency ?? 'usd',
       billingInterval,
       intervalCount: original?.intervalCount ?? 1,
-      trialDays,
-      features,
+      trialDays: null,
+      features: [],
       coach: { displayName: coachDisplayName, bio: null },
     };
   }, [
     priceText,
-    featuresText,
-    trialText,
     billingInterval,
     title,
     description,
@@ -445,8 +439,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           <View style={styles.archivedBanner}>
             <Ionicons name="archive-outline" size={16} color={tokens.semantic.warning.icon} />
             <Text style={styles.archivedText}>
-              This package is archived. Restore it by setting status back to
-              Active in the form below — current subscribers are unaffected.
+              This package is archived. It cannot be sold or changed. Create a
+              new package instead. Current clients keep their access.
             </Text>
           </View>
         ) : null}
@@ -490,6 +484,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         </Text>
 
         <Label semanticColors={semanticColors} tokens={tokens}>Billing</Label>
+        {billingInterval === 'weekly' ? (
+          <Text style={styles.priceHelperText} testID="package-weekly-note">
+            Billed weekly. Leave this as it is to keep weekly billing, or pick
+            another option to change it.
+          </Text>
+        ) : null}
         <View style={styles.segment}>
           {INTERVAL_OPTIONS.map((opt) => {
             const active = billingInterval === opt.value;
@@ -524,31 +524,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             </Text>
           </View>
         ) : null}
-
-        {billingInterval !== 'one_time' ? (
-          <>
-            <Label semanticColors={semanticColors} tokens={tokens}>Trial days (optional)</Label>
-            <TextInput
-              value={trialText}
-              onChangeText={setTrialText}
-              placeholder="0"
-              style={styles.input}
-              placeholderTextColor={semanticColors.textMuted}
-              keyboardType="number-pad"
-              maxLength={3}
-            />
-          </>
-        ) : null}
-
-        <Label semanticColors={semanticColors} tokens={tokens}>Features (one per line)</Label>
-        <TextInput
-          value={featuresText}
-          onChangeText={setFeaturesText}
-          placeholder={'Weekly check-ins\nCustom workout plan\nMeal plan'}
-          style={[styles.input, styles.inputMultiline, { minHeight: 120 }]}
-          placeholderTextColor={semanticColors.textMuted}
-          multiline
-        />
 
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -610,13 +585,22 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               <>
                 <Text style={styles.priceHelperText} testID="package-publish-state">
                   {original.status === 'draft'
-                    ? 'Draft. Clients can buy this package after you publish it.'
+                    ? unsavedChanges
+                      ? SAVE_BEFORE_PUBLISH
+                      : 'Draft. Clients can buy this package after you publish it.'
                     : 'On sale. Unpublishing stops new sales; current clients keep access.'}
                 </Text>
                 <TouchableOpacity
-                  style={[styles.secondaryBtn, publishing && styles.primaryBtnDisabled]}
+                  style={[
+                    styles.secondaryBtn,
+                    (publishing || (original.status === 'draft' && unsavedChanges)) &&
+                      styles.primaryBtnDisabled,
+                  ]}
                   onPress={() => void handlePublishToggle()}
-                  disabled={publishing}
+                  disabled={publishing || (original.status === 'draft' && unsavedChanges)}
+                  accessibilityState={{
+                    disabled: publishing || (original.status === 'draft' && unsavedChanges),
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={
                     original.status === 'draft' ? 'Publish package' : 'Unpublish package'

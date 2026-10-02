@@ -84,7 +84,8 @@ jest.mock('../api/packagesApi', () => {
 
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import type { CoachPackage } from '../api/packagesApi';
-import { toBackendUpdate } from '../api/packagesApi';
+import { fromBackend, toBackendUpdate } from '../api/packagesApi';
+import { SAVE_BEFORE_PUBLISH } from '../screens/coach/payments/CoachPackageEditScreen';
 
 function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
   return {
@@ -499,5 +500,145 @@ describe('CoachPackageEditScreen — billing edits and publishing', () => {
     await fireEvent.press(getByLabelText('Unpublish package'));
     await waitFor(() => expect(mockUnpublish).toHaveBeenCalledWith('pkg_1'));
     expect(getByLabelText('Publish package')).toBeTruthy();
+  });
+});
+
+// S-FEE round 5 (#321 Opus 0/2/4 at 4295fc79).
+describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', () => {
+  beforeEach(() => {
+    mockUpdate.mockReset();
+    mockPublish.mockReset();
+    mockUnpublish.mockReset();
+    (Alert.alert as jest.Mock).mockClear();
+  });
+
+  it('B-321-4: no trial days or features inputs; every input on the screen reaches the PATCH body', async () => {
+    mockUpdate.mockResolvedValue({ data: pkg() });
+    const props = makeProps(pkg());
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(screen.queryByText('Trial days (optional)')).toBeNull();
+    expect(screen.queryByText('Features (one per line)')).toBeNull();
+    // Every text input the coach can type in: name, description, price.
+    const countInputs = (node: unknown): number => {
+      if (!node || typeof node !== 'object') return 0;
+      if (Array.isArray(node)) return node.reduce((n: number, c) => n + countInputs(c), 0);
+      const n = node as { type?: string; children?: unknown };
+      return (n.type === 'TextInput' ? 1 : 0) + countInputs(n.children ?? null);
+    };
+    expect(countInputs(screen.toJSON())).toBe(3);
+    await fireEvent.changeText(screen.getByDisplayValue('Strength Builder'), 'Strength Plus');
+    await fireEvent.changeText(screen.getByDisplayValue('Get strong.'), 'Get stronger.');
+    await fireEvent.changeText(screen.getByDisplayValue('99.00'), '120.00');
+    await fireEvent.press(screen.getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const body = toBackendUpdate(mockUpdate.mock.calls[0][1]);
+    expect(body).toMatchObject({
+      name: 'Strength Plus',
+      description: 'Get stronger.',
+      amount_cents: 12000,
+    });
+  });
+
+  it('B-321-5: with unsaved edits Publish is disabled and says to save first; after saving it publishes', async () => {
+    const draft = pkg({ status: 'draft', priceCents: 1999 });
+    mockUpdate.mockResolvedValue({ data: pkg({ status: 'draft', priceCents: 5000 }) });
+    mockPublish.mockResolvedValue({ data: pkg({ status: 'active', priceCents: 5000 }) });
+    const props = makeProps(draft);
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.changeText(screen.getByDisplayValue('19.99'), '50.00');
+    expect(screen.getByTestId('package-publish-state').props.children).toBe(SAVE_BEFORE_PUBLISH);
+    const publish = screen.getByLabelText('Publish package');
+    expect(publish.props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(publish);
+    expect(mockPublish).not.toHaveBeenCalled();
+    expect(mockUpdate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByLabelText('Publish package').props.accessibilityState).toMatchObject({
+        disabled: false,
+      }),
+    );
+    await fireEvent.press(screen.getByLabelText('Publish package'));
+    await waitFor(() => expect(mockPublish).toHaveBeenCalledWith('pkg_1'));
+  });
+
+  it('C-321-3: a PACKAGE_INVALID publish refusal is shown in plain words, not API text', async () => {
+    mockPublish.mockRejectedValue({
+      response: {
+        status: 400,
+        data: { code: 'PACKAGE_INVALID', message: 'recurring packages require interval = week | month | year' },
+      },
+    });
+    const props = makeProps(pkg({ status: 'draft' }));
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Publish package'));
+    await waitFor(() => {
+      const c = (Alert.alert as jest.Mock).mock.calls.find((x) => x[0] === 'Check the package details');
+      expect(c?.[1]).toBe(
+        'Choose how clients pay: One-time, Monthly, Quarterly or Yearly, then publish the package.',
+      );
+    });
+  });
+
+  it('C-321-4: a publish failure is titled for publishing', async () => {
+    mockPublish.mockRejectedValue({ response: { status: 500, data: { request_id: 'pub-500-ref' } } });
+    const props = makeProps(pkg({ status: 'draft' }));
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Publish package'));
+    await waitFor(() =>
+      expect(
+        (Alert.alert as jest.Mock).mock.calls.some((c) => c[0] === 'Could not publish the package'),
+      ).toBe(true),
+    );
+  });
+
+  it('C-321-5: a weekly backend package reads as weekly and keeps weekly billing', async () => {
+    const row = fromBackend({
+      id: 'pkg_w',
+      coach_user_id: 'u1',
+      name: 'Weekly check-ins',
+      description: null,
+      amount_cents: 2500,
+      currency: 'usd',
+      billing_type: 'recurring',
+      billing_interval: 'week',
+      billing_interval_count: 1,
+      published_at: '2026-01-01T00:00:00Z',
+    });
+    expect(row.billingInterval).toBe('weekly');
+    expect(toBackendUpdate({ billingInterval: 'weekly', intervalCount: 1 })).toMatchObject({
+      billing_type: 'recurring',
+      billing_interval: 'week',
+      billing_interval_count: 1,
+    });
+    mockUpdate.mockResolvedValue({ data: pkg({ billingInterval: 'weekly' }) });
+    const props = makeProps(pkg({ billingInterval: 'weekly' }));
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(screen.getByTestId('package-weekly-note')).toBeTruthy();
+    await fireEvent.changeText(screen.getByDisplayValue('Strength Builder'), 'Strength Weekly');
+    await fireEvent.press(screen.getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    expect(mockUpdate.mock.calls[0][1].billingInterval).toBeUndefined();
+  });
+
+  it('C-321-6: the archived banner says it cannot be sold or changed and to create a new package', async () => {
+    const props = makeProps(pkg({ status: 'archived', archivedAt: '2026-02-01T00:00:00Z' }));
+    const { getByText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(
+      getByText(/This package is archived\. It cannot be sold or changed\. Create a\s+new package instead\./),
+    ).toBeTruthy();
   });
 });
