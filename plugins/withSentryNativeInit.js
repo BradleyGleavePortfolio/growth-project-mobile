@@ -173,7 +173,7 @@ function addAndroidNativeInit(contents, o, language = 'kt') {
   }
   src = src.replace(re, (_m, head, indent) => `${head}${kotlinBlock(o, indent)}\n`);
   const missing = ['io.sentry.Sentry', 'io.sentry.android.core.SentryAndroid', 'io.sentry.android.core.SentryAndroidOptions'].filter(
-    (imp) => !new RegExp(`^import ${imp.replace(/\./g, '\\.')}$`, 'm').test(src),
+    (imp) => !src.split('\n').some((line) => line.trim() === `import ${imp}`),
   );
   if (missing.length) src = addAfterLastImport(src, missing.map((imp) => `import ${imp}`));
   return src;

@@ -103,7 +103,7 @@ describe('Android MainApplication.kt (SDK 56 template)', () => {
     expect(init).toBeLessThan(out.indexOf('loadReactNative(this)'));
     expect(init).toBeLessThan(out.indexOf('ApplicationLifecycleDispatcher.onApplicationCreate'));
     for (const imp of ['io.sentry.Sentry', 'io.sentry.android.core.SentryAndroid', 'io.sentry.android.core.SentryAndroidOptions']) {
-      expect(out).toMatch(new RegExp(`^import ${imp.replace(/\./g, '\\.')}$`, 'm'));
+      expect(out.split('\n')).toContain(`import ${imp}`);
     }
   });
 
