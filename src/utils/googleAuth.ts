@@ -13,8 +13,20 @@ import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from '../services/secureStorage';
+// Static import (appleAuth does the same; services/api does not import this
+// module, so there is no cycle). A dynamic import() cannot run in Jest, which
+// left the backend-failure branches below untested (#306 fix round 2).
+import { authApi } from '../services/api';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
+import { readInviteAttachOutcome } from '../lib/inviteAttachOutcome';
+import { toAuthErrorDetail, type AuthErrorDetail } from './authErrorDetail';
+import {
+  COACH_SIGNUP_UNAVAILABLE,
+  COACH_SIGNUP_UNCONFIRMED,
+  isCoachSignupUnavailable,
+  type IntendedRole,
+} from '../lib/intendedRole';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -36,12 +48,59 @@ export interface GoogleAuthResult {
   };
   is_new_user?: boolean;
   error?: string;
+  /**
+   * 'coach_signup_unavailable' (C13): the backend refused `intended_role`
+   * before any handler ran, so no account row was created. Not a success;
+   * the Supabase session is dropped so the next attempt starts clean.
+   */
+  error_code?: typeof COACH_SIGNUP_UNAVAILABLE | typeof COACH_SIGNUP_UNCONFIRMED;
+  /**
+   * True when the backend answered /auth/google and `user` / `is_new_user`
+   * come from that answer. Since #306 r7 every success is a server answer
+   * (the legacy provisional-user fallback is gone: a backend failure is
+   * returned as a failure with `error_detail`); `false` is no longer
+   * produced and callers treat it as not confirmed.
+   */
+  server_confirmed?: boolean;
+  /**
+   * Set when the caller passed an invite code and the backend did not
+   * attach it (no `coach_id` on the returned user, dedicated attach call
+   * failed too). The code is returned so the caller can carry it to the
+   * RoleSelection retry step instead of dropping it.
+   */
+  invite_attached?: boolean;
+  invite_code?: string;
+  /** Server reason when it reported `invite_attached:false` (safe code, not copy). */
+  invite_attach_error?: string;
+  /**
+   * #306 r4: the Google account's email, returned with
+   * `coach_signup_unconfirmed` so the unconfirmed-attempt marker is scoped to
+   * this identity (lib/coachSignupAttempt), not to every Google sign-in.
+   */
+  provider_email?: string;
+  /**
+   * #306 r6 (Sol C-306-5): the stable id of this Google sign-in (the Supabase
+   * auth user id). Returned on success and on coach outcomes so the
+   * unconfirmed-attempt marker matches this Google account only.
+   */
+  provider_subject?: string;
+  /**
+   * #306 r6 (Sol B-306-5): the backend failure, sanitised (status, machine
+   * code, request id) so screens can map and report it.
+   */
+  error_detail?: AuthErrorDetail;
 }
 
 export interface GoogleAuthOptions {
   // When set, the invite code is forwarded to /auth/google so the backend can
   // attach the new (or existing) user to the right coach during the upsert.
   inviteCode?: string;
+  /**
+   * Signup role choice (C13). Pass only when the live signup policy
+   * advertises `role_choice`. Omitted from the request when an invite code
+   * is present (always client).
+   */
+  intendedRole?: IntendedRole;
 }
 
 export async function signInWithGoogle(
@@ -118,7 +177,6 @@ export async function signInWithGoogle(
     const supaUser = sessionData.user;
 
     // Now call our backend to upsert the user in our DB
-    const { authApi } = await import('../services/api');
 
     // Store the token in SecureStore (not AsyncStorage) so the API client can
     // attach it to the backend request. Security: SecureStore uses Keychain /
@@ -129,18 +187,40 @@ export async function signInWithGoogle(
     }
 
     try {
-      const response = await authApi.googleAuth(accessToken, options.inviteCode);
+      const response = await authApi.googleAuth(accessToken, options.inviteCode, options.intendedRole);
       const { user } = response.data;
 
       // Defensive second pass: if the backend doesn't yet support the
       // invite_code arg on /auth/google but exposes the dedicated attach
       // endpoint, forward the code there. Failure is non-fatal — sign-in
       // already succeeded; the user can re-enter the code on RoleSelection.
-      if (options.inviteCode && !user?.coach_id) {
-        try {
-          await authApi.attachInviteCode(options.inviteCode);
-        } catch {
-          // ignore — non-fatal
+      // #306 r5 (Sol B-306-3): the server's own `invite_attached` decides.
+      // Backend #597 answers `invite_attached:false` when it skipped the code
+      // (an already-paired student keeps coach A when scanning coach B's QR;
+      // a coach-like account never redeems). A `coach_id` that was already
+      // there proves nothing about THIS code, so it is never read as success.
+      // The legacy second pass below runs only when the field is absent.
+      let inviteAttached: boolean | undefined;
+      let inviteAttachError: string | undefined;
+      const serverAttach = readInviteAttachOutcome(response.data);
+      if (options.inviteCode && serverAttach.attached !== null) {
+        inviteAttached = serverAttach.attached;
+        if (!inviteAttached) inviteAttachError = serverAttach.reason ?? undefined;
+      } else if (options.inviteCode) {
+        // Legacy backend without the field. An existing coach is not proof
+        // that this code attached, and attaching over it could re-parent, so
+        // it is reported as not attached (the retry step offers "Keep my
+        // current coach"); otherwise the dedicated attach endpoint is tried.
+        inviteAttached = false;
+        if (!user?.coach_id) {
+          try {
+            const attach = await authApi.attachInviteCode(options.inviteCode);
+            const coachId = (attach?.data as { coach_id?: unknown } | undefined)?.coach_id;
+            if (typeof coachId === 'string' && user) user.coach_id = coachId;
+            inviteAttached = typeof coachId === 'string';
+          } catch {
+            inviteAttached = false;
+          }
         }
       }
 
@@ -151,25 +231,77 @@ export async function signInWithGoogle(
         access_token: accessToken,
         user,
         is_new_user: response.data.is_new_user,
+        server_confirmed: true,
+        ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
+        ...(typeof inviteAttached === 'boolean'
+          ? { invite_attached: inviteAttached, invite_code: options.inviteCode }
+          : {}),
+        ...(inviteAttachError ? { invite_attach_error: inviteAttachError } : {}),
       };
-    } catch {
-      // Backend call failed — but we still have Supabase auth
-      // Store basic user data from Supabase directly
-      const basicUser = {
-        id: supaUser.id,
-        email: supaUser.email || '',
-        name: supaUser.user_metadata?.full_name || supaUser.email || '',
-      };
-      await AsyncStorage.setItem('user_data', JSON.stringify(basicUser));
-
+    } catch (backendErr) {
+      if (isCoachSignupUnavailable(backendErr)) {
+        // C13: the coach request was refused before any handler ran. Do not
+        // present this as a signed-in client; drop the provider session.
+        await secureStorage.removeItem('supabase_token').catch(() => undefined);
+        await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+        return {
+          success: false,
+          error: 'Coach sign-up is not available right now',
+          error_code: COACH_SIGNUP_UNAVAILABLE,
+          // #306 r5 (Sol B-306-1): lets the screen check this sign-in's
+          // earlier unconfirmed attempt before it says "No account was created".
+          ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+          ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
+          error_detail: toAuthErrorDetail(backendErr),
+        };
+      }
+      if (options.intendedRole === 'coach') {
+        // #306 r2 (B1): a coach request whose backend call failed (5xx,
+        // network, timeout, or any other error) has no server answer, so
+        // neither the account nor its role is known. The server may even
+        // have committed before the response was lost. Never fall through to
+        // the legacy "signed-in basic user" result below: that was reported
+        // as a client account being created. Drop the provisional provider
+        // session and local user cache, and return a truthful failure. A
+        // retry with the same Google account is safe: if the server did
+        // create the account, /auth/google answers with it and its role.
+        await secureStorage.removeItem('supabase_token').catch(() => undefined);
+        await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+        await AsyncStorage.removeItem('user_data').catch(() => undefined);
+        return {
+          success: false,
+          error: 'Could not confirm the coach account',
+          error_code: COACH_SIGNUP_UNCONFIRMED,
+          ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+          ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
+          error_detail: toAuthErrorDetail(backendErr),
+        };
+      }
+      // #306 r7 (Sol B-306-5): any other backend failure is a failure too.
+      // The old fallback returned `success:true` with a provisional Supabase
+      // user (`server_confirmed:false`), which entered the app with no
+      // account answer and dropped the status and reference. Now the
+      // provisional session and cache are dropped, and the sanitised detail
+      // goes to the screen, which maps it (network, unverified email, ...)
+      // or shows a reference and reports it. A retry is safe: /auth/google
+      // is an upsert, so an account the server did create is found.
+      await secureStorage.removeItem('supabase_token').catch(() => undefined);
+      await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+      await AsyncStorage.removeItem('user_data').catch(() => undefined);
+      const detail = toAuthErrorDetail(backendErr);
       return {
-        success: true,
-        access_token: accessToken,
-        user: basicUser,
-        is_new_user: true,
+        success: false,
+        error: detail.message || 'Google sign-in failed',
+        error_detail: detail,
+        ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+        ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
       };
     }
   } catch (err) {
-    return { success: false, error: errorMessage(err) || 'Google sign-in failed' };
+    return {
+      success: false,
+      error: errorMessage(err) || 'Google sign-in failed',
+      error_detail: toAuthErrorDetail(err),
+    };
   }
 }

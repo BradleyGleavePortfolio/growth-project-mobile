@@ -84,6 +84,7 @@ import {
 } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
+import { profileOnboardingCompleted } from '../lib/profileOnboarding';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -623,6 +624,8 @@ export default function RootNavigator() {
       if (role === 'coach') {
         // Sync Crisp identity so operators see the coach's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'coach',
@@ -664,7 +667,7 @@ export default function RootNavigator() {
       if (role === 'student') {
         // Check if onboarding quiz has been completed
         const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
-        const profileDone = user?.profile?.onboarding_completed;
+        const profileDone = profileOnboardingCompleted(user?.profile);
 
         if (onboardingDone !== 'true' && !profileDone) {
           // Psych Report #1: route new users to 3-question lean flow.
@@ -686,14 +689,14 @@ export default function RootNavigator() {
           // Day-1 final onboarding gate. Decacorn-quality flow shown to every
           // student who has not yet completed it. Backend source of truth is
           // `profile.day_one_completed`; we also accept the legacy
-          // `onboarding_completed` flag so existing users who already finished
+          // onboarding flag (`onboardingCompleted`, see lib/profileOnboarding) so existing users who already finished
           // the old flow are not asked to redo it. A local AsyncStorage flag
           // and an in-progress resume checkpoint keep the flow alive across
           // reinstalls when the backend hasn't caught up (fail-open).
           try {
             const day1ServerDone = !!user?.profile?.day_one_completed;
             const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
-            const legacyOnboardingDone = !!user?.profile?.onboarding_completed;
+            const legacyOnboardingDone = profileOnboardingCompleted(user?.profile);
             const day1ResumeState = await readDay1ResumeState();
             if (
               !day1ServerDone &&
@@ -722,6 +725,8 @@ export default function RootNavigator() {
 
         // Sync Crisp identity so operators see the client's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'student',
