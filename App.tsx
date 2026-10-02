@@ -25,7 +25,7 @@ import {
   installForegroundHandler,
   installNotificationResponseHandler,
 } from './src/services/pushNotifications';
-import { syncDeviceTimezone } from './src/services/timezoneSync';
+import { installTimezoneResyncOnForeground, syncDeviceTimezone } from './src/services/timezoneSync';
 import { routePushTap } from './src/services/pushTapRouter';
 import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
@@ -162,6 +162,19 @@ function App() {
     const unsubscribe = authEvents.onAuthChange(tryRegisterPushToken);
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // C-312-3: resync the device timezone when the app returns to the
+  // foreground (a client may travel with the app open). Best-effort.
+  useEffect(() => {
+    if (isScreenshotMode()) return undefined;
+    return installTimezoneResyncOnForeground(
+      () => secureStorage.getItem('supabase_token'),
+      undefined,
+      (e: unknown) => {
+        if (__DEV__) console.warn('Failed to resync timezone', e);
+      },
+    );
   }, []);
 
   const initApp = async () => {

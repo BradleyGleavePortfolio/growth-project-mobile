@@ -77,7 +77,11 @@ Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple c
 Client Settings > Notifications shows per-category switches (coach messages,
 reminders, workout reminders, milestones, system). Each switch PATCHes
 `/notifications/preferences` with the mapped backend fields and rolls back on
-failure.
+failure. A failed save shows an inline notice that names the setting and says
+what to do next, by status (`notificationPreferenceErrors.ts`): no response =
+check the connection; 401 = signed out, sign in again; 429 = wait a minute;
+anything else = try again, with the support address and a short reference, and
+a Sentry report (status, machine code, reference only).
 
 **Workout reminders** (C05 item 7) map to `workout_reminder_push` and
 `workout_reminder_inapp` (default on). The backend sends a short note from
@@ -85,5 +89,7 @@ Roman at the client's preferred training time (consultation S2) on their first
 session day and every plan day, in the client's local timezone, at most once a
 day, and not when that day's session is already logged. The switch reads the
 server value on mount. The device timezone is synced to the backend by
-`src/services/timezoneSync.ts` (called from `App.tsx` after sign-in, once per
-change).
+`src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
+time the app returns to the foreground, sent only when the zone or account
+changed). Workout reminders go to clients only, so the switch is hidden for
+coach and owner accounts.

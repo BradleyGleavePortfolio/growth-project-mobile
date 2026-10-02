@@ -11,6 +11,7 @@
 // from the session token, the zone is sent every time and nothing is cached.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState, type AppStateStatus } from 'react-native';
 import { notificationsApi } from './api';
 
 export const TIMEZONE_SYNC_KEY = 'gp_synced_timezone';
@@ -70,4 +71,37 @@ export async function syncDeviceTimezone(sessionToken?: string | null): Promise<
     }
   }
   return true;
+}
+
+type AppStateLike = {
+  currentState: AppStateStatus | null | undefined;
+  addEventListener: (
+    type: 'change',
+    listener: (state: AppStateStatus) => void,
+  ) => { remove: () => void };
+};
+
+/**
+ * C-312-3: a client who travels with the app open must not keep the old zone
+ * until the next cold start, so the zone is also synced each time the app
+ * comes back to the foreground. syncDeviceTimezone sends nothing when the
+ * zone (and account) did not change, so this is one cache read per resume.
+ * Best-effort: a failure is retried on the next resume, auth change or cold
+ * start and never interrupts the user. Returns the unsubscribe function.
+ */
+export function installTimezoneResyncOnForeground(
+  readSessionToken: () => Promise<string | null>,
+  appState: AppStateLike = AppState,
+  onError: (err: unknown) => void = () => undefined,
+): () => void {
+  let previous: AppStateStatus | null | undefined = appState.currentState;
+  const subscription = appState.addEventListener('change', (next) => {
+    const resumed = next === 'active' && previous !== 'active';
+    previous = next;
+    if (!resumed) return;
+    readSessionToken()
+      .then((token) => (token ? syncDeviceTimezone(token) : false))
+      .catch(onError);
+  });
+  return () => subscription.remove();
 }

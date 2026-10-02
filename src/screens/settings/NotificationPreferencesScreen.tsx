@@ -12,6 +12,10 @@
  *     the client's preferred training time on session days. Default on. The
  *     backend is the source of truth (workout_reminder_push/_inapp); the
  *     server value is read on mount so the switch never shows a stale state.
+ *     Hidden for coach and owner accounts (reminders go to clients only).
+ *
+ * A failed save rolls the switch back and shows an inline notice chosen by
+ * status (notificationPreferenceErrors.ts), never a generic alert.
  *
  * Preferences are persisted to AsyncStorage and synced to the backend
  * notifications preferences API where a backend field exists.
@@ -20,7 +24,7 @@
  * Accessibility: every toggle row has accessibilityLabel + accessibilityRole.
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -28,7 +32,6 @@ import {
   ScrollView,
   Switch,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../components/HapticPressable';
@@ -40,6 +43,8 @@ import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { NotificationPreferenceChangedProps } from '../../analytics/events';
 import { mediumTap } from '../../utils/haptics';
+import { readUserCacheSync } from '../../lib/userCache';
+import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,6 +88,17 @@ export function workoutRemindersFromServer(data: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
+/**
+ * B-312-2: the server value of any category, read from the first backend
+ * field it maps to. Null when the response does not carry it.
+ */
+export function serverValueOf(category: NotifCategory, data: unknown): boolean | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const field = Object.keys(BACKEND_FIELD_MAP[category])[0];
+  const value = (data as Record<string, unknown>)[field];
+  return typeof value === 'boolean' ? value : null;
+}
+
 function buildBackendPayload(category: NotifCategory, value: boolean): Record<string, boolean> {
   const template = BACKEND_FIELD_MAP[category];
   const payload: Record<string, boolean> = {};
@@ -99,53 +115,100 @@ interface CategoryMeta {
   label: string;
   description: string;
   icon: string;
+  /** The setting in plain words, used in a failure message. */
+  noun: string;
 }
 
 const CATEGORIES: CategoryMeta[] = [
   {
     id: 'coach_direct',
+    noun: 'coach message',
     label: 'Coach Messages',
     description: 'Direct messages and session reminders from your coach.',
     icon: 'person-circle-outline',
   },
   {
     id: 'client_bot',
+    noun: 'reminder',
     label: 'Reminders',
     description: 'Meal, water, and daily check-in nudges.',
     icon: 'alarm-outline',
   },
   {
     id: 'workout_reminders',
+    noun: 'workout reminder',
     label: 'Workout reminders',
     description: 'A short note from Roman at your preferred training time on session days.',
     icon: 'barbell-outline',
   },
   {
     id: 'milestones',
+    noun: 'milestone',
     label: 'Milestones',
     description: 'Streak extensions and personal records.',
     icon: 'ribbon-outline',
   },
   {
     id: 'system',
+    noun: 'system notification',
     label: 'System',
     description: 'App updates, billing, and critical alerts.',
     icon: 'information-circle-outline',
   },
 ];
 
+/**
+ * C-312-2: workout reminders are sent to clients only (backend #609 runs them
+ * for role 'student'), so coaches and owners do not see a switch that would do
+ * nothing for them. While the role is not known yet the row is shown; the
+ * backend still decides who gets reminders.
+ */
+export function categoriesForRole(role: string | null | undefined): CategoryMeta[] {
+  if (typeof role === 'string' && role.length > 0 && role !== 'student') {
+    return CATEGORIES.filter((c) => c.id !== 'workout_reminders');
+  }
+  return CATEGORIES;
+}
+
+const defaultRole = (): string | null => readUserCacheSync()?.role ?? null;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function NotificationPreferencesScreen({
   navigation,
+  role = defaultRole,
 }: {
   navigation: NavigationProp<ParamListBase>;
+  /** Injectable for tests; defaults to the signed-in account's cached role. */
+  role?: () => string | null;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const categories = useMemo(() => categoriesForRole(role()), [role]);
 
   const [prefs, setPrefs] = useState<CategoryPrefs>(DEFAULT_PREFS);
+  // B-312-2: the latest preferences, so every write and rollback starts from
+  // what is on screen now rather than a snapshot taken by an older toggle.
+  const prefsRef = useRef<CategoryPrefs>(DEFAULT_PREFS);
+  // B-312-2: one write per category at a time. The ref blocks a second change
+  // in the same frame; the state disables the switch until the server answers.
+  const pendingRef = useRef<Set<NotifCategory>>(new Set());
+  const [pending, setPending] = useState<ReadonlySet<NotifCategory>>(() => new Set());
   const [loading, setLoading] = useState(true);
+  const [saveFailure, setSaveFailure] = useState<
+    (PreferenceSaveFailure & { category: NotifCategory }) | null
+  >(null);
+
+  const commitPrefs = useCallback(async (update: (current: CategoryPrefs) => CategoryPrefs) => {
+    const next = update(prefsRef.current);
+    prefsRef.current = next;
+    setPrefs(next);
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // Non-fatal: worst case the toggle resets on next cold start.
+    }
+  }, []);
 
   // Load persisted prefs on mount.
   const loadPrefs = useCallback(async () => {
@@ -159,6 +222,7 @@ export default function NotificationPreferencesScreen({
       } catch {
         // Offline or older backend: keep the locally stored value.
       }
+      prefsRef.current = next;
       setPrefs(next);
     } catch {
       // Fall back to defaults — preference loss is non-fatal.
@@ -173,41 +237,52 @@ export default function NotificationPreferencesScreen({
 
   const handleToggle = useCallback(
     async (category: NotifCategory, value: boolean) => {
+      // B-312-2: ignore a change while this category's last one is in flight.
+      if (pendingRef.current.has(category)) return;
+      pendingRef.current.add(category);
+      setPending(new Set(pendingRef.current));
       mediumTap();
-      const previous = prefs;
-      const updated = { ...prefs, [category]: value };
+      setSaveFailure(null);
+      const previousValue = prefsRef.current[category];
 
-      // Optimistic update — show immediately.
-      setPrefs(updated);
-
-      // Persist locally.
       try {
-        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-      } catch {
-        // Non-fatal: worst case the toggle resets on next cold start.
-      }
+        // Optimistic update of this category only, persisted locally.
+        await commitPrefs((current) => ({ ...current, [category]: value }));
 
-      // Sync to backend. On failure, roll back both the local state and
-      // the AsyncStorage value so UI reflects truth.
-      try {
-        const payload = buildBackendPayload(category, value);
-        await notificationsApi.updatePreferences(payload);
-      } catch {
-        // Roll back — the backend is the source of truth for preferences.
-        setPrefs(previous);
+        // Sync to backend. On failure, roll back this category only (a newer
+        // change to another category stands) and say what happened.
         try {
-          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
-        } catch {
-          // Ignore secondary storage failure.
+          await notificationsApi.updatePreferences(buildBackendPayload(category, value));
+        } catch (err: unknown) {
+          await commitPrefs((current) => ({ ...current, [category]: previousValue }));
+          // B-312-1: say what happened and what to do next, by status.
+          const noun = CATEGORIES.find((c) => c.id === category)?.noun ?? 'notification';
+          const failure = preferenceSaveFailureOf(err, noun);
+          setSaveFailure({ ...failure, category });
+          // B-312-2: when the write may still have reached the server (no
+          // response, or an unexpected answer), show the server's value.
+          if (failure.kind === 'offline' || failure.kind === 'server') {
+            try {
+              const res = await notificationsApi.getPreferences();
+              const server = serverValueOf(category, res?.data);
+              if (server !== null) {
+                await commitPrefs((current) => ({ ...current, [category]: server }));
+              }
+            } catch {
+              // Still unreachable: the rolled-back value and the notice stand.
+            }
+          }
         }
-        Alert.alert('Could not save preference', 'Please check your connection and try again.');
-      }
 
-      // Analytics.
-      const props: NotificationPreferenceChangedProps = { category, enabled: value };
-      track(AnalyticsEvents.NOTIFICATION_PREFERENCE_CHANGED, props as unknown as Record<string, unknown>);
+        // Analytics.
+        const props: NotificationPreferenceChangedProps = { category, enabled: value };
+        track(AnalyticsEvents.NOTIFICATION_PREFERENCE_CHANGED, { ...props });
+      } finally {
+        pendingRef.current.delete(category);
+        setPending(new Set(pendingRef.current));
+      }
     },
-    [prefs],
+    [commitPrefs],
   );
 
   if (loading) {
@@ -246,10 +321,10 @@ export default function NotificationPreferencesScreen({
         </Text>
 
         <View style={styles.card}>
-          {CATEGORIES.map((cat, idx) => (
+          {categories.map((cat, idx) => (
             <View
               key={cat.id}
-              style={[styles.row, idx < CATEGORIES.length - 1 && styles.rowDivider]}
+              style={[styles.row, idx < categories.length - 1 && styles.rowDivider]}
             >
               <View style={styles.rowLeft}>
                 <Ionicons
@@ -266,15 +341,35 @@ export default function NotificationPreferencesScreen({
               <Switch
                 value={prefs[cat.id]}
                 onValueChange={(v) => handleToggle(cat.id, v)}
+                disabled={pending.has(cat.id)}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.white}
                 accessibilityRole="switch"
                 accessibilityLabel={cat.label}
-                accessibilityState={{ checked: prefs[cat.id] }}
+                accessibilityState={{ checked: prefs[cat.id], disabled: pending.has(cat.id), busy: pending.has(cat.id) }}
               />
             </View>
           ))}
         </View>
+
+        {saveFailure ? (
+          <View
+            style={styles.notice}
+            accessibilityRole="alert"
+            accessibilityLiveRegion="polite"
+            testID="notif-pref-save-error"
+          >
+            <Ionicons
+              name="alert-circle-outline"
+              size={18}
+              color={colors.textPrimary}
+              style={styles.noticeIcon}
+            />
+            <Text selectable style={styles.noticeText} testID="notif-pref-save-error-text">
+              {saveFailure.message}
+            </Text>
+          </View>
+        ) : null}
 
         <Text style={styles.footnote}>
           System notifications cannot be fully disabled — critical billing and
@@ -324,6 +419,27 @@ function makeStyles(colors: ThemeColors) {
     content: {
       padding: 20,
       paddingBottom: 40,
+    },
+    notice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 12,
+      padding: 12,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    noticeIcon: {
+      marginRight: 8,
+      marginTop: 1,
+    },
+    noticeText: {
+      flex: 1,
+      fontSize: 14,
+      lineHeight: 20,
+      fontFamily: 'Inter_400Regular',
+      color: colors.textPrimary,
     },
     intro: {
       fontSize: 14,
