@@ -5,19 +5,28 @@
  * Rendered as a Modal (animationType='slide', presentationStyle='pageSheet')
  * so it feels like a native bottom sheet without a third-party dependency.
  *
- * Payment flow:
- *   1. On visible: GET /v1/clients/me/coach/packages
+ * Payment flow (OR-112-22, contract cited in src/lib/packagePayment.ts):
+ *   1. On visible: GET /v1/clients/me/coach/packages (price = amount_cents)
  *   2. User selects a package
- *   3. POST /v1/checkout/sessions { package_id, idempotency_key } →
- *        { stripe_client_secret, stripe_ephemeral_key }
- *      (publishable key comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY, falling
- *      back to the legacy EXPO_PUBLIC_STRIPE_PK)
- *   4. stripe.initPaymentSheet() + stripe.presentPaymentSheet()
- *   5. Completed → onPaymentSuccess(); Cancel → stay on sheet; Error → inline
+ *   3. One-time package: POST /v1/checkout/payment-intent
+ *        { package_id, idempotency_key } ->
+ *        { client_secret, ephemeral_key, customer_id, publishable_key }
+ *      The key is stable for the attempt: retries, a cancel or a decline on
+ *      the same package reuse it, so the backend returns the same
+ *      PaymentIntent and the client can never be charged twice.
+ *      $0 package: POST /v1/packages/:id/claim-free (never reaches Stripe).
+ *      Renewing package: the payment-intent route makes a one-off charge with
+ *      no subscription, so the sheet points to the plans screen instead.
+ *   4. initStripe() + initPaymentSheet({ customerId, ephemeral key, client
+ *      secret }) themed with TGP tokens, then presentPaymentSheet()
+ *   5. Completed -> entitlement check -> onPaymentSuccess(); Canceled -> stay
+ *      on the sheet, no message; failure -> specific copy per cause, unknown
+ *      causes add a short reference and the support email.
  *
  * R18: payment success is only fired after Stripe confirms the PaymentSheet.
- * R19: every checkout session POST carries a client-generated idempotency key.
- * R17: raw Stripe/backend error strings are scrubbed; users see safe copy.
+ * R19: every payment-intent POST carries a client-generated idempotency key.
+ * R17: raw Stripe/backend error strings are never shown or reported; secrets
+ *      are never logged or sent to Sentry.
  *
  * 24-hour re-surface logic:
  *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
@@ -42,65 +51,29 @@ import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { shortReference } from '../utils/correlation';
 import { resolveStripePublishableKey } from '../config/stripe';
-
-// Deferred: install @stripe/stripe-react-native when the native build is
-// configured. When the package is available, replace this dynamic resolver
-// with `import { useStripe } from '@stripe/stripe-react-native'`.
-//
-// IMPORTANT: this local binding intentionally does NOT start with `use` so it
-// is not treated as a React Hook by `react-hooks/rules-of-hooks`. The hook,
-// when available, is *invoked* through this binding from inside the
-// component body without any conditional wrapper, satisfying the rule.
-type StripeHookFactory = () => {
-  initPaymentSheet: (
-    params: Record<string, unknown>,
-  ) => Promise<{ error?: { message: string } }>;
-  presentPaymentSheet: () => Promise<{ error?: { message: string } }>;
-};
-
-let stripeHookFactory: StripeHookFactory | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const stripeModule = require('@stripe/stripe-react-native');
-  stripeHookFactory = stripeModule.useStripe ?? null;
-} catch {
-  // Native module missing — handled at handleSelectPlan time with a user-safe
-  // error. We deliberately do NOT proceed past this point in that case.
-}
-
-// Stable no-op shape returned when the native module is unavailable.
-// This lets the call site invoke the hook unconditionally on every render.
-// The `_stub` discriminator field lets call sites detect the stub at runtime
-// and REFUSE to attempt a charge — mirroring the previous `if (!stripe)`
-// gate before we restructured this for `react-hooks/rules-of-hooks`.
-const NOOP_STRIPE_API = {
-  _stub: true as const,
-  initPaymentSheet: async () => ({}),
-  presentPaymentSheet: async () => ({
-    error: { message: 'Stripe is not configured on this build.' },
-  }),
-};
-
-// Helper that mirrors the previous `if (!stripe)` semantics: returns true when
-// the native Stripe SDK is not actually wired up and we should refuse the
-// charge to avoid silently granting access without a real payment.
-function isStripeStub(
-  api: { _stub?: true } | unknown,
-): api is typeof NOOP_STRIPE_API {
-  return Boolean((api as { _stub?: true })?._stub);
-}
-
-// Single, unconditional hook the component can call every render. When the
-// native Stripe module is present, it delegates to the real hook. Otherwise
-// it returns the no-op shape. Either way, the same hooks are called in the
-// same order, satisfying `react-hooks/rules-of-hooks`.
-function useStripeOrStub() {
-  if (stripeHookFactory) {
-    return stripeHookFactory();
-  }
-  return NOOP_STRIPE_API;
-}
+import { clientPaymentsApi } from '../api/clientPaymentsApi';
+import { useEntitlement } from '../entitlements/EntitlementProvider';
+import { SupportEmailFallback, useSupportEmail } from './support/SupportEmailFallback';
+import {
+  PACKAGE_PAYMENT_COPY,
+  STRIPE_RETURN_URL,
+  STRIPE_URL_SCHEME,
+  backendCodeOf,
+  claimFreePackage,
+  createPackagePaymentIntent,
+  describeBackendFailure,
+  describeMissingPublishableKey,
+  describeSheetCrash,
+  describeSdkMissing,
+  describeSheetFailure,
+  isSheetCanceled,
+  loadPackageStripeSdk,
+  reportPackagePaymentFailure,
+  type PackagePaymentNotice,
+  type StripeSdkError,
+} from '../lib/packagePayment';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,23 +87,68 @@ export interface CoachPackage {
   interval?: 'month' | 'year';
 }
 
-interface CheckoutSessionResponse {
-  stripe_client_secret: string;
-  stripe_ephemeral_key: string;
-}
-
 export interface PackageSelectionSheetProps {
   visible: boolean;
   onDismiss: () => void;
   onPaymentSuccess: () => void;
+  /**
+   * Waits between entitlement checks after Stripe confirms the payment (the
+   * webhook flips the entitlement). Tests pass zeros.
+   */
+  entitlementPollDelaysMs?: number[];
 }
+
+type Phase = 'idle' | 'paying' | 'confirming' | 'confirmed_pending';
+
+type Outcome =
+  | { kind: 'paid'; free?: boolean }
+  | { kind: 'canceled' }
+  | { kind: 'notice'; notice: PackagePaymentNotice };
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DISMISSED_KEY_BASE = 'onboarding.package_prompt_dismissed_at';
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+/** About 10 s for the payment_intent.succeeded webhook to flip the entitlement. */
+const ENTITLEMENT_POLL_DELAYS_MS = [0, 1500, 2500, 3000, 3000];
+const MERCHANT_DISPLAY_NAME = 'The Growth Project';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * The backend sends the raw CoachPackage row (amount_cents, billing_type,
+ * interval). Rows without an id or a whole-cent price are dropped rather
+ * than shown with a made-up price.
+ */
+function normalizePackage(raw: unknown): CoachPackage | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const cents =
+    typeof r.amount_cents === 'number'
+      ? r.amount_cents
+      : typeof r.price_cents === 'number'
+        ? r.price_cents
+        : NaN;
+  if (typeof r.id !== 'string' || !r.id || !Number.isInteger(cents) || cents < 0) return null;
+  return {
+    id: r.id,
+    name: typeof r.name === 'string' ? r.name : '',
+    price_cents: cents,
+    currency: typeof r.currency === 'string' && r.currency ? r.currency : 'usd',
+    description: typeof r.description === 'string' ? r.description : null,
+    billing_type: r.billing_type === 'recurring' ? 'recurring' : 'one_time',
+    interval: r.interval === 'year' ? 'year' : r.interval === 'month' ? 'month' : undefined,
+  };
+}
+
+function infoNotice(cause: string, message: string): PackagePaymentNotice {
+  return { cause, message, support: false, reference: null, tone: 'info' };
+}
+
+const wait = (ms: number) =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 function formatPrice(priceCents: number, currency: string): string {
   const major = priceCents / 100;
@@ -141,6 +159,7 @@ function formatPrice(priceCents: number, currency: string): string {
 }
 
 function formatPriceLabel(pkg: CoachPackage): string {
+  if (pkg.price_cents === 0) return 'Free';
   const price = formatPrice(pkg.price_cents, pkg.currency);
   if (pkg.billing_type === 'recurring') {
     const interval = pkg.interval ?? 'month';
@@ -167,25 +186,38 @@ export default function PackageSelectionSheet({
   visible,
   onDismiss,
   onPaymentSuccess,
+  entitlementPollDelaysMs = ENTITLEMENT_POLL_DELAYS_MS,
 }: PackageSelectionSheetProps) {
-  const { semanticColors, tokens } = useTheme();
+  const { semanticColors, tokens, colorScheme } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const currentUser = useCurrentUser();
+  const { refreshEntitlement } = useEntitlement();
   const dismissedKey = useMemo(
     () => (currentUser?.id ? `${DISMISSED_KEY_BASE}:${currentUser.id}` : null),
     [currentUser?.id],
   );
 
-  // Always called unconditionally; returns no-op shape when Stripe isn’t
-  // installed (e.g. Expo Go). Preserves all existing behavior at call sites.
-  const stripe = useStripeOrStub();
-
   const [packages, setPackages] = useState<CoachPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [notice, setNotice] = useState<PackagePaymentNotice | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
+  const [freePlan, setFreePlan] = useState(false); // the confirmed plan was a $0 claim
+  const supportEmail = useSupportEmail(PACKAGE_PAYMENT_COPY.supportSubject(notice?.reference ?? null));
+
+  // One idempotency key per attempt (package). Reused on retry, cancel or
+  // decline so the backend hands back the same PaymentIntent; replaced when
+  // the client picks another package or the sheet reloads.
+  const attemptRef = useRef<{ packageId: string; key: string } | null>(null);
+  const inFlightRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
@@ -227,18 +259,23 @@ export default function PackageSelectionSheet({
     if (!ready) return;
     let cancelled = false;
     setLoading(true);
-    setError(null);
+    setNotice(null);
+    setPhase('idle');
     setSelectedId(null);
+    attemptRef.current = null;
     (async () => {
       try {
-        const res = await api.get<{ packages: CoachPackage[] } | CoachPackage[]>(
+        const res = await api.get<{ packages: unknown[] } | unknown[]>(
           '/v1/clients/me/coach/packages',
         );
         // Backend may return { packages: [...] } or a bare array
         const data = res.data;
-        const list: CoachPackage[] = Array.isArray(data)
+        const raw: unknown[] = Array.isArray(data)
           ? data
-          : (data as { packages: CoachPackage[] }).packages ?? [];
+          : (data as { packages?: unknown[] })?.packages ?? [];
+        const list = raw
+          .map(normalizePackage)
+          .filter((p): p is CoachPackage => p !== null);
         if (!cancelled) {
           if (list.length === 0) {
             onDismissRef.current();
@@ -258,97 +295,212 @@ export default function PackageSelectionSheet({
   }, [ready]);
 
   // ── Payment ───────────────────────────────────────────────────────────────
-  const handleSelectPlan = useCallback(async () => {
-    if (!selectedId || paying) return;
-    setError(null);
-    setPaying(true);
+  const appearance = useMemo(
+    () => ({
+      colors: {
+        primary: semanticColors.accent,
+        background: semanticColors.bgPrimary,
+        componentBackground: semanticColors.bgSurface,
+        componentBorder: semanticColors.border,
+        componentDivider: semanticColors.border,
+        primaryText: semanticColors.textPrimary,
+        secondaryText: semanticColors.textMuted,
+        componentText: semanticColors.textPrimary,
+        placeholderText: semanticColors.textMuted,
+        icon: semanticColors.textMuted,
+        error: tokens.colors.error,
+      },
+      shapes: { borderRadius: 2, borderWidth: 1 },
+      primaryButton: {
+        colors: {
+          background: semanticColors.accent,
+          text: semanticColors.textOnAccent,
+          border: semanticColors.accent,
+        },
+        shapes: { borderRadius: 0, borderWidth: 0 },
+      },
+    }),
+    [semanticColors, tokens],
+  );
 
-    // R18: refuse to proceed when the native Stripe SDK isn't available — the
-    // hook now ALWAYS returns an object (real Stripe or a tagged no-op), so
-    // detect the stub via its discriminator field and fail closed rather than
-    // fabricate success.
-    if (isStripeStub(stripe)) {
-      setError('Payment is not available on this device. Please update the app and try again.');
-      setPaying(false);
-      return;
+  const attemptKeyFor = useCallback((packageId: string): string => {
+    if (attemptRef.current?.packageId !== packageId) {
+      attemptRef.current = { packageId, key: generateIdempotencyKey() };
     }
+    return attemptRef.current.key;
+  }, []);
 
-    // R29: backend contract is POST /v1/checkout/sessions with
-    // { package_id, idempotency_key }; response is
-    // { stripe_client_secret, stripe_ephemeral_key }. Publishable key
-    // comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (the name EAS stores),
-    // with the legacy EXPO_PUBLIC_STRIPE_PK as a fallback.
-    const publishableKey = resolveStripePublishableKey();
-    if (!publishableKey) {
-      setError('Payment is not available right now. Please try again later.');
-      setPaying(false);
-      return;
-    }
-
+  const claimFree = useCallback(async (packageId: string): Promise<Outcome> => {
     try {
-      const idempotencyKey = generateIdempotencyKey();
-      const sessionRes = await api.post<CheckoutSessionResponse>(
-        '/v1/checkout/sessions',
-        { package_id: selectedId, idempotency_key: idempotencyKey },
-      );
-      const { stripe_client_secret, stripe_ephemeral_key } = sessionRes.data;
-
-      const { error: initError } = await stripe.initPaymentSheet({
-        merchantDisplayName: 'The Growth Project',
-        customerEphemeralKeySecret: stripe_ephemeral_key,
-        paymentIntentClientSecret: stripe_client_secret,
-        publishableKey,
-        allowsDelayedPaymentMethods: false,
-      });
-
-      if (initError) {
-        // R17: never surface raw Stripe error strings — they can include
-        // backend identifiers or environment hints.
-        setError('Payment failed. Please try again.');
-        setPaying(false);
-        return;
-      }
-
-      const { error: presentError } = await stripe.presentPaymentSheet();
-
-      if (presentError) {
-        // Cancellations come back as a present error with a "canceled" /
-        // "dismissed" message — treat as a no-op so the user can retry from
-        // the same sheet without seeing a scary error string.
-        const msg = presentError.message?.toLowerCase() ?? '';
-        const isCancelled = msg.includes('cancel') || msg.includes('dismiss');
-        if (!isCancelled) {
-          setError('Payment failed. Please try again.');
-        }
-        setPaying(false);
-        return;
-      }
-
-      onPaymentSuccess();
-    } catch {
-      setError('Payment failed. Please try again.');
-      setPaying(false);
+      const active = await claimFreePackage(packageId);
+      return active
+        ? { kind: 'paid', free: true }
+        : { kind: 'notice', notice: infoNotice('free_pending', PACKAGE_PAYMENT_COPY.freePending) };
+    } catch (err) {
+      return { kind: 'notice', notice: describeBackendFailure(err, 'claim_free', null) };
     }
-  }, [selectedId, paying, stripe, onPaymentSuccess]);
+  }, []);
+
+  const payWithSheet = useCallback(
+    async (packageId: string): Promise<Outcome> => {
+      const sdk = loadPackageStripeSdk();
+      if (!sdk) {
+        return { kind: 'notice', notice: describeSdkMissing() };
+      }
+      const key = attemptKeyFor(packageId);
+      const ref = shortReference(key);
+
+      let secrets;
+      try {
+        secrets = await createPackagePaymentIntent(packageId, key);
+      } catch (err) {
+        // The coach made the plan free since the list loaded.
+        if (backendCodeOf(err) === 'PACKAGE_IS_FREE') return claimFree(packageId);
+        return { kind: 'notice', notice: describeBackendFailure(err, 'payment_intent', ref) };
+      }
+
+      // The backend key always matches the secret key that minted the
+      // PaymentIntent (same mode, same account); the build key is the fallback.
+      const publishableKey = secrets.publishableKey || resolveStripePublishableKey();
+      if (!publishableKey) {
+        return { kind: 'notice', notice: describeMissingPublishableKey(ref) };
+      }
+
+      let init: { error?: StripeSdkError } | undefined;
+      try {
+        await sdk.initStripe({
+          publishableKey,
+          urlScheme: STRIPE_URL_SCHEME,
+          setReturnUrlSchemeOnAndroid: true,
+        });
+        init = await sdk.initPaymentSheet({
+          merchantDisplayName: MERCHANT_DISPLAY_NAME,
+          customerId: secrets.customerId,
+          customerEphemeralKeySecret: secrets.ephemeralKey,
+          paymentIntentClientSecret: secrets.clientSecret,
+          returnURL: STRIPE_RETURN_URL,
+          allowsDelayedPaymentMethods: false,
+          style: colorScheme === 'dark' ? 'alwaysDark' : 'alwaysLight',
+          appearance,
+        });
+      } catch {
+        return { kind: 'notice', notice: describeSheetCrash('sheet_init', ref) };
+      }
+      if (init?.error) {
+        return { kind: 'notice', notice: describeSheetFailure(init.error, 'sheet_init', ref) };
+      }
+
+      let presented: { error?: StripeSdkError } | undefined;
+      try {
+        presented = await sdk.presentPaymentSheet();
+      } catch {
+        return { kind: 'notice', notice: describeSheetCrash('sheet_present', ref) };
+      }
+      if (presented?.error) {
+        if (isSheetCanceled(presented.error)) return { kind: 'canceled' };
+        return { kind: 'notice', notice: describeSheetFailure(presented.error, 'sheet_present', ref) };
+      }
+      // Stripe confirmed the payment; this attempt's key is spent.
+      attemptRef.current = null;
+      return { kind: 'paid' };
+    },
+    [appearance, attemptKeyFor, claimFree, colorScheme],
+  );
+
+  /** Wait (bounded) for the webhook to activate the plan. */
+  const waitForEntitlement = useCallback(async (): Promise<boolean> => {
+    for (const delay of entitlementPollDelaysMs) {
+      if (delay > 0) await wait(delay);
+      if (!mountedRef.current) return false;
+      try {
+        const res = await clientPaymentsApi.getEntitlement();
+        if (res.ok && res.data?.active === true) return true;
+      } catch {
+        // keep polling; the payment itself is already confirmed
+      }
+    }
+    return false;
+  }, [entitlementPollDelaysMs]);
+
+  const handleSelectPlan = useCallback(async () => {
+    const pkg = packages.find((p) => p.id === selectedId);
+    if (!pkg || inFlightRef.current) return;
+    inFlightRef.current = true;
+    setNotice(null);
+    setPhase('paying');
+
+    let outcome: Outcome;
+    try {
+      if (pkg.billing_type === 'recurring') {
+        outcome = {
+          kind: 'notice',
+          notice: infoNotice('recurring_elsewhere', PACKAGE_PAYMENT_COPY.recurringElsewhere),
+        };
+      } else if (pkg.price_cents === 0) {
+        outcome = await claimFree(pkg.id);
+      } else {
+        outcome = await payWithSheet(pkg.id);
+      }
+    } catch {
+      // Anything not mapped above (e.g. no secure random source for the key).
+      const ref = attemptRef.current ? shortReference(attemptRef.current.key) : null;
+      const n: PackagePaymentNotice = {
+        cause: 'unexpected',
+        message: PACKAGE_PAYMENT_COPY.unknown(ref),
+        support: true,
+        reference: ref,
+      };
+      reportPackagePaymentFailure('config', n);
+      outcome = { kind: 'notice', notice: n };
+    }
+
+    if (!mountedRef.current) {
+      inFlightRef.current = false;
+      return;
+    }
+    if (outcome.kind === 'paid') {
+      setFreePlan(outcome.free === true);
+      setPhase('confirming');
+      const active = await waitForEntitlement();
+      void refreshEntitlement().catch(() => false);
+      inFlightRef.current = false;
+      if (!mountedRef.current) return;
+      if (active) {
+        onPaymentSuccess();
+      } else {
+        setPhase('confirmed_pending');
+      }
+      return;
+    }
+    inFlightRef.current = false;
+    // Canceled: the client closed the card form; stay on the sheet, no message.
+    if (outcome.kind === 'notice') setNotice(outcome.notice);
+    setPhase('idle');
+  }, [packages, selectedId, claimFree, payWithSheet, waitForEntitlement, refreshEntitlement, onPaymentSuccess]);
 
   // ── Skip ──────────────────────────────────────────────────────────────────
+  const busy = phase === 'paying' || phase === 'confirming';
   const handleSkip = useCallback(() => {
+    if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
       prefsStorage
         .set(dismissedKey, new Date().toISOString())
         .catch(() => {});
     }
     onDismiss();
-  }, [onDismiss, dismissedKey]);
+  }, [busy, onDismiss, dismissedKey]);
 
   if (!visible || !ready) return null;
+
+  const paid = phase === 'confirmed_pending';
+  const ctaDisabled = paid ? false : !selectedId || busy;
 
   return (
     <Modal
       visible={visible && ready}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={handleSkip}
+      onRequestClose={paid ? onPaymentSuccess : handleSkip}
     >
       <View style={styles.sheet}>
         <ScrollView
@@ -376,10 +528,14 @@ export default function PackageSelectionSheet({
                     styles.packageCard,
                     isSelected && styles.packageCardSelected,
                   ]}
-                  onPress={() => setSelectedId(pkg.id)}
+                  onPress={() => {
+                    if (busy || paid) return;
+                    setSelectedId(pkg.id);
+                    setNotice(null);
+                  }}
                   accessibilityRole="radio"
                   accessibilityLabel={`${pkg.name}, ${formatPriceLabel(pkg)}`}
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityState={{ selected: isSelected, disabled: busy || paid }}
                   testID={`package-card-${pkg.id}`}
                 >
                   <Text style={styles.packageName}>{pkg.name}</Text>
@@ -394,37 +550,94 @@ export default function PackageSelectionSheet({
             })
           )}
 
-          {/* Inline error */}
-          {error ? (
-            <Text style={styles.errorText} testID="payment-error">{error}</Text>
+          {/* Payment progress */}
+          {phase === 'confirming' || paid ? (
+            <Text
+              style={styles.statusText}
+              accessibilityLiveRegion="polite"
+              testID={paid ? 'payment-confirmed-pending' : 'payment-confirming'}
+            >
+              {freePlan
+                ? paid
+                  ? PACKAGE_PAYMENT_COPY.confirmedPendingFree
+                  : PACKAGE_PAYMENT_COPY.confirmingFree
+                : paid
+                  ? PACKAGE_PAYMENT_COPY.confirmedPending
+                  : PACKAGE_PAYMENT_COPY.confirming}
+            </Text>
+          ) : null}
+
+          {/* Inline notice */}
+          {notice ? (
+            <View style={styles.noticeWrap}>
+              <Text
+                style={notice.tone === 'info' ? styles.infoText : styles.errorText}
+                accessibilityRole="alert"
+                accessibilityLiveRegion="polite"
+                testID="payment-error"
+              >
+                {notice.message}
+              </Text>
+              {notice.support ? (
+                <>
+                  {notice.reference ? (
+                    <Text selectable style={styles.referenceText} testID="payment-error-reference">
+                      {`Reference ${notice.reference}`}
+                    </Text>
+                  ) : null}
+                  <Pressable
+                    onPress={() => {
+                      void supportEmail.open();
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={PACKAGE_PAYMENT_COPY.supportAction}
+                    hitSlop={8}
+                    style={styles.supportBtn}
+                    testID="payment-support"
+                  >
+                    <Text style={styles.supportText}>{PACKAGE_PAYMENT_COPY.supportAction}</Text>
+                  </Pressable>
+                  <SupportEmailFallback
+                    handle={supportEmail}
+                    textStyle={styles.infoText}
+                    linkColor={semanticColors.accentText}
+                    testID="payment-support-fallback"
+                  />
+                </>
+              ) : null}
+            </View>
           ) : null}
 
           {/* CTA */}
           <TouchableOpacity
             style={[
               styles.ctaBtn,
-              (!selectedId || paying) && styles.ctaBtnDisabled,
+              ctaDisabled && styles.ctaBtnDisabled,
             ]}
-            onPress={handleSelectPlan}
-            disabled={!selectedId || paying}
+            onPress={paid ? onPaymentSuccess : handleSelectPlan}
+            disabled={ctaDisabled}
             accessibilityRole="button"
-            accessibilityLabel="Select this plan"
-            accessibilityState={{ disabled: !selectedId || paying }}
+            accessibilityLabel={paid ? 'Continue' : 'Select this plan'}
+            accessibilityState={{ disabled: ctaDisabled, busy }}
             testID="select-plan-btn"
           >
-            <Text style={styles.ctaBtnText}>Select this plan</Text>
+            <Text style={styles.ctaBtnText}>{paid ? 'Continue' : 'Select this plan'}</Text>
           </TouchableOpacity>
 
           {/* Skip */}
-          <TouchableOpacity
-            style={styles.skipBtn}
-            onPress={handleSkip}
-            accessibilityRole="button"
-            accessibilityLabel="Skip for now"
-            testID="skip-package-btn"
-          >
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
+          {paid ? null : (
+            <TouchableOpacity
+              style={styles.skipBtn}
+              onPress={handleSkip}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Skip for now"
+              accessibilityState={{ disabled: busy }}
+              testID="skip-package-btn"
+            >
+              <Text style={styles.skipText}>Skip for now</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
     </Modal>
@@ -512,13 +725,45 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       borderRadius: 2,
       backgroundColor: semanticColors.border,
     },
-    // Error
+    // Notices
+    noticeWrap: {
+      marginBottom: 12,
+    },
     errorText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
       color: tokens.colors.error,
-      marginBottom: 12,
       lineHeight: 19,
+    },
+    infoText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: semanticColors.textPrimary,
+      lineHeight: 19,
+    },
+    statusText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: semanticColors.textPrimary,
+      lineHeight: 19,
+      marginBottom: 12,
+    },
+    referenceText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
+      color: semanticColors.textMuted,
+      marginTop: 6,
+    },
+    supportBtn: {
+      minHeight: 44,
+      justifyContent: 'center',
+      alignSelf: 'flex-start',
+    },
+    supportText: {
+      fontFamily: 'Inter_600SemiBold',
+      fontSize: 13,
+      color: semanticColors.accentText,
+      textDecorationLine: 'underline',
     },
     // CTA
     ctaBtn: {
