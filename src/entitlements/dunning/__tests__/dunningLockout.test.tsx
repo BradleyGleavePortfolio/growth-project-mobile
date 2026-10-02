@@ -3,9 +3,8 @@
  * the Days 0-9 banner, and specific error copy.
  */
 import React from 'react';
-import { Text } from 'react-native';
+import { Alert, Text } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
-import * as WebBrowser from 'expo-web-browser';
 import { dunningLockoutStore, isLockedDunningResponse } from '../dunningLockoutStore';
 import { describeDunningError, SUPPORT_EMAIL } from '../dunningErrorCopy';
 import { normalizeDunningStatus, formatDunningAmount, type ClientDunningStatus } from '../dunningApi';
@@ -15,7 +14,9 @@ import { lockoutSummary, supportMailto } from '../DunningLockoutScreen';
 
 jest.mock('../../../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../../../theme/tokens').default;
-  return { useTheme: () => ({ semanticColors: realTokens.lightTokens, tokens: realTokens }) };
+  return {
+    useTheme: () => ({ semanticColors: realTokens.lightTokens, tokens: realTokens, colorScheme: 'light' }),
+  };
 });
 
 const mockCaptureError = jest.fn();
@@ -37,9 +38,6 @@ jest.mock('../../../services/queryClient', () => ({
   queryClient: { invalidateQueries: jest.fn() },
 }));
 
-jest.mock('expo-web-browser', () => ({
-  openAuthSessionAsync: jest.fn(async () => ({ type: 'dismiss' })),
-}));
 
 const LOCKED: ClientDunningStatus = {
   enabled: true,
@@ -53,6 +51,7 @@ const LOCKED: ClientDunningStatus = {
   day: 10,
   coach_name: 'Avery',
   card_last4: '4242',
+  card_brand: 'visa',
 };
 const PAST_DUE: ClientDunningStatus = { ...LOCKED, state: 'past_due', locked_at: null, day: 3 };
 const CLEAR: ClientDunningStatus = { ...LOCKED, state: 'none', amount_cents: null, day: null, locked_at: null };
@@ -80,6 +79,7 @@ async function renderProvider(child: React.ReactNode = <Text>app</Text>) {
     onOpenDataExport: jest.fn(),
     onOpenDeleteAccount: jest.fn(),
     onSignOut: jest.fn(),
+    onOpenUpdateCard: jest.fn(),
   };
   const utils = await render(
     <DunningLockoutProvider
@@ -102,7 +102,6 @@ beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockReset();
   mockCaptureError.mockReset();
-  (WebBrowser.openAuthSessionAsync as jest.Mock).mockClear();
   nav.route = 'HomeMain';
   nav.listeners.clear();
 });
@@ -131,7 +130,7 @@ describe('DunningLockoutProvider', () => {
     mockGet.mockResolvedValue({ data: LOCKED });
     const { findByTestId, queryByTestId } = await renderProvider();
     await findByTestId('dunning-lockout-screen');
-    expect([...REACHABLE_WHILE_LOCKED].sort()).toEqual(['DataExport', 'DeleteAccount', 'Messages']);
+    expect([...REACHABLE_WHILE_LOCKED].sort()).toEqual(['DataExport', 'DeleteAccount', 'Messages', 'UpdateCard']);
     await act(async () => {
       nav.go('DataExport');
     });
@@ -156,35 +155,76 @@ describe('DunningLockoutProvider', () => {
     expect(handlers.onSignOut).toHaveBeenCalledTimes(1);
   });
 
-  it('Update card opens the Stripe portal, then unlocks when the payment cleared', async () => {
-    mockGet.mockResolvedValueOnce({ data: LOCKED }).mockResolvedValueOnce({ data: CLEAR });
-    mockPost.mockResolvedValue({ data: { url: 'https://billing.stripe.com/p/session/test_123' } });
-    const { findByTestId, getByTestId, queryByTestId } = await renderProvider();
+  it('Update card opens the native card screen (no Stripe-hosted portal), and the lockout steps aside there', async () => {
+    mockGet.mockResolvedValue({ data: LOCKED });
+    const { findByTestId, getByTestId, queryByTestId, handlers } = await renderProvider();
     await findByTestId('dunning-lockout-screen');
+    await fireEvent.press(getByTestId('dunning-lockout-update-card'));
+    expect(handlers.onOpenUpdateCard).toHaveBeenCalledWith({ autostart: true, surface: 'DunningLockoutScreen' });
+    expect(mockPost).not.toHaveBeenCalledWith('/v1/checkout/billing-portal', expect.anything());
     await act(async () => {
-      await fireEvent.press(getByTestId('dunning-lockout-update-card'));
+      nav.go('UpdateCard');
     });
-    expect(mockPost).toHaveBeenCalledWith('/v1/checkout/billing-portal', {});
-    expect(WebBrowser.openAuthSessionAsync).toHaveBeenCalledWith(
-      'https://billing.stripe.com/p/session/test_123',
-      'com.growthproject.app://',
-    );
-    await waitFor(() => expect(queryByTestId('dunning-lockout-screen')).toBeNull());
-    expect(dunningLockoutStore.isLocked()).toBe(false);
+    expect(queryByTestId('dunning-lockout-screen')).toBeNull();
   });
 
-  it('refuses a non-Stripe portal URL with specific copy and reports it', async () => {
+  it('lockout copy no longer sends the client to the portal invoice history', async () => {
     mockGet.mockResolvedValue({ data: LOCKED });
-    mockPost.mockResolvedValue({ data: { url: 'https://evil.example.com/pay' } });
+    const { findByTestId, queryByText, getByText } = await renderProvider();
+    await findByTestId('dunning-lockout-screen');
+    expect(queryByText(/Invoice history/)).toBeNull();
+    expect(getByText(/We charge it right away/)).toBeTruthy();
+  });
+
+  it('End my plan (2A) asks first, then voids the unpaid invoice and ends the plan', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockGet.mockResolvedValueOnce({ data: LOCKED }).mockResolvedValue({ data: CLEAR });
+    mockPost.mockResolvedValue({
+      data: {
+        outcome: 'ended',
+        purchase_id: 'p1',
+        access_ends_at: '2026-10-11T16:00:00.000Z',
+        voided_invoice_count: 1,
+        voided_amount_cents: 15000,
+        currency: 'usd',
+        message: 'server copy',
+      },
+    });
+    const { findByTestId, getByTestId, queryByTestId } = await renderProvider();
+    await findByTestId('dunning-lockout-screen');
+    await fireEvent.press(getByTestId('dunning-lockout-end-plan'));
+    expect(mockPost).not.toHaveBeenCalled();
+    const [title, body, buttons] = alert.mock.calls[0] as [string, string, Array<{ text: string; onPress?: () => void }>];
+    expect(title).toBe('End your plan now?');
+    expect(body).toContain('The unpaid $150.00 is canceled');
+    expect(buttons.map((b) => b.text)).toEqual(['Keep my plan', 'End my plan']);
+    await act(async () => {
+      buttons[1].onPress?.();
+    });
+    await waitFor(() => expect(mockPost).toHaveBeenCalledWith('/v1/checkout/subscriptions/p1/cancel', {}));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+    expect(alert.mock.calls[1][0]).toBe('Your plan has ended');
+    expect(alert.mock.calls[1][1]).toContain('The unpaid $150.00 is canceled, so you will not be charged for it.');
+    await waitFor(() => expect(queryByTestId('dunning-lockout-screen')).toBeNull());
+    alert.mockRestore();
+  });
+
+  it('End my plan failure is specific and keeps the client on the lockout', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockGet.mockResolvedValue({ data: LOCKED });
+    mockPost.mockRejectedValue(axiosError(503, { code: 'CANCEL_INCOMPLETE' }, { 'x-request-id': 'req-c1' }));
     const { findByTestId, getByTestId } = await renderProvider();
     await findByTestId('dunning-lockout-screen');
+    await fireEvent.press(getByTestId('dunning-lockout-end-plan'));
+    const buttons = alert.mock.calls[0][2] as Array<{ onPress?: () => void }>;
     await act(async () => {
-      await fireEvent.press(getByTestId('dunning-lockout-update-card'));
+      buttons[1].onPress?.();
     });
-    const err = await findByTestId('dunning-lockout-card-error');
-    expect(err.props.children).toContain('did not come from Stripe');
-    expect(WebBrowser.openAuthSessionAsync).not.toHaveBeenCalled();
+    const err = await findByTestId('dunning-lockout-end-error');
+    expect(err.props.children).toContain('tap End my plan again');
+    expect(err.props.children).toContain('req-c1');
     expect(mockCaptureError).toHaveBeenCalled();
+    alert.mockRestore();
   });
 
   it('renders nothing extra and clears the store when the client is not dunned', async () => {
@@ -237,6 +277,18 @@ describe('specific error copy', () => {
     [axiosError(502, { error: 'STRIPE_CHECKOUT_ERROR', request_id: 'req-9' }), 'STRIPE_UNAVAILABLE', true],
     [axiosError(500, { request_id: 'req-7' }), 'UNKNOWN', true],
     [new Error('STRIPE_URL_REJECTED'), 'LINK_REJECTED', true],
+    [axiosError(404, { code: 'SETUP_INTENT_NOT_FOUND' }), 'CARD_FORM_EXPIRED', true],
+    [axiosError(409, { code: 'SETUP_INTENT_NOT_CONFIRMED' }), 'CARD_NOT_SAVED', false],
+    [axiosError(409, { code: 'BILLING_ACTION_IN_PROGRESS' }), 'BILLING_ACTION_IN_PROGRESS', false],
+    [axiosError(404, { code: 'PURCHASE_NOT_FOUND' }), 'PLAN_NOT_FOUND', true],
+    [axiosError(409, { code: 'NOT_A_SUBSCRIPTION' }), 'NOT_A_SUBSCRIPTION', false],
+    [axiosError(503, { code: 'CANCEL_INCOMPLETE' }), 'CANCEL_INCOMPLETE', true],
+    [axiosError(503, { code: 'PAYMENTS_NOT_CONFIGURED' }), 'PAYMENTS_NOT_CONFIGURED', true],
+    [axiosError(502, { code: 'STRIPE_REQUEST_FAILED' }), 'STRIPE_REJECTED', true],
+    [axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'invoice_pay' }), 'PAYMENT_UNCONFIRMED', true],
+    [axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'invoice_void' }), 'PLAN_CHANGE_UNCONFIRMED', true],
+    [axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'setup_intent' }), 'STRIPE_UNAVAILABLE', true],
+    [new Error('DUNNING_RESPONSE_SHAPE'), 'UNEXPECTED_RESPONSE', true],
   ])('maps %#', (err, code, report) => {
     const copy = describeDunningError(err, 'update_card');
     expect(copy.code).toBe(code);

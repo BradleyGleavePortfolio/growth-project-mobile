@@ -2,29 +2,37 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, BackHandler, StyleSheet, View, type AppStateStatus } from 'react-native';
 import { queryClient } from '../../services/queryClient';
 import { captureError } from '../../services/sentry';
-import { dunningApi, type ClientDunningStatus } from './dunningApi';
-import { describeDunningError, type DunningErrorCopy } from './dunningErrorCopy';
+import { dunningApi, type CancelPlanResponse, type ClientDunningStatus } from './dunningApi';
+import { describeDunningError, localDunningError, type DunningErrorCopy } from './dunningErrorCopy';
 import { dunningLockoutStore } from './dunningLockoutStore';
 import { DunningLockoutScreen } from './DunningLockoutScreen';
-import { openUpdateCard } from './updateCard';
 
 /**
  * Screens a locked client can still use (the backend allow-list mirrors
- * this: data export, account deletion, the coach thread). The lockout state
- * steps aside while one of these is focused and returns when the client
- * navigates away.
+ * this: data export, account deletion, the coach thread, and the native
+ * card update with its three billing routes). The lockout state steps aside
+ * while one of these is focused and returns when the client navigates away.
  */
 export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
   'DataExport',
   'DeleteAccount',
   'Messages',
+  'UpdateCard',
 ]);
+
+export type EndPlanResult =
+  | { ok: true; response: CancelPlanResponse }
+  | { ok: false; error: DunningErrorCopy };
 
 export interface DunningContextValue {
   status: ClientDunningStatus | null;
   locked: boolean;
+  refreshing: boolean;
   refresh: () => Promise<void>;
-  updateCard: (surface: string) => Promise<DunningErrorCopy | null>;
+  /** Open the native Update card screen and start the card form. */
+  updateCard: (surface: string) => void;
+  /** End the plan in dunning (2A): void the unpaid invoice, access ends now. */
+  endPlan: (surface: string) => Promise<EndPlanResult>;
   messageCoach: () => void;
 }
 
@@ -43,6 +51,8 @@ export interface DunningLockoutProviderProps {
   onOpenDataExport: () => void;
   onOpenDeleteAccount: () => void;
   onSignOut: () => void;
+  /** Navigate to the native Update card screen (`UpdateCard`). */
+  onOpenUpdateCard: (params: { autostart: boolean; surface: string }) => void;
   /** Current focused route name, and a subscription to route changes. */
   getCurrentRouteName: () => string | undefined;
   subscribeToRouteChanges: (listener: () => void) => () => void;
@@ -55,6 +65,7 @@ export function DunningLockoutProvider({
   onOpenDataExport,
   onOpenDeleteAccount,
   onSignOut,
+  onOpenUpdateCard,
   getCurrentRouteName,
   subscribeToRouteChanges,
 }: DunningLockoutProviderProps) {
@@ -135,18 +146,36 @@ export function DunningLockoutProvider({
   }, [showLockout]);
 
   const updateCard = useCallback(
-    async (surface: string) => {
-      const failure = await openUpdateCard(surface);
-      // Refresh either way: the sheet closed, the card may have changed.
-      await refresh();
-      return failure;
+    (surface: string) => {
+      onOpenUpdateCard({ autostart: true, surface });
     },
-    [refresh],
+    [onOpenUpdateCard],
+  );
+
+  const endPlan = useCallback(
+    async (surface: string): Promise<EndPlanResult> => {
+      const purchaseId = status?.purchase_id;
+      if (!purchaseId) return { ok: false, error: localDunningError('PLAN_NOT_LOADED') };
+      try {
+        const response = await dunningApi.cancelPlan(purchaseId);
+        await refresh();
+        return { ok: true, response };
+      } catch (err) {
+        const error = describeDunningError(err, 'cancel_plan');
+        if (error.report) {
+          captureError(err, { surface, dunning_error_code: error.code, request_id: error.reference });
+        }
+        // A lost answer may still have ended the plan: show the truth.
+        await refresh();
+        return { ok: false, error };
+      }
+    },
+    [status?.purchase_id, refresh],
   );
 
   const value = useMemo<DunningContextValue>(
-    () => ({ status, locked, refresh, updateCard, messageCoach: onMessageCoach }),
-    [status, locked, refresh, updateCard, onMessageCoach],
+    () => ({ status, locked, refreshing, refresh, updateCard, endPlan, messageCoach: onMessageCoach }),
+    [status, locked, refreshing, refresh, updateCard, endPlan, onMessageCoach],
   );
 
   return (
@@ -160,6 +189,7 @@ export function DunningLockoutProvider({
             refreshing={refreshing}
             onRefresh={refresh}
             onUpdateCard={updateCard}
+            onEndPlan={endPlan}
             onMessageCoach={onMessageCoach}
             onOpenDataExport={onOpenDataExport}
             onOpenDeleteAccount={onOpenDeleteAccount}

@@ -57,7 +57,9 @@ jest.mock('../entitlements/dunning/dunningApi', () => ({
   ...jest.requireActual('../entitlements/dunning/dunningApi'),
   dunningApi: {
     getStatus: jest.fn(async () => ({ enabled: false, state: 'none' })),
-    createPortalUrl: jest.fn(),
+    createCardSetup: jest.fn(),
+    confirmCardUpdate: jest.fn(),
+    cancelPlan: jest.fn(),
   },
 }));
 jest.mock('../navigation/AuthNavigator', () => {

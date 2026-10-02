@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Linking,
   RefreshControl,
   SafeAreaView,
@@ -12,14 +13,18 @@ import {
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
-import { SUPPORT_EMAIL, type DunningErrorCopy } from './dunningErrorCopy';
+import { cancelOutcomeCopy, SUPPORT_EMAIL, type DunningErrorCopy } from './dunningErrorCopy';
+import type { EndPlanResult } from './DunningLockoutProvider';
 
 export interface DunningLockoutScreenProps {
   status: ClientDunningStatus | null;
   loadError: DunningErrorCopy | null;
   refreshing: boolean;
   onRefresh: () => Promise<void> | void;
-  onUpdateCard: (surface: string) => Promise<DunningErrorCopy | null>;
+  /** Opens the native Update card screen (reachable while locked). */
+  onUpdateCard: (surface: string) => void;
+  /** 2A: void the unpaid invoice and end the plan now. */
+  onEndPlan: (surface: string) => Promise<EndPlanResult>;
   onMessageCoach: () => void;
   onOpenDataExport: () => void;
   onOpenDeleteAccount: () => void;
@@ -52,6 +57,7 @@ export function DunningLockoutScreen({
   refreshing,
   onRefresh,
   onUpdateCard,
+  onEndPlan,
   onMessageCoach,
   onOpenDataExport,
   onOpenDeleteAccount,
@@ -60,21 +66,47 @@ export function DunningLockoutScreen({
 }: DunningLockoutScreenProps) {
   const { semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
-  const [busy, setBusy] = useState(false);
-  const [cardError, setCardError] = useState<DunningErrorCopy | null>(null);
+  const [ending, setEnding] = useState(false);
+  const [endError, setEndError] = useState<DunningErrorCopy | null>(null);
   const [mailError, setMailError] = useState<string | null>(null);
 
-  const handleUpdateCard = useCallback(async () => {
-    setBusy(true);
-    setCardError(null);
-    const failure = await onUpdateCard('DunningLockoutScreen');
-    setCardError(failure);
-    setBusy(false);
+  const handleUpdateCard = useCallback(() => {
+    onUpdateCard('DunningLockoutScreen');
   }, [onUpdateCard]);
+
+  const handleEndPlan = useCallback(() => {
+    if (ending) return;
+    const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
+    Alert.alert(
+      'End your plan now?',
+      `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your plan ends today. Your data stays in your account.`,
+      [
+        { text: 'Keep my plan', style: 'cancel' },
+        {
+          text: 'End my plan',
+          style: 'destructive',
+          onPress: () => {
+            setEnding(true);
+            setEndError(null);
+            void onEndPlan('DunningLockoutScreen')
+              .then((out) => {
+                if (out.ok) {
+                  const c = cancelOutcomeCopy(out.response);
+                  Alert.alert(c.title, c.body);
+                } else {
+                  setEndError(out.error);
+                }
+              })
+              .finally(() => setEnding(false));
+          },
+        },
+      ],
+    );
+  }, [ending, onEndPlan, status]);
 
   const handleContactSupport = useCallback(async () => {
     setMailError(null);
-    const reference = cardError?.reference ?? loadError?.reference ?? supportReference;
+    const reference = endError?.reference ?? loadError?.reference ?? supportReference;
     try {
       await Linking.openURL(supportMailto(reference));
     } catch {
@@ -82,7 +114,7 @@ export function DunningLockoutScreen({
         `No email app opened on this device. Write to ${SUPPORT_EMAIL}${reference ? ` and include reference ${reference}` : ''}.`,
       );
     }
-  }, [cardError, loadError, supportReference]);
+  }, [endError, loadError, supportReference]);
 
   const card = status?.card_last4 ? ` The card ending ${status.card_last4} was declined.` : '';
   const coachLabel = status?.coach_name ? `Message ${status.coach_name}` : 'Message your coach';
@@ -102,8 +134,8 @@ export function DunningLockoutScreen({
           {card}
         </Text>
         <Text style={styles.body}>
-          To restore access, tap Update card, add a card that works, then pay the open invoice
-          under Invoice history. Access returns within a few minutes of the payment clearing.
+          To restore access, tap Update card and add a card that works. We charge it right away,
+          and your plan comes back as soon as the payment clears.
         </Text>
         {loadError ? (
           <Text style={styles.notice} testID="dunning-lockout-load-error">
@@ -112,23 +144,13 @@ export function DunningLockoutScreen({
         ) : null}
 
         <TouchableOpacity
-          style={[styles.primary, busy && styles.disabled]}
+          style={styles.primary}
           onPress={handleUpdateCard}
-          disabled={busy}
           accessibilityRole="button"
           testID="dunning-lockout-update-card"
         >
-          {busy ? (
-            <ActivityIndicator color={semanticColors.textOnAccent} />
-          ) : (
-            <Text style={styles.primaryText}>Update card</Text>
-          )}
+          <Text style={styles.primaryText}>Update card</Text>
         </TouchableOpacity>
-        {cardError ? (
-          <Text style={styles.notice} testID="dunning-lockout-card-error">
-            {cardError.message}
-          </Text>
-        ) : null}
 
         <TouchableOpacity
           style={styles.secondary}
@@ -138,6 +160,25 @@ export function DunningLockoutScreen({
         >
           <Text style={styles.secondaryText}>{coachLabel}</Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.secondary, ending && styles.disabled]}
+          onPress={handleEndPlan}
+          disabled={ending}
+          accessibilityRole="button"
+          testID="dunning-lockout-end-plan"
+        >
+          {ending ? (
+            <ActivityIndicator color={semanticColors.textPrimary} />
+          ) : (
+            <Text style={styles.secondaryText}>End my plan</Text>
+          )}
+        </TouchableOpacity>
+        {endError ? (
+          <Text style={styles.notice} testID="dunning-lockout-end-error">
+            {endError.message}
+          </Text>
+        ) : null}
 
         <Text style={styles.sectionLabel}>Still available while your plan is paused</Text>
         <Row label="Download my data" onPress={onOpenDataExport} styles={styles} testID="dunning-lockout-data-export" />

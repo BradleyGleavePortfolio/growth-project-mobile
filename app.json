@@ -75,6 +75,15 @@
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/p"
+            },
+            {
+              "scheme": "tgp",
+              "host": "billing"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/billing/update-card"
             }
           ],
           "category": [

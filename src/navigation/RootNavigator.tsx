@@ -260,6 +260,15 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
                 Fast: 'fast',
               }
             : {}),
+          // OR-110-2: native card update. The dunning emails link to
+          // https://app.trygrowthproject.com/billing/update-card (a universal
+          // link: the backend AASA lists the path, app.json registers the
+          // Android filter); the backend's in-app blocker uses
+          // tgp://billing/update. Reachable while locked.
+          UpdateCard: {
+            path: 'billing/update-card',
+            alias: ['billing/update'],
+          },
           CheckoutReturn: {
             path: 'checkout/:outcome',
             parse: {
@@ -296,6 +305,12 @@ function openDataExport(): void {
 
 function openDeleteAccount(): void {
   if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DeleteAccount' });
+}
+
+function openUpdateCard(params: { autostart: boolean; surface: string }): void {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('MoreTab', { screen: 'UpdateCard', params: { autostart: params.autostart } });
+  }
 }
 
 function signOutFromLockout(): void {
@@ -925,6 +940,7 @@ export default function RootNavigator() {
             onMessageCoach={openCoachThread}
             onOpenDataExport={openDataExport}
             onOpenDeleteAccount={openDeleteAccount}
+            onOpenUpdateCard={openUpdateCard}
             onSignOut={signOutFromLockout}
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
@@ -954,6 +970,7 @@ export default function RootNavigator() {
             onMessageCoach={openCoachThread}
             onOpenDataExport={openDataExport}
             onOpenDeleteAccount={openDeleteAccount}
+            onOpenUpdateCard={openUpdateCard}
             onSignOut={signOutFromLockout}
             getCurrentRouteName={currentRouteName}
             subscribeToRouteChanges={subscribeToRouteChanges}
