@@ -7,8 +7,10 @@
  * message text is used only to recognise the auth guard's own 401s.
  */
 import { captureError } from "../../services/sentry";
+import { SUPPORT_EMAIL } from "../../constants/support";
 
-export const DELETION_SUPPORT_EMAIL = "Bradley@Bradleytgpcoaching.com";
+/** The one support inbox (owner ruling 2026-10-01 14:19), not a separate address. */
+export const DELETION_SUPPORT_EMAIL = SUPPORT_EMAIL;
 
 export type DeletionAction =
   "check" | "confirm" | "schedule" | "cancel" | "export";
