@@ -63,6 +63,15 @@ export function initSentry(): void {
     enableAutoSessionTracking: true,
     // Don't crash the app if Sentry itself blows up.
     enableNative: true,
+    // No PII (owner rule: no health data, no message content). These match
+    // the pre-JS native init in plugins/withSentryNativeInit.js, which this
+    // call re-initializes: no IP / default PII, no screenshots or view
+    // hierarchy (they can show health values and messages), no failed-request
+    // events (request URLs).
+    sendDefaultPii: false,
+    attachScreenshot: false,
+    attachViewHierarchy: false,
+    enableCaptureFailedRequests: false,
     // Strip sensitive headers before transmission.
     beforeSend(event) {
       if (event.request?.headers) {
@@ -98,11 +107,16 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   }
 }
 
-/** Tag the current user so events are attributable. Call after login. */
-export function setSentryUser(user: { id: string; email?: string } | null): void {
+/**
+ * Tag the current user so events are attributable. Call after login.
+ * Only the opaque account id is sent: the email is personal data and is
+ * never attached (it would also reach native crash reports through scope
+ * sync).
+ */
+export function setSentryUser(user: { id: string } | null): void {
   if (!initialized) return;
   if (user) {
-    Sentry.setUser({ id: user.id, email: user.email });
+    Sentry.setUser({ id: user.id });
   } else {
     Sentry.setUser(null);
   }

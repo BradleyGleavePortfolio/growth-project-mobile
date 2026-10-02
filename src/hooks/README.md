@@ -15,7 +15,7 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 
 | File | What it does |
 | --- | --- |
-| `useCurrentUser.ts` | Reads `user_data` from AsyncStorage. Listens to `authEvents` so logout / login re-runs the read. Tags Sentry with the user id. |
+| `useCurrentUser.ts` | Reads `user_data` from AsyncStorage. Listens to `authEvents` so logout / login re-runs the read. Tags Sentry with the user id (never the email). |
 | `useIdentity.ts` | `useFoundingNumber` and `useCircleStats` — both degrade to `null` data on any failure. |
 | `useSettings.ts` | Generic settings hook backed by AsyncStorage. |
 | `usePreferences.ts` | Reads / writes the `/users/me/preferences` surface (Psych #4 personalisation toggles). |
@@ -48,7 +48,7 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 ```
 useCurrentUser()
    ├─ AsyncStorage('user_data')
-   ├─ setSentryUser({ id, email })
+   ├─ setSentryUser({ id })   (id only, no email)
    └─ authEvents.on('logout' | 'login') ─► re-read
 
 useApi hooks
