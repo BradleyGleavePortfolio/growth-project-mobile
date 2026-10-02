@@ -16,7 +16,11 @@
  *
  * When a flagged item targets a POST, the content area opens the post-detail
  * surface (with the flagged badge) so the coach can read the full thread before
- * deciding.
+ * deciding. A flagged VOICE NOTE carries a player (a 15-minute signed link;
+ * pull to refresh mints a new one), because audio cannot be text-filtered and
+ * the reviewer has to listen. Member WINS show their title and text. Every
+ * row shows the 24-hour review commitment ("Review within 5h", or "Past 24
+ * hours" once overdue).
  *
  * THREE distinct branches (UX P0.2): a loading spinner; an honest
  * CoachErrorState on failure (never a celebratory "all clear" masquerade); and
@@ -54,6 +58,33 @@ import {
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachFlaggedItem, CoachModerationAction } from '../../api/coachCommunityApi';
+import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
+
+/** Reviewer-facing noun for each reported content type. */
+export const TARGET_NOUN: Record<CoachFlaggedItem['target_type'], string> = {
+  post: 'post',
+  message: 'message',
+  voice_note: 'voice note',
+  win: 'win',
+};
+
+/**
+ * The 24-hour commitment, per report: "Review within 5h" while there is time,
+ * "Past 24 hours, review now" once overdue. Empty when the server did not send
+ * a respond-by time (older backend).
+ */
+export function reviewDueLabel(
+  item: Pick<CoachFlaggedItem, 'respond_by' | 'overdue'>,
+  nowMs: number = Date.now(),
+): string {
+  if (!item.respond_by) return '';
+  const due = Date.parse(item.respond_by);
+  if (Number.isNaN(due)) return '';
+  if (item.overdue || due <= nowMs) return 'Past 24 hours, review now';
+  const minutes = Math.max(1, Math.ceil((due - nowMs) / 60_000));
+  if (minutes < 60) return `Review within ${minutes}m`;
+  return `Review within ${Math.ceil(minutes / 60)}h`;
+}
 
 interface PendingDecision {
   item: CoachFlaggedItem;
@@ -78,8 +109,12 @@ const DONE_COPY: Record<CoachModerationAction, string> = {
   dismiss: 'Report dismissed.',
 };
 
-function confirmCopy(d: PendingDecision): { title: string; body: string; confirm: string } {
-  const what = `this ${d.item.target_type} from ${d.item.author_name}`;
+function confirmCopy(d: PendingDecision): {
+  title: string;
+  body: string;
+  confirm: string;
+} {
+  const what = `this ${TARGET_NOUN[d.item.target_type]} from ${d.item.author_name}`;
   switch (d.action) {
     case 'hide':
       return {
@@ -158,6 +193,10 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
   const renderItem = useCallback(
     ({ item }: { item: CoachFlaggedItem }) => {
       const isPost = item.target_type === 'post';
+      const noun = TARGET_NOUN[item.target_type];
+      const due = reviewDueLabel(item);
+      const overdue = due.startsWith('Past');
+      const voice = item.target_type === 'voice_note' && !item.removed ? item.media : null;
       return (
         <View
           style={[
@@ -180,13 +219,22 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
               {relativeAge(item.created_at)}
             </Text>
           </View>
-          <Text
-            style={[styles.meta, { color: semanticColors.textMuted }]}
-            numberOfLines={1}
-          >
-            {(item.cohort_name ? `${item.cohort_name} · ` : '') +
-              `${item.target_type} · ${item.reason}`}
+          <Text style={[styles.meta, { color: semanticColors.textMuted }]} numberOfLines={1}>
+            {(item.cohort_name ? `${item.cohort_name} · ` : '') + `${noun} · ${item.reason}`}
           </Text>
+          {due ? (
+            <Text
+              style={[
+                styles.meta,
+                {
+                  color: overdue ? semantic.danger.fg : semanticColors.textMuted,
+                },
+              ]}
+              testID={`coach-community-flagged-due-${item.id}`}
+            >
+              {due}
+            </Text>
+          ) : null}
           <HapticPressable
             intent="light"
             onPress={isPost ? () => onOpenPost(item) : undefined}
@@ -195,7 +243,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
             accessibilityLabel={
               isPost
                 ? `Open post from ${item.author_name}`
-                : `Flagged ${item.target_type} from ${item.author_name}`
+                : `Flagged ${noun} from ${item.author_name}`
             }
             accessibilityHint={isPost ? 'Opens the full post and thread' : undefined}
             testID={`coach-community-flagged-content-${item.id}`}
@@ -209,6 +257,20 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
               </Text>
             ) : null}
           </HapticPressable>
+          {voice ? (
+            <View style={styles.player} testID={`coach-community-flagged-voice-${item.id}`}>
+              <VoiceNotePlayer
+                url={voice.url}
+                durationMs={voice.duration_ms}
+                testID={`coach-community-flagged-player-${item.id}`}
+              />
+              <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
+                {voice.url
+                  ? 'Listen before you decide. If it stops playing, pull down to refresh the queue.'
+                  : 'This recording cannot be played right now. Pull down to refresh the queue, then try again.'}
+              </Text>
+            </View>
+          ) : null}
           <View style={styles.actions}>
             {DECISIONS.map((d) => (
               <HapticPressable
@@ -347,6 +409,10 @@ const styles = StyleSheet.create({
   content: {
     fontSize: 15,
     lineHeight: 21,
+    marginTop: spacing.xs,
+  },
+  player: {
+    gap: spacing.xs,
     marginTop: spacing.xs,
   },
   openHint: {

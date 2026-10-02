@@ -3,6 +3,7 @@
  * report, block / unblock, block list, safety info, and the 422 / error-code
  * helpers that screens use to keep a draft and explain a rejection.
  */
+import { SUPPORT_EMAIL } from '../../constants/support';
 import axios from 'axios';
 import {
   communitySafetyApi,
@@ -172,8 +173,9 @@ describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
     );
   });
 
-  it('pins the safety contact email', () => {
-    expect(COMMUNITY_SAFETY_FALLBACK_EMAIL).toBe('Bradley@Bradleytgpcoaching.com');
+  it('uses the one support constant as the safety contact (OR-109-1)', () => {
+    expect(COMMUNITY_SAFETY_FALLBACK_EMAIL).toBe(SUPPORT_EMAIL);
+    expect(SUPPORT_EMAIL).toBe('Bradleyapple1031@gmail.com');
   });
 
   it('pins the seven guidelines, including rules 5 and 7', () => {

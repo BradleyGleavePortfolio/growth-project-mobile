@@ -856,6 +856,77 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       flagged: true,
     });
   });
+
+  it('a reported voice note shows a player, the 24-hour respond-by and voice-note copy', async () => {
+    mockState.flagged = {
+      data: [
+        flaggedItem({
+          target_type: 'voice_note',
+          content: 'Voice note, 0:42',
+          author_name: 'Bob',
+          media: {
+            kind: 'voice_note',
+            url: 'https://storage.example.test/signed',
+            duration_ms: 42000,
+            mime_type: 'audio/mp4',
+          },
+          removed: false,
+          respond_by: new Date(Date.now() + 5 * 3_600_000 - 60_000).toISOString(),
+          overdue: false,
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByTestId, getByText } = await render(<CoachCommunityModerationScreen />);
+    const id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    expect(getByTestId(`coach-community-flagged-player-${id}`)).toBeTruthy();
+    expect(getByTestId(`coach-community-flagged-due-${id}`).props.children).toBe(
+      'Review within 5h',
+    );
+    expect(getByText('Spring block · voice note · spam')).toBeTruthy();
+    // Opening a decision names the voice note, not a raw enum.
+    await fireEvent.press(getByTestId(`coach-community-flagged-hide-${id}`));
+    expect(getByText(/Hide this voice note from Bob\?/)).toBeTruthy();
+  });
+
+  it('a reported win and an overdue report read plainly; a removed voice note has no player', async () => {
+    mockState.flagged = {
+      data: [
+        flaggedItem({
+          id: 'cccccccc-cccc-cccc-cccc-ccccccccccc1',
+          target_type: 'win',
+          content: 'Best week',
+          respond_by: new Date(Date.now() - 60_000).toISOString(),
+          overdue: true,
+        }),
+        flaggedItem({
+          id: 'cccccccc-cccc-cccc-cccc-ccccccccccc2',
+          target_type: 'voice_note',
+          content: 'Removed',
+          media: null,
+          removed: true,
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByTestId, getByText, queryByTestId } = await render(
+      <CoachCommunityModerationScreen />,
+    );
+    expect(getByText('Spring block · win · spam')).toBeTruthy();
+    expect(
+      getByTestId('coach-community-flagged-due-cccccccc-cccc-cccc-cccc-ccccccccccc1').props
+        .children,
+    ).toBe('Past 24 hours, review now');
+    expect(
+      queryByTestId('coach-community-flagged-player-cccccccc-cccc-cccc-cccc-ccccccccccc2'),
+    ).toBeNull();
+  });
 });
 
 describe('Home stat cards route into the matching surfaces', () => {

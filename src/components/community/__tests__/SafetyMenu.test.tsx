@@ -236,4 +236,88 @@ describe('SafetyMenu', () => {
     expect(getByTestId('sm-report')).toBeTruthy();
     expect(queryByTestId('sm-block')).toBeNull();
   });
+
+  it('reports a voice note with the voice_note target type', async () => {
+    const voice = await renderMenu({
+      targetType: 'voice_note',
+      targetId: 'vn-1',
+    });
+    await fireEvent.press(voice.getByTestId('sm'));
+    await fireEvent.press(voice.getByTestId('sm-report'));
+    await fireEvent.press(voice.getByTestId('sm-reason-sexual'));
+    await waitFor(() =>
+      expect(mockReport).toHaveBeenCalledWith({
+        target_type: 'voice_note',
+        target_id: 'vn-1',
+        reason: 'sexual',
+      }),
+    );
+  });
+
+  it('reports a member win with the win target type', async () => {
+    const win = await renderMenu({ targetType: 'win', targetId: 'win-1' });
+    await fireEvent.press(win.getByTestId('sm'));
+    await fireEvent.press(win.getByTestId('sm-report'));
+    await fireEvent.press(win.getByTestId('sm-reason-spam'));
+    await waitFor(() =>
+      expect(mockReport).toHaveBeenCalledWith({
+        target_type: 'win',
+        target_id: 'win-1',
+        reason: 'spam',
+      }),
+    );
+  });
+
+  it('offers Delete (not Report or Block) on the viewer’s own content when the screen allows it', async () => {
+    const onDelete = jest.fn().mockResolvedValue(undefined);
+    const { getByTestId, queryByTestId } = await renderMenu({
+      authorUserId: ME,
+      onDelete,
+      contentNoun: 'win',
+    });
+    await fireEvent.press(getByTestId('sm'));
+    expect(queryByTestId('sm-report')).toBeNull();
+    expect(queryByTestId('sm-block')).toBeNull();
+    await fireEvent.press(getByTestId('sm-delete'));
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Delete this win?',
+      'It will be removed for everyone in your community. This cannot be undone.',
+      expect.any(Array),
+    );
+    await act(async () => {
+      await pressAlertButton('Delete');
+    });
+    expect(onDelete).toHaveBeenCalledTimes(1);
+  });
+
+  it('a failed delete says what happened and what to do next', async () => {
+    const onDelete = jest.fn().mockRejectedValue({
+      isAxiosError: true,
+      response: {
+        status: 403,
+        data: {
+          code: 'community.voice.not_author',
+          message:
+            'Only the person who recorded this voice note, or your coach, can delete it. You can report it instead.',
+        },
+      },
+    });
+    const { getByTestId } = await renderMenu({
+      authorUserId: ME,
+      onDelete,
+      contentNoun: 'voice note',
+      targetType: 'voice_note',
+    });
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-delete'));
+    await act(async () => {
+      await pressAlertButton('Delete');
+    });
+    expect(alertSpy).toHaveBeenLastCalledWith(
+      'Not deleted',
+      'Only the person who recorded this voice note, or your coach, can delete it. You can report it instead.',
+    );
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
 });

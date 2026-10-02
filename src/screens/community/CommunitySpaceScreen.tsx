@@ -30,6 +30,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePosts } from '../../hooks/useCommunity';
 import { CommunityEmptyState, PostCard } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
+import VoiceNotesSection from '../../components/community/VoiceNotesSection';
+import { featureFlags } from '../../config/featureFlags';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
@@ -88,6 +90,19 @@ export default function CommunitySpaceScreen({
     navigation.navigate('CommunityThread', { postId: post.id });
 
   const compose = () => navigation.navigate('CommunityComposer', { mode: 'post' });
+
+  // Hall voice notes (behind featureFlags.communityVoiceNotes): Record entry
+  // point plus the feed, each note with Report / Block / author Delete.
+  const showVoice = space === 'hall' && featureFlags.communityVoiceNotes;
+  const voiceSection = showVoice ? (
+    <VoiceNotesSection
+      workspaceId={workspaceId ?? null}
+      viewerUserId={client?.id}
+      viewerCoachId={client?.coach_id}
+      onRecord={() => navigation.navigate('CommunityVoiceComposer', { target: 'hall' })}
+      testID="community-space-voice"
+    />
+  ) : null;
 
   const data = posts.data ?? [];
   // A post-feed LOAD FAILURE must render a calm retryable error, never the
@@ -200,6 +215,7 @@ export default function CommunitySpaceScreen({
     <Container>
       {isEmpty ? (
         <View style={styles.center} testID="community-space-screen">
+          {voiceSection}
           <CommunityEmptyState
             stem={space === 'cohort' ? 'cohortEmpty' : 'hallEmpty'}
             firstName={client?.firstName ?? client?.name ?? null}
@@ -214,6 +230,7 @@ export default function CommunitySpaceScreen({
           testID="community-space-screen"
           data={data}
           keyExtractor={(p) => p.id}
+          ListHeaderComponent={voiceSection}
           renderItem={({ item }) => (
             <PostCard
               post={item}

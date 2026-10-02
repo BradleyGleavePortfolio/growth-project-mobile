@@ -21,14 +21,20 @@ import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
 import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from './communityErrors';
 
-/** Report targets accepted by the backend report route. */
-export type CommunityReportTargetType = 'post' | 'comment' | 'message';
+/**
+ * Report targets accepted by the backend report route. Voice notes and member
+ * wins are reportable too (Apple 1.2: report on every piece of user content).
+ */
+export type CommunityReportTargetType = 'post' | 'comment' | 'message' | 'voice_note' | 'win';
 
 /**
  * Report reasons. Mirrors backend COMMUNITY_REPORT_REASONS so the sheet works
  * before /community/safety has loaded; the server copy wins when present.
  */
-export const COMMUNITY_REPORT_REASONS: ReadonlyArray<{ code: string; label: string }> = [
+export const COMMUNITY_REPORT_REASONS: ReadonlyArray<{
+  code: string;
+  label: string;
+}> = [
   { code: 'harassment', label: 'Harassment or bullying' },
   { code: 'hate', label: 'Hate speech or discrimination' },
   { code: 'sexual', label: 'Sexual or explicit content' },
@@ -153,7 +159,10 @@ interface ErrorBody {
 function responseOf(err: unknown): { status?: number; data?: ErrorBody } | null {
   let cur: unknown = err;
   for (let i = 0; i < 4 && cur && typeof cur === 'object'; i += 1) {
-    const e = cur as { response?: { status?: number; data?: unknown }; cause?: unknown };
+    const e = cur as {
+      response?: { status?: number; data?: unknown };
+      cause?: unknown;
+    };
     if (e.response) {
       const data = e.response.data;
       return {

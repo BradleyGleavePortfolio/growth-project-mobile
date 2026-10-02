@@ -1,8 +1,10 @@
 /**
  * SafetyMenu — the Report / Block control attached to every piece of community
  * user-generated content (posts, comments, cohort/challenge comments, DM
- * messages). Apple App Review 1.2 requires users to be able to report
- * objectionable content and block abusive users from the content itself.
+ * messages, voice notes, member wins). Apple App Review 1.2 requires users to
+ * be able to report objectionable content and block abusive users from the
+ * content itself. On the viewer's own content it offers Delete instead (when
+ * the screen passes onDelete).
  *
  * A 44pt "More" button opens a sheet:
  *   - Report…  -> reason list (backend report reasons) -> POST /community/moderation/reports
@@ -45,6 +47,13 @@ export interface SafetyMenuProps {
   viewerCoachId?: string | null;
   /** Called after a successful block (screens refetch / navigate away). */
   onBlocked?: (userId: string) => void;
+  /**
+   * Author delete for the viewer's own content. When set, the viewer's own
+   * content gets a menu with Delete (confirmed first); otherwise no menu.
+   */
+  onDelete?: () => Promise<void>;
+  /** What is being deleted, for the confirm copy, e.g. "win" or "voice note". */
+  contentNoun?: string;
   testID?: string;
 }
 
@@ -58,6 +67,8 @@ export default function SafetyMenu({
   viewerUserId,
   viewerCoachId,
   onBlocked,
+  onDelete,
+  contentNoun = 'post',
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
   const { semanticColors } = useTheme();
@@ -67,7 +78,7 @@ export default function SafetyMenu({
   const [busy, setBusy] = useState(false);
 
   const isOwn = !!viewerUserId && !!authorUserId && viewerUserId === authorUserId;
-  if (isOwn || !targetId) return null;
+  if (!targetId || (isOwn && !onDelete)) return null;
   const isCoach = !!viewerCoachId && !!authorUserId && viewerCoachId === authorUserId;
   const canBlock = !!authorUserId && !isCoach;
   const who = authorName?.trim() || 'this member';
@@ -89,6 +100,33 @@ export default function SafetyMenu({
     } finally {
       setBusy(false);
     }
+  };
+
+  const confirmDelete = () => {
+    if (!onDelete) return;
+    Alert.alert(
+      `Delete this ${contentNoun}?`,
+      `It will be removed for everyone in your community. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setBusy(true);
+            try {
+              await onDelete();
+              close();
+            } catch (err) {
+              const failure = describeCommunityFailure(err, 'delete');
+              Alert.alert(failure.title, failure.message);
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const confirmBlock = () => {
@@ -128,7 +166,7 @@ export default function SafetyMenu({
         intent="light"
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel={`Report or block ${who}`}
+        accessibilityLabel={isOwn ? `Options for your ${contentNoun}` : `Report or block ${who}`}
         hitSlop={8}
         style={styles.trigger}
         testID={testID}
@@ -146,6 +184,20 @@ export default function SafetyMenu({
           >
             {busy ? (
               <ActivityIndicator color={semanticColors.accent} style={styles.busy} />
+            ) : isOwn ? (
+              <HapticPressable
+                intent="warning"
+                onPress={confirmDelete}
+                accessibilityRole="button"
+                accessibilityLabel={`Delete this ${contentNoun}`}
+                style={styles.row}
+                testID={`${testID}-delete`}
+              >
+                <Ionicons name="trash-outline" size={18} color={semantic.danger.fg} />
+                <Text style={[styles.rowText, { color: semantic.danger.fg }]}>
+                  Delete {contentNoun}
+                </Text>
+              </HapticPressable>
             ) : step === 'menu' ? (
               <>
                 <HapticPressable

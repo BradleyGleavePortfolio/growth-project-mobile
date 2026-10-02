@@ -63,7 +63,6 @@ import {
 import { CommunityApiError } from '../../api/communityApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
 import SafetyMenu from '../../components/community/SafetyMenu';
-import { generateIdempotencyKey } from '../../utils/idempotency';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
 import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
@@ -108,13 +107,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   // comment). Every mutation has an onError that sets this, and the banner is
   // dismissible, so a failure is never silently swallowed.
   const [actionError, setActionError] = useState<string | null>(null);
-  // The comment id whose report is currently in flight, so its report control
-  // can be disabled to block a double-submit while the request is pending.
-  const [reportingId, setReportingId] = useState<string | null>(null);
-  // One stable Idempotency-Key per comment-report intent, so a double-tap or
-  // retry of the same report deduplicates server-side rather than minting a
-  // fresh key each tap. Keyed by comment id; persists across renders.
-  const reportKeys = useRef<Map<string, string>>(new Map());
   // Imperative handle to the composer so the empty-state CTA can focus it.
   const composerRef = useRef<ComposerInputHandle>(null);
 
@@ -379,40 +371,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     onError: (err: unknown) => setActionError(describeError(err)),
   });
 
-  const reportMutation = useMutation({
-    mutationFn: (commentId: string) => {
-      let key = reportKeys.current.get(commentId);
-      if (!key) {
-        key = generateIdempotencyKey();
-        reportKeys.current.set(commentId, key);
-      }
-      return communityChallengesApi.reportComment(
-        challengeId,
-        commentId,
-        'inappropriate',
-        undefined,
-        key,
-      );
-    },
-    onMutate: (commentId: string) => {
-      setActionError(null);
-      setReportingId(commentId);
-    },
-    onSuccess: () =>
-      setActionError('Thanks -- our team will take a look at this.'),
-    onError: (err: unknown) => setActionError(describeError(err)),
-    onSettled: () => setReportingId(null),
-  });
-
-  const onReport = useCallback(
-    (commentId: string) => {
-      // Guard the double-submit: ignore taps while any report is in flight.
-      if (reportMutation.isPending) return;
-      reportMutation.mutate(commentId);
-    },
-    [reportMutation],
-  );
-
   const handleSubmitProgress = useCallback(
     async (value: number): Promise<{ completed: boolean }> => {
       // Rejects on failure so the sheet keeps the draft + shows its calm inline
@@ -563,41 +521,19 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
-    // Disable this row's report control while any report is in flight; the
-    // tapped row also shows a busy state so a double-tap cannot fire twice.
-    const reporting = reportMutation.isPending;
-    const reportingThis = reportingId === item.id;
     return (
       <View
         // The wrapper carries `listitem` semantics so assistive tech receives
         // the list structure (the parent FlatList carries the `list` role),
-        // while the inner report control keeps `button`. RN types the W3C
+        // while the inner safety control keeps `button`. RN types the W3C
         // `role` prop (not `accessibilityRole`) for list/listitem.
         role="listitem"
         style={[styles.comment, { borderColor: semanticColors.border }]}
         testID={`community-challenge-comment-${item.id}`}
       >
-        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
-          {item.body}
-        </Text>
-        {!mine ? (
-          <HapticPressable
-            intent="light"
-            onPress={() => onReport(item.id)}
-            disabled={reporting}
-            accessibilityRole="button"
-            accessibilityLabel="Report this comment"
-            accessibilityState={{ disabled: reporting, busy: reportingThis }}
-            testID={`community-challenge-comment-${item.id}-report`}
-            style={styles.reportButton}
-          >
-            <Ionicons
-              name="flag-outline"
-              size={16}
-              color={semanticColors.textMuted}
-            />
-          </HapticPressable>
-        ) : null}
+        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+        {/* One report entry per comment (C-314-1): the SafetyMenu, with the
+            reason list and the 24-hour review copy. */}
         {!mine ? (
           <SafetyMenu
             targetType="comment"
@@ -1057,14 +993,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
-  reportButton: {
-    // >=48dp touch target (WCAG 2.5.5). The icon is visually small but the hit
-    // area is a full 48dp square.
-    minWidth: 48,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyComments: {
     paddingVertical: spacing.lg,
     alignItems: 'center',

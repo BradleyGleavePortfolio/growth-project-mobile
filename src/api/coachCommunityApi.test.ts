@@ -252,6 +252,64 @@ describe('coachCommunityApi — mutations carry Idempotency-Key + no coachId', (
     const res = await coachCommunityApi.getFlagged();
     expect(res[0].reason).toBe('harassment');
   });
+
+  it('getFlagged accepts voice-note and win reports with playback media and the 24-hour respond-by', async () => {
+    api.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+            workspace_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            target_type: 'voice_note',
+            target_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+            content: 'Voice note, 0:42',
+            media: {
+              kind: 'voice_note',
+              url: 'https://storage.example.test/signed',
+              duration_ms: 42000,
+              mime_type: 'audio/mp4',
+            },
+            removed: false,
+            author_user_id: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+            author_name: 'Bob Member',
+            cohort_name: 'Spring plan',
+            reason: 'harassment',
+            notes: null,
+            created_at: '2026-09-30T00:00:00.000Z',
+            respond_by: '2026-10-01T00:00:00.000Z',
+            overdue: true,
+          },
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+            workspace_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            target_type: 'win',
+            target_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+            content: 'Best week\n\nBuy my plan here',
+            media: null,
+            removed: false,
+            author_user_id: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+            author_name: 'Alice Member',
+            cohort_name: null,
+            reason: 'spam',
+            notes: null,
+            created_at: '2026-09-30T00:00:00.000Z',
+            respond_by: '2026-10-01T00:00:00.000Z',
+            overdue: false,
+          },
+        ],
+      },
+    });
+    const res = await coachCommunityApi.getFlagged();
+    expect(res.map((r) => r.target_type)).toEqual(['voice_note', 'win']);
+    expect(res[0].media).toEqual({
+      kind: 'voice_note',
+      url: 'https://storage.example.test/signed',
+      duration_ms: 42000,
+      mime_type: 'audio/mp4',
+    });
+    expect(res[0].overdue).toBe(true);
+    expect(res[1].media).toBeNull();
+  });
 });
 
 describe('coachCommunityApi — empty-states payload contract (face + voice)', () => {

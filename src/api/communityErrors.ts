@@ -18,9 +18,13 @@
 import { captureError } from '../services/sentry';
 import { extractRequestId, REQUEST_ID_HEADER } from '../utils/correlation';
 import { randomUuid } from '../utils/idempotency';
+import { SUPPORT_EMAIL } from '../constants/support';
 
-/** Published support path when /community/safety has not loaded. */
-export const COMMUNITY_SUPPORT_EMAIL = 'Bradley@Bradleytgpcoaching.com';
+/**
+ * Published support path when /community/safety has not loaded: the app's one
+ * support constant (OR-109-1; src/constants/support.ts).
+ */
+export const COMMUNITY_SUPPORT_EMAIL = SUPPORT_EMAIL;
 
 export type CommunityAction =
   | 'report'
@@ -35,7 +39,12 @@ export type CommunityAction =
   | 'load_challenge'
   | 'challenge_action'
   | 'load_posts'
-  | 'load_space';
+  | 'load_space'
+  | 'delete'
+  | 'send_win'
+  | 'load_wins'
+  | 'load_voice'
+  | 'send_voice';
 
 export interface CommunityFailure {
   /** Short alert title naming what did not happen. */
@@ -64,6 +73,11 @@ const TITLES: Record<CommunityAction, string> = {
   challenge_action: 'Not saved',
   load_posts: 'Posts not loaded',
   load_space: 'Space not loaded',
+  delete: 'Not deleted',
+  send_win: 'Win not shared',
+  load_wins: 'Wins not loaded',
+  load_voice: 'Voice note not loaded',
+  send_voice: 'Voice note not sent',
 };
 
 const VERBS: Record<CommunityAction, string> = {
@@ -80,6 +94,11 @@ const VERBS: Record<CommunityAction, string> = {
   challenge_action: 'save that',
   load_posts: 'load these posts',
   load_space: 'load this space',
+  delete: 'delete this',
+  send_win: 'share your win',
+  load_wins: 'load community wins',
+  load_voice: 'load this voice note',
+  send_voice: 'send your voice note',
 };
 
 /** Codes whose server `message` is written for members; shown verbatim. */
@@ -89,6 +108,12 @@ const SERVER_WORDED = new Set([
   'community.block.not_found',
   'community.block.workspace_coach',
   'community.dm.blocked',
+  'community.dm.blocked_by_you',
+  'community.win.removed_member',
+  'community.voice.dm_not_supported',
+  'community.voice.not_author',
+  'community.voice.duration_out_of_range',
+  'community.voice.not_entitled',
 ]);
 
 /** Local copy for known machine codes (used when the server sent no message). */
@@ -102,6 +127,8 @@ const BY_CODE: Record<string, string> = {
     'You cannot block your coach. You can report a message or post, or email the safety contact in Community safety.',
   'community.dm.blocked':
     'You cannot message this member. If you need help, email the safety contact in Community safety.',
+  'community.dm.blocked_by_you':
+    'You blocked this member. To message them again, unblock them in Community safety.',
   'community.dm.disabled':
     'Direct messages are turned off in this community. You can still post in the Hall or your cohort, or message your coach.',
   'community.dm.not_found':
@@ -123,6 +150,30 @@ const BY_CODE: Record<string, string> = {
     'Only the coach who owns this community can act on its reports.',
   'community.moderation.cannot_ban_coach':
     'A coach cannot be removed from their own community. Hide the content instead.',
+  'community.win.not_found':
+    'This win is no longer available. It may have been removed. Pull down to refresh.',
+  'community.win.removed_member':
+    'You cannot share wins in this community because your access was removed. If you think this is a mistake, email the safety contact in Community safety.',
+  'community.voice.not_found':
+    'This voice note is no longer available. It may have been deleted or removed. Go back and refresh.',
+  'community.voice.dm_not_supported':
+    'Voice notes can be shared in your community spaces, not in direct messages. Send a text message instead, or share the voice note in a space.',
+  'community.voice.not_author':
+    'Only the person who recorded this voice note, or your coach, can delete it. You can report it instead.',
+  'community.voice.mime_rejected':
+    'This recording format is not supported. Record the voice note again in the app, then send it.',
+  'community.voice.duration_out_of_range':
+    'This voice note is too long. Record a shorter one, then send it.',
+  'community.voice.size_out_of_range':
+    'This recording is too large to send. Record a shorter voice note, then send it.',
+  'community.voice.size_duration_mismatch':
+    'This recording could not be checked. Record the voice note again in the app, then send it.',
+  'community.voice.storage_key_rejected':
+    'This recording could not be attached. Record the voice note again in the app, then send it.',
+  'community.voice.ambiguous_target':
+    'A voice note can go to one space at a time. Choose one space, then send it again.',
+  'community.voice.not_entitled':
+    'Voice notes are not included in your current plan. You can post a text message instead, or ask your coach about your plan.',
 };
 
 interface ErrorBody {

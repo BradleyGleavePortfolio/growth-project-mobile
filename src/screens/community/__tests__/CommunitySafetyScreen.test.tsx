@@ -2,6 +2,7 @@
  * CommunitySafetyScreen — guidelines, contact email, and block list with
  * Unblock (Apple 1.2 published contact + block management).
  */
+import { SUPPORT_EMAIL } from '../../../constants/support';
 import React from 'react';
 import { Alert, Linking, type AlertButton } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
@@ -101,7 +102,7 @@ describe('CommunitySafetyScreen', () => {
     mockGetInfo.mockRejectedValue(new Error('offline'));
     mockListBlocks.mockResolvedValue([]);
     const { findByText } = await renderScreen();
-    expect(await findByText('Bradley@Bradleytgpcoaching.com')).toBeTruthy();
+    expect(await findByText(SUPPORT_EMAIL)).toBeTruthy();
   });
 
   it('falls back to the owner-approved guidelines and 24-hour commitment, byte for byte', async () => {

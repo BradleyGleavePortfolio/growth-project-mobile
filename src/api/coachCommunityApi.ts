@@ -36,7 +36,7 @@ import { generateIdempotencyKey } from '../utils/idempotency';
 // ─── Shared enums (mirror backend) ───────────────────────────────────────────
 
 /** Moderation surface targets a post or a message. */
-export const COACH_MOD_TARGET_TYPES = ['post', 'message'] as const;
+export const COACH_MOD_TARGET_TYPES = ['post', 'message', 'voice_note', 'win'] as const;
 export type CoachModTargetType = (typeof COACH_MOD_TARGET_TYPES)[number];
 
 /** Moderation decisions accepted by PATCH /community/moderation/items/:id. */
@@ -164,13 +164,36 @@ export const CoachCohortDetailSchema = z
   .passthrough();
 export type CoachCohortDetail = z.infer<typeof CoachCohortDetailSchema>;
 
+/**
+ * Playable media on a flagged voice note: a short-lived (15 minute) signed
+ * link, or null when storage signing is unavailable. Pull to refresh mints a
+ * new link.
+ */
+export const CoachFlaggedMediaSchema = z
+  .object({
+    kind: z.literal('voice_note'),
+    url: z.string().nullable(),
+    duration_ms: z.number().int().nonnegative(),
+    mime_type: z.string(),
+  })
+  .passthrough();
+export type CoachFlaggedMedia = z.infer<typeof CoachFlaggedMediaSchema>;
+
 /** A single flagged-content item awaiting a moderation decision. */
 export const CoachFlaggedItemSchema = z
   .object({
     id: z.string().uuid(),
     target_type: z.enum(COACH_MOD_TARGET_TYPES),
-    /** The post id or message id the decision will act on. */
+    /** The post, message, voice note or win id the decision will act on. */
     target_id: z.string().uuid(),
+    /** Voice notes only: what the reviewer plays (audio is not text-filtered). */
+    media: CoachFlaggedMediaSchema.nullable().optional(),
+    /** True when the content was already hidden or deleted. */
+    removed: z.boolean().optional(),
+    /** created_at + 24 hours: the published review commitment. */
+    respond_by: z.string().optional(),
+    /** Still open past respond_by. */
+    overdue: z.boolean().optional(),
     /** The offending content body, surfaced verbatim for the reviewer. */
     content: z.string(),
     author_name: z.string(),
