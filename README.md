@@ -122,6 +122,10 @@ eas login
 # Build for the store (profile names in eas.json)
 eas build --platform ios --profile production
 eas build --platform android --profile production
+
+# Clinic launch build: production plus the clinic flags (Roman tutorial,
+# Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
+eas build --platform ios --profile clinic
 ```
 
 ## Environment variables
@@ -137,6 +141,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
 | `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
 | `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
+| `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | no | Consultation onboarding instead of the lean flow. Off by default; `true` in the `clinic` EAS profile. Calls `PUT /me/onboarding/consultation`, `GET /me/onboarding`, `POST /me/onboarding/complete`, `POST /me/ai-consent/onboarding`, `GET /me/ai-consent`. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | no | PostHog project key. Empty string disables capture. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | no | Defaults to `https://us.i.posthog.com`. |
 | `EXPO_PUBLIC_CRISP_WEBSITE_ID` | yes (support inbox) | Crisp website ID for the in-app support inbox. Found in the Crisp dashboard under **Settings -> Website Settings -> Setup instructions**. Ships in the bundle (public key). See `docs/support-inbox.md`. |
@@ -397,8 +402,17 @@ src/
 - Client 1:1 coach packages stay available on iOS (Guideline 3.1.3(d), Stripe).
 - Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.
 - The gate fails closed. It needs the bundle flag `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` to be explicitly `false` **and** a native build below 6. Build 6 and later always hide, so an OTA update cannot turn these purchases on.
-- API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy` for server-side enforcement.
+- The feature paywall (`ProtectedScreen` + `PaywallSheet`, in front of Roman, Community, Log, Workouts, Booking and the other protected screens) never lists packages or shows a Subscribe CTA on a hidden iOS build. It shows "Your coach manages your access" with a "Message your coach" action (Guideline 3.1.1). Purchases happen only on the 1:1 coaching screen (`ClientPackages`, labelled by `oneToOneCoachingLabel`), reached from More.
+- The unsolicited package sheet (after Day-1 and the 24h re-surface) is never shown on a hidden iOS build; on iOS a client buys only on the labelled 1:1 coaching screen. Purchase-flow copy does not describe the purchase as unlocking app features or access.
+- On hidden iOS builds AI credit top-ups are not purchasable: every entry point is hidden, an AI budget push lands on Settings, and the gated checkout route says "Managed on the web" with no link or URL.
+- `app.json` `ios.supportsTablet` is false (iPhone only for v1, so no iPad screenshots or iPad review).
+- Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
+- The Membership screen's website link is not rendered on hidden iOS builds.
+- API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
+- `app.json` `ios.buildNumber` is 6, the native anchor. `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
+
+New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.
 
 Bottom tabs are icons-only (no labels). Four tabs, in order:
 
@@ -744,7 +758,7 @@ The fitness mobile app ships from this repo to TestFlight (iOS) and Play Interna
 
 - [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
 - [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
-- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "5"`, `expo.android.versionCode = 4`. iOS bumped to 5 to clear an App Store Connect duplicate-build rejection on the build-4 upload; Android versionCode unchanged since no Play upload has occurred for build 4. Bump both together on every subsequent release where both platforms are being submitted — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "6"`, `expo.android.versionCode = 4`. iOS is 6 because `IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6` (`src/config/purchaseSurfaces.ts`): every iOS binary from build 6 up keeps non-P2P purchases hidden whatever an OTA bundle's flag says, and `scripts/validate-app-config.js` fails below 6. Android versionCode is unchanged (iOS ships first; no Play upload is pending). Bump both together on every subsequent release where both platforms are being submitted — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
 - [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
 - [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
 - [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.

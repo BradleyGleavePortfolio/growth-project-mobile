@@ -77,7 +77,11 @@ describe('iOS non-P2P purchase hiding', () => {
     expect(clientNav).not.toMatch(/withNonP2PPurchaseGate|withPurchaseSurfaceGate/);
     expect(read('screens/client/PackageCheckoutScreen.tsx')).toMatch(/oneToOneCoachingLabel\(pkg\?\.coach\?\.displayName\)/);
     expect(read('screens/client/ClientPackagesScreen.tsx')).toMatch(/oneToOneCoachingLabel\(coachName\)/);
-    expect(read('entitlements/ProtectedScreen.tsx')).not.toMatch(/purchaseSurfaces/);
-    expect(read('entitlements/EntitlementProvider.tsx')).not.toMatch(/purchaseSurfaces/);
+    // Fix round #304 B1: the feature gates (ProtectedScreen / PaywallSheet)
+    // DO consult the iOS gate, because they sit in front of app features and
+    // must never sell a package "to unlock this feature" (3.1.1). The 1:1
+    // coaching screen itself stays ungated (asserted above).
+    expect(read('entitlements/ProtectedScreen.tsx')).toMatch(/nonP2PPurchasesHidden\(\)/);
+    expect(read('entitlements/PaywallSheet.tsx')).toMatch(/nonP2PPurchasesHidden\(\)/);
   });
 });

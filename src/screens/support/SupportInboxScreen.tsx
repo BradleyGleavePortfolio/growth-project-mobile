@@ -15,42 +15,61 @@
  * ThemeProvider. No hardcoded colors. No emoji.
  */
 
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
-import { show } from 'crisp-sdk-react-native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { openSupportChat } from '../../services/support/crisp.service';
+
+// The team inbox, also used for access requests on the signup screen.
+const SUPPORT_EMAIL = 'hello@thegrowthproject.app';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
+  /**
+   * Opened from the auth stack (nobody signed in). The chat session is reset
+   * first unless it is already this device's anonymous one, so a previous
+   * user's conversation is never shown (#306 fix round 3, Opus C2).
+   */
+  preSignIn?: boolean;
 }
 
-export default function SupportInboxScreen({ navigation }: Props) {
+export default function SupportInboxScreen({ navigation, preSignIn = false }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // #306 r4 (Sol A1-R3): every open (on mount and from the button) goes
+  // through openSupportChat, which shows the chat only when the session is
+  // known to be safe for whoever is looking. If clearing a previous session
+  // failed, the chat stays closed and the screen offers a retry.
+  const [blocked, setBlocked] = useState(false);
+  // #306 r5 (Opus C-306-4, owner 13:34): when live chat is not available in
+  // this build (no Crisp website id, or no native module) the screen says so
+  // and offers email instead of "should open automatically".
+  const [unavailable, setUnavailable] = useState(false);
+  const open = () => {
+    const result = openSupportChat({ preSignIn });
+    setBlocked(result === 'blocked');
+    setUnavailable(result === 'unavailable');
+  };
 
   useEffect(() => {
     // Open the Crisp chat overlay as soon as the screen mounts.
     // The overlay sits above the current React Native view hierarchy;
     // the user dismisses it via the Crisp UI and returns to this screen.
-    try {
-      show();
-    } catch (err) {
-      // If the native module is unavailable (e.g. running in Expo Go or
-      // EXPO_PUBLIC_CRISP_WEBSITE_ID is not set) the overlay silently
-      // fails and the fallback UI below is shown instead.
-      if (__DEV__) {
-        console.warn('[SupportInboxScreen] crisp-sdk-react-native show() failed:', err);
-      }
-    }
-  }, []);
+    // If the native module is unavailable (e.g. running in Expo Go or
+    // EXPO_PUBLIC_CRISP_WEBSITE_ID is not set) the fallback UI below stays.
+    open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preSignIn]);
 
   return (
     <View style={styles.container}>
@@ -81,27 +100,49 @@ export default function SupportInboxScreen({ navigation }: Props) {
           />
         </View>
         <Text style={styles.heading}>Live Support</Text>
-        <Text style={styles.body_text}>
-          Connect with our support team via the chat overlay. The window
-          should open automatically. If it did not appear, tap the button
-          below.
-        </Text>
+        {unavailable ? (
+          <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-unavailable">
+            Live chat is not available in this version of the app. Email us at {SUPPORT_EMAIL} and
+            a person from our team will reply.
+          </Text>
+        ) : blocked ? (
+          <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-blocked">
+            The support chat could not be opened safely on this device just
+            now, so it stayed closed. Tap Try again in a moment.
+          </Text>
+        ) : (
+          <Text style={styles.body_text}>
+            Connect with our support team via the chat overlay. The window
+            should open automatically. If it did not appear, tap the button
+            below.
+          </Text>
+        )}
+        {unavailable ? (
+          <HapticPressable
+            intent="medium"
+            style={styles.openBtn}
+            onPress={() => {
+              void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Support%20request`).catch(() => undefined);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Email support"
+            testID="support-email"
+          >
+            <Text style={styles.openBtnText}>Email support</Text>
+          </HapticPressable>
+        ) : (
         <HapticPressable
           intent="medium"
           style={styles.openBtn}
-          onPress={() => {
-            try {
-              show();
-            } catch {
-              // silent — handled by fallback message below
-            }
-          }}
+          onPress={open}
           accessibilityRole="button"
-          accessibilityLabel="Open support chat"
+          accessibilityLabel={blocked ? 'Try again' : 'Open support chat'}
           accessibilityHint="Opens the Crisp live support chat overlay"
+          testID="support-chat-open"
         >
-          <Text style={styles.openBtnText}>Open Support Chat</Text>
+          <Text style={styles.openBtnText}>{blocked ? 'Try again' : 'Open Support Chat'}</Text>
         </HapticPressable>
+        )}
 
         <Text style={styles.note}>
           Support is separate from Coach AI and the Client Bot. A human

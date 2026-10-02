@@ -21,10 +21,15 @@ import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
+import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
+import { resetCrispIdentity } from './support/crisp.service';
+import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
+import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
+import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
@@ -42,6 +47,16 @@ const ASYNC_SIGN_OUT_KEYS = [
   'lean_onboarding_synced',
   'analytics_onboarding_completed_fired',
   'pending_invite_code',
+  // #306 r3: a pre-sign-in marker of an unconfirmed coach signup; never
+  // carried to the next person on the device.
+  COACH_SIGNUP_UNCONFIRMED_KEY,
+  // #306 r4 (Sol C1): a signup role notice belongs to the person who signed
+  // up; never shown to the next person on the device.
+  SIGNUP_ROLE_NOTICE_KEY,
+  // #306 r5: whose role-selection gate it is, and an unacknowledged Login
+  // recovery notice; both belong to the person signing out.
+  ROLE_SELECTION_OWNER_KEY,
+  COACH_RECOVERY_GATE_KEY,
   // Pre-R15 global active workout session. Upgrading users may still have
   // a payload at this key from before the per-user namespace landed; if it
   // survives signOut, loadActiveWorkoutSession() on the next user will
@@ -81,6 +96,11 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // inherit it and be handed a session that pairs into someone else's account.
   // Swept via the exported constant so the literal lives in one place.
   IMPORT_PAIRING_MIRROR_KEY_PREFIX,
+  // Legacy plaintext consultation drafts (first build of PR #310, keyed
+  // `consultation_v1:<userId>`): health and screening answers must never
+  // survive sign-out. Current drafts live in SecureStore and are purged by
+  // purgeConsultationDraft below.
+  LEGACY_DRAFT_PREFIX,
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
@@ -330,6 +350,18 @@ export async function signOut(userId?: string | null): Promise<void> {
   // untouched by this step.
   await retireAndDrainIdentityPersistences();
 
+  // Consultation draft (Sol A-04): fence the signing-out user's draft writer
+  // (any write still queued or arriving late from the unmounting flow is
+  // dropped), drain it, then delete the encrypted draft. Awaited so that
+  // `await signOut()` is the privacy boundary for the health answers too.
+  if (signingOutUserId) {
+    try {
+      await purgeConsultationDraft(signingOutUserId);
+    } catch (err) {
+      logger.warn('AuthActions', 'purgeConsultationDraft failed', err);
+    }
+  }
+
   try {
     await Promise.all([
       // S6 R3: empty the in-memory identity mirror (generation bump happens
@@ -357,6 +389,13 @@ export async function signOut(userId?: string | null): Promise<void> {
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.
   setSentryUser(null);
+  // #306 r3 (Opus C2): end the support chat session so the next person on
+  // this device (signed in or not) cannot open this user's conversation.
+  try {
+    resetCrispIdentity();
+  } catch (err) {
+    logger.warn('AuthActions', 'signOut: support chat reset failed', err);
+  }
   // Psych Report #4: Reset PostHog anonymous ID on sign-out
   analyticsReset();
 

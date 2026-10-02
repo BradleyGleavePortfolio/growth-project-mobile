@@ -28,6 +28,14 @@ export interface SignupPolicyResponse {
   require_invite_code?: boolean;
   /** Legacy name (never sent by the current backend). */
   google_signin_enabled?: boolean;
+  /**
+   * C13 (backend #597): `true` when the server accepts `intended_role` at
+   * account creation and SIGNUP_ROLE_CHOICE_ENABLED is on. Absent on the
+   * current production backend.
+   */
+  role_choice?: boolean;
+  role_choice_field?: unknown;
+  role_choice_values?: unknown;
 }
 
 export interface SignupPolicy {
@@ -35,6 +43,14 @@ export interface SignupPolicy {
   providers: AuthProvider[];
   googleEnabled: boolean;
   appleEnabled: boolean;
+  /**
+   * Whether CreateAccount asks "How will you use the app?" and sends
+   * `intended_role`. Only an explicit `role_choice: true` (with the field
+   * name and both values the app knows) turns this on. Anything else,
+   * including the current production backend and a failed GET, is `false`:
+   * no role step, no `intended_role` on any request, exactly today's flow.
+   */
+  roleChoice: boolean;
 }
 
 /**
@@ -46,6 +62,7 @@ export const STRICT_SIGNUP_POLICY: SignupPolicy = {
   providers: ['email'],
   googleEnabled: false,
   appleEnabled: false,
+  roleChoice: false,
 };
 
 const KNOWN: readonly AuthProvider[] = ['email', 'google', 'apple'];
@@ -87,7 +104,26 @@ export function normalizeSignupPolicy(raw: unknown): SignupPolicy {
     providers,
     googleEnabled,
     appleEnabled: providers.includes('apple'),
+    roleChoice: readRoleChoice(r),
   };
+}
+
+/**
+ * `role_choice` is honoured only when it is literally `true` and the server
+ * either omits the descriptor fields or describes exactly the contract this
+ * build speaks (`intended_role`, values `client` and `coach`). A future
+ * backend that renames the field or drops a value therefore hides the step
+ * instead of sending something the server would reject.
+ */
+function readRoleChoice(r: SignupPolicyResponse): boolean {
+  if (r.role_choice !== true) return false;
+  if (r.role_choice_field !== undefined && r.role_choice_field !== 'intended_role') return false;
+  if (r.role_choice_values !== undefined) {
+    if (!Array.isArray(r.role_choice_values)) return false;
+    const values = r.role_choice_values.filter((v): v is string => typeof v === 'string');
+    if (!values.includes('client') || !values.includes('coach')) return false;
+  }
+  return true;
 }
 
 /**
@@ -104,6 +140,7 @@ export const UNKNOWN_SIGNUP_POLICY: SignupPolicy = {
   providers: ['email'],
   googleEnabled: false,
   appleEnabled: false,
+  roleChoice: false,
 };
 
 export type SignupPolicySource = 'live' | 'last_known' | 'unknown';

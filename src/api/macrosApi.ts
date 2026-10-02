@@ -63,6 +63,13 @@ export interface MacroTarget {
   effective_from: string;
   created_at: string;
   archived_at: string | null;
+  /**
+   * Clinic onboarding contract v1 addition 8 (client surface only). 'simple'
+   * means show calories and protein only until `simple_until`. Absent on
+   * older backends, which the client treats as 'full'.
+   */
+  macro_display_mode?: 'simple' | 'full';
+  simple_until?: string | null;
 }
 
 export interface MacroPresetOutput {

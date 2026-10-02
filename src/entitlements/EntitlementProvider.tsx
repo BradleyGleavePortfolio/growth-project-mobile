@@ -25,6 +25,8 @@ export interface EntitlementContextValue {
   paywallVisible: boolean;
   paywallMessage: string | null;
   dismissPaywall: () => void;
+  /** Open the in-app thread with the coach (closes the sheet first). */
+  messageCoach: () => void;
 }
 
 const EntitlementContext = createContext<EntitlementContextValue>({
@@ -36,6 +38,7 @@ const EntitlementContext = createContext<EntitlementContextValue>({
   paywallVisible: false,
   paywallMessage: null,
   dismissPaywall: () => {},
+  messageCoach: () => {},
 });
 
 export function useEntitlement() {
@@ -45,9 +48,14 @@ export function useEntitlement() {
 interface EntitlementProviderProps {
   children: React.ReactNode;
   onOpenPlans?: () => void;
+  /**
+   * Navigate to the client's thread with their coach. Used by the iOS
+   * coach-managed gate (audit #304 B1) instead of a package purchase.
+   */
+  onMessageCoach?: () => void;
 }
 
-export function EntitlementProvider({ children, onOpenPlans }: EntitlementProviderProps) {
+export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: EntitlementProviderProps) {
   const user = useCurrentUser();
   const [status, setStatus] = useState<EntitlementStatus>('unknown');
   const [paywallVisible, setPaywallVisible] = useState(false);
@@ -89,6 +97,11 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
   const dismissPaywall = useCallback(() => {
     setPaywallVisible(false);
   }, []);
+
+  const messageCoach = useCallback(() => {
+    setPaywallVisible(false);
+    if (onMessageCoach) onMessageCoach();
+  }, [onMessageCoach]);
 
   // Bootstrap on login
   useEffect(() => {
@@ -146,6 +159,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
         paywallVisible,
         paywallMessage,
         dismissPaywall,
+        messageCoach,
       }}
     >
       {children}
@@ -154,6 +168,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
         message={paywallMessage}
         onClose={dismissPaywall}
         onSubscribe={handleSubscribe}
+        onMessageCoach={onMessageCoach ? messageCoach : undefined}
       />
     </EntitlementContext.Provider>
   );

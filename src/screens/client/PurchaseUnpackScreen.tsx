@@ -237,7 +237,7 @@ function PurchaseUnpackContent({
           <Text style={styles.emptyTitle}>Purchase complete</Text>
           <Text style={styles.emptyBody}>
             Your coach is finalising what&apos;s included. You&apos;ll see
-            everything appear in Deliverables as it&apos;s unlocked.
+            everything appear in Deliverables as your coach releases it.
           </Text>
         </View>
         <View style={styles.footerCtas}>
@@ -356,7 +356,7 @@ function PurchaseUnpackContent({
 
       {visible.unlocked.length > 0 ? (
         <>
-          <Text style={styles.sectionTitle}>Unlocked now</Text>
+          <Text style={styles.sectionTitle}>Ready now</Text>
           <Text style={styles.sectionSub}>
             Ready to use — tap to open.
           </Text>

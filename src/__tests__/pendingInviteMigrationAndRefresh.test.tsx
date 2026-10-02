@@ -44,8 +44,8 @@ describe('legacy scoped pending-invite keys (re-audit R1/R2: no migration)', () 
 
 describe('B2: foreground invite link refreshes a mounted banner', () => {
   it.each([
-    ['https://app.trygrowthproject.com/join/GP-PNW1', 'GP-PNW1'],
-    ['tgp://join/GP-PNW1?utm=qr', 'GP-PNW1'],
+    ['https://app.trygrowthproject.com/join/GP-TEST1', 'GP-TEST1'],
+    ['tgp://join/GP-TEST1?utm=qr', 'GP-TEST1'],
   ])('extracts %p', (url, code) => {
     expect(extractJoinPathCode(url)).toBe(code);
   });
@@ -53,13 +53,13 @@ describe('B2: foreground invite link refreshes a mounted banner', () => {
   it('banner appears without remount when the signed-in handler writes a code, and hides on clear', async () => {
     const utils = await render(<PendingInviteBanner />);
     await new Promise((r) => setTimeout(r, 10));
-    expect(utils.queryByText(/GP-PNW1/)).toBeNull();
+    expect(utils.queryByText(/GP-TEST1/)).toBeNull();
     // Same call RootNavigator's signed-in handler makes for /join/<code>.
-    const code = extractJoinPathCode('https://app.trygrowthproject.com/join/GP-PNW1');
+    const code = extractJoinPathCode('https://app.trygrowthproject.com/join/GP-TEST1');
     await act(async () => {
       await writePendingInviteCode(code as string);
     });
-    await waitFor(() => expect(utils.getByText(/GP-PNW1/)).toBeTruthy());
+    await waitFor(() => expect(utils.getByText(/GP-TEST1/)).toBeTruthy());
     await act(async () => {
       await clearPendingInviteCode();
     });

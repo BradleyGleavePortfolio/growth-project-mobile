@@ -18,6 +18,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { Colors } from '../constants/colors';
+import { decodePushParams } from './pushTapRouter';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -150,9 +151,8 @@ function dispatchResponse(
   const request = response.notification?.request;
   const data = request?.content?.data;
   const actionScreen = typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;
-  const rawParams = data?.actionParams;
-  const actionParams =
-    rawParams && typeof rawParams === 'object' ? (rawParams as Record<string, string>) : undefined;
+  // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
+  const actionParams = decodePushParams(data?.actionParams);
   onResponse(actionScreen, actionParams, request?.identifier);
 }
 

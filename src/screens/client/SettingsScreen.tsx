@@ -26,6 +26,8 @@ import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
+import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
+import { featureFlags } from '../../config/featureFlags';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -188,7 +190,23 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowLabel}>Change Password</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* Settings > Account > Delete account (D2 contract wording). */}
+          <HapticPressable
+            intent="warning"
+            style={styles.row}
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+            testID="settings-delete-account"
+            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
+          >
+            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+          </HapticPressable>
         </View>
+
+        {/* Clinic tutorial: resume or rerun Roman's tour (flag-gated). */}
+        <TutorialSettingsRow />
 
         {/* Nutrition Preferences */}
         <Text style={styles.sectionLabel}>Nutrition Preferences</Text>
@@ -401,8 +419,8 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </HapticPressable>
         </View>
 
-        {/* Data & Privacy */}
-        <Text style={styles.sectionLabel}>Data & Privacy</Text>
+        {/* Privacy (D2 contract wording: Settings > Privacy > Roman and AI) */}
+        <Text style={styles.sectionLabel}>Privacy</Text>
         <View style={styles.card}>
           {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
           <HapticPressable
@@ -419,6 +437,26 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* D2 (Opus A-05): the optional Roman and AI choice from the
+              onboarding agreement can be allowed or withdrawn here. Shown
+              in builds where that choice can be made. */}
+          {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
+            <HapticPressable
+              intent="light"
+              style={styles.row}
+              onPress={() => navigation.navigate('RomanAiConsent')}
+              accessibilityRole="button"
+              accessibilityLabel="Roman and AI"
+              accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
+              testID="settings-roman-ai"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                <Text style={styles.rowLabel}>Roman and AI</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </HapticPressable>
+          ) : null}
           {/* iMessage-grade DM — Apple 1.2 compliance. Users must be able to
               view and undo their blocks from Settings. */}
           <HapticPressable
@@ -449,17 +487,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               <Text style={styles.rowLabel}>My data</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
-          <HapticPressable
-            intent="warning"
-            style={styles.row}
-            onPress={() => navigation.navigate('DeleteAccount')}
-            accessibilityRole="button"
-            accessibilityLabel="Delete my account"
-            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
-          >
-            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete my account</Text>
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
           </HapticPressable>
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>

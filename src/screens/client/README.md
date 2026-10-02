@@ -55,6 +55,28 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in this directory because it is shared with the coach navigator).
 
+### Clinic tutorial additions (featureFlags.clientTutorial, default OFF)
+
+| Screen | Addition |
+| --- | --- |
+| `HomeScreen.tsx` | `<TutorialHomeSlot />` below the coach introduction banner: the pinned macro explanation card (C08, real `/me/macros/current` or onboarding numbers), a "Message your coach" row into HomeStack `Messages`, and after a skipped tour one quiet line that resumes it. |
+| `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
+| `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
+| `SettingsScreen.tsx` | Settings > Tutorial: resume or run the tour again. |
+
+### Lighter start for never-trackers (no flag; driven by the backend `macro_display_mode`)
+
+| Screen | Behaviour while `simple` (absent field = `full`, unchanged) |
+| --- | --- |
+| `HomeScreen.tsx` | Number grid shows Calories, Protein and Water. Once the simple week ends, `FullMacrosIntroCard` (Roman, once, dismissible, persisted) introduces carbohydrate and fat. |
+| `LogScreen.tsx` | Summary bar shows Eaten, Remaining and Protein. Food entries show protein only. |
+| `ClientMacrosScreen.tsx` | Calories and Protein, plus one quiet note that carbohydrate and fat join after the first week. |
+
+Rules and persistence: `src/macros/README.md`.
+| `wearables/ConnectProviderSheet.tsx` | Emits the tutorial `wearable_connected` signal on an on-device grant or OAuth success. |
+
+Roman's tour runs over these real screens. See `src/tutorial/README.md`.
+
 ## Data flow
 
 ```
@@ -133,7 +155,7 @@ npm run typecheck
 
 ## 1:1 coach packages on iOS (clinic launch)
 
-Client packages are 1:1 person-to-person coaching (App Review Guideline 3.1.3(d)) paid through Stripe, so they stay available on iOS. `ClientPackagesScreen` and `PackageCheckoutScreen` name the individual coach through `oneToOneCoachingLabel()`, for example "1:1 coaching with Bradley". Comp or entitled clients never see the package prompt: `lib/packagePromptGate.shouldOfferPackagePrompt()` is checked by Day1Win and by the 24h `package_prompt`.
+Client packages are 1:1 person-to-person coaching (App Review Guideline 3.1.3(d)) paid through Stripe, so they stay available on iOS. `ClientPackagesScreen` and `PackageCheckoutScreen` name the individual coach through `oneToOneCoachingLabel()`, for example "1:1 coaching with Bradley". The unsolicited package prompt is governed by `lib/packagePromptGate.shouldOfferPackagePrompt()`, checked by Day1Win and by the 24h `package_prompt`: it is offered only after an explicit inactive entitlement (unknown or failed lookups suppress it, so comp clients never see it) and never on a hidden iOS build, where purchase happens only on the labelled 1:1 coaching screen. The feature paywall (`ProtectedScreen` / `PaywallSheet`) shows "Your coach manages your access" with Message your coach on hidden iOS builds, and Membership hides its website link there. Purchase-flow copy speaks of coaching, not of unlocking app features or access.
 
 **Catalog evidence (audit #304 C1).** Client package schemas carry no service-type field, so the app treats every client-purchasable package as 1:1 coaching. Keeping these packages on iOS depends on the owner confirming, or the server enforcing, that every client-purchasable package is real-time 1:1 coaching. Standalone digital content (programs, PDFs or videos sold on their own) must not be sold as a client package. If mixed products are ever allowed, add a trusted per-product classification from the server and fail closed on iOS for unknown or non-P2P products at the list, paywall, share-link checkout and webview entry points.
 

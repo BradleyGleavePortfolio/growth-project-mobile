@@ -402,11 +402,23 @@ export default function MessagesScreen() {
         </View>
         <View style={styles.noCoachBody}>
           <Ionicons name="person-add-outline" size={48} color={colors.textMuted} />
-          <Text style={styles.noCoachHeadline}>No coach yet</Text>
+          <Text style={styles.noCoachHeadline}>No coach connected</Text>
+          {/* Owner 2026-10-01 13:28: a client without a coach is a complete
+              state. This screen says what is missing and offers a working
+              next step instead of a sign-up-time instruction. */}
           <Text style={styles.noCoachText}>
-            You don't have a coach yet. Ask your coach for an invite code and use it when you sign up,
-            or talk to support about linking an existing account.
+            You are not connected to a coach yet, so there is no one to message here. If you have a
+            code from a coach, contact support and we will connect you.
           </Text>
+          <TouchableOpacity
+            onPress={() => navigation.getParent()?.navigate('MoreTab', { screen: 'SupportInbox' })}
+            accessibilityRole="button"
+            accessibilityLabel="Contact support"
+            testID="messages-no-coach-support"
+            style={styles.noCoachAction}
+          >
+            <Text style={styles.noCoachActionText}>Contact support</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -690,6 +702,16 @@ const makeStyles = (colors: ThemeColors) => {
   noCoachBody: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 12 },
   noCoachHeadline: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
   noCoachText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  noCoachAction: {
+    marginTop: 16,
+    minHeight: 44,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  noCoachActionText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
   errorBanner: { backgroundColor: colors.error + '22', paddingVertical: 8, paddingHorizontal: 16 },
   errorBannerText: { color: colors.error, fontSize: 13, textAlign: 'center' },
   chatHeader: {

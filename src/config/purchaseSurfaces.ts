@@ -15,7 +15,7 @@
  *     the app today; any future one must check this gate.
  *
  * Server state stays canonical (rule 22); this only hides UI (see the A1
- * note below for the native anchor and server header).
+ * note below for the native anchor and what is still only planned).
  */
 import { Platform } from 'react-native';
 import * as Application from 'expo-application';
@@ -37,12 +37,20 @@ import { featureFlags } from './featureFlags';
  * so engineers can exercise the flows in the simulator.
  *
  * This is defence in depth, not a proof. An authorised publisher can still
- * ship JS that edits this function. That path is covered by governance:
- * scripts/eas-update-guard.js (#305) refuses a preview/production publish
- * unless the flag is "true" in that EAS environment and this file matches
- * the pinned hash. The API client also sends X-Client-Purchase-Policy so the
- * backend can reject non-P2P checkout/portal sessions for iOS clients (a
- * backend follow-up).
+ * ship JS that edits this function. What exists at this head:
+ *   - this native anchor (app.json ios.buildNumber is 6, and
+ *     scripts/validate-app-config.js fails a build number below
+ *     IOS_P2P_ONLY_MIN_NATIVE_BUILD);
+ *   - expo-updates is NOT configured in this repo yet, so there is no OTA
+ *     channel that could replace this bundle on an installed binary.
+ * What does NOT exist yet (audit #304 C1; do not rely on it):
+ *   - PLANNED (#305): an EAS publish guard that refuses a preview/production
+ *     update unless the flag is "true" and this file matches a pinned hash.
+ *     It must land with, or before, the first OTA-enabled release.
+ *   - PLANNED (backend follow-up): server-side enforcement of the
+ *     X-Client-Purchase-Policy header. The API client sends the header today
+ *     (services/api.ts), but no backend handler reads it, so it is advisory
+ *     until that follow-up ships.
  */
 export const IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6;
 
@@ -70,9 +78,11 @@ export function purchasePolicyHeader(): 'p2p-only' | 'all' {
   return nonP2PPurchasesHidden() ? 'p2p-only' : 'all';
 }
 
-export const NON_P2P_HIDDEN_TITLE = 'Not available in this app';
+// Operator 2026-09-30 (store package P0): AI credit top-ups say "Managed on
+// the web", with no link, URL or instruction to buy elsewhere (3.1.1 / 3.1.3).
+export const NON_P2P_HIDDEN_TITLE = 'Managed on the web';
 export const NON_P2P_HIDDEN_BODY =
-  'This purchase is not offered in the iOS app. Your account and anything you already have are unchanged.';
+  'This is not available in the iOS app. Your account and anything you already have are unchanged.';
 
 /** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
 export function oneToOneCoachingLabel(coachName?: string | null): string {

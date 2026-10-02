@@ -10,22 +10,30 @@ Settings-area screens for The Growth Project mobile app.
 
 **Purpose**
 
-Allows a user to initiate permanent deletion of their account from within the app. The flow follows the two-phase model specified by GDPR Article 17 ("right to erasure"):
+In-app account deletion for both roles (Apple App Review 5.1.1(v); GDPR Art. 17; Washington My Health My Data Act right to deletion). Deletion can be completed entirely in the app: no email step, no contacting support.
 
-1. User reads a clear summary of what will be permanently deleted and what must be retained for legal compliance.
-2. User types `DELETE` (case-insensitive) or their registered email address to demonstrate deliberate intent. The confirm button is disabled until this gate passes.
-3. On submit, `POST /me/delete-account` sends a single-use confirmation link to the user's registered email (24-hour TTL).
-4. On API success, an `Alert.alert` explains the 14-day grace period and that the user can cancel from Settings. Pressing OK calls `signOut()`.
+**Flow**
 
-The 14-day grace period and cancellation flow are handled on the server side. The mobile client does not need to implement the cancel flow here because the user's active session ends on sign-out. The cancel endpoint (`POST /me/delete-account/cancel`) remains accessible during the grace window; the user would need to sign back in and navigate to Settings to invoke it.
+1. On open the screen calls `GET /me/delete-account/status`. If a deletion is already scheduled it shows the **status view** (step 5) instead of the form.
+2. The user reads what is permanently deleted and what is retained (lists exported as `PERMANENTLY_DELETED` / `KEPT_RECORDS`; keep them in line with the backend finalizer fan-out in `growth-project-backend/src/account-deletion/account-deletion.fanout.ts`).
+3. The user types `DELETE` (case-insensitive) or their account email, then **re-authenticates**:
+   - password, or
+   - on iOS when available, the native Sign in with Apple sheet (`reauthenticateWithApple()` in `src/utils/appleAuth.ts`; requests no scopes and does NOT create a new session).
+4. `POST /auth/recent-auth-token` (`{ password }` or `{ provider: 'apple', provider_token }`) returns a short-lived single-use token; `POST /me/delete-account` with header `X-Recent-Auth-Token` schedules the deletion **in the same request** (the 14-day grace period starts now). Apple users also send `apple_authorization_code` so the server revokes their Sign in with Apple tokens. The request is idempotent on the server.
+5. **Status view:** the exact permanent-deletion date (`purge_after`), the deleted-data list, **Keep my account** (`POST /me/delete-account/cancel`, after a confirm alert) while `cancellable`, and Sign out. The user is not signed out automatically; the account stays usable during the grace period.
 
-**API surface**
+Errors: 401 on re-auth shows "That password is not correct" / "Apple could not confirm it is you"; 429 shows a wait-a-minute message; other failures show the server message. The re-auth request is sent with `skipAuthRefresh` so a wrong password is not replayed by the 401 refresh interceptor against the 5/min throttle.
 
-| Method | Endpoint | Auth required |
-|--------|----------|---------------|
-| `POST` | `/me/delete-account` | JWT bearer |
+The coach Settings danger zone and the Trust Center read/cancel the same canonical status (`deletionApi`) and open this screen; neither schedules deletion inline. The legacy `usersApi.deleteAccount` (`DELETE /users/me/account`) is not used by any deletion UI.
 
-See `src/services/api.ts` — `deletionApi.requestDeletion()`.
+**API surface** (`src/services/api.ts`, `deletionApi`)
+
+| Method | Endpoint | Auth |
+|--------|----------|------|
+| `POST` | `/auth/recent-auth-token` | JWT bearer + password or fresh Apple identity token |
+| `POST` | `/me/delete-account` | JWT bearer + `X-Recent-Auth-Token` |
+| `GET` | `/me/delete-account/status` | JWT bearer |
+| `POST` | `/me/delete-account/cancel` | JWT bearer |
 
 **Navigation**
 
@@ -56,118 +64,10 @@ The screen is scanned by `src/__tests__/quietLuxuryDoctrine.test.ts`. It contain
 `src/screens/settings/__tests__/DeleteAccountScreen.test.tsx`
 
 Coverage:
-- Render: title, 14-day grace copy, permanently-deleted list, kept-for-legal list, confirmation input, initial disabled state
-- Confirmation gate: disabled on empty/wrong input, enabled on "DELETE" (case-insensitive), enabled on matching email (case-insensitive)
-- Success: calls `deletionApi.requestDeletion`, shows success Alert with grace message, calls `signOut` after Alert OK
-- Error: shows error text on API failure, does not call signOut, clears error when input changes
-- Navigation: back button calls `navigation.goBack`, cancel button calls `navigation.goBack`
-- Doctrine: rendered JSON contains no forbidden tokens
+- Request form: lists and grace copy, no email/support promises, doctrine tokens, DELETE/email gate plus password requirement, Apple option hidden when unavailable
+- Password re-auth: token minted then deletion scheduled with it, date shown, no auto sign-out; 401 wrong password, 429, scheduling failure stays on form
+- Apple re-auth: identity token proof, authorization code forwarded, silent cancel
+- Status view: scheduled date, cancel returns to the form, cancel hidden when not cancellable, sign out
+- Navigation: back and "Cancel — keep my account"
 
-**Related files**
-
-| File | Role |
-|------|------|
-| `src/services/api.ts` | `deletionApi` — HTTP client wrappers |
-| `src/screens/client/SettingsScreen.tsx` | "Delete account" navigation row (client) |
-| `src/screens/coach/SettingsScreen.tsx` | "Delete account" navigation row (coach) |
-| `src/navigation/ClientNavigator.tsx` | Route registration (`MoreStack`) |
-| `src/navigation/CoachNavigator.tsx` | Route registration (`SettingsStack`) |
-| Backend: `src/account-deletion/` | State machine, cascade, finalize |
----
-# Data Export Screen — `src/screens/settings/`
-
-This screen implements GDPR Article 20 (right to data portability) for the mobile app. It lets any user (coach or client) request a complete copy of their personal data, check the status of an in-progress export, and download the finished file when it is ready.
-
-> **GDPR dependency note:** This screen is closely linked to the account deletion flow. If a user intends to delete their account, they should download their data here first. Once deletion is confirmed, the data cannot be recovered. The screen surfaces this warning at the bottom of the page.
-
----
-
-## Screens
-
-| Screen | File | Purpose |
-|--------|------|---------|
-| `DataExportScreen` | `DataExportScreen.tsx` | Main screen: explanation, request button, status display, download button. |
-
----
-
-## State machine
-
-```
-         mount
-           │
-           ▼
-        loading  ──loadStatus── ─── 404 ──► idle
-           │                          ├── PENDING/RUNNING ──► polling
-           │                          ├── READY ──────────► ready
-           │                          ├── FAILED ──────────► failed
-           │                          └── EXPIRED ─────────► expired
-           │
-        idle ──press "Request"──► requesting ──success──► polling
-                                              └──error───► failed
-
-        polling ──poll every 5s── ─── READY ──► ready
-                                       ├── FAILED ──► failed
-                                       └── EXPIRED ──► expired
-
-        ready ──press "Download"──► Linking.openURL (external browser)
-              ──press "Request new"──► requesting
-
-        failed ──press "Try again"──► requesting
-               ──press "Cancel"──► idle
-
-        expired ──press "Request new"──► requesting
-```
-
----
-
-## API endpoints consumed
-
-| Method | Path | Status |
-|--------|------|--------|
-| `POST` | `/v1/me/data-export/request` | LIVE |
-| `GET` | `/v1/me/data-export/status` | LIVE |
-| `GET` | `/v1/me/data-export/download?token=<jwt>` | Opened via `Linking.openURL` (browser) |
-
----
-
-## Where it is wired
-
-- **Client Settings screen:** `src/screens/settings/ClientSettingsScreen.tsx` — "Data export" row under "Account" section.
-- **Coach Settings screen:** `src/screens/settings/CoachSettingsScreen.tsx` — same placement.
-
----
-
-## Env vars / feature flags
-
-| Variable | Purpose |
-|----------|---------|
-| `EXPO_PUBLIC_API_BASE_URL` | Base URL for the download redirect. Defaults to `https://api.thegrowthproject.app`. |
-
----
-
-## Tests
-
-| File | What it asserts |
-|------|----------------|
-| `src/screens/settings/__tests__/DataExportScreen.test.tsx` | Render, request flow, status polling, expired state, accessibility. |
-
-Specific test cases:
-- Heading and included-data list render
-- Request button shown in idle state
-- Moves to polling state after requesting
-- 409 Conflict shows "already in progress" error
-- Generic network error shows error state
-- Polling transitions to READY state
-- File size and expiry date shown when ready
-- Download button present when READY
-- Polling transitions to FAILED state
-- Initial EXPIRED status renders expired state
-- Request new export from expired state works
-- All interactive elements have `accessibilityLabel` + `accessibilityRole`
-
----
-
-## Future work
-
-- **Push notification on ready:** Rather than polling, the app could receive a push notification when the export completes.
-- **Progress bar:** Show a rough completion percentage during RUNNING state (requires a backend progress field on the export record).
+Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).

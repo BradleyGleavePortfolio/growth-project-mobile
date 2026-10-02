@@ -375,10 +375,10 @@ export default function ClientPackagesScreen() {
           <TouchableOpacity
             onPress={() => void load()}
             accessibilityRole="button"
-            accessibilityLabel="Refresh access"
+            accessibilityLabel="Refresh coaching status"
             style={styles.refreshLink}
           >
-            <Text style={styles.refreshLinkText}>Already completed payment? Tap to refresh your access.</Text>
+            <Text style={styles.refreshLinkText}>Already paid your coach? Tap to refresh your coaching status.</Text>
           </TouchableOpacity>
         </>
       ) : null}

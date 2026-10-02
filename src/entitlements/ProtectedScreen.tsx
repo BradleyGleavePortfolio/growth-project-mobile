@@ -21,13 +21,15 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useEntitlement } from './EntitlementProvider';
 import { useTheme } from '../theme/useTheme';
+import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
+import { COACH_MANAGED_BODY, COACH_MANAGED_TITLE } from './PaywallSheet';
 
 interface ProtectedScreenProps {
   children: React.ReactNode;
 }
 
 export function ProtectedScreen({ children }: ProtectedScreenProps) {
-  const { entitlementActive, status, openPlans } = useEntitlement();
+  const { entitlementActive, status, openPlans, messageCoach } = useEntitlement();
   const { colors, tokens } = useTheme();
 
   if (status === 'loading' || status === 'checking' || status === 'unknown') {
@@ -37,6 +39,39 @@ export function ProtectedScreen({ children }: ProtectedScreenProps) {
         testID="protected-screen-loading"
       >
         <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // Audit #304 B1 (App Review 3.1.1): on hidden iOS builds the gate never
+  // says "Choose a Plan" or offers plans; the coach manages access.
+  if (entitlementActive !== true && nonP2PPurchasesHidden()) {
+    return (
+      <View
+        style={[styles.center, { backgroundColor: colors.background }]}
+        testID="protected-screen-coach-managed"
+      >
+        <Text style={[styles.title, { color: colors.textPrimary, ...tokens.typography.h2 }]}>
+          {COACH_MANAGED_TITLE}
+        </Text>
+        <Text style={[styles.body, { color: colors.textSecondary, ...tokens.typography.body }]}>
+          {COACH_MANAGED_BODY}
+        </Text>
+        <TouchableOpacity
+          style={[styles.coachButton, { backgroundColor: colors.primary }]}
+          onPress={messageCoach}
+          accessibilityRole="button"
+          testID="protected-screen-message-coach"
+        >
+          <Text
+            style={[
+              styles.coachButtonText,
+              { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
+            ]}
+          >
+            Message your coach
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -100,6 +135,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 8,
+  },
+  coachButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 4,
+  },
+  coachButtonText: {
+    fontWeight: '500',
   },
   buttonText: {
     fontWeight: '600',

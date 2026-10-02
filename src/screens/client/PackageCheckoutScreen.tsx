@@ -99,7 +99,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     if (shareToken == null || shareToken === '') {
       setError({
         title: 'This link is not yet active',
-        body: 'Coach package share links are coming soon. Ask your coach for an updated link.',
+        body: 'This coach package link is not active yet. Ask your coach for an updated link.',
       });
       setLoading(false);
       return;

@@ -10,6 +10,7 @@
 // gracefully (handled in the client's readAllSupportedRecords).
 
 import { Platform } from 'react-native';
+import { assertAndroidHealthConnectEnabled } from '../../../config/healthConnect';
 import { secureStorage } from '../../secureStorage';
 import { logger } from '../../../utils/logger';
 import {
@@ -19,7 +20,6 @@ import {
 import {
   HEALTH_CONNECT_RECORD_TYPES,
   healthConnectClient as defaultClient,
-  isHealthConnectSupported,
   type HealthConnectClient,
   type HealthConnectRecordType,
 } from './healthConnectClient';
@@ -74,9 +74,10 @@ export interface HealthConnectSyncResult {
 }
 
 function assertSupported(): void {
-  if (!isHealthConnectSupported()) {
+  if (Platform.OS !== 'android') {
     throw new HealthConnectUnsupportedError(Platform.OS);
   }
+  assertAndroidHealthConnectEnabled();
 }
 
 /** Read the persisted last-sync instant, or null if never synced. */

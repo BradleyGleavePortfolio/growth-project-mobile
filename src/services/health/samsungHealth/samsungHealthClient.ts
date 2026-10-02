@@ -21,6 +21,7 @@
  */
 
 import { Platform } from 'react-native';
+import { assertAndroidHealthConnectEnabled } from '../../../config/healthConnect';
 import { logger } from '../../../utils/logger';
 import {
   SAMSUNG_HEALTH_PACKAGE_NAME,
@@ -67,6 +68,7 @@ export interface SamsungHealthBridge {
 let bridgeOverride: SamsungHealthBridge | null = null;
 
 export function getBridge(): SamsungHealthBridge {
+  assertAndroid();
   if (bridgeOverride) return bridgeOverride;
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mod = require('react-native-health-connect') as SamsungHealthBridge;
@@ -83,6 +85,7 @@ function assertAndroid(): void {
   if (Platform.OS !== 'android') {
     throw new SamsungHealthUnsupportedError(Platform.OS);
   }
+  assertAndroidHealthConnectEnabled();
 }
 
 /**

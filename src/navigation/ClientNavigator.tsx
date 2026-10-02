@@ -40,6 +40,7 @@ import ProfileScreen from '../screens/client/ProfileScreen';
 import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -133,6 +134,14 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
+// Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
+// unless featureFlags.clientTutorial is on.
+import TutorialHost from '../components/tutorial/TutorialHost';
+import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
+import { setTutorialRoute } from '../tutorial/tutorialStore';
+import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
+import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
+import { logger } from '../utils/logger';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -145,7 +154,12 @@ const ProtectedLogScreen = withProtectedScreen(LogScreen);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
 const ProtectedCommunityScreen = withProtectedScreen(CommunityScreen);
 const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
-const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
+// Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
+// the assigned coach is free server-side (client-messaging.controller.ts:
+// GET/POST /messages, /messages/read, /messages/unread-count carry no
+// ClientEntitlementGuard; only voice-upload is paid and still 402s into the
+// paywall). It is also the one action the iOS coach-managed gate offers, so
+// gating it here would trap an unentitled client in a loop.
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -224,6 +238,8 @@ export type MoreStackParamList = {
   Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
+  /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
+  RomanAiConsent: undefined;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -329,7 +345,7 @@ function HomeStackNavigator() {
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
-      <HomeStackNav.Screen name="Messages"              component={ProtectedMessagesScreen} />
+      <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* Phase 9 — Notification center screens */}
       <HomeStackNav.Screen
         name="NotificationCenter"
@@ -410,6 +426,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
@@ -527,8 +544,31 @@ function CommunityTabBarIcon({ color }: { color: string }) {
   );
 }
 
+const TUTORIAL_TABS = [
+  'Home',
+  'WorkoutTab',
+  'Log',
+  'MoreTab',
+  ...(featureFlags.communityTab ? ['CommunityTab'] : []),
+];
+
 export default function ClientNavigator() {
+  // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
+  // has not confirmed yet is sent when the app opens.
+  useAiWithdrawalDrain();
+  // Latest tab-screen navigation object, captured from screenListeners, so
+  // the tutorial overlay (which sits outside the navigator) can offer
+  // "Take me there" for screens behind a menu.
+  const tabNavRef = React.useRef<{ navigate: (name: string, params?: object) => void } | null>(null);
+  const onTutorialNavigate = React.useCallback((t: TutorialNavTarget) => {
+    try {
+      tabNavRef.current?.navigate(t.tab, t.screen ? { screen: t.screen } : undefined);
+    } catch (err) {
+      logger.warn('ClientNavigator', 'tutorial navigate failed', err);
+    }
+  }, []);
   return (
+    <TutorialHost tabs={TUTORIAL_TABS} onNavigate={onTutorialNavigate}>
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
@@ -543,11 +583,21 @@ export default function ClientNavigator() {
           height: 64,
         },
       }}
-      screenListeners={{
-        tabPress: () => {
-          // Phase 11 / Track 3: haptic selection feedback on tab switch
-          HapticService.selection();
-        },
+      screenListeners={({ navigation }) => {
+        if (featureFlags.clientTutorial) tabNavRef.current = navigation;
+        return {
+          tabPress: () => {
+            // Phase 11 / Track 3: haptic selection feedback on tab switch
+            HapticService.selection();
+          },
+          // Clinic tutorial: report the focused route path so route gates
+          // (e.g. "tap Train") are satisfied by real navigation only.
+          state: (e) => {
+            if (!featureFlags.clientTutorial) return;
+            const data = e.data as { state?: NavStateLike } | undefined;
+            setTutorialRoute(withInitialLeaf(focusedRoutePath(data?.state)));
+          },
+        };
       }}
     >
       <Tab.Screen
@@ -605,6 +655,7 @@ export default function ClientNavigator() {
         />
       )}
     </Tab.Navigator>
+    </TutorialHost>
   );
 }
 

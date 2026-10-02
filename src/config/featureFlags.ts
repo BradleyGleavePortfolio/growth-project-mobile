@@ -32,9 +32,11 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
+  EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
+  EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING: process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
   EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES: process.env.EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES,
   EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS,
@@ -86,6 +88,33 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FEATURE_BLOODWORK
    */
   bloodwork: readFlag('EXPO_PUBLIC_FEATURE_BLOODWORK', false),
+
+  // ─── Consultation onboarding (consult-v1) ────────────────────────────────
+  /**
+   * The full personal-training consultation (chapters 0-8, single P0
+   * "I agree" box, readiness screening, summary, macro and plan reveals)
+   * replaces the lean flow for new clients. OFF by default in every general
+   * build (not `isDev`), ON only in the `clinic` EAS build profile. Rollback
+   * is this flag: off mounts the lean flow exactly as before.
+   *
+   * env: EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING
+   */
+  consultationOnboarding: readFlag('EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', false),
+
+  // ─── Clinic launch — Roman-led client tutorial (C08 + C09) ───────────────
+  /**
+   * The action-gated Roman tour after the plan reveal, the pinned macro and
+   * plan explanation cards on Home and Train, the Home "Message your coach"
+   * row, the Profile and more "Connected devices" / "Health and sleep" rows,
+   * and Settings > Tutorial. OFF by default unconditionally (owner decision
+   * T-1); ON only in the `clinic` EAS build profile. Turning it off is the
+   * whole rollback: no overlay, no cards, no rows, and startClientTutorial()
+   * returns false. See src/tutorial/README.md for the companion flags the
+   * clinic build needs.
+   *
+   * env: EXPO_PUBLIC_FF_CLIENT_TUTORIAL
+   */
+  clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */

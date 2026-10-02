@@ -64,3 +64,31 @@ describe('the old client-wide flag is gone', () => {
     expect(eas.build.preview.env).not.toHaveProperty('EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES');
   });
 });
+
+describe('C1 (#304): comments do not claim controls that do not exist', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const fs = require('fs');
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const path = require('path');
+  const ROOT = path.resolve(__dirname, '..', '..', '..');
+  const src: string = fs.readFileSync(path.join(ROOT, 'src', 'config', 'purchaseSurfaces.ts'), 'utf8');
+
+  it('the OTA publish guard is either present or explicitly marked PLANNED', () => {
+    const guardExists = fs.existsSync(path.join(ROOT, 'scripts', 'eas-update-guard.js'));
+    if (!guardExists) {
+      expect(src).toMatch(/PLANNED \(#305\): an EAS publish guard/);
+      expect(src).not.toMatch(/eas-update-guard\.js \(#305\) refuses/);
+    }
+  });
+
+  it('the purchase-policy header is described as advisory until the backend reads it', () => {
+    expect(src).toMatch(/PLANNED \(backend follow-up\)/);
+    expect(src).toMatch(/advisory/);
+  });
+
+  it('the app.json build number note matches app.json', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const app = require('../../../app.json');
+    expect(src).toMatch(new RegExp(`ios\\.buildNumber is ${app.expo.ios.buildNumber}`));
+  });
+});

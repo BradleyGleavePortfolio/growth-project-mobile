@@ -35,6 +35,16 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `community/CommunityWinCard.tsx` | Community feed primitive. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
+### Roman (AI butler) identity
+
+| File | What it does |
+| --- | --- |
+| `roman/RomanAvatar.tsx` | Roman's circular face avatar (neutral / smile / monogram fallback). |
+| `roman/romanAvatarAssets.ts` | Resolves bundled Roman art: `romanFaceAsset(crop)` for avatars, `romanArtAsset('portrait' \| 'hero' \| 'welcome')` for onboarding, reveal and tutorial surfaces. |
+| `roman/__tests__/romanCanonicalAssets.test.ts` | Pins every file in `assets/roman/` by sha256. |
+
+Roman is an older Black man in his 60s in a black three-piece butler suit, white shirt and straight black tie. The only approved art is `tgp-agent-context/design/roman/` (see `tgp-agent-context/strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md` section 3). Until 2026-09-30 the bundled avatar files showed a different, younger man; that art is removed and must never return. Replacing any Roman asset requires an owner decision recorded in tgp-agent-context, after which the pinned hashes are updated in the same PR.
+
 ### Logging primitives
 
 | File | What it does |
@@ -52,9 +62,12 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
-| `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Not available in this app" state and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
+| `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
 | `coach/ai-budget/*` | AI usage meter, 95% banner, 80% tutorial and hard-pause modal. When `nonP2PPurchasesHidden()` is true, the meter is a non-interactive readout with neutral accessibility copy, the banner has no CTA, the tutorial shows three usage-only cards ending in "Done", and the hard pause says when AI resumes. None of them mentions packs, buying or top-ups. |
 | `invite/PasteInviteCodeButton.tsx` | "Paste invite code" text button used by CreateAccount and RoleSelection. It reads the clipboard only on tap and parses with `lib/inviteCodeInput.extractInviteCode`, which accepts a bare code, `/join/<code>`, `tgp://join/<code>` or `?code=`, and never truncates a token. It fills the field and never auto-attaches. |
+| `tutorial/` | Clinic launch Roman-led tutorial UI (featureFlags.clientTutorial, default OFF): `TutorialHost` (hydration, signals, live macros, overlay mount), `TutorialOverlay` (Roman coach-mark card, progress, spotlight, skip/resume, defer, done line, completion), `TutorialTarget` (spotlight measurement wrapper), the C08 `MacroExplanationCard` (Home) and `PlanExplanationCard` (Train), `TutorialHomeSlot` (re-offer line, macro card, Message your coach row), `TutorialSettingsRow` (Settings > Tutorial). Logic and flags: `src/tutorial/README.md`. |
+| `home/FullMacrosIntroCard.tsx` | One quiet Roman card on Home. It introduces carbohydrate and fat once, on the day a never-tracker's simple macro view ends. Dismissible and persisted per user. See `src/macros/README.md`. |
+| `log/DailySummaryBar.tsx`, `log/MealSectionCard.tsx` | Accept a `mode` / `macroMode` prop (`simple` or `full`, default `full`). `simple` shows calories and protein only. |
 | `PendingInviteBanner.tsx` | Home consent banner for a pending invite code. It refreshes on auth events and on `subscribePendingInviteCode` (a foreground invite link). Legacy scoped `pending_invite_code:*` keys are never read; they are only deleted at sign-out. |
 
 ## Data flow
