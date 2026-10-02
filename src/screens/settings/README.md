@@ -71,3 +71,34 @@ Coverage:
 - Navigation: back and "Cancel — keep my account"
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
+
+### RomanConversationsScreen and RomanConversationScreen
+
+`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).
+
+**Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
+
+**Flow**
+
+1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local date and message count (coach-tool chats are labelled), and pages with "Show older conversations".
+2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
+3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
+4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
+5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id).
+
+**Account binding:** every request remembers the account that made it. Sign-out (`authEvents` `logout`) clears the list and transcript at once; sign-in re-reads for whoever is signed in; answers for the previous account are dropped; a delete is not sent unless the account that loaded the list is still signed in. Nothing is stored on the device; the server sends `no-store`. Both screens carry `ph-no-capture`.
+
+**Errors** (`romanChatsCopy.ts` `failureView`, from status and machine `code`): offline, 401 signed out, 403 not allowed (reference + support), 404 `ROMAN_SESSION_NOT_FOUND`, uncoded 404 (backend without #635, or Roman chat reading switched off for the transcript, where Delete is still offered), 400 `ROMAN_CURSOR_INVALID` (list re-read from the top), 503 `ROMAN_ERASE_INCOMPLETE` (one / all copy), 429, and anything else as a short reference + Contact support (mailto with the reference only) + a Sentry report with status, code and request id only. Delete copy never claims a result the server did not confirm.
+
+**Entry points:** Settings > Privacy > Roman and AI (`RomanAiConsentScreen`, row "Your conversations with Roman"), the Roman chat header (`RomanConversationsButton`), and coach Settings > Privacy. The routes `RomanConversations` / `RomanConversation` are registered in the client More stack and the coach Settings stack without the Roman chat flag, because the backend list and delete routes are outside the chat switch.
+
+**API surface** (`src/api/romanChatsApi.ts`, backend #635 `docs/roman-chat-deletion.md`)
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `GET` | `/roman/sessions?limit=&cursor=` | metadata only, newest first |
+| `DELETE` | `/roman/sessions/:id` | 204, idempotent |
+| `DELETE` | `/roman/sessions` | 204, every chat, both surfaces |
+| `GET` | `/roman/sessions/:id/messages?limit=&cursor=` | behind the Roman chat switch |
+
+**Tests:** `src/api/__tests__/romanChatsApi.test.ts`, `src/screens/settings/__tests__/RomanConversationsScreen.test.tsx`, `src/screens/settings/__tests__/RomanConversationScreen.test.tsx`, `src/components/roman/__tests__/RomanConversationsButton.test.tsx`, `src/navigation/__tests__/romanConversationsReachable.test.ts`.

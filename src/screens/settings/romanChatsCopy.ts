@@ -94,9 +94,9 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
       return {
         message:
           op === 'delete_one'
-            ? 'I could not reach the server, so this conversation is not deleted yet. Check your connection, then delete it again.'
+            ? 'I could not reach the server, so this conversation may not be deleted yet. Check your connection, then delete it again. Deleting again is safe.'
             : op === 'delete_all'
-              ? 'I could not reach the server, so your conversations are not deleted yet. Check your connection, then try again.'
+              ? 'I could not reach the server, so your conversations may not be deleted yet. Check your connection, then try again. Deleting again is safe.'
               : op === 'read'
                 ? 'I could not reach the server to open this conversation. Check your connection, then tap Try again.'
                 : 'I could not reach the server to load your conversations. Check your connection, then tap Try again.',
@@ -179,9 +179,9 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
       const ref = shortReference(f.requestId);
       const what =
         op === 'delete_one'
-          ? 'The server could not delete this conversation, so it is still here. Try again.'
+          ? 'The server could not confirm that this conversation was deleted, so it is still listed. Try again. Deleting again is safe.'
           : op === 'delete_all'
-            ? 'The server could not delete your conversations, so the list shows what is still there. Try again.'
+            ? 'The server could not confirm that your conversations were deleted, so the list shows what is still there. Try again. Deleting again is safe.'
             : op === 'read'
               ? 'The server could not open this conversation. Tap Try again.'
               : 'The server could not load your conversations. Tap Try again.';
