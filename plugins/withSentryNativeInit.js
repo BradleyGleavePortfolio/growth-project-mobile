@@ -32,16 +32,31 @@
  *   - release: `<version>+<ios.buildNumber>` / `<version>+<android.versionCode>`
  *     (the same string `buildReleaseId()` reports from JS).
  *   - TGP_SENTRY_NATIVE_INIT=0 skips native init (build-time kill switch).
+ * Every prebuild reconciles the generated code (B-330-4): the plugin-owned
+ * init block and import block are removed first and only re-added when the
+ * options resolve, so switching the kill switch on or removing the DSN also
+ * removes an initializer an earlier (incremental) prebuild wrote. Imports the
+ * file already had outside the owned block are never touched.
+ * Android also gets the manifest flag io.sentry.breadcrumbs.network-events =
+ * false. SentryAndroid reads manifest metadata on every init, so the network
+ * breadcrumb suppression survives the React Native SDK's re-init from JS,
+ * which has no option for it (B-330-3). It is set whatever the DSN, since it
+ * only matters when Sentry runs.
  * A DSN, environment or release that is not a safe literal fails prebuild with
  * a message that says how to fix it; so does an AppDelegate / MainApplication
  * the plugin cannot patch (a silent no-op is the defect this fixes).
  */
 'use strict';
 /* eslint-disable @typescript-eslint/no-var-requires -- CommonJS config plugin */
-const { withAppDelegate, withMainApplication } = require('expo/config-plugins');
+const { AndroidConfig, withAndroidManifest, withAppDelegate, withMainApplication } = require('expo/config-plugins');
 
 const MARK_BEGIN = '// @generated begin tgp-sentry-native-init';
 const MARK_END = '// @generated end tgp-sentry-native-init';
+const IMPORTS_BEGIN = '// @generated begin tgp-sentry-native-imports';
+const IMPORTS_END = '// @generated end tgp-sentry-native-imports';
+const IOS_IMPORTS = ['Sentry'];
+const ANDROID_IMPORTS = ['io.sentry.Sentry', 'io.sentry.android.core.SentryAndroid', 'io.sentry.android.core.SentryAndroidOptions'];
+const NETWORK_EVENTS_META = 'io.sentry.breadcrumbs.network-events';
 const DSN_RE = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._-]+)*\/\d+$/;
 const ENV_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const RELEASE_RE = /^[A-Za-z0-9._+-]{1,200}$/;
@@ -120,10 +135,41 @@ function kotlinBlock(o, indent) {
   return lines.map((l) => indent + l).join('\n');
 }
 
-function stripBlock(contents) {
-  // The block plus the blank line the iOS insert adds after it.
-  const re = new RegExp(`[ \\t]*${MARK_BEGIN}[\\s\\S]*?${MARK_END}\\n(?:[ \\t]*\\n)?`, 'g');
-  return contents.replace(re, '');
+/**
+ * Removes every plugin-owned block (init and imports), matching the marker
+ * lines exactly, plus (iOS) the blank line the insert adds after the init
+ * block. Text outside the markers is returned unchanged.
+ */
+function stripOwned(contents, blankAfterInit) {
+  const lines = contents.split('\n');
+  const out = [];
+  let end = null;
+  let dropBlankAfter = false;
+  for (const line of lines) {
+    const t = line.trim();
+    if (end !== null) {
+      if (t === end) {
+        dropBlankAfter = blankAfterInit && end === MARK_END;
+        end = null;
+      }
+      continue;
+    }
+    if (t === MARK_BEGIN || t === IMPORTS_BEGIN) {
+      end = t === MARK_BEGIN ? MARK_END : IMPORTS_END;
+      continue;
+    }
+    if (dropBlankAfter) {
+      dropBlankAfter = false;
+      if (t === '') continue;
+    }
+    out.push(line);
+  }
+  if (end !== null) {
+    throw new Error(
+      'withSentryNativeInit: a generated tgp-sentry block in the native entry file has no end marker. Fix: delete the ios/ and android/ folders and run expo prebuild --clean.',
+    );
+  }
+  return out.join('\n');
 }
 
 /** Insert lines after the last top-level `import` line (Swift or Kotlin). */
@@ -138,6 +184,27 @@ function addAfterLastImport(src, lines) {
   return `${src.slice(0, at)}\n${lines.join('\n')}${src.slice(at)}`;
 }
 
+/** Adds the imports the file lacks, inside the owned import block. */
+function addOwnedImports(src, modules) {
+  const present = new Set(
+    src
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.startsWith('import ')),
+  );
+  const missing = modules.filter((m) => !present.has(`import ${m}`));
+  if (!missing.length) return src;
+  return addAfterLastImport(src, [IMPORTS_BEGIN, ...missing.map((m) => `import ${m}`), IMPORTS_END]);
+}
+
+/**
+ * Removes the plugin-owned init and import blocks (kill switch on, or no
+ * DSN). Safe on any language: only exact marker lines are matched.
+ */
+function removeNativeInit(contents, platform) {
+  return stripOwned(contents, platform === 'ios');
+}
+
 /** Insert (or replace) the iOS block; Swift AppDelegate only. */
 function addIosNativeInit(contents, o, language = 'swift') {
   if (language !== 'swift') {
@@ -145,7 +212,7 @@ function addIosNativeInit(contents, o, language = 'swift') {
       `withSentryNativeInit: AppDelegate is ${language}, but this plugin patches the Swift AppDelegate of Expo SDK 56. Fix: update plugins/withSentryNativeInit.js for this template.`,
     );
   }
-  let src = stripBlock(contents);
+  let src = stripOwned(contents, true);
   const re = /(func application\(\s*_ application: UIApplication,\s*didFinishLaunchingWithOptions[^)]*\)\s*->\s*Bool\s*\{[ \t]*\n)([ \t]*)/;
   if (!re.test(src)) {
     throw new Error(
@@ -153,8 +220,7 @@ function addIosNativeInit(contents, o, language = 'swift') {
     );
   }
   src = src.replace(re, (_m, head, indent) => `${head}${swiftBlock(o, indent)}\n\n${indent}`);
-  if (!/^import Sentry$/m.test(src)) src = addAfterLastImport(src, ['import Sentry']);
-  return src;
+  return addOwnedImports(src, IOS_IMPORTS);
 }
 
 /** Insert (or replace) the Android block; Kotlin MainApplication only. */
@@ -164,7 +230,7 @@ function addAndroidNativeInit(contents, o, language = 'kt') {
       `withSentryNativeInit: MainApplication is ${language}, but this plugin patches the Kotlin MainApplication of Expo SDK 56. Fix: update plugins/withSentryNativeInit.js for this template.`,
     );
   }
-  let src = stripBlock(contents);
+  let src = stripOwned(contents, false);
   const re = /(override fun onCreate\(\)\s*\{\s*\n([ \t]*)super\.onCreate\(\)[ \t]*\n)/;
   if (!re.test(src)) {
     throw new Error(
@@ -172,22 +238,34 @@ function addAndroidNativeInit(contents, o, language = 'kt') {
     );
   }
   src = src.replace(re, (_m, head, indent) => `${head}${kotlinBlock(o, indent)}\n`);
-  const missing = ['io.sentry.Sentry', 'io.sentry.android.core.SentryAndroid', 'io.sentry.android.core.SentryAndroidOptions'].filter(
-    (imp) => !src.split('\n').some((line) => line.trim() === `import ${imp}`),
-  );
-  if (missing.length) src = addAfterLastImport(src, missing.map((imp) => `import ${imp}`));
-  return src;
+  return addOwnedImports(src, ANDROID_IMPORTS);
+}
+
+/** Sets io.sentry.breadcrumbs.network-events=false on the main application (idempotent). */
+function setNetworkEventsMeta(manifest) {
+  const app = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
+  AndroidConfig.Manifest.addMetaDataItemToMainApplication(app, NETWORK_EVENTS_META, 'false');
+  return manifest;
 }
 
 const withSentryNativeInit = (config) => {
+  // Every prebuild reconciles: enabled writes the block, disabled removes it (B-330-4).
   config = withAppDelegate(config, (cfg) => {
     const o = resolveNativeOptions(cfg, 'ios');
-    if (o) cfg.modResults.contents = addIosNativeInit(cfg.modResults.contents, o, cfg.modResults.language);
+    cfg.modResults.contents = o
+      ? addIosNativeInit(cfg.modResults.contents, o, cfg.modResults.language)
+      : removeNativeInit(cfg.modResults.contents, 'ios');
     return cfg;
   });
   config = withMainApplication(config, (cfg) => {
     const o = resolveNativeOptions(cfg, 'android');
-    if (o) cfg.modResults.contents = addAndroidNativeInit(cfg.modResults.contents, o, cfg.modResults.language);
+    cfg.modResults.contents = o
+      ? addAndroidNativeInit(cfg.modResults.contents, o, cfg.modResults.language)
+      : removeNativeInit(cfg.modResults.contents, 'android');
+    return cfg;
+  });
+  config = withAndroidManifest(config, (cfg) => {
+    cfg.modResults = setNetworkEventsMeta(cfg.modResults);
     return cfg;
   });
   return config;
@@ -197,4 +275,8 @@ module.exports = withSentryNativeInit;
 module.exports.resolveNativeOptions = resolveNativeOptions;
 module.exports.addIosNativeInit = addIosNativeInit;
 module.exports.addAndroidNativeInit = addAndroidNativeInit;
+module.exports.removeNativeInit = removeNativeInit;
+module.exports.setNetworkEventsMeta = setNetworkEventsMeta;
 module.exports.MARK_BEGIN = MARK_BEGIN;
+module.exports.IMPORTS_BEGIN = IMPORTS_BEGIN;
+module.exports.NETWORK_EVENTS_META = NETWORK_EVENTS_META;

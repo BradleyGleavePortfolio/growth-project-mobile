@@ -43,7 +43,30 @@ describe('sentry service privacy', () => {
       attachViewHierarchy: false,
       enableCaptureFailedRequests: false,
       enableNative: true,
+      // B-330-3: forwarded to the native SDK it re-initializes (iOS initWithDict).
+      enableNetworkBreadcrumbs: false,
+      enableNetworkTracking: false,
     });
+  });
+
+  it('wires the content policy into every send path (B-330-3)', () => {
+    jest.isolateModules(() => {
+      require('../sentry').initSentry();
+    });
+    const options = mockInit.mock.calls[0][0];
+    const canary = 'AUDIT_SYNTHETIC_PRIVATE_MESSAGE';
+    const xhr = { category: 'xhr', data: { method: 'GET', url: `https://api.example.test/api/search?q=${canary}`, status_code: 200 } };
+    const accepted = options.beforeBreadcrumb(xhr, {});
+    expect(accepted.data.url).toBe('https://api.example.test/api/search');
+    expect(options.beforeBreadcrumb({ category: 'console', message: canary }, {})).toBeNull();
+    const event = {
+      exception: { values: [{ type: 'Error', value: 'synthetic failure' }] },
+      breadcrumbs: [xhr],
+      user: { id: 'user-1', email: 'person@example.com' },
+    };
+    expect(JSON.stringify(options.beforeSend(event, {}))).not.toMatch(new RegExp(`${canary}|person@example\\.com`));
+    const tx = { type: 'transaction', spans: [{ span_id: 'a', trace_id: 't', start_timestamp: 1, op: 'http.client', description: `GET https://api.example.test/x?q=${canary}`, data: { 'http.query': `?q=${canary}` } }] };
+    expect(JSON.stringify(options.beforeSendTransaction(tx, {}))).not.toContain(canary);
   });
 
   it('binds the user by id only, even when the caller object carries an email', () => {

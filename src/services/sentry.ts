@@ -2,7 +2,19 @@ import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import { scrubBreadcrumb, scrubEvent } from './sentryPrivacy';
+
 let initialized = false;
+
+/**
+ * Options only the native SDKs read (not part of the JS option type). iOS:
+ * no NSURLSession breadcrumbs (full request URLs) and no native HTTP spans
+ * (JS owns tracing).
+ */
+export const NATIVE_PRIVACY_OPTIONS = {
+  enableNetworkBreadcrumbs: false,
+  enableNetworkTracking: false,
+} as const;
 
 /**
  * Build the release identifier that the running app reports to Sentry. It
@@ -63,6 +75,13 @@ export function initSentry(): void {
     enableAutoSessionTracking: true,
     // Don't crash the app if Sentry itself blows up.
     enableNative: true,
+    // Native-only keys: the RN SDK forwards every non-function option to
+    // the native SDK it re-initializes (iOS reads them in
+    // SentryOptionsInternal initWithDict), so the pre-JS suppression in
+    // plugins/withSentryNativeInit.js survives JS startup. Android keeps it
+    // through the io.sentry.breadcrumbs.network-events manifest flag that
+    // the same plugin writes (B-330-3).
+    ...NATIVE_PRIVACY_OPTIONS,
     // No PII (owner rule: no health data, no message content). These match
     // the pre-JS native init in plugins/withSentryNativeInit.js, which this
     // call re-initializes: no IP / default PII, no screenshots or view
@@ -72,16 +91,13 @@ export function initSentry(): void {
     attachScreenshot: false,
     attachViewHierarchy: false,
     enableCaptureFailedRequests: false,
-    // Strip sensitive headers before transmission.
-    beforeSend(event) {
-      if (event.request?.headers) {
-        delete event.request.headers.Authorization;
-        delete event.request.headers.authorization;
-        delete event.request.headers.Cookie;
-        delete event.request.headers.cookie;
-      }
-      return event;
-    },
+    // Explicit content policy (src/services/sentryPrivacy.ts): sendDefaultPii
+    // does not redact console text or request URLs. beforeBreadcrumb runs
+    // before scope sync copies a breadcrumb to native; beforeSend also covers
+    // native breadcrumbs merged into JS events; transactions lose URL queries.
+    beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
+    beforeSend: (event) => scrubEvent(event),
+    beforeSendTransaction: (event) => scrubEvent(event),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
