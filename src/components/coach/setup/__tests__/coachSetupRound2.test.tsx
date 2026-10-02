@@ -83,6 +83,13 @@ import FirstPackageForm from "../FirstPackageForm";
 import CoachSetupChecklist, { buildChecklist } from "../CoachSetupChecklist";
 import CoachHomeCards from "../../../../screens/coach/command-center/CoachHomeCards";
 import CoachWizardNavigator from "../../../../navigation/CoachWizardNavigator";
+import {
+  advanceWizardTo,
+  coachSetupApi,
+  stepBlob,
+  toConnectView,
+} from "../../../../api/coachSetupApi";
+import { connectCopy } from "../../../../lib/coachSetup/connectCopy";
 
 function httpError(status: number, data?: Record<string, unknown>) {
   return Object.assign(new Error(`HTTP ${status}`), {
@@ -372,5 +379,130 @@ describe("C-329-3 wizard resumes on the last step with server truth", () => {
     await findByLabelText("Stripe ready to pay you. Done");
     await findByLabelText("First package live. Done");
     await findByLabelText("First client invited. Still to do");
+  });
+});
+
+describe("B-329-3 wizard save and resume use the backend's step blob shape", () => {
+  /** Faithful to coach-onboarding.controller/service: the whole body is stored as step_data[step]. */
+  function backend(start: {
+    current_step: number;
+    step_data: Record<string, unknown>;
+  }) {
+    const row = { ...start, is_complete: false };
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === "/coach/onboarding") return { data: row };
+      throw httpError(404);
+    });
+    mockPost.mockImplementation(
+      async (url: string, body?: Record<string, unknown>) => {
+        const n = Number(url.split("/").pop());
+        if (body && typeof body === "object")
+          row.step_data = { ...row.step_data, [String(n)]: body };
+        row.current_step = Math.min(n + 1, 6);
+        return { data: row };
+      },
+    );
+    return row;
+  }
+
+  it("round trip: what step 1 saves is what resume reads", async () => {
+    const row = backend({ current_step: 1, step_data: {} });
+    await advanceWizardTo(1, { practice_name: "North", focus: ["Strength"] });
+    expect(row.step_data["1"]).toEqual({
+      practice_name: "North",
+      focus: ["Strength"],
+    });
+    const progress = await coachSetupApi.progress();
+    expect(stepBlob(progress.stepData, 1)).toEqual({
+      practice_name: "North",
+      focus: ["Strength"],
+    });
+  });
+
+  it("a blob saved by an earlier build in the {data} wrapper still resumes", async () => {
+    backend({
+      current_step: 1,
+      step_data: {
+        "1": { data: { practice_name: "North", focus: ["Strength"] } },
+      },
+    });
+    const { findByLabelText } = await render(
+      <NavigationContainer>
+        <CoachWizardNavigator />
+      </NavigationContainer>,
+    );
+    const input = await findByLabelText("Practice name");
+    await waitFor(() => expect(input.props.value).toBe("North"));
+  });
+
+  it("a flat blob resumes the practice name", async () => {
+    backend({
+      current_step: 1,
+      step_data: { "1": { practice_name: "Harbour" } },
+    });
+    const { findByLabelText } = await render(
+      <NavigationContainer>
+        <CoachWizardNavigator />
+      </NavigationContainer>,
+    );
+    const input = await findByLabelText("Practice name");
+    await waitFor(() => expect(input.props.value).toBe("Harbour"));
+  });
+});
+
+describe("B-329-4 active account with Stripe requirements due", () => {
+  const base = {
+    account_id: "acct_1",
+    state: "active",
+    charges_enabled: true,
+    payouts_enabled: true,
+    details_submitted: true,
+  };
+
+  it("currently due: keeps 'clients can pay you' and offers Update details with Stripe", () => {
+    const c = connectCopy(
+      toConnectView({
+        ...base,
+        action_required: true,
+        requirements: {
+          currently_due: ["external_account"],
+          past_due: [],
+          current_deadline: "2026-10-20T00:00:00Z",
+        },
+      }),
+    );
+    expect(c.action).toBe("Update details with Stripe");
+    expect(c.due).toEqual(["Bank account for payouts"]);
+    expect(c.tone).toBe("attention");
+    expect(c.body).toMatch(
+      /^Clients can pay you now\. Send these to Stripe by /,
+    );
+    expect(c.body).not.toMatch(/!/);
+  });
+
+  it("past due without an action_required flag still offers the action", () => {
+    const c = connectCopy(
+      toConnectView({
+        ...base,
+        requirements: {
+          currently_due: [],
+          past_due: ["individual.verification.document"],
+        },
+      }),
+    );
+    expect(c.action).toBe("Update details with Stripe");
+    expect(c.due).toEqual(["Photo ID"]);
+  });
+
+  it("nothing due: done copy, no action", () => {
+    const c = connectCopy(
+      toConnectView({
+        ...base,
+        action_required: false,
+        requirements: { currently_due: [], past_due: [] },
+      }),
+    );
+    expect(c.action).toBeNull();
+    expect(c.title).toBe("You are ready to get paid");
   });
 });

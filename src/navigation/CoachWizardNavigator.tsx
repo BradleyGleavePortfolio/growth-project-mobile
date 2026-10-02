@@ -39,6 +39,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme, ThemeColors } from "../theme/ThemeProvider";
 import {
   advanceWizardTo,
+  stepBlob,
   coachSetupApi,
   type ConnectView,
 } from "../api/coachSetupApi";
@@ -740,8 +741,7 @@ export default function CoachWizardNavigator() {
       try {
         const progress = await coachSetupApi.progress();
         step = progress.currentStep;
-        const s1 = progress.stepData["1"] as
-          { practice_name?: unknown; focus?: unknown } | undefined;
+        const s1 = stepBlob(progress.stepData, 1);
         if (s1 && typeof s1.practice_name === "string")
           practiceName = s1.practice_name;
         if (s1 && Array.isArray(s1.focus))

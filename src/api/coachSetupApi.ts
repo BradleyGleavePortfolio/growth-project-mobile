@@ -240,10 +240,9 @@ export const coachSetupApi = {
     step: number,
     data?: Record<string, unknown>,
   ): Promise<CoachOnboardingProgress> {
-    const res = await api.post(
-      `/coach/onboarding/steps/${step}`,
-      data ? { data } : {},
-    );
+    // B-329-3: the backend stores the whole request body verbatim as
+    // step_data[step], so send the flat per-step blob (no `{data}` wrapper).
+    const res = await api.post(`/coach/onboarding/steps/${step}`, data ?? {});
     return toProgress(res.data);
   },
 
@@ -252,6 +251,31 @@ export const coachSetupApi = {
     return toProgress(res.data);
   },
 };
+
+/**
+ * One step's saved blob from `stepData`. Accepts the flat shape the backend
+ * stores and the `{data: {...}}` shape earlier builds sent (B-329-3), so a
+ * coach who saved with an older build still resumes with their answers.
+ */
+export function stepBlob(
+  stepData: Record<string, unknown>,
+  step: number,
+): Record<string, unknown> | null {
+  const raw = stepData[String(step)];
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const blob = raw as Record<string, unknown>;
+  const keys = Object.keys(blob);
+  const inner = blob.data;
+  if (
+    keys.length === 1 &&
+    keys[0] === "data" &&
+    inner &&
+    typeof inner === "object" &&
+    !Array.isArray(inner)
+  )
+    return inner as Record<string, unknown>;
+  return blob;
+}
 
 /**
  * Advance the backend wizard to `target`. The backend accepts the same step

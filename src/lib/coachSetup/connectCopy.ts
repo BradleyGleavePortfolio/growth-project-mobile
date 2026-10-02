@@ -97,15 +97,30 @@ export function connectCopy(view: ConnectView): ConnectCopy {
       tone: "attention",
       due,
     }),
-    active: () => ({
-      title: "You are ready to get paid",
-      body: view.payoutsEnabled
-        ? "Clients can pay you, and Stripe sends your earnings to your bank."
-        : "Clients can pay you. Stripe will start payouts once your bank account is confirmed.",
-      action: null,
-      tone: "done",
-      due: [],
-    }),
+    active: () =>
+      // B-329-4: an account that can charge today can still owe Stripe
+      // details (currently or past due, with a deadline). Keep the truthful
+      // "can take payments" state, but surface what is due and the action so
+      // the coach fixes it before Stripe pauses payments or payouts.
+      view.actionRequired || due.length > 0
+        ? {
+            title: "Stripe needs an update from you",
+            body: deadline
+              ? `Clients can pay you now. Send these to Stripe by ${deadline} so payments and payouts keep running.`
+              : "Clients can pay you now. Send these to Stripe so payments and payouts keep running.",
+            action: "Update details with Stripe",
+            tone: "attention",
+            due,
+          }
+        : {
+            title: "You are ready to get paid",
+            body: view.payoutsEnabled
+              ? "Clients can pay you, and Stripe sends your earnings to your bank."
+              : "Clients can pay you. Stripe will start payouts once your bank account is confirmed.",
+            action: null,
+            tone: "done",
+            due: [],
+          },
     deauthorized: () => ({
       title: "Your Stripe account is disconnected",
       body: "Clients cannot pay you right now. Connect Stripe again to take payments.",
