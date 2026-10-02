@@ -7,6 +7,8 @@
  * nothing at all — never a locally-invented value that support would chase.
  */
 import {
+  shortReference,
+  supportReferenceOf,
   REQUEST_ID_HEADER,
   extractRequestId,
   newRequestId,
@@ -67,5 +69,21 @@ describe('extractRequestId', () => {
     ['a string body (HTML error page)', { response: { data: '<html>502</html>' } }],
   ])('returns null for %s rather than inventing a reference', (_label, err) => {
     expect(extractRequestId(err)).toBeNull();
+  });
+});
+
+describe('supportReferenceOf / shortReference (owner rule 2026-10-01 13:34)', () => {
+  it('prefers the server id, then the X-Request-Id this app sent', () => {
+    expect(supportReferenceOf({ response: { data: { request_id: 'srv-123' } }, config: { headers: { 'X-Request-Id': 'out-456' } } })).toBe('srv-123');
+    expect(supportReferenceOf({ response: { status: 500 }, config: { headers: { 'X-Request-Id': 'out-456' } } })).toBe('out-456');
+    expect(supportReferenceOf({ response: { status: 500 } })).toBeNull();
+    expect(supportReferenceOf(null)).toBeNull();
+  });
+
+  it('shows the first 8 characters, never markup', () => {
+    expect(shortReference('3f9c2a71-0000-4000-8000-000000000000')).toBe('3f9c2a71');
+    expect(shortReference('<b>ab</b>')).toBe('babb');
+    expect(shortReference('')).toBeNull();
+    expect(shortReference(null)).toBeNull();
   });
 });
