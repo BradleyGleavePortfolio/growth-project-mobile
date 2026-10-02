@@ -13,6 +13,7 @@ jest.mock('../../../services/api', () => ({
   },
 }));
 jest.mock('../../../utils/appleAuth', () => ({ signInWithApple: jest.fn() }));
+jest.mock('../../../utils/googleAuth', () => ({ signInWithGoogle: jest.fn() }));
 jest.mock('../../../components/AppleSignInButton', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../services/secureStorage', () => ({
   secureStorage: { setItem: jest.fn(() => Promise.resolve()), getItem: jest.fn(() => Promise.resolve(null)) },

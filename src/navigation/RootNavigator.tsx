@@ -649,6 +649,8 @@ export default function RootNavigator() {
       if (role === 'coach') {
         // Sync Crisp identity so operators see the coach's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'coach',
@@ -743,6 +745,8 @@ export default function RootNavigator() {
 
         // Sync Crisp identity so operators see the client's account in the dashboard.
         syncCrispIdentity({
+          // #306 r4 (Sol A2-R3): the server user id decides session ownership.
+          userId: typeof user.id === 'string' ? user.id : undefined,
           email: user.email ?? '',
           displayName: user.name,
           role: 'student',
