@@ -143,7 +143,7 @@ function App() {
         if (!token) return; // not authenticated
         // C05 item 7: workout reminders use the client's local timezone.
         // Independent of push permission; best-effort.
-        syncDeviceTimezone().catch((e: unknown) => {
+        syncDeviceTimezone(token).catch((e: unknown) => {
           if (__DEV__) console.warn('Failed to sync timezone', e);
         });
         const result = await registerForPushNotifications({ requestPermission: false });

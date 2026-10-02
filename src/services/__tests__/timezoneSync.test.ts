@@ -1,9 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { deviceTimezone, syncDeviceTimezone, TIMEZONE_SYNC_KEY } from '../timezoneSync';
+import {
+  deviceTimezone,
+  sessionSubject,
+  syncDeviceTimezone,
+  TIMEZONE_SYNC_KEY,
+} from '../timezoneSync';
 import { notificationsApi } from '../api';
 
 // C05 item 7 — workout reminders use the client's local timezone, so the
-// device IANA zone is synced to the backend once per change.
+// device IANA zone is synced to the backend once per change and per account.
+// Backend contract (#609): PATCH /notifications/preferences { timezone }
+// (string, max 64); the backend falls back to its default zone when the
+// value is not a valid IANA zone.
 
 jest.mock('../api', () => ({
   notificationsApi: { updatePreferences: jest.fn() },
@@ -11,9 +19,16 @@ jest.mock('../api', () => ({
 
 const mockUpdate = notificationsApi.updatePreferences as jest.Mock;
 
+function token(sub: string): string {
+  const b64url = (o: object) =>
+    Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64url({ alg: 'HS256' })}.${b64url({ sub })}.signature`;
+}
+
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
+  mockUpdate.mockResolvedValue({ data: {} });
 });
 
 describe('timezoneSync', () => {
@@ -23,22 +38,44 @@ describe('timezoneSync', () => {
     expect((tz ?? '').length).toBeGreaterThan(0);
   });
 
-  it('sends the zone once, then only when it changes', async () => {
-    mockUpdate.mockResolvedValue({ data: {} });
+  it('reads the account from the session token, and nothing from a malformed one', () => {
+    expect(sessionSubject(token('user-a'))).toBe('user-a');
+    expect(sessionSubject('not-a-jwt')).toBeNull();
+    expect(sessionSubject('a.%%%.c')).toBeNull();
+    expect(sessionSubject(null)).toBeNull();
+    expect(sessionSubject(undefined)).toBeNull();
+  });
+
+  it('sends the zone once per account, then only when it changes', async () => {
     const tz = deviceTimezone();
-    expect(await syncDeviceTimezone()).toBe(true);
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
     expect(mockUpdate).toHaveBeenCalledWith({ timezone: tz });
-    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(tz);
-    expect(await syncDeviceTimezone()).toBe(false);
+    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(`user-a|${tz}`);
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(false);
     expect(mockUpdate).toHaveBeenCalledTimes(1);
-    await AsyncStorage.setItem(TIMEZONE_SYNC_KEY, 'Pacific/Chatham');
-    expect(await syncDeviceTimezone()).toBe(true);
+    await AsyncStorage.setItem(TIMEZONE_SYNC_KEY, 'user-a|Pacific/Chatham');
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
     expect(mockUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it('a second account signing in on the same device syncs its own row', async () => {
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
+    expect(await syncDeviceTimezone(token('user-b'))).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(`user-b|${deviceTimezone()}`);
+  });
+
+  it('without a readable account it always sends and caches nothing', async () => {
+    expect(await syncDeviceTimezone(null)).toBe(true);
+    expect(await syncDeviceTimezone('opaque')).toBe(true);
+    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
   });
 
   it('does not cache a failed sync, so it retries next time', async () => {
     mockUpdate.mockRejectedValueOnce(new Error('offline'));
-    await expect(syncDeviceTimezone()).rejects.toThrow('offline');
+    await expect(syncDeviceTimezone(token('user-a'))).rejects.toThrow('offline');
     expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
   });
 });

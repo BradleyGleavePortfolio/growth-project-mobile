@@ -1,4 +1,6 @@
 import React from 'react';
+import { Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import NotificationPreferencesScreen, {
   workoutRemindersFromServer,
@@ -39,8 +41,9 @@ function cast<T>(v: unknown): T {
 }
 const navigation = cast<Parameters<typeof NotificationPreferencesScreen>[0]['navigation']>({ goBack: jest.fn() });
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
 });
 
 describe('workoutRemindersFromServer', () => {
@@ -76,5 +79,39 @@ describe('NotificationPreferencesScreen — workout reminders', () => {
     await waitFor(() =>
       expect(mockUpdate).toHaveBeenCalledWith({ workout_reminder_push: false, workout_reminder_inapp: false }),
     );
+  });
+
+  it('the server value wins over a stale local copy', async () => {
+    await AsyncStorage.setItem(
+      'gp_notif_category_prefs',
+      JSON.stringify({ workout_reminders: true }),
+    );
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: false } });
+    const { findByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} />);
+    const toggle = await findByLabelText('Workout reminders');
+    expect(toggle.props.value).toBe(false);
+  });
+
+  it('offline on open: the locally stored value stands', async () => {
+    await AsyncStorage.setItem(
+      'gp_notif_category_prefs',
+      JSON.stringify({ workout_reminders: false }),
+    );
+    mockGet.mockRejectedValue(new Error('offline'));
+    const { findByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} />);
+    const toggle = await findByLabelText('Workout reminders');
+    expect(toggle.props.value).toBe(false);
+  });
+
+  it('a failed save rolls the switch back and says so', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
+    mockUpdate.mockRejectedValue(new Error('offline'));
+    const { findByLabelText } = await render(<NotificationPreferencesScreen navigation={navigation} />);
+    const toggle = await findByLabelText('Workout reminders');
+    await fireEvent(toggle, 'valueChange', false);
+    await waitFor(() => expect(alert).toHaveBeenCalled());
+    expect((await findByLabelText('Workout reminders')).props.value).toBe(true);
+    alert.mockRestore();
   });
 });
