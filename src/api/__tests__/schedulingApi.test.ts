@@ -1,102 +1,62 @@
-/**
- * schedulingApi — Lane 4 contract tests.
- *
- * Verifies the runtime guarantees added for P1-6 (client_timezone is
- * always present on the wire for requestSession and rescheduleSession,
- * even when the caller forgets it) and P3-3 (CoachingSession type
- * supports the optional `cancellable` flag).
- */
+/** Existing backend DTOs reject speculative civil-time/note fields. */
+jest.mock('../../services/api', () => ({
+  __esModule: true,
+  default: { get: jest.fn(), post: jest.fn() },
+}));
 
-jest.mock('axios', () => {
-  const instance = {
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    patch: jest.fn(),
-    delete: jest.fn(),
-    interceptors: {
-      request: { use: jest.fn() },
-      response: { use: jest.fn() },
-    },
-    defaults: { headers: { common: {} } },
-  };
-  return {
-    __esModule: true,
-    default: { create: jest.fn(() => instance) },
-    __instance: instance,
-  };
-});
+import api from '../../services/api';
+import { schedulingApi, resolveClientTimezone } from '../schedulingApi';
 
-const axiosMock = jest.requireMock('axios') as {
-  __instance: { post: jest.Mock };
+const mockApi = jest.mocked(api);
+const input = {
+  coach_id: 'c1',
+  session_type_id: 'type1',
+  title: 'Quick initialization',
+  start_at: '2030-05-21T15:00:00Z',
+  end_at: '2030-05-21T15:15:00Z',
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { schedulingApi, resolveClientTimezone } = require('../schedulingApi');
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockApi.get.mockResolvedValue({ data: {} });
+  mockApi.post.mockResolvedValue({ data: {} });
+});
 
-describe('schedulingApi — P1-6 client_timezone enforcement', () => {
-  beforeEach(() => {
-    axiosMock.__instance.post.mockReset().mockResolvedValue({ data: {} });
-  });
+it('resolves a time zone for display without changing absolute booking instants', () => {
+  expect(resolveClientTimezone().length).toBeGreaterThan(0);
+});
 
-  it('resolveClientTimezone returns a non-empty IANA-shaped string', () => {
-    const tz = resolveClientTimezone();
-    expect(typeof tz).toBe('string');
-    expect(tz.length).toBeGreaterThan(0);
-  });
+it('request sends the existing strict DTO, excluding unsupported notes/timezone', async () => {
+  await schedulingApi.requestSession({ ...input, notes: 'private note', client_timezone: 'Europe/Berlin' });
+  expect(mockApi.post).toHaveBeenCalledWith('/scheduling/sessions', input);
+});
 
-  it('requestSession forwards a caller-provided client_timezone unchanged', async () => {
-    await schedulingApi.requestSession({
-      coach_id: 'c1',
-      title: 'Coaching session',
-      start_at: '2026-05-21T15:00:00Z',
-      end_at: '2026-05-21T15:30:00Z',
-      client_timezone: 'Europe/Berlin',
-    });
-    const [, payload] = axiosMock.__instance.post.mock.calls[0];
-    expect(payload.client_timezone).toBe('Europe/Berlin');
-  });
+it('request with no speculative fields preserves its shape', async () => {
+  await schedulingApi.requestSession(input);
+  expect(mockApi.post).toHaveBeenCalledWith('/scheduling/sessions', input);
+});
 
-  it('requestSession force-resolves client_timezone when the caller omits it', async () => {
-    await schedulingApi.requestSession({
-      coach_id: 'c1',
-      title: 'Coaching session',
-      start_at: '2026-05-21T15:00:00Z',
-      end_at: '2026-05-21T15:30:00Z',
-    });
-    const [, payload] = axiosMock.__instance.post.mock.calls[0];
-    expect(payload.client_timezone).toBeTruthy();
-    expect(typeof payload.client_timezone).toBe('string');
-  });
+it('reschedule excludes unsupported timezone and keeps the absolute instants', async () => {
+  await schedulingApi.rescheduleSession('s1', { start_at: input.start_at, end_at: input.end_at, client_timezone: 'Asia/Tokyo' });
+  expect(mockApi.post).toHaveBeenCalledWith('/scheduling/sessions/s1/reschedule', { start_at: input.start_at, end_at: input.end_at });
+});
 
-  it('requestSession force-resolves client_timezone when the caller passes undefined', async () => {
-    await schedulingApi.requestSession({
-      coach_id: 'c1',
-      title: 'Coaching session',
-      start_at: '2026-05-21T15:00:00Z',
-      end_at: '2026-05-21T15:30:00Z',
-      client_timezone: undefined as unknown as string,
-    });
-    const [, payload] = axiosMock.__instance.post.mock.calls[0];
-    expect(payload.client_timezone).toBeTruthy();
+it('open slots passes the approved duration to the existing backend contract', async () => {
+  await schedulingApi.getOpenSlots('c1', { from: input.start_at, to: input.end_at, durationMinutes: 15 });
+  expect(mockApi.get).toHaveBeenCalledWith('/scheduling/coaches/c1/open-slots', {
+    params: { from: input.start_at, to: input.end_at, duration_minutes: '15' },
   });
+});
 
-  it('rescheduleSession forwards a caller-provided client_timezone unchanged', async () => {
-    await schedulingApi.rescheduleSession('sess-1', {
-      start_at: '2026-05-21T15:00:00Z',
-      end_at: '2026-05-21T15:30:00Z',
-      client_timezone: 'Asia/Tokyo',
-    });
-    const [, payload] = axiosMock.__instance.post.mock.calls[0];
-    expect(payload.client_timezone).toBe('Asia/Tokyo');
-  });
+it('coach identity uses the already scoped assigned-coach endpoint', async () => {
+  mockApi.get.mockResolvedValue({ data: { id: 'c1', name: 'Coach' } });
+  await expect(schedulingApi.listMyCoaches()).resolves.toEqual([{ coach_id: 'c1', name: 'Coach', timezone: null }]);
+  expect(mockApi.get).toHaveBeenCalledWith('/v1/clients/me/coach');
+});
 
-  it('rescheduleSession force-resolves client_timezone when the caller omits it', async () => {
-    await schedulingApi.rescheduleSession('sess-1', {
-      start_at: '2026-05-21T15:00:00Z',
-      end_at: '2026-05-21T15:30:00Z',
-    });
-    const [, payload] = axiosMock.__instance.post.mock.calls[0];
-    expect(payload.client_timezone).toBeTruthy();
-  });
+it('only explicit no assignment becomes an empty coach list; other 404s remain errors', async () => {
+  mockApi.get.mockRejectedValueOnce({ response: { status: 404, data: { error: 'COACH_NOT_ASSIGNED' } } });
+  await expect(schedulingApi.listMyCoaches()).resolves.toEqual([]);
+  mockApi.get.mockRejectedValueOnce({ response: { status: 404, data: { error: 'COACH_NOT_FOUND' } } });
+  await expect(schedulingApi.listMyCoaches()).rejects.toMatchObject({ response: { status: 404 } });
 });

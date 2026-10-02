@@ -15,14 +15,16 @@
  * with this client is a separate task (see
  * `/home/user/workspace/sprint-scheduling-ui/AUDIT.md` §3).
  *
- * Notably NOT covered by this client today:
- *   - CoachAvailabilityOverride CRUD (the schema/migration includes
- *     the model, but the backend controller does not yet expose
- *     overrides — held back to a backend follow-up).
- *   - Computed open-slots endpoint (`/open-slots`) — does not exist
- *     yet on the backend. Concrete slot rendering is deferred.
- *   - Google OAuth browser flow (the mobile opens the URLs in an
- *     in-app browser; not API client surface).
+ * S-SCHED (2026-10-01): the backend now exposes computed open slots
+ * (`GET /scheduling/coaches/:coachId/open-slots`, honours time off,
+ * booked sessions, the appointment type length and the coach time zone),
+ * coach time-off overrides (`/scheduling/coach/availability-overrides`),
+ * coach identity via the existing `/v1/clients/me/coach` endpoint.
+ * Native scheduling uses only existing contracts; archived-type listing,
+ * history and persistent welcome markers require a separate backend slice.
+ *
+ * Not covered: the Google OAuth browser flow (Google Calendar sync stays
+ * off and is not a dependency of native scheduling).
  */
 
 import api from '../services/api';
@@ -76,11 +78,8 @@ export function resolveVideoUrl(raw: string | null | undefined): string | null {
 
 /**
  * Resolve the IANA timezone the device is currently in (e.g.
- * "America/New_York"). Sent on every requestSession / rescheduleSession
- * call so the backend can disambiguate cross-TZ bookings. Falls back to
- * 'UTC' on the rare runtime where Intl is unavailable; the backend
- * treats this as a hard error response signal rather than silently
- * accepting client wall-clock.
+ * "America/New_York"). Used for display; booking payloads use the server's
+ * absolute ISO instants. Falls back to UTC when Intl is unavailable.
  */
 export function resolveClientTimezone(): string {
   try {
@@ -129,6 +128,65 @@ export interface UpdateSessionTypeInput {
   auto_approve?: boolean;
   default_video_provider?: SchedulingVideoProvider;
   archived?: boolean;
+}
+
+/** Assigned coach identity adapted from GET /v1/clients/me/coach. */
+export interface BookableCoach {
+  coach_id: string;
+  name: string;
+  /** Identity endpoint omits the zone; open-slots supplies the authoritative zone. */
+  timezone: string | null;
+}
+
+/** GET /scheduling/coaches/:coachId/open-slots */
+export interface OpenSlotsPayload {
+  coach_id: string;
+  timezone: string;
+  generated_at: string;
+  slots: { start_at: string; end_at: string }[];
+}
+
+export type AvailabilityOverrideKind = 'holiday' | 'block' | 'extra';
+
+/** A date-keyed exception to the weekly hours, in the coach's time zone. */
+export interface AvailabilityOverride {
+  id: string;
+  coach_id: string;
+  /** Calendar date; the backend returns an ISO string, use the first 10 chars. */
+  date: string;
+  start_minute: number | null;
+  end_minute: number | null;
+  kind: AvailabilityOverrideKind;
+  note: string | null;
+}
+
+export interface CreateAvailabilityOverrideInput {
+  /** YYYY-MM-DD in the coach's time zone. */
+  date: string;
+  kind: AvailabilityOverrideKind;
+  /** HH:MM, coach-local. Omit both for a full day off. */
+  start_time?: string;
+  end_time?: string;
+  note?: string;
+}
+
+/**
+ * Backend error code (e.g. SLOT_TAKEN, SLOT_UNAVAILABLE) from an axios-style
+ * error. Scheduling exceptions put the code in `error`; the global filter
+ * also forwards an optional `code`.
+ */
+export function schedulingErrorCode(err: unknown): string | null {
+  const data = (err as { response?: { data?: { code?: unknown; error?: unknown } } } | null)
+    ?.response?.data;
+  if (data && typeof data.code === 'string') return data.code;
+  if (data && typeof data.error === 'string' && /^[A-Z_]+$/.test(data.error)) return data.error;
+  return null;
+}
+
+/** HTTP status from an axios-style error, or null for network failures. */
+export function schedulingErrorStatus(err: unknown): number | null {
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  return typeof status === 'number' ? status : null;
 }
 
 // ─── Availability (recurring weekly windows) ────────────────────────────────
@@ -200,22 +258,10 @@ export interface RequestSessionInput {
   title: string;
   start_at: string; // ISO 8601
   end_at: string; // ISO 8601
-  // V-4: optional free-text the client wants their coach to read before
-  // the session. The backend stores this on the CoachingSession row; an
-  // older backend that does not yet accept the field ignores it without
-  // error (extra-keys-whitelisted).
+  // Deprecated scaffold metadata; the current server DTO does not accept
+  // this field. Native Calendar does not collect it; send a coach message.
   notes?: string;
-  // V-5 / P1-6: the IANA timezone the start_at/end_at were composed in.
-  // The backend uses this to disambiguate when the client's device TZ
-  // does not match the coach's `CoachProfile.timezone` — the booking
-  // must resolve to the coach's wall clock, not the client's.
-  //
-  // Required at runtime: `schedulingApi.requestSession` force-resolves
-  // a value via `resolveClientTimezone()` when callers omit it or pass
-  // undefined, so a payload that reaches the wire ALWAYS carries this
-  // field. The TS type is still ?-optional during the rollout window
-  // to keep older internal call sites compiling without a coordinated
-  // edit; treat omission as a programmer error.
+  // Deprecated display metadata, excluded from the current strict DTO.
   client_timezone?: string;
 }
 
@@ -223,8 +269,7 @@ export interface RescheduleSessionInput {
   start_at: string;
   end_at: string;
   reason?: string;
-  // V-5 / P1-6 (see RequestSessionInput) — required at runtime; force-
-  // resolved inside `rescheduleSession`.
+  // Deprecated display metadata, excluded from the current strict DTO.
   client_timezone?: string;
 }
 
@@ -252,12 +297,66 @@ export const schedulingApi = {
     return res.data;
   },
 
+  // Bookable coaches (client)
+  listMyCoaches: async (): Promise<BookableCoach[]> => {
+    try {
+      const res = await api.get<{ id: string; name: string }>('/v1/clients/me/coach');
+      return [{ coach_id: res.data.id, name: res.data.name, timezone: null }];
+    } catch (err) {
+      if (schedulingErrorStatus(err) === 404 && schedulingErrorCode(err) === 'COACH_NOT_ASSIGNED') {
+        return [];
+      }
+      throw err;
+    }
+  },
+
   // Session types
-  listSessionTypes: async (coachId: string): Promise<SessionType[]> => {
+  listSessionTypes: async (
+    coachId: string,
+  ): Promise<SessionType[]> => {
     const res = await api.get<SessionType[]>(
       `/scheduling/coaches/${encodeURIComponent(coachId)}/session-types`,
     );
     return res.data;
+  },
+
+  // Open slots (server-computed; max 14-day range)
+  getOpenSlots: async (
+    coachId: string,
+    args: { from: string; to: string; durationMinutes: number },
+  ): Promise<OpenSlotsPayload> => {
+    const params: Record<string, string> = { from: args.from, to: args.to };
+    params.duration_minutes = String(args.durationMinutes);
+    const res = await api.get<OpenSlotsPayload>(
+      `/scheduling/coaches/${encodeURIComponent(coachId)}/open-slots`,
+      { params },
+    );
+    return res.data;
+  },
+
+  // Coach time off
+  listMyAvailabilityOverrides: async (
+    args: { from?: string; to?: string } = {},
+  ): Promise<AvailabilityOverride[]> => {
+    const res = await api.get<AvailabilityOverride[]>(
+      '/scheduling/coach/availability-overrides',
+      { params: args },
+    );
+    return res.data;
+  },
+
+  createAvailabilityOverride: async (
+    input: CreateAvailabilityOverrideInput,
+  ): Promise<AvailabilityOverride> => {
+    const res = await api.post<AvailabilityOverride>(
+      '/scheduling/coach/availability-overrides',
+      input,
+    );
+    return res.data;
+  },
+
+  deleteAvailabilityOverride: async (id: string): Promise<void> => {
+    await api.delete(`/scheduling/coach/availability-overrides/${encodeURIComponent(id)}`);
   },
 
   createSessionType: async (
@@ -298,8 +397,12 @@ export const schedulingApi = {
   },
 
   // Sessions
-  listMySessions: async (limit?: number): Promise<CoachingSession[]> => {
-    const params = limit !== undefined ? { limit: String(limit) } : undefined;
+  listMySessions: async (
+    limit?: number,
+  ): Promise<CoachingSession[]> => {
+    const p: Record<string, string> = {};
+    if (limit !== undefined) p.limit = String(limit);
+    const params = Object.keys(p).length > 0 ? p : undefined;
     const res = await api.get<CoachingSession[]>('/scheduling/sessions', {
       params,
     });
@@ -316,13 +419,10 @@ export const schedulingApi = {
   requestSession: async (
     input: RequestSessionInput,
   ): Promise<CoachingSession> => {
-    // P1-6: client_timezone is required on the contract; force-resolve
-    // here so an older call site that passes an empty string (or that
-    // bypasses the type — e.g. through `as`) cannot ship an unset TZ.
-    const payload: RequestSessionInput = {
-      ...input,
-      client_timezone: input.client_timezone || resolveClientTimezone(),
-    };
+    // Main's strict DTO accepts neither notes nor client_timezone.
+    // Slots already contain absolute ISO instants, so do not send civil-time
+    // metadata that the current server rejects with forbidNonWhitelisted.
+    const { notes: _notes, client_timezone: _timezone, ...payload } = input;
     const res = await api.post<CoachingSession>(
       '/scheduling/sessions',
       payload,
@@ -352,11 +452,7 @@ export const schedulingApi = {
     id: string,
     input: RescheduleSessionInput,
   ): Promise<CoachingSession> => {
-    // P1-6: see requestSession.
-    const payload: RescheduleSessionInput = {
-      ...input,
-      client_timezone: input.client_timezone || resolveClientTimezone(),
-    };
+    const { client_timezone: _timezone, ...payload } = input;
     const res = await api.post<CoachingSession>(
       `/scheduling/sessions/${encodeURIComponent(id)}/reschedule`,
       payload,

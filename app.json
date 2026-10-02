@@ -126,6 +126,15 @@
       "expo-font",
       "expo-localization",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar. Calendar copies do not update automatically.",
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Unlock the app and confirm sensitive actions with Face ID"

@@ -291,12 +291,23 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
                     <Text style={[styles.secondaryText, { color: sc.textPrimary }]}>Take me there</Text>
                   </Pressable>
                 ) : null}
+                {gate.kind === 'signal' && gate.action ? (
+                  <Pressable
+                    onPress={() => gate.action && onNavigate(gate.action.target)}
+                    accessibilityRole="button"
+                    accessibilityLabel={gate.action.label(copy)}
+                    style={[styles.primary, styles.actionWide]}
+                    testID="tutorial-action"
+                  >
+                    <Text style={styles.primaryText}>{gate.action.label(copy)}</Text>
+                  </Pressable>
+                ) : null}
                 {gate.kind === 'signal' && gate.allowDefer ? (
                   <Pressable
                     onPress={() => dispatchTutorial({ type: 'DEFER' })}
                     accessibilityRole="button"
                     accessibilityLabel="Later"
-                    accessibilityHint="Connect a device another time"
+                    accessibilityHint={gate.deferHint ?? 'Connect a device another time'}
                     style={[styles.secondary, { borderColor: sc.textPrimary }]}
                     testID="tutorial-defer"
                   >
@@ -354,7 +365,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  primaryText: { ...typography.bodyMd, color: colors.bone },
+  primaryText: { ...typography.bodyMd, color: colors.bone, textAlign: 'center' },
+  actionWide: { flex: 2, paddingVertical: 8 },
   secondary: {
     flex: 1,
     minHeight: 48,

@@ -24,6 +24,8 @@ import {
   useCoachAvailability,
   useSetAvailability,
 } from '../../hooks/useScheduling';
+import { useSchedulingTimezone } from '../../hooks/useCalendar';
+import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import type {
   AvailabilityWindow,
   UpsertAvailabilityWindowInput,
@@ -58,14 +60,6 @@ function minutesToLabel(min: number): string {
   return `${hh}:${mm}`;
 }
 
-function deviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  } catch {
-    return 'UTC';
-  }
-}
-
 type DraftWindow = UpsertAvailabilityWindowInput & { _key: string };
 
 function toDraft(w: AvailabilityWindow): DraftWindow {
@@ -82,7 +76,8 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
   const { coachId } = route.params;
   const { colors } = useTheme();
   const oxblood = colors.error;
-  const { data, isLoading, isError, refetch } = useCoachAvailability(coachId);
+  const { data, isLoading, isError, error, refetch } = useCoachAvailability(coachId);
+  const calendarZone = useSchedulingTimezone(coachId);
   const setAvailability = useSetAvailability(coachId);
   const [draft, setDraft] = useState<DraftWindow[]>([]);
 
@@ -127,11 +122,12 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
   );
 
   const onSave = useCallback(() => {
+    if (!calendarZone.data || setAvailability.isPending) return;
     const windows: UpsertAvailabilityWindowInput[] = draft.map(
       ({ _key: _unused, ...rest }) => rest,
     );
     setAvailability.mutate({ windows });
-  }, [draft, setAvailability]);
+  }, [draft, setAvailability, calendarZone.data]);
 
   if (isLoading) {
     return (
@@ -145,7 +141,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[typography.body, { color: colors.textPrimary }]}>
-          Could not load availability.
+          {calendarErrorMessage(error, 'load weekly availability')}
         </Text>
         <TouchableOpacity
           accessibilityRole="button"
@@ -182,9 +178,17 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
             not the device TZ. That's correct behaviour (DST-stable, no
             client-clock drift) but the label was misleading and the
             audit caught it. Make the contract explicit. */}
-        Times are stored in your coach profile timezone. Your device shows{' '}
-        {deviceTimezone()}.
+        Times use your coach calendar time zone:{' '}
+        {calendarZone.data ?? 'loading the coach calendar time zone'}.
       </Text>
+      {calendarZone.isError ? (
+        <View>
+          <Text style={[typography.bodySmall, { color: oxblood }]}>{calendarErrorMessage(calendarZone.error, 'load the calendar time zone')}</Text>
+          <TouchableOpacity onPress={() => void calendarZone.refetch()} accessibilityRole="button" accessibilityLabel="Refresh calendar time zone" style={styles.primaryBtn}>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh calendar time zone</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {DAY_LABELS.map((label, dayIdx) => (
         <View
@@ -307,8 +311,8 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
 
       <TouchableOpacity
         accessibilityRole="button"
-        disabled={isSaving}
         onPress={onSave}
+        disabled={isSaving || !calendarZone.data}
         style={[
           styles.primaryBtn,
           { backgroundColor: oxblood, opacity: isSaving ? 0.6 : 1 },
@@ -326,7 +330,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
             { color: oxblood, marginTop: spacing.sm },
           ]}
         >
-          Save failed. Check your connection and try again.
+          {calendarErrorMessage(setAvailability.error, 'save weekly availability')}
         </Text>
       ) : null}
       {setAvailability.isSuccess ? (

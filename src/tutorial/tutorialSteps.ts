@@ -14,6 +14,7 @@
  * the onboarding complete payload or the live macro endpoint; nothing is
  * invented. `tutorialCopy.test.ts` enforces the voice rules.
  */
+import { featureFlags } from '../config/featureFlags';
 import type { MacroDisplayMode } from '../macros/macroDisplay';
 import type {
   OnboardingMacros,
@@ -29,6 +30,7 @@ export type TutorialTargetId =
   | 'tab:Log'
   | 'tab:MoreTab'
   | 'tab:CommunityTab'
+  | 'tab:CalendarTab'
   | 'plan-card'
   | 'macro-card'
   | 'home-message-coach'
@@ -37,8 +39,9 @@ export type TutorialTargetId =
 
 /** A cross-tab destination the overlay may offer as "Take me there". */
 export interface TutorialNavTarget {
-  tab: 'Home' | 'WorkoutTab' | 'Log' | 'MoreTab' | 'CommunityTab';
+  tab: 'Home' | 'WorkoutTab' | 'Log' | 'MoreTab' | 'CommunityTab' | 'CalendarTab';
   screen?: string;
+  params?: Record<string, unknown>;
 }
 
 export interface CopyContext {
@@ -80,11 +83,18 @@ export interface SignalGate extends GateBase {
   kind: 'signal';
   signal: TutorialSignal;
   allowDefer?: boolean;
+  /** Spoken hint on the Later button (defaults to the wearable wording). */
+  deferHint?: string;
+  /**
+   * Optional primary action that opens the screen where the signal can
+   * happen (e.g. the welcome call booking). Never required to finish.
+   */
+  action?: { label: Line; target: TutorialNavTarget };
 }
 
 export type TutorialGate = AckGate | RouteGate | SignalGate;
 
-export type StepRequirement = 'program' | 'macros' | 'community';
+export type StepRequirement = 'program' | 'macros' | 'community' | 'calendar';
 
 export interface TutorialStepDef {
   id: TutorialStepId;
@@ -134,7 +144,7 @@ function planSummary(c: CopyContext): string {
   return parts.length ? `${p.name}: ${parts.join(', ')}.` : `${p.name}.`;
 }
 
-export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
+const ALL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'welcome',
     title: 'Welcome',
@@ -237,6 +247,28 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     doneLine: () => 'Noted.',
   },
   {
+    // S-SCHED: only when featureFlags.clientCalendar is on.
+    id: 'calendar',
+    title: 'Your calendar',
+    requires: 'calendar',
+    gates: [
+      {
+        kind: 'route',
+        routes: ['CalendarHome'],
+        target: 'tab:CalendarTab',
+        line: (c) =>
+          `This is Calendar. It shows ${c.coachName}'s open times and your upcoming sessions. Tap Calendar.`,
+      },
+      {
+        kind: 'ack',
+        cta: 'Continue',
+        line: (c) =>
+          `Choose a type of call, then a time that suits you. Times are shown in your own time zone. Some calls are confirmed straight away, and others wait for ${c.coachName} to confirm. You can copy a confirmed session to your phone's calendar. If it changes, update the copy in your calendar app.`,
+      },
+    ],
+    doneLine: () => 'That is where your sessions live.',
+  },
+  {
     id: 'wearables',
     title: 'Wearables, health and sleep',
     gates: [
@@ -312,6 +344,28 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     doneLine: (c) => `Sent. ${c.coachName} will see it in your conversation.`,
   },
   {
+    // S-SCHED owner decision 2026-10-01: the tour ends with the welcome call.
+    // Skippable (Later), never blocks finishing. Only with clientCalendar on.
+    id: 'welcome_call',
+    title: 'Your welcome call',
+    requires: 'calendar',
+    gates: [
+      {
+        kind: 'signal',
+        signal: 'welcome_call_booked',
+        allowDefer: true,
+        deferHint: 'Book the welcome call another time from Calendar',
+        action: {
+          label: (c) => `Book your welcome call with ${c.coachName}`,
+          target: { tab: 'CalendarTab', screen: 'CalendarBook', params: { welcome: true } },
+        },
+        line: (c) =>
+          `One more thing. Book your welcome call with ${c.coachName}. Pick a time that suits you and it is set. If now is not a good moment, tap Later and book it from Calendar.`,
+      },
+    ],
+    doneLine: () => 'Done. You will find it in Calendar.',
+  },
+  {
     id: 'complete',
     title: 'Complete',
     gates: [
@@ -325,6 +379,18 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     ],
   },
 ];
+
+/**
+ * The tour for this build. The two Calendar steps (S-SCHED) exist only when
+ * featureFlags.clientCalendar is on, so with the flag off the step list,
+ * the progress count ("Step 1 of 8") and persisted step indexes are
+ * exactly what they were before.
+ */
+export function buildTutorialSteps(calendar: boolean): readonly TutorialStepDef[] {
+  return calendar ? ALL_STEPS : ALL_STEPS.filter((s) => s.requires !== 'calendar');
+}
+
+export const TUTORIAL_STEPS: readonly TutorialStepDef[] = buildTutorialSteps(featureFlags.clientCalendar);
 
 /** Steps shown in the progress indicator (the completion moment is not one). */
 export const COUNTED_STEPS = TUTORIAL_STEPS.filter((s) => s.id !== 'complete');
