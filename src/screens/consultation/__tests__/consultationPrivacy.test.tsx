@@ -1011,8 +1011,8 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
     await waitFor(() => r.getByTestId('consult-problem-not_attached'));
     expect(r.getByTestId('consult-problem-action')).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-support'));
-    expect(SUPPORT_EMAIL).toBe('Bradley@Bradleytgpcoaching.com');
-    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:Bradley@Bradleytgpcoaching\.com\?subject=/));
+    expect(SUPPORT_EMAIL).toBe('Bradleyapple1031@gmail.com');
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:Bradleyapple1031@gmail\.com\?subject=/));
     await fireEvent.press(r.getByTestId('consult-sign-out'));
     expect(onSignOut).not.toHaveBeenCalled(); // asks first
     const buttons = (alert.mock.calls[alert.mock.calls.length - 1][2] ?? []) as AlertButton[];

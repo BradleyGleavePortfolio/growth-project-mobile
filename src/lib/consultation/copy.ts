@@ -387,5 +387,9 @@ export const AI_GRANT_NOTICE = {
   body: 'I could not save your Roman and AI choice just now, so it is not allowed yet. Your training is not affected. You can allow it at any time in Settings > Privacy > Roman and AI.',
 } as const;
 
-/** Support contact on the problem and paused screens (owner-approved, operator C-310-3). */
-export const SUPPORT_EMAIL = 'Bradley@Bradleytgpcoaching.com';
+/**
+ * Support contact on the problem and paused screens. Owner rule (lane
+ * B-CONSENT-2, 2026-10-02): one support address everywhere, the same as
+ * backend #611 SUPPORT_EMAIL.
+ */
+export const SUPPORT_EMAIL = 'Bradleyapple1031@gmail.com';
