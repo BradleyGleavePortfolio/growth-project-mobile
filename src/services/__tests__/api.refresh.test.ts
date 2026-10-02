@@ -76,6 +76,7 @@ jest.mock('../secureStorage', () => ({
 const axiosMock = jest.requireMock('axios') as {
   __instance: {
     request: jest.Mock;
+    post: jest.Mock;
     interceptors: {
       response: { handlers: Array<{ rejected?: ResponseErrorHandler }> };
     };
@@ -85,7 +86,9 @@ const secureStorageMock = jest.requireMock('../secureStorage') as {
   secureStorage: { getItem: jest.Mock; setItem: jest.Mock };
 };
 
+import { Alert } from 'react-native';
 import {
+  DELETION_COMPLETE_NOTICE,
   __resetRefreshStateForTests,
   __setRefreshSessionForTests,
   __setSignOutForTests,
@@ -299,5 +302,80 @@ describe('api.ts — refresh-cycle race fix', () => {
     ]);
 
     expect(signOutMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('skipAuthRefresh: a rejected re-auth credential 401 goes straight to the caller (no refresh, no replay)', async () => {
+    const err = fake401({ url: '/auth/recent-auth-token', skipAuthRefresh: true } as AxiosRequestConfig);
+    await expect(handler(err)).rejects.toBe(err);
+    expect(refreshSessionMock).not.toHaveBeenCalled();
+    expect(axiosMock.__instance.request).not.toHaveBeenCalled();
+    expect(signOutMock).not.toHaveBeenCalled();
+  });
+
+  describe('B-313-5: deleted account at refresh failure (backend receipt, B-608-10)', () => {
+    let alertSpy: jest.SpyInstance;
+    beforeEach(() => {
+      refreshSessionMock.mockResolvedValue({
+        data: { session: null },
+        error: new Error('User from sub claim in JWT does not exist'),
+      });
+      secureStorageMock.secureStorage.getItem.mockImplementation(async (k: string) =>
+        k === 'supabase_token' ? 'stale-access-token' : k === 'supabase_refresh_token' ? 'r' : null,
+      );
+      axiosMock.__instance.post.mockReset();
+      alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      alertSpy.mockRestore();
+      secureStorageMock.secureStorage.getItem.mockImplementation(async (k: string) =>
+        k === 'supabase_refresh_token' ? 'fake-refresh-token' : null,
+      );
+    });
+
+    it('server confirms deleted: signs out once and tells the person the deletion is complete', async () => {
+      axiosMock.__instance.post.mockResolvedValue({ data: { state: 'deleted' } });
+      await Promise.allSettled([
+        handler(fake401({ url: '/me/delete-account/status' })),
+        handler(fake401({ url: '/x' })),
+      ]);
+      expect(axiosMock.__instance.post).toHaveBeenCalledTimes(1);
+      const [url, body, config] = axiosMock.__instance.post.mock.calls[0];
+      expect(url).toBe('/account-deletion/receipt');
+      expect(body).toBeUndefined();
+      expect(config).toEqual(
+        expect.objectContaining({
+          headers: { Authorization: 'Bearer stale-access-token' },
+          skipAuthRefresh: true,
+        }),
+      );
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+      expect(alertSpy).toHaveBeenCalledTimes(1);
+      expect(alertSpy).toHaveBeenCalledWith(DELETION_COMPLETE_NOTICE.title, DELETION_COMPLETE_NOTICE.body);
+    });
+
+    it('404 NO_DELETION_RECEIPT: an ordinary sign-out, never called "deleted"', async () => {
+      axiosMock.__instance.post.mockRejectedValue({
+        response: { status: 404, data: { code: 'NO_DELETION_RECEIPT' } },
+      });
+      await handler(fake401()).catch(() => undefined);
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('receipt unreachable (network): an ordinary sign-out, never called "deleted"', async () => {
+      axiosMock.__instance.post.mockRejectedValue(new Error('Network Error'));
+      await handler(fake401()).catch(() => undefined);
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+
+    it('no stored token: no receipt call', async () => {
+      secureStorageMock.secureStorage.getItem.mockImplementation(async (k: string) =>
+        k === 'supabase_refresh_token' ? 'r' : null,
+      );
+      await handler(fake401()).catch(() => undefined);
+      expect(axiosMock.__instance.post).not.toHaveBeenCalled();
+      expect(signOutMock).toHaveBeenCalledTimes(1);
+    });
   });
 });

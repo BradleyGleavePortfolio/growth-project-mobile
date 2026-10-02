@@ -33,6 +33,7 @@ import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
 import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
+import { profileOnboardingCompleted } from '../../lib/profileOnboarding';
 import {
   clearSignupRoleNotice,
   setSignupRoleNotice,
@@ -270,7 +271,7 @@ export default function LoginScreen({ navigation, route }: Props) {
       await purgePersistedQueryCacheForAllUsers();
 
       // Restore onboarding status from backend profile — prevents re-onboarding on re-login
-      if (user.profile?.onboarding_completed) {
+      if (profileOnboardingCompleted(user.profile)) {
         await AsyncStorage.setItem('onboarding_complete', 'true');
       }
 
