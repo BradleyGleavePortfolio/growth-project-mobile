@@ -392,4 +392,5 @@ export const AI_GRANT_NOTICE = {
  * B-CONSENT-2, 2026-10-02): one support address everywhere, the same as
  * backend #611 SUPPORT_EMAIL.
  */
-export const SUPPORT_EMAIL = 'Bradleyapple1031@gmail.com';
+// S-SCHED-4 (B-325-3): one constant, defined in src/config/support.ts.
+export { SUPPORT_EMAIL } from '../../config/support';

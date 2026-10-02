@@ -85,7 +85,6 @@ import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Sprint B-2 — client surfaces from PR #130 wired here.
 import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
 // Concierge Phase 1 — scheduling client surfaces.
-import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestScreen';
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 // Payments — checkout surface for a coach's package share link.
 import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
@@ -165,7 +164,6 @@ const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 // ClientEntitlementGuard; only voice-upload is paid and still 402s into the
 // paywall). It is also the one action the iOS coach-managed gate offers, so
 // gating it here would trap an unentitled client in a loop.
-const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
 // Scheduling endpoints sit behind ClientEntitlementGuard server-side, so the
 // Calendar screens take the same client-side gate as the booking screens.
@@ -279,7 +277,6 @@ export type MoreStackParamList = {
   ClientWorkoutViewer: { assignmentId: string };
   WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
-  ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
@@ -503,11 +500,9 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
-      {/* Concierge Phase 1 — scheduling client surfaces. */}
-      <MoreStackNav.Screen
-        name="ClientBookingRequest"
-        component={ProtectedClientBookingRequestScreen}
-      />
+      {/* Concierge Phase 1 — scheduling client surfaces. The old
+          ClientBookingRequest route (no entry point, superseded by the
+          Calendar tab's booking) was removed in S-SCHED-4. */}
       <MoreStackNav.Screen
         name="ClientUpcomingSessions"
         component={ProtectedClientUpcomingSessionsScreen}

@@ -203,13 +203,56 @@ describe('B-325-2: coach-worded errors on every coach scheduling screen', () => 
     expect(r.queryAllByText(CLIENT_ONLY)).toHaveLength(0);
   });
 
-  it('CoachBookingInboxScreen: a session that already started reads coach copy', async () => {
-    serveByStatus([session()]);
-    api.approveSession.mockRejectedValue(coded(409, 'SESSION_STARTED'));
+  it('the generic coach SESSION_STARTED copy offers only a step that exists (refresh), never complete / no-show', () => {
+    expect(COACH_CODE_MESSAGES.SESSION_STARTED).not.toMatch(/complete|no-show/i);
+    expect(COACH_CODE_MESSAGES.SESSION_STARTED).toMatch(/Refresh the inbox/);
+    expect(COACH_CODE_MESSAGES.SESSION_STARTED).not.toMatch(CLIENT_ONLY);
+  });
+});
+
+describe('S-SCHED-4 B-325-2: an expired request gets the action the card actually offers', () => {
+  // The backend's real refusal (approvalTooLate): requested + start_at passed.
+  const tooLate = {
+    response: {
+      status: 409,
+      data: {
+        code: 'SESSION_STARTED',
+        message: 'The requested time has already passed. Decline it so the client can pick a new time.',
+      },
+    },
+  };
+  // Started 10 minutes ago, ends in 10: still "upcoming" (end_at > now), so
+  // the refreshed inbox still shows it with Confirm / Decline.
+  const expired = () =>
+    session({
+      id: 'rq-late',
+      start_at: new Date(Date.now() - 10 * 60_000).toISOString(),
+      end_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    });
+
+  it('Confirm on an expired request says the time passed and to tap Decline; Decline then works', async () => {
+    const row = expired();
+    serveByStatus([row]);
+    api.approveSession.mockRejectedValue(tooLate);
+    api.declineSession.mockResolvedValue({ ...row, status: 'declined' });
     const r = await renderQ(<CoachBookingInboxScreen />);
     await waitFor(() => expect(r.getByLabelText('Confirm session Quick Q/A Call')).toBeTruthy());
     await fireEvent.press(r.getByLabelText('Confirm session Quick Q/A Call'));
-    await waitFor(() => expect(r.getByText(COACH_CODE_MESSAGES.SESSION_STARTED)).toBeTruthy());
-    expect(r.queryByText(/Message your coach/)).toBeNull();
+    await waitFor(() =>
+      expect(
+        r.getByText(
+          'The requested time has already passed, so it can no longer be confirmed. Tap Decline on this request so your client can choose another time.',
+        ),
+      ).toBeTruthy(),
+    );
+    // The proposed next step exists on the card after the refresh; the
+    // impossible ones (complete / no-show on a request) are neither offered
+    // as controls nor suggested.
+    expect(r.queryByText(/complete|no-show/i)).toBeNull();
+    const declineBtn = await waitFor(() => r.getByLabelText('Decline session Quick Q/A Call'));
+    await fireEvent.press(declineBtn);
+    await waitFor(() =>
+      expect(api.declineSession).toHaveBeenCalledWith('rq-late', { expected_start_at: row.start_at }),
+    );
   });
 });

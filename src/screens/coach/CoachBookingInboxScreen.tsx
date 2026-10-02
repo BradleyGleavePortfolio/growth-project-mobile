@@ -68,7 +68,7 @@ function CoachSessionActions({ session }: { session: CoachingSession }) {
             ? 'Phone number saved. Your client can call it from their session.'
             : 'Call link saved. Your client can open it from their session.',
         ),
-      onError: (err) => setMessage(calendarErrorMessage(err, 'save the call link', 'coach')),
+      onError: (err) => setMessage(calendarErrorMessage(err, 'save the call link', 'coach', 'save_link')),
       onSettled: () => { inFlight.current = false; },
     });
   };
@@ -80,7 +80,7 @@ function CoachSessionActions({ session }: { session: CoachingSession }) {
         inFlight.current = true;
         cancel.mutate({ id: session.id, input: { expected_start_at: session.start_at } }, {
           onSuccess: () => setMessage('Session cancelled in TGP.'),
-          onError: (err) => setMessage(calendarErrorMessage(err, 'cancel the session', 'coach')),
+          onError: (err) => setMessage(calendarErrorMessage(err, 'cancel the session', 'coach', 'cancel')),
           onSettled: () => { inFlight.current = false; },
         });
       } },
@@ -127,7 +127,14 @@ export default function CoachBookingInboxScreen() {
     setMessage(null);
     const handlers = {
       onError: (err: unknown) => {
-        setMessage(calendarErrorMessage(err, confirm ? 'confirm the request' : 'decline the request', 'coach'));
+        setMessage(
+          calendarErrorMessage(
+            err,
+            confirm ? 'confirm the request' : 'decline the request',
+            'coach',
+            confirm ? 'approve' : 'decline',
+          ),
+        );
         void refetch();
       },
       onSettled: () => { inFlight.current = false; },

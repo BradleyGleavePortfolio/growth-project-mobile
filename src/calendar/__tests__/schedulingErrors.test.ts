@@ -112,3 +112,28 @@ describe('coach audience', () => {
     expect(calendarErrorMessage({ response: { status: 400, data: { code: 'INVALID_LIST_QUERY' } } }, 'load')).toMatch(/Refresh Calendar/);
   });
 });
+
+describe('S-SCHED-4 B-325-2: SESSION_STARTED next step depends on what the coach did', () => {
+  const started = { response: { status: 409, data: { code: 'SESSION_STARTED' } } };
+
+  it('Confirm on an expired request: the time passed, tap Decline (the backend approvalTooLate step)', () => {
+    const msg = calendarErrorMessage(started, 'confirm the request', 'coach', 'approve');
+    expect(msg).toMatch(/requested time has already passed/);
+    expect(msg).toMatch(/Tap Decline/);
+    expect(msg).not.toMatch(/complete|no-show|message your coach/i);
+  });
+
+  it('other coach actions never propose complete / no-show (no such control in the app)', () => {
+    for (const intent of [undefined, 'decline', 'cancel', 'save_link'] as const) {
+      const msg = calendarErrorMessage(started, 'cancel the session', 'coach', intent);
+      expect(msg).not.toMatch(/complete|no-show/i);
+      expect(msg).toMatch(/Refresh the inbox/);
+    }
+  });
+
+  it('an intent never changes client copy', () => {
+    expect(calendarErrorMessage(started, 'cancel the session', 'client', 'approve')).toBe(
+      SCHEDULING_CODE_MESSAGES.SESSION_STARTED,
+    );
+  });
+});

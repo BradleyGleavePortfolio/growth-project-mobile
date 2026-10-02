@@ -58,7 +58,7 @@ export const SCHEDULING_CODE_MESSAGES: Readonly<Record<string, string>> = {
  * listed here read the same for both audiences.
  */
 export const COACH_CODE_MESSAGES: Readonly<Record<string, string>> = {
-  SESSION_STARTED: 'This session has already started, so it can no longer be changed here. Mark it complete or no-show after it ends.',
+  SESSION_STARTED: 'This session has already started, so it can no longer be changed here. Refresh the inbox to see where it stands now.',
   SESSION_TYPE_UNAVAILABLE: 'This appointment type is archived or was removed. Open Appointment types to restore it or choose another type.',
   SESSION_STATE_CHANGED: 'This changed a moment ago, on another device or by your client. Refresh this screen to see where it stands now.',
   SESSION_MOVED: 'Your client moved this request to a new time a moment ago. Refresh the inbox, check the new time, then confirm or decline it.',
@@ -69,6 +69,24 @@ export const COACH_CODE_MESSAGES: Readonly<Record<string, string>> = {
   SLOT_TAKEN: 'Another session already uses that time. Refresh and choose a different time.',
   CALENDAR_BUSY: 'Your calendar is busy saving other changes right now. Wait a few seconds, then try again.',
   INVALID_LIST_QUERY: 'The inbox could not load more sessions from where you were. Refresh the inbox to start the list again.',
+};
+
+/**
+ * What the coach was doing when the error came back (S-SCHED-4 B-325-2).
+ * The same machine code can need a different next step: SESSION_STARTED on
+ * Confirm means the requested time passed, and the only action the request
+ * card offers that works is Decline (backend approvalTooLate; a requested
+ * session cannot be completed or marked no-show).
+ */
+export type CoachSchedulingIntent = 'approve' | 'decline' | 'cancel' | 'save_link';
+
+export const COACH_INTENT_CODE_MESSAGES: Readonly<
+  Partial<Record<CoachSchedulingIntent, Readonly<Record<string, string>>>>
+> = {
+  approve: {
+    SESSION_STARTED:
+      'The requested time has already passed, so it can no longer be confirmed. Tap Decline on this request so your client can choose another time.',
+  },
 };
 
 function audienceWords(audience: CalendarAudience): { home: string; ask: string } {
@@ -82,9 +100,14 @@ export function calendarErrorMessage(
   err: unknown,
   operation: string,
   audience: CalendarAudience = 'client',
+  intent?: CoachSchedulingIntent,
 ): string {
   const status = schedulingErrorStatus(err);
   const code = schedulingErrorCode(err);
+  const intentMessages = audience === 'coach' && intent ? COACH_INTENT_CODE_MESSAGES[intent] : undefined;
+  if (intentMessages && code && Object.prototype.hasOwnProperty.call(intentMessages, code)) {
+    return intentMessages[code];
+  }
   if (audience === 'coach' && code && Object.prototype.hasOwnProperty.call(COACH_CODE_MESSAGES, code)) {
     return COACH_CODE_MESSAGES[code];
   }
