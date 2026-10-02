@@ -35,6 +35,8 @@ jest.mock("../../../../api/packagesApi", () => ({
     create: (...a: unknown[]) => mockCreatePackage(...a),
     list: jest.fn(async () => ({ data: [] })),
   },
+  isLivePackage: jest.requireActual("../../../../api/packagesApi")
+    .isLivePackage,
 }));
 
 import {
@@ -202,8 +204,8 @@ describe("describeError", () => {
       ),
     ];
     expect(cases.map((c) => c.title)).toEqual([
-      "Payouts are not switched on yet",
-      "Payouts are not switched on yet",
+      "Payouts are not switched on for your account yet",
+      "Payouts are not switched on for your account yet",
       "Finish Stripe setup first",
       "Too many tries in a row",
       "Your session ended",
@@ -427,7 +429,7 @@ describe("GetPaidPanel", () => {
     const { findByText, getByTestId } = await render(<GetPaidPanel />);
     await findByText("Get paid with Stripe");
     await fireEvent.press(getByTestId("get-paid-open"));
-    await findByText("Payouts are not switched on yet");
+    await findByText("Payouts are not switched on for your account yet");
     expect(mockOpenAuth).not.toHaveBeenCalled();
   });
 });
@@ -438,7 +440,8 @@ describe("Home checklist and resume", () => {
       connectActive: false,
       connectNeedsAttention: true,
       hasPackage: true,
-      invited: false,
+      hasClient: false,
+      sharedLink: false,
       paid: false,
     });
     expect(items.map((i) => [i.key, i.done])).toEqual([

@@ -42,7 +42,11 @@ import {
   coachSetupApi,
   type ConnectView,
 } from "../api/coachSetupApi";
-import { coachPackagesApi } from "../api/packagesApi";
+import {
+  coachPackagesApi,
+  isLivePackage,
+  type CoachPackage,
+} from "../api/packagesApi";
 import { describeError, type FriendlyError } from "../lib/coachSetup/errors";
 import GetPaidPanel from "../components/coach/setup/GetPaidPanel";
 import FirstPackageForm, {
@@ -50,6 +54,11 @@ import FirstPackageForm, {
 } from "../components/coach/setup/FirstPackageForm";
 import InviteShareCard from "../components/coach/setup/InviteShareCard";
 import SetupNotice from "../components/coach/setup/SetupNotice";
+import { useCurrentUser } from "../hooks/useCurrentUser";
+import {
+  loadSetupStatus,
+  type SetupSnapshot,
+} from "../lib/coachSetup/setupStatus";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -360,26 +369,58 @@ type Step3Props = {
 };
 
 function CoachWizardStep3({ navigation }: Step3Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state, patch } = useWizard();
   const { saving, error, save } = useStepSaver(3);
   const [checking, setChecking] = useState(true);
+  const [listError, setListError] = useState<FriendlyError | null>(null);
+  const [draft, setDraft] = useState<CoachPackage | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<FriendlyError | null>(null);
+
+  // C-329-1: only a live package (active, not archived, published) counts.
+  // A draft is offered to publish; it is never shown as live.
+  const check = useCallback(async () => {
+    setChecking(true);
+    setListError(null);
+    try {
+      const res = await coachPackagesApi.list();
+      const live = res.data.find(isLivePackage);
+      if (live) {
+        patch({ existingPackageTitle: live.title });
+        setDraft(null);
+      } else {
+        setDraft(
+          res.data.find((p) => p.status !== "archived" && !p.archivedAt) ??
+            null,
+        );
+      }
+    } catch (err) {
+      setListError(describeError(err, "check your packages"));
+    } finally {
+      setChecking(false);
+    }
+  }, [patch]);
 
   useEffect(() => {
-    let alive = true;
-    coachPackagesApi
-      .list()
-      .then((res) => {
-        const live = res.data.find((p) => p.status === "active") ?? res.data[0];
-        if (alive && live) patch({ existingPackageTitle: live.title });
-      })
-      .catch(() => undefined)
-      .finally(() => alive && setChecking(false));
-    return () => {
-      alive = false;
-    };
-    // Only on mount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    void check();
+  }, [check]);
+
+  const publishDraft = async () => {
+    if (!draft) return;
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      await coachSetupApi.publishPackage(draft.id);
+      patch({ existingPackageTitle: draft.title });
+      setDraft(null);
+    } catch (err) {
+      setPublishError(describeError(err, "make your package live"));
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   const done = state.pkg !== null || state.existingPackageTitle !== null;
   const goNext = () =>
@@ -409,6 +450,12 @@ function CoachWizardStep3({ navigation }: Step3Props) {
     >
       {checking ? (
         <ActivityIndicator accessibilityLabel="Checking your packages" />
+      ) : listError ? (
+        <SetupNotice
+          error={listError}
+          onRetry={() => void check()}
+          testID="wizard-package-list-error"
+        />
       ) : state.pkg ? (
         <SmallNote
           testID="wizard-package-created"
@@ -426,17 +473,47 @@ function CoachWizardStep3({ navigation }: Step3Props) {
           text={`You already have a package, ${state.existingPackageTitle}. You can add more from Packages later.`}
         />
       ) : (
-        <FirstPackageForm
-          defaultTitle={title}
-          defaultDescription={
-            state.focus.length
-              ? `Coaching for ${state.focus.join(", ").toLowerCase()}.`
-              : null
-          }
-          chargesEnabled={state.connect?.chargesEnabled === true}
-          onCreated={(pkg) => patch({ pkg })}
-          testID="wizard-first-package"
-        />
+        <>
+          {draft ? (
+            <View testID="wizard-package-draft">
+              <SmallNote
+                text={`${draft.title} is saved as a draft. Clients cannot see it until it is live.`}
+              />
+              <TouchableOpacity
+                onPress={() => void publishDraft()}
+                disabled={publishing}
+                accessibilityRole="button"
+                accessibilityLabel={`Make ${draft.title} live`}
+                accessibilityState={{ busy: publishing, disabled: publishing }}
+                testID="wizard-package-draft-publish"
+                style={styles.linkBtn}
+              >
+                <Text style={styles.linkBtnText}>
+                  {publishing ? "Making it live" : `Make ${draft.title} live`}
+                </Text>
+              </TouchableOpacity>
+              {publishError ? (
+                <SetupNotice
+                  error={publishError}
+                  onRetry={() => void publishDraft()}
+                  testID="wizard-package-draft-error"
+                />
+              ) : null}
+              <SmallNote text="Or create a new package below." />
+            </View>
+          ) : null}
+          <FirstPackageForm
+            defaultTitle={title}
+            defaultDescription={
+              state.focus.length
+                ? `Coaching for ${state.focus.join(", ").toLowerCase()}.`
+                : null
+            }
+            chargesEnabled={state.connect?.chargesEnabled === true}
+            onCreated={(pkg) => patch({ pkg })}
+            testID="wizard-first-package"
+          />
+        </>
       )}
       {error ? (
         <SetupNotice error={error} testID="wizard-step-3-error" />
@@ -497,19 +574,49 @@ function CoachWizardStep5({ navigation }: Step5Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { state } = useWizard();
+  const user = useCurrentUser();
+  const coachId = user?.id ?? null;
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<FriendlyError | null>(null);
+  // C-329-3: read the server on mount. When the wizard resumes on this
+  // step, the in-memory state from earlier steps is empty, so the ticks
+  // must come from the same routes the Home checklist uses.
+  const [snap, setSnap] = useState<SetupSnapshot | null>(null);
+  const [checking, setChecking] = useState(true);
+  const check = useCallback(async () => {
+    if (!coachId) {
+      setChecking(false);
+      return;
+    }
+    setChecking(true);
+    try {
+      setSnap(await loadSetupStatus(coachId));
+    } finally {
+      setChecking(false);
+    }
+  }, [coachId]);
+  useEffect(() => {
+    void check();
+  }, [check]);
+  const connectState = snap?.connect?.state ?? state.connect?.state ?? null;
+  const hasPackage =
+    state.pkg !== null ||
+    state.existingPackageTitle !== null ||
+    (snap?.livePackageTitle ?? "") !== "";
+  const hasClient = snap?.hasClient === true;
+  const shared = state.invited || snap?.sharedLink === true;
   const items = [
     { label: "Practice set up", done: state.practiceName.length > 0 },
+    { label: "Stripe ready to pay you", done: connectState === "active" },
+    { label: "First package live", done: hasPackage },
     {
-      label: "Stripe ready to pay you",
-      done: state.connect?.state === "active",
+      label: hasClient
+        ? "First client joined"
+        : shared
+          ? "Invite link shared, waiting for your first client to join"
+          : "First client invited",
+      done: hasClient,
     },
-    {
-      label: "First package live",
-      done: state.pkg !== null || state.existingPackageTitle !== null,
-    },
-    { label: "First client invited", done: state.invited },
   ];
   const finish = async () => {
     setSubmitting(true);
@@ -529,12 +636,26 @@ function CoachWizardStep5({ navigation }: Step5Props) {
       stepNumber={5}
       totalSteps={UI_STEPS}
       heading="You are ready to coach"
-      body="Anything still open stays on your Home checklist. Your first client payment shows up in Money."
+      body="Anything still open stays on your Home checklist, and we mark your first client payment with you when it lands."
       ctaLabel="Go to my dashboard"
       ctaDisabled={submitting}
       onCta={finish}
       onBack={() => navigation.goBack()}
     >
+      {checking ? (
+        <ActivityIndicator
+          color={colors.primary}
+          accessibilityLabel="Checking your setup"
+          testID="wizard-step-5-checking"
+        />
+      ) : null}
+      {snap && snap.errors.length > 0 ? (
+        <SetupNotice
+          error={snap.errors[0]}
+          onRetry={checking ? undefined : () => void check()}
+          testID="wizard-step-5-status-error"
+        />
+      ) : null}
       <View accessibilityRole="list">
         {items.map((it) => (
           <View
@@ -713,6 +834,12 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 16,
     },
     primaryBtnDisabled: { opacity: 0.5 },
+    linkBtn: { minHeight: 44, justifyContent: "center" },
+    linkBtnText: {
+      fontFamily: "Inter_600SemiBold",
+      fontSize: 15,
+      color: colors.primary,
+    },
     primaryBtnText: {
       fontFamily: "Inter_600SemiBold",
       fontSize: 14,

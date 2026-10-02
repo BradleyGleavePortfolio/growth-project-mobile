@@ -16,7 +16,9 @@ import {
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
 import {
   coachPackagesApi,
+  type CoachPackage,
   type PackageBillingInterval,
+  type PackageCreateInput,
 } from "../../../api/packagesApi";
 import { coachSetupApi } from "../../../api/coachSetupApi";
 import {
@@ -24,6 +26,7 @@ import {
   type FriendlyError,
 } from "../../../lib/coachSetup/errors";
 import { generateIdempotencyKey } from "../../../utils/idempotency";
+import { errorStatus } from "../../../types/common";
 import SetupNotice from "./SetupNotice";
 
 export const PAID_PACKAGE_MIN_CENTS = 1999;
@@ -60,6 +63,66 @@ export function validatePackage(input: {
   return null;
 }
 
+interface PendingCreate {
+  input: PackageCreateInput;
+  /** Device time the create was sent; bounds the lookup without a snapshot. */
+  startedAt: number;
+}
+
+/** A 4xx (other than 408 / 409 / 429) means the server did not create it. */
+export function isDefinitiveRejection(err: unknown): boolean {
+  const status = errorStatus(err);
+  return (
+    status !== undefined &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 409 &&
+    status !== 429
+  );
+}
+
+function sameInput(pkg: CoachPackage, input: PackageCreateInput): boolean {
+  return (
+    pkg.title.trim() === input.title &&
+    pkg.priceCents === input.priceCents &&
+    pkg.billingInterval === input.billingInterval
+  );
+}
+
+async function snapshotIds(): Promise<Set<string> | null> {
+  try {
+    const res = await coachPackagesApi.list();
+    return new Set(res.data.map((p) => p.id));
+  } catch {
+    // Without a snapshot the lookup falls back to name, price and time.
+    return null;
+  }
+}
+
+// Ten minutes either side of the device clock covers ordinary clock skew.
+const LOOKUP_SKEW_MS = 10 * 60_000;
+
+/**
+ * After a create with no definitive answer, find the package the server
+ * may have committed. Throws when the lookup itself fails, so the coach
+ * retries again rather than risking a duplicate. Exported for tests.
+ */
+export async function findCommitted(
+  attempt: PendingCreate,
+  known: Set<string> | null,
+): Promise<CoachPackage | null> {
+  const res = await coachPackagesApi.list();
+  const match = res.data.find((p) => {
+    if (known && known.has(p.id)) return false;
+    if (!sameInput(p, attempt.input)) return false;
+    if (known) return true;
+    const at = Date.parse(p.createdAt);
+    return Number.isFinite(at) && at >= attempt.startedAt - LOOKUP_SKEW_MS;
+  });
+  return match ?? null;
+}
+
 interface Props {
   defaultTitle: string;
   defaultDescription?: string | null;
@@ -84,9 +147,20 @@ export default function FirstPackageForm({
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [error, setError] = useState<FriendlyError | null>(null);
-  // One key per attempt so a double tap or a retry after a timeout cannot
-  // create two packages.
+  // B-329-1: a retry must never create a second package.
+  //  - `created` holds the package once the server has answered create;
+  //    a retry after a publish / invite / bind failure resumes from there
+  //    and never calls create again.
+  //  - `pending` holds an attempt whose create got no definitive answer
+  //    (offline, timeout, 5xx): the server may have committed it, so the
+  //    retry looks the package up first (ids we had not seen before, same
+  //    name, price and billing) and adopts it instead of creating again.
+  //  - The idempotency key rotates only after a definitive 4xx from create
+  //    (nothing was created, the coach fixes the input and sends again).
   const idemKey = useRef(generateIdempotencyKey());
+  const created = useRef<CoachPackage | null>(null);
+  const pending = useRef<PendingCreate | null>(null);
+  const knownIds = useRef<Set<string> | null>(null);
 
   const submit = async () => {
     const problem = validatePackage({ title, free, priceText });
@@ -97,21 +171,49 @@ export default function FirstPackageForm({
     const priceCents = free ? 0 : (parsePriceCents(priceText) ?? 0);
     const billingInterval: PackageBillingInterval =
       free || !monthly ? "one_time" : "monthly";
+    const input: PackageCreateInput = {
+      title: title.trim(),
+      description: defaultDescription ?? null,
+      priceCents,
+      currency: "usd",
+      billingInterval,
+      intervalCount: 1,
+      trialDays: 0,
+      features: [],
+    };
     try {
-      const res = await coachPackagesApi.create(
-        {
-          title: title.trim(),
-          description: defaultDescription ?? null,
-          priceCents,
-          currency: "usd",
-          billingInterval,
-          intervalCount: 1,
-          trialDays: 0,
-          features: [],
-        },
-        idemKey.current,
-      );
-      const pkg = res.data;
+      let pkg = created.current;
+      if (!pkg && pending.current) {
+        pkg = await findCommitted(pending.current, knownIds.current);
+        if (pkg) created.current = pkg;
+      }
+      if (!pkg) {
+        if (!knownIds.current) knownIds.current = await snapshotIds();
+        const attempt: PendingCreate = {
+          input,
+          startedAt: Date.now(),
+        };
+        pending.current = attempt;
+        try {
+          const res = await coachPackagesApi.create(input, idemKey.current);
+          pkg = res.data;
+          created.current = pkg;
+          pending.current = null;
+        } catch (err) {
+          if (isDefinitiveRejection(err)) {
+            // The server refused it: nothing exists. Next send is new.
+            pending.current = null;
+            idemKey.current = generateIdempotencyKey();
+          }
+          throw err;
+        }
+      } else if (!sameInput(pkg, input)) {
+        // The coach changed the details after a partial failure: update
+        // the package we already have rather than making another one.
+        const res = await coachPackagesApi.update(pkg.id, input);
+        pkg = res.data;
+        created.current = pkg;
+      }
       await coachSetupApi.publishPackage(pkg.id);
       let freeOnJoin = false;
       if (priceCents === 0) {
@@ -121,14 +223,13 @@ export default function FirstPackageForm({
       }
       onCreated({
         id: pkg.id,
-        title: pkg.title,
+        title: pkg.title || input.title,
         priceCents,
         billingInterval,
         freeOnJoin,
       });
     } catch (err) {
       setError(describeError(err, "create your package"));
-      idemKey.current = generateIdempotencyKey();
     } finally {
       setBusy(false);
     }

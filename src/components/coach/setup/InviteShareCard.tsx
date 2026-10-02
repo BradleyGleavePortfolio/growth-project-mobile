@@ -23,8 +23,7 @@ import SetupNotice from "./SetupNotice";
 import QrCode from "./QrCode";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import { prefsStorage } from "../../../storage/mmkv";
-
-const INVITE_SHARED_KEY_BASE = "coach.setup.invite_shared";
+import { inviteSharedKey } from "../../../lib/coachSetup/setupStatus";
 
 interface Props {
   /** Called once the coach has shared or copied the link. */
@@ -52,7 +51,7 @@ export default function InviteShareCard({
       // Ticks "Invite your first client" on the Home checklist (this device).
       if (coachId)
         void prefsStorage
-          .set(`${INVITE_SHARED_KEY_BASE}:${coachId}`, "true")
+          .set(inviteSharedKey(coachId), "true")
           .catch(() => undefined);
       onShared?.(how);
     },

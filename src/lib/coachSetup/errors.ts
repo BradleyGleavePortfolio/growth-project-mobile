@@ -112,12 +112,16 @@ export function describeError(err: unknown, action: string): FriendlyError {
     stripeCode === "configuration_missing" ||
     code === "STRIPE_NOT_CONFIGURED"
   ) {
+    // A server configuration state (Connect not configured for this
+    // environment), not an app-version state: tell the coach what still
+    // works, where to connect later, and how to reach support.
     return {
       ...base,
-      title: "Payouts are not switched on yet",
+      title: "Payouts are not switched on for your account yet",
       body:
-        "Stripe payouts are not available in this version of the app yet. Finish the rest of setup now, " +
-        "and connect Stripe later from Money. Free packages work today.",
+        "You cannot connect Stripe right now because payouts are not switched on for your account yet. " +
+        "Finish the rest of setup, then connect Stripe later from Get paid on your Home checklist. " +
+        `Free packages work today.${referenceSentence(requestId, "If this has not changed by tomorrow")}`,
       retryable: false,
     };
   }
@@ -141,7 +145,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       title: "Setup is already finished",
-      body: "You can change anything from Settings or Money.",
+      body: "You can change anything from Settings.",
       retryable: false,
     };
   }
@@ -197,8 +201,11 @@ export function describeError(err: unknown, action: string): FriendlyError {
   };
 }
 
-function referenceSentence(requestId: string | null): string {
+function referenceSentence(
+  requestId: string | null,
+  lead = "If it keeps happening",
+): string {
   return requestId
-    ? ` If it keeps happening, write to ${COACH_SUPPORT_EMAIL} and mention reference ${requestId}.`
-    : ` If it keeps happening, write to ${COACH_SUPPORT_EMAIL}.`;
+    ? ` ${lead}, write to ${COACH_SUPPORT_EMAIL} and mention reference ${requestId}.`
+    : ` ${lead}, write to ${COACH_SUPPORT_EMAIL}.`;
 }

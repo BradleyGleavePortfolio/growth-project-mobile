@@ -16,7 +16,7 @@ export default function CoachHomeCards() {
   const navigation =
     useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   const open = useCallback(
-    (target: ChecklistTarget) => {
+    (target: ChecklistTarget, done: boolean | null) => {
       switch (target) {
         case "get_paid":
           navigation.navigate("SettingsStack", {
@@ -34,7 +34,19 @@ export default function CoachHomeCards() {
           navigation.navigate("SettingsStack", { screen: "CoachPackagesList" });
           return;
         case "money":
-          navigation.navigate("SettingsStack", { screen: "CoachEarnings" });
+          // A first payment needs a client on a package: before it lands,
+          // open the invite step; after, the packages list shows who pays.
+          // (Never the retired Earnings screen.)
+          if (done === true) {
+            navigation.navigate("SettingsStack", {
+              screen: "CoachPackagesList",
+            });
+          } else {
+            navigation.navigate("SettingsStack", {
+              screen: "CoachSetup",
+              params: { section: "invite" },
+            });
+          }
           return;
       }
     },
