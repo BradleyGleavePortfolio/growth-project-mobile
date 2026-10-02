@@ -10,7 +10,6 @@ import {
   Platform,
   ScrollView,
   Alert,
-  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Typography, Spacing, Radius, Shadow } from '../../theme';
@@ -48,6 +47,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 // Static import (was a dynamic `import()`): Metro bundles the module either
 // way, and a static import lets the Google path be exercised in Jest.
 import { signInWithGoogle } from '../../utils/googleAuth';
@@ -165,6 +165,9 @@ function canonicalEmailFrom(data: unknown, submitted: string): string {
 export default function CreateAccountScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Sol B-324-1: "Request access" opens the one support inbox; if no email
+  // app opens, the address, Copy and Try again are shown under the hint.
+  const requestAccessEmail = useSupportEmail('Request access to The Growth Project');
   // Role choice (C13): asked only when the live signup policy advertises
   // `role_choice: true` (backend #597). People who arrive with an invite /
   // QR code are always clients and skip it; everyone else picks first.
@@ -1289,16 +1292,23 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                   style={styles.requestAccessLink}
                   accessibilityRole="link"
                   accessibilityLabel="Request access by email"
-                  onPress={() =>
-                    Linking.openURL(
-                      'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
-                    )
-                  }
+                  onPress={() => {
+                    void requestAccessEmail.open();
+                  }}
+                  testID="request-access-link"
                 >
                   Request access
                 </Text>
                 .
               </Text>
+            ) : null}
+            {requireInviteCode && requestAccessEmail.state !== 'idle' ? (
+              <SupportEmailFallback
+                handle={requestAccessEmail}
+                textStyle={styles.requestAccessFallbackText}
+                linkColor={colors.primary}
+                testID="request-access-fallback"
+              />
             ) : null}
           </View>
         )}
@@ -1462,6 +1472,7 @@ const makeStyles = (colors: ThemeColors) =>
   invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 6 },
   invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
   requestAccessLink: { color: colors.primary, textDecorationLine: 'underline' },
+  requestAccessFallbackText: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
   registerButton: {
     backgroundColor: colors.primary,
     borderRadius: Radius.md,
