@@ -21,6 +21,7 @@ import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
+import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
@@ -95,6 +96,11 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // inherit it and be handed a session that pairs into someone else's account.
   // Swept via the exported constant so the literal lives in one place.
   IMPORT_PAIRING_MIRROR_KEY_PREFIX,
+  // Legacy plaintext consultation drafts (first build of PR #310, keyed
+  // `consultation_v1:<userId>`): health and screening answers must never
+  // survive sign-out. Current drafts live in SecureStore and are purged by
+  // purgeConsultationDraft below.
+  LEGACY_DRAFT_PREFIX,
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
@@ -343,6 +349,18 @@ export async function signOut(userId?: string | null): Promise<void> {
   // Credentials, analytics, stores and offline mutation queues below are
   // untouched by this step.
   await retireAndDrainIdentityPersistences();
+
+  // Consultation draft (Sol A-04): fence the signing-out user's draft writer
+  // (any write still queued or arriving late from the unmounting flow is
+  // dropped), drain it, then delete the encrypted draft. Awaited so that
+  // `await signOut()` is the privacy boundary for the health answers too.
+  if (signingOutUserId) {
+    try {
+      await purgeConsultationDraft(signingOutUserId);
+    } catch (err) {
+      logger.warn('AuthActions', 'purgeConsultationDraft failed', err);
+    }
+  }
 
   try {
     await Promise.all([
