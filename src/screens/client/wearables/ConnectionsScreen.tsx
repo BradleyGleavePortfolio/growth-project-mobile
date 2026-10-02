@@ -19,7 +19,7 @@
  * The list is the join of the user's existing connections with the full
  * provider catalog so providers the user has not connected yet still appear
  * with a Connect button. Tapping Connect / Reconnect opens
- * `ConnectProviderSheet`; Disconnect calls the soft-disconnect mutation.
+ * `ConnectProviderSheet`; Disconnect asks first (DisconnectConfirmDialog, S14 round 4b) and then calls the soft-disconnect mutation.
  *
  * States: loading skeleton, error-with-retry, and a per-row pending state on
  * disconnect. Every interactive element carries an accessibilityLabel + role.
@@ -53,6 +53,8 @@ import {
   isConnectedButNotSyncingHere,
 } from '../../../services/health/onDeviceSync';
 import { notSyncingHereCopy } from './onDeviceCopy';
+import DisconnectConfirmDialog from './DisconnectConfirmDialog';
+import { disconnectFailureMessage } from './disconnectCopy';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
 
@@ -310,12 +312,44 @@ export default function ConnectionsScreen() {
     setSheetProvider(null);
   }, []);
 
-  const handleDisconnect = useCallback(
-    (provider: WearableProvider) => {
-      disconnect.mutate(provider);
-    },
-    [disconnect],
-  );
+  // S14 round 4b (C-317-4): Disconnect asks first. Cancel is the default;
+  // a failure keeps the dialog open with coded copy.
+  const [confirmProvider, setConfirmProvider] = useState<WearableProvider | null>(null);
+  const [disconnectError, setDisconnectError] = useState<{
+    text: string;
+    canRetry: boolean;
+  } | null>(null);
+
+  const handleDisconnect = useCallback((provider: WearableProvider) => {
+    setDisconnectError(null);
+    setConfirmProvider(provider);
+  }, []);
+
+  const cancelDisconnect = useCallback(() => {
+    setConfirmProvider(null);
+    setDisconnectError(null);
+  }, []);
+
+  const confirmDisconnect = useCallback(() => {
+    if (confirmProvider == null) return;
+    const provider = confirmProvider;
+    const name = configFor(provider).displayName;
+    setDisconnectError(null);
+    disconnect.mutate(provider, {
+      onSuccess: () => {
+        setConfirmProvider(null);
+      },
+      onError: (err: unknown) => {
+        const failure = disconnectFailureMessage(err, name);
+        if (failure.kind === 'already') {
+          setConfirmProvider(null);
+          void refetch();
+          return;
+        }
+        setDisconnectError({ text: failure.text, canRetry: failure.kind === 'retry' });
+      },
+    });
+  }, [confirmProvider, disconnect, refetch]);
 
   if (isLoading) {
     return (
@@ -384,6 +418,16 @@ export default function ConnectionsScreen() {
         visible={sheetVisible}
         onClose={closeSheet}
         onConnected={closeSheet}
+      />
+      <DisconnectConfirmDialog
+        provider={confirmProvider}
+        name={confirmProvider != null ? configFor(confirmProvider).displayName : ''}
+        visible={confirmProvider != null}
+        pending={disconnect.isPending}
+        errorText={disconnectError?.text ?? null}
+        canRetry={disconnectError?.canRetry ?? true}
+        onCancel={cancelDisconnect}
+        onConfirm={confirmDisconnect}
       />
     </SafeAreaView>
   );

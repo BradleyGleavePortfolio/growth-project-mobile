@@ -57,6 +57,11 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
   }),
 }));
 
+const mockReportUnexpected = jest.fn();
+jest.mock('../../../../lib/consultation/report', () => ({
+  reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
+}));
+
 import ConnectionsScreen from '../ConnectionsScreen';
 import { WEARABLE_PROVIDERS } from '../../../../api/wearablesConnectionsApi';
 
@@ -96,6 +101,7 @@ function queryResult(over: Record<string, unknown>) {
 }
 
 beforeEach(() => {
+  mockReportUnexpected.mockReset();
   mockLocalAuth.mockReset();
   mockLocalAuth.mockReturnValue({ data: undefined });
   mockUseWearableConnections.mockReset();
@@ -165,13 +171,122 @@ describe('ConnectionsScreen — interactions', () => {
     expect(sheetProps.provider).toBe('STRAVA');
   });
 
-  it('calls the disconnect mutation when Disconnect is tapped', async () => {
+  // Opus C-317-4 / owner ruling 2026-10-02: Disconnect asks first.
+  it('C-317-4: tapping Disconnect asks first and disconnects nothing yet', async () => {
     mockUseWearableConnections.mockReturnValue(
       queryResult({ data: [connection('OURA', 'connected')] }),
     );
     await render(<ConnectionsScreen />);
     await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
-    expect(mockDisconnectMutate).toHaveBeenCalledWith('OURA');
+    expect(mockDisconnectMutate).not.toHaveBeenCalled();
+    expect(screen.getByText('Disconnect Oura?')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'The Growth Project stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
+      ),
+    ).toBeTruthy();
+  });
+});
+
+describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
+  const axiosErr = (status: number | null, data: unknown = {}) => {
+    const { AxiosError, AxiosHeaders } = jest.requireActual('axios');
+    if (status === null) return new AxiosError('Network Error', 'ERR_NETWORK', { headers: new AxiosHeaders() });
+    return new AxiosError('http', String(status), undefined, undefined, {
+      status,
+      statusText: '',
+      headers: new AxiosHeaders({ 'x-request-id': 'req12345-abcd' }),
+      config: { headers: new AxiosHeaders() },
+      data,
+    });
+  };
+
+  async function openConfirm(provider = 'OURA', label = 'Disconnect Oura') {
+    mockUseWearableConnections.mockReturnValue(
+      queryResult({ data: [connection(provider, 'connected')] }),
+    );
+    await render(<ConnectionsScreen />);
+    await fireEvent.press(screen.getByLabelText(label));
+  }
+
+  it('Cancel keeps the source connected', async () => {
+    await openConfirm();
+    await fireEvent.press(screen.getByTestId('disconnect-cancel'));
+    expect(mockDisconnectMutate).not.toHaveBeenCalled();
+    expect(screen.queryByText('Disconnect Oura?')).toBeNull();
+  });
+
+  it('Cancel is the first (default) action', async () => {
+    await openConfirm();
+    const cancel = screen.getByTestId('disconnect-cancel');
+    const confirm = screen.getByTestId('disconnect-confirm');
+    const buttons = screen.getAllByRole('button');
+    expect(buttons.indexOf(cancel)).toBeLessThan(buttons.indexOf(confirm));
+  });
+
+  it('confirming disconnects and closes on success', async () => {
+    mockDisconnectMutate.mockImplementation((_p: string, opts: { onSuccess: () => void }) =>
+      opts.onSuccess(),
+    );
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
+    expect(mockDisconnectMutate).toHaveBeenCalledWith('OURA', expect.any(Object));
+    expect(screen.queryByText('Disconnect Oura?')).toBeNull();
+  });
+
+  it('names this phone for Apple Health', async () => {
+    mockLocalAuth.mockReturnValue({
+      data: { userId: 'u1', source: 'APPLE_HEALTHKIT', connectionId: 'c-APPLE_HEALTHKIT' },
+    });
+    await openConfirm('APPLE_HEALTHKIT', 'Disconnect Apple Health');
+    expect(screen.getByText(/stops bringing in new Apple Health data from this phone/)).toBeTruthy();
+  });
+
+  it.each([
+    [null, /couldn't reach The Growth Project, so Oura is still connected/, true],
+    [429, /Too many tries in a short time, so Oura is still connected/, true],
+    [401, /Your session has ended, so Oura is still connected/, false],
+    [403, /client account only, so nothing changed/, false],
+  ])('a %p failure keeps the dialog open with its own copy', async (status, re, canRetry) => {
+    mockDisconnectMutate.mockImplementation((_p: string, opts: { onError: (e: unknown) => void }) =>
+      opts.onError(axiosErr(status)),
+    );
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
+    expect(screen.getByText(re)).toBeTruthy();
+    expect(screen.getByText('Disconnect Oura?')).toBeTruthy();
+    expect(screen.queryByTestId('disconnect-confirm') != null).toBe(canRetry);
+    expect(mockReportUnexpected).not.toHaveBeenCalled();
+  });
+
+  it('404 (already disconnected) closes and refreshes the list', async () => {
+    const refetch = jest.fn();
+    mockDisconnectMutate.mockImplementation((_p: string, opts: { onError: (e: unknown) => void }) =>
+      opts.onError(axiosErr(404)),
+    );
+    mockUseWearableConnections.mockReturnValue(
+      queryResult({ data: [connection('OURA', 'connected')], refetch }),
+    );
+    await render(<ConnectionsScreen />);
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
+    expect(screen.queryByText('Disconnect Oura?')).toBeNull();
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it('an unexpected failure shows a reference and support path and is reported', async () => {
+    mockDisconnectMutate.mockImplementation((_p: string, opts: { onError: (e: unknown) => void }) =>
+      opts.onError(axiosErr(500, { code: 'internal_error' })),
+    );
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
+    expect(screen.getByText(/Reference req12345\./)).toBeTruthy();
+    expect(screen.getByText(/hello@thegrowthproject.app/)).toBeTruthy();
+    expect(screen.queryByText(/Something went wrong/)).toBeNull();
+    expect(mockReportUnexpected).toHaveBeenCalledWith(
+      'wearables.disconnect',
+      expect.objectContaining({ status: 500, code: 'internal_error', requestId: 'req12345-abcd' }),
+    );
   });
 });
 

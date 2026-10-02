@@ -71,9 +71,9 @@ This document covers the on-device native module configuration serialized by **P
 | --- | --- |
 | `android.permission.health.READ_STEPS` | Step count |
 | `android.permission.health.READ_HEART_RATE` | Heart rate |
+| `android.permission.health.READ_RESTING_HEART_RATE` | Resting heart rate |
 | `android.permission.health.READ_SLEEP` | Sleep sessions |
 | `android.permission.health.READ_ACTIVE_CALORIES_BURNED` | Active calories |
-| `android.permission.health.READ_TOTAL_CALORIES_BURNED` | Total calories |
 | `android.permission.health.READ_DISTANCE` | Distance |
 | `android.permission.health.READ_EXERCISE` | Exercise / workout sessions |
 | `android.permission.health.READ_OXYGEN_SATURATION` | SpO₂ |
@@ -83,9 +83,9 @@ This document covers the on-device native module configuration serialized by **P
 | `android.permission.health.READ_WEIGHT` | Weight |
 | `android.permission.health.READ_BODY_FAT` | Body fat % |
 | `android.permission.health.READ_VO2_MAX` | VO₂ max |
-| `android.permission.health.READ_BASAL_BODY_TEMPERATURE` | Basal body temperature |
 | `android.permission.health.READ_BLOOD_PRESSURE` | Blood pressure |
-| `android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND` | Allows background reads (subject to user opt-in in Health Connect settings). |
+
+Only the record types the sync reads are declared (least privilege, S14 round 4b): no total calories, no basal body temperature, and no background read permission (data refreshes when the client opens Health).
 
 **Activity / Samsung permissions:**
 

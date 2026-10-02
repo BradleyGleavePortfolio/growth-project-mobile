@@ -119,6 +119,26 @@ describe('Health Connect manifest', () => {
     },
   );
 
+  // S14 round 4b (least privilege, Play health review): the manifest declares
+  // EXACTLY the Health Connect read permissions the sync reads. Unused ones
+  // (total calories, basal body temperature, background reads) are rejected.
+  it('declares exactly the Health Connect read permissions the sync reads', () => {
+    const declared = appJson.expo.android.permissions
+      .filter((p) => p.startsWith('android.permission.health.'))
+      .sort();
+    const read = HEALTH_CONNECT_RECORD_TYPES.map(
+      (rt) => `android.permission.health.${RECORD_TYPE_PERMISSION[rt]}`,
+    ).sort();
+    expect(declared).toEqual(read);
+    for (const unused of [
+      'READ_TOTAL_CALORIES_BURNED',
+      'READ_BASAL_BODY_TEMPERATURE',
+      'READ_HEALTH_DATA_IN_BACKGROUND',
+    ]) {
+      expect(declared).not.toContain(`android.permission.health.${unused}`);
+    }
+  });
+
   it('registers the library plugin and the S14 delegate plugin after it', () => {
     const lib = pluginNames.indexOf('react-native-health-connect');
     const local = pluginNames.indexOf('./plugins/withHealthConnectPermissionDelegate');
