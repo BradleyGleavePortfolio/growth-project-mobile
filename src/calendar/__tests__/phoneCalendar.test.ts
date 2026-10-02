@@ -83,18 +83,23 @@ it('serializes native editor presentation on rapid taps', async () => {
 });
 
 // S-SCHED-3 C-325-6 and B-325-1: neutral description; phone calls keep the number.
+function editorEvent(i: number) {
+  const event = cal.createEventInCalendarAsync.mock.calls[i]?.[0];
+  if (!event) throw new Error(`the calendar editor was not opened (call ${i})`);
+  return event;
+}
 it('describes the copy with the appointment type, or "Coaching session"', async () => {
   await addSessionToPhoneCalendar({ ...session, session_type: { id: 't1', name: 'Quick initialization', duration_minutes: 15, auto_approve: true, is_welcome: true, archived: false } }, 'Coach');
-  expect(cal.createEventInCalendarAsync.mock.calls[0][0].notes).toMatch(/^Quick initialization with Coach\./);
+  expect(editorEvent(0).notes).toMatch(/^Quick initialization with Coach\./);
   await addSessionToPhoneCalendar(session, 'Coach');
-  const notes = String(cal.createEventInCalendarAsync.mock.calls[1][0].notes);
+  const notes = String(editorEvent(1).notes);
   expect(notes).toMatch(/^Coaching session with Coach\./);
   expect(notes).not.toMatch(/Personal-training/);
 });
 
 it('a phone-call session keeps the number in the copy and links it', async () => {
   await addSessionToPhoneCalendar({ ...session, video_url: 'tel:+1 425 555 0100' }, 'Coach');
-  const event = cal.createEventInCalendarAsync.mock.calls[0][0];
+  const event = editorEvent(0);
   expect(event.notes).toContain('Phone call: +1 425 555 0100');
   expect(event.notes).not.toContain('Join:');
   expect(event.url).toBe('tel:+14255550100');
@@ -102,7 +107,7 @@ it('a phone-call session keeps the number in the copy and links it', async () =>
 
 it('an unsafe link never reaches the calendar copy', async () => {
   await addSessionToPhoneCalendar({ ...session, video_url: 'javascript:alert(1)' }, 'Coach');
-  const event = cal.createEventInCalendarAsync.mock.calls[0][0];
+  const event = editorEvent(0);
   expect(event.url).toBeUndefined();
   expect(event.notes).not.toContain('javascript');
 });
