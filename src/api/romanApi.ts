@@ -52,7 +52,8 @@
  *     send one and never presents a retry as duplicate-safe.
  *   - Errors are mapped to a typed RomanApiError union: unavailable (404 /
  *     feature-off), rateLimited (429 + retryAfterSeconds), offline (no network),
- *     and generic. Screens render calm Roman-voiced copy off these kinds; this
+ *     aiRefused (R2b 403 ai_consent_required / 503 ai_egress_blocked, over HTTP
+ *     or in the stream's strict { code, message } error frame), and generic. Screens render calm Roman-voiced copy off these kinds; this
  *     layer never throws a raw axios error into the UI.
  */
 
@@ -62,6 +63,12 @@ import api from '../services/api';
 import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
+import {
+  aiRefusalFromHttp,
+  aiRefusalFromStreamCode,
+  aiRefusalOf,
+  type AiRefusal,
+} from '../lib/ai/aiRefusal';
 
 // ─── Surfaces (mirror backend ROMAN_SURFACES, dto L18) ───────────────────────
 
@@ -184,19 +191,44 @@ export type RomanErrorKind =
   | 'unavailable' // 404 — feature flag off OR session not found / not owned
   | 'rateLimited' // 429 — @Throttle / per-tier cap
   | 'offline' // no network reachability
+  | 'aiRefused' // R2b: 403 ai_consent_required / 503 ai_egress_blocked (HTTP or in-stream)
   | 'generic'; // anything else (5xx, malformed, unknown)
 
 export class RomanApiError extends Error {
   readonly kind: RomanErrorKind;
   /** Present only for `rateLimited`; seconds the caller should wait. */
   readonly retryAfterSeconds?: number;
+  /** Present only for `aiRefused`: which refusal, with its support reference. */
+  readonly refusal?: AiRefusal;
 
-  constructor(kind: RomanErrorKind, message: string, retryAfterSeconds?: number) {
+  constructor(
+    kind: RomanErrorKind,
+    message: string,
+    retryAfterSeconds?: number,
+    refusal?: AiRefusal,
+  ) {
     super(message);
     this.name = 'RomanApiError';
     this.kind = kind;
     this.retryAfterSeconds = retryAfterSeconds;
+    this.refusal = refusal;
   }
+}
+
+/** Read a non-2xx body as JSON when it is JSON; never throws. */
+async function readErrorBody(response: Response): Promise<unknown> {
+  try {
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The X-Request-ID the backend stamped on this response (the support reference). */
+function responseRequestId(response: Response): string | null {
+  const v = response.headers?.get?.('x-request-id');
+  return typeof v === 'string' && v.length > 0 ? v : null;
 }
 
 /** Thrown when a backend response shape drifts from the cited contract. */
@@ -240,6 +272,10 @@ function toRomanApiError(err: unknown): RomanApiError {
           'Roman needs a brief moment before the next message.',
           headerRetry ?? bodyRetry,
         );
+      }
+      const refusal = aiRefusalOf(err);
+      if (refusal) {
+        return new RomanApiError('aiRefused', 'Roman cannot answer this request.', undefined, refusal);
       }
       return new RomanApiError('generic', 'That request did not complete.');
     }
@@ -442,6 +478,19 @@ export async function sendMessage(
           retry,
         );
       }
+      // R2b: 403 ai_consent_required (before the turn is stored) and 503
+      // ai_egress_blocked are specific, actionable refusals, read from the
+      // status AND the machine code.
+      if (response.status === 403 || response.status === 503) {
+        const refusal = aiRefusalFromHttp(
+          response.status,
+          await readErrorBody(response),
+          responseRequestId(response),
+        );
+        if (refusal) {
+          throw new RomanApiError('aiRefused', 'Roman cannot answer this request.', undefined, refusal);
+        }
+      }
       throw new RomanApiError('generic', 'That request did not complete.');
     }
 
@@ -450,6 +499,13 @@ export async function sendMessage(
 
     if (streamError) {
       // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152).
+      // R2b: a consent / egress refusal mid-request keeps its code; the
+      // reference is the stream response's X-Request-ID header (the frame
+      // itself is exactly { code, message }, backend B-626-2).
+      const refusal = aiRefusalFromStreamCode(streamError, responseRequestId(response));
+      if (refusal) {
+        throw new RomanApiError('aiRefused', streamError.message, undefined, refusal);
+      }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
       throw new RomanApiError(kind, streamError.message);

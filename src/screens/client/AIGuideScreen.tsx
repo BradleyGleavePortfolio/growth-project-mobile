@@ -26,6 +26,10 @@ import { aiApi, AIStructuredContext } from '../../services/api';
 import { ChatMessage } from '../../types';
 import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
+import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
+import { shortReference, supportReferenceOf } from '../../utils/correlation';
+import { captureError } from '../../services/sentry';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // Quiet-luxury prompts. The AI is the coach's voice; the prompts should read
@@ -92,6 +96,11 @@ export default function AIGuideScreen() {
   const [coachName, setCoachName] = useState<string | undefined>(undefined);
   const [isOffline, setIsOffline] = useState(false);
   const [isDegraded, setIsDegraded] = useState(false);
+  // R2b: a consent / egress refusal from POST /ai/chat (403
+  // ai_consent_required, 503 ai_egress_blocked). Shown as its own notice
+  // with a working action; never an invented AI reply.
+  const [refusal, setRefusal] = useState<AiRefusal | null>(null);
+  const [refusedText, setRefusedText] = useState<string | null>(null);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
@@ -140,9 +149,10 @@ export default function AIGuideScreen() {
       };
 
       setMessages((prev) => [...prev, userMsg]);
-      await saveChatMessage(userId, userMsg);
       setInput('');
       setIsTyping(true);
+      setRefusal(null);
+      setRefusedText(null);
 
       let aiText = '';
 
@@ -168,6 +178,19 @@ export default function AIGuideScreen() {
         // Show degraded banner when the backend served a deterministic fallback.
         setIsDegraded(response.data?.degraded === true);
       } catch (err) {
+        // R2b: the server refused to send this to the AI provider. Nothing was
+        // answered, so the turn is not kept; the draft goes back in the input
+        // and the notice offers the working next step.
+        const refused = aiRefusalOf(err);
+        if (refused) {
+          setIsTyping(false);
+          setInput(text.trim());
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          setRefusal(refused);
+          setRefusedText(text.trim());
+          return;
+        }
+
         // Detect axios network-level failures (no response from server). These
         // can happen on a flaky connection even when NetInfo still reports
         // reachable, so we treat them as the "offline" branch.
@@ -207,8 +230,14 @@ export default function AIGuideScreen() {
         // disabled response. Previously we ran a hardcoded keyword matcher
         // labelled "Offline reply" — a lie when the user was online. (Hunt
         // P0-aiGuide / R18)
+        // Owner rule 2026-10-01 13:34: an unknown failure says what happened,
+        // the next step, and a short reference for support, and is reported.
+        const ref = shortReference(supportReferenceOf(err));
+        captureError(err, { surface: 'ai_guide', reference: ref });
         aiText =
-          "Your coach's guidance is briefly unavailable — please try again in a minute.";
+          'Guidance could not answer this time because of a problem on our side. ' +
+          'Send your message again in a minute. If it keeps happening, contact support' +
+          (ref ? ` and share reference ${ref}.` : '.');
         setIsDegraded(true);
       }
 
@@ -221,6 +250,10 @@ export default function AIGuideScreen() {
 
       setIsTyping(false);
       setMessages((prev) => [...prev, aiMsg]);
+      // The user turn is stored only once the request settled with a reply
+      // (or the fail-closed note), so an offline or refused turn that was
+      // rolled back never reappears from history.
+      await saveChatMessage(userId, userMsg);
       await saveChatMessage(userId, aiMsg);
     },
     [userId, currentUser, messages]
@@ -326,6 +359,16 @@ export default function AIGuideScreen() {
           />
         </View>
       )}
+
+      {refusal ? (
+        <AiRefusalNotice
+          refusal={refusal}
+          audience="client"
+          surface="guide"
+          onRetry={refusedText ? () => void sendMessage(refusedText) : undefined}
+          testID="ai-guide-refusal"
+        />
+      ) : null}
 
       {/* Input Bar */}
       <View style={styles.inputBar}>

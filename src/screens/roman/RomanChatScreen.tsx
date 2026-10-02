@@ -40,6 +40,8 @@ import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import RomanComposer from '../../components/roman/RomanComposer';
 import RomanState from '../../components/roman/RomanState';
+import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import {
   romanRateLimited,
@@ -171,12 +173,22 @@ export default function RomanChatScreen({
   }, [messages]);
 
   const isEmpty = messages.length === 0;
+  // R2b: a consent / egress refusal gets its own notice with a working action
+  // (Allow AI help, or Contact support with the reference), never the
+  // generic send-failed row.
+  const refusal = sendError?.kind === 'aiRefused' ? (sendError.refusal ?? null) : null;
+  const refusalAudience = surface === 'coach' ? 'coach' : 'client';
   const sendErrorCopy =
     sendError == null
       ? null
-      : sendError.kind === 'rateLimited'
-        ? romanRateLimited(sendError.retryAfterSeconds)
-        : ROMAN_SEND_FAILED;
+      : refusal
+        ? (() => {
+            const c = aiRefusalCopy(refusal, refusalAudience, 'roman');
+            return `${c.title}. ${c.body}`;
+          })()
+        : sendError.kind === 'rateLimited'
+          ? romanRateLimited(sendError.retryAfterSeconds)
+          : ROMAN_SEND_FAILED;
 
   // Announce a send failure (and its remedy) to assistive tech the moment it
   // appears. The optimistic user turn was rolled back in useRomanChat, so the
@@ -312,7 +324,17 @@ export default function RomanChatScreen({
 
         {sending ? <RomanTypingIndicator testID="roman-typing" /> : null}
 
-        {sendErrorCopy != null ? (
+        {refusal ? (
+          <AiRefusalNotice
+            refusal={refusal}
+            audience={refusalAudience}
+            surface="roman"
+            onRetry={onRetrySend}
+            testID="roman-ai-refusal"
+          />
+        ) : null}
+
+        {sendErrorCopy != null && !refusal ? (
           <View
             style={styles.sendError}
             testID="roman-send-error"

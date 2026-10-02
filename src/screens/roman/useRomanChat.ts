@@ -27,6 +27,7 @@ import {
   type RomanSurface,
 } from '../../api/romanApi';
 import { logger } from '../../utils/logger';
+import type { AiRefusal } from '../../lib/ai/aiRefusal';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
 const PAGE_LIMIT = 30;
@@ -42,6 +43,8 @@ export interface RomanSendError {
   kind: RomanApiError['kind'];
   message: string;
   retryAfterSeconds?: number;
+  /** R2b refusal (kind `aiRefused`): consent required or egress blocked. */
+  refusal?: AiRefusal;
 }
 
 /**
@@ -191,6 +194,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
           kind: e?.kind ?? 'generic',
           message: e?.message ?? 'That request did not complete.',
           retryAfterSeconds: e?.retryAfterSeconds,
+          ...(e?.refusal ? { refusal: e.refusal } : {}),
         });
       }
       sendingRef.current = false;
