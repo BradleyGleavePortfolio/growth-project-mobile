@@ -26,13 +26,18 @@
  *   - a checked value (every `kind: required` name plus the profile's
  *     `require` list) is missing or a placeholder (your_..._here,
  *     REPLACE_WITH_*, <...>, ${...}, changeme, a masked *****, ...);
- *   - a URL-shaped value is not https on a real host (no localhost, private
- *     emulator hosts, example.*, *.invalid / *.test / *.local);
- *   - the Supabase anon key is not a JWT with role "anon" (a service_role or
- *     sb_secret_ key in the bundle is a full database bypass) nor an
- *     sb_publishable_ key;
+ *   - a URL-shaped value is not https on a real host (no localhost,
+ *     loopback, private, CGNAT or link-local IPv4/IPv6, example.*,
+ *     *.invalid / *.test / *.local / *.internal / *.lan, single-label names);
+ *   - the Supabase anon key is not a complete JWT (three non-empty base64url
+ *     parts, a signed header, role "anon", a full-length signature, not
+ *     expired) nor a complete sb_publishable_ key (a service_role or
+ *     sb_secret_ key in the bundle is a full database bypass);
  *   - the Sentry DSN is not https://<key>@<host>/<project>;
- *   - the Stripe key is not pk_live_ on a `stripe: "live"` profile;
+ *   - the Stripe key is not a complete publishable key (pk_live_ / pk_test_
+ *     plus 24-247 letters and digits), or not pk_live_ on a `stripe: "live"`
+ *     profile;
+ * Failure messages are fixed text and never contain any part of a value.
  *   - an eas.json build.<profile>.env value (after `extends`) is overridden
  *     with a different value in the build environment.
  * `--eas-hook` is the EAS `eas-build-pre-install` mode: it runs before
@@ -383,12 +388,98 @@ const PLACEHOLDER_VALUE =
   /^(?:your[_-].*|.*[_-]here|change[_-]?me|placeholder|todo|tbd|x{3,}|dummy|sample|null|undefined|none|false|true|0|-)$/i;
 const PLACEHOLDER_ANYWHERE = /REPLACE_WITH_|<[^>]*>|\$\{[^}]*\}|^\$[A-Z_]+$|^\*{3,}/;
 const URL_NAMES = new Set(['EXPO_PUBLIC_API_URL', 'EXPO_PUBLIC_SUPABASE_URL', 'EXPO_PUBLIC_HELP_BASE_URL']);
-const BAD_HOST =
-  /^(?:localhost|0\.0\.0\.0|127\.\d+\.\d+\.\d+|10\.0\.2\.2|10\.0\.3\.2|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)$|(?:^|\.)example\.(?:com|org|net)$|\.(?:example|invalid|test|localhost|local)$/i;
+// Hosts a release build must never call (C-333-1): loopback, unspecified,
+// RFC 1918, CGNAT and link-local IPv4; IPv6 loopback / unspecified / ULA
+// (fc00::/7) / link-local (fe80::/10) / IPv4-mapped; reserved or LAN-only
+// names; single-label names. WHATWG URL has already normalized decimal or hex
+// IPv4 to dotted form and IPv6 to its compressed, bracketed form.
+const BAD_HOSTS = [
+  /^(?:localhost|0\.\d+\.\d+\.\d+|127\.\d+\.\d+\.\d+|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|169\.254\.\d+\.\d+)$/i,
+  /^172\.(?:1[6-9]|2\d|3[01])\.\d+\.\d+$/,
+  /^100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d+\.\d+$/,
+  /^\[(?:::1?|::ffff:[^\]]*|f[cd][0-9a-f]{2}:[^\]]*|fe[89ab][0-9a-f]:[^\]]*)\]$/i,
+  /(?:^|\.)example\.(?:com|org|net)$/i,
+  /\.(?:example|invalid|test|localhost|local|internal|lan|home\.arpa)$/i,
+  /^[^.[\]]+$/,
+];
+const isBadHost = (hostname) => {
+  const h = String(hostname || '').replace(/\.$/, '');
+  return !h || BAD_HOSTS.some((re) => re.test(h));
+};
 const SENTRY_DSN = /^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+(?::\d{1,5})?(?:\/[A-Za-z0-9._-]+)*\/\d+$/;
+// Stripe publishable keys: pk_live_ / pk_test_ then letters and digits (24 on
+// older accounts, ~99 today; Stripe caps keys at 255 characters).
+const STRIPE_PUBLISHABLE_KEY = /^pk_(live|test)_([A-Za-z0-9]{24,247})$/;
+// Supabase publishable keys: sb_publishable_<22 random>_<8 checksum> on
+// hosted projects; self-hosted keys are longer random strings.
+const SUPABASE_PUBLISHABLE_KEY = /^sb_publishable_([A-Za-z0-9_-]{20,200})$/;
+const BASE64URL_SEGMENT = /^[A-Za-z0-9_-]+$/;
+const SUPABASE_SERVICE_ROLE = 'is the Supabase SERVICE ROLE key; it bypasses row-level security and must never be in the app';
+// HS256 (Supabase legacy keys) signs with 32 bytes; every real JWS algorithm signs with at least that many.
+const MIN_JWT_SIGNATURE_BYTES = 32;
 
-/** Why `value` is not a usable release value for `name`, or undefined. Never includes the value. */
-function valueProblem(name, value, profileSpec = {}) {
+const repeatsOneChar = (s) => /^(.)\1*$/.test(s);
+const isBase64UrlSegment = (s) => BASE64URL_SEGMENT.test(s) && s.length % 4 !== 1;
+
+/** A JWT segment decoded to a JSON object, or undefined. */
+function jsonSegment(segment) {
+  if (!isBase64UrlSegment(segment)) return undefined;
+  try {
+    const o = JSON.parse(Buffer.from(segment, 'base64url').toString('utf8'));
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Why `v` is not a usable Supabase anon / publishable key, or undefined (B-333-2). */
+function supabaseKeyProblem(v, now) {
+  if (/^sb_secret_/.test(v)) return 'is a Supabase SECRET key (sb_secret_); it bypasses row-level security and must never be in the app';
+  if (/^sb_publishable_/.test(v)) {
+    const m = SUPABASE_PUBLISHABLE_KEY.exec(v);
+    if (!m || repeatsOneChar(m[1])) {
+      return 'is not a complete Supabase publishable key (expected sb_publishable_ followed by at least 20 letters, digits, _ or -, copied whole from Supabase → Project Settings → API Keys)';
+    }
+    return undefined;
+  }
+  const parts = v.split('.');
+  if (parts.length !== 3) return 'is not a Supabase anon key (expected a JWT or an sb_publishable_ key)';
+  const payload = jsonSegment(parts[1]);
+  // A service-role payload is named first, whatever else is wrong with the token.
+  if (payload && payload.role === 'service_role') return SUPABASE_SERVICE_ROLE;
+  if (!parts.every(isBase64UrlSegment)) return 'is not a Supabase anon key (each of the three JWT parts must be non-empty base64url)';
+  const header = jsonSegment(parts[0]);
+  if (!header || typeof header.alg !== 'string' || !header.alg.trim() || header.alg.trim().toLowerCase() === 'none') {
+    return 'is not a Supabase anon key (the JWT header does not decode to a signed-token header)';
+  }
+  if (!payload) return 'is not a Supabase anon key (the JWT payload does not decode)';
+  if (payload.role !== 'anon') return 'is not a Supabase anon key (JWT role is not "anon")';
+  if (Buffer.from(parts[2], 'base64url').length < MIN_JWT_SIGNATURE_BYTES) {
+    return 'is not a complete Supabase anon key (the JWT signature is too short; copy the whole key)';
+  }
+  if (typeof payload.exp === 'number' && payload.exp * 1000 <= now) {
+    return 'is an expired Supabase anon key (the JWT exp is in the past); copy the current anon key from Supabase → Project Settings → API Keys';
+  }
+  return undefined;
+}
+
+/** Why `v` is not a usable Stripe publishable key for `mode` ('live' | 'any'), or undefined (B-333-2). */
+function stripeKeyProblem(v, mode) {
+  if (!/^pk_(live|test)_/.test(v)) return 'does not start with pk_live_ or pk_test_; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable';
+  if (mode === 'live' && !/^pk_live_/.test(v)) return 'is a Stripe TEST key on a store profile (needs pk_live_)';
+  const m = STRIPE_PUBLISHABLE_KEY.exec(v);
+  if (!m || repeatsOneChar(m[2])) {
+    return 'is not a complete Stripe publishable key (expected pk_live_ or pk_test_ followed by at least 24 letters and digits, copied whole from the Stripe dashboard → Developers → API keys)';
+  }
+  return undefined;
+}
+
+/**
+ * Why `value` is not a usable release value for `name`, or undefined.
+ * Every message is fixed text: nothing derived from the value is ever
+ * interpolated, so it is safe in build logs (B-333-3).
+ */
+function valueProblem(name, value, profileSpec = {}, now = Date.now()) {
   const v = String(value == null ? '' : value).trim();
   if (!v) return 'is unset or empty';
   if (PLACEHOLDER_VALUE.test(v) || PLACEHOLDER_ANYWHERE.test(v)) return 'is a placeholder, not a real value';
@@ -399,28 +490,17 @@ function valueProblem(name, value, profileSpec = {}) {
     } catch {
       return 'is not a URL';
     }
-    if (u.protocol !== 'https:') return `must be an https URL (got ${u.protocol.replace(':', '')})`;
-    if (BAD_HOST.test(u.hostname)) return 'points at a local, private or example host';
+    if (u.protocol !== 'https:') return 'must be an https URL';
+    if (isBadHost(u.hostname)) return 'points at a local, private or example host';
   }
   if (name === 'EXPO_PUBLIC_SUPABASE_ANON_KEY') {
-    if (/^sb_secret_/.test(v)) return 'is a Supabase SECRET key (sb_secret_); it bypasses row-level security and must never be in the app';
-    if (!/^sb_publishable_[A-Za-z0-9_-]+$/.test(v)) {
-      const parts = v.split('.');
-      if (parts.length !== 3) return 'is not a Supabase anon key (expected a JWT or an sb_publishable_ key)';
-      let payload;
-      try {
-        payload = JSON.parse(Buffer.from(parts[1].replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8'));
-      } catch {
-        return 'is not a Supabase anon key (the JWT payload does not decode)';
-      }
-      if (payload && payload.role === 'service_role') return 'is the Supabase SERVICE ROLE key; it bypasses row-level security and must never be in the app';
-      if (!payload || payload.role !== 'anon') return 'is not a Supabase anon key (JWT role is not "anon")';
-    }
+    const p = supabaseKeyProblem(v, now);
+    if (p) return p;
   }
   if (name === 'EXPO_PUBLIC_SENTRY_DSN' && !SENTRY_DSN.test(v)) return 'is not a Sentry DSN (https://<key>@<host>/<project-id>)';
   if (name === STRIPE_PUBLISHABLE) {
-    if (!/^pk_(live|test)_/.test(v)) return 'does not start with pk_live_ or pk_test_; a secret (sk_) or restricted (rk_) key must never be in an EXPO_PUBLIC_* variable';
-    if (profileSpec.stripe === 'live' && !/^pk_live_/.test(v)) return 'is a Stripe TEST key on a store profile (needs pk_live_)';
+    const p = stripeKeyProblem(v, profileSpec.stripe);
+    if (p) return p;
   }
   return undefined;
 }
