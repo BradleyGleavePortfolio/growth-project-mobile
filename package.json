@@ -13,6 +13,8 @@
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=99999",
     "guard:vendors": "node scripts/vendor-name-guard.mjs",
     "guard:supabase-hermes": "node scripts/check-supabase-hermes.js",
+    "check:release-env": "node scripts/check-expected-env.js --release-env",
+    "eas-build-pre-install": "node scripts/check-expected-env.js --eas-hook",
     "validate:config": "node scripts/validate-app-config.js",
     "validate:release": "node scripts/validate-app-config.js --release",
     "update:publish": "node scripts/eas-update-guard.js",
