@@ -78,6 +78,10 @@ export function initSentry(): void {
     beforeBreadcrumb(breadcrumb) {
       return scrubEvent(breadcrumb);
     },
+    // Performance transactions carry span URLs too; same scrub.
+    beforeSendTransaction(event) {
+      return scrubEvent(event);
+    },
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || "production",
     release: buildReleaseId(),
   });

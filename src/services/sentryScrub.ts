@@ -34,29 +34,61 @@ export function scrubText(text: string): string {
   return out;
 }
 
-/** Scrub every string inside a JSON-like value (bounded depth, cycles cut). */
-export function scrubValue<T>(
-  value: T,
-  depth = 0,
-  seen: WeakSet<object> = new WeakSet(),
-): T {
-  if (typeof value === "string") return scrubText(value) as T;
-  if (typeof value !== "object" || value === null || depth > 8) return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i += 1)
-      value[i] = scrubValue(value[i], depth + 1, seen);
-    return value;
-  }
-  const record = value as Record<string, unknown>;
-  for (const key of Object.keys(record)) {
-    record[key] = scrubValue(record[key], depth + 1, seen);
-  }
-  return value;
+/** Deeper than this a branch is replaced, never forwarded unscrubbed. */
+const MAX_DEPTH = 8;
+/** Entries kept per array or object; the rest are dropped (C-327-2 breadth bound). */
+const MAX_ENTRIES = 200;
+const CIRCULAR = "[circular]";
+const TOO_DEEP = "[redacted: nested too deep]";
+
+/**
+ * Return a scrubbed COPY of a JSON-like value (C-327-2). The caller's value
+ * is never written to: console breadcrumbs carry the app's live objects by
+ * reference, so an in-place scrub would rewrite the running app's state.
+ * Arrays and objects are rebuilt; an Error becomes { name, message, stack }
+ * with scrubbed text; cycles become "[circular]"; branches deeper than
+ * MAX_DEPTH become a fixed marker; at most MAX_ENTRIES entries per level.
+ */
+export function scrubValue<T>(value: T): T {
+  return scrubAny(value, 0, new WeakSet()) as T;
 }
 
-/** Sentry `beforeSend` / `beforeBreadcrumb` body: scrub in place and return. */
+function scrubAny(
+  value: unknown,
+  depth: number,
+  seen: WeakSet<object>,
+): unknown {
+  if (typeof value === "string") return scrubText(value);
+  if (typeof value !== "object" || value === null) return value;
+  if (value instanceof Date) return new Date(value.getTime());
+  if (depth > MAX_DEPTH) return TOO_DEEP;
+  if (seen.has(value)) return CIRCULAR;
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value
+        .slice(0, MAX_ENTRIES)
+        .map((item) => scrubAny(item, depth + 1, seen));
+    }
+    if (value instanceof Error) {
+      return {
+        name: value.name,
+        message: scrubText(value.message),
+        ...(value.stack ? { stack: scrubText(value.stack) } : {}),
+      };
+    }
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).slice(0, MAX_ENTRIES)) {
+      out[key] = scrubAny(Reflect.get(value, key), depth + 1, seen);
+    }
+    return out;
+  } finally {
+    // Siblings may share a sub-object; only a true cycle is cut.
+    seen.delete(value);
+  }
+}
+
+/** Sentry `beforeSend` / `beforeBreadcrumb` body: return a scrubbed copy. */
 export function scrubEvent<E extends object>(event: E): E {
   return scrubValue(event);
 }

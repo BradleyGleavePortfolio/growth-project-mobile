@@ -160,6 +160,12 @@ describe("DataExportScreen", () => {
     expect(getByText(/Weight, food, and water logs/)).toBeTruthy();
     expect(getByText(/Coaching messages you sent/)).toBeTruthy();
     expect(getByText(/Audit log entries about your account/)).toBeTruthy();
+    // C-636-2 / backend archive inventory: recipes, Roman chats, AI consent.
+    expect(getByText("Recipes you created and recipes you saved")).toBeTruthy();
+    expect(getByText("Your Roman chats you have not deleted")).toBeTruthy();
+    expect(
+      getByText("Your AI consent choices and when you made them"),
+    ).toBeTruthy();
   });
 
   it("shows the Request button when no export exists (idle state)", async () => {
@@ -747,6 +753,40 @@ describe("DataExportScreen fix round 1", () => {
     await again.findByText("Download started in your browser");
     expect(openURL).toHaveBeenCalledTimes(1);
     openURL.mockRestore();
+  });
+
+  // B-327-2 (re-audit): the same mounted screen must drop account A's READY
+  // record, link and busy state and load account B's own status.
+  it("an identity change on the same mounted screen clears A's ready file and loads B's status", async () => {
+    mockGetStatus
+      .mockResolvedValueOnce(readyRecord())
+      .mockResolvedValueOnce(null);
+    const pending = deferred<ReturnType<typeof link>>();
+    mockCreateLink.mockReturnValueOnce(pending.promise);
+    const openURL = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+
+    const screen = await render(<DataExportScreen />);
+    await pressHeld(
+      await screen.findByRole("button", { name: /Download your data file/i }),
+    );
+    mockUser = { id: "user-b", email: "b@example.test" };
+    await screen.rerender(<DataExportScreen />);
+    await act(async () => {
+      pending.resolve(link());
+    });
+
+    expect(openURL).not.toHaveBeenCalled();
+    expect(mockGetStatus).toHaveBeenCalledTimes(2);
+    const request = await screen.findByRole("button", {
+      name: /Request my data/i,
+    });
+    expect(request.props.accessibilityState?.disabled).not.toBe(true);
+    expect(screen.queryByText(/Your file is ready/)).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: /Download your data file/i }),
+    ).toBeNull();
+    openURL.mockRestore();
+    await screen.unmount();
   });
 
   // B-327-3

@@ -52,7 +52,45 @@ describe("sentryScrub", () => {
   it("survives cycles", () => {
     const a: Record<string, unknown> = { msg: URL };
     a.self = a;
-    expect(() => scrubEvent(a)).not.toThrow();
-    expect(a.msg).not.toContain(JWT);
+    const out = scrubEvent(a);
+    expect(out.msg).not.toContain(JWT);
+    expect(out.self).toBe("[circular]");
+  });
+
+  // C-327-2: console breadcrumbs carry the app's live objects by reference;
+  // the scrub must never rewrite them.
+  it("never writes to the caller's objects (console breadcrumb arguments)", () => {
+    const session = { access_token: JWT, user: { id: "u1" } };
+    const shareUrl = "https://app.example.test/join?code=ABC123";
+    const payload = { session, shareUrl };
+    const args: unknown[] = ["state", payload];
+    const crumb = { category: "console", data: { arguments: args } };
+    const out = scrubEvent(crumb);
+    expect(JSON.stringify(out)).not.toContain(JWT);
+    expect(JSON.stringify(out)).not.toContain("ABC123");
+    expect(session.access_token).toBe(JWT);
+    expect(payload.shareUrl).toBe(shareUrl);
+    expect(crumb.data.arguments).toBe(args);
+  });
+
+  it("copies Errors with scrubbed text and keeps shared siblings", () => {
+    const shared = { link: URL };
+    const out = scrubEvent({
+      a: shared,
+      b: shared,
+      err: new Error(`failed ${URL}`),
+    });
+    expect(JSON.stringify(out)).not.toContain(JWT);
+    expect(out.b).toEqual(out.a);
+    expect(shared.link).toBe(URL);
+  });
+
+  it("bounds depth and breadth without forwarding unscrubbed branches", () => {
+    let deep: Record<string, unknown> = { msg: URL };
+    for (let i = 0; i < 12; i += 1) deep = { next: deep };
+    expect(JSON.stringify(scrubEvent(deep))).not.toContain(JWT);
+    const wide = Array.from({ length: 500 }, () => URL);
+    const outWide = scrubEvent({ wide }).wide;
+    expect(outWide).toHaveLength(200);
   });
 });

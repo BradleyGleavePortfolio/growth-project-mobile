@@ -352,13 +352,19 @@ export default function DataExportScreen() {
     };
   }, []);
 
-  // The signed-in identity changing under the screen also retires the session.
+  // The signed-in identity changing under the screen retires the session
+  // (B-327-2): nothing of the old account stays on screen (record, link,
+  // busy state, polling), and the new account's own status is loaded on this
+  // same screen once a usable identity is signed in.
   const lastUser = useRef<string | null>(null);
   useEffect(() => {
     const id = user?.id ?? null;
-    if (lastUser.current !== null && id !== lastUser.current)
-      sessionEpoch.current += 1;
+    const changed = lastUser.current !== null && id !== lastUser.current;
     lastUser.current = id;
+    if (!changed) return;
+    sessionEpoch.current += 1;
+    setState({ phase: "loading" });
+    if (id !== null) reload.current?.();
   }, [user?.id]);
 
   // ── Load existing export status ───────────────────────────────────────────
@@ -862,6 +868,9 @@ const INCLUDED_DATA = [
   "Diagnostic submission results",
   "Notification preferences",
   "Community wins you posted",
+  "Recipes you created and recipes you saved",
+  "Your Roman chats you have not deleted",
+  "Your AI consent choices and when you made them",
   "All previous export requests",
   "Audit log entries about your account",
 ];
