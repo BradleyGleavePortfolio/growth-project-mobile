@@ -650,8 +650,8 @@ export default function DataExportScreen() {
 
       <Text style={styles.body}>
         Under UK/EU data protection law (GDPR Article 20), you have the right to
-        receive a complete copy of all the personal data The Growth Project
-        holds about you. Your export will include:
+        receive a copy of the personal data you have given The Growth Project.
+        Your export will include:
       </Text>
 
       <View style={styles.listContainer}>

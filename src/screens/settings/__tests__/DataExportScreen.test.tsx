@@ -155,7 +155,9 @@ describe("DataExportScreen", () => {
     // CTA button label. v14 surfaces both host <Text> nodes, so anchor the async
     // wait on the unique intro paragraph, then assert the heading text exists
     // (one of the two occurrences) rather than requiring a single match.
-    await findByText(/right to receive a complete copy/);
+    await findByText(
+      /right to receive a copy of the personal data you have given/,
+    );
     expect(getAllByText("Request my data").length).toBeGreaterThanOrEqual(1);
     expect(getByText(/Weight, food, and water logs/)).toBeTruthy();
     expect(getByText(/Coaching messages you sent/)).toBeTruthy();
