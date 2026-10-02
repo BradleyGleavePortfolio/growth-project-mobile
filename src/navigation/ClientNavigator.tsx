@@ -40,6 +40,7 @@ import ProfileScreen from '../screens/client/ProfileScreen';
 import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -137,6 +138,7 @@ import { withProtectedScreen } from '../entitlements/withProtectedScreen';
 // Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
+import { useAiWithdrawalDrain } from '../hooks/useAiWithdrawalDrain';
 import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
@@ -240,6 +242,8 @@ export type MoreStackParamList = {
   Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
+  /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
+  RomanAiConsent: undefined;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -427,6 +431,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
@@ -553,6 +558,9 @@ const TUTORIAL_TABS = [
 ];
 
 export default function ClientNavigator() {
+  // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
+  // has not confirmed yet is sent when the app opens.
+  useAiWithdrawalDrain();
   // Latest tab-screen navigation object, captured from screenListeners, so
   // the tutorial overlay (which sits outside the navigator) can offer
   // "Take me there" for screens behind a menu.

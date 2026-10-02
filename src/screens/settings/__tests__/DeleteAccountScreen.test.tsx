@@ -287,6 +287,36 @@ describe('DeleteAccountScreen', () => {
       expect(mockedSignOut).not.toHaveBeenCalled();
     });
 
+    it('purges the encrypted consultation draft as soon as deletion is scheduled (Sol A-04, C-310-10)', async () => {
+      const { writeLocalState, readLocalState } = jest.requireActual('../../../lib/consultation/storage');
+      await writeLocalState('user-1', { screenId: 'P4', answers: { P4: 'yes', P4_note: 'Sensitive screening note' } });
+      expect((await readLocalState('user-1'))?.answers.P4_note).toBe('Sensitive screening note');
+      tokenOk();
+      mockedDeletionApi.requestDeletion.mockResolvedValue(stub(scheduledResponse()));
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'hunter2' });
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('confirm-button'));
+      });
+      await waitFor(() => utils.getByTestId('deletion-date'));
+      expect(await readLocalState('user-1')).toBeNull();
+      expect(mockedSignOut).not.toHaveBeenCalled();
+    });
+
+    it('keeps the consultation draft when scheduling the deletion fails', async () => {
+      const { writeLocalState, readLocalState } = jest.requireActual('../../../lib/consultation/storage');
+      await writeLocalState('user-1', { screenId: 'P4', answers: { P4: 'no' } });
+      tokenOk();
+      mockedDeletionApi.requestDeletion.mockRejectedValue(axiosError(500));
+      const utils = await renderScreen();
+      await fillForm(utils, { password: 'hunter2' });
+      await act(async () => {
+        fireEvent.press(utils.getByTestId('confirm-button'));
+      });
+      await waitFor(() => expect(mockedDeletionApi.requestDeletion).toHaveBeenCalled());
+      expect((await readLocalState('user-1'))?.answers.P4).toBe('no');
+    });
+
     it('shows a wrong-password message on 401, does not request deletion and does not sign out', async () => {
       mockedDeletionApi.issueRecentAuthToken.mockRejectedValue(stub(axiosError(401)));
       const utils = await renderScreen();

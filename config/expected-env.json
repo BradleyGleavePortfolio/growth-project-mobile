@@ -141,6 +141,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation onboarding, #310); on in the clinic EAS profile."
+    },
     "EXPO_PUBLIC_FF_DELIVERABLES": {
       "kind": "flag",
       "default": "on in dev, off in release",
