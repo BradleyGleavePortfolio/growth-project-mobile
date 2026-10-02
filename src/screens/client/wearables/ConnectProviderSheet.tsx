@@ -52,7 +52,17 @@ import {
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
-import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
+import {
+  HEALTH_CONNECT_DISABLED_MESSAGE,
+  isHealthConnectProviderDisabled,
+} from '../../../config/healthConnect';
+import {
+  colors,
+  radius,
+  spacing,
+  typography,
+  withAlpha,
+} from '../../../theme/tokens';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 
 /**
@@ -95,6 +105,8 @@ export default function ConnectProviderSheet({
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
+  const buildDisabled =
+    provider != null && isHealthConnectProviderDisabled(provider);
 
   const handleCloudConnect = useCallback(
     async (target: WearableProvider) => {
@@ -126,6 +138,9 @@ export default function ConnectProviderSheet({
       const outcome = await connectOnDeviceProvider(target);
       const name = configFor(target).displayName;
       switch (outcome) {
+        case 'disabled':
+          setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+          return;
         case 'granted':
           // Permission granted on-device; re-read so the hub reflects it.
           invalidate();
@@ -153,6 +168,10 @@ export default function ConnectProviderSheet({
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
+    if (isHealthConnectProviderDisabled(provider)) {
+      setError(HEALTH_CONNECT_DISABLED_MESSAGE);
+      return;
+    }
     setError(null);
 
     try {
@@ -206,9 +225,13 @@ export default function ConnectProviderSheet({
                 </Text>
               </View>
 
-              <Text style={styles.body}>{config.dataDescription}</Text>
+              <Text style={styles.body}>
+                {buildDisabled
+                  ? HEALTH_CONNECT_DISABLED_MESSAGE
+                  : config.dataDescription}
+              </Text>
 
-              {onDevice && (
+              {onDevice && !buildDisabled && (
                 <View
                   style={styles.note}
                   accessibilityRole="text"
@@ -227,28 +250,35 @@ export default function ConnectProviderSheet({
                 </Text>
               )}
 
-              <Pressable
-                style={[styles.cta, continuing && styles.ctaDisabled]}
-                onPress={handleContinue}
-                disabled={continuing}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: continuing, busy: continuing }}
-                accessibilityLabel={`Continue connecting ${config.displayName}`}
-              >
-                {continuing ? (
-                  <ActivityIndicator color={colors.bone} />
-                ) : (
-                  <Text style={styles.ctaText}>Continue</Text>
-                )}
-              </Pressable>
+              {!buildDisabled && (
+                <Pressable
+                  style={[styles.cta, continuing && styles.ctaDisabled]}
+                  onPress={handleContinue}
+                  disabled={continuing}
+                  accessibilityRole="button"
+                  accessibilityState={{
+                    disabled: continuing,
+                    busy: continuing,
+                  }}
+                  accessibilityLabel={`Continue connecting ${config.displayName}`}
+                >
+                  {continuing ? (
+                    <ActivityIndicator color={colors.bone} />
+                  ) : (
+                    <Text style={styles.ctaText}>Continue</Text>
+                  )}
+                </Pressable>
+              )}
 
               <Pressable
                 style={styles.cancel}
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel="Cancel"
+                accessibilityLabel={buildDisabled ? 'Close' : 'Cancel'}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>
+                  {buildDisabled ? 'Close' : 'Cancel'}
+                </Text>
               </Pressable>
             </>
           )}

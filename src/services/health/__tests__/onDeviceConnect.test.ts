@@ -9,6 +9,10 @@
  */
 
 import { Platform } from 'react-native';
+jest.mock('expo-constants', () => ({
+  __esModule: true,
+  default: { expoConfig: { extra: { healthConnectEnabled: true } } },
+}));
 import AppleHealthKit from 'react-native-health';
 import {
   getSdkStatus,

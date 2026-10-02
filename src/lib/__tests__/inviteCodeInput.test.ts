@@ -9,7 +9,7 @@ describe('extractInviteCode', () => {
     ['tgp://join/GP-ZZ99', 'GP-ZZ99'],
     ['https://app.trygrowthproject.com/join?code=GP-1234', 'GP-1234'],
     ['Scan or use code GP-CL1N to join Bradley', 'GP-CL1N'],
-    ['Join me: https://app.trygrowthproject.com/join/GP-PNW1 thanks', 'GP-PNW1'],
+    ['Join me: https://app.trygrowthproject.com/join/GP-TEST1 thanks', 'GP-TEST1'],
     ['CLINIC2026', 'CLINIC2026'],
     // B5: full backend dash pattern, whole-token normalisation
     ['GP-AB-CD', 'GP-AB-CD'],
