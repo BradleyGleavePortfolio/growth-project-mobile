@@ -53,15 +53,35 @@ export function bookingErrorMessage(err: unknown): string {
   return calendarErrorMessage(err, 'confirm the booking');
 }
 
+/** Repeated after every move: phone-calendar copies never update themselves. */
+export const MOVED_PHONE_COPY_NOTE =
+  'If you copied this session to your phone calendar, update that copy in your calendar app.';
+
 export function bookedMessage(session: CoachingSession, coachName: string, moved: boolean): string {
+  const copyNote = moved ? ` ${MOVED_PHONE_COPY_NOTE}` : '';
   if (session.status === 'requested') {
-    return `Requested, waiting for your coach. Check Calendar to see when ${coachName} confirms.`;
+    return `Requested, waiting for your coach. Check Calendar to see when ${coachName} confirms.${copyNote}`;
   }
-  if (session.status === 'pending_provider') return 'Your time is reserved. The call link is being prepared. Open Calendar to check its status.';
+  if (session.status === 'pending_provider') return `Your time is reserved. The call link is being prepared. Open Calendar to check its status.${copyNote}`;
   const base = moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in Calendar.`;
-  return session.meeting_link_status === 'pending'
-    ? `${base} ${coachName} will add the call link before it starts.`
-    : base;
+  const linkNote = session.meeting_link_status === 'pending' ? ` ${coachName} will add the call link before it starts.` : '';
+  return `${base}${linkNote}${copyNote}`;
+}
+
+/**
+ * S-SCHED-3 (C-325-4 / backend C-634-4): moving a confirmed session of a type
+ * that needs approval sends it back as a request and gives up the current
+ * time. Say so before the client picks a new time.
+ */
+export function moveNeedsApprovalWarning(
+  moving: CoachingSession | undefined,
+  autoApprove: boolean | undefined,
+  coachName: string,
+): string | null {
+  if (!moving || moving.status !== 'scheduled') return null;
+  const needsApproval = autoApprove === false || moving.session_type?.auto_approve === false;
+  if (!needsApproval) return null;
+  return `This session is confirmed. Moving it sends the new time to ${coachName} for approval and gives up your current time. If ${coachName} declines, you will need to pick another time.`;
 }
 
 /** Welcome type for a coach: server marker first, day-1 seed name as fallback. */
@@ -282,6 +302,10 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       <Note
         text={`${type.duration_minutes} minutes. ${type.auto_approve ? 'Confirmed right away.' : `${coachName} confirms each request.`} Times are in your time zone.`}
       />
+      {(() => {
+        const warning = params.rescheduleSessionId ? moveNeedsApprovalWarning(moving.data, type.auto_approve, coachName) : null;
+        return warning ? <Note text={warning} testID="calendar-move-approval-warning" /> : null;
+      })()}
       {days.map((d) => (
         <View key={d.key} style={styles.day}>
           <Text style={[styles.dayLabel, { color: sc.textPrimary }]} accessibilityRole="header">

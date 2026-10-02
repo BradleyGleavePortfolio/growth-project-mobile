@@ -153,8 +153,13 @@ export function useRequestSession() {
 
 export function useApproveSession() {
   const qc = useQueryClient();
-  return useMutation<CoachingSession, Error, { id: string }>({
-    mutationFn: ({ id }) => schedulingApi.approveSession(id),
+  return useMutation<CoachingSession, Error, { id: string; expectedStartAt?: string }>({
+    // S-SCHED-3: send the start time the coach saw; a moved request answers
+    // SESSION_MOVED instead of confirming a time the coach never saw.
+    mutationFn: ({ id, expectedStartAt }) =>
+      expectedStartAt
+        ? schedulingApi.approveSession(id, { expected_start_at: expectedStartAt })
+        : schedulingApi.approveSession(id),
     onSuccess: (session) => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'sessions', 'me'] });
       // Welcome-call marker (book / booked / done) lives on my-coaches.

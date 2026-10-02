@@ -11,9 +11,16 @@
  *   ['scheduling', 'sessionTypes', coachId, 'all']     (owning coach, with archived)
  *   ['scheduling', 'overrides']
  */
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 import {
   schedulingApi,
+  type SchedulingSessionStatus,
   type AvailabilityOverride,
   type BookableCoach,
   type CoachingSession,
@@ -119,20 +126,63 @@ export function useMySessions(limit = 50) {
 
 export const PAST_SESSIONS_PAGE = 20;
 
-/** Ended sessions, newest first, paged by the last row's start time. */
+/** Keyset cursor: the last row's start time and id (ties break on id). */
+export interface SessionCursor {
+  start_at: string;
+  id: string;
+}
+
+function lastCursor(page: CoachingSession[], size: number): SessionCursor | undefined {
+  if (page.length < size) return undefined;
+  const last = page[page.length - 1];
+  return last ? { start_at: last.start_at, id: last.id } : undefined;
+}
+
+/**
+ * Ended sessions, newest first. Pages on (start_at, id) so sessions that
+ * share a start time are neither skipped nor repeated (S-SCHED-3, B-634-4).
+ */
 export function usePastSessions(enabled = true) {
-  return useInfiniteQuery<CoachingSession[], Error>({
+  return useInfiniteQuery<CoachingSession[], Error, InfiniteData<CoachingSession[]>, readonly unknown[], SessionCursor | null>({
     queryKey: ['scheduling', 'sessions', 'me', 'past'],
     queryFn: ({ pageParam }) =>
       schedulingApi.listMySessions(PAST_SESSIONS_PAGE, {
         scope: 'past',
-        before: typeof pageParam === 'string' ? pageParam : undefined,
+        before: pageParam?.start_at,
+        beforeId: pageParam?.id,
       }),
-    initialPageParam: null as string | null,
-    getNextPageParam: (last) =>
-      last.length < PAST_SESSIONS_PAGE ? undefined : last[last.length - 1]?.start_at,
+    initialPageParam: null,
+    getNextPageParam: (last) => lastCursor(last, PAST_SESSIONS_PAGE),
     enabled,
     staleTime: FIVE_MIN_MS,
+  });
+}
+
+export const COACH_INBOX_PAGE = 50;
+
+/**
+ * Upcoming sessions in the given statuses, soonest first, filtered and paged
+ * by the server (S-SCHED-3 C-325-3): the coach inbox asks for requests, the
+ * agenda for confirmed sessions, so neither is cut off by a fixed list size.
+ */
+export function useUpcomingSessionsByStatus(
+  statuses: readonly SchedulingSessionStatus[],
+  enabled = true,
+) {
+  return useInfiniteQuery<CoachingSession[], Error, InfiniteData<CoachingSession[]>, readonly unknown[], SessionCursor | null>({
+    queryKey: ['scheduling', 'sessions', 'me', 'upcoming', statuses.join(',')],
+    queryFn: ({ pageParam }) =>
+      schedulingApi.listMySessions(COACH_INBOX_PAGE, {
+        status: statuses,
+        after: pageParam?.start_at,
+        afterId: pageParam?.id,
+      }),
+    initialPageParam: null,
+    getNextPageParam: (last) => lastCursor(last, COACH_INBOX_PAGE),
+    enabled,
+    staleTime: THIRTY_S_MS,
+    refetchOnMount: 'always',
+    refetchInterval: THIRTY_S_MS,
   });
 }
 

@@ -5,7 +5,7 @@
  */
 import * as Calendar from 'expo-calendar/legacy';
 import type { CoachingSession } from '../api/schedulingApi';
-import { resolveVideoUrl } from '../api/schedulingApi';
+import { resolveCallLink } from '../api/schedulingApi';
 import { calendarErrorMessage } from './schedulingErrors';
 
 export type AddResult =
@@ -16,6 +16,15 @@ export type AddResult =
   | { kind: 'error'; message: string };
 
 let presenting = false;
+
+/**
+ * Neutral description for the calendar copy (S-SCHED-3 C-325-6): the
+ * appointment type's name, else "Coaching session".
+ */
+export function sessionKindLabel(session: CoachingSession): string {
+  const name = session.session_type?.name?.trim();
+  return name ? name : 'Coaching session';
+}
 
 export async function addSessionToPhoneCalendar(
   session: CoachingSession,
@@ -33,18 +42,19 @@ export async function addSessionToPhoneCalendar(
   presenting = true;
   try {
     if (!(await Calendar.isAvailableAsync())) return { kind: 'unavailable' };
-    const link = resolveVideoUrl(session.video_url);
+    const link = resolveCallLink(session.video_url);
     const result = await Calendar.createEventInCalendarAsync(
       {
         title: session.title || `Session with ${coachName}`,
         startDate: start,
         endDate: end,
         notes: [
-          `Personal-training session with ${coachName}.`,
-          ...(link ? [`Join: ${link}`] : []),
+          `${sessionKindLabel(session)} with ${coachName}.`,
+          ...(link?.kind === 'video' ? [`Join: ${link.url}`] : []),
+          ...(link?.kind === 'phone' ? [`Phone call: ${link.display}`] : []),
           'Check The Growth Project for booking status. This calendar copy does not update automatically.',
         ].join('\n'),
-        url: link ?? undefined,
+        url: link?.url ?? undefined,
         alarms: [{ relativeOffset: -1440 }, { relativeOffset: -60 }],
       },
       { startNewActivityTask: false },

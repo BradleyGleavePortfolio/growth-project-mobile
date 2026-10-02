@@ -2,9 +2,12 @@
  * CoachBookingInboxScreen — pending booking requests, with Confirm /
  * Decline actions.
  *
- * Backend has no dedicated "pending" endpoint. We use the session
- * list and filter to `status === 'requested'` client-side. Documented
- * in /home/user/workspace/concierge-phase1-mobile/AUDIT.md §3.
+ * S-SCHED-3: requests and the agenda each come from the server's status
+ * filter (`status=requested`, `status=scheduled,pending_provider`), paged
+ * on (start_at, id), so a busy week never hides requests behind a fixed list
+ * size. Confirm and Decline send the start time the coach is looking at; a
+ * request the client moved meanwhile answers SESSION_MOVED and the inbox
+ * refreshes instead of confirming a time the coach never saw.
  */
 
 import React, { useMemo, useRef, useState } from 'react';
@@ -21,39 +24,51 @@ import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import {
   useApproveSession,
   useDeclineSession,
-  useMyUpcomingSessions,
   useAttachManualVideoLink,
   useCancelSession,
 } from '../../hooks/useScheduling';
-import type { CoachingSession } from '../../api/schedulingApi';
+import { useUpcomingSessionsByStatus } from '../../hooks/useCalendar';
+import type { CoachingSession, SchedulingSessionStatus } from '../../api/schedulingApi';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
-import { resolveVideoUrl } from '../../api/schedulingApi';
+import { normalizeCallLinkInput, resolveCallLink } from '../../api/schedulingApi';
+
+const REQUESTED: readonly SchedulingSessionStatus[] = ['requested'];
+const CONFIRMED: readonly SchedulingSessionStatus[] = ['scheduled', 'pending_provider'];
+
+function initialLinkText(raw: string | null | undefined): string {
+  const link = resolveCallLink(raw);
+  if (!link) return '';
+  return link.kind === 'phone' ? link.display : link.url;
+}
 
 function CoachSessionActions({ session }: { session: CoachingSession }) {
   const { colors } = useTheme();
   const attach = useAttachManualVideoLink();
   const cancel = useCancelSession();
-  const [link, setLink] = useState(resolveVideoUrl(session.video_url) ?? '');
+  const [link, setLink] = useState(initialLinkText(session.video_url));
   const [message, setMessage] = useState<string | null>(null);
   const inFlight = useRef(false);
   const busy = attach.isPending || cancel.isPending;
 
   const save = () => {
     if (inFlight.current) return;
-    const url = link.trim();
-    try {
-      const parsed = new URL(url);
-      if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password || url.length > 2000) throw new Error('invalid');
-    } catch {
-      setMessage('Enter a complete https call link without a password, then tap Save call link.');
+    const parsed = normalizeCallLinkInput(link);
+    if (!parsed.ok) {
+      setMessage(parsed.message);
       return;
     }
+    const url = parsed.url;
     inFlight.current = true;
     attach.mutate({ id: session.id, input: { video_url: url } }, {
-      onSuccess: () => setMessage('Call link saved. Your client can open it from their session.'),
-      onError: (err) => setMessage(calendarErrorMessage(err, 'save the call link')),
+      onSuccess: () =>
+        setMessage(
+          url.startsWith('tel:')
+            ? 'Phone number saved. Your client can call it from their session.'
+            : 'Call link saved. Your client can open it from their session.',
+        ),
+      onError: (err) => setMessage(calendarErrorMessage(err, 'save the call link', 'coach')),
       onSettled: () => { inFlight.current = false; },
     });
   };
@@ -63,9 +78,9 @@ function CoachSessionActions({ session }: { session: CoachingSession }) {
       { text: 'Cancel session', style: 'destructive', onPress: () => {
         if (inFlight.current) return;
         inFlight.current = true;
-        cancel.mutate({ id: session.id }, {
+        cancel.mutate({ id: session.id, input: { expected_start_at: session.start_at } }, {
           onSuccess: () => setMessage('Session cancelled in TGP.'),
-          onError: (err) => setMessage(calendarErrorMessage(err, 'cancel the session')),
+          onError: (err) => setMessage(calendarErrorMessage(err, 'cancel the session', 'coach')),
           onSettled: () => { inFlight.current = false; },
         });
       } },
@@ -75,7 +90,7 @@ function CoachSessionActions({ session }: { session: CoachingSession }) {
     <View>
       <TextInput
         value={link} onChangeText={setLink} autoCapitalize="none" autoCorrect={false} keyboardType="url"
-        accessibilityLabel={`Call link for ${session.title}`} placeholder="https://your-call-link"
+        accessibilityLabel={`Call link or phone number for ${session.title}`} placeholder="https://your-call-link or +1 425 555 0100"
         placeholderTextColor={colors.textMuted} maxLength={2000}
         style={[styles.linkInput, { color: colors.textPrimary, borderColor: colors.border }]}
         testID={`coach-call-link-${session.id}`}
@@ -94,7 +109,14 @@ function CoachSessionActions({ session }: { session: CoachingSession }) {
 export default function CoachBookingInboxScreen() {
   const { colors } = useTheme();
   const oxblood = colors.error;
-  const { data, isLoading, isError, error, refetch } = useMyUpcomingSessions(100);
+  const requestsQ = useUpcomingSessionsByStatus(REQUESTED);
+  const agendaQ = useUpcomingSessionsByStatus(CONFIRMED);
+  const isLoading = requestsQ.isLoading || agendaQ.isLoading;
+  const isError = requestsQ.isError;
+  const error = requestsQ.error;
+  const refetch = async () => {
+    await Promise.all([requestsQ.refetch(), agendaQ.refetch()]);
+  };
   const approve = useApproveSession();
   const decline = useDeclineSession();
   const [message, setMessage] = useState<string | null>(null);
@@ -103,24 +125,30 @@ export default function CoachBookingInboxScreen() {
     if (inFlight.current) return;
     inFlight.current = true;
     setMessage(null);
-    const mutation = confirm ? approve : decline;
-    mutation.mutate({ id: s.id }, {
-      onError: (err) => { setMessage(calendarErrorMessage(err, confirm ? 'confirm the request' : 'decline the request')); void refetch(); },
+    const handlers = {
+      onError: (err: unknown) => {
+        setMessage(calendarErrorMessage(err, confirm ? 'confirm the request' : 'decline the request', 'coach'));
+        void refetch();
+      },
       onSettled: () => { inFlight.current = false; },
-    });
+    };
+    // The start time on this card: a request moved since is refused, not confirmed.
+    if (confirm) approve.mutate({ id: s.id, expectedStartAt: s.start_at }, handlers);
+    else decline.mutate({ id: s.id, input: { expected_start_at: s.start_at } }, handlers);
   };
 
+  // Server-filtered pages; the status check stays as a guard for an older
+  // backend that ignores the filter.
   const pending = useMemo<CoachingSession[]>(
-    () => (data ?? []).filter((s) => s.status === 'requested'),
-    [data],
+    () => (requestsQ.data?.pages ?? []).flat().filter((s) => s.status === 'requested'),
+    [requestsQ.data],
   );
-  // S-SCHED: a light agenda of confirmed upcoming sessions, same data.
   const confirmed = useMemo<CoachingSession[]>(
     () =>
-      (data ?? []).filter(
+      (agendaQ.data?.pages ?? []).flat().filter(
         (s) => s.status === 'scheduled' || s.status === 'pending_provider',
       ),
-    [data],
+    [agendaQ.data],
   );
 
   if (isLoading) {
@@ -131,11 +159,11 @@ export default function CoachBookingInboxScreen() {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[typography.body, { color: colors.textPrimary }]}>
-          {calendarErrorMessage(error, 'load booking requests')}
+          {calendarErrorMessage(error, 'load booking requests', 'coach')}
         </Text>
         <TouchableOpacity
           accessibilityRole="button"
-          onPress={() => refetch()}
+          onPress={() => void refetch()}
           style={[styles.primaryBtn, { backgroundColor: oxblood }]}
         >
           <Text style={[typography.body, { color: colors.textOnPrimary }]}>
@@ -241,13 +269,23 @@ export default function CoachBookingInboxScreen() {
         );
       })}
 
+      {requestsQ.hasNextPage ? (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Show more requests" disabled={requestsQ.isFetchingNextPage} onPress={() => void requestsQ.fetchNextPage()} style={[styles.primaryBtn, { borderColor: colors.border, borderWidth: 1 }]} testID="coach-requests-more">
+          <Text style={[typography.body, { color: colors.textPrimary }]}>Show more requests</Text>
+        </TouchableOpacity>
+      ) : null}
+
       <Text
         style={[typography.h2, { color: colors.textPrimary, marginTop: spacing.xl }]}
         accessibilityRole="header"
       >
         Upcoming sessions
       </Text>
-      {confirmed.length === 0 ? (
+      {agendaQ.isError ? (
+        <Text style={[typography.body, { color: colors.error, marginTop: spacing.md }]} testID="coach-agenda-error">
+          {calendarErrorMessage(agendaQ.error, 'load upcoming sessions', 'coach')}
+        </Text>
+      ) : confirmed.length === 0 ? (
         <Text
           style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}
           testID="coach-agenda-empty"
@@ -272,6 +310,11 @@ export default function CoachBookingInboxScreen() {
           </View>
         ))
       )}
+      {agendaQ.hasNextPage ? (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Show more upcoming sessions" disabled={agendaQ.isFetchingNextPage} onPress={() => void agendaQ.fetchNextPage()} style={[styles.primaryBtn, { borderColor: colors.border, borderWidth: 1 }]} testID="coach-agenda-more">
+          <Text style={[typography.body, { color: colors.textPrimary }]}>Show more upcoming sessions</Text>
+        </TouchableOpacity>
+      ) : null}
     </ScrollView>
   );
 }
@@ -279,10 +322,12 @@ export default function CoachBookingInboxScreen() {
 /** Coach agenda status line; a missing call link is a clear next action. */
 export function agendaLine(s: CoachingSession): string {
   const who = s.client_name ? ` with ${s.client_name}` : '';
-  if (s.meeting_link_status === 'pending' || (s.meeting_link_status === undefined && !resolveVideoUrl(s.video_url))) {
-    return `Confirmed${who}. No call link yet. Add one below so your client can join.`;
+  const link = resolveCallLink(s.video_url);
+  if (s.meeting_link_status === 'pending' || (s.meeting_link_status === undefined && !link)) {
+    return `Confirmed${who}. No call link yet. Add a call link or phone number below so your client can join.`;
   }
   if (s.status === 'pending_provider') return `Confirmed${who}. Call link is being prepared.`;
+  if (link?.kind === 'phone') return `Confirmed${who}. Phone call on ${link.display}.`;
   return `Confirmed${who}. Call link ready.`;
 }
 

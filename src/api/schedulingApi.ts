@@ -69,18 +69,63 @@ export type SchedulingSessionStatus =
 export type SchedulingVideoProvider = 'stub' | 'google_meet' | 'zoom' | 'manual';
 
 /**
- * Helper: resolves a raw video_url from a CoachingSession to a
- * displayable URL, or null if no real link is present.
- *
- * The stub adapter used to emit `tgp-stub://session/<key>` URLs which
- * are not openable. Treat them — and any other non-http(s) URL — as
- * "no link yet" so the UI can show the manual-link prompt instead.
+ * A call link the app can act on: an https video link (Join) or a phone
+ * number (Call). Mirrors the backend contract (`MEETING_LINK_PATTERN`,
+ * scheduling.types.ts): `https://` up to 500 characters, or `tel:` with 3-30
+ * digits, spaces, parentheses, dots or dashes and an optional leading +.
+ * Everything else (stub markers, http, javascript:, other schemes, links with
+ * a user name or password) is "no link yet".
  */
-export function resolveVideoUrl(raw: string | null | undefined): string | null {
+export type CallLink =
+  | { kind: 'video'; url: string }
+  | { kind: 'phone'; url: string; display: string };
+
+const TEL_LINK = /^tel:(\+?[0-9 ().-]{3,30})$/i;
+const HTTPS_LINK = /^https:\/\/[^\s<>"']{3,490}$/i;
+
+export function resolveCallLink(raw: string | null | undefined): CallLink | null {
   if (!raw) return null;
-  if (raw.startsWith('tgp-stub://')) return null;
-  if (!/^https?:\/\//i.test(raw)) return null;
-  return raw;
+  const value = raw.trim();
+  const tel = TEL_LINK.exec(value);
+  if (tel) {
+    const display = tel[1].trim();
+    const digits = display.replace(/[^0-9]/g, '');
+    if (digits.length < 3) return null;
+    return { kind: 'phone', url: `tel:${display.startsWith('+') ? '+' : ''}${digits}`, display };
+  }
+  if (!HTTPS_LINK.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) return null;
+  } catch {
+    return null;
+  }
+  return { kind: 'video', url: value };
+}
+
+/** The https video link, or null (phone numbers resolve via resolveCallLink). */
+export function resolveVideoUrl(raw: string | null | undefined): string | null {
+  const link = resolveCallLink(raw);
+  return link?.kind === 'video' ? link.url : null;
+}
+
+/**
+ * Coach entry for a session call link: an https link, or a phone number
+ * (with or without `tel:`), normalised to what the server accepts.
+ */
+export function normalizeCallLinkInput(
+  input: string,
+): { ok: true; url: string } | { ok: false; message: string } {
+  const value = input.trim();
+  const phone = /^(tel:)?\s*(\+?[0-9 ().-]{3,30})$/i.exec(value);
+  const candidate = phone ? `tel:${phone[2].trim()}` : value;
+  const link = resolveCallLink(candidate);
+  if (link) return { ok: true, url: link.url };
+  return {
+    ok: false,
+    message:
+      'Enter a complete https call link without a password, or a phone number such as +1 425 555 0100, then tap Save call link.',
+  };
 }
 
 /**
@@ -334,6 +379,21 @@ export interface RescheduleSessionInput {
 
 export interface CancelSessionInput {
   reason?: string;
+  /** Start time the actor saw; a moved session answers SESSION_MOVED. */
+  expected_start_at?: string;
+}
+
+export interface ApproveSessionInput {
+  expected_start_at?: string;
+}
+
+export interface SessionListOptions {
+  scope?: SessionListScope;
+  before?: string;
+  beforeId?: string;
+  after?: string;
+  afterId?: string;
+  status?: readonly SchedulingSessionStatus[];
 }
 
 export interface CompleteSessionInput {
@@ -468,16 +528,23 @@ export const schedulingApi = {
     return res.data;
   },
 
-  // Sessions. scope=upcoming (default): not ended, soonest first.
-  // scope=past: ended, newest first; page with before=<start_at of last row>.
+  // Sessions. scope=upcoming (default): not ended, soonest first; page with
+  // after/after_id = the last row's start_at and id. scope=past: ended,
+  // newest first; page with before/before_id. The id breaks ties between
+  // sessions that share a start time (S-SCHED-3, backend B-634-4). `status`
+  // filters on the server (e.g. the coach inbox asks for requests only).
   listMySessions: async (
     limit?: number,
-    opts: { scope?: SessionListScope; before?: string } = {},
+    opts: SessionListOptions = {},
   ): Promise<CoachingSession[]> => {
     const p: Record<string, string> = {};
     if (limit !== undefined) p.limit = String(limit);
     if (opts.scope === 'past') p.scope = 'past';
     if (opts.before) p.before = opts.before;
+    if (opts.before && opts.beforeId) p.before_id = opts.beforeId;
+    if (opts.after) p.after = opts.after;
+    if (opts.after && opts.afterId) p.after_id = opts.afterId;
+    if (opts.status && opts.status.length > 0) p.status = opts.status.join(',');
     const params = Object.keys(p).length > 0 ? p : undefined;
     const res = await api.get<CoachingSession[]>('/scheduling/sessions', {
       params,
@@ -506,9 +573,16 @@ export const schedulingApi = {
     return res.data;
   },
 
-  approveSession: async (id: string): Promise<CoachingSession> => {
+  // expected_start_at: the start time the coach was looking at. If the client
+  // moved the request meanwhile, the server answers SESSION_MOVED instead of
+  // confirming a time the coach never saw.
+  approveSession: async (
+    id: string,
+    input: ApproveSessionInput = {},
+  ): Promise<CoachingSession> => {
     const res = await api.post<CoachingSession>(
       `/scheduling/sessions/${encodeURIComponent(id)}/approve`,
+      input,
     );
     return res.data;
   },

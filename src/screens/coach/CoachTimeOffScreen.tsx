@@ -88,7 +88,7 @@ export default function CoachTimeOffScreen() {
       },
       {
         onSuccess: () => setNote(''),
-        onError: (err) => setError(calendarErrorMessage(err, 'save time off')),
+        onError: (err) => setError(calendarErrorMessage(err, 'save time off', 'coach')),
         onSettled: () => {
           saving.current = false;
         },
@@ -103,7 +103,7 @@ export default function CoachTimeOffScreen() {
         if (saving.current || remove.isPending) return;
         saving.current = true;
         remove.mutate({ id: o.id }, {
-          onError: (err) => setError(calendarErrorMessage(err, 'remove time off')),
+          onError: (err) => setError(calendarErrorMessage(err, 'remove time off', 'coach')),
           onSettled: () => { saving.current = false; },
         });
       } },
@@ -125,7 +125,7 @@ export default function CoachTimeOffScreen() {
       </Text>
       {timezone.isError ? (
         <View>
-          <Text style={[typography.bodySmall, { color: colors.error }]}>{calendarErrorMessage(timezone.error, 'load the calendar time zone')}</Text>
+          <Text style={[typography.bodySmall, { color: colors.error }]}>{calendarErrorMessage(timezone.error, 'load the calendar time zone', 'coach')}</Text>
           <Pressable onPress={() => void timezone.refetch()} accessibilityRole="button" accessibilityLabel="Refresh calendar time zone" style={styles.primary}>
             <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh calendar time zone</Text>
           </Pressable>
@@ -167,7 +167,7 @@ export default function CoachTimeOffScreen() {
       {q.isLoading ? <Text style={[typography.body, { color: colors.textMuted }]}>Loading.</Text> : null}
       {q.isError ? (
         <View>
-          <Text style={[typography.body, { color: colors.textMuted }]}>{calendarErrorMessage(q.error, 'load time off')}</Text>
+          <Text style={[typography.body, { color: colors.textMuted }]}>{calendarErrorMessage(q.error, 'load time off', 'coach')}</Text>
           <Pressable onPress={() => void q.refetch()} accessibilityRole="button" accessibilityLabel="Refresh time off" style={[styles.secondary, { borderColor: colors.border }]}>
             <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh time off</Text>
           </Pressable>

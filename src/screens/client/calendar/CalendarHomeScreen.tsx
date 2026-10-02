@@ -18,6 +18,7 @@ import { resolveClientTimezone } from '../../../api/schedulingApi';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
+import { SUPPORT_EMAIL, supportMailto } from '../../../config/support';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { Body, Card, Note, SecondaryButton, Section, Title, calendarStyles, statusLabel } from './calendarUi';
@@ -241,8 +242,8 @@ export default function CalendarHomeScreen({ navigation }: Props) {
           {!coaches.isLoading && !coaches.isError && (coaches.data ?? []).length === 0 ? (
             <View testID="calendar-no-coach">
               <Body muted>You are not matched with a coach yet. Once you are, their open times appear here.</Body>
-              <Note text="Ask your coach for an invite code or contact Bradley@Bradleytgpcoaching.com for help getting matched." />
-              <SecondaryButton label="Contact support" onPress={() => void Linking.openURL('mailto:Bradley@Bradleytgpcoaching.com').catch((err: unknown) => setSupportMessage(calendarErrorMessage(err, 'open support email')))} />
+              <Note text={`Ask your coach for an invite code or contact ${SUPPORT_EMAIL} for help getting matched.`} />
+              <SecondaryButton label="Contact support" onPress={() => void Linking.openURL(supportMailto()).catch((err: unknown) => setSupportMessage(calendarErrorMessage(err, 'open support email')))} />
               {supportMessage ? <Note text={supportMessage} /> : null}
             </View>
           ) : null}

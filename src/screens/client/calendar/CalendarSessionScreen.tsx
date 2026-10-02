@@ -2,7 +2,7 @@
  * CalendarSessionScreen — S-SCHED one session for the client.
  *
  * Status, time (client zone, coach clock when different), Join when a real
- * video link exists, the coach's recap when present, Add to my calendar,
+ * video link exists (Call when the coach gave a phone number, S-SCHED-3), the coach's recap when present, Add to my calendar,
  * Reschedule and Cancel. Cancel asks once and explains manual calendar-copy
  * removal. Booking action notifications can route to this registered screen.
  */
@@ -10,7 +10,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Linking, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { resolveClientTimezone, resolveVideoUrl, type CoachingSession } from '../../../api/schedulingApi';
+import { resolveCallLink, resolveClientTimezone, type CallLink, type CoachingSession } from '../../../api/schedulingApi';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { useCancelSession, useSession } from '../../../hooks/useScheduling';
 import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
@@ -29,7 +29,7 @@ const JOIN_EARLY_MS = 15 * 60 * 1000;
 
 export function canJoin(s: CoachingSession, now: number = Date.now()): boolean {
   if (s.status !== 'scheduled') return false;
-  if (!resolveVideoUrl(s.video_url)) return false;
+  if (!resolveCallLink(s.video_url)) return false;
   const start = new Date(s.start_at).getTime();
   const end = new Date(s.end_at).getTime();
   return now >= start - JOIN_EARLY_MS && now <= end;
@@ -46,6 +46,29 @@ export function canChange(s: CoachingSession, now: number = Date.now()): boolean
 export function canReschedule(s: CoachingSession, now: number = Date.now()): boolean {
   if (s.reschedulable !== undefined) return s.reschedulable && canChange(s, now);
   return canChange(s, now) && (s.status === 'requested' || s.status === 'scheduled');
+}
+
+/**
+ * Open the call. A phone number goes to the dialer. A device that cannot
+ * place calls (tablet, simulator) rejects the dialer link; the client then
+ * gets the number and a next step instead of a silent failure. (No
+ * canOpenURL pre-check: on iOS it needs a declared query scheme.)
+ */
+export async function openCallLink(link: CallLink, coachName: string): Promise<string | null> {
+  if (link.kind === 'phone') {
+    try {
+      await Linking.openURL(link.url);
+      return null;
+    } catch {
+      return `This device could not start the call. Call ${link.display} from a phone, or message ${coachName}.`;
+    }
+  }
+  try {
+    await Linking.openURL(link.url);
+    return null;
+  } catch (err) {
+    return calendarErrorMessage(err, 'open the call link');
+  }
 }
 
 /** Calm, specific call-link line for the client, or null when not needed. */
@@ -104,7 +127,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
   const coach = coaches.data?.find((c) => c.coach_id === s.coach_id);
   const coachName = coach?.name ?? s.coach_name ?? 'your coach';
   const coachClock = coachTimeLabel(s.start_at, coach?.timezone, clientTz);
-  const link = resolveVideoUrl(s.video_url);
+  const link = resolveCallLink(s.video_url);
   const changeable = canChange(s, now);
   const movable = canReschedule(s, now);
   const live = LIVE_STATUSES.has(s.status) && new Date(s.end_at).getTime() > Date.now();
@@ -152,14 +175,21 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
 
       {canJoin(s, now) && link ? (
         <PrimaryButton
-          label="Join"
-          onPress={() => void Linking.openURL(link).catch((err: unknown) => setMsg(calendarErrorMessage(err, 'open the call link')))}
-          accessibilityHint="Opens the video call"
+          label={link.kind === 'phone' ? `Call ${link.display}` : 'Join'}
+          onPress={() => void openCallLink(link, coachName).then((m) => { if (m) setMsg(m); })}
+          accessibilityHint={link.kind === 'phone' ? 'Opens your phone app to call your coach' : 'Opens the video call'}
           testID="calendar-join"
         />
       ) : null}
       {s.status === 'scheduled' && link && !canJoin(s, now) && live ? (
-        <Note text="Join opens 15 minutes before the start." />
+        <Note
+          text={
+            link.kind === 'phone'
+              ? `This is a phone call on ${link.display}. Call opens 15 minutes before the start.`
+              : 'Join opens 15 minutes before the start.'
+          }
+          testID="calendar-join-later"
+        />
       ) : null}
       {linkLine ? <Note text={linkLine} testID="calendar-session-link-pending" /> : null}
 

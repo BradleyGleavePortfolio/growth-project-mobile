@@ -122,7 +122,7 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
     };
     const done = {
       onSuccess: () => setEditing(null),
-      onError: (err: unknown) => setError(calendarErrorMessage(err, 'save the appointment type')),
+      onError: (err: unknown) => setError(calendarErrorMessage(err, 'save the appointment type', 'coach')),
       onSettled: () => {
         saving.current = false;
       },
@@ -142,7 +142,7 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
     saving.current = true;
     setError(null);
     update.mutate({ id: t.id, input: { archived } }, {
-      onError: (err: unknown) => setError(calendarErrorMessage(err, archived ? 'archive the appointment type' : 'restore the appointment type')),
+      onError: (err: unknown) => setError(calendarErrorMessage(err, archived ? 'archive the appointment type' : 'restore the appointment type', 'coach')),
       onSettled: () => { saving.current = false; },
     });
   };
@@ -172,7 +172,7 @@ export default function CoachAppointmentTypesScreen({ route }: { route?: RoutePr
       {q.isLoading ? <Text style={[typography.body, { color: colors.textMuted }]}>Loading.</Text> : null}
       {q.isError ? (
         <View>
-          <Text style={[typography.body, { color: colors.textMuted }]}>{calendarErrorMessage(q.error, 'load appointment types')}</Text>
+          <Text style={[typography.body, { color: colors.textMuted }]}>{calendarErrorMessage(q.error, 'load appointment types', 'coach')}</Text>
           <Pressable onPress={() => void q.refetch()} accessibilityRole="button" accessibilityLabel="Refresh appointment types" style={[styles.primary, { borderColor: colors.border, borderWidth: 1 }]}>
             <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh appointment types</Text>
           </Pressable>

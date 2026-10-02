@@ -141,7 +141,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <Text style={[typography.body, { color: colors.textPrimary }]}>
-          {calendarErrorMessage(error, 'load weekly availability')}
+          {calendarErrorMessage(error, 'load weekly availability', 'coach')}
         </Text>
         <TouchableOpacity
           accessibilityRole="button"
@@ -183,7 +183,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
       </Text>
       {calendarZone.isError ? (
         <View>
-          <Text style={[typography.bodySmall, { color: oxblood }]}>{calendarErrorMessage(calendarZone.error, 'load the calendar time zone')}</Text>
+          <Text style={[typography.bodySmall, { color: oxblood }]}>{calendarErrorMessage(calendarZone.error, 'load the calendar time zone', 'coach')}</Text>
           <TouchableOpacity onPress={() => void calendarZone.refetch()} accessibilityRole="button" accessibilityLabel="Refresh calendar time zone" style={styles.primaryBtn}>
             <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh calendar time zone</Text>
           </TouchableOpacity>
@@ -330,7 +330,7 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
             { color: oxblood, marginTop: spacing.sm },
           ]}
         >
-          {calendarErrorMessage(setAvailability.error, 'save weekly availability')}
+          {calendarErrorMessage(setAvailability.error, 'save weekly availability', 'coach')}
         </Text>
       ) : null}
       {setAvailability.isSuccess ? (
