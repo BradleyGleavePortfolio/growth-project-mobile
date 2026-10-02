@@ -1,6 +1,8 @@
 jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 import { captureError } from '../../services/sentry';
+import { SUPPORT_EMAIL } from '../../config/support';
 import {
+  COACH_CODE_MESSAGES,
   SCHEDULING_CODE_MESSAGES,
   bookingOutcomeUncertain,
   calendarErrorMessage,
@@ -40,7 +42,7 @@ it('unknown failures carry a short server reference and redact raw diagnostic co
   expect(calendarErrorMessage(err, 'book')).toMatch(/reference req-12345678/);
   expect(calendarErrorMessage(err, 'book')).toMatch(/We could not book/);
   const [, metadata] = jest.mocked(captureError).mock.calls[0];
-  expect(metadata).toEqual({ area: 'calendar', status: 500, code: null, request_id: 'req-12345678' });
+  expect(metadata).toEqual({ area: 'calendar', audience: 'client', status: 500, code: null, request_id: 'req-12345678' });
   expect(JSON.stringify(metadata)).not.toMatch(/secret|not diagnostic|Authorization/);
 });
 
@@ -51,6 +53,8 @@ const BACKEND_CODES = [
   'PENDING_REQUEST_LIMIT', 'WELCOME_ALREADY_BOOKED', 'SESSION_STATE_CHANGED', 'SESSION_NOT_ACTIVE',
   'SESSION_STARTED', 'COACH_NOT_BOOKABLE', 'COACH_NOT_FOUND', 'SESSION_NOT_FOUND',
   'NOT_SESSION_PARTICIPANT', 'INVALID_MEETING_LINK',
+  // S-SCHED-3 (backend #634 fix round)
+  'SESSION_MOVED', 'INVALID_LIST_QUERY',
 ];
 
 it.each(BACKEND_CODES)('backend code %s has plain, specific copy', (code) => {
@@ -72,4 +76,39 @@ it('CALENDAR_BUSY is a definite not-booked; slot codes refresh the list', () => 
   expect(shouldRefreshSlots({ response: { status: 409, data: { code: 'SLOT_TAKEN' } } })).toBe(true);
   expect(shouldRefreshSlots({ response: { status: 400, data: { code: 'SLOT_UNAVAILABLE' } } })).toBe(true);
   expect(shouldRefreshSlots({ response: { status: 400, data: { code: 'PENDING_REQUEST_LIMIT' } } })).toBe(false);
+});
+
+// S-SCHED-3 B-325-2: coach screens get coach-worded copy, never "your coach".
+describe('coach audience', () => {
+  const COACH_CODES = [
+    'SESSION_STARTED', 'SESSION_TYPE_UNAVAILABLE', 'SESSION_STATE_CHANGED', 'NOT_SESSION_PARTICIPANT',
+    'COACH_NOT_BOOKABLE', 'SESSION_MOVED', 'INVALID_LIST_QUERY',
+  ];
+  it.each(COACH_CODES)('%s has coach copy that differs from the client copy', (code) => {
+    const err = { response: { status: 409, data: { code } } };
+    const coach = calendarErrorMessage(err, 'confirm the request', 'coach');
+    expect(coach).toBe(COACH_CODE_MESSAGES[code]);
+    expect(coach).not.toBe(calendarErrorMessage(err, 'confirm the request'));
+    expect(coach).not.toMatch(/your coach|Message your coach|!/i);
+    expect(coach).toMatch(/\.$/);
+  });
+
+  it.each([401, 402, 403, 404, 400, 409, 429])('HTTP %s never sends a coach to "your coach" or client Calendar', (status) => {
+    const msg = calendarErrorMessage({ response: { status } }, 'save time off', 'coach');
+    expect(msg).not.toMatch(/your coach|assigned coach|choose an available time/i);
+  });
+
+  it('network and unknown failures name a coach next step and the shared support address', () => {
+    expect(calendarErrorMessage(new Error('Network Error'), 'save time off', 'coach')).toMatch(/refresh your schedule/);
+    const unknown = calendarErrorMessage({ response: { status: 500, data: { request_id: 'req_abcdefabcdef12' } } }, 'save time off', 'coach');
+    expect(unknown).toMatch(/Refresh your schedule and try again/);
+    expect(unknown).toContain(SUPPORT_EMAIL);
+    expect(unknown).toMatch(/reference req_abcdefab/);
+    expect(jest.mocked(captureError).mock.calls[0][1]).toEqual(expect.objectContaining({ audience: 'coach' }));
+  });
+
+  it('client copy for the new codes points at Calendar', () => {
+    expect(calendarErrorMessage({ response: { status: 409, data: { code: 'SESSION_MOVED' } } }, 'cancel')).toMatch(/new time/);
+    expect(calendarErrorMessage({ response: { status: 400, data: { code: 'INVALID_LIST_QUERY' } } }, 'load')).toMatch(/Refresh Calendar/);
+  });
 });

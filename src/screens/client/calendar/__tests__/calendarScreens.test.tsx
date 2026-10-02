@@ -58,7 +58,7 @@ import type { CalendarStackParamList } from '../../../../navigation/calendarRout
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { emitTutorialSignal } from '../../../../tutorial/tutorialEvents';
 import CalendarHomeScreen from '../CalendarHomeScreen';
-import CalendarBookScreen, { bookingErrorMessage } from '../CalendarBookScreen';
+import CalendarBookScreen, { bookedMessage, bookingErrorMessage, moveNeedsApprovalWarning } from '../CalendarBookScreen';
 import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
 import { pickWelcomeType } from '../CalendarBookScreen';
 
@@ -245,10 +245,11 @@ describe('CalendarHomeScreen', () => {
     });
     const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
     await waitFor(() => expect(r.getByTestId('calendar-past-past-0')).toBeTruthy());
-    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: undefined });
+    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: undefined, beforeId: undefined });
     await fireEvent.press(r.getByTestId('calendar-past-more'));
     await waitFor(() => expect(r.getByTestId('calendar-past-past-old')).toBeTruthy());
-    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: page1[19].start_at });
+    // S-SCHED-3 (B-634-4 pair): the cursor carries the last row's id too.
+    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', before: page1[19].start_at, beforeId: page1[19].id });
     expect(r.getByText('Recap from your coach inside.')).toBeTruthy();
     expect(r.queryByTestId('calendar-past-more')).toBeNull();
   });
@@ -415,7 +416,13 @@ describe('CalendarBookScreen', () => {
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_B.start_at}`));
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await waitFor(() => expect(api.rescheduleSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({ start_at: SLOT_B.start_at })));
-    await waitFor(() => expect(r.getByText('Moved. Bradley has the new time.')).toBeTruthy());
+    await waitFor(() =>
+      expect(
+        r.getByText(
+          'Moved. Bradley has the new time. If you copied this session to your phone calendar, update that copy in your calendar app.',
+        ),
+      ).toBeTruthy(),
+    );
   });
 
   it('error copy: offline, payment, forbidden', () => {
@@ -518,5 +525,82 @@ describe('CalendarSessionScreen', () => {
     expect(r.queryByTestId('calendar-reschedule')).toBeNull();
     expect(r.queryByTestId('calendar-cancel')).toBeNull();
     expect(r.queryByTestId('calendar-add-phone')).toBeNull();
+  });
+});
+
+// ─── S-SCHED-3 fix round (mobile #325 @ b0c02156 audit repros) ──────────────
+
+describe('S-SCHED-3 B-325-1: a phone-call link is usable end to end', () => {
+  const soon = () => {
+    const now = Date.now();
+    return { start_at: new Date(now + 5 * 60_000).toISOString(), end_at: new Date(now + 25 * 60_000).toISOString() };
+  };
+
+  it('a ready phone-call session offers Call, which opens the dialer with the number', async () => {
+    api.getSession.mockResolvedValue(sess({ ...soon(), video_url: 'tel:+1 425 555 0100', meeting_link_status: 'ready' }));
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-join')).toBeTruthy());
+    expect(r.getByText('Call +1 425 555 0100')).toBeTruthy();
+    expect(r.queryByTestId('calendar-session-link-pending')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-join'));
+    expect(open).toHaveBeenCalledWith('tel:+14255550100');
+    open.mockRestore();
+  });
+
+  it('a device that refuses the dialer gets the number and a next step', async () => {
+    api.getSession.mockResolvedValue(sess({ ...soon(), video_url: 'tel:+1 425 555 0100' }));
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('Unable to open URL: tel:+14255550100'));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-join')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('calendar-join'));
+    await waitFor(() =>
+      expect(r.getByTestId('calendar-session-msg').props.children).toBe(
+        'This device could not start the call. Call +1 425 555 0100 from a phone, or message Bradley.',
+      ),
+    );
+    open.mockRestore();
+  });
+
+  it('before the window the phone number is shown with when Call opens', async () => {
+    api.getSession.mockResolvedValue(sess({ video_url: 'tel:+1 425 555 0100' }));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-join-later')).toBeTruthy());
+    expect(r.getByText('This is a phone call on +1 425 555 0100. Call opens 15 minutes before the start.')).toBeTruthy();
+  });
+
+  it('other schemes never become a Join or Call action', () => {
+    const start = Date.parse('2030-10-07T16:00:00.000Z');
+    expect(canJoin(sess({ video_url: 'tel:+14255550100' }), start)).toBe(true);
+    for (const url of ['javascript:alert(1)', 'sms:+14255550100', 'http://meet.example/room', 'https://u:p@meet.example/room', 'tel:call-me']) {
+      expect(canJoin(sess({ video_url: url }), start)).toBe(false);
+    }
+  });
+});
+
+describe('S-SCHED-3 C-325-4: moving a confirmed approval-type session warns first', () => {
+  it('shows the warning for a confirmed session whose type needs approval', async () => {
+    api.listSessionTypes.mockResolvedValue([type({ auto_approve: false })]);
+    api.getSession.mockResolvedValue(sess({ status: 'scheduled' }));
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1', rescheduleSessionId: 'sess-1' })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-move-approval-warning')).toBeTruthy());
+    expect(
+      r.getByText(
+        'This session is confirmed. Moving it sends the new time to Bradley for approval and gives up your current time. If Bradley declines, you will need to pick another time.',
+      ),
+    ).toBeTruthy();
+  });
+
+  it('no warning for instant-confirm types or for a move of a request', async () => {
+    api.getSession.mockResolvedValue(sess({ status: 'scheduled' }));
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1', rescheduleSessionId: 'sess-1' })} />);
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_B.start_at}`)).toBeTruthy());
+    expect(r.queryByTestId('calendar-move-approval-warning')).toBeNull();
+    expect(moveNeedsApprovalWarning(sess({ status: 'requested' }), false, 'Bradley')).toBeNull();
+  });
+
+  it('a moved request repeats the phone-calendar note too', () => {
+    expect(bookedMessage(sess({ status: 'requested' }), 'Bradley', true)).toMatch(/update that copy in your calendar app\.$/);
+    expect(bookedMessage(sess({ status: 'scheduled' }), 'Bradley', false)).not.toMatch(/phone calendar/);
   });
 });

@@ -109,7 +109,10 @@ describe('CoachBookingInboxScreen', () => {
     const btn = await findByLabelText('Confirm session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
-      expect(mockApi.approveSession).toHaveBeenCalledWith('sess-pending'),
+      // S-SCHED-3: the start time on the card goes with the answer.
+      expect(mockApi.approveSession).toHaveBeenCalledWith('sess-pending', {
+        expected_start_at: PENDING.start_at,
+      }),
     );
   });
 
@@ -123,10 +126,9 @@ describe('CoachBookingInboxScreen', () => {
     const btn = await findByLabelText('Decline session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
-      expect(mockApi.declineSession).toHaveBeenCalledWith(
-        'sess-pending',
-        undefined,
-      ),
+      expect(mockApi.declineSession).toHaveBeenCalledWith('sess-pending', {
+        expected_start_at: PENDING.start_at,
+      }),
     );
   });
 });
