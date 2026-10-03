@@ -169,3 +169,31 @@ describe('VoiceNoteComposer — review + send', () => {
     );
   });
 });
+
+describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
+  it('a microphone that cannot start shows what happened, a Try again and a support reference', async () => {
+    const port = makePort({ start: jest.fn().mockRejectedValue(new Error('session busy')) });
+    const { getByTestId, findByTestId, getByText } = await render(
+      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+    );
+    fireEvent.press(getByTestId('voice-record-button'));
+    const notice = await findByTestId('voice-composer-error');
+    expect(notice).toBeTruthy();
+    expect(getByText(/The microphone could not start recording\. Try again\./)).toBeTruthy();
+    expect(getByText(/mention reference [A-Za-z0-9-]{8}/)).toBeTruthy();
+    expect(getByText(/@/)).toBeTruthy();
+    fireEvent.press(getByTestId('voice-composer-error-retry'));
+    await waitFor(() => expect(getByTestId('voice-record-button')).toBeTruthy());
+  });
+
+  it('a permission read that fails says so instead of leaving an idle button', async () => {
+    const port = makePort({
+      getPermissionStatus: jest.fn().mockRejectedValue(new Error('perm read failed')),
+    });
+    const { getByTestId, findByText } = await render(
+      <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
+    );
+    fireEvent.press(getByTestId('voice-record-button'));
+    expect(await findByText(/We could not check microphone access on this phone\./)).toBeTruthy();
+  });
+});
