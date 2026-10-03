@@ -221,7 +221,7 @@ export default function ConnectProviderSheet({
         onClose();
       }
     },
-    [startOauth, invalidate, onConnected, onClose],
+    [startOauth, invalidate, onConnected, onClose, showMessage],
   );
 
   /**
