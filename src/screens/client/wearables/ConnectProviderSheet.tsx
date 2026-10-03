@@ -67,6 +67,7 @@ import {
 } from '../../../services/health/onDeviceSync';
 import {
   currentAuthGeneration,
+  OnDeviceSessionChangedError,
   type SessionFence,
 } from '../../../services/health/sessionFence';
 import {
@@ -176,8 +177,24 @@ export default function ConnectProviderSheet({
     setRetry('connect');
     setCtaOverride(undefined);
     setResumeTarget(null);
+    // B-317-11: busy state belongs to the attempt; a run that is still
+    // settling for the previous sheet never keeps this one disabled.
     setImporting(false);
+    setRequestingOnDevice(false);
   }, [visible, provider]);
+
+  /**
+   * B-317-11: an on-device attempt is current only while this sheet is
+   * mounted, still on the epoch it started on (close, provider change,
+   * unmount and a new Continue all move it) and still holds the attempt's
+   * fence. Every continuation after an await asks this before any visible
+   * effect, Sentry report or busy-state write.
+   */
+  const isCurrentAttempt = useCallback(
+    (epoch: number, fence: SessionFence | null) =>
+      mountedRef.current && epochRef.current === epoch && attemptRef.current === fence,
+    [],
+  );
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
@@ -294,18 +311,52 @@ export default function ConnectProviderSheet({
       target: WearableProvider,
       firstRun: boolean,
       run: () => Promise<OnDeviceImportOutcome>,
+      epoch: number,
+      fence: SessionFence,
     ) => {
-      if (mountedRef.current) setImporting(true);
+      // B-317-11: the import belongs to the attempt that started it. The
+      // sheet stays mounted across close and reopen (ConnectionsScreen only
+      // changes visible / provider), so a mount check alone would let a late
+      // import act on the NEXT sheet. Captured before the first await.
+      const generation = currentAuthGeneration();
+      const current = () => isCurrentAttempt(epoch, fence);
+      const staleSettled = () => {
+        // The phone may have sent data before the close: in the same session
+        // the authoritative list is still re-read. Nothing else happens: no
+        // success signal, onConnected, close, message or Sentry report.
+        if (currentAuthGeneration() === generation) invalidate();
+      };
+      if (current()) setImporting(true);
       try {
-        handleImportOutcome(await run(), name, target, firstRun);
+        const outcome = await run();
+        if (!current() || currentAuthGeneration() !== generation) {
+          // Closed, replaced or unmounted meanwhile, or the session ended or
+          // switched while the last pass finished: no success is announced.
+          staleSettled();
+          return;
+        }
+        handleImportOutcome(outcome, name, target, firstRun);
       } catch (err) {
+        if (!current()) {
+          staleSettled();
+          return;
+        }
+        if (currentAuthGeneration() !== generation) {
+          // Still this sheet, but the session ended or switched while the
+          // import ran: the session-change copy, no re-read for the next
+          // person and no Sentry report for a failure the stop caused.
+          showMessage(connectFailureMessage(new OnDeviceSessionChangedError(), name));
+          return;
+        }
         invalidate();
+        // The failure copy (and its Sentry report) is built only for the
+        // current attempt.
         showMessage(connectFailureMessage(err, name));
       } finally {
-        if (mountedRef.current) setImporting(false);
+        if (current()) setImporting(false);
       }
     },
-    [handleImportOutcome, invalidate, showMessage],
+    [handleImportOutcome, invalidate, isCurrentAttempt, showMessage],
   );
 
   const handleOnDeviceConnect = useCallback(
@@ -377,7 +428,7 @@ export default function ConnectProviderSheet({
             showMessage(permissionOutcomeMessage('unsupported', target, name));
             return;
           }
-          await runImport(name, target, true, () => connectOnDevice(source, fence));
+          await runImport(name, target, true, () => connectOnDevice(source, fence), epoch, fence);
           return;
         }
         default:
@@ -390,8 +441,12 @@ export default function ConnectProviderSheet({
   /** Open Health Connect permissions or its Play Store page (S-WEAR-3). */
   const handleOpenExternal = useCallback(
     async (kind: 'settings' | 'store', name: string) => {
+      // C-317-c: the message is for the sheet that asked; a close, provider
+      // change or unmount while the settings or store app opens drops it.
+      const epoch = epochRef.current;
       const opened =
         kind === 'settings' ? await openHealthConnectPermissions() : await openHealthConnectStore();
+      if (!mountedRef.current || epochRef.current !== epoch) return;
       showMessage(opened ? returnFromSettingsMessage(name) : settingsDidNotOpenMessage(kind, name));
     },
     [showMessage],
@@ -408,16 +463,24 @@ export default function ConnectProviderSheet({
       });
       return;
     }
+    // B-317-11: a resume continues the current attempt (same epoch and
+    // fence), captured synchronously before the first await.
+    const epoch = epochRef.current;
     setError(null);
     setRequestingOnDevice(true);
     try {
-      await runImport(name, provider, false, () =>
-        resumeOnDeviceImport(resumeTarget.source, resumeTarget.connectionId, fence),
+      await runImport(
+        name,
+        provider,
+        false,
+        () => resumeOnDeviceImport(resumeTarget.source, resumeTarget.connectionId, fence),
+        epoch,
+        fence,
       );
     } finally {
-      if (mountedRef.current) setRequestingOnDevice(false);
+      if (isCurrentAttempt(epoch, fence)) setRequestingOnDevice(false);
     }
-  }, [provider, resumeTarget, runImport, showMessage]);
+  }, [provider, resumeTarget, runImport, showMessage, isCurrentAttempt]);
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
@@ -457,7 +520,9 @@ export default function ConnectProviderSheet({
         await handleCloudConnect(provider, epoch);
       }
     } finally {
-      if (mountedRef.current) setRequestingOnDevice(false);
+      // B-317-11: only this attempt's own sheet is un-busied; a close or
+      // provider change already reset it for the next one.
+      if (mountedRef.current && epochRef.current === epoch) setRequestingOnDevice(false);
     }
   }, [
     provider,
@@ -477,7 +542,10 @@ export default function ConnectProviderSheet({
         : 'Try again'
       : ctaLabelFor({ action: retry, cta: ctaOverride });
   const showCta = !buildDisabled && retry !== 'none';
-  const continuing = startOauth.isPending || requestingOnDevice;
+  // B-317-11: the attempt's own busy flag (set for cloud and on-device
+  // attempts alike). The shared mint mutation's isPending is not used: a
+  // mint still pending for a closed sheet must not disable the next one.
+  const continuing = requestingOnDevice;
 
   return (
     <Modal

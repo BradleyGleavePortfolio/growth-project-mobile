@@ -19,7 +19,7 @@
  * an optional `{ bucket?: 'fitness' | 'recovery' }` param.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -52,6 +52,7 @@ import {
   deviceSourceForPlatform,
   refreshOnDevice,
 } from '../../../services/health/onDeviceSync';
+import { currentAuthGeneration } from '../../../services/health/sessionFence';
 import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
 import {
@@ -108,12 +109,29 @@ export default function WearablesShell() {
     | null
   >(null);
   const deviceName = deviceSource != null ? configFor(deviceSource).displayName : '';
+  // C-317-a: a refresh that settles after this screen unmounted, after a
+  // sign-out or account switch, or after a newer refresh started writes no
+  // notice and refetches nothing.
+  const mountedRef = useRef(true);
+  const latestRunRef = useRef(-1);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   useEffect(() => {
     if (refreshStartedFor === refreshRun || deviceSource == null || !hasDeviceConnection) return;
     setRefreshStartedFor(refreshRun);
     setNotice(null);
+    const run = refreshRun;
+    latestRunRef.current = run;
+    const generation = currentAuthGeneration();
+    const current = () =>
+      mountedRef.current && latestRunRef.current === run && currentAuthGeneration() === generation;
     refreshOnDevice(deviceSource, connections)
       .then((outcome) => {
+        if (!current()) return;
         if (outcome.kind === 'imported') {
           invalidateWearables();
           if (!outcome.complete) {
@@ -128,7 +146,11 @@ export default function WearablesShell() {
         }
       })
       .catch((err: unknown) => {
-        logger.warn('[wearables] on-device refresh failed', err);
+        // C-317-b: the error's class name only, never its message or body.
+        logger.warn('[wearables] on-device refresh failed', {
+          error: err instanceof Error ? err.name : typeof err,
+        });
+        if (!current()) return;
         const message = connectFailureMessage(err, deviceName);
         if (message != null) {
           setNotice({ kind: 'retry', text: message.text, action: message.action, cta: message.cta });
