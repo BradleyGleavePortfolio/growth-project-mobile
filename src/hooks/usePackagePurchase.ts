@@ -462,6 +462,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           // Stripe or the network is slow; the card step already finished.
           continue;
         }
+        // C-334-3: unmounted or superseded while the read was in flight.
+        if (!mountedRef.current || confirmingRef.current !== c) return true;
         if (!plan) continue;
         if (
           plan.entitlementActive &&
