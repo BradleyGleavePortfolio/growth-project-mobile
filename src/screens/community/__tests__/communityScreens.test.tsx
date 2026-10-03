@@ -15,6 +15,18 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
 // ── Theme: real tokens, no ThemeProvider ─────────────────────────────────────
+// SafetyMenu (Report / Block) needs a QueryClient; it has its own suite
+// (components/community/__tests__/SafetyMenu.test.tsx). Stub it to a marker so
+// these render tests still prove it is mounted on the thread.
+jest.mock('../../../components/community/SafetyMenu', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ testID }: { testID?: string }) => React.createElement(View, { testID }),
+  };
+});
+
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
