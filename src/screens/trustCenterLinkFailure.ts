@@ -12,16 +12,19 @@
  *                  short reference that is also on the Sentry report.
  *
  * Every non-offline failure is reported to Sentry without personal data
- * (captureErrorWithoutPii: no signed-in user id or email, no request data,
- * no breadcrumbs). The report carries the link id, the step that failed, the
- * reference and the page address without any query string or fragment. The
- * raw error name and message are not sent as is; they pass through
- * sentrySafeText first (no email addresses, no query strings).
+ * (captureErrorWithoutPii: no signed-in user id, no request data, no
+ * breadcrumbs). Sol B-315-1: the report is a CLOSED allowlist built here from
+ * constants and enums only (LinkFailureReport): the event name, the link id,
+ * the operation (step) and cause, an error-class enum, the platform and a
+ * generated reference. No free-form text from the native exception (its
+ * name, message, stack or any other field) is ever sent: the error class is
+ * decided by `instanceof` checks, never by reading the exception's text, and
+ * the exception handed to Sentry is a fixed synthetic one.
  *
  * openTrustCenterLink never rejects, so a tap can never leave an unhandled
  * promise behind.
  */
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 
 import { SUPPORT_EMAIL } from '../constants/support';
@@ -42,7 +45,10 @@ export type LinkFailureStep =
 export interface LinkFailure {
   cause: LinkFailureCause;
   step: LinkFailureStep;
-  /** Short reference shown to the user and sent to Sentry (unexpected only). */
+  /**
+   * Short reference sent with the Sentry report (every cause but offline);
+   * shown to the user with the support path (unexpected).
+   */
   reference: string | null;
 }
 
@@ -74,19 +80,6 @@ export function linkFailureEmailSubject(link: TrustCenterLink, failure: LinkFail
   return `Trust & Privacy: the ${link.pageName} did not open${ref}`;
 }
 
-/** The page address without any query string or fragment. */
-export function addressWithoutQuery(url: string): string {
-  return url.split(/[?#]/)[0];
-}
-
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
-const URL_WITH_QUERY = /\b([a-z][a-z0-9+.-]*:[^\s?#'"]*)[?#][^\s'"]*/gi;
-
-/** Error text safe to send to Sentry: no query strings or fragments, no email addresses. */
-export function sentrySafeText(text: string): string {
-  return text.replace(URL_WITH_QUERY, '$1').replace(EMAIL, '[email]').slice(0, 200);
-}
-
 /** 8 hex characters; enough to find one report, not an identifier of the user. */
 export function newLinkFailureReference(): string {
   return Math.floor(Math.random() * 0x100000000)
@@ -94,28 +87,69 @@ export function newLinkFailureReference(): string {
     .padStart(8, '0');
 }
 
-function errorField(err: unknown, key: 'name' | 'message'): string | undefined {
-  if (typeof err === 'string') return key === 'message' ? err : undefined;
-  if (typeof err !== 'object' || err === null) return undefined;
-  const value = Reflect.get(err, key);
-  return typeof value === 'string' ? value : undefined;
+/** The kind of value the failing call rejected with; decided without reading any of its text. */
+export type LinkErrorClass = 'none' | 'type_error' | 'range_error' | 'error' | 'string' | 'other';
+
+export function linkErrorClassOf(err: unknown): LinkErrorClass {
+  if (err === undefined) return 'none';
+  if (err instanceof TypeError) return 'type_error';
+  if (err instanceof RangeError) return 'range_error';
+  if (err instanceof Error) return 'error';
+  if (typeof err === 'string') return 'string';
+  return 'other';
+}
+
+export type LinkReportPlatform = 'ios' | 'android' | 'web' | 'other';
+
+function platformOf(): LinkReportPlatform {
+  const os: string = Platform.OS;
+  return os === 'ios' || os === 'android' || os === 'web' ? os : 'other';
+}
+
+/** Event name of every link-failure report. */
+export const LINK_FAILURE_EVENT = 'trust_center.link_open_failed' as const;
+
+/**
+ * Everything a link-failure report may carry (Sol B-315-1). Every field is
+ * a constant, an enum or the generated reference: nothing comes from the
+ * native exception or from the person.
+ */
+export interface LinkFailureReport {
+  event: typeof LINK_FAILURE_EVENT;
+  link: TrustCenterLink['id'];
+  operation: LinkFailureStep;
+  cause: Exclude<LinkFailureCause, 'offline'>;
+  error_class: LinkErrorClass;
+  platform: LinkReportPlatform;
+  reference: string;
+}
+
+/** The exact keys a report may carry, in order; tests pin this list. */
+export const LINK_FAILURE_REPORT_KEYS = ['event', 'link', 'operation', 'cause', 'error_class', 'platform', 'reference'] as const;
+
+export function linkFailureReport(
+  link: TrustCenterLink,
+  failure: LinkFailure & { cause: Exclude<LinkFailureCause, 'offline'>; reference: string },
+  err?: unknown,
+): LinkFailureReport {
+  return {
+    event: LINK_FAILURE_EVENT,
+    link: link.id,
+    operation: failure.step,
+    cause: failure.cause,
+    error_class: linkErrorClassOf(err),
+    platform: platformOf(),
+    reference: failure.reference,
+  };
 }
 
 function report(link: TrustCenterLink, failure: LinkFailure, err?: unknown): void {
-  const error = new Error(`Trust & Privacy link did not open (${link.id}, ${failure.step})`);
+  if (failure.cause === 'offline' || !failure.reference) return;
+  const extras = linkFailureReport(link, { ...failure, cause: failure.cause, reference: failure.reference }, err);
+  // A fixed synthetic exception: its message holds only the two enums.
+  const error = new Error(`Trust & Privacy link did not open (${extras.link}, ${extras.operation})`);
   error.name = 'TrustCenterLinkError';
-  const name = errorField(err, 'name');
-  const message = errorField(err, 'message');
-  captureErrorWithoutPii(error, {
-    where: 'trust_center.link_open',
-    link: link.id,
-    cause: failure.cause,
-    step: failure.step,
-    reference: failure.reference,
-    url: addressWithoutQuery(link.url),
-    ...(name ? { error_name: sentrySafeText(name) } : {}),
-    ...(message ? { error_message: sentrySafeText(message) } : {}),
-  });
+  captureErrorWithoutPii(error, { ...extras });
 }
 
 interface Connectivity {
@@ -145,7 +179,7 @@ function fail(
   const failure: LinkFailure = {
     cause,
     step,
-    reference: cause === 'unexpected' ? newLinkFailureReference() : null,
+    reference: cause === 'offline' ? null : newLinkFailureReference(),
   };
   // Being offline is the phone's state, not a defect; everything else is reported.
   if (cause !== 'offline') {

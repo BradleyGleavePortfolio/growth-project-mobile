@@ -334,13 +334,15 @@ describe('TrustCenterScreen render', () => {
 
     expect(mockCaptureError).toHaveBeenCalledTimes(1);
     const [, extras] = mockCaptureError.mock.calls[0];
+    // Sol B-315-1: exactly the closed allowlist, nothing else.
     expect(extras).toEqual({
-      where: 'trust_center.link_open',
+      event: 'trust_center.link_open_failed',
       link: 'consumer_health_policy',
+      operation: 'can_open_url_false',
       cause: 'cannot_open',
-      step: 'can_open_url_false',
-      reference: null,
-      url: 'https://app.trygrowthproject.com/consumer-health-privacy',
+      error_class: 'none',
+      platform: 'ios',
+      reference: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
   });
 
@@ -363,18 +365,17 @@ describe('TrustCenterScreen render', () => {
 
     expect(mockCaptureError).toHaveBeenCalledTimes(1);
     const [err, extras] = mockCaptureError.mock.calls[0];
-    expect(extras).toMatchObject({
+    expect(extras).toEqual({
+      event: 'trust_center.link_open_failed',
       link: 'privacy_policy',
+      operation: 'open_url_rejected',
       cause: 'cannot_open',
-      step: 'open_url_rejected',
-      url: 'https://app.trygrowthproject.com/privacy',
-      error_name: 'Error',
+      error_class: 'error',
+      platform: 'ios',
+      reference: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
-    expect(extras.error_message).toBe(
-      "Could not open URL 'https://app.trygrowthproject.com/privacy' for [email]: No Activity found",
-    );
-    const sent = `${String(err.message)} ${JSON.stringify(extras)}`;
-    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'realmail', '@', '?']) {
+    const sent = `${String(err.name)} ${String(err.message)} ${String(err.stack)} ${JSON.stringify(extras)}`;
+    for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'realmail', '@', '?', 'No Activity found']) {
       expect(sent).not.toContain(leaked);
     }
   });
@@ -414,17 +415,18 @@ describe('TrustCenterScreen render', () => {
     expect(mockCaptureError).toHaveBeenCalledTimes(1);
     const [err, extras] = mockCaptureError.mock.calls[0];
     expect(err.name).toBe('TrustCenterLinkError');
-    expect(extras).toMatchObject({
-      where: 'trust_center.link_open',
+    expect(err.message).toBe('Trust & Privacy link did not open (privacy_policy, can_open_url_rejected)');
+    expect(extras).toEqual({
+      event: 'trust_center.link_open_failed',
       link: 'privacy_policy',
+      operation: 'can_open_url_rejected',
       cause: 'unexpected',
-      step: 'can_open_url_rejected',
+      error_class: 'error',
+      platform: 'ios',
       reference,
-      url: 'https://app.trygrowthproject.com/privacy',
-      error_message: 'Unable to open URL: https://app.trygrowthproject.com/privacy',
     });
     expect(JSON.stringify(extras)).not.toContain(supportEmail());
-    expect(JSON.stringify(extras)).not.toContain('?');
+    expect(JSON.stringify(extras)).not.toContain('Unable to open URL');
 
     await fireEvent.press(screen.getByTestId('trust-link-failure-email'));
     await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(1));
@@ -449,6 +451,12 @@ describe('TrustCenterScreen render', () => {
       supportEmail(),
     );
     expect(screen.getByTestId('trust-link-failure-support-retry')).toBeTruthy();
+    // Quiet Luxury: the shared fallback shown in this flow has no first person either.
+    const status: string = screen.getByTestId('trust-link-failure-support-status').props.children;
+    expect(status).toBe(
+      'This phone could not open an email app. Copy the address below and email support from any email app or device.',
+    );
+    expect(status).not.toMatch(/\b(we|us|our|ours|i|me|my)\b/i);
   });
 
   it('the old generic alert copy is gone from the screen', () => {
@@ -496,16 +504,17 @@ describe('link failure copy rules (OR-112-15)', () => {
     ]);
   });
 
-  it('sentrySafeText drops query strings, fragments and email addresses; addressWithoutQuery keeps the path', () => {
-    const { sentrySafeText, addressWithoutQuery, newLinkFailureReference } = failureLib();
-    expect(
-      sentrySafeText('open https://a.example.org/p?q=1&t=2#x and intent://b/c?d=e for Ann.Lee+x@mail.co.uk'),
-    ).toBe('open https://a.example.org/p and intent://b/c for [email]');
-    expect(sentrySafeText('x'.repeat(500))).toHaveLength(200);
-    expect(addressWithoutQuery('https://app.trygrowthproject.com/privacy?a=1#b')).toBe(
-      'https://app.trygrowthproject.com/privacy',
-    );
-    expect(newLinkFailureReference()).toMatch(/^[0-9a-f]{8}$/);
+  it('Sol B-315-1: no free-form text scrubber remains; the error class is an enum decided without reading text', () => {
+    const lib = failureLib();
+    expect(lib.sentrySafeText).toBeUndefined();
+    expect(lib.newLinkFailureReference()).toMatch(/^[0-9a-f]{8}$/);
+    expect(lib.LINK_FAILURE_REPORT_KEYS).toEqual(['event', 'link', 'operation', 'cause', 'error_class', 'platform', 'reference']);
+    expect(lib.linkErrorClassOf(undefined)).toBe('none');
+    expect(lib.linkErrorClassOf(new TypeError('Jane'))).toBe('type_error');
+    expect(lib.linkErrorClassOf(new RangeError('Jane'))).toBe('range_error');
+    expect(lib.linkErrorClassOf(new Error('Jane'))).toBe('error');
+    expect(lib.linkErrorClassOf('Jane')).toBe('string');
+    expect(lib.linkErrorClassOf({ message: 'Jane' })).toBe('other');
   });
 
   it('openTrustCenterLink never rejects, even when the error reporter throws', async () => {

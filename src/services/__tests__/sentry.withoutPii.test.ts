@@ -1,6 +1,6 @@
 /**
  * captureErrorWithoutPii (OR-112-15): a report that must not identify the
- * person is sent without the signed-in user (id, email), request data or
+ * person is sent without the signed-in user (account id), request data or
  * breadcrumbs, even though setSentryUser tags every event app-wide.
  */
 type Processor = (event: Record<string, unknown>) => Record<string, unknown>;
