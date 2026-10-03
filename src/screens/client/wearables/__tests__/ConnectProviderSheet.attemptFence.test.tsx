@@ -288,7 +288,7 @@ describe('Sol B-317-10: a stale cloud auth-session result does nothing visible',
     });
   });
 
-  it('a new Continue for another attempt is not closed by the old browser result', async () => {
+  it('a sheet closed and reopened for another provider is not closed by the old browser result', async () => {
     const onClose = jest.fn();
     const onConnected = jest.fn();
     const view = await render(

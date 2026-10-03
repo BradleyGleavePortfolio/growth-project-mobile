@@ -137,6 +137,8 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 import WearablesShell from '../WearablesShell';
+import { stopOnDeviceHealthWork } from '../../../../services/health/sessionFence';
+import { logger } from '../../../../utils/logger';
 
 beforeEach(() => {
   mockAiInsightsFlag = true;
@@ -317,5 +319,69 @@ describe('WearablesShell', () => {
     await waitFor(() => expect(screen.getByText(/no longer linked to your account/)).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
     expect(mockNavigate).toHaveBeenCalledWith('Connections');
+  });
+  describe('C-317-a: a refresh that settles late writes nothing', () => {
+    function heldRefresh() {
+      const held: { resolve: (v: unknown) => void; reject: (e: unknown) => void } = {
+        resolve: () => undefined,
+        reject: () => undefined,
+      };
+      mockImportHistory.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            held.resolve = resolve;
+            held.reject = reject;
+          }),
+      );
+      return held;
+    }
+    const PARTIAL = { kind: 'imported', source: 'APPLE_HEALTHKIT', connectionId: 'c1', postedCount: 3, complete: false };
+
+    it.each(['resolves partial', 'rejects'] as const)(
+      'sign-out while the refresh runs, then it %s: no notice, no refetch, no report',
+      async (how) => {
+        const held = heldRefresh();
+        await render(<WearablesShell />);
+        await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(1));
+        // signOut() calls this first, synchronously, before its first await.
+        stopOnDeviceHealthWork();
+        if (how === 'rejects') held.reject(new Error('boom'));
+        else held.resolve(PARTIAL);
+        await new Promise((r) => setTimeout(r, 0));
+        expect(screen.queryByText(/didn't come in this time/)).toBeNull();
+        expect(screen.queryByText(/Reference /)).toBeNull();
+        expect(mockInvalidateWearables).not.toHaveBeenCalled();
+        expect(mockReportUnexpected).not.toHaveBeenCalled();
+      },
+    );
+
+    it('unmount while the refresh runs, then it finishes: no refetch', async () => {
+      const held = heldRefresh();
+      const view = await render(<WearablesShell />);
+      await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(1));
+      await view.unmount();
+      held.resolve({ ...PARTIAL, complete: true });
+      await new Promise((r) => setTimeout(r, 0));
+      expect(mockInvalidateWearables).not.toHaveBeenCalled();
+    });
+
+    it('control: the same refresh with no session change refetches and shows the notice', async () => {
+      const held = heldRefresh();
+      await render(<WearablesShell />);
+      await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(1));
+      held.resolve(PARTIAL);
+      await waitFor(() => expect(screen.getByText(/didn't come in this time/)).toBeTruthy());
+      expect(mockInvalidateWearables).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('C-317-b: a refresh failure is logged by error class only, never its text', async () => {
+    const warn = jest.mocked(logger.warn);
+    warn.mockClear();
+    mockImportHistory.mockRejectedValue(new Error('synthetic private text Janet'));
+    await render(<WearablesShell />);
+    await waitFor(() => expect(mockReportUnexpected).toHaveBeenCalled());
+    expect(warn).toHaveBeenCalledWith('[wearables] on-device refresh failed', { error: 'Error' });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Janet');
   });
 });
