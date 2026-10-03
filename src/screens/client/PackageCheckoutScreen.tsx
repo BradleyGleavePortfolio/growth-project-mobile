@@ -143,6 +143,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
 
   const purchase = usePackagePurchase({
     surface: 'share_link',
+    shareToken,
     appearance,
     colorScheme,
     onEntitled: () => {

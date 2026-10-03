@@ -64,7 +64,16 @@ export interface SubscriptionIntentRequest {
   package_id: string;
   idempotency_key: string;
   expected_amount_cents?: number;
+  /**
+   * The share-link token, sent only from a share link. The backend uses it
+   * only to explain a refusal (PACKAGE_COACH_NOT_CONNECTED); it never widens
+   * who can buy.
+   */
+  share_token?: string;
 }
+
+/** Same shape the backend DTO accepts (21 chars, nanoid alphabet). */
+const SHARE_TOKEN_SHAPE = /^[A-Za-z0-9_-]{21}$/;
 
 export interface PaymentSheetSecrets {
   clientSecret: string;
@@ -144,6 +153,7 @@ export async function createSubscriptionIntent(
   packageId: string,
   idempotencyKey: string,
   expectedAmountCents: number | null,
+  shareToken?: string | null,
 ): Promise<SubscriptionIntent> {
   const body: SubscriptionIntentRequest = {
     package_id: packageId,
@@ -151,6 +161,8 @@ export async function createSubscriptionIntent(
   };
   if (typeof expectedAmountCents === "number")
     body.expected_amount_cents = expectedAmountCents;
+  if (typeof shareToken === "string" && SHARE_TOKEN_SHAPE.test(shareToken))
+    body.share_token = shareToken;
   const res = await api.post<Record<string, unknown>>(
     SUBSCRIPTION_INTENT_PATH,
     body,
@@ -424,6 +436,20 @@ export const PACKAGE_PAYMENT_COPY = {
   alreadyActiveEnding:
     "You already have this plan, and it is set to end at the close of this period. Open your plan to keep it instead of starting it again.",
   openPlan: "Open your plan",
+  alreadyIncluded: (by: "invite" | "free_claim" | "purchase" | null) =>
+    by === "invite"
+      ? "Your coach already added this plan to your account with your invite, so nothing was charged. Open your plan to use it."
+      : by === "free_claim"
+        ? "You already added this free plan to your account, so nothing was charged. Open your plan to use it."
+        : by === "purchase"
+          ? "You already paid for this plan and it is still active, so nothing more was charged. Open your plan to use it."
+          : "This plan is already on your account, so nothing was charged. Open your plan to use it.",
+  attemptExpired:
+    "That checkout ended before it finished, so nothing was charged. Choose the plan again to start a new checkout.",
+  packageCoachNotConnectedNoCoach:
+    "This plan is from a coach you are not connected with yet, so it cannot be started from this account and nothing was charged. Ask that coach for their invite code, join with it, then open the link again.",
+  packageCoachNotConnectedOtherCoach:
+    "This plan is from a different coach than yours, so it cannot be started from this account and nothing was charged. Message the coach who shared the link.",
   planNotFound:
     "This plan could not be found on your account, so nothing changed. Pull down to refresh your plans.",
   planAlreadyEnded:
@@ -679,6 +705,26 @@ export function describeBackendFailure(
         backendFieldOf(err, "cancel_at_period_end") === true
           ? PACKAGE_PAYMENT_COPY.alreadyActiveEnding
           : PACKAGE_PAYMENT_COPY.alreadyActive,
+      );
+    case "PACKAGE_ALREADY_INCLUDED": {
+      const by = backendFieldOf(err, "included_by");
+      return notice(
+        "already_included",
+        PACKAGE_PAYMENT_COPY.alreadyIncluded(
+          by === "invite" || by === "free_claim" || by === "purchase"
+            ? by
+            : null,
+        ),
+      );
+    }
+    case "SUBSCRIPTION_ATTEMPT_EXPIRED":
+      return notice("attempt_expired", PACKAGE_PAYMENT_COPY.attemptExpired);
+    case "PACKAGE_COACH_NOT_CONNECTED":
+      return notice(
+        "package_coach_not_connected",
+        backendFieldOf(err, "reason") === "no_coach"
+          ? PACKAGE_PAYMENT_COPY.packageCoachNotConnectedNoCoach
+          : PACKAGE_PAYMENT_COPY.packageCoachNotConnectedOtherCoach,
       );
     case "PACKAGE_IS_FREE":
     case "PACKAGE_NOT_FREE":

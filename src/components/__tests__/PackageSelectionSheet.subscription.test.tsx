@@ -457,6 +457,141 @@ describe('every backend code has its own calm copy and next action', () => {
   });
 });
 
+// B-RECUR-BE (agent 114), Opus B-334-1: every code backend #654 can answer has
+// its own copy and next action, and an expired attempt never strands the
+// client on a dead idempotency key. Failing before at 3fc925d4.
+describe('backend #654 round 1 codes', () => {
+  const expired = () =>
+    httpError(409, { code: 'SUBSCRIPTION_ATTEMPT_EXPIRED', error: 'SUBSCRIPTION_ATTEMPT_EXPIRED', message: 'x' });
+
+  it('SUBSCRIPTION_ATTEMPT_EXPIRED: starts once more with a fresh key and sells the plan', async () => {
+    mockPost.mockRejectedValueOnce(expired());
+    const r = await mountAndSelect();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
+    const keys = keysOf();
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).not.toBe(keys[1]);
+    expect(keys[1]).toMatch(IS_UUID);
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('SUBSCRIPTION_ATTEMPT_EXPIRED twice: specific copy, and the next tap uses a new key (never the dead one)', async () => {
+    mockPost.mockRejectedValueOnce(expired()).mockRejectedValueOnce(expired());
+    const r = await mountAndSelect();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-error')).toBeTruthy());
+    const text = r.getByTestId('payment-error').props.children as string;
+    expect(text).toBe(
+      'That checkout ended before it finished, so nothing was charged. Choose the plan again to start a new checkout.',
+    );
+    expectCopyRules(text);
+    expect(r.queryByTestId('payment-error-reference')).toBeNull();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
+    const keys = keysOf();
+    expect(keys).toHaveLength(3);
+    expect(new Set(keys).size).toBe(3);
+  });
+
+  it.each([
+    ['invite', 'Your coach already added this plan to your account with your invite, so nothing was charged. Open your plan to use it.'],
+    ['free_claim', 'You already added this free plan to your account, so nothing was charged. Open your plan to use it.'],
+    ['purchase', 'You already paid for this plan and it is still active, so nothing more was charged. Open your plan to use it.'],
+  ])('PACKAGE_ALREADY_INCLUDED (%s): specific copy and Open your plan', async (by, copy) => {
+    mockPost.mockRejectedValueOnce(
+      httpError(409, {
+        code: 'PACKAGE_ALREADY_INCLUDED',
+        error: 'PACKAGE_ALREADY_INCLUDED',
+        message: 'x',
+        purchase_id: PURCHASE,
+        included_by: by,
+        access_expires_at: null,
+      }),
+    );
+    const r = await mountAndSelect();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-open-plan')).toBeTruthy());
+    const text = r.getByTestId('payment-error').props.children as string;
+    expect(text).toBe(copy);
+    expectCopyRules(text);
+    await fireEvent.press(r.getByTestId('payment-open-plan'));
+    expect(r.onOpenPlan).toHaveBeenCalledWith(null);
+    expect(mockInitPaymentSheet).not.toHaveBeenCalled();
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['no_coach', 'This plan is from a coach you are not connected with yet, so it cannot be started from this account and nothing was charged. Ask that coach for their invite code, join with it, then open the link again.'],
+    ['other_coach', 'This plan is from a different coach than yours, so it cannot be started from this account and nothing was charged. Message the coach who shared the link.'],
+  ])('PACKAGE_COACH_NOT_CONNECTED (%s): specific copy', async (reason, copy) => {
+    mockPost.mockRejectedValueOnce(
+      httpError(409, { code: 'PACKAGE_COACH_NOT_CONNECTED', error: 'PACKAGE_COACH_NOT_CONNECTED', message: 'x', reason }),
+    );
+    const r = await mountAndSelect();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-error')).toBeTruthy());
+    const text = r.getByTestId('payment-error').props.children as string;
+    expect(text).toBe(copy);
+    expectCopyRules(text);
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('PACKAGE_IS_FREE from subscription-intent: the plan is claimed free, never a generic error', async () => {
+    mockPost.mockImplementation(async (url: string) => {
+      if (url === '/v1/checkout/subscription-intent') {
+        throw httpError(409, { code: 'PACKAGE_IS_FREE', error: 'PACKAGE_IS_FREE', message: 'x' });
+      }
+      if (url === `/v1/packages/${PKG_MONTHLY}/claim-free`) return { data: { active: true } };
+      throw httpError(404, { error: 'Not Found' });
+    });
+    const r = await mountAndSelect();
+    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
+    expect(mockPost.mock.calls.map((c) => c[0])).toEqual([
+      '/v1/checkout/subscription-intent',
+      `/v1/packages/${PKG_MONTHLY}/claim-free`,
+    ]);
+    expect(mockInitPaymentSheet).not.toHaveBeenCalled();
+  });
+
+  it('a share link sends its token with subscription-intent; other surfaces never do', async () => {
+    const pkg = purchasableFromCoachPackage(PACKAGES[0]);
+    if (!pkg) throw new Error('fixture');
+    const token = 'AbCdEfGhIjKlMnOpQrStU';
+    const { result } = await renderHook(() =>
+      usePackagePurchase({
+        surface: 'share_link',
+        shareToken: token,
+        appearance: {},
+        colorScheme: 'light',
+        planPollDelaysMs: [0],
+        entitlementPollDelaysMs: [0],
+      }),
+    );
+    await act(async () => {
+      await result.current.start(pkg);
+    });
+    expect((subIntentCalls()[0][1] as Record<string, unknown>).share_token).toBe(token);
+
+    mockPost.mockClear();
+    const bad = await renderHook(() =>
+      usePackagePurchase({
+        surface: 'share_link',
+        shareToken: '../x',
+        appearance: {},
+        colorScheme: 'light',
+        planPollDelaysMs: [0],
+        entitlementPollDelaysMs: [0],
+      }),
+    );
+    await act(async () => {
+      await bad.result.current.start(pkg);
+    });
+    expect(subIntentCalls()[0][1]).not.toHaveProperty('share_token');
+  });
+});
+
 describe('Apple Pay / Google Pay are off by config (OR-113-2)', () => {
   it('no merchant ID: no wallet in the sheet and no merchantIdentifier', async () => {
     const r = await mountAndSelect();

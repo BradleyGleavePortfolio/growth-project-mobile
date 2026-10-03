@@ -112,6 +112,12 @@ export interface UsePackagePurchaseOptions {
   onEntitled?: () => void;
   /** The surface's package list may be stale (price or terms moved). */
   onReloadNeeded?: () => void;
+  /**
+   * Share links only: the link's token, sent with subscription-intent so a
+   * refusal for a coach the client is not connected with is explained
+   * (PACKAGE_COACH_NOT_CONNECTED). Never sent to payment-intent.
+   */
+  shareToken?: string | null;
   now?: () => Date;
 }
 
@@ -587,13 +593,51 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         showNotice(describeSdkMissing());
         return;
       }
-      const key = attemptKeyFor(pkg);
-      const ref = shortReference(key);
+      let key = attemptKeyFor(pkg);
+      let ref = shortReference(key);
+      const request = (k: string) =>
+        createSubscriptionIntent(
+          pkg.id,
+          k,
+          pkg.amountCents,
+          optsRef.current.shareToken ?? null,
+        );
       let intent;
       try {
-        intent = await createSubscriptionIntent(pkg.id, key, pkg.amountCents);
+        try {
+          intent = await request(key);
+        } catch (first) {
+          // The attempt behind this key has ended on the server (expired or
+          // retired): its key is dead. Start once more with a fresh key.
+          if (backendCodeOf(first) !== "SUBSCRIPTION_ATTEMPT_EXPIRED") throw first;
+          attemptRef.current = null;
+          key = attemptKeyFor(pkg);
+          ref = shortReference(key);
+          intent = await request(key);
+        }
       } catch (err) {
         const code = backendCodeOf(err);
+        if (code === "SUBSCRIPTION_ATTEMPT_EXPIRED") {
+          // Never resend a dead key: the next tap starts a new attempt.
+          attemptRef.current = null;
+        }
+        // The coach made the plan free since the list loaded.
+        if (code === "PACKAGE_IS_FREE") {
+          attemptRef.current = null;
+          await claimFree({ ...pkg, amountCents: 0 });
+          return;
+        }
+        if (code === "PACKAGE_ALREADY_INCLUDED") {
+          attemptRef.current = null;
+          set({
+            phase: "idle",
+            alreadyActive: { purchaseId: null },
+            notice: describeBackendFailure(err, "subscription_intent", ref, {
+              surface,
+            }),
+          });
+          return;
+        }
         if (code === "PACKAGE_PRICE_CHANGED") {
           const change = await resolvePriceChange(pkg, err);
           if (change) {
@@ -648,6 +692,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     },
     [
       attemptKeyFor,
+      claimFree,
       planPollDelaysMs,
       pollPlan,
       resolveExistingPlan,
