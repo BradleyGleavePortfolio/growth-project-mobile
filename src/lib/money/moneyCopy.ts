@@ -54,7 +54,10 @@ export const FILTER_LABEL: Record<ChargeFilter, string> = {
  * "Monthly": a recurring charge with no known cadence says "Recurring".
  */
 export function cadenceLabel(
-  c: Pick<MoneyCharge, "billingType" | "billingInterval" | "billingIntervalCount">,
+  c: Pick<
+    MoneyCharge,
+    "billingType" | "billingInterval" | "billingIntervalCount"
+  >,
 ): string {
   if (c.billingType !== "recurring") return "One time";
   const n = c.billingIntervalCount ?? 1;

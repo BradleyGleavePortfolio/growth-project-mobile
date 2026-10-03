@@ -106,11 +106,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
         <View style={styles.card}>
           <Text style={styles.rowTitle}>{c.client.name}</Text>
           <Text style={styles.rowSub} testID="money-charge-meta">
-            {[
-              c.packageName,
-              cadenceLabel(c),
-              shortDate(c.createdAt),
-            ]
+            {[c.packageName, cadenceLabel(c), shortDate(c.createdAt)]
               .filter(Boolean)
               .join(", ")}
           </Text>

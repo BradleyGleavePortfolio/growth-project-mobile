@@ -4,7 +4,8 @@
  * (no Stripe -> setup action), error with reference, offline.
  */
 import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { act, render, fireEvent, waitFor } from "@testing-library/react-native";
+import { Share } from "react-native";
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -32,6 +33,7 @@ jest.mock("../../../../hooks/useNetworkStatus", () => ({
   }),
 }));
 
+const mockFocus: { current: (() => void) | null } = { current: null };
 const mockNavigate = jest.fn();
 const mockReplace = jest.fn();
 const mockParentNavigate = jest.fn();
@@ -48,13 +50,18 @@ jest.mock("@react-navigation/native", () => {
     }),
     useFocusEffect: (cb: () => void) => {
       const R = jest.requireActual("react");
-      R.useEffect(cb, [cb]);
+      R.useEffect(() => {
+        mockFocus.current = cb;
+        cb();
+      }, [cb]);
     },
   };
 });
 
 import {
+  MoneyPayloadError,
   nextPayout,
+  toAttentionItem,
   toCharge,
   toPayout,
   toSummary,
@@ -64,9 +71,16 @@ import {
 import {
   attentionCopy,
   breakdownRows,
+  cadenceLabel,
   changeLine,
   chargeStateLabel,
+  FILTER_LABEL,
+  PAYOUT_LABEL,
 } from "../../../../lib/money/moneyCopy";
+import {
+  describeError,
+  isSubCoachBillingBlocked,
+} from "../../../../lib/coachSetup/errors";
 import MoneyScreen from "../MoneyScreen";
 import MoneyChargesScreen from "../MoneyChargesScreen";
 import MoneyChargeScreen from "../MoneyChargeScreen";
@@ -196,12 +210,26 @@ function routeGets(over: Record<string, unknown | Error> = {}) {
     "/coach/connect/status": ACTIVE,
     ...over,
   };
-  mockGet.mockImplementation(async (url: string) => {
-    const v = map[url];
-    if (v instanceof Error) throw v;
-    if (v === undefined) throw httpError(404);
-    return { data: v };
-  });
+  mockGet.mockImplementation(
+    async (url: string, cfg?: { params?: Record<string, string> }) => {
+      const v = map[url];
+      if (v instanceof Error) throw v;
+      if (v === undefined) throw httpError(404);
+      if (typeof v === "function") return { data: await v(cfg) };
+      return { data: url === SUMMARY_URL ? echoWindow(v, cfg) : v };
+    },
+  );
+}
+
+const SUMMARY_URL = "/v1/coach/money/summary";
+/** The backend echoes the window it was asked for (coach-money.service). */
+function echoWindow(
+  v: unknown,
+  cfg?: { params?: Record<string, string> },
+): unknown {
+  const p = cfg?.params;
+  if (!p || !v || typeof v !== "object") return v;
+  return { ...(v as object), window: { from: p.from, to: p.to } };
 }
 
 beforeEach(() => {
@@ -238,8 +266,13 @@ describe("coachMoneyApi parsing", () => {
     expect(s.recurring.mrrCents).toBe(9800);
     expect(s.heldFromNextSaleCents).toBeNull();
     expect(
-      toSummary({ ...SUMMARY, held_cents: 812 }).heldFromNextSaleCents,
+      toSummary({ ...SUMMARY, held_from_next_sale_cents: 812 })
+        .heldFromNextSaleCents,
     ).toBe(812);
+    // Only the field #641 names is read (Opus #332 assumption: pin it).
+    expect(
+      toSummary({ ...SUMMARY, held_cents: 812 }).heldFromNextSaleCents,
+    ).toBeNull();
     expect(() => toSummary({})).toThrow();
   });
 
@@ -256,24 +289,28 @@ describe("coachMoneyApi parsing", () => {
       toPayout({
         id: "a",
         amount: 10,
+        currency: "usd",
         status: "paid",
         arrival_date: "2026-09-01T00:00:00Z",
       }),
       toPayout({
         id: "b",
         amount: 20.5,
+        currency: "usd",
         status: "pending",
         arrival_date: "2026-10-09T00:00:00Z",
       }),
       toPayout({
         id: "c",
         amount: 30,
+        currency: "usd",
         status: "in_transit",
         arrival_date: "2026-10-05T00:00:00Z",
       }),
       toPayout({
         id: "d",
         amount: 1,
+        currency: "usd",
         status: "pending",
         arrival_date: new Date(0).toISOString(),
       }),
@@ -613,5 +650,460 @@ describe("retired routes", () => {
   it("the old Earnings and Business metrics routes redirect to Money", async () => {
     await render(<MoneyRedirect />);
     expect(mockReplace).toHaveBeenCalledWith("CoachMoney");
+  });
+});
+
+// ─── S-COACH-MOB-4 (agent 114): fix round for AUD-SOL-5 / AUD-OPUS-4 ─────────
+
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+describe("B-332-1 a period switch never relabels another period's money", () => {
+  it("30 days loads, Today fails: no 30-day number under Today, the error and retry show", async () => {
+    routeGets();
+    const base = mockGet.getMockImplementation()!;
+    const { findByTestId, getByTestId, queryByTestId, findByText } =
+      await render(<MoneyScreen />);
+    expect((await findByTestId("money-net-amount")).props.children).toBe(
+      "$94.80",
+    );
+    mockGet.mockImplementation(async (url: string, cfg?: unknown) => {
+      if (url === SUMMARY_URL) throw httpError(500, { request_id: "req_t1" });
+      return base(url, cfg);
+    });
+    await fireEvent.press(getByTestId("money-range-today"));
+    await findByTestId("money-summary-failed");
+    expect(queryByTestId("money-net-amount")).toBeNull();
+    expect(queryByTestId("money-net-change")).toBeNull();
+    await findByText("Net to you, Today");
+    await findByText("Reference req_t1");
+    mockGet.mockImplementation(base);
+    await fireEvent.press(getByTestId("money-summary-error-retry"));
+    const eyebrow = await findByText("Net to you, Today");
+    expect(eyebrow).toBeTruthy();
+    expect((await findByTestId("money-net-amount")).props.children).toBe(
+      "$94.80",
+    );
+    expect(getByTestId("money-net-change").props.children).toMatch(
+      /on yesterday$/,
+    );
+  });
+
+  it("a slow switch shows a loader for the new period, never the old number", async () => {
+    routeGets();
+    const base = mockGet.getMockImplementation()!;
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <MoneyScreen />,
+    );
+    await findByTestId("money-net-amount");
+    const slow = deferred<unknown>();
+    mockGet.mockImplementation(async (url: string, cfg?: unknown) => {
+      if (url === SUMMARY_URL) return slow.promise;
+      return base(url, cfg);
+    });
+    await fireEvent.press(getByTestId("money-range-ytd"));
+    const loader = await findByTestId("money-summary-loading");
+    expect(loader.props.accessibilityLabel).toBe(
+      "Loading net to you, Year to date",
+    );
+    expect(queryByTestId("money-net-amount")).toBeNull();
+  });
+
+  it("out of order answers: only the period on screen is shown", async () => {
+    routeGets();
+    const base = mockGet.getMockImplementation()!;
+    const { findByTestId, getByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    const today = deferred<unknown>();
+    mockGet.mockImplementation(
+      async (url: string, cfg?: { params?: Record<string, string> }) => {
+        if (url !== SUMMARY_URL) return base(url, cfg);
+        const fromIso = cfg?.params?.from ?? "";
+        const isToday =
+          Date.now() - Date.parse(fromIso) < 2 * 86_400_000 &&
+          new Date(fromIso).getHours() === 0;
+        if (isToday) {
+          const late = (await today.promise) as object;
+          return { data: echoWindow(late, cfg) };
+        }
+        return {
+          data: echoWindow(
+            {
+              ...SUMMARY,
+              totals: totals({ net_cents: 120000 }),
+              compare_totals: totals({ net_cents: 60000 }),
+              change_cents: 60000,
+            },
+            cfg,
+          ),
+        };
+      },
+    );
+    await fireEvent.press(getByTestId("money-range-today"));
+    await fireEvent.press(getByTestId("money-range-ytd"));
+    await waitFor(async () =>
+      expect((await findByTestId("money-net-amount")).props.children).toBe(
+        "$1,200.00",
+      ),
+    );
+    await act(async () => {
+      today.resolve({
+        ...SUMMARY,
+        totals: totals({ net_cents: 111 }),
+        compare_totals: totals({ net_cents: 0 }),
+        change_cents: 111,
+      });
+    });
+    expect(getByTestId("money-net-amount").props.children).toBe("$1,200.00");
+  });
+
+  it("a failed refresh of the same period keeps the numbers, says when they are from and offers retry", async () => {
+    routeGets();
+    const base = mockGet.getMockImplementation()!;
+    const { findByTestId, getByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    mockGet.mockImplementation(async (url: string, cfg?: unknown) => {
+      if (url === SUMMARY_URL) throw httpError(503);
+      return base(url, cfg);
+    });
+    await act(async () => {
+      await getByTestId("money-screen").props.refreshControl.props.onRefresh();
+    });
+    await findByTestId("money-summary-stale");
+    expect(getByTestId("money-net-amount").props.children).toBe("$94.80");
+    expect(getByTestId("money-summary-error-retry")).toBeTruthy();
+  });
+});
+
+describe("B-332-2 charges name their real cadence", () => {
+  const rec = (billing_interval: unknown, billing_interval_count: unknown) =>
+    toCharge({
+      ...CHARGES.charges[0],
+      billing_type: "recurring",
+      billing_interval,
+      billing_interval_count,
+    });
+  it("weekly, every 2 weeks, monthly, every 3 months, yearly, unknown", () => {
+    expect(cadenceLabel(rec("week", 1))).toBe("Weekly");
+    expect(cadenceLabel(rec("week", 2))).toBe("Every 2 weeks");
+    expect(cadenceLabel(rec("month", 1))).toBe("Monthly");
+    expect(cadenceLabel(rec("month", 3))).toBe("Every 3 months");
+    expect(cadenceLabel(rec("year", 1))).toBe("Yearly");
+    expect(cadenceLabel(rec(null, null))).toBe("Recurring");
+    expect(cadenceLabel(rec("fortnight", 1))).toBe("Recurring");
+    expect(
+      cadenceLabel(
+        toCharge({ ...CHARGES.charges[0], billing_type: "one_time" }),
+      ),
+    ).toBe("One time");
+  });
+
+  it("the charge screen says Every 3 months for a quarterly purchase, never Monthly", async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        charge: {
+          ...CHARGES.charges[0],
+          amount_cents: 12000,
+          billing_interval: "month",
+          billing_interval_count: 3,
+        },
+        breakdown: {
+          price_cents: 12000,
+          processing_cents: 378,
+          platform_fee_cents: 240,
+          head_coach_split_cents: 0,
+          refunded_cents: 0,
+          net_cents: 11382,
+          processing_paid_by: "coach",
+          settled: true,
+        },
+      },
+    });
+    const nav = {
+      goBack: jest.fn(),
+      getParent: () => ({ navigate: jest.fn() }),
+    };
+    const { findByTestId } = await render(
+      <MoneyChargeScreen
+        navigation={nav as never}
+        route={
+          {
+            key: "k",
+            name: "CoachMoneyCharge",
+            params: { chargeId: "ch_1" },
+          } as never
+        }
+      />,
+    );
+    const meta = await findByTestId("money-charge-meta");
+    const text = [meta.props.children].flat().join("");
+    expect(text).toMatch(/Every 3 months/);
+    expect(text).not.toMatch(/Monthly/);
+  });
+});
+
+describe("B-332-3 no invented money: invalid payloads fail with specific copy", () => {
+  it("rejects missing amounts, currency, counts and incoherent change", () => {
+    const code = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (e) {
+        return (e as MoneyPayloadError).response.data.code;
+      }
+      return "parsed";
+    };
+    expect(code(() => toSummary({ totals: {}, recurring: {} }))).toBe(
+      "MONEY_PAYLOAD_INVALID",
+    );
+    const { currency: _c, ...noCurrency } = SUMMARY;
+    expect(code(() => toSummary(noCurrency))).toBe("MONEY_PAYLOAD_INVALID");
+    expect(
+      code(() =>
+        toSummary({ ...SUMMARY, totals: totals({ net_cents: 12.5 }) }),
+      ),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(
+      code(() =>
+        toSummary({ ...SUMMARY, totals: totals({ net_cents: "9480" }) }),
+      ),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(code(() => toSummary({ ...SUMMARY, change_cents: 1 }))).toBe(
+      "MONEY_PAYLOAD_INVALID",
+    );
+    expect(code(() => toSummary({ ...SUMMARY, recurring: {} }))).toBe(
+      "MONEY_PAYLOAD_INVALID",
+    );
+    expect(code(() => toSummary({ ...SUMMARY, attention_count: -1 }))).toBe(
+      "MONEY_PAYLOAD_INVALID",
+    );
+    // An answer for another window or currency is refused.
+    expect(
+      code(() =>
+        toSummary(SUMMARY, {
+          window: { from: new Date(0), to: new Date(1000) },
+        }),
+      ),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(code(() => toSummary(SUMMARY, { currency: "gbp" }))).toBe(
+      "MONEY_PAYLOAD_INVALID",
+    );
+    const { amount_cents: _a, ...noAmount } = CHARGES.charges[0];
+    expect(code(() => toCharge(noAmount))).toBe("MONEY_PAYLOAD_INVALID");
+    expect(
+      code(() => toCharge({ ...CHARGES.charges[0], currency: undefined })),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(
+      code(() => toAttentionItem({ ...ATTENTION.items[0], currency: null }, 0)),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(
+      code(() => toPayout({ id: "p", amount: "10", currency: "usd" })),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+    expect(code(() => toSummary(SUMMARY))).toBe("parsed");
+  });
+
+  it("the invalid-payload copy is specific and carries the request reference", () => {
+    let err: unknown;
+    try {
+      toSummary({ totals: {} }, undefined, { "x-request-id": "req_bad1" });
+    } catch (e) {
+      err = e;
+    }
+    const f = describeError(err, "load your Money numbers");
+    expect(f.title).toBe("These money figures could not be checked");
+    expect(f.body).toMatch(/not showing them/);
+    expect(f.body).toMatch(/req_bad1/);
+    expect(f.retryable).toBe(true);
+    expect(`${f.title} ${f.body}`).not.toMatch(
+      /\bwe\b|something went wrong|!/i,
+    );
+  });
+
+  it("the Money page shows the error instead of $0.00 when the summary is malformed", async () => {
+    routeGets({ [SUMMARY_URL]: { totals: {}, recurring: {} } });
+    const { findByTestId, queryByTestId, findByText } = await render(
+      <MoneyScreen />,
+    );
+    await findByTestId("money-summary-failed");
+    await findByText("These money figures could not be checked");
+    expect(queryByTestId("money-net-amount")).toBeNull();
+    expect(queryByTestId("money-business")).toBeNull();
+  });
+});
+
+describe("C-332-1 the Home card never presents a stale number as current", () => {
+  it("a failed refresh keeps the last number with its time, the error and a retry", async () => {
+    routeGets();
+    const base = mockGet.getMockImplementation()!;
+    const { findByTestId, getByTestId } = await render(
+      <MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />,
+    );
+    await findByTestId("money-home-card-net");
+    mockGet.mockImplementation(async (url: string, cfg?: unknown) => {
+      if (url === SUMMARY_URL) throw httpError(500, { request_id: "req_h1" });
+      return base(url, cfg);
+    });
+    await act(async () => {
+      mockFocus.current?.();
+    });
+    await findByTestId("money-home-card-stale");
+    expect(getByTestId("money-home-card-net").props.children).toBe("$94.80");
+    await findByTestId("money-home-card-error");
+  });
+});
+
+describe("C-332-1 (Opus) an active sub-coach sees who handles money", () => {
+  const blocked = () =>
+    httpError(403, {
+      kind: "sub_coach_billing_blocked",
+      message: "Sub-coaches cannot access billing or financial surfaces.",
+    });
+  it("maps the guard's 403 to quiet head-coach copy, not a permission error", () => {
+    expect(isSubCoachBillingBlocked(blocked())).toBe(true);
+    expect(isSubCoachBillingBlocked(httpError(403))).toBe(false);
+    const f = describeError(blocked(), "load your Money numbers");
+    expect(f.title).toBe("Money is handled by your head coach");
+    expect(f.retryable).toBe(false);
+  });
+  it("the Home card says so instead of an error card", async () => {
+    routeGets({
+      [SUMMARY_URL]: blocked(),
+      "/coach/connect/status": blocked(),
+    });
+    const { findByTestId, queryByTestId } = await render(
+      <MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />,
+    );
+    await findByTestId("money-home-card-head-coach");
+    expect(queryByTestId("money-home-card-error")).toBeNull();
+  });
+});
+
+describe("C-332-3 an unknown payout status is never the next payout", () => {
+  it("reads as unknown with its own label", () => {
+    const odd = toPayout({
+      id: "x",
+      amount: 5,
+      currency: "usd",
+      status: "held_by_bank",
+      arrival_date: "2026-10-03T00:00:00Z",
+    });
+    expect(odd.status).toBe("unknown");
+    expect(odd.rawStatus).toBe("held_by_bank");
+    expect(PAYOUT_LABEL.unknown).toBe("Status from Stripe not recognised");
+    expect(nextPayout([odd])).toBeNull();
+  });
+});
+
+describe("C-332-4 Export CSV for taxes (backend #641 export.csv)", () => {
+  it("exports the selected period and currency through the share sheet", async () => {
+    routeGets({
+      "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n",
+    });
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation(async (url: string, cfg?: unknown) => {
+      const r = await base(url, cfg);
+      return url === "/v1/coach/money/export.csv"
+        ? {
+            ...r,
+            headers: {
+              "content-disposition":
+                'attachment; filename="tgp-money-2026-09-02-to-2026-10-02-usd.csv"',
+            },
+          }
+        : r;
+    });
+    const share = jest
+      .spyOn(Share, "share")
+      .mockResolvedValue({ action: "sharedAction" } as never);
+    const { findByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await waitFor(() => expect(share).toHaveBeenCalled());
+    expect(share).toHaveBeenCalledWith({
+      title: "tgp-money-2026-09-02-to-2026-10-02-usd.csv",
+      message: "date_utc,type,charge_id\r\n",
+    });
+    const call = mockGet.mock.calls.find(
+      (c) => c[0] === "/v1/coach/money/export.csv",
+    )!;
+    expect(call[1].params.currency).toBe("usd");
+    expect(call[1].params.from).toEqual(expect.any(String));
+    share.mockRestore();
+  });
+
+  it("a period too large to export says what to do", async () => {
+    routeGets({
+      "/v1/coach/money/export.csv": httpError(400, {
+        code: "MONEY_EXPORT_TOO_LARGE",
+        message:
+          "This period has more than 20000 ledger rows, which is too many for one file. Choose a shorter period, for example one quarter, and export each part.",
+      }),
+    });
+    const { findByTestId, findByText } = await render(<MoneyScreen />);
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await findByTestId("money-export-csv-error");
+    await findByText(/Choose a shorter period/);
+  });
+});
+
+describe("#641 per-currency summary: switch currency, never add currencies together", () => {
+  it("shows a currency switch and asks the server for the chosen one", async () => {
+    routeGets({
+      [SUMMARY_URL]: (cfg?: { params?: Record<string, string> }) => {
+        const cur = cfg?.params?.currency ?? "usd";
+        return echoWindow(
+          {
+            ...SUMMARY,
+            currency: cur,
+            currencies: ["gbp", "usd"],
+            totals: totals({ net_cents: cur === "gbp" ? 5000 : 9480 }),
+            compare_totals: totals({ net_cents: 4740 }),
+            change_cents: (cur === "gbp" ? 5000 : 9480) - 4740,
+          },
+          cfg,
+        );
+      },
+    });
+    const { findByTestId, getByTestId } = await render(<MoneyScreen />);
+    expect((await findByTestId("money-net-amount")).props.children).toBe(
+      "$94.80",
+    );
+    await fireEvent.press(getByTestId("money-currency-gbp"));
+    await waitFor(() =>
+      expect(getByTestId("money-net-amount").props.children).toBe("£50.00"),
+    );
+    const last = mockGet.mock.calls.filter((c) => c[0] === SUMMARY_URL).pop()!;
+    expect(last[1].params.currency).toBe("gbp");
+  });
+
+  it("the disputed filter exists and copy never speaks as we", () => {
+    expect(FILTER_LABEL.disputed).toBe("Disputed");
+    const c = attentionCopy({
+      kind: "failed_payment",
+      id: "p",
+      client: { id: "u", name: "Sam" },
+      amountCents: 4900,
+      currency: "usd",
+      createdAt: null,
+      failedPayment: {
+        packageName: "North",
+        attempt: 1,
+        maxAttempts: 4,
+        nextRetryAt: "2026-10-04T12:00:00Z",
+        lockedOutAt: null,
+        cardUpdateLinkSentAt: "2026-10-02T12:00:00Z",
+        lastFailureReason: null,
+      },
+      dispute: null,
+      stripeRequirements: null,
+    });
+    expect(c.lines.join(" ")).toMatch(/TGP tries the card again/);
+    expect(c.lines.join(" ")).not.toMatch(/\bWe\b|\bwe\b/);
   });
 });

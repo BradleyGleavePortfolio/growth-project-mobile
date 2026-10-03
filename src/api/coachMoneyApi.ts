@@ -337,7 +337,7 @@ export function toSummary(
   expect?: { window?: { from: Date; to: Date }; currency?: string | null },
   headers?: unknown,
 ): MoneySummary {
-  const r = new Reader("summary", headers);
+  const r: Reader = new Reader("summary", headers);
   const s = r.obj(raw, "summary");
   const currency = r.currency(s.currency, "currency");
   const currencies = Array.isArray(s.currencies)
@@ -466,9 +466,7 @@ const KINDS: readonly AttentionKind[] = [
 function strings(r: Reader, v: unknown, at: string): string[] {
   if (v === undefined || v === null) return [];
   if (!Array.isArray(v)) r.fail(at);
-  return v.map((x, i) =>
-    typeof x === "string" ? x : r.fail(`${at}[${i}]`),
-  );
+  return v.map((x, i) => (typeof x === "string" ? x : r.fail(`${at}[${i}]`)));
 }
 
 /** Exported for tests. Unknown kinds return null (skipped, never guessed). */
@@ -477,7 +475,7 @@ export function toAttentionItem(
   index = 0,
   headers?: unknown,
 ): AttentionItem | null {
-  const r = new Reader("attention", headers);
+  const r: Reader = new Reader("attention", headers);
   const at = `items[${index}]`;
   const a = r.obj(raw, at);
   if (!(KINDS as readonly unknown[]).includes(a.kind)) return null;
@@ -514,7 +512,8 @@ export function toAttentionItem(
     createdAt: r.dateOrNull(a.created_at, `${at}.created_at`),
     failedPayment: fp
       ? {
-          packageName: typeof fp.package_name === "string" ? fp.package_name : "",
+          packageName:
+            typeof fp.package_name === "string" ? fp.package_name : "",
           attempt: r.count(fp.attempt, `${at}.failed_payment.attempt`),
           maxAttempts: r.count(
             fp.max_attempts,
@@ -572,8 +571,12 @@ const PAYOUT_STATUSES: readonly KnownPayoutStatus[] = [
  * this build does not know is `unknown` (C-332-3): it is listed under its
  * own label and never offered as the next payout.
  */
-export function toPayout(raw: unknown, index = 0, headers?: unknown): MoneyPayout {
-  const r = new Reader("payouts", headers);
+export function toPayout(
+  raw: unknown,
+  index = 0,
+  headers?: unknown,
+): MoneyPayout {
+  const r: Reader = new Reader("payouts", headers);
   const at = `[${index}]`;
   const p = r.obj(raw, at);
   const amount = p.amount;
@@ -709,7 +712,7 @@ export const coachMoneyApi = {
         ...(opts.cursor ? { cursor: opts.cursor } : {}),
       },
     });
-    const r = new Reader("charges", headersOf(res));
+    const r: Reader = new Reader("charges", headersOf(res));
     const d = r.obj(res.data, "charges");
     if (!Array.isArray(d.charges)) r.fail("charges");
     const nc = d.next_cursor;
@@ -725,7 +728,7 @@ export const coachMoneyApi = {
     const res = await api.get(
       `/v1/coach/money/charges/${encodeURIComponent(id)}`,
     );
-    const r = new Reader("charge", headersOf(res));
+    const r: Reader = new Reader("charge", headersOf(res));
     const d = r.obj(res.data, "charge");
     const charge = readCharge(r, d.charge, "charge");
     const b = r.obj(d.breakdown, "breakdown");
@@ -734,7 +737,10 @@ export const coachMoneyApi = {
     return {
       charge,
       priceCents: r.cents(b.price_cents, "breakdown.price_cents"),
-      processingCents: r.cents(b.processing_cents, "breakdown.processing_cents"),
+      processingCents: r.cents(
+        b.processing_cents,
+        "breakdown.processing_cents",
+      ),
       platformFeeCents: r.cents(
         b.platform_fee_cents,
         "breakdown.platform_fee_cents",
@@ -754,7 +760,7 @@ export const coachMoneyApi = {
 
   async attention(): Promise<MoneyAttention> {
     const res = await api.get("/v1/coach/money/attention");
-    const r = new Reader("attention", headersOf(res));
+    const r: Reader = new Reader("attention", headersOf(res));
     const d = r.obj(res.data, "attention");
     if (!Array.isArray(d.items)) r.fail("items");
     const count = r.count(d.count, "count");
@@ -777,7 +783,7 @@ export const coachMoneyApi = {
 
   async roster(): Promise<RosterMetrics> {
     const res = await api.get("/coach/connect/metrics");
-    const r = new Reader("metrics", headersOf(res));
+    const r: Reader = new Reader("metrics", headersOf(res));
     const m = r.obj(res.data, "metrics");
     return {
       rosterClients: r.count(m.active_clients, "active_clients"),

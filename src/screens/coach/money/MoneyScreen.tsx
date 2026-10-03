@@ -13,7 +13,12 @@
  *   Business        summary.recurring (MRR, paying, churn, new) +
  *                   /coach/connect/metrics (roster counts)
  *   Recent charges  /v1/coach/money/charges (last 5, See all)
- *   Footer          Payout settings (Stripe Express dashboard), Packages
+ *   Footer          Payout settings (Stripe Express dashboard), Export CSV
+ *                   for taxes (/v1/coach/money/export.csv), Packages
+ * A coach who sells in more than one currency switches currency; amounts in
+ * different currencies are never added together (#641 B-641-3). Every
+ * number is shown only under the period and currency it was loaded for
+ * (B-332-1).
  * Every state is handled: loading, empty (no Stripe yet -> set up), error
  * with specific copy and a reference, offline (last numbers kept).
  */
@@ -485,21 +490,21 @@ export default function MoneyScreen() {
             />
           ) : payouts.data ? (
             <>
-            {featureFlags.romanChat &&
-            lastPaid != null &&
-            shortDate(lastPaid.arrivalDate) ? (
-              <RomanPayoutNotice
-                amount={money(lastPaid.amountCents, lastPaid.currency)}
-                sentOn={shortDate(lastPaid.arrivalDate) as string}
-                mode="default"
-                testID="roman-payout-card"
+              {featureFlags.romanChat &&
+              lastPaid != null &&
+              shortDate(lastPaid.arrivalDate) ? (
+                <RomanPayoutNotice
+                  amount={money(lastPaid.amountCents, lastPaid.currency)}
+                  sentOn={shortDate(lastPaid.arrivalDate) as string}
+                  mode="default"
+                  testID="roman-payout-card"
+                />
+              ) : null}
+              <PayoutsBlock
+                list={payouts.data}
+                stripeActive={stripeActive}
+                styles={styles}
               />
-            ) : null}
-            <PayoutsBlock
-              list={payouts.data}
-              stripeActive={stripeActive}
-              styles={styles}
-            />
             </>
           ) : (
             <ActivityIndicator
