@@ -292,7 +292,13 @@ describe('one attempt, one key', () => {
     const pkg = purchasableFromCoachPackage(PACKAGES[0]);
     if (!pkg) throw new Error('fixture');
     const { result } = await renderHook(() =>
-      usePackagePurchase({ surface: 'sheet', planPollDelaysMs: [0], entitlementPollDelaysMs: [0] }),
+      usePackagePurchase({
+        surface: 'sheet',
+        appearance: {},
+        colorScheme: 'light',
+        planPollDelaysMs: [0],
+        entitlementPollDelaysMs: [0],
+      }),
     );
     await act(async () => {
       const first = result.current.start(pkg);
