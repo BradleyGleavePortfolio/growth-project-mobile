@@ -81,6 +81,36 @@ describe('loadClientConsultation', () => {
     mockGet.mockResolvedValueOnce({ data: { version: 'consult-v1' } });
     await expect(loadClientConsultation(CLIENT)).rejects.toMatchObject({ kind: 'unexpected', code: 'contract' });
   });
+
+  // Sol C-335-3: an invalid 2xx keeps its correlation id, so the reference on
+  // screen, the support subject and the Sentry report all point at it.
+  it('a contract breach on a 2xx keeps the server correlation id', async () => {
+    mockGet.mockResolvedValueOnce({
+      status: 200,
+      data: { version: 'consult-v1' },
+      headers: { 'x-request-id': 'srv-2222-3333' },
+      config: { headers: { 'X-Request-Id': 'outbound-0000-1111' } },
+    });
+    await expect(loadClientConsultation(CLIENT)).rejects.toMatchObject({
+      kind: 'unexpected',
+      status: 200,
+      code: 'contract',
+      requestId: 'srv-2222-3333',
+    });
+  });
+
+  it('a contract breach on a 2xx falls back to the outbound X-Request-Id, never the body', async () => {
+    mockGet.mockResolvedValueOnce({
+      status: 200,
+      data: { version: 'consult-v1', request_id: 'from-the-body' },
+      headers: {},
+      config: { headers: { 'X-Request-Id': 'outbound-0000-1111' } },
+    });
+    await expect(loadClientConsultation(CLIENT)).rejects.toMatchObject({ requestId: 'outbound-0000-1111' });
+
+    mockGet.mockResolvedValueOnce({ status: 200, data: { request_id: 'from-the-body' }, headers: {} });
+    await expect(loadClientConsultation(CLIENT)).rejects.toMatchObject({ code: 'contract', requestId: null });
+  });
 });
 
 describe('classifyFailure', () => {
