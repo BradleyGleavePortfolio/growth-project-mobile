@@ -155,6 +155,7 @@
         }
       ],
       "@sentry/react-native",
+      "./plugins/withSentryNativeInit",
       "expo-sharing",
       [
         "react-native-health",
