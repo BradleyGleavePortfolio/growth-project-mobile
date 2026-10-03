@@ -6,48 +6,49 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
   Modal,
   TextInput,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-
-import {
-  useCommunityFeed,
-  usePostWin,
-  ApiCommunityWin,
-} from '../../hooks/useApi';
 import { SkeletonCard } from '../../components/SkeletonLoader';
+import SafetyMenu from '../../components/community/SafetyMenu';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { errorMessage } from '../../types/common';
 import type { IoniconName } from '../../types/common';
+import { communityWinsApi, type CommunityWin } from '../../api/communityWinsApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
+import { communitySafetyApi, communitySafetyKeys } from '../../api/communitySafetyApi';
 
 /**
- * CommunityScreen — API-first.
+ * CommunityScreen (More > Community) — member wins.
  *
- * Source-of-truth migration (Fix #2):
- *   Wins → real CommunityWin rows on the backend (Fix #9). When a client posts
- *   a win it's persisted server-side, scoped to the coach roster, and visible
- *   to teammates and the coach.
+ * A win is user-generated content, so it carries the same App Review 1.2
+ * controls as every community surface: the server filters objectionable text
+ * before it is stored (422, the draft is kept here), every other member's win
+ * has Report and Block, the author can delete their own win, and reports go
+ * to the coach's moderation queue (reviewed within 24 hours). Wins are shared
+ * only with teammates in the coach's community; there is no public feed.
+ * Other members appear by first name only.
  *
- * Wave 5b: the Challenges tab is gone. There is no backend module behind it,
- * and the quiet-luxury doctrine forbids "Coming Soon" placeholder UI.
- *
- * Doctrine excise: the rankings tab has been removed. Ranked competition is
- * not part of the quiet-luxury voice; the Wins feed is the only social surface.
- *
- * Cache:
- *   The feed query is persisted via the PersistQueryClientProvider so cold
- *   starts paint last-known data while the network call refreshes in the
- *   background.
+ * Wins are live whether or not the Community tab is on, so Community safety
+ * (guidelines, safety contact, block list, moderation notices) opens from
+ * here too (B-314-4), with a banner while a moderator notice is unread.
  */
 
-function formatTimeAgo(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
+/** Query key under ['community'] so a block refetches it with every community surface. */
+export const WINS_QUERY_KEY = ['community', 'wins'] as const;
+
+export function formatTimeAgo(iso: string | null, now: number = Date.now()): string {
+  if (!iso) return '';
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '';
+  const mins = Math.max(0, Math.floor((now - t) / 60000));
   if (mins < 1) return 'Just now';
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.floor(mins / 60);
@@ -61,33 +62,62 @@ export default function CommunityScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
+  const viewerId = currentUser?.id ?? null;
+  const qc = useQueryClient();
   const [postWinOpen, setPostWinOpen] = useState(false);
   const [winTitle, setWinTitle] = useState('');
   const [winDesc, setWinDesc] = useState('');
+  const [postError, setPostError] = useState<string | null>(null);
 
-  const wins = useCommunityFeed();
-  const postWin = usePostWin();
+  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList, 'Community'>>();
+  const notices = useQuery({
+    queryKey: communitySafetyKeys.notices,
+    queryFn: () => communitySafetyApi.listNotices(),
+  });
+  const unreadNotices = notices.data?.unread_count ?? 0;
+  const openSafety = useCallback(() => navigation.navigate('CommunitySafety'), [navigation]);
+
+  const wins = useQuery<CommunityWin[]>({
+    queryKey: [...WINS_QUERY_KEY, viewerId],
+    queryFn: () => communityWinsApi.getFeed(viewerId),
+  });
+
+  const refreshWins = useCallback(() => qc.invalidateQueries({ queryKey: WINS_QUERY_KEY }), [qc]);
+
+  const postWin = useMutation({
+    mutationFn: (input: { title: string; description: string }) => communityWinsApi.postWin(input),
+    onSuccess: () => refreshWins(),
+  });
 
   const onRefresh = useCallback(async () => {
     await wins.refetch();
   }, [wins]);
 
+  const openComposer = useCallback(() => {
+    setPostError(null);
+    setPostWinOpen(true);
+  }, []);
+
   const handleSubmitWin = useCallback(async () => {
     const title = winTitle.trim();
     const description = winDesc.trim();
     if (!title || !description) {
-      Alert.alert('Almost there', 'Add a title and a quick description before posting.');
+      setPostError('Add a title and a few words about what happened, then post.');
       return;
     }
+    setPostError(null);
     try {
       await postWin.mutateAsync({ title, description });
       setWinTitle('');
       setWinDesc('');
       setPostWinOpen(false);
     } catch (err) {
-      Alert.alert('Could not post', errorMessage(err, 'Please try again in a moment.'));
+      // The draft stays in the fields so the member can rephrase or retry.
+      setPostError(describeCommunityFailure(err, 'send_win').message);
     }
   }, [winTitle, winDesc, postWin]);
+
+  const loadFailure = wins.isError ? describeCommunityFailure(wins.error, 'load_wins') : null;
 
   return (
     <View style={styles.container}>
@@ -99,14 +129,41 @@ export default function CommunityScreen() {
         </View>
         <TouchableOpacity
           style={styles.shareWinBtn}
-          onPress={() => setPostWinOpen(true)}
+          onPress={openComposer}
           accessibilityRole="button"
           accessibilityLabel="Share a win"
+          testID="wins-share"
         >
           <Ionicons name="add" size={18} color={colors.textOnPrimary} />
           <Text style={styles.shareWinText}>Share a win</Text>
         </TouchableOpacity>
       </View>
+
+      {unreadNotices > 0 ? (
+        <TouchableOpacity
+          style={styles.noticeBanner}
+          onPress={openSafety}
+          accessibilityRole="button"
+          accessibilityLabel="You have a notice from a moderator. Open Community safety to read it."
+          testID="wins-notice-banner"
+        >
+          <Ionicons name="alert-circle-outline" size={18} color={colors.textPrimary} />
+          <Text style={styles.noticeBannerText}>
+            You have a notice from a moderator. Open Community safety to read it.
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+      <TouchableOpacity
+        style={styles.safetyRow}
+        onPress={openSafety}
+        accessibilityRole="button"
+        accessibilityLabel="Community safety: guidelines, safety contact and blocked members"
+        testID="wins-open-safety"
+      >
+        <Ionicons name="shield-checkmark-outline" size={18} color={colors.primary} />
+        <Text style={styles.safetyRowText}>Community safety</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </TouchableOpacity>
 
       <FlatList
         data={wins.data || []}
@@ -128,37 +185,65 @@ export default function CommunityScreen() {
               <SkeletonCard />
               <SkeletonCard />
             </View>
-          ) : wins.isError ? (
-            <ErrorState
-              icon="cloud-offline-outline"
-              title="Couldn't load wins"
-              text="Pull down to try again."
-            />
+          ) : loadFailure ? (
+            <View style={styles.emptyContainer} testID="wins-error">
+              <Ionicons name="cloud-offline-outline" size={48} color={colors.error} />
+              <Text style={[styles.emptyTitle, { color: colors.error }]}>{loadFailure.title}</Text>
+              <Text style={styles.emptyText}>{loadFailure.message}</Text>
+              <TouchableOpacity
+                style={styles.shareWinBtn}
+                onPress={onRefresh}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                testID="wins-retry"
+              >
+                <Text style={styles.shareWinText}>Try again</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <EmptyState
               icon="star-outline"
               title="No wins yet"
-              text="Be the first — tap Share a win at the top."
+              text="Share something you are proud of, like a new personal best or a week you stayed consistent."
             />
           )
         }
-        renderItem={({ item }: { item: ApiCommunityWin }) => {
-          const isMe = item.user_id === currentUser?.id;
-          const authorName = item.user?.name || (isMe ? 'You' : 'Teammate');
+        renderItem={({ item }: { item: CommunityWin }) => {
+          const isMe = item.isMine || (!!viewerId && item.userId === viewerId);
           return (
-            <View style={styles.winCard}>
+            <View style={styles.winCard} testID={`win-${item.id}`}>
               <View style={styles.winIcon}>
                 <Ionicons name="star" size={22} color={colors.warning} />
               </View>
               <View style={styles.winInfo}>
-                <Text style={styles.winUserName}>
-                  {authorName}
-                  {isMe ? ' (You)' : ''}
-                </Text>
+                <Text style={styles.winUserName}>{isMe ? 'You' : item.displayName}</Text>
                 <Text style={styles.winTitle}>{item.title}</Text>
-                <Text style={styles.winDesc}>{item.description}</Text>
+                {item.description ? <Text style={styles.winDesc}>{item.description}</Text> : null}
               </View>
-              <Text style={styles.winTime}>{formatTimeAgo(item.created_at)}</Text>
+              <View style={styles.winMeta}>
+                <Text style={styles.winTime}>{formatTimeAgo(item.createdAt)}</Text>
+                <SafetyMenu
+                  targetType="win"
+                  targetId={item.id}
+                  authorUserId={isMe ? viewerId : item.userId}
+                  authorName={item.displayName}
+                  viewerUserId={viewerId}
+                  viewerCoachId={currentUser?.coach_id}
+                  contentNoun="win"
+                  onDelete={
+                    isMe
+                      ? async () => {
+                          await communityWinsApi.deleteWin(item.id);
+                          await refreshWins();
+                        }
+                      : undefined
+                  }
+                  onBlocked={() => {
+                    void refreshWins();
+                  }}
+                  testID={`win-menu-${item.id}`}
+                />
+              </View>
             </View>
           );
         }}
@@ -178,20 +263,26 @@ export default function CommunityScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Share a win</Text>
-              <TouchableOpacity onPress={() => setPostWinOpen(false)} accessibilityRole="button">
+              <TouchableOpacity
+                onPress={() => setPostWinOpen(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>
-              Your coach and your teammates will see this.
+              Teammates in your coach&apos;s community will see this, and can report it if something
+              is wrong. If your coach has not opened a community yet, only you will see it.
             </Text>
             <TextInput
-              placeholder="Title — e.g. Hit a PR on squats"
+              placeholder="Title, for example: Hit a new best on squats"
               placeholderTextColor={colors.textMuted}
               value={winTitle}
               onChangeText={setWinTitle}
               maxLength={80}
               style={styles.modalInput}
+              testID="wins-title"
             />
             <TextInput
               placeholder="A few words about what happened"
@@ -201,12 +292,23 @@ export default function CommunityScreen() {
               multiline
               maxLength={500}
               style={[styles.modalInput, styles.modalInputMultiline]}
+              testID="wins-description"
             />
+            {postError ? (
+              <Text
+                style={styles.modalError}
+                accessibilityLiveRegion="polite"
+                testID="wins-post-error"
+              >
+                {postError}
+              </Text>
+            ) : null}
             <TouchableOpacity
               style={[styles.modalSubmit, postWin.isPending && styles.modalSubmitDisabled]}
               disabled={postWin.isPending}
               onPress={handleSubmitWin}
               accessibilityRole="button"
+              testID="wins-submit"
             >
               <Text style={styles.modalSubmitText}>
                 {postWin.isPending ? 'Posting…' : 'Post win'}
@@ -233,177 +335,221 @@ function EmptyState({ icon, title, text }: { icon: string; title: string; text: 
   );
 }
 
-function ErrorState({ icon, title, text }: { icon: string; title: string; text: string }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  return (
-    <View style={styles.emptyContainer}>
-      <Ionicons name={icon as IoniconName} size={48} color={colors.error} />
-      <Text style={[styles.emptyTitle, { color: colors.error }]}>{title}</Text>
-      <Text style={styles.emptyText}>{text}</Text>
-    </View>
-  );
-}
-
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    marginBottom: 12,
-  },
-  title: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 32,
-    lineHeight: 35,
-    letterSpacing: 0.6,
-    fontWeight: '400',
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 13,
-    letterSpacing: 1.98,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-    marginTop: 8,
-  },
-  shareWinBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.primary,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  shareWinText: {
-    fontFamily: 'Inter_500Medium',
-    color: colors.textOnPrimary,
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      paddingHorizontal: 24,
+      paddingTop: 60,
+      marginBottom: 12,
+    },
+    title: {
+      fontFamily: 'CormorantGaramond_400Regular',
+      fontSize: 32,
+      lineHeight: 35,
+      letterSpacing: 0.6,
+      fontWeight: '400',
+      color: colors.textPrimary,
+    },
+    subtitle: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 11,
+      lineHeight: 13,
+      letterSpacing: 1.98,
+      fontWeight: '500',
+      textTransform: 'uppercase',
+      color: colors.textMuted,
+      marginTop: 8,
+    },
+    noticeBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 24,
+      marginBottom: 8,
+      padding: 12,
+      minHeight: 44,
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.warning,
+      backgroundColor: colors.surface,
+    },
+    noticeBannerText: {
+      flex: 1,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    safetyRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginHorizontal: 24,
+      marginBottom: 8,
+      minHeight: 44,
+    },
+    safetyRowText: {
+      flex: 1,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.primary,
+    },
+    shareWinBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.primary,
+      borderRadius: 4, // radius.lg
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+    },
+    shareWinText: {
+      fontFamily: 'Inter_500Medium',
+      color: colors.textOnPrimary,
+      fontSize: 12,
+      fontWeight: '500',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
 
-  listContent: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 100 },
-  emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  emptyText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    paddingHorizontal: 40,
-    lineHeight: 22,
-  },
+    listContent: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 100 },
+    emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 10 },
+    emptyTitle: {
+      fontFamily: 'CormorantGaramond_500Medium',
+      fontSize: 20,
+      lineHeight: 24,
+      letterSpacing: 0.4,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    emptyText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingHorizontal: 40,
+      lineHeight: 22,
+    },
 
-  // Wins
-  winCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  winIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 2, // radius.md
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(233, 196, 106, 0.15)',
-  },
-  winInfo: { flex: 1, gap: 2 },
-  winUserName: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.primary,
-  },
-  winTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  winDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  winTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted },
+    // Wins
+    winCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: colors.surface,
+      borderRadius: 4, // radius.lg
+      padding: 14,
+      marginBottom: 10,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    winIcon: {
+      width: 44,
+      height: 44,
+      borderRadius: 2, // radius.md
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(233, 196, 106, 0.15)',
+    },
+    winInfo: { flex: 1, gap: 2 },
+    winUserName: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 11,
+      fontWeight: '500',
+      letterSpacing: 1.5,
+      textTransform: 'uppercase',
+      color: colors.primary,
+    },
+    winTitle: {
+      fontFamily: 'CormorantGaramond_500Medium',
+      fontSize: 18,
+      lineHeight: 22,
+      letterSpacing: 0.4,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    winDesc: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: colors.textSecondary,
+      lineHeight: 20,
+    },
+    winTime: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 11,
+      color: colors.textMuted,
+    },
+    winMeta: { alignItems: 'flex-end', justifyContent: 'space-between' },
+    modalError: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: colors.error,
+      lineHeight: 19,
+    },
 
-  // Modal
-  modalBackdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(26,26,24,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    padding: 20,
-    paddingBottom: 40,
-    gap: 12,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  modalTitle: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 24,
-    lineHeight: 29,
-    letterSpacing: 0.5,
-    fontWeight: '400',
-    color: colors.textPrimary,
-  },
-  modalSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: -4 },
-  modalInput: {
-    backgroundColor: colors.background,
-    borderRadius: 2, // radius.md
-    padding: 14,
-    fontSize: 15,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  modalInputMultiline: { minHeight: 100, textAlignVertical: 'top' },
-  modalSubmit: {
-    backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  modalSubmitDisabled: { opacity: 0.6 },
-  modalSubmitText: {
-    fontFamily: 'Inter_500Medium',
-    color: colors.textOnPrimary,
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-  },
-
+    // Modal
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(26,26,24,0.5)',
+      justifyContent: 'flex-end',
+    },
+    modalSheet: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 4,
+      borderTopRightRadius: 4,
+      padding: 20,
+      paddingBottom: 40,
+      gap: 12,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    modalTitle: {
+      fontFamily: 'CormorantGaramond_400Regular',
+      fontSize: 24,
+      lineHeight: 29,
+      letterSpacing: 0.5,
+      fontWeight: '400',
+      color: colors.textPrimary,
+    },
+    modalSubtitle: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: -4,
+    },
+    modalInput: {
+      backgroundColor: colors.background,
+      borderRadius: 2, // radius.md
+      padding: 14,
+      fontSize: 15,
+      color: colors.textPrimary,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    modalInputMultiline: { minHeight: 100, textAlignVertical: 'top' },
+    modalSubmit: {
+      backgroundColor: colors.primary,
+      borderRadius: 2, // radius.md
+      paddingVertical: 14,
+      alignItems: 'center',
+      marginTop: 6,
+    },
+    modalSubmitDisabled: { opacity: 0.6 },
+    modalSubmitText: {
+      fontFamily: 'Inter_500Medium',
+      color: colors.textOnPrimary,
+      fontSize: 13,
+      fontWeight: '500',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+    },
   });

@@ -1,15 +1,15 @@
 /**
  * voicePlaybackPort — the audio-playback capability the v3-3 VoiceNotePlayer
- * depends on, plus the safe default adapter resolved at module load.
+ * depends on, plus the honest "unavailable" adapter.
  *
- * WHY A PORT (same rationale as voiceRecorderPort): the app bundles no audio
- * playback module today (expo-video covers video; there is no audio player), so
- * the surface ships behind `featureFlags.communityVoiceNotes` (default OFF).
- * The player depends on this PORT so it (a) type-checks, (b) is testable
- * without a native module, and (c) degrades to a disabled control with an
- * honest "playback isn't available on this build" label rather than a dead
- * play button. A host registers a real adapter once audio playback is wired.
+ * Production plays through expo-audio (src/services/voiceAudio.ts, B-314-2):
+ * `resolveVoicePlayback()` returns a registered adapter (hosts, tests), else
+ * the native expo-audio player, else `unavailablePlayback` — the last only on
+ * a binary built before expo-audio was added, where the player renders a
+ * disabled control with an honest "playback isn't available on this build"
+ * label rather than a dead play button.
  */
+import { nativeVoicePlayback } from '../../services/voiceAudio';
 
 export interface VoicePlaybackHandle {
   /** Resume / start playback from the current position. */
@@ -56,12 +56,12 @@ export const unavailablePlayback: VoicePlaybackPort = {
 
 let registered: VoicePlaybackPort | null = null;
 
-/** Register the concrete playback adapter (host wiring). Null reverts to default. */
+/** Register an adapter that overrides the native player (hosts, tests). Null reverts. */
 export function registerVoicePlayback(port: VoicePlaybackPort | null): void {
   registered = port;
 }
 
-/** Resolve the active playback port — the registered adapter or safe default. */
+/** Resolve the active playback port: registered, else native, else unavailable. */
 export function resolveVoicePlayback(): VoicePlaybackPort {
-  return registered ?? unavailablePlayback;
+  return registered ?? nativeVoicePlayback() ?? unavailablePlayback;
 }
