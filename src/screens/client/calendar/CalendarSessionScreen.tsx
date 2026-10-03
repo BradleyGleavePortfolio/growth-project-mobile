@@ -19,7 +19,19 @@ import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { useOpenMessages } from './CalendarHomeScreen';
-import { Body, Note, PrimaryButton, SecondaryButton, Section, Title, calendarStyles, statusLabel } from './calendarUi';
+import {
+  Body,
+  EXPIRED_REQUEST_CLIENT_NOTE,
+  Note,
+  PrimaryButton,
+  SecondaryButton,
+  Section,
+  Title,
+  asSeen,
+  calendarStyles,
+  requestDeadlineNote,
+  statusLabel,
+} from './calendarUi';
 
 type Props = NativeStackScreenProps<CalendarStackParamList, 'CalendarSession'>;
 
@@ -123,7 +135,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
     );
   }
 
-  const s = q.data;
+  const s = asSeen(q.data, now);
   const coach = coaches.data?.find((c) => c.coach_id === s.coach_id);
   const coachName = coach?.name ?? s.coach_name ?? 'your coach';
   const coachClock = coachTimeLabel(s.start_at, coach?.timezone, clientTz);
@@ -172,6 +184,24 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
       <Note text={`${formatWhen(s.start_at, clientTz)}. ${formatRange(s.start_at, s.end_at, clientTz)}.`} />
       {coachClock ? <Note text={coachClock} /> : null}
       <Note text={`With ${coachName}.`} />
+      {requestDeadlineNote(s, 'client', clientTz) ? (
+        <Note text={requestDeadlineNote(s, 'client', clientTz) ?? ''} testID="calendar-request-deadline" />
+      ) : null}
+      {s.status === 'expired' ? (
+        <>
+          <Note text={EXPIRED_REQUEST_CLIENT_NOTE} testID="calendar-request-expired" />
+          <PrimaryButton
+            label="Pick another time"
+            onPress={() =>
+              navigation.navigate('CalendarBook', {
+                coachId: s.coach_id,
+                sessionTypeId: s.session_type_id ?? undefined,
+              })
+            }
+            testID="calendar-request-rebook"
+          />
+        </>
+      ) : null}
 
       {canJoin(s, now) && link ? (
         <PrimaryButton
