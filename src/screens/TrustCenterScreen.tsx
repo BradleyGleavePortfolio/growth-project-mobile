@@ -186,6 +186,14 @@ function LinkFailureNotice({ link, failure }: { link: TrustCenterLink; failure: 
   const { colors } = useTheme();
   const noticeStyles = useMemo(() => makeNoticeStyles(colors), [colors]);
   const [copyState, setCopyState] = useState<CopyState>('idle');
+  // Checklist (b): a copy result that lands after the notice is gone writes nothing.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const unexpected = failure.cause === 'unexpected';
   const supportEmail = useSupportEmail(unexpected ? linkFailureEmailSubject(link, failure) : undefined);
   const showAddress = failure.cause !== 'offline';
@@ -193,9 +201,9 @@ function LinkFailureNotice({ link, failure }: { link: TrustCenterLink; failure: 
   const copyAddress = useCallback(async () => {
     try {
       const ok = await Clipboard.setStringAsync(link.url);
-      setCopyState(ok === false ? 'copy_failed' : 'copied');
+      if (alive.current) setCopyState(ok === false ? 'copy_failed' : 'copied');
     } catch {
-      setCopyState('copy_failed');
+      if (alive.current) setCopyState('copy_failed');
     }
   }, [link.url]);
 
@@ -529,8 +537,8 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <BulletItem text="You — always" />
           <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
           <BulletItem text="Not your coach — your Roman conversations, which are kept until you delete them or your account" />
-          <BulletItem text="Service providers that run the app for us, such as Anthropic for Roman, only as described in the Privacy Policy" />
-          <BulletItem text="We do not sell your data or use your health data for advertising" />
+          <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
+          <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>What is encrypted</Text>
           <BulletItem text="All data in transit uses TLS 1.3 (the strongest available)" />

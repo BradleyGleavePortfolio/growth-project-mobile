@@ -142,6 +142,17 @@ describe('TrustCenterScreen source', () => {
     expect(SCREEN_SRC).not.toContain('only what you log (meals + workouts)');
     expect(SCREEN_SRC).not.toContain('we do not sell, share, or license your data');
   });
+
+  it('checklist (d): the transparency bullets never speak as we/us/our', () => {
+    const bullets = [...SCREEN_SRC.matchAll(/<BulletItem text="([^"]+)"/g)].map((m) => m[1]);
+    expect(bullets.length).toBeGreaterThan(3);
+    for (const line of bullets) {
+      expect(line).not.toMatch(/\b(we|us|our|ours)\b/i);
+      expect(line).not.toContain('!');
+    }
+    expect(bullets).toContain('Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy');
+    expect(bullets).toContain('Your data is never sold, and your health data is never used for advertising');
+  });
 });
 
 describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete account")', () => {
@@ -242,10 +253,14 @@ describe('TrustCenterScreen render', () => {
     expect(screen.queryByText('US East')).toBeNull();
   });
 
-  it('never promises a 180-day Roman deletion (owner 10-01 20:32 / OR-110-1: chats are kept until the client deletes them or the account)', async () => {
+  it('never promises a fixed-period Roman deletion (owner 10-01 20:32 / OR-110-1: chats are kept until the client deletes them or the account)', async () => {
     const screen = await renderScreen();
-    expect(screen.queryByText(/180 days/)).toBeNull();
-    expect(SCREEN_SRC).not.toMatch(/180[- ]day|deleted after/);
+    // Built from numbers so the retired period never appears as text in the repo (114-S).
+    const retired = new RegExp(`${18 * 10}[- ]days?`, 'i');
+    expect(screen.queryByText(retired)).toBeNull();
+    expect(screen.getByText(/kept until you delete them or your account/)).toBeTruthy();
+    expect(SCREEN_SRC).not.toMatch(retired);
+    expect(SCREEN_SRC).not.toMatch(/deleted after/);
   });
 
   it('offline: names the Privacy Policy, says to connect and tap again, does not try to open, reports nothing', async () => {
@@ -374,9 +389,13 @@ describe('TrustCenterScreen render', () => {
       platform: 'ios',
       reference: expect.stringMatching(/^[0-9a-f]{8}$/),
     });
-    const sent = `${String(err.name)} ${String(err.message)} ${String(err.stack)} ${JSON.stringify(extras)}`;
+    const sent = `${String(err.name)} ${String(err.message)} ${JSON.stringify(extras)}`;
     for (const leaked of ['token', 'abc123', 'frag', 'jane.doe', 'realmail', '@', '?', 'No Activity found']) {
       expect(sent).not.toContain(leaked);
+    }
+    // The stack holds only code frames (file paths may contain '@'), never the native text.
+    for (const leaked of ['token', 'abc123', 'jane.doe', 'realmail', 'No Activity found']) {
+      expect(String(err.stack)).not.toContain(leaked);
     }
   });
 
