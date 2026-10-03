@@ -1155,6 +1155,36 @@ describe("C-332-4 Export CSV for taxes (backend #641 export.csv)", () => {
     mockFs.failWrite = false;
   });
 
+  it("an export that returns after the screen closed opens no share sheet and writes no file", async () => {
+    let release!: (v: unknown) => void;
+    routeGets({});
+    const base = mockGet.getMockImplementation()!;
+    mockGet.mockImplementation((url: string, cfg?: unknown) =>
+      url === "/v1/coach/money/export.csv"
+        ? new Promise((resolve) => {
+            release = resolve;
+          })
+        : base(url, cfg),
+    );
+    const textShare = jest
+      .spyOn(Share, "share")
+      .mockResolvedValue({ action: "sharedAction" } as never);
+    const screen = await render(<MoneyScreen />);
+    await fireEvent.press(await screen.findByTestId("money-export-csv"));
+    await waitFor(() =>
+      expect(
+        mockGet.mock.calls.some((c) => c[0] === "/v1/coach/money/export.csv"),
+      ).toBe(true),
+    );
+    await screen.unmount();
+    release({ data: "date_utc,type,charge_id\r\n", headers: {} });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mockSharing.shareAsync).not.toHaveBeenCalled();
+    expect(textShare).not.toHaveBeenCalled();
+    expect(mockFiles.size).toBe(0);
+    textShare.mockRestore();
+  });
+
   it("a share sheet that cannot open gets specific copy", async () => {
     mockSharing.shareAsync.mockRejectedValueOnce(new Error("busy"));
     routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });

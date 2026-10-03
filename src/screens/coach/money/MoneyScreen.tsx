@@ -22,7 +22,13 @@
  * Every state is handled: loading, empty (no Stripe yet -> set up), error
  * with specific copy and a reference, offline (last numbers kept).
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -114,6 +120,17 @@ export default function MoneyScreen() {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<FriendlyError | null>(null);
   const [exportedAsText, setExportedAsText] = useState(false);
+  // An export that finishes after the screen closed (sign-out swaps the
+  // stack) or after a newer export started never opens a share sheet or
+  // writes state: the CSV belongs to the session that asked for it.
+  const mountedRef = useRef(true);
+  const exportEpoch = useRef(0);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -276,6 +293,8 @@ export default function MoneyScreen() {
   // .csv file (lib/money/csvFile.ts). Only where the system cannot share
   // files does it go out as text, and the screen says so.
   const exportCsv = async () => {
+    const epoch = ++exportEpoch.current;
+    const current = () => mountedRef.current && exportEpoch.current === epoch;
     setExporting(true);
     setExportError(null);
     setExportedAsText(false);
@@ -285,9 +304,11 @@ export default function MoneyScreen() {
         { from: w.from, to: w.to },
         currency ?? shownCurrency,
       );
+      if (!current()) return;
       const how = await shareCsvFile(out.csv, out.filename);
-      setExportedAsText(how === "text");
+      if (current()) setExportedAsText(how === "text");
     } catch (err) {
+      if (!current()) return;
       if (err instanceof CsvFileError) {
         setExportError(csvFileFailure(err));
         captureError(err, {
@@ -300,7 +321,7 @@ export default function MoneyScreen() {
           captureError(err, { area: "coach_money", action: "export_csv" });
       }
     } finally {
-      setExporting(false);
+      if (current()) setExporting(false);
     }
   };
 
