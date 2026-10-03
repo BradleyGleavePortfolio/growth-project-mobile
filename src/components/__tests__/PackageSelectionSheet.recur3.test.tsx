@@ -195,7 +195,7 @@ async function mountAndSelect(pkgId = PKG_MONTHLY) {
 
 const subIntentCalls = () => mockPost.mock.calls.filter((c) => c[0] === '/v1/checkout/subscription-intent');
 const keysOf = () => subIntentCalls().map((c) => (c[1] as { idempotency_key: string }).idempotency_key);
-const errorText = (r: { getByTestId: (id: string) => { props: { children: unknown } } }) =>
+const errorText = (r: Awaited<ReturnType<typeof mountAndSelect>>): string =>
   String(r.getByTestId('payment-error').props.children);
 const NO_CHARGE = /nothing was charged/i;
 
