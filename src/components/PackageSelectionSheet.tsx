@@ -1,23 +1,28 @@
 /**
- * PackageSelectionSheet — bottom sheet for coach package selection and
- * in-app Stripe payment.
+ * PackageSelectionSheet — the Day 1 / package_prompt bottom sheet: the
+ * coach's plans, their terms, and in-app payment through the native,
+ * TGP-themed Stripe PaymentSheet.
  *
  * Rendered as a Modal (animationType='slide', presentationStyle='pageSheet')
  * so it feels like a native bottom sheet without a third-party dependency.
  *
- * Payment flow:
- *   1. On visible: GET /v1/clients/me/coach/packages
- *   2. User selects a package
- *   3. POST /v1/checkout/sessions { package_id, idempotency_key } →
- *        { stripe_client_secret, stripe_ephemeral_key }
- *      (publishable key comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY, falling
- *      back to the legacy EXPO_PUBLIC_STRIPE_PK)
- *   4. stripe.initPaymentSheet() + stripe.presentPaymentSheet()
- *   5. Completed → onPaymentSuccess(); Cancel → stay on sheet; Error → inline
+ * Flow (contracts cited in src/lib/packagePayment.ts):
+ *   1. On visible: GET /v1/clients/me/coach/packages (raw CoachPackage rows)
+ *   2. The client picks a plan and reads its terms (PlanTermsBlock): price
+ *      and interval, today's charge incl. any one-time part, the trial and
+ *      the first charge date, cancel anytime in Membership.
+ *   3. usePackagePurchase (the one shared flow):
+ *        renewing -> subscription-intent -> PaymentSheet (payment, or setup
+ *                    for a trial) -> "Confirming your plan" -> success
+ *        one-time -> payment-intent -> PaymentSheet -> entitlement -> success
+ *        $0       -> claim-free
+ *   Renewing plans are sold as real subscriptions (owner 16:04), never
+ *   refused and never sold as a single charge.
  *
- * R18: payment success is only fired after Stripe confirms the PaymentSheet.
- * R19: every checkout session POST carries a client-generated idempotency key.
- * R17: raw Stripe/backend error strings are scrubbed; users see safe copy.
+ * R18: success only after Stripe confirms the sheet and the backend entitles.
+ * R19: one idempotency key per attempt, reused on retry; double taps dropped.
+ * R17: raw Stripe/backend strings are never shown or reported; secrets are
+ *      never logged, stored or sent to Sentry.
  *
  * 24-hour re-surface logic:
  *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
@@ -41,113 +46,50 @@ import type { SemanticTokens, Tokens } from '../theme/tokens';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
-import { generateIdempotencyKey } from '../utils/idempotency';
-import { resolveStripePublishableKey } from '../config/stripe';
-
-// Deferred: install @stripe/stripe-react-native when the native build is
-// configured. When the package is available, replace this dynamic resolver
-// with `import { useStripe } from '@stripe/stripe-react-native'`.
-//
-// IMPORTANT: this local binding intentionally does NOT start with `use` so it
-// is not treated as a React Hook by `react-hooks/rules-of-hooks`. The hook,
-// when available, is *invoked* through this binding from inside the
-// component body without any conditional wrapper, satisfying the rule.
-type StripeHookFactory = () => {
-  initPaymentSheet: (
-    params: Record<string, unknown>,
-  ) => Promise<{ error?: { message: string } }>;
-  presentPaymentSheet: () => Promise<{ error?: { message: string } }>;
-};
-
-let stripeHookFactory: StripeHookFactory | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const stripeModule = require('@stripe/stripe-react-native');
-  stripeHookFactory = stripeModule.useStripe ?? null;
-} catch {
-  // Native module missing — handled at handleSelectPlan time with a user-safe
-  // error. We deliberately do NOT proceed past this point in that case.
-}
-
-// Stable no-op shape returned when the native module is unavailable.
-// This lets the call site invoke the hook unconditionally on every render.
-// The `_stub` discriminator field lets call sites detect the stub at runtime
-// and REFUSE to attempt a charge — mirroring the previous `if (!stripe)`
-// gate before we restructured this for `react-hooks/rules-of-hooks`.
-const NOOP_STRIPE_API = {
-  _stub: true as const,
-  initPaymentSheet: async () => ({}),
-  presentPaymentSheet: async () => ({
-    error: { message: 'Stripe is not configured on this build.' },
-  }),
-};
-
-// Helper that mirrors the previous `if (!stripe)` semantics: returns true when
-// the native Stripe SDK is not actually wired up and we should refuse the
-// charge to avoid silently granting access without a real payment.
-function isStripeStub(
-  api: { _stub?: true } | unknown,
-): api is typeof NOOP_STRIPE_API {
-  return Boolean((api as { _stub?: true })?._stub);
-}
-
-// Single, unconditional hook the component can call every render. When the
-// native Stripe module is present, it delegates to the real hook. Otherwise
-// it returns the no-op shape. Either way, the same hooks are called in the
-// same order, satisfying `react-hooks/rules-of-hooks`.
-function useStripeOrStub() {
-  if (stripeHookFactory) {
-    return stripeHookFactory();
-  }
-  return NOOP_STRIPE_API;
-}
+import { useEntitlement } from '../entitlements/EntitlementProvider';
+import { usePackagePurchase } from '../hooks/usePackagePurchase';
+import { usePaymentSheetAppearance } from './purchase/usePaymentSheetAppearance';
+import PlanTermsBlock from './purchase/PlanTermsBlock';
+import PurchaseFeedback from './purchase/PurchaseFeedback';
+import {
+  planTerms,
+  priceLabel,
+  purchasableFromCoachPackage,
+  type PurchasablePackage,
+} from '../lib/planTerms';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export interface CoachPackage {
-  id: string;
-  name: string;
-  price_cents: number;
-  currency: string;
-  description: string | null;
-  billing_type: 'one_time' | 'recurring';
-  interval?: 'month' | 'year';
-}
-
-interface CheckoutSessionResponse {
-  stripe_client_secret: string;
-  stripe_ephemeral_key: string;
-}
+export type CoachPackage = PurchasablePackage;
 
 export interface PackageSelectionSheetProps {
   visible: boolean;
   onDismiss: () => void;
   onPaymentSuccess: () => void;
+  /**
+   * "Open your plan" when the client already has the plan
+   * (SUBSCRIPTION_ALREADY_ACTIVE). Defaults to leaving the sheet the same way
+   * a successful payment does: the client is already on the plan.
+   */
+  onOpenPlan?: (purchaseId: string | null) => void;
+  /** Waits between plan polls while confirming a subscription. Tests pass zeros. */
+  planPollDelaysMs?: number[];
+  /**
+   * Waits between entitlement checks after Stripe confirms a one-time
+   * payment (the webhook flips the entitlement). Tests pass zeros.
+   */
+  entitlementPollDelaysMs?: number[];
+  /**
+   * Waits between plan reads for Check again and after a card step that
+   * ended without a clear answer (B-334-3). Tests pass zeros.
+   */
+  recheckDelaysMs?: number[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DISMISSED_KEY_BASE = 'onboarding.package_prompt_dismissed_at';
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function formatPrice(priceCents: number, currency: string): string {
-  const major = priceCents / 100;
-  const code = currency.toUpperCase();
-  // Common major-currency symbols
-  const sym = code === 'USD' ? '$' : code === 'GBP' ? '£' : code === 'EUR' ? '€' : `${code} `;
-  return `${sym}${major.toFixed(2)}`;
-}
-
-function formatPriceLabel(pkg: CoachPackage): string {
-  const price = formatPrice(pkg.price_cents, pkg.currency);
-  if (pkg.billing_type === 'recurring') {
-    const interval = pkg.interval ?? 'month';
-    return `${price} / ${interval}`;
-  }
-  return `${price} one-time`;
-}
 
 // ─── Skeleton shimmer ─────────────────────────────────────────────────────────
 
@@ -167,36 +109,50 @@ export default function PackageSelectionSheet({
   visible,
   onDismiss,
   onPaymentSuccess,
+  onOpenPlan,
+  planPollDelaysMs,
+  entitlementPollDelaysMs,
+  recheckDelaysMs,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const currentUser = useCurrentUser();
+  const { refreshEntitlement } = useEntitlement();
+  const { appearance, colorScheme } = usePaymentSheetAppearance();
   const dismissedKey = useMemo(
     () => (currentUser?.id ? `${DISMISSED_KEY_BASE}:${currentUser.id}` : null),
     [currentUser?.id],
   );
 
-  // Always called unconditionally; returns no-op shape when Stripe isn’t
-  // installed (e.g. Expo Go). Preserves all existing behavior at call sites.
-  const stripe = useStripeOrStub();
-
-  const [packages, setPackages] = useState<CoachPackage[]>([]);
+  const [packages, setPackages] = useState<PurchasablePackage[]>([]);
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [paying, setPaying] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
+  const [reloadTick, setReloadTick] = useState(0);
 
   // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
   // every render. Subscribing the effects below to `onDismiss` directly would
   // cause them to re-run (and re-fetch packages) on every parent re-render.
-  // Storing it in a ref lets the effects always invoke the freshest callback
-  // while depending only on the actual triggers (`visible`, `ready`). This
-  // satisfies react-hooks/exhaustive-deps without changing runtime semantics.
   const onDismissRef = useRef(onDismiss);
   useEffect(() => {
     onDismissRef.current = onDismiss;
   }, [onDismiss]);
+
+  const purchase = usePackagePurchase({
+    surface: 'sheet',
+    appearance,
+    colorScheme,
+    planPollDelaysMs,
+    entitlementPollDelaysMs,
+    recheckDelaysMs,
+    onEntitled: () => {
+      void refreshEntitlement().catch(() => false);
+    },
+    // Price or terms moved since the list loaded: show the current ones.
+    onReloadNeeded: () => setReloadTick((t) => t + 1),
+  });
+  const { state } = purchase;
 
   // ── 24h suppression gate ──────────────────────────────────────────────────
   useEffect(() => {
@@ -222,133 +178,90 @@ export default function PackageSelectionSheet({
     return () => { cancelled = true; };
   }, [visible, dismissedKey]);
 
-  // ── Fetch packages when ready ─────────────────────────────────────────────
+  // ── Fetch packages when ready (and after a price / terms change) ──────────
   useEffect(() => {
     if (!ready) return;
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setSelectedId(null);
+    const firstLoad = reloadTick === 0;
+    if (firstLoad) {
+      setLoading(true);
+      setSelectedId(null);
+    }
     (async () => {
       try {
-        const res = await api.get<{ packages: CoachPackage[] } | CoachPackage[]>(
+        const res = await api.get<{ packages: unknown[] } | unknown[]>(
           '/v1/clients/me/coach/packages',
         );
         // Backend may return { packages: [...] } or a bare array
         const data = res.data;
-        const list: CoachPackage[] = Array.isArray(data)
+        const raw: unknown[] = Array.isArray(data)
           ? data
-          : (data as { packages: CoachPackage[] }).packages ?? [];
-        if (!cancelled) {
-          if (list.length === 0) {
-            onDismissRef.current();
-            return;
-          }
-          setPackages(list);
-          setLoading(false);
+          : (data as { packages?: unknown[] })?.packages ?? [];
+        const desc: Record<string, string> = {};
+        const list: PurchasablePackage[] = [];
+        for (const row of raw) {
+          const p = purchasableFromCoachPackage(row);
+          if (!p) continue;
+          list.push(p);
+          const d = (row as { description?: unknown }).description;
+          if (typeof d === 'string' && d) desc[p.id] = d;
         }
+        if (cancelled) return;
+        if (list.length === 0) {
+          if (firstLoad) onDismissRef.current();
+          return;
+        }
+        setPackages(list);
+        setDescriptions(desc);
+        setLoading(false);
       } catch {
-        if (!cancelled) {
-          // API error — dismiss quietly
-          onDismissRef.current();
-        }
+        // API error on the first load — dismiss quietly; a failed reload
+        // keeps the list and the notice already on screen.
+        if (!cancelled && firstLoad) onDismissRef.current();
       }
     })();
     return () => { cancelled = true; };
-  }, [ready]);
+  }, [ready, reloadTick]);
 
-  // ── Payment ───────────────────────────────────────────────────────────────
-  const handleSelectPlan = useCallback(async () => {
-    if (!selectedId || paying) return;
-    setError(null);
-    setPaying(true);
+  const selected = packages.find((p) => p.id === selectedId) ?? null;
 
-    // R18: refuse to proceed when the native Stripe SDK isn't available — the
-    // hook now ALWAYS returns an object (real Stripe or a tagged no-op), so
-    // detect the stub via its discriminator field and fail closed rather than
-    // fabricate success.
-    if (isStripeStub(stripe)) {
-      setError('Payment is not available on this device. Please update the app and try again.');
-      setPaying(false);
-      return;
-    }
-
-    // R29: backend contract is POST /v1/checkout/sessions with
-    // { package_id, idempotency_key }; response is
-    // { stripe_client_secret, stripe_ephemeral_key }. Publishable key
-    // comes from EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (the name EAS stores),
-    // with the legacy EXPO_PUBLIC_STRIPE_PK as a fallback.
-    const publishableKey = resolveStripePublishableKey();
-    if (!publishableKey) {
-      setError('Payment is not available right now. Please try again later.');
-      setPaying(false);
-      return;
-    }
-
-    try {
-      const idempotencyKey = generateIdempotencyKey();
-      const sessionRes = await api.post<CheckoutSessionResponse>(
-        '/v1/checkout/sessions',
-        { package_id: selectedId, idempotency_key: idempotencyKey },
-      );
-      const { stripe_client_secret, stripe_ephemeral_key } = sessionRes.data;
-
-      const { error: initError } = await stripe.initPaymentSheet({
-        merchantDisplayName: 'The Growth Project',
-        customerEphemeralKeySecret: stripe_ephemeral_key,
-        paymentIntentClientSecret: stripe_client_secret,
-        publishableKey,
-        allowsDelayedPaymentMethods: false,
-      });
-
-      if (initError) {
-        // R17: never surface raw Stripe error strings — they can include
-        // backend identifiers or environment hints.
-        setError('Payment failed. Please try again.');
-        setPaying(false);
-        return;
-      }
-
-      const { error: presentError } = await stripe.presentPaymentSheet();
-
-      if (presentError) {
-        // Cancellations come back as a present error with a "canceled" /
-        // "dismissed" message — treat as a no-op so the user can retry from
-        // the same sheet without seeing a scary error string.
-        const msg = presentError.message?.toLowerCase() ?? '';
-        const isCancelled = msg.includes('cancel') || msg.includes('dismiss');
-        if (!isCancelled) {
-          setError('Payment failed. Please try again.');
-        }
-        setPaying(false);
-        return;
-      }
-
-      onPaymentSuccess();
-    } catch {
-      setError('Payment failed. Please try again.');
-      setPaying(false);
-    }
-  }, [selectedId, paying, stripe, onPaymentSuccess]);
+  const handleSelectPlan = useCallback(() => {
+    if (!selected) return;
+    void purchase.start(selected);
+  }, [purchase, selected]);
 
   // ── Skip ──────────────────────────────────────────────────────────────────
+  const busy = purchase.busy;
+  const done = state.phase === 'success' || state.phase === 'confirm_slow' || state.phase === 'confirmed_pending';
   const handleSkip = useCallback(() => {
+    if (busy) return; // never close the sheet in the middle of a payment
     if (dismissedKey) {
       prefsStorage
         .set(dismissedKey, new Date().toISOString())
         .catch(() => {});
     }
     onDismiss();
-  }, [onDismiss, dismissedKey]);
+  }, [busy, onDismiss, dismissedKey]);
+
+  const openPlan = useCallback(
+    (purchaseId: string | null) => {
+      if (onOpenPlan) onOpenPlan(purchaseId);
+      else onPaymentSuccess();
+    },
+    [onOpenPlan, onPaymentSuccess],
+  );
 
   if (!visible || !ready) return null;
+
+  const ctaDisabled = !selected || busy;
+  const ctaLabel = selected ? planTerms(selected).cta : 'Select this plan';
 
   return (
     <Modal
       visible={visible && ready}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={handleSkip}
+      onRequestClose={done ? onPaymentSuccess : handleSkip}
     >
       <View style={styles.sheet}>
         <ScrollView
@@ -369,6 +282,7 @@ export default function PackageSelectionSheet({
           ) : (
             packages.map((pkg) => {
               const isSelected = pkg.id === selectedId;
+              const description = descriptions[pkg.id];
               return (
                 <Pressable
                   key={pkg.id}
@@ -376,55 +290,63 @@ export default function PackageSelectionSheet({
                     styles.packageCard,
                     isSelected && styles.packageCardSelected,
                   ]}
-                  onPress={() => setSelectedId(pkg.id)}
+                  onPress={() => {
+                    if (busy || done) return;
+                    setSelectedId(pkg.id);
+                    purchase.clearNotice();
+                  }}
                   accessibilityRole="radio"
-                  accessibilityLabel={`${pkg.name}, ${formatPriceLabel(pkg)}`}
-                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={`${pkg.name}, ${priceLabel(pkg)}`}
+                  accessibilityState={{ selected: isSelected, disabled: busy || done }}
                   testID={`package-card-${pkg.id}`}
                 >
                   <Text style={styles.packageName}>{pkg.name}</Text>
-                  <Text style={styles.packagePrice}>{formatPriceLabel(pkg)}</Text>
-                  {pkg.description ? (
+                  <Text style={styles.packagePrice}>{priceLabel(pkg)}</Text>
+                  {description ? (
                     <Text style={styles.packageDesc} numberOfLines={2}>
-                      {pkg.description}
+                      {description}
                     </Text>
                   ) : null}
+                  {isSelected ? <PlanTermsBlock pkg={pkg} /> : null}
                 </Pressable>
               );
             })
           )}
 
-          {/* Inline error */}
-          {error ? (
-            <Text style={styles.errorText} testID="payment-error">{error}</Text>
-          ) : null}
+          <PurchaseFeedback purchase={purchase} onContinue={onPaymentSuccess} onOpenPlan={openPlan} />
 
           {/* CTA */}
-          <TouchableOpacity
-            style={[
-              styles.ctaBtn,
-              (!selectedId || paying) && styles.ctaBtnDisabled,
-            ]}
-            onPress={handleSelectPlan}
-            disabled={!selectedId || paying}
-            accessibilityRole="button"
-            accessibilityLabel="Select this plan"
-            accessibilityState={{ disabled: !selectedId || paying }}
-            testID="select-plan-btn"
-          >
-            <Text style={styles.ctaBtnText}>Select this plan</Text>
-          </TouchableOpacity>
+          {done || state.priceChange ? null : (
+            <TouchableOpacity
+              style={[
+                styles.ctaBtn,
+                ctaDisabled && styles.ctaBtnDisabled,
+              ]}
+              onPress={handleSelectPlan}
+              disabled={ctaDisabled}
+              accessibilityRole="button"
+              accessibilityLabel={ctaLabel}
+              accessibilityState={{ disabled: ctaDisabled, busy }}
+              testID="select-plan-btn"
+            >
+              <Text style={styles.ctaBtnText}>{ctaLabel}</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Skip */}
-          <TouchableOpacity
-            style={styles.skipBtn}
-            onPress={handleSkip}
-            accessibilityRole="button"
-            accessibilityLabel="Skip for now"
-            testID="skip-package-btn"
-          >
-            <Text style={styles.skipText}>Skip for now</Text>
-          </TouchableOpacity>
+          {done ? null : (
+            <TouchableOpacity
+              style={styles.skipBtn}
+              onPress={handleSkip}
+              disabled={busy}
+              accessibilityRole="button"
+              accessibilityLabel="Skip for now"
+              accessibilityState={{ disabled: busy }}
+              testID="skip-package-btn"
+            >
+              <Text style={styles.skipText}>Skip for now</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
     </Modal>
@@ -511,14 +433,6 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     skeletonLine: {
       borderRadius: 2,
       backgroundColor: semanticColors.border,
-    },
-    // Error
-    errorText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: tokens.colors.error,
-      marginBottom: 12,
-      lineHeight: 19,
     },
     // CTA
     ctaBtn: {
