@@ -117,7 +117,7 @@ export function buildChecklist(s: ChecklistStatus): ChecklistItem[] {
         s.paid === null
           ? UNKNOWN
           : s.paid
-            ? "You have been paid."
+            ? "You have been paid. See it in Money."
             : "We will mark the moment with you when it lands.",
       done: s.paid,
     },
@@ -173,6 +173,9 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
       </View>
     ) : null;
   }
+  // C-332-1 (Opus): an active sub-coach does not set up Stripe or
+  // packages; the head coach's practice does.
+  if (snap.headCoachHandlesMoney) return null;
   const items = buildChecklist(toChecklistStatus(snap));
   const doneCount = items.filter((i) => i.done === true).length;
   if (doneCount === items.length) return null;
