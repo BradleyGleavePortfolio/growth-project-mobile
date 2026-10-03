@@ -386,6 +386,37 @@ describe("C-329-2 / C-329-4 checklist from server data", () => {
   });
 });
 
+describe("C-332-1 (Opus) an active sub-coach gets no setup checklist", () => {
+  it("the guard's 403 hides the checklist instead of a permanent error card", async () => {
+    mockList.mockResolvedValue({ data: [] });
+    const blocked = () => {
+      throw httpError(403, {
+        kind: "sub_coach_billing_blocked",
+        message: "Sub-coaches cannot access billing or financial surfaces.",
+      });
+    };
+    routeGets({
+      "/coach/connect/status": blocked,
+      "/coach/clients": () => [],
+      "/v1/coach/money/charges": blocked,
+    });
+    const s = await loadSetupStatus("coach_1");
+    expect(s.headCoachHandlesMoney).toBe(true);
+    expect(s.errors.map((e) => e.title)).not.toContain(
+      "Only the coach who owns this practice can do that",
+    );
+    const { queryByTestId } = await render(
+      <CoachSetupChecklist onOpen={jest.fn()} />,
+    );
+    await waitFor(() => expect(mockGet).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(queryByTestId("coach-setup-checklist-loading")).toBeNull(),
+    );
+    expect(queryByTestId("coach-setup-checklist")).toBeNull();
+    expect(queryByTestId("coach-setup-checklist-error")).toBeNull();
+  });
+});
+
 describe("A-329-1 checklist never opens the retired Earnings screen", () => {
   it("the first-payment item opens a live screen before and after the payment", async () => {
     mockList.mockResolvedValue({ data: [] });

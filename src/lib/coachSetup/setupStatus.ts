@@ -21,7 +21,11 @@ import { coachPackagesApi, isLivePackage } from "../../api/packagesApi";
 import { prefsStorage } from "../../storage/mmkv";
 import { hasSeenFirstPayment } from "../../screens/coach/ed/firstPaymentGate";
 import { errorStatus } from "../../types/common";
-import { describeError, type FriendlyError } from "./errors";
+import {
+  describeError,
+  isSubCoachBillingBlocked,
+  type FriendlyError,
+} from "./errors";
 
 // Same key InviteShareCard writes when the coach shares or copies the link.
 export const INVITE_SHARED_KEY_BASE = "coach.setup.invite_shared";
@@ -42,6 +46,11 @@ export interface SetupSnapshot {
   sharedLink: boolean;
   /** Specific copy for each read that failed (deduplicated by title). */
   errors: FriendlyError[];
+  /**
+   * C-332-1 (Opus): the signed-in coach is an active sub-coach, so Stripe
+   * and money belong to the head coach and the setup checklist is not theirs.
+   */
+  headCoachHandlesMoney?: boolean;
 }
 
 type Settled<T> = { ok: true; value: T } | { ok: false; error: unknown };
@@ -112,7 +121,10 @@ export async function loadSetupStatus(coachId: string): Promise<SetupSnapshot> {
     const e = describeError(err, action);
     if (!errors.some((x) => x.title === e.title)) errors.push(e);
   };
-  if (!connect.ok) add(connect.error, "check your Stripe status");
+  const headCoachHandlesMoney =
+    !connect.ok && isSubCoachBillingBlocked(connect.error);
+  if (!connect.ok && !headCoachHandlesMoney)
+    add(connect.error, "check your Stripe status");
   if (!packages.ok) add(packages.error, "check your packages");
   if (!clients.ok) add(clients.error, "check your client list");
   if (!paid.ok) add(paid.error, "check your payments");
@@ -124,5 +136,6 @@ export async function loadSetupStatus(coachId: string): Promise<SetupSnapshot> {
     paid: paid.ok ? paid.value : null,
     sharedLink: shared.ok ? shared.value === "true" : false,
     errors,
+    headCoachHandlesMoney,
   };
 }
