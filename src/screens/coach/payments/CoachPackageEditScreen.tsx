@@ -36,6 +36,7 @@ import {
   PackageBillingInterval,
   PackageCreateInput,
   PackageUpdateInput,
+  trialDaysChange,
 } from '../../../api/packagesApi';
 import { errorCode, errorMessage } from '../../../types/common';
 import { mediumTap, successTap, warningTap } from '../../../utils/haptics';
@@ -193,7 +194,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       if (isEdit && original) {
-        const updated: PackageUpdateInput = v.payload;
+        // B-TRIALS-3 (C-338-3) — trial_days goes on the wire only when the
+        // trial changed.
+        const updated: PackageUpdateInput = {
+          ...v.payload,
+          trialDays: trialDaysChange(original, v.payload),
+        };
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
         successTap();

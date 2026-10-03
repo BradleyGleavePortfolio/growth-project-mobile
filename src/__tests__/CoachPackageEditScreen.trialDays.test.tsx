@@ -66,7 +66,7 @@ jest.mock("../api/packagesApi", () => {
 });
 
 import CoachPackageEditScreen from "../screens/coach/payments/CoachPackageEditScreen";
-import type { CoachPackage } from "../api/packagesApi";
+import { toBackendUpdate, type CoachPackage } from "../api/packagesApi";
 
 function pkg(overrides: Partial<CoachPackage> = {}): CoachPackage {
   return {
@@ -174,6 +174,32 @@ describe("CoachPackageEditScreen — free trial days (B-TRIALS-2)", () => {
       expect(trial[1]).toMatch(/Make this package renew/);
       expect(calls.find((c) => c[0] === "Could not save")).toBeUndefined();
     });
+  });
+
+  it("an edit that leaves the trial alone sends no trial_days (C-338-3)", async () => {
+    mockUpdate.mockResolvedValue({
+      data: pkg({ trialDays: 7, title: "Renamed" }),
+    });
+    const r = await mount(pkg({ trialDays: 7 }));
+    await fireEvent.changeText(
+      r.getByDisplayValue("Strength Builder"),
+      "Renamed",
+    );
+    await fireEvent.press(r.getByLabelText("Save changes"));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const sent = mockUpdate.mock.calls[0][1];
+    expect(sent).toMatchObject({ title: "Renamed" });
+    expect(sent.trialDays).toBeUndefined();
+    expect(toBackendUpdate(sent)).not.toHaveProperty("trial_days");
+  });
+
+  it("a $0 price with a trial is refused on the device, before any request (C-338-2)", async () => {
+    const r = await mount(pkg());
+    await fireEvent.changeText(r.getByDisplayValue("99.00"), "0");
+    await fireEvent.press(r.getByTestId("trial-preset-7"));
+    await fireEvent.press(r.getByLabelText("Save changes"));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(r.getByText(/Price must be greater than zero/)).toBeTruthy();
   });
 
   it("a one-time package shows no trial field", async () => {

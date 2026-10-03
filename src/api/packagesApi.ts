@@ -429,7 +429,11 @@ export function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
     body.billing_interval_count = intervalFields.billing_interval_count;
   }
   // features are still rejected by the whitelist DTO; omitted until added.
-  body.trial_days = trialDaysForBackend(input.billingInterval, input.trialDays);
+  // B-TRIALS-3 (C-338-3) — no trial = field omitted (the backend default is
+  // no trial), so creating a package never depends on a backend that knows
+  // trial_days unless the coach actually chose a trial.
+  const trialDays = trialDaysForBackend(input.billingInterval, input.trialDays);
+  if (trialDays > 0) body.trial_days = trialDays;
   return body;
 }
 
@@ -456,6 +460,19 @@ export function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
     out.trial_days = trialDaysForBackend(input.billingInterval, input.trialDays);
   }
   return out;
+}
+
+/**
+ * B-TRIALS-3 (C-338-3) — the edit screen sends trial_days only when the trial
+ * changed, so an edit that leaves the trial alone never depends on it.
+ */
+export function trialDaysChange(
+  original: { billingInterval: PackageBillingInterval; trialDays: number | null },
+  next: { billingInterval: PackageBillingInterval; trialDays?: number | null },
+): number | undefined {
+  const before = trialDaysForBackend(original.billingInterval, original.trialDays);
+  const after = trialDaysForBackend(next.billingInterval, next.trialDays);
+  return before === after ? undefined : after;
 }
 
 // ─── coach API ──────────────────────────────────────────────────────────────

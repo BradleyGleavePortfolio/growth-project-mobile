@@ -7,7 +7,11 @@ import {
   TRIAL_DAYS_MAX,
   trialErrorMessage,
 } from "../packageTrial";
-import { toBackendCreate, toBackendUpdate } from "../../api/packagesApi";
+import {
+  toBackendCreate,
+  toBackendUpdate,
+  trialDaysChange,
+} from "../../api/packagesApi";
 
 describe("parseTrialDays", () => {
   it("empty is no trial; presets and 1..30 are accepted", () => {
@@ -68,7 +72,7 @@ describe("trial refusal copy", () => {
 });
 
 describe("packagesApi sends trial_days (backend #656 DTOs accept it)", () => {
-  it("create: renewing plan carries the days, one-time carries 0", () => {
+  it("create: renewing plan carries the days; no trial and one-time omit the field (C-338-3)", () => {
     expect(
       toBackendCreate({
         title: "A",
@@ -84,15 +88,51 @@ describe("packagesApi sends trial_days (backend #656 DTOs accept it)", () => {
         billingInterval: "monthly",
         trialDays: null,
       }),
-    ).toMatchObject({ trial_days: 0 });
+    ).not.toHaveProperty("trial_days");
     expect(
       toBackendCreate({
         title: "A",
         priceCents: 4900,
-        billingInterval: "one_time",
-        trialDays: 7,
+        billingInterval: "monthly",
+        trialDays: 0,
       }),
-    ).toMatchObject({ billing_type: "one_time", trial_days: 0 });
+    ).not.toHaveProperty("trial_days");
+    const oneTime = toBackendCreate({
+      title: "A",
+      priceCents: 4900,
+      billingInterval: "one_time",
+      trialDays: 7,
+    });
+    expect(oneTime).toMatchObject({ billing_type: "one_time" });
+    expect(oneTime).not.toHaveProperty("trial_days");
+  });
+
+  it("edit: trial_days goes on the wire only when the trial changed (C-338-3)", () => {
+    const monthly = "monthly" as const;
+    expect(
+      trialDaysChange(
+        { billingInterval: monthly, trialDays: 7 },
+        { billingInterval: monthly, trialDays: 7 },
+      ),
+    ).toBeUndefined();
+    expect(
+      trialDaysChange(
+        { billingInterval: monthly, trialDays: null },
+        { billingInterval: monthly, trialDays: 0 },
+      ),
+    ).toBeUndefined();
+    expect(
+      trialDaysChange(
+        { billingInterval: monthly, trialDays: 14 },
+        { billingInterval: monthly, trialDays: 0 },
+      ),
+    ).toBe(0);
+    expect(
+      trialDaysChange(
+        { billingInterval: monthly, trialDays: null },
+        { billingInterval: monthly, trialDays: 7 },
+      ),
+    ).toBe(7);
   });
 
   it("update: sends trial_days only when the editor provided it; 0 clears", () => {
