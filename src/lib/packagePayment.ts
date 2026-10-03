@@ -65,6 +65,11 @@ export interface SubscriptionIntentRequest {
   idempotency_key: string;
   expected_amount_cents?: number;
   /**
+   * B-334-4: the one-time part the client was shown (0 for a pure renewing
+   * plan). The backend answers PACKAGE_PRICE_CHANGED when it moved.
+   */
+  expected_one_time_cents?: number;
+  /**
    * The share-link token, sent only from a share link. The backend uses it
    * only to explain a refusal (PACKAGE_COACH_NOT_CONNECTED); it never widens
    * who can buy.
@@ -84,8 +89,14 @@ export interface PaymentSheetSecrets {
 }
 
 export interface SubscriptionIntent extends PaymentSheetSecrets {
-  /** 'payment' charges now; 'setup' saves a card for a free trial. */
-  mode: "payment" | "setup";
+  /**
+   * 'payment' charges now; 'setup' saves a card for a free trial.
+   * 'none' (backend #654 B-654-6): Stripe needs nothing from the client (the
+   * first invoice was settled without a sheet, or its payment is already
+   * processing). No sheet opens; the plan is confirmed by polling. The
+   * secrets are '' then.
+   */
+  mode: "payment" | "setup" | "none";
   purchaseId: string;
   plan: {
     amountCents: number | null;
@@ -154,6 +165,7 @@ export async function createSubscriptionIntent(
   idempotencyKey: string,
   expectedAmountCents: number | null,
   shareToken?: string | null,
+  expectedOneTimeCents?: number | null,
 ): Promise<SubscriptionIntent> {
   const body: SubscriptionIntentRequest = {
     package_id: packageId,
@@ -161,6 +173,12 @@ export async function createSubscriptionIntent(
   };
   if (typeof expectedAmountCents === "number")
     body.expected_amount_cents = expectedAmountCents;
+  if (
+    typeof expectedOneTimeCents === "number" &&
+    Number.isInteger(expectedOneTimeCents) &&
+    expectedOneTimeCents >= 0
+  )
+    body.expected_one_time_cents = expectedOneTimeCents;
   if (typeof shareToken === "string" && SHARE_TOKEN_SHAPE.test(shareToken))
     body.share_token = shareToken;
   const res = await api.post<Record<string, unknown>>(
@@ -169,7 +187,27 @@ export async function createSubscriptionIntent(
   );
   const d = res?.data ?? {};
   const mode =
-    d.mode === "setup" ? "setup" : d.mode === "payment" ? "payment" : null;
+    d.mode === "setup"
+      ? "setup"
+      : d.mode === "payment"
+        ? "payment"
+        : d.mode === "none"
+          ? "none"
+          : null;
+  if (mode === "none") {
+    // Nothing for the sheet: only the purchase id is needed to confirm.
+    if (!nonEmpty(d.purchase_id))
+      throw new PaymentIntentShapeError("subscription_intent");
+    return {
+      mode,
+      clientSecret: "",
+      ephemeralKey: "",
+      customerId: nonEmpty(d.customer_id) ? d.customer_id : "",
+      publishableKey: "",
+      purchaseId: d.purchase_id,
+      plan: intentPlanOf(d.plan),
+    };
+  }
   if (
     !mode ||
     !nonEmpty(d.client_secret) ||
@@ -182,7 +220,19 @@ export async function createSubscriptionIntent(
   ) {
     throw new PaymentIntentShapeError("subscription_intent");
   }
-  const p = (d.plan && typeof d.plan === "object" ? d.plan : {}) as Record<
+  return {
+    mode,
+    clientSecret: d.client_secret,
+    ephemeralKey: d.ephemeral_key,
+    customerId: d.customer_id,
+    publishableKey: nonEmpty(d.publishable_key) ? d.publishable_key : "",
+    purchaseId: d.purchase_id,
+    plan: intentPlanOf(d.plan),
+  };
+}
+
+function intentPlanOf(raw: unknown): SubscriptionIntent["plan"] {
+  const p = (raw && typeof raw === "object" ? raw : {}) as Record<
     string,
     unknown
   >;
@@ -191,22 +241,14 @@ export async function createSubscriptionIntent(
       ? p.interval
       : null;
   return {
-    mode,
-    clientSecret: d.client_secret,
-    ephemeralKey: d.ephemeral_key,
-    customerId: d.customer_id,
-    publishableKey: nonEmpty(d.publishable_key) ? d.publishable_key : "",
-    purchaseId: d.purchase_id,
-    plan: {
-      amountCents: numOrNull(p.amount_cents),
-      currency: typeof p.currency === "string" ? p.currency : null,
-      interval,
-      intervalCount: numOrNull(p.interval_count),
-      firstChargeCents: numOrNull(p.first_charge_cents),
-      oneTimeCents: numOrNull(p.one_time_cents),
-      trialDays: numOrNull(p.trial_days),
-      trialEndsAt: typeof p.trial_ends_at === "string" ? p.trial_ends_at : null,
-    },
+    amountCents: numOrNull(p.amount_cents),
+    currency: typeof p.currency === "string" ? p.currency : null,
+    interval,
+    intervalCount: numOrNull(p.interval_count),
+    firstChargeCents: numOrNull(p.first_charge_cents),
+    oneTimeCents: numOrNull(p.one_time_cents),
+    trialDays: numOrNull(p.trial_days),
+    trialEndsAt: typeof p.trial_ends_at === "string" ? p.trial_ends_at : null,
   };
 }
 
@@ -226,6 +268,30 @@ export type PlanState =
   | "past_due"
   | "ended";
 
+/**
+ * Backend #654 (B-334-3): what Stripe shows for a plan still confirming,
+ * on GET /v1/checkout/subscriptions/:id only. awaiting_payment /
+ * awaiting_card are the only proof that nothing was charged.
+ */
+export type CheckoutState =
+  | "awaiting_payment"
+  | "awaiting_card"
+  | "processing"
+  | "paid"
+  | "card_saved"
+  | "ended"
+  | "unknown";
+
+const CHECKOUT_STATES: ReadonlySet<string> = new Set([
+  "awaiting_payment",
+  "awaiting_card",
+  "processing",
+  "paid",
+  "card_saved",
+  "ended",
+  "unknown",
+]);
+
 export interface ClientPlan {
   purchaseId: string;
   packageId: string;
@@ -242,6 +308,8 @@ export interface ClientPlan {
   trialEndsAt: string | null;
   canCancel: boolean;
   canResume: boolean;
+  /** null when the backend did not report it (list route, entitled plan). */
+  checkoutState: CheckoutState | null;
 }
 
 const PLAN_STATES: ReadonlySet<string> = new Set([
@@ -282,6 +350,11 @@ export function normalizePlan(raw: unknown): ClientPlan | null {
     trialEndsAt: str(r.trial_ends_at),
     canCancel: r.can_cancel === true,
     canResume: r.can_resume === true,
+    checkoutState:
+      typeof r.checkout_state === "string" &&
+      CHECKOUT_STATES.has(r.checkout_state)
+        ? (r.checkout_state as CheckoutState)
+        : null,
   };
 }
 
@@ -402,6 +475,24 @@ export const PACKAGE_PAYMENT_COPY = {
     "Your bank did not accept this card for the trial, so the trial has not started and nothing was charged. Start again with a different card.",
   sheetTimeout:
     "The payment form closed before it finished, so nothing was charged. Start again when you are ready.",
+  // B-334-3: the card form ended without a clear answer. Said only after
+  // Stripe itself shows no payment (awaiting_payment / awaiting_card).
+  sheetNotFinished:
+    "The payment form closed before the payment finished. Stripe shows no payment for this plan, so nothing was charged. Start again when you are ready.",
+  sheetNotFinishedTrial:
+    "The card form closed before your card was saved, so the trial has not started and nothing was charged. Start again when you are ready.",
+  // B-334-3: the outcome is not known yet. Never claims that nothing was charged.
+  outcomeUnknown: (ref: string | null) =>
+    `The payment form closed before it could confirm the result, so it is not yet clear whether this payment went through. Choose Check again in a moment. If it is still unclear, email support${ref ? ` and quote reference ${ref}` : ""}.`,
+  checkoutEnded:
+    "This checkout closed before the payment finished, so nothing was charged. Choose the plan again to start a new checkout.",
+  endedWhileConfirming: (ref: string | null) =>
+    `This plan closed before it was confirmed. If your card statement shows a charge for it, email support${ref ? ` and quote reference ${ref}` : ""}, and the team will put it right.`,
+  // B-334-4: the backend's terms differ from what the client was shown.
+  termsReviewTrialRemoved:
+    "This plan no longer includes a free trial for you, so it starts with a charge today. Nothing was charged yet. Review the current terms, then confirm to continue.",
+  termsReview:
+    "The terms of this plan changed since it was shown. Nothing was charged yet. Review the current terms, then confirm to continue.",
   packageUnavailable:
     "This plan is no longer offered, so nothing was charged. Pull down to see your coach’s current plans, or message your coach.",
   packageUnavailableShareLink:
@@ -446,6 +537,8 @@ export const PACKAGE_PAYMENT_COPY = {
           : "This plan is already on your account, so nothing was charged. Open your plan to use it.",
   attemptExpired:
     "That checkout ended before it finished, so nothing was charged. Choose the plan again to start a new checkout.",
+  attemptExpiredTermsChanged:
+    "The terms of this plan changed after that checkout started, so it was closed and nothing was charged. Choose the plan again to see the current terms.",
   packageCoachNotConnectedNoCoach:
     "This plan is from a coach you are not connected with yet, so it cannot be started from this account and nothing was charged. Ask that coach for their invite code, join with it, then open the link again.",
   packageCoachNotConnectedOtherCoach:
@@ -477,6 +570,8 @@ export const PACKAGE_PAYMENT_COPY = {
   confirmingFree: "Adding your free plan.",
   confirmSlow:
     "Your card was accepted. Stripe is still confirming your plan, which usually takes under a minute. You can carry on; your plan appears in Membership as soon as it is confirmed.",
+  confirmSlowNoSheet:
+    "Stripe is still confirming your plan, which usually takes under a minute. You can carry on; your plan appears in Membership as soon as it is confirmed.",
   confirmedPending:
     "Your payment went through. Your plan can take a minute to show in the app. Choose Continue to carry on.",
   confirmedPendingFree:
@@ -509,6 +604,8 @@ export interface PackagePaymentNotice {
   tone?: "info";
   /** The surface should reload its package list (terms or price moved). */
   reload?: boolean;
+  /** B-334-3: offer Check again (the outcome of the card step is unknown). */
+  checkAgain?: boolean;
 }
 
 export type PaymentStep =
@@ -718,7 +815,13 @@ export function describeBackendFailure(
       );
     }
     case "SUBSCRIPTION_ATTEMPT_EXPIRED":
-      return notice("attempt_expired", PACKAGE_PAYMENT_COPY.attemptExpired);
+      return backendFieldOf(err, "reason") === "terms_changed"
+        ? notice(
+            "attempt_expired_terms_changed",
+            PACKAGE_PAYMENT_COPY.attemptExpiredTermsChanged,
+            true,
+          )
+        : notice("attempt_expired", PACKAGE_PAYMENT_COPY.attemptExpired);
     case "PACKAGE_COACH_NOT_CONNECTED":
       return notice(
         "package_coach_not_connected",
@@ -809,6 +912,32 @@ export function isSheetCanceled(
   error: StripeSdkError | undefined | null,
 ): boolean {
   return error?.code === "Canceled";
+}
+
+/**
+ * B-334-3: is this presentPaymentSheet error a definite answer (a decline,
+ * an authentication failure, wrong card details: the card was not charged)
+ * or an unknown outcome (timeout, dropped connection, a failure without any
+ * card detail)? An unknown outcome is never reported as "nothing was
+ * charged": the plan is read from the backend first.
+ */
+export function isUncertainSheetResult(error: StripeSdkError): boolean {
+  if (isSheetCanceled(error)) return false;
+  const decline = error.declineCode ?? "";
+  const stripeCode = error.stripeErrorCode ?? "";
+  if (error.code === "Timeout") return true;
+  if (error.type === "api_connection_error") return true;
+  if (AUTH_FAILED.has(stripeCode) || AUTH_FAILED.has(decline)) return false;
+  if (
+    decline ||
+    stripeCode === "card_declined" ||
+    error.type === "card_error" ||
+    DECLINE_INSUFFICIENT.has(stripeCode) ||
+    DECLINE_EXPIRED.has(stripeCode) ||
+    DECLINE_DETAILS.has(stripeCode)
+  )
+    return false;
+  return true;
 }
 
 /** Map a PaymentSheet (init or present) error to what the client is told. */

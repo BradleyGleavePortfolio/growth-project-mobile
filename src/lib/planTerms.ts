@@ -297,3 +297,89 @@ export function purchasableFromPublicPackage(p: {
     trialDays: renewing ? positiveInt(p.trialDays, 0) : 0,
   };
 }
+
+/** The money terms a subscription intent answers (backend #654 `plan`). */
+export interface IntentTerms {
+  amountCents: number | null;
+  currency: string | null;
+  interval: PlanInterval | null;
+  intervalCount: number | null;
+  firstChargeCents: number | null;
+  oneTimeCents: number | null;
+  trialDays: number | null;
+}
+
+/** What the client is told is charged today for this package. */
+export function firstChargeCentsOf(pkg: PurchasablePackage): number {
+  return pkg.trialDays > 0 ? 0 : pkg.amountCents + pkg.oneTimeCents;
+}
+
+/**
+ * B-334-4: reconcile what the client was shown with what the backend is about
+ * to charge, BEFORE any chargeable sheet opens. Returns the package adopted to
+ * the backend's terms (zero trial days stay zero), and whether anything the
+ * client consents to differs: renewal price, one-time part, currency,
+ * cadence, trial length, or today's charge.
+ */
+export function reconcileIntentTerms(
+  pkg: PurchasablePackage,
+  plan: IntentTerms,
+  mode: "payment" | "setup" | "none",
+): {
+  adopted: PurchasablePackage;
+  changed: boolean;
+  trialRemoved: boolean;
+  /** Today's charge does not follow from the answered terms: never open a sheet. */
+  inconsistent: boolean;
+} {
+  const trialDays =
+    plan.trialDays !== null &&
+    Number.isInteger(plan.trialDays) &&
+    plan.trialDays >= 0
+      ? plan.trialDays
+      : mode === "setup"
+        ? pkg.trialDays
+        : 0;
+  const adopted: PurchasablePackage = {
+    ...pkg,
+    amountCents:
+      plan.amountCents !== null &&
+      Number.isInteger(plan.amountCents) &&
+      plan.amountCents > 0
+        ? plan.amountCents
+        : pkg.amountCents,
+    currency: plan.currency ? plan.currency.toLowerCase() : pkg.currency,
+    interval: plan.interval ?? pkg.interval,
+    intervalCount:
+      plan.intervalCount !== null &&
+      Number.isInteger(plan.intervalCount) &&
+      plan.intervalCount > 0
+        ? plan.intervalCount
+        : pkg.intervalCount,
+    oneTimeCents:
+      plan.oneTimeCents !== null &&
+      Number.isInteger(plan.oneTimeCents) &&
+      plan.oneTimeCents >= 0
+        ? plan.oneTimeCents
+        : pkg.oneTimeCents,
+    trialDays,
+  };
+  // Today's charge follows from the terms; a mismatch is a broken answer, not
+  // a change to review (reviewing it again would show the same terms).
+  const inconsistent =
+    plan.firstChargeCents !== null &&
+    plan.firstChargeCents !== firstChargeCentsOf(adopted);
+  const changed =
+    adopted.amountCents !== pkg.amountCents ||
+    adopted.currency !== pkg.currency.toLowerCase() ||
+    adopted.interval !== pkg.interval ||
+    adopted.intervalCount !== pkg.intervalCount ||
+    adopted.oneTimeCents !== pkg.oneTimeCents ||
+    adopted.trialDays !== pkg.trialDays;
+  return {
+    adopted,
+    changed,
+    trialRemoved: pkg.trialDays > 0 && adopted.trialDays === 0,
+    inconsistent,
+  };
+}

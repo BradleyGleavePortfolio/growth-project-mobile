@@ -91,7 +91,9 @@ export default function PurchaseFeedback({
           testID="payment-confirm-slow"
           accessibilityLiveRegion="polite"
         >
-          <Text style={styles.body}>{PACKAGE_PAYMENT_COPY.confirmSlow}</Text>
+          <Text style={styles.body}>
+            {state.slowMessage ?? PACKAGE_PAYMENT_COPY.confirmSlow}
+          </Text>
           <Secondary
             label={PACKAGE_PAYMENT_COPY.checkAgain}
             onPress={() => void purchase.checkAgain()}
@@ -125,20 +127,37 @@ export default function PurchaseFeedback({
 
       {state.priceChange ? (
         <View style={styles.block} testID="price-changed">
-          <Text style={styles.body} accessibilityRole="alert">
-            {PACKAGE_PAYMENT_COPY.priceChanged(
-              money(state.priceChange.oldCents, state.priceChange.pkg.currency),
-              money(state.priceChange.newCents, state.priceChange.pkg.currency),
-            )}
+          <Text
+            style={styles.body}
+            accessibilityRole="alert"
+            testID="price-changed-message"
+          >
+            {state.priceChange.message ??
+              PACKAGE_PAYMENT_COPY.priceChanged(
+                money(
+                  state.priceChange.oldCents,
+                  state.priceChange.pkg.currency,
+                ),
+                money(
+                  state.priceChange.newCents,
+                  state.priceChange.pkg.currency,
+                ),
+              )}
           </Text>
           <PlanTermsBlock
             pkg={state.priceChange.pkg}
             testID="price-changed-terms"
           />
           <Primary
-            label={PACKAGE_PAYMENT_COPY.confirmNewPrice(
-              money(state.priceChange.newCents, state.priceChange.pkg.currency),
-            )}
+            label={
+              state.priceChange.confirmLabel ??
+              PACKAGE_PAYMENT_COPY.confirmNewPrice(
+                money(
+                  state.priceChange.newCents,
+                  state.priceChange.pkg.currency,
+                ),
+              )
+            }
             onPress={() => void purchase.confirmNewPrice()}
             styles={styles}
             testID="price-confirm-btn"
@@ -156,6 +175,14 @@ export default function PurchaseFeedback({
           >
             {notice.message}
           </Text>
+          {notice.checkAgain ? (
+            <Secondary
+              label={PACKAGE_PAYMENT_COPY.checkAgain}
+              onPress={() => void purchase.checkAgain()}
+              styles={styles}
+              testID="payment-check-again"
+            />
+          ) : null}
           {state.alreadyActive ? (
             <Secondary
               label={PACKAGE_PAYMENT_COPY.openPlan}

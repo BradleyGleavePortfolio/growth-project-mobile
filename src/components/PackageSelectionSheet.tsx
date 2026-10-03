@@ -79,6 +79,11 @@ export interface PackageSelectionSheetProps {
    * payment (the webhook flips the entitlement). Tests pass zeros.
    */
   entitlementPollDelaysMs?: number[];
+  /**
+   * Waits between plan reads for Check again and after a card step that
+   * ended without a clear answer (B-334-3). Tests pass zeros.
+   */
+  recheckDelaysMs?: number[];
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -107,6 +112,7 @@ export default function PackageSelectionSheet({
   onOpenPlan,
   planPollDelaysMs,
   entitlementPollDelaysMs,
+  recheckDelaysMs,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -139,6 +145,7 @@ export default function PackageSelectionSheet({
     colorScheme,
     planPollDelaysMs,
     entitlementPollDelaysMs,
+    recheckDelaysMs,
     onEntitled: () => {
       void refreshEntitlement().catch(() => false);
     },
