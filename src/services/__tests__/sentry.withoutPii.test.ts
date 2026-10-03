@@ -7,9 +7,13 @@ type Processor = (event: Record<string, unknown>) => Record<string, unknown>;
 
 const mockScope = {
   extras: {} as Record<string, unknown>,
+  tags: {} as Record<string, string>,
   processors: [] as Processor[],
   setExtra(k: string, v: unknown) {
     this.extras[k] = v;
+  },
+  setTag(k: string, v: string) {
+    this.tags[k] = v;
   },
   addEventProcessor(fn: Processor) {
     this.processors.push(fn);
@@ -30,6 +34,7 @@ describe('captureErrorWithoutPii', () => {
   beforeEach(() => {
     jest.resetModules();
     mockScope.extras = {};
+    mockScope.tags = {};
     mockScope.processors = [];
     mockCaptureException.mockReset();
     mockInit.mockReset();
@@ -52,6 +57,8 @@ describe('captureErrorWithoutPii', () => {
 
       expect(mockCaptureException).toHaveBeenCalledWith(err);
       expect(mockScope.extras).toEqual({ where: 'trust_center.link_open', reference: 'ab12cd34' });
+      // Searchable support reference (B-326-4 parity), nothing else as a tag.
+      expect(mockScope.tags).toEqual({ reference: 'ab12cd34' });
       expect(mockScope.processors).toHaveLength(1);
 
       const event = {

@@ -160,6 +160,11 @@ export function captureErrorWithoutPii(err: unknown, context: Record<string, unk
   if (!initialized) return;
   Sentry.withScope((scope) => {
     Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+    // The support reference a person quotes is searchable as a tag (same rule
+    // as captureError, B-326-4); it is a generated id, never personal data.
+    if (typeof context.reference === 'string' && context.reference) {
+      scope.setTag('reference', context.reference);
+    }
     scope.addEventProcessor((event) => stripPersonalData(event));
     Sentry.captureException(err);
   });
