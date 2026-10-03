@@ -27,7 +27,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -72,6 +71,7 @@ import RomanPayoutNotice from "../../../components/roman/RomanPayoutNotice";
 import { assertStripeUrl } from "../../../utils/stripeUrlValidator";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
+import { CsvFileError, shareCsvFile } from "../../../lib/money/csvFile";
 import KpiTile from "../../../components/command-center/KpiTile";
 import AlertRow from "../../../components/command-center/AlertRow";
 import type {
@@ -84,6 +84,25 @@ import MoneyBack from "./MoneyBack";
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, "CoachMoney">;
 
+/** Specific copy for a CSV that could not be saved or shared (OR-114-4). */
+export function csvFileFailure(err: CsvFileError): FriendlyError {
+  return err.reason === "write"
+    ? {
+        title: "Your CSV could not be saved on this phone",
+        body: "Free up some space on the phone, then export again.",
+        requestId: null,
+        code: "MONEY_CSV_WRITE_FAILED",
+        retryable: true,
+      }
+    : {
+        title: "The share sheet did not open",
+        body: "Close any other share sheet that is open, then export again.",
+        requestId: null,
+        code: "MONEY_CSV_SHARE_FAILED",
+        retryable: true,
+      };
+}
+
 export default function MoneyScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -94,6 +113,7 @@ export default function MoneyScreen() {
   const [currency, setCurrency] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<FriendlyError | null>(null);
+  const [exportedAsText, setExportedAsText] = useState(false);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -251,23 +271,34 @@ export default function MoneyScreen() {
       })
     : null;
 
-  // C-332-4 / C-641-4: the selected period, in the selected currency, as
-  // the server's tax CSV, handed to the share sheet as text (C-332-4 Sol:
-  // a text share, never described as a file attachment).
+  // C-332-4 / C-641-4 / OR-114-4: the selected period, in the selected
+  // currency, as the server's tax CSV, handed to the share sheet as a real
+  // .csv file (lib/money/csvFile.ts). Only where the system cannot share
+  // files does it go out as text, and the screen says so.
   const exportCsv = async () => {
     setExporting(true);
     setExportError(null);
+    setExportedAsText(false);
     try {
       const w = windowsFor(range, new Date());
       const out = await coachMoneyApi.exportCsv(
         { from: w.from, to: w.to },
         currency ?? shownCurrency,
       );
-      await Share.share({ title: out.filename, message: out.csv });
+      const how = await shareCsvFile(out.csv, out.filename);
+      setExportedAsText(how === "text");
     } catch (err) {
-      setExportError(describeError(err, "export your money as CSV text"));
-      if (!(err as { response?: unknown } | null)?.response)
-        captureError(err, { area: "coach_money", action: "export_csv" });
+      if (err instanceof CsvFileError) {
+        setExportError(csvFileFailure(err));
+        captureError(err, {
+          area: "coach_money",
+          action: `export_csv_${err.reason}`,
+        });
+      } else {
+        setExportError(describeError(err, "export your money as a CSV file"));
+        if (!(err as { response?: unknown } | null)?.response)
+          captureError(err, { area: "coach_money", action: "export_csv" });
+      }
     } finally {
       setExporting(false);
     }
@@ -741,6 +772,17 @@ export default function MoneyScreen() {
               testID="money-export-csv-error"
             />
           ) : null}
+          {exportedAsText && !exportError ? (
+            <Text
+              style={styles.rowSub}
+              accessibilityLiveRegion="polite"
+              testID="money-export-csv-text"
+            >
+              This device cannot attach files from TGP, so the CSV was shared as
+              text. Paste it into a spreadsheet, or export again on a phone that
+              can share files.
+            </Text>
+          ) : null}
           <TouchableOpacity
             onPress={() => navigation.navigate("CoachPackagesList")}
             style={styles.footerRow}
@@ -822,8 +864,8 @@ function NetBlock({
             </View>
           ))}
           <Text style={styles.bNote}>
-            Counts sales made in this period, minus refunds and chargebacks
-            made in this period, including those on earlier sales.
+            Counts sales made in this period, minus refunds and chargebacks made
+            in this period, including those on earlier sales.
           </Text>
         </View>
       ) : null}

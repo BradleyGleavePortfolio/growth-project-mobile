@@ -19,6 +19,53 @@ jest.mock("../../../../services/api", () => ({
 
 jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn() }));
 
+// OR-114-4: an in-memory file system and share sheet. The CSV must leave as
+// a real .csv file written under the app cache.
+const mockFiles = new Map<string, string>();
+const mockFs = { failWrite: false };
+jest.mock("expo-file-system", () => {
+  const join = (parts: unknown[]) =>
+    parts
+      .map((p) => (typeof p === "string" ? p : (p as { uri: string }).uri))
+      .join("/");
+  class Directory {
+    uri: string;
+    constructor(...parts: unknown[]) {
+      this.uri = join(parts);
+    }
+    get exists() {
+      return [...mockFiles.keys()].some((k) => k.startsWith(`${this.uri}/`));
+    }
+    delete() {
+      for (const k of [...mockFiles.keys()])
+        if (k.startsWith(`${this.uri}/`)) mockFiles.delete(k);
+    }
+    create() {}
+  }
+  class File {
+    uri: string;
+    constructor(...parts: unknown[]) {
+      this.uri = join(parts);
+    }
+    create() {
+      if (mockFs.failWrite) throw new Error("No space left on device");
+      mockFiles.set(this.uri, "");
+    }
+    write(content: string) {
+      mockFiles.set(this.uri, content);
+    }
+  }
+  return { Directory, File, Paths: { cache: { uri: "file:///cache" } } };
+});
+const mockSharing = {
+  isAvailableAsync: jest.fn(async () => true),
+  shareAsync: jest.fn(async () => undefined),
+};
+jest.mock("expo-sharing", () => ({
+  isAvailableAsync: () => mockSharing.isAvailableAsync(),
+  shareAsync: (uri: string, opts: unknown) => mockSharing.shareAsync(uri, opts),
+}));
+
 const mockOpenBrowser = jest.fn();
 jest.mock("expo-web-browser", () => ({
   __esModule: true,
@@ -64,9 +111,15 @@ import path from "path";
 // package does not export the subpath.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { autocaptureFromTouchEvent } = require(
-  path.resolve(__dirname, "../../../../../node_modules/posthog-react-native/dist/autocapture.js"),
+  path.resolve(
+    __dirname,
+    "../../../../../node_modules/posthog-react-native/dist/autocapture.js",
+  ),
 ) as {
-  autocaptureFromTouchEvent: (e: unknown, posthog: { autocapture: jest.Mock }) => void;
+  autocaptureFromTouchEvent: (
+    e: unknown,
+    posthog: { autocapture: jest.Mock },
+  ) => void;
 };
 import { Text } from "react-native";
 import {
@@ -245,6 +298,10 @@ function echoWindow(
 }
 
 beforeEach(() => {
+  mockFiles.clear();
+  mockFs.failWrite = false;
+  mockSharing.isAvailableAsync.mockClear();
+  mockSharing.shareAsync.mockClear();
   mockGet.mockReset();
   mockPost.mockReset();
   mockNavigate.mockReset();
@@ -1033,20 +1090,78 @@ describe("C-332-4 Export CSV for taxes (backend #641 export.csv)", () => {
     const share = jest
       .spyOn(Share, "share")
       .mockResolvedValue({ action: "sharedAction" } as never);
-    const { findByTestId } = await render(<MoneyScreen />);
+    mockFiles.clear();
+    mockSharing.shareAsync.mockClear();
+    const { findByTestId, queryByTestId } = await render(<MoneyScreen />);
     await findByTestId("money-net-amount");
     await fireEvent.press(await findByTestId("money-export-csv"));
-    await waitFor(() => expect(share).toHaveBeenCalled());
-    expect(share).toHaveBeenCalledWith({
-      title: "tgp-money-2026-09-02-to-2026-10-02-usd.csv",
-      message: "date_utc,type,charge_id\r\n",
+    await waitFor(() => expect(mockSharing.shareAsync).toHaveBeenCalled());
+    // OR-114-4: a real .csv attachment, not pasted text.
+    const uri =
+      "file:///cache/money-exports/tgp-money-2026-09-02-to-2026-10-02-usd.csv";
+    expect(mockSharing.shareAsync).toHaveBeenCalledWith(uri, {
+      mimeType: "text/csv",
+      UTI: "public.comma-separated-values-text",
+      dialogTitle: "tgp-money-2026-09-02-to-2026-10-02-usd.csv",
     });
+    expect(mockFiles.get(uri)).toBe("\uFEFFdate_utc,type,charge_id\r\n");
+    expect(share).not.toHaveBeenCalled();
+    expect(queryByTestId("money-export-csv-text")).toBeNull();
     const call = mockGet.mock.calls.find(
       (c) => c[0] === "/v1/coach/money/export.csv",
     )!;
     expect(call[1].params.currency).toBe("usd");
     expect(call[1].params.from).toEqual(expect.any(String));
     share.mockRestore();
+  });
+
+  it("keeps at most one export on the phone: the previous file is removed first", async () => {
+    mockFiles.clear();
+    mockFiles.set("file:///cache/money-exports/old.csv", "date_utc\r\n");
+    routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
+    const { findByTestId } = await render(<MoneyScreen />);
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await waitFor(() => expect(mockSharing.shareAsync).toHaveBeenCalled());
+    expect([...mockFiles.keys()]).toHaveLength(1);
+    expect(mockFiles.has("file:///cache/money-exports/old.csv")).toBe(false);
+  });
+
+  it("where the phone cannot share files, the CSV goes out as text and the screen says so", async () => {
+    mockSharing.isAvailableAsync.mockResolvedValueOnce(false);
+    const share = jest
+      .spyOn(Share, "share")
+      .mockResolvedValue({ action: "sharedAction" } as never);
+    routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
+    const { findByTestId } = await render(<MoneyScreen />);
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await findByTestId("money-export-csv-text");
+    expect(share).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "date_utc,type,charge_id\r\n" }),
+    );
+    share.mockRestore();
+  });
+
+  it("a phone that is out of space gets specific copy and a retry, never a generic line", async () => {
+    mockFs.failWrite = true;
+    routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
+    const { findByTestId, findByText, queryByText } = await render(
+      <MoneyScreen />,
+    );
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await findByTestId("money-export-csv-error");
+    await findByText("Your CSV could not be saved on this phone");
+    await findByText("Free up some space on the phone, then export again.");
+    expect(queryByText(/Something went wrong/)).toBeNull();
+    mockFs.failWrite = false;
+  });
+
+  it("a share sheet that cannot open gets specific copy", async () => {
+    mockSharing.shareAsync.mockRejectedValueOnce(new Error("busy"));
+    routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
+    const { findByTestId, findByText } = await render(<MoneyScreen />);
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await findByTestId("money-export-csv-error");
+    await findByText("The share sheet did not open");
   });
 
   it("a period too large to export says what to do (the error body arrives as JSON text, as axios gives it in text mode)", async () => {
@@ -1141,16 +1256,19 @@ describe("FIX ROUND 2 B-332-2: an unknown count is an unknown cadence", () => {
     ["zero", 0],
     ["negative", -1],
     ["a fraction", 1.5],
-  ])("count %s with a known unit reads Recurring, never Monthly", (_n, count) => {
-    const c = toCharge({
-      ...base,
-      billing_type: "recurring",
-      billing_interval: "month",
-      billing_interval_count: count,
-    });
-    expect(c.billingIntervalCount).toBeNull();
-    expect(cadenceLabel(c)).toBe("Recurring");
-  });
+  ])(
+    "count %s with a known unit reads Recurring, never Monthly",
+    (_n, count) => {
+      const c = toCharge({
+        ...base,
+        billing_type: "recurring",
+        billing_interval: "month",
+        billing_interval_count: count,
+      });
+      expect(c.billingIntervalCount).toBeNull();
+      expect(cadenceLabel(c)).toBe("Recurring");
+    },
+  );
 
   it("valid counts still read exactly", () => {
     const read = (unit: string, count: number) =>
@@ -1191,21 +1309,37 @@ describe("FIX ROUND 2 B-332-3: payout cents are finite safe integers", () => {
     ["more than two decimals", 10.005],
   ])("rejects an amount %s", (_n, amount) => {
     expect(
-      code(() => toPayout({ id: "po", amount, currency: "usd", status: "paid" })),
+      code(() =>
+        toPayout({ id: "po", amount, currency: "usd", status: "paid" }),
+      ),
     ).toBe("MONEY_PAYLOAD_INVALID");
   });
   it("keeps normal major-unit amounts exact", () => {
-    expect(toPayout({ id: "po", amount: 94.8, currency: "usd", status: "paid" }).amountCents).toBe(9480);
-    expect(toPayout({ id: "po", amount: 19.99, currency: "usd", status: "paid" }).amountCents).toBe(1999);
-    expect(toPayout({ id: "po", amount: 0, currency: "usd", status: "paid" }).amountCents).toBe(0);
+    expect(
+      toPayout({ id: "po", amount: 94.8, currency: "usd", status: "paid" })
+        .amountCents,
+    ).toBe(9480);
+    expect(
+      toPayout({ id: "po", amount: 19.99, currency: "usd", status: "paid" })
+        .amountCents,
+    ).toBe(1999);
+    expect(
+      toPayout({ id: "po", amount: 0, currency: "usd", status: "paid" })
+        .amountCents,
+    ).toBe(0);
   });
 });
 
 describe("FIX ROUND 2 B-332-4 (Opus): export errors keep their server code", () => {
   it("parseJsonErrorBody turns a JSON text body back into an object and leaves other text alone", () => {
-    const e1 = { response: { data: '{"code":"MONEY_WINDOW_INVALID","message":"m"}' } };
+    const e1 = {
+      response: { data: '{"code":"MONEY_WINDOW_INVALID","message":"m"}' },
+    };
     parseJsonErrorBody(e1);
-    expect(e1.response.data).toEqual({ code: "MONEY_WINDOW_INVALID", message: "m" });
+    expect(e1.response.data).toEqual({
+      code: "MONEY_WINDOW_INVALID",
+      message: "m",
+    });
     const e2 = { response: { data: "<html>bad gateway</html>" } };
     parseJsonErrorBody(e2);
     expect(e2.response.data).toBe("<html>bad gateway</html>");
@@ -1241,13 +1375,19 @@ describe("FIX ROUND 2 B-332-4 (Sol): a failed currency keeps the way back", () =
     twoCurrencies(() => {
       throw httpError(503, { code: "SERVICE_UNAVAILABLE" });
     });
-    const { findByTestId, getByTestId, queryByTestId } = await render(<MoneyScreen />);
-    expect((await findByTestId("money-net-amount")).props.children).toBe("$94.80");
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <MoneyScreen />,
+    );
+    expect((await findByTestId("money-net-amount")).props.children).toBe(
+      "$94.80",
+    );
     await fireEvent.press(getByTestId("money-currency-gbp"));
     await findByTestId("money-summary-failed");
     expect(queryByTestId("money-net-amount")).toBeNull();
     expect(getByTestId("money-currency-usd")).toBeTruthy();
-    expect(getByTestId("money-currency-gbp").props.accessibilityState).toEqual({ selected: true });
+    expect(getByTestId("money-currency-gbp").props.accessibilityState).toEqual({
+      selected: true,
+    });
     await fireEvent.press(getByTestId("money-currency-usd"));
     await waitFor(() =>
       expect(getByTestId("money-net-amount").props.children).toBe("$94.80"),
@@ -1256,7 +1396,10 @@ describe("FIX ROUND 2 B-332-4 (Sol): a failed currency keeps the way back", () =
 
   it("an invalid currency answer keeps the chips, so the copy's pick-a-currency step works", async () => {
     twoCurrencies(() => {
-      throw httpError(400, { code: "MONEY_CURRENCY_INVALID", message: "Pick a currency." });
+      throw httpError(400, {
+        code: "MONEY_CURRENCY_INVALID",
+        message: "Pick a currency.",
+      });
     });
     const { findByTestId, getByTestId } = await render(<MoneyScreen />);
     await findByTestId("money-net-amount");
@@ -1284,7 +1427,10 @@ describe("FIX ROUND 2 B-332-4 (Sol): a failed currency keeps the way back", () =
     );
     await act(async () => {
       releaseGbp(
-        echoWindow({ ...SUMMARY, currency: "gbp", currencies: ["gbp", "usd"] }, undefined),
+        echoWindow(
+          { ...SUMMARY, currency: "gbp", currencies: ["gbp", "usd"] },
+          undefined,
+        ),
       );
     });
     expect(getByTestId("money-net-amount").props.children).toBe("$94.80");
@@ -1293,7 +1439,9 @@ describe("FIX ROUND 2 B-332-4 (Sol): a failed currency keeps the way back", () =
 
 describe("FIX ROUND 2 B-332-5: signed contributions always add up to the net", () => {
   const explained = (rows: ReturnType<typeof breakdownRows>) =>
-    rows.filter((r) => r.sign !== 0).reduce((sum, r) => sum + r.sign * r.cents, 0);
+    rows
+      .filter((r) => r.sign !== 0)
+      .reduce((sum, r) => sum + r.sign * r.cents, 0);
   const zero = {
     priceCents: 0,
     processingCents: 0,
@@ -1306,7 +1454,11 @@ describe("FIX ROUND 2 B-332-5: signed contributions always add up to the net", (
   };
 
   it("head coach view: a refund-only period with team income -500 shows the reversal row", () => {
-    const rows = breakdownRows({ ...zero, headCoachIncomeCents: -500, netCents: -500 });
+    const rows = breakdownRows({
+      ...zero,
+      headCoachIncomeCents: -500,
+      netCents: -500,
+    });
     const team = rows.find((r) => r.key === "team_income")!;
     expect(team).toMatchObject({ cents: 500, sign: -1 });
     expect(team.label).toBe("Your share of refunds on your team's sales");
@@ -1338,8 +1490,14 @@ describe("FIX ROUND 2 B-332-5: signed contributions always add up to the net", (
       headCoachIncomeCents: 700,
       netCents: 9180,
     });
-    expect(rows.find((r) => r.key === "head_coach")).toMatchObject({ label: "Head coach share", sign: -1 });
-    expect(rows.find((r) => r.key === "team_income")).toMatchObject({ label: "Your share of your team's sales", sign: 1 });
+    expect(rows.find((r) => r.key === "head_coach")).toMatchObject({
+      label: "Head coach share",
+      sign: -1,
+    });
+    expect(rows.find((r) => r.key === "team_income")).toMatchObject({
+      label: "Your share of your team's sales",
+      sign: 1,
+    });
     expect(explained(rows)).toBe(9180);
   });
 });
@@ -1355,13 +1513,17 @@ describe("FIX ROUND 2 C-332-6: Business tiles say when they are from an earlier 
         return echoWindow(SUMMARY, cfg);
       },
     });
-    const { findByTestId, getByTestId, queryByTestId } = await render(<MoneyScreen />);
+    const { findByTestId, getByTestId, queryByTestId } = await render(
+      <MoneyScreen />,
+    );
     await findByTestId("money-net-amount");
     expect(queryByTestId("money-business-stale")).toBeNull();
     await fireEvent.press(getByTestId("money-range-today"));
     await findByTestId("money-summary-failed");
     expect(getByTestId("money-business")).toBeTruthy();
-    expect(getByTestId("money-business-stale").props.children).toMatch(/could not be refreshed/);
+    expect(getByTestId("money-business-stale").props.children).toMatch(
+      /could not be refreshed/,
+    );
   });
 });
 
@@ -1420,7 +1582,9 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
 
   it("Home Money card: no host node is captured", async () => {
     routeGets();
-    const r = await render(<MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />);
+    const r = await render(
+      <MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />,
+    );
     await r.findByTestId("money-home-card-net");
     expect(captured(r.container as unknown as Inst)).toEqual([]);
   });
@@ -1429,7 +1593,11 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
     mockGet.mockImplementation(async () => ({
       data: { charges: CHARGES.charges, next_cursor: null },
     }));
-    const nav = { navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
+    const nav = {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+    };
     const list = await render(
       <MoneyChargesScreen
         navigation={nav as never}
@@ -1441,7 +1609,11 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
   });
 
   it("charge detail: no host node is captured", async () => {
-    const nav = { navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
+    const nav = {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+    };
     mockGet.mockResolvedValueOnce({
       data: {
         charge: CHARGES.charges[0],
@@ -1460,7 +1632,13 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
     const detail = await render(
       <MoneyChargeScreen
         navigation={{ ...nav, getParent: () => undefined } as never}
-        route={{ key: "k", name: "CoachMoneyCharge", params: { chargeId: "ch_1" } } as never}
+        route={
+          {
+            key: "k",
+            name: "CoachMoneyCharge",
+            params: { chargeId: "ch_1" },
+          } as never
+        }
       />,
     );
     await detail.findByLabelText("Net to you: $46.30");
@@ -1468,13 +1646,13 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
   });
 });
 
-describe("FIX ROUND 2 C-332-4 (Sol): the CSV is a text share, never called a file", () => {
-  it("a failed export names CSV text, not a file", async () => {
+describe("OR-114-4: the CSV is a real .csv file, and a failure says so", () => {
+  it("a failed export names the CSV file and what to do", async () => {
     routeGets({ "/v1/coach/money/export.csv": httpError(503, {}) });
-    const { findByTestId, queryAllByText, getAllByText } = await render(<MoneyScreen />);
+    const { findByTestId, getAllByText } = await render(<MoneyScreen />);
     await fireEvent.press(await findByTestId("money-export-csv"));
     await findByTestId("money-export-csv-error");
-    expect(getAllByText(/CSV text/).length).toBeGreaterThan(0);
-    expect(queryAllByText(/\bfile\b/i)).toHaveLength(0);
+    expect(getAllByText(/CSV file/).length).toBeGreaterThan(0);
+    expect(mockSharing.shareAsync).not.toHaveBeenCalled();
   });
 });
