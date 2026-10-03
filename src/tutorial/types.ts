@@ -51,9 +51,11 @@ export type TutorialStepId =
   | 'macros'
   | 'community'
   | 'coach_messages'
+  | 'calendar'
   | 'wearables'
   | 'first_meal'
   | 'first_message'
+  | 'welcome_call'
   | 'complete';
 
 /**
@@ -85,11 +87,14 @@ export type TutorialSignal =
   | 'macro_card_opened'
   | 'meal_logged'
   | 'message_sent'
-  | 'wearable_connected';
+  | 'wearable_connected'
+  | 'welcome_call_booked';
 
 /** What the step machine knows about the world when it enters a step. */
 export interface TutorialContext {
   hasProgram: boolean;
   hasMacros: boolean;
   communityAvailable: boolean;
+  /** S-SCHED: featureFlags.clientCalendar. Absent means off. */
+  calendarAvailable?: boolean;
 }
