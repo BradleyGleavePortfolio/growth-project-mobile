@@ -66,7 +66,7 @@ describe('useCurrentUser — real identity composition', () => {
     });
     await flush();
     expect(result.current).toEqual(userA);
-    expect(setSentryUser).toHaveBeenLastCalledWith({ id: 'user-A', email: 'a@example.com' });
+    expect(setSentryUser).toHaveBeenLastCalledWith({ id: 'user-A' });
   });
 
   it('resolves the identity after a "restart" (value only on disk, mirror empty)', async () => {
