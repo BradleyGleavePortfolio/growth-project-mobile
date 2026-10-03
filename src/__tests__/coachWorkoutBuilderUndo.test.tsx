@@ -190,16 +190,22 @@ jest.mock("../api/workoutAutosaveApi", () => {
     kind: string;
     status: number;
     conflict?: unknown;
+    cause?: unknown;
+    headMoved?: unknown;
     constructor(
       kind: string,
       status: number,
       message: string,
       conflict?: unknown,
+      cause?: unknown,
+      headMoved?: unknown,
     ) {
       super(message);
       this.kind = kind;
       this.status = status;
       this.conflict = conflict;
+      this.cause = cause;
+      this.headMoved = headMoved;
     }
     get isNetwork() {
       return this.kind === "network";
@@ -346,6 +352,7 @@ describe("CoachWorkoutBuilderScreen — undo / redo (S-MWB-2)", () => {
     });
     expect(mockUndoCall).toHaveBeenCalledWith("plan-1", {
       to_revision_index: 0,
+      expected_head_index: 1,
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A"),
@@ -404,6 +411,7 @@ describe("CoachWorkoutBuilderScreen — undo / redo (S-MWB-2)", () => {
     });
     expect(mockUndoCall).toHaveBeenLastCalledWith("plan-1", {
       to_revision_index: 1,
+      expected_head_index: 2,
     });
     await waitFor(() =>
       expect(screen.getByLabelText("Plan name").props.value).toBe("Push day B"),
@@ -441,7 +449,7 @@ describe("CoachWorkoutBuilderScreen — undo / redo (S-MWB-2)", () => {
     ).toEqual(expect.objectContaining({ disabled: true }));
   });
 
-  it("an unknown failure carries a reference and the support path", async () => {
+  it("a non-HTTP failure is an unknown outcome: could not confirm, reference, support path, editing paused", async () => {
     setFlag(true);
     jest.useFakeTimers();
     const Screen = loadScreen();
@@ -454,8 +462,287 @@ describe("CoachWorkoutBuilderScreen — undo / redo (S-MWB-2)", () => {
     });
     expect(
       screen.getByText(
-        /problem on our side.*contact support \(Settings, Help\) and quote reference [A-Z0-9]{1,8}\./,
+        /could not confirm whether the change was undone.*Tap Check again.*contact support \(Settings, Help\) and quote reference [A-Z0-9]{1,8}\./,
       ),
     ).toBeTruthy();
+    expect(screen.queryByText(/nothing was undone/)).toBeNull();
+    expect(screen.getByLabelText("Check again")).toBeTruthy();
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+  });
+});
+
+// ─── S-MWB-3: history barrier (B-328-5) and unknown outcomes (B-328-6) ─────
+
+type ApiErrorCtor = new (
+  kind: string,
+  status: number,
+  message: string,
+  conflict?: unknown,
+  cause?: unknown,
+  headMoved?: unknown,
+) => Error;
+
+function apiError(): ApiErrorCtor {
+  return (
+    jest.requireMock("../api/workoutAutosaveApi") as {
+      WorkoutAutosaveApiError: ApiErrorCtor;
+    }
+  ).WorkoutAutosaveApiError;
+}
+
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+async function mountWithOneSave() {
+  setFlag(true);
+  jest.useFakeTimers();
+  const Screen = loadScreen();
+  const screen = await render(<Screen />);
+  await editAndSave(screen.getByLabelText, "Push day B");
+  await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalledTimes(1));
+  await waitFor(() =>
+    expect(
+      screen.getByLabelText("Undo last change").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: false })),
+  );
+  return screen;
+}
+
+describe("CoachWorkoutBuilderScreen — history barrier and unknown outcomes (S-MWB-3)", () => {
+  it("B-328-5: while an undo is in flight the editor is read-only, and typing, adding or removing a row is never lost to the returned copy", async () => {
+    const screen = await mountWithOneSave();
+    const pending = deferred<{
+      head_revision_index: number;
+      lock_token: string;
+    }>();
+    mockUndoCall.mockReturnValueOnce(pending.promise);
+    mockRefetch.mockResolvedValueOnce({ data: UNDONE_PLAN, isError: false });
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    await waitFor(() => expect(mockUndoCall).toHaveBeenCalledTimes(1));
+
+    // Read-only while the request is out.
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+    expect(screen.getByLabelText("Sets").props.editable).toBe(false);
+    expect(
+      screen.getByLabelText("Estimated duration in minutes").props.editable,
+    ).toBe(false);
+    expect(
+      screen.getByLabelText("Search exercise catalog").props.editable,
+    ).toBe(false);
+    expect(
+      screen.getByLabelText("Remove exercise").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(
+      screen.getByLabelText("Save changes").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+
+    // The coach tries to type and to remove the row: nothing changes.
+    await act(async () => {
+      fireEvent.changeText(
+        screen.getByLabelText("Plan name"),
+        "Typed meanwhile",
+      );
+      fireEvent.press(screen.getByLabelText("Remove exercise"));
+    });
+    expect(screen.getByLabelText("Plan name").props.value).toBe("Push day B");
+    expect(screen.getAllByLabelText("Remove exercise")).toHaveLength(1);
+
+    await act(async () => {
+      pending.resolve({
+        head_revision_index: 2,
+        lock_token: "abababababababab",
+      });
+      await pending.promise;
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A"),
+    );
+    expect(screen.getByLabelText("Plan name").props.editable).not.toBe(false);
+    // Nothing typed during the request was queued behind the undo.
+    await act(async () => {
+      jest.advanceTimersByTime(2000);
+    });
+    expect(mockAutosaveCall).toHaveBeenCalledTimes(1);
+  });
+
+  it("B-328-6: a committed undo whose response was lost says could not confirm, keeps editing paused, and Check again confirms it with the same fence", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(new ApiError("network", 0, "offline"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    expect(
+      screen.getByText(/could not confirm whether the change was undone/),
+    ).toBeTruthy();
+    expect(screen.queryByText(/nothing was undone/)).toBeNull();
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+    expect(
+      screen.getByLabelText("Undo last change").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+
+    // The first request had landed: the fenced retry finds the head one step on.
+    mockUndoCall.mockRejectedValueOnce(
+      new ApiError("conflict", 409, "moved", undefined, undefined, {
+        error: "undo_head_moved",
+        head_revision_index: 2,
+        lock_token: "abababababababab",
+      }),
+    );
+    mockRefetch.mockResolvedValueOnce({ data: UNDONE_PLAN, isError: false });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Check again"));
+    });
+    expect(mockUndoCall).toHaveBeenCalledTimes(2);
+    expect(mockUndoCall.mock.calls[1]).toEqual(mockUndoCall.mock.calls[0]);
+    expect(mockUndoCall.mock.calls[1][1]).toEqual({
+      to_revision_index: 0,
+      expected_head_index: 1,
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A"),
+    );
+    expect(screen.getByText("Undone. Redo puts the change back.")).toBeTruthy();
+    expect(screen.queryByLabelText("Check again")).toBeNull();
+    expect(
+      screen.getByLabelText("Redo change").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: false }));
+
+    // The next edit saves on the adopted head, never the pre-undo one.
+    await editAndSave(screen.getByLabelText, "Push day C");
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalledTimes(2));
+    const batch = (
+      mockAutosaveCall.mock.calls[1][0] as {
+        body: { base_revision_index: number; lock_token: string };
+      }
+    ).body;
+    expect(batch.base_revision_index).toBe(2);
+    expect(batch.lock_token).toBe("abababababababab");
+  });
+
+  it("B-328-6: a 5xx that never committed is applied by Check again", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(new ApiError("server", 503, "down"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    expect(
+      screen.getByText(
+        /could not confirm whether the change was undone.*quote reference [A-Z0-9]{1,8}\./,
+      ),
+    ).toBeTruthy();
+    mockUndoCall.mockResolvedValueOnce({
+      head_revision_index: 2,
+      lock_token: "abababababababab",
+    });
+    mockRefetch.mockResolvedValueOnce({ data: UNDONE_PLAN, isError: false });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Check again"));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A"),
+    );
+    expect(screen.getByText("Undone. Redo puts the change back.")).toBeTruthy();
+  });
+
+  it("B-328-6: a failed reconciliation fetch keeps editing paused, and Check again loads and adopts the copy", async () => {
+    const screen = await mountWithOneSave();
+    mockUndoCall.mockResolvedValueOnce({
+      head_revision_index: 2,
+      lock_token: "abababababababab",
+    });
+    mockRefetch.mockRejectedValueOnce(new Error("offline"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    expect(
+      screen.getByText(
+        /The change was undone, but the updated workout did not load/,
+      ),
+    ).toBeTruthy();
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+    expect(screen.getByLabelText("Plan name").props.value).toBe("Push day B");
+
+    // Still offline: stays paused, no second undo is sent.
+    mockRefetch.mockResolvedValueOnce({ data: undefined, isError: true });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Check again"));
+    });
+    expect(mockUndoCall).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+
+    mockRefetch.mockResolvedValueOnce({ data: UNDONE_PLAN, isError: false });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Check again"));
+    });
+    expect(mockUndoCall).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(screen.getByLabelText("Plan name").props.value).toBe("Push day A"),
+    );
+    expect(screen.getByLabelText("Plan name").props.editable).not.toBe(false);
+    await editAndSave(screen.getByLabelText, "Push day C");
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalledTimes(2));
+    const batch = (
+      mockAutosaveCall.mock.calls[1][0] as {
+        body: { base_revision_index: number; lock_token: string };
+      }
+    ).body;
+    expect(batch.base_revision_index).toBe(2);
+  });
+
+  it("B-328-6: a head moved by another session shows the latest version and resets the history", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(
+      new ApiError("conflict", 409, "moved", undefined, undefined, {
+        error: "undo_head_moved",
+        head_revision_index: 5,
+        lock_token: "cdcdcdcdcdcdcdcd",
+      }),
+    );
+    mockRefetch.mockResolvedValueOnce({
+      data: { ...EXISTING_PLAN, name: "Edited on the web" },
+      isError: false,
+    });
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Plan name").props.value).toBe(
+        "Edited on the web",
+      ),
+    );
+    expect(
+      screen.getByText(/changed in another session, so Undo history was reset/),
+    ).toBeTruthy();
+    expect(
+      screen.getByLabelText("Undo last change").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+    expect(
+      screen.getByLabelText("Redo change").props.accessibilityState,
+    ).toEqual(expect.objectContaining({ disabled: true }));
+  });
+
+  it("a definite refusal (403) still says nothing was undone and reopens editing", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(new ApiError("forbidden", 403, "no"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    expect(screen.getByText(/so nothing was undone/)).toBeTruthy();
+    expect(screen.queryByLabelText("Check again")).toBeNull();
+    expect(screen.getByLabelText("Plan name").props.editable).not.toBe(false);
   });
 });

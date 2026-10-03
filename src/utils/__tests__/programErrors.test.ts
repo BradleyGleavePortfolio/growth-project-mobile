@@ -63,7 +63,7 @@ describe("describeProgramFailure", () => {
     expect(f.reference).toBe("AB12CD34");
     expect(f.support).toBe(true);
     expect(f.message).toMatch(
-      /Could not assign the program because of a problem on our side/,
+      /Could not assign the program because of a problem on the server/,
     );
     expect(f.message).toMatch(/AB12CD34/);
     expect(f.message).not.toMatch(/Something went wrong/);
@@ -163,5 +163,67 @@ describe("bulkResultCopy", () => {
       bulkResultCopy("assign_failed", "Could not assign (reference 1234)."),
     ).toBe("Could not assign (reference 1234).");
     expect(bulkResultCopy(undefined, undefined)).toMatch(/Retry this client/);
+  });
+});
+
+describe("S-MWB-3 C-328-7: consultation-set codes and unmapped refusals", () => {
+  it.each(["program_in_clinic_set", "program_in_clinic_set_needs_a_day"])(
+    "%s has specific copy with the support path and no reference",
+    (code) => {
+      const f = describeProgramFailure(
+        httpError(409, { code, message: "server copy", request_id: "r-1" }),
+        "archive the program",
+      );
+      expect(f.code).toBe(code);
+      expect(f.message).toMatch(/consultation/);
+      expect(f.message).toMatch(/contact support \(Settings, Help\)/);
+      expect(f.message).not.toBe("server copy");
+      expect(f.support).toBe(true);
+      expect(f.reference).toBeNull();
+      expect(mockCaptureError).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([409, 422])(
+    "an unmapped %i code with a server message shows that message and a reference",
+    (status) => {
+      const f = describeProgramFailure(
+        httpError(status, {
+          code: "brand_new_rule",
+          message: "This program is locked while a delivery runs.",
+          request_id: "aa11bb22-0000-4000-8000-000000000000",
+        }),
+        "clear the day",
+      );
+      expect(f.message).toBe(
+        "Could not clear the day: This program is locked while a delivery runs. If this keeps happening, contact support and quote reference AA11BB22.",
+      );
+      expect(f.message).not.toMatch(/problem on/);
+      expect(f.reference).toBe("AA11BB22");
+      expect(f.support).toBe(true);
+    },
+  );
+
+  it("an unmapped 404 says it is gone and offers reload, not a server problem", () => {
+    const f = describeProgramFailure(
+      httpError(404, { request_id: "cc33dd44-0000-4000-8000-000000000000" }),
+      "open this program",
+    );
+    expect(f.message).toMatch(/no longer exists or is not shared with you/);
+    expect(f.message).toMatch(/CC33DD44/);
+    expect(f.reload).toBe(true);
+  });
+
+  it("no Programs copy uses first person", () => {
+    for (const code of [
+      "program_version_conflict",
+      "program_in_clinic_set",
+      "program_in_clinic_set_needs_a_day",
+    ]) {
+      const f = describeProgramFailure(httpError(409, { code }), "save");
+      expect(f.message).not.toMatch(/\b(we|us|our)\b/i);
+    }
+    const unknown = describeProgramFailure(httpError(500, {}), "save");
+    expect(unknown.message).not.toMatch(/\b(we|us|our)\b/i);
   });
 });

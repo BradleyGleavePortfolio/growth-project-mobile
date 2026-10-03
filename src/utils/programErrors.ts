@@ -63,7 +63,7 @@ const KNOWN: Record<string, { message: string; reload?: boolean }> = {
   },
   program_version_conflict: {
     message:
-      "This program changed on another device. We reloaded the latest version; make your change again.",
+      "This program changed on another device. The latest version is loading; make your change again.",
     reload: true,
   },
   program_days_out_of_range: {
@@ -93,6 +93,14 @@ const KNOWN: Record<string, { message: string; reload?: boolean }> = {
   program_in_package_needs_a_day: {
     message:
       "A package delivers this program, so it must keep at least one workout. Add another day before clearing this one, or remove the program from the package.",
+  },
+  program_in_clinic_set: {
+    message:
+      "Your consultation matches new clients to this program, so it stays in your library. To retire it, contact support (Settings, Help) to change the programs your consultation uses.",
+  },
+  program_in_clinic_set_needs_a_day: {
+    message:
+      "This is the last workout in a program your consultation gives new clients. Add another day first. To retire the program, contact support (Settings, Help) to change the programs your consultation uses.",
   },
   program_in_package: {
     message:
@@ -224,7 +232,9 @@ export function describeProgramFailure(
       reference: null,
       support:
         env.code === "programs_unavailable" ||
-        env.code === "idempotency_key_required",
+        env.code === "idempotency_key_required" ||
+        env.code === "program_in_clinic_set" ||
+        env.code === "program_in_clinic_set_needs_a_day",
       reload: known.reload === true,
     };
   }
@@ -283,9 +293,26 @@ export function describeProgramFailure(
       reload: false,
     };
   }
-  if (env.status === 400 && env.message) {
-    // A request the server refused as invalid (DTO validation). Show its
-    // reason, and keep the reference + support path in case the app sent it.
+  if (env.status === 404) {
+    return {
+      code: env.code,
+      status: 404,
+      message: `Could not ${action}: it no longer exists or is not shared with you. Reload to see the current list; if it should be there, contact support and quote reference ${reference}.`,
+      reference,
+      support: true,
+      reload: true,
+    };
+  }
+  if (
+    env.message &&
+    env.status !== null &&
+    env.status >= 400 &&
+    env.status < 500
+  ) {
+    // A definite refusal with a reason this app does not have copy for yet
+    // (DTO validation, or a 409 / 422 business rule added after this build,
+    // S-MWB-3 C-328-7). Show the server's reason, and keep the reference and
+    // support path in case the app sent it.
     return {
       code: env.code,
       status: env.status,
@@ -298,7 +325,7 @@ export function describeProgramFailure(
   return {
     code: env.code,
     status: env.status,
-    message: `Could not ${action} because of a problem on our side. Retry; if it happens again, contact support and quote reference ${reference}.`,
+    message: `Could not ${action} because of a problem on the server. Retry; if it happens again, contact support and quote reference ${reference}.`,
     reference,
     support: true,
     reload: false,

@@ -318,6 +318,12 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
     lockToken: string;
     serverCopy: TWorkingCopy;
   }) => boolean;
+  /**
+   * S-MWB-3: the head index and lock token the NEXT request would be based on,
+   * read from the live refs (never a stale render value). The builder sends
+   * the index as the undo's `expected_head_index` fence.
+   */
+  readHead: () => { index: number; lockToken: string };
 }
 
 /**
@@ -1265,6 +1271,11 @@ export function useAutosave<TWorkingCopy>(
     [setDirty, safeSet, computeHasPending],
   );
 
+  const readHead = useCallback(
+    () => ({ index: indexRef.current, lockToken: tokenRef.current }),
+    [],
+  );
+
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -1432,7 +1443,8 @@ export function useAutosave<TWorkingCopy>(
       rebaselineTo,
       rebaselineToConflict,
       adoptServerHead,
+      readHead,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict, adoptServerHead],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict, adoptServerHead, readHead],
   );
 }

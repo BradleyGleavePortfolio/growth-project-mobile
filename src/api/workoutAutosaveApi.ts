@@ -181,6 +181,13 @@ export type AutosaveBatch = z.infer<typeof AutosaveBatchSchema>;
 export const UndoRequestSchema = z
   .object({
     to_revision_index: z.number().int().min(0),
+    /**
+     * S-MWB-3 (B-328-6): the head this undo was requested against. The backend
+     * applies the undo only while the head is still this index; otherwise it
+     * answers 409 `undo_head_moved` with the current head, so a retry after a
+     * lost response can never restore twice.
+     */
+    expected_head_index: z.number().int().min(0).optional(),
   })
   .strict();
 export type UndoRequest = z.infer<typeof UndoRequestSchema>;
@@ -219,6 +226,19 @@ export const AutosaveConflictSchema = z
   })
   .strict();
 export type AutosaveConflict = z.infer<typeof AutosaveConflictSchema>;
+
+/**
+ * 409 body of a fenced undo whose `expected_head_index` no longer matches the
+ * plan head (S-MWB-3, backend #640). Carries the current head and a fresh lock
+ * token so the screen can adopt server truth. Extra keys (`code`, `message`)
+ * are allowed.
+ */
+export const UndoHeadMovedSchema = z.object({
+  error: z.literal('undo_head_moved'),
+  head_revision_index: z.number().int().min(0),
+  lock_token: z.string().regex(LOCK_TOKEN_RE),
+});
+export type UndoHeadMoved = z.infer<typeof UndoHeadMovedSchema>;
 
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
@@ -261,6 +281,8 @@ export class WorkoutAutosaveApiError extends Error {
     /** Parsed 409 body when `kind === 'conflict'` and the body validated. */
     public readonly conflict?: AutosaveConflict,
     public readonly cause?: unknown,
+    /** Parsed 409 `undo_head_moved` body of a fenced undo (S-MWB-3). */
+    public readonly headMoved?: UndoHeadMoved,
   ) {
     super(message);
     this.name = 'WorkoutAutosaveApiError';
@@ -478,7 +500,21 @@ export const workoutAutosaveApi = {
       );
       data = res.data;
     } catch (err) {
-      throw fromAxios(err);
+      const mapped = fromAxios(err);
+      if (mapped.kind === 'conflict' && axios.isAxiosError(err)) {
+        const moved = UndoHeadMovedSchema.safeParse(err.response?.data);
+        if (moved.success) {
+          throw new WorkoutAutosaveApiError(
+            'conflict',
+            409,
+            'undo refused: the plan head moved since the undo was requested',
+            undefined,
+            err,
+            moved.data,
+          );
+        }
+      }
+      throw mapped;
     }
     return parseResponse(UndoResponseSchema, data);
   },

@@ -65,17 +65,44 @@ import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
-import { workoutAutosaveApi } from '../../api/workoutAutosaveApi';
+import {
+  WorkoutAutosaveApiError,
+  workoutAutosaveApi,
+} from '../../api/workoutAutosaveApi';
 import {
   describeHistoryFailure,
+  describeUnconfirmedHistory,
+  HISTORY_CONFIRMED_REDO,
+  HISTORY_CONFIRMED_UNDO,
+  HISTORY_EDITED_ELSEWHERE,
   HISTORY_REFRESH_FAILED,
   HISTORY_WAIT_FOR_SAVE,
+  isUnknownHistoryOutcome,
   type HistoryDirection,
 } from './workoutBuilderUndo';
 import {
   diffWorkingCopy,
   type WorkoutBuilderWorkingCopy,
 } from './workoutBuilderAutosaveDiff';
+
+/** S-MWB-3: the undo / redo barrier phases (see the screen body). */
+type HistoryOutcome = 'applied' | 'elsewhere';
+type HistoryGate =
+  | { phase: 'running' }
+  | {
+      phase: 'unconfirmed';
+      direction: HistoryDirection;
+      target: number;
+      expectedHead: number;
+    }
+  | {
+      phase: 'reload';
+      direction: HistoryDirection;
+      head: number;
+      lockToken: string;
+      expectedHead: number;
+      outcome: HistoryOutcome;
+    };
 
 type RouteParam = { planId?: string };
 
@@ -292,7 +319,26 @@ export default function CoachWorkoutBuilderScreen() {
     { enabled: searchEnabled },
   );
 
+  // S-MWB-3 (B-328-5 / B-328-6): the history barrier. Raised BEFORE the
+  // pre-undo flush and held until the server copy has been adopted (or the
+  // request was definitely refused). While it is up the editor is read-only:
+  // inputs, row controls, Save, the status-pill flush and the leave flush all
+  // stand still, so nothing the coach types can be overwritten by the copy the
+  // undo brings back. An unknown outcome (no response, 5xx, unreadable reply)
+  // keeps it up in the `unconfirmed` phase until a fenced retry settles what
+  // the server holds; a landed undo whose refreshed copy did not load keeps it
+  // up in the `reload` phase until the copy loads.
+  const historyGateRef = useRef<HistoryGate | null>(null);
+  const [historyGate, setHistoryGateState] = useState<HistoryGate | null>(null);
+  const setHistoryGate = useCallback((next: HistoryGate | null) => {
+    historyGateRef.current = next;
+    setHistoryGateState(next);
+  }, []);
+  const historyBusy = historyGate?.phase === 'running';
+  const editorLocked = historyGate !== null;
+
   const addExercise = useCallback((ex: Exercise) => {
+    if (historyGateRef.current) return;
     setRows((cur) => [
       ...cur,
       {
@@ -317,6 +363,7 @@ export default function CoachWorkoutBuilderScreen() {
   }, []);
 
   const moveRow = useCallback((idx: number, dir: -1 | 1) => {
+    if (historyGateRef.current) return;
     setRows((cur) => {
       const next = cur.slice();
       const target = idx + dir;
@@ -337,6 +384,7 @@ export default function CoachWorkoutBuilderScreen() {
   const deletedSignaturesRef = useRef<Map<string, string[]>>(new Map());
 
   const removeRow = useCallback((idx: number) => {
+    if (historyGateRef.current) return;
     setRows((cur) => {
       const target = cur[idx];
       // Record the stable clientId of the removed row REGARDLESS of whether it
@@ -361,6 +409,7 @@ export default function CoachWorkoutBuilderScreen() {
 
   const updateRow = useCallback(
     (idx: number, patch: Partial<DraftExerciseRow>) => {
+      if (historyGateRef.current) return;
       setRows((cur) =>
         cur.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
       );
@@ -528,8 +577,6 @@ export default function CoachWorkoutBuilderScreen() {
     redoStackRef.current = next;
     setRedoStackState(next);
   }, []);
-  const [historyBusy, setHistoryBusy] = useState(false);
-  const historyBusyRef = useRef(false);
   const [historyNotice, setHistoryNotice] = useState<string | null>(null);
 
   const onAutosaveSaved = useCallback((next?: { headRevisionIndex: number }) => {
@@ -698,6 +745,8 @@ export default function CoachWorkoutBuilderScreen() {
   useEffect(() => {
     if (!autosaveEnabled) return undefined;
     const unsubscribe = navigation.addListener('beforeRemove', () => {
+      // The history barrier owns the plan while it is up (S-MWB-3 B-328-5).
+      if (historyGateRef.current) return;
       void autosaveFlush();
     });
     return unsubscribe;
@@ -1097,6 +1146,7 @@ export default function CoachWorkoutBuilderScreen() {
   // baseline reanchor, exactly the window in which a full-replace Save is unsafe.
   const canSave =
     name.trim().length > 0 &&
+    !editorLocked &&
     !autosave.replayInFlight &&
     !replayAdoptionPending &&
     !replayRefetchFailed &&
@@ -1182,12 +1232,167 @@ export default function CoachWorkoutBuilderScreen() {
   // the screen owns this overlay. When the failed state is active the pill's tap
   // re-runs the refetch (`runReplayRefetch`); otherwise it retries the flush as
   // before.
+  // Adopt a server head the history request produced (or found), then fold
+  // the matching server copy into the screen. The order is the B-328-5 fix:
+  // the hook adopts first, and the screen state changes ONLY when the hook
+  // accepted it, so a refused adoption can never overwrite live edits.
+  const settleHistoryHead = useCallback(
+    async (args: {
+      direction: HistoryDirection;
+      head: number;
+      lockToken: string;
+      expectedHead: number;
+      outcome: HistoryOutcome;
+    }): Promise<void> => {
+      const fresh = await refetchPlan().catch(() => null);
+      const plan = fresh && !fresh.isError ? fresh.data : undefined;
+      if (!plan) {
+        // The server moved but its copy did not load: stay read-only and offer
+        // Check again (the same refetch).
+        setHistoryGate({ phase: 'reload', ...args });
+        setHistoryNotice(
+          args.outcome === 'applied'
+            ? HISTORY_REFRESH_FAILED
+            : 'This workout was changed in another session, and the latest version did not load. Editing is paused so nothing is lost. Check your connection, then tap Check again.',
+        );
+        return;
+      }
+      const meta = { name: plan.name ?? '', type: plan.type ?? 'strength' };
+      const adopted = autosave.adoptServerHead({
+        headRevisionIndex: args.head,
+        lockToken: args.lockToken,
+        serverCopy: buildServerWorkingCopy(plan.exercises, meta),
+      });
+      if (!adopted) {
+        // A save is still in flight or queued. Leave the screen as it is and
+        // let the replay-adoption path fold server truth in once it settles.
+        runReplayRefetch();
+        setHistoryNotice(
+          'The change went through on the server. The latest saved version loads as soon as your last edit finishes saving.',
+        );
+        setHistoryGate(null);
+        return;
+      }
+      if (args.outcome === 'applied') {
+        // The head this request left becomes the opposite step's target.
+        if (args.direction === 'undo') {
+          setUndoStack(undoStackRef.current.slice(0, -1));
+          setRedoStack([...redoStackRef.current, args.expectedHead]);
+        } else {
+          setRedoStack(redoStackRef.current.slice(0, -1));
+          setUndoStack([...undoStackRef.current, args.expectedHead]);
+        }
+      } else {
+        // Another session moved the plan: the session history no longer
+        // describes it.
+        setUndoStack([]);
+        setRedoStack([]);
+      }
+      deletedKeysRef.current.clear();
+      deletedSignaturesRef.current.clear();
+      setName(meta.name);
+      setType(meta.type);
+      setRows(
+        plan.exercises.map((e) => ({
+          clientId: clientIdForServerRow(e.id),
+          row_id: e.id,
+          exercise_external_id: e.exercise_external_id,
+          display_name: e.exercise_external_id,
+          sets: e.sets,
+          reps_or_duration_seconds: e.reps_or_duration_seconds,
+          rest_seconds: e.rest_seconds,
+          weight_lbs: e.weight_lbs,
+          superset_group_id: e.superset_group_id,
+          notes: e.notes,
+        })),
+      );
+      setHistoryNotice(
+        args.outcome === 'elsewhere'
+          ? HISTORY_EDITED_ELSEWHERE
+          : args.direction === 'undo'
+            ? HISTORY_CONFIRMED_UNDO
+            : HISTORY_CONFIRMED_REDO,
+      );
+      setHistoryGate(null);
+    },
+    [
+      refetchPlan,
+      autosave,
+      buildServerWorkingCopy,
+      runReplayRefetch,
+      setHistoryGate,
+      setUndoStack,
+      setRedoStack,
+      clientIdForServerRow,
+    ],
+  );
+
+  // Send one fenced history request and resolve its outcome. `isRetry` marks a
+  // Check again after an unknown outcome: there a 409 `undo_head_moved` whose
+  // head is exactly one step ahead means the earlier request landed.
+  const sendHistoryRequest = useCallback(
+    async (args: {
+      direction: HistoryDirection;
+      target: number;
+      expectedHead: number;
+      isRetry: boolean;
+    }): Promise<void> => {
+      if (!planId) return;
+      const { direction, target, expectedHead, isRetry } = args;
+      let res: { head_revision_index: number; lock_token: string };
+      try {
+        res = await workoutAutosaveApi.undo(planId, {
+          to_revision_index: target,
+          expected_head_index: expectedHead,
+        });
+      } catch (err) {
+        if (err instanceof WorkoutAutosaveApiError && err.headMoved) {
+          const moved = err.headMoved;
+          await settleHistoryHead({
+            direction,
+            head: moved.head_revision_index,
+            lockToken: moved.lock_token,
+            expectedHead,
+            outcome:
+              isRetry && moved.head_revision_index === expectedHead + 1
+                ? 'applied'
+                : 'elsewhere',
+          });
+          return;
+        }
+        if (isUnknownHistoryOutcome(err)) {
+          setHistoryGate({ phase: 'unconfirmed', direction, target, expectedHead });
+          setHistoryNotice(describeUnconfirmedHistory(err, direction).message);
+          return;
+        }
+        const f = describeHistoryFailure(err, direction);
+        setHistoryNotice(f.message);
+        if (f.dropHistory) {
+          if (direction === 'undo') setUndoStack([]);
+          else setRedoStack([]);
+        }
+        setHistoryGate(null);
+        return;
+      }
+      await settleHistoryHead({
+        direction,
+        head: res.head_revision_index,
+        lockToken: res.lock_token,
+        expectedHead,
+        outcome: 'applied',
+      });
+    },
+    [planId, settleHistoryHead, setHistoryGate, setUndoStack, setRedoStack],
+  );
+
   const runHistoryStep = useCallback(
     async (direction: HistoryDirection) => {
-      if (!autosaveEnabled || !planId || historyBusyRef.current) return;
-      historyBusyRef.current = true;
-      setHistoryBusy(true);
+      if (!autosaveEnabled || !planId || historyGateRef.current) return;
+      // Raise the barrier BEFORE the flush (B-328-5): from here on nothing the
+      // coach does can change the working copy until the outcome is known.
+      setHistoryGate({ phase: 'running' });
       setHistoryNotice(null);
+      let sent: { target: number; expectedHead: number } | null = null;
       try {
         // Land any buffered edit first so the undo never discards it (that
         // save becomes the newest undo step, read below from the ref).
@@ -1199,92 +1404,63 @@ export default function CoachWorkoutBuilderScreen() {
         const stack = direction === 'undo' ? undoStackRef.current : redoStackRef.current;
         const target = stack[stack.length - 1];
         if (target === undefined) return;
-        let res: { head_revision_index: number; lock_token: string };
-        try {
-          res = await workoutAutosaveApi.undo(planId, { to_revision_index: target });
-        } catch (err) {
-          const f = describeHistoryFailure(err, direction);
-          setHistoryNotice(f.message);
-          if (f.dropHistory) {
-            if (direction === 'undo') setUndoStack([]);
-            else setRedoStack([]);
-          }
-          return;
-        }
-        // The head we just left becomes the opposite step's target.
-        const left = res.head_revision_index - 1;
-        if (direction === 'undo') {
-          setUndoStack(undoStackRef.current.slice(0, -1));
-          setRedoStack([...redoStackRef.current, left]);
+        sent = { target, expectedHead: autosave.readHead().index };
+        await sendHistoryRequest({ direction, ...sent, isRetry: false });
+      } catch (err) {
+        if (sent) {
+          // The request may have landed: keep the barrier and offer Check again.
+          setHistoryGate({ phase: 'unconfirmed', direction, ...sent });
+          setHistoryNotice(describeUnconfirmedHistory(err, direction).message);
         } else {
-          setRedoStack(redoStackRef.current.slice(0, -1));
-          setUndoStack([...undoStackRef.current, left]);
+          setHistoryNotice(describeHistoryFailure(err, direction).message);
         }
-        const fresh = await refetchPlan().catch(() => null);
-        const plan = fresh && !fresh.isError ? fresh.data : undefined;
-        if (!plan) {
-          // The undo is on the server but we cannot show it yet: hold Save and
-          // offer the refresh affordance (the same path as a replay refetch).
-          runReplayRefetch();
-          setHistoryNotice(HISTORY_REFRESH_FAILED);
-          return;
-        }
-        const meta = { name: plan.name ?? '', type: plan.type ?? 'strength' };
-        deletedKeysRef.current.clear();
-        deletedSignaturesRef.current.clear();
-        setName(meta.name);
-        setType(meta.type);
-        setRows(
-          plan.exercises.map((e) => ({
-            clientId: clientIdForServerRow(e.id),
-            row_id: e.id,
-            exercise_external_id: e.exercise_external_id,
-            display_name: e.exercise_external_id,
-            sets: e.sets,
-            reps_or_duration_seconds: e.reps_or_duration_seconds,
-            rest_seconds: e.rest_seconds,
-            weight_lbs: e.weight_lbs,
-            superset_group_id: e.superset_group_id,
-            notes: e.notes,
-          })),
-        );
-        const adopted = autosave.adoptServerHead({
-          headRevisionIndex: res.head_revision_index,
-          lockToken: res.lock_token,
-          serverCopy: buildServerWorkingCopy(plan.exercises, meta),
-        });
-        setHistoryNotice(
-          adopted
-            ? direction === 'undo'
-              ? 'Undone. Redo puts the change back.'
-              : 'Redone.'
-            : HISTORY_WAIT_FOR_SAVE,
-        );
       } finally {
-        historyBusyRef.current = false;
-        setHistoryBusy(false);
+        if (historyGateRef.current?.phase === 'running') setHistoryGate(null);
       }
     },
-    [
-      autosaveEnabled,
-      planId,
-      setUndoStack,
-      setRedoStack,
-      autosave,
-      refetchPlan,
-      runReplayRefetch,
-      clientIdForServerRow,
-      buildServerWorkingCopy,
-    ],
+    [autosaveEnabled, planId, autosave, sendHistoryRequest, setHistoryGate],
   );
+
+  // Check again: resolve an unknown outcome with the SAME fence (never a fresh
+  // restore), or retry loading the copy of a head that already moved.
+  const checkHistoryAgain = useCallback(async () => {
+    const gate = historyGateRef.current;
+    if (!gate || gate.phase === 'running') return;
+    setHistoryGate({ phase: 'running' });
+    try {
+      if (gate.phase === 'unconfirmed') {
+        await sendHistoryRequest({
+          direction: gate.direction,
+          target: gate.target,
+          expectedHead: gate.expectedHead,
+          isRetry: true,
+        });
+      } else {
+        await settleHistoryHead({
+          direction: gate.direction,
+          head: gate.head,
+          lockToken: gate.lockToken,
+          expectedHead: gate.expectedHead,
+          outcome: gate.outcome,
+        });
+      }
+    } catch (err) {
+      setHistoryNotice(describeUnconfirmedHistory(err, gate.direction).message);
+      setHistoryGate(gate);
+    } finally {
+      if (historyGateRef.current?.phase === 'running') setHistoryGate(gate);
+    }
+  }, [sendHistoryRequest, settleHistoryHead, setHistoryGate]);
+
   const historyBlocked =
-    historyBusy ||
+    editorLocked ||
     autosave.replayInFlight ||
     replayAdoptionPending ||
     replayRefetchFailed;
 
   const pillStatus = replayRefetchFailed ? 'conflict' : autosave.status;
   const onPillPress = useCallback(() => {
+    if (historyGateRef.current) return;
     if (replayRefetchFailedRef.current) {
       runReplayRefetch();
       return;
@@ -1355,6 +1531,17 @@ export default function CoachWorkoutBuilderScreen() {
             {historyNotice}
           </Text>
         ) : null}
+        {autosaveEnabled &&
+        (historyGate?.phase === 'unconfirmed' || historyGate?.phase === 'reload') ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Check again"
+            onPress={() => void checkHistoryAgain()}
+            style={[styles.historyButton, { alignSelf: 'flex-start', marginBottom: spacing.xs }]}
+          >
+            <Text style={[typography.caption, { color: sc.textPrimary }]}>Check again</Text>
+          </Pressable>
+        ) : null}
 
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
@@ -1363,6 +1550,7 @@ export default function CoachWorkoutBuilderScreen() {
           accessibilityLabel="Plan name"
           value={name}
           onChangeText={setName}
+          editable={!editorLocked}
           placeholder="e.g. Push day A"
           placeholderTextColor={sc.textMuted}
           style={styles.input}
@@ -1377,6 +1565,8 @@ export default function CoachWorkoutBuilderScreen() {
             <Pressable
               key={t}
               accessibilityRole="button"
+              accessibilityState={{ disabled: editorLocked, selected: type === t }}
+              disabled={editorLocked}
               onPress={() => setType(t)}
               style={[
                 styles.typeChip,
@@ -1403,6 +1593,7 @@ export default function CoachWorkoutBuilderScreen() {
           accessibilityLabel="Estimated duration in minutes"
           value={duration}
           onChangeText={setDuration}
+          editable={!editorLocked}
           keyboardType="number-pad"
           placeholder="45"
           placeholderTextColor={sc.textMuted}
@@ -1432,7 +1623,7 @@ export default function CoachWorkoutBuilderScreen() {
                   <Pressable
                     accessibilityLabel="Move exercise up"
                     onPress={() => moveRow(idx, -1)}
-                    disabled={idx === 0}
+                    disabled={editorLocked || idx === 0}
                     style={styles.controlBtn}
                   >
                     <Text style={[typography.body, { color: sc.textPrimary }]}>
@@ -1442,7 +1633,7 @@ export default function CoachWorkoutBuilderScreen() {
                   <Pressable
                     accessibilityLabel="Move exercise down"
                     onPress={() => moveRow(idx, 1)}
-                    disabled={idx === rows.length - 1}
+                    disabled={editorLocked || idx === rows.length - 1}
                     style={styles.controlBtn}
                   >
                     <Text style={[typography.body, { color: sc.textPrimary }]}>
@@ -1451,6 +1642,8 @@ export default function CoachWorkoutBuilderScreen() {
                   </Pressable>
                   <Pressable
                     accessibilityLabel="Remove exercise"
+                    accessibilityState={{ disabled: editorLocked }}
+                    disabled={editorLocked}
                     onPress={() => removeRow(idx)}
                     style={styles.controlBtn}
                   >
@@ -1463,18 +1656,21 @@ export default function CoachWorkoutBuilderScreen() {
               <View style={styles.rowInputs}>
                 <NumberField
                   label="Sets"
+                  editable={!editorLocked}
                   value={row.sets}
                   onChange={(v) => updateRow(idx, { sets: v })}
                   sc={sc}
                 />
                 <NumberField
                   label="Reps / sec"
+                  editable={!editorLocked}
                   value={row.reps_or_duration_seconds}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
                   sc={sc}
                 />
                 <NumberField
                   label="Rest (s)"
+                  editable={!editorLocked}
                   value={row.rest_seconds ?? 0}
                   onChange={(v) => updateRow(idx, { rest_seconds: v })}
                   sc={sc}
@@ -1491,6 +1687,7 @@ export default function CoachWorkoutBuilderScreen() {
           accessibilityLabel="Search exercise catalog"
           value={search}
           onChangeText={setSearch}
+          editable={!editorLocked}
           placeholder="bench press, squat, ..."
           placeholderTextColor={sc.textMuted}
           style={styles.input}
@@ -1501,6 +1698,7 @@ export default function CoachWorkoutBuilderScreen() {
               <Pressable
                 key={ex.id}
                 accessibilityRole="button"
+                disabled={editorLocked}
                 onPress={() => addExercise(ex)}
                 style={[styles.searchHit, { borderColor: sc.border }]}
               >
@@ -1547,14 +1745,16 @@ function NumberField(props: {
   value: number;
   onChange: (n: number) => void;
   sc: SemanticTokens;
+  editable?: boolean;
 }) {
-  const { label, value, onChange, sc } = props;
+  const { label, value, onChange, sc, editable = true } = props;
   return (
     <View style={{ flex: 1 }}>
       <Text style={[typography.caption, { color: sc.textMuted }]}>{label}</Text>
       <TextInput
         accessibilityLabel={label}
         value={String(value)}
+        editable={editable}
         onChangeText={(t) => {
           const parsed = parseInt(t.replace(/[^0-9]/g, ''), 10);
           onChange(Number.isFinite(parsed) ? parsed : 0);
