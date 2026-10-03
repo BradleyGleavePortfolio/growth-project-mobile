@@ -68,6 +68,23 @@ import SleepRecoveryScreen from './SleepRecoveryScreen';
 
 type HealthRouteParams = { bucket?: 'fitness' | 'recovery' };
 
+/** Closed set logged for a failed refresh (C-317-b). */
+export type RefreshErrorClass = 'aborted' | 'network' | 'http' | 'type' | 'error' | 'other';
+
+/**
+ * Classify a refresh failure without logging anything it carries. `name` is
+ * only compared against fixed constants, never copied.
+ */
+export function refreshErrorClass(err: unknown): RefreshErrorClass {
+  if (!(err instanceof Error)) return 'other';
+  if (err.name === 'AbortError' || err.name === 'CanceledError') return 'aborted';
+  if ((err as { isAxiosError?: unknown }).isAxiosError === true) {
+    return (err as { response?: unknown }).response ? 'http' : 'network';
+  }
+  if (err instanceof TypeError) return 'type';
+  return 'error';
+}
+
 export default function WearablesShell() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, HealthRouteParams>, string>>();
@@ -146,11 +163,11 @@ export default function WearablesShell() {
         }
       })
       .catch((err: unknown) => {
-        // C-317-b: the error's class name only, never its message or body.
-        logger.warn('[wearables] on-device refresh failed', {
-          error: err instanceof Error ? err.name : typeof err,
-        });
+        // A stale failure (sign-out, unmount, a newer run) writes and logs nothing.
         if (!current()) return;
+        // C-317-b: a closed class only, never the message, body or the
+        // (mutable) Error.name.
+        logger.warn('[wearables] on-device refresh failed', { error: refreshErrorClass(err) });
         const message = connectFailureMessage(err, deviceName);
         if (message != null) {
           setNotice({ kind: 'retry', text: message.text, action: message.action, cta: message.cta });
