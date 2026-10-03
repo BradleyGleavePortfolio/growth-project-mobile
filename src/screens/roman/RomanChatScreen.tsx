@@ -40,6 +40,8 @@ import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import RomanComposer from '../../components/roman/RomanComposer';
 import RomanState from '../../components/roman/RomanState';
+import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import {
   romanRateLimited,
@@ -47,6 +49,8 @@ import {
   ROMAN_LOADING_OLDER,
   ROMAN_REPLY_ANNOUNCE_PREFIX,
   ROMAN_SEND_FAILED,
+  ROMAN_STORED_NO_REPLY,
+  ROMAN_AI_ON_ASK_AGAIN,
 } from '../../components/roman/romanVoice';
 import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -98,6 +102,8 @@ export default function RomanChatScreen({
     clearSendError,
   } = useRomanChat(surface);
   const [draft, setDraft] = useState('');
+  // Shown after AI help is allowed for a message the server already stored.
+  const [askAgainHint, setAskAgainHint] = useState(false);
   // OS "Reduce Motion" preference. When ON, the auto-scroll to the newest turn
   // is instant rather than animated, matching the reduced-motion parity the
   // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
@@ -171,12 +177,24 @@ export default function RomanChatScreen({
   }, [messages]);
 
   const isEmpty = messages.length === 0;
+  // R2b: a consent / egress refusal gets its own notice with a working action
+  // (Allow AI help, or Contact support with the reference), never the
+  // generic send-failed row.
+  const refusal = sendError?.kind === 'aiRefused' ? (sendError.refusal ?? null) : null;
+  const refusalAudience = surface === 'coach' ? 'coach' : 'client';
   const sendErrorCopy =
     sendError == null
       ? null
-      : sendError.kind === 'rateLimited'
-        ? romanRateLimited(sendError.retryAfterSeconds)
-        : ROMAN_SEND_FAILED;
+      : refusal
+        ? (() => {
+            const c = aiRefusalCopy(refusal, refusalAudience, 'roman');
+            return `${c.title}. ${c.body}`;
+          })()
+        : sendError.kind === 'rateLimited'
+          ? romanRateLimited(sendError.retryAfterSeconds)
+          : sendError.turnStored
+            ? ROMAN_STORED_NO_REPLY
+            : ROMAN_SEND_FAILED;
 
   // Announce a send failure (and its remedy) to assistive tech the moment it
   // appears. The optimistic user turn was rolled back in useRomanChat, so the
@@ -197,6 +215,7 @@ export default function RomanChatScreen({
 
   const onSend = useCallback(async () => {
     const text = draft;
+    setAskAgainHint(false);
     const outcome = await send(text);
     // Clear the composer ONLY when the turn actually persisted; on a send
     // failure the draft is preserved so the user can retry without retyping
@@ -217,6 +236,19 @@ export default function RomanChatScreen({
   const onRetrySend = useCallback(() => {
     void onSend();
   }, [onSend]);
+
+  // After a grant (or the coach's Try again) for a refusal that came in the
+  // stream, the server already stored the message: never append it again on
+  // its own. Re-read state is already shown; tell the person how to ask again
+  // (Sol B-326-3). A refusal before the turn was stored re-sends as before.
+  const onRefusalRetry = useCallback(() => {
+    if (sendError?.turnStored) {
+      clearSendError();
+      setAskAgainHint(true);
+      return;
+    }
+    onRetrySend();
+  }, [sendError, clearSendError, onRetrySend]);
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<RomanMessage>) => (
@@ -312,7 +344,26 @@ export default function RomanChatScreen({
 
         {sending ? <RomanTypingIndicator testID="roman-typing" /> : null}
 
-        {sendErrorCopy != null ? (
+        {refusal ? (
+          <AiRefusalNotice
+            refusal={refusal}
+            audience={refusalAudience}
+            surface="roman"
+            onRetry={onRefusalRetry}
+            testID="roman-ai-refusal"
+          />
+        ) : null}
+
+        {askAgainHint && sendError == null ? (
+          <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
+            <RomanAvatar crop="neutral" size={28} />
+            <Text style={styles.sendErrorText} accessibilityRole="text">
+              {ROMAN_AI_ON_ASK_AGAIN}
+            </Text>
+          </View>
+        ) : null}
+
+        {sendErrorCopy != null && !refusal ? (
           <View
             style={styles.sendError}
             testID="roman-send-error"

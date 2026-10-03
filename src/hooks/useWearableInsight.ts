@@ -16,6 +16,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query';
+import { aiRefusalOf } from '../lib/ai/aiRefusal';
 import {
   fetchCoachInsight,
   fetchClientInsight,
@@ -33,6 +34,15 @@ import type { WearableMetricBucket } from '../api/wearablesSamplesApi';
 // sooner only burns LLM budget for an unchanged answer.
 const INSIGHT_STALE_MS = 6 * 60 * 60 * 1_000;
 
+/**
+ * R2b: a consent / egress refusal is a stable answer, not a transient fault,
+ * so it is shown at once instead of after three silent retries. Anything else
+ * keeps React Query's default of three retries.
+ */
+export function retryUnlessAiRefused(failureCount: number, error: unknown): boolean {
+  return aiRefusalOf(error) === null && failureCount < 3;
+}
+
 export function useCoachInsight(args: {
   clientId: string;
   bucket: WearableMetricBucket;
@@ -45,6 +55,7 @@ export function useCoachInsight(args: {
     // Guard against an empty clientId firing a doomed request.
     enabled: (args.enabled ?? true) && args.clientId.length > 0,
     staleTime: INSIGHT_STALE_MS,
+    retry: retryUnlessAiRefused,
   });
 }
 
@@ -57,6 +68,7 @@ export function useClientInsight(args: {
     queryFn: () => fetchClientInsight({ bucket: args.bucket }),
     enabled: args.enabled ?? true,
     staleTime: INSIGHT_STALE_MS,
+    retry: retryUnlessAiRefused,
   });
 }
 
