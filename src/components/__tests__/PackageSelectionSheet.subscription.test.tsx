@@ -8,7 +8,7 @@
  * Membership..." and never called POST /v1/checkout/subscription-intent.
  *
  * Backend contract: growth-project-backend #654 (agent/clinic/b-recur-subscriptions)
- *   POST /v1/checkout/subscription-intent { package_id, idempotency_key, expected_amount_cents? }
+ *   POST /v1/checkout/subscription-intent { package_id, idempotency_key, expected_amount_cents?, expected_one_time_cents? }
  *     -> { mode: 'payment'|'setup', client_secret, ephemeral_key, customer_id,
  *          publishable_key, purchase_id, subscription_id, status, reused, plan{...} }
  *   GET  /v1/checkout/subscriptions/:purchaseId -> ClientPlanView
@@ -189,7 +189,8 @@ describe('a renewing plan sells as a subscription', () => {
 
     expect(mockPost.mock.calls.map((c) => c[0])).toEqual(['/v1/checkout/subscription-intent']);
     const body = subIntentCalls()[0][1] as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual(['expected_amount_cents', 'idempotency_key', 'package_id']);
+    expect(Object.keys(body).sort()).toEqual(['expected_amount_cents', 'expected_one_time_cents', 'idempotency_key', 'package_id']);
+    expect(body.expected_one_time_cents).toBe(0);
     expect(body.package_id).toBe(PKG_MONTHLY);
     expect(body.expected_amount_cents).toBe(9900);
     expect(body.idempotency_key).toMatch(IS_UUID);
@@ -405,9 +406,12 @@ describe('every backend code has its own calm copy and next action', () => {
   });
 
   it('PACKAGE_PRICE_CHANGED (price in the body) shows the new price; confirming reuses the same key', async () => {
-    mockPost.mockRejectedValueOnce(
-      httpError(409, { code: 'PACKAGE_PRICE_CHANGED', error: 'PACKAGE_PRICE_CHANGED', message: 'x', amount_cents: 12900, currency: 'usd' }),
-    );
+    mockPost
+      .mockRejectedValueOnce(
+        httpError(409, { code: 'PACKAGE_PRICE_CHANGED', error: 'PACKAGE_PRICE_CHANGED', message: 'x', amount_cents: 12900, currency: 'usd' }),
+      )
+      // The confirmed attempt answers the price the client confirmed (B-334-4 checks it).
+      .mockResolvedValueOnce({ data: intent('payment', { plan: { ...intent('payment').plan, amount_cents: 12900, first_charge_cents: 12900 } }) });
     const r = await mountAndSelect();
     await fireEvent.press(r.getByTestId('select-plan-btn'));
     await waitFor(() => expect(r.getByTestId('price-changed')).toBeTruthy());
