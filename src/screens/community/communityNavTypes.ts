@@ -20,6 +20,8 @@ export type CommunityStackParamList = {
   CommunityEventDetail: { eventId: string };
   /** DM inbox. */
   CommunityDmList: undefined;
+  /** Community guidelines, report/block help, contact and block list (Apple 1.2). */
+  CommunitySafety: undefined;
   /** Single DM conversation. */
   CommunityDmThread: { recipientId: string; participantLabel?: string };
   /** Compose a post (or, with a recipient, a DM). */
