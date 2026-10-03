@@ -260,8 +260,8 @@ export default function FirstPackageForm({
     <View testID={testID}>
       {resumed ? (
         <Text style={styles.help} testID={`${testID}-resumed`}>
-          Your package from earlier is saved here. Tap Create package to
-          finish it. It will not be made twice.
+          Your package from earlier is saved here. Tap Create package to finish
+          it. It will not be made twice.
         </Text>
       ) : null}
       <Text style={styles.label} nativeID={`${testID}-name-label`}>
@@ -372,7 +372,9 @@ export default function FirstPackageForm({
       ) : null}
       <TouchableOpacity
         style={[styles.primary, busy && styles.disabled]}
-        onPress={submit}
+        onPress={() => {
+          void submit();
+        }}
         disabled={busy}
         accessibilityRole="button"
         accessibilityLabel="Create package"

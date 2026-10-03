@@ -12,9 +12,16 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 
 jest.mock("../../../../services/api", () => ({
   __esModule: true,
-  default: { get: jest.fn(), post: jest.fn(async () => ({ data: {} })), put: jest.fn() },
+  default: {
+    get: jest.fn(),
+    post: jest.fn(async () => ({ data: {} })),
+    put: jest.fn(),
+  },
 }));
-jest.mock("../../../../services/sentry", () => ({ captureError: jest.fn() }));
+jest.mock("../../../../services/sentry", () => ({
+  captureError: jest.fn(),
+  setSentryUser: jest.fn(),
+}));
 
 const mockCreate = jest.fn();
 const mockList = jest.fn();
@@ -110,7 +117,7 @@ describe("OR-112-16 durable package-create intent", () => {
     await first.findByTestId("first-package-error");
     const sentKey = mockCreate.mock.calls[0][1];
     const sentBody = mockCreate.mock.calls[0][0];
-    first.unmount();
+    await first.unmount();
 
     // Reopen: a fresh component with no memory, only device storage.
     mockCreate.mockResolvedValueOnce({ data: row("pkg_1") });
@@ -135,7 +142,7 @@ describe("OR-112-16 durable package-create intent", () => {
     await fireEvent.press(first.getByTestId("first-package-create"));
     await first.findByTestId("first-package-error");
     expect(parseIntent(mockStore.get(KEY))?.packageId).toBe("pkg_1");
-    first.unmount();
+    await first.unmount();
 
     const onCreated = jest.fn();
     const second = await mount(onCreated);

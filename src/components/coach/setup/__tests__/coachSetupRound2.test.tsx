@@ -251,13 +251,12 @@ describe("B-329-1 first package retry never duplicates", () => {
 
   it("a fast double tap sends one create", async () => {
     let release: (v: unknown) => void = () => undefined;
-    mockCreate.mockImplementationOnce(
-      () => new Promise((r) => (release = r)),
-    );
+    mockCreate.mockImplementationOnce(() => new Promise((r) => (release = r)));
     mockPost.mockResolvedValue({ data: {} });
     const { getByTestId, onCreated } = await renderForm();
-    fireEvent.press(getByTestId("first-package-create"));
-    fireEvent.press(getByTestId("first-package-create"));
+    // The second tap lands while the first create is still in flight.
+    await fireEvent.press(getByTestId("first-package-create"));
+    await fireEvent.press(getByTestId("first-package-create"));
     await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
     release({ data: pkg() });
     await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));

@@ -21,8 +21,10 @@ const KEY_BASE = "coachSetup.packageCreate.v1";
 
 /**
  * How long a remembered attempt is re-sent with its key. The backend keeps
- * create keys for 7 days (packages service); a day here stays well inside
- * that, so a replay can never reach a server that has forgotten the key.
+ * package-create keys with no expiry (the WorkoutBuilderIdempotencyKey
+ * ledger is never purged), so a replay inside a day always finds the key;
+ * after a day the intent is dropped and the coach starts fresh (the wizard
+ * then offers any draft that exists as "Make it live").
  */
 export const INTENT_TTL_MS = 24 * 60 * 60_000;
 

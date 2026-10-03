@@ -49,14 +49,20 @@ describe("connectCopy is truthful for every Stripe switch combination", () => {
 
   it("pending verification never claims payouts work, and says when clients can already pay", () => {
     const charging = connectCopy(
-      view({ state: "pending_verification", chargesEnabled: true, actionRequired: false }),
+      view({
+        state: "pending_verification",
+        chargesEnabled: true,
+        actionRequired: false,
+      }),
     );
     expect(charging.body).toMatch(/^Clients can pay you now\./);
     expect(charging.body).toMatch(/payouts to your bank once it has finished/);
     const waiting = connectCopy(
       view({ state: "pending_verification", actionRequired: false }),
     );
-    expect(waiting.body).toMatch(/Clients can pay you once Stripe has finished/);
+    expect(waiting.body).toMatch(
+      /Clients can pay you once Stripe has finished/,
+    );
   });
 
   it("no copy speaks as we, none has an exclamation mark", () => {
@@ -73,7 +79,9 @@ describe("connectCopy is truthful for every Stripe switch combination", () => {
           const c = connectCopy(
             view({ state, chargesEnabled: charges, payoutsEnabled: payouts }),
           );
-          expect(`${c.title} ${c.body}`).not.toMatch(/\b(we|We|us|our|Our)\b|!/);
+          expect(`${c.title} ${c.body}`).not.toMatch(
+            /\b(we|We|us|our|Our)\b|!/,
+          );
         }
     }
   });

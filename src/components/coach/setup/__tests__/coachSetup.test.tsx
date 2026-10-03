@@ -21,6 +21,7 @@ jest.mock("../../../../services/api", () => ({
 const mockCapture = jest.fn();
 jest.mock("../../../../services/sentry", () => ({
   captureError: (...a: unknown[]) => mockCapture(...a),
+  setSentryUser: jest.fn(),
 }));
 
 const mockOpenAuth = jest.fn();
