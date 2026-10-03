@@ -364,6 +364,52 @@ describe('B-334-3 an unknown card-step outcome is read, never reported as no cha
   });
 });
 
+describe('C-334-3 the confirm poll never reports after unmount', () => {
+  it('(failed before) uncertain -> processing, unmount during the next plan read: no entitlement callback, no success', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    let reads = 0;
+    mockPresent.mockRejectedValueOnce(new Error('bridge lost the response'));
+    mockGet.mockImplementation(async (url: string) => {
+      if (url === `/v1/checkout/subscriptions/${PURCHASE}`) {
+        reads += 1;
+        if (reads === 1) return { data: planView('confirming', { checkout_state: 'processing' }) };
+        return new Promise((res) => {
+          release = res;
+        });
+      }
+      throw httpError(404, { error: 'Not Found' });
+    });
+    const pkg = purchasableFromCoachPackage(PACKAGES[0]);
+    if (!pkg) throw new Error('fixture');
+    const onEntitled = jest.fn();
+    const { result, unmount } = await renderHook(() =>
+      usePackagePurchase({
+        surface: 'sheet',
+        appearance: {},
+        colorScheme: 'light',
+        planPollDelaysMs: [0, 0],
+        entitlementPollDelaysMs: [0],
+        recheckDelaysMs: [0, 0],
+        onEntitled,
+      }),
+    );
+    let done: Promise<void> = Promise.resolve();
+    await act(async () => {
+      done = result.current.start(pkg);
+      for (let i = 0; i < 100 && reads < 2; i += 1) {
+        await Promise.resolve();
+      }
+    });
+    expect(reads).toBe(2);
+    await unmount();
+    release({ data: planView('active') });
+    await done;
+    expect(onEntitled).not.toHaveBeenCalled();
+    expect(result.current.state.phase).not.toBe('success');
+    expect(reads).toBe(2);
+  });
+});
+
 describe('B-334-4 the answered terms are reviewed before any chargeable sheet', () => {
   it('(failed before) shown a 7-day trial, the backend answers no trial (already used) -> review, no sheet; confirm replays the same key and pays', async () => {
     const noTrial = { ...TRIAL_PLAN, trial_days: 0, first_charge_cents: 4900, trial_ends_at: null };
