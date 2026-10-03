@@ -9,7 +9,7 @@
  */
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { reportUnexpected } from '../../lib/consultation/report';
-import { shortReference, supportReferenceOf } from '../../utils/correlation';
+import { newRequestId, shortReference, supportReferenceOf } from '../../utils/correlation';
 
 export type PreferenceSaveFailureKind = 'offline' | 'signed_out' | 'busy' | 'server';
 
@@ -78,7 +78,10 @@ export function preferenceSaveFailureOf(err: unknown, noun: string): PreferenceS
       reference: null,
     };
   }
-  const requestId = supportReferenceOf(err);
+  // A failure with no request id at all (not an HTTP error) still gets a
+  // reference: a fresh one, sent with the Sentry report, so the person can
+  // quote it and support can find the event.
+  const requestId = supportReferenceOf(err) ?? newRequestId();
   reportUnexpected(PREFERENCES_ENDPOINT, { status, code: codeOf(err), requestId });
   const reference = shortReference(requestId);
   return {

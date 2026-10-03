@@ -199,6 +199,14 @@ describe('B-312-1: a toggle that could not be saved says what happened, by statu
     );
   });
 
+  it('a failure with no request id still shows a reference, the same one the Sentry report carries', () => {
+    const out = preferenceSaveFailureOf(new TypeError('x is undefined'), 'workout reminder');
+    expect(out.reference).toMatch(/^[A-Za-z0-9-]{8}$/);
+    expect(out.message).toMatch(new RegExp(`mention reference ${out.reference}\\.$`));
+    const sent = mockReport.mock.calls[0][1] as { requestId: string };
+    expect(sent.requestId.startsWith(String(out.reference))).toBe(true);
+  });
+
   it('the screen shows the server failure inline with its reference and clears it on the next change', async () => {
     mockGet.mockResolvedValue({ data: { workout_reminder_push: true } });
     mockUpdate
