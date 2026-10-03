@@ -68,6 +68,9 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
   Log: () => ({ root: 'Log' }),
+  // B-NOTIF-6: a booking push (backend #648 / #634, actionParams.sessionId)
+  // opens the client's upcoming sessions with that session in focus.
+  CalendarSession: () => ({ root: 'MoreTab', screen: 'ClientUpcomingSessions' }),
   CommunityEventDetail: () =>
     featureFlags.communityTab && featureFlags.communityEvents
       ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
@@ -80,6 +83,9 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
+  // B-NOTIF-6: a coach's booking push (backend #648 / #634) opens the
+  // booking inbox.
+  CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
   // AI credit top-ups are not purchasable on hidden iOS builds: a budget
   // push lands on Settings, never on the checkout route (whose gated
   // wrapper would only say "Managed on the web").

@@ -313,4 +313,39 @@ describe('pushTapRouter', () => {
       expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', params: { threadId: 't1' } });
     });
   });
+
+  describe('B-NOTIF-6: a booking push opens the session (backend #648 / #634 contract)', () => {
+    it('client CalendarSession opens upcoming sessions with the session id', () => {
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 'sess-7' }, 'b1');
+      expect(nav.navigate).toHaveBeenCalledWith('MoreTab', {
+        screen: 'ClientUpcomingSessions',
+        params: { sessionId: 'sess-7' },
+      });
+    });
+
+    it('coach CoachBookingInbox opens the booking inbox with the session id', () => {
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CoachBookingInbox', { sessionId: 'sess-7' }, 'b2');
+      expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', {
+        screen: 'CoachBookingInbox',
+        params: { sessionId: 'sess-7' },
+      });
+    });
+
+    it('the other role never opens a screen it does not have: notification center', () => {
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CoachBookingInbox', { sessionId: 'sess-7' }, 'b3');
+      expect(nav.navigate).toHaveBeenCalledWith('Home', {
+        screen: 'NotificationCenter',
+        params: { sessionId: 'sess-7' },
+      });
+    });
+  });
 });

@@ -10,6 +10,7 @@
  */
 
 import {
+  focusFor,
   isSessionLocked,
   isWithinLockout,
 } from '../ClientUpcomingSessionsScreen';
@@ -63,5 +64,23 @@ describe('ClientUpcomingSessionsScreen — lockout resolution', () => {
         backdatedNow,
       ),
     ).toBe(true);
+  });
+});
+
+describe('B-NOTIF-6: the session a booking push opened', () => {
+  const list = [{ id: 'sess-1' }, { id: 'sess-7' }];
+
+  it('is focused when it is still scheduled', () => {
+    expect(focusFor(list, 'sess-7')).toEqual({ focusedId: 'sess-7', missing: false });
+  });
+
+  it('is reported missing when it is no longer scheduled', () => {
+    expect(focusFor(list, 'sess-9')).toEqual({ focusedId: null, missing: true });
+  });
+
+  it('nothing is focused or missing without a usable id', () => {
+    for (const requested of [undefined, null, '', 7, { id: 'sess-7' }]) {
+      expect(focusFor(list, requested)).toEqual({ focusedId: null, missing: false });
+    }
   });
 });
