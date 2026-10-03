@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { Alert, AlertButton } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import RomanAiConsentScreen, { actionNoticeOf, choiceOf, headOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
 import { captureError } from '../../../services/sentry';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
@@ -373,6 +373,69 @@ describe('RomanAiConsentScreen', () => {
       confirmLastAlert('Allow');
       await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
       expect(await readAiWithdrawalPending('user-a')).toBeNull();
+    });
+  });
+
+  describe('Sol B-326-2 round 3: a result that settles after the session ended writes nothing', () => {
+    function held() {
+      let resolve!: (v: AiConsentOutcome) => void;
+      const promise = new Promise<AiConsentOutcome>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    }
+    async function settle() {
+      await act(async () => {
+        for (let i = 0; i < 10; i += 1) await new Promise((res) => setImmediate(res));
+      });
+    }
+
+    it.each([
+      ['Allow', 'roman-ai-allow', WITHDRAWN, 'grantRoman', ALLOWED],
+      ['Withdraw', 'roman-ai-withdraw', ALLOWED, 'withdrawRoman', WITHDRAWN],
+    ] as const)('%s sent as A, B signed in before it settles: no state change and no re-read', async (label, testID, start, call, end) => {
+      const h = held();
+      const api = makeApi({ kind: 'ok', status: start }, { [call]: jest.fn(() => h.promise) });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId(testID));
+      await fireEvent.press(r.getByTestId(testID));
+      confirmLastAlert(label);
+      await waitFor(() => expect(api[call]).toHaveBeenCalledTimes(1));
+      signedIn = 'user-b';
+      h.resolve({ kind: 'ok', status: end });
+      await settle();
+      // A's screen still shows A's starting choice, nothing for B; no GET under B.
+      expect(r.getByTestId(`roman-ai-${start === ALLOWED ? 'allowed' : 'not_allowed'}`)).toBeTruthy();
+      expect(r.queryByTestId('roman-ai-notice')).toBeNull();
+      expect(api.getStatus).toHaveBeenCalledTimes(1);
+    });
+
+    it('an ambiguous Allow error after sign-out: no re-read and no notice', async () => {
+      const h = held();
+      (captureError as jest.Mock).mockClear();
+      const api = makeApi({ kind: 'ok', status: WITHDRAWN }, { grantRoman: jest.fn(() => h.promise) });
+      const r = await renderScreen(api);
+      await waitFor(() => r.getByTestId('roman-ai-allow'));
+      await fireEvent.press(r.getByTestId('roman-ai-allow'));
+      confirmLastAlert('Allow');
+      await waitFor(() => expect(api.grantRoman).toHaveBeenCalledTimes(1));
+      signedIn = null;
+      h.resolve({ kind: 'error', status: 500, requestId: 'req-500' });
+      await settle();
+      expect(api.getStatus).toHaveBeenCalledTimes(1);
+      expect(r.queryByTestId('roman-ai-notice')).toBeNull();
+      expect(captureError).not.toHaveBeenCalled();
+    });
+
+    it('the status load settles after the account changed: A\u2019s state is never shown', async () => {
+      const h = held();
+      const api = makeApi({ kind: 'ok', status: ALLOWED }, { getStatus: jest.fn(() => h.promise) });
+      const r = await renderScreen(api);
+      signedIn = 'user-b';
+      h.resolve({ kind: 'ok', status: ALLOWED });
+      await settle();
+      expect(r.queryByTestId('roman-ai-allowed')).toBeNull();
+      expect(r.getByTestId('roman-ai-loading')).toBeTruthy();
     });
   });
 
