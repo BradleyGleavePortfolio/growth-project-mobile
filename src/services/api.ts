@@ -86,7 +86,12 @@ import {
   isAccountChangedError,
   type AccountBinding,
 } from './accountBinding';
-import { holdSessionFence, sessionGeneration, type SessionFencePass } from './sessionFence';
+import {
+  holdSessionFence,
+  sessionGeneration,
+  sessionWritesSettled,
+  type SessionFencePass,
+} from './sessionFence';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -152,6 +157,8 @@ api.interceptors.request.use(async (config) => {
  */
 async function readTokenForRequest(config: RetryableConfig): Promise<string | null> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Never read while a session-key write is landing (a half-written pair).
+    await sessionWritesSettled();
     const before = sessionGeneration();
     const token = await secureStorage.getItem('supabase_token');
     if (sessionGeneration() !== before) continue;
@@ -298,7 +305,7 @@ async function handleRefreshFailure(startGeneration: number): Promise<void> {
   // held for the whole sign-out. A sign-in that begins meanwhile waits and
   // writes its tokens after this sign-out finished; one that began earlier
   // has moved the generation, and this sign-out does not happen.
-  const fence = holdSessionFence(startGeneration);
+  const fence = holdSessionFence(startGeneration, 'signout');
   if (!fence) return;
   try {
     const signOut = __testSignOut
@@ -309,7 +316,8 @@ async function handleRefreshFailure(startGeneration: number): Promise<void> {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
   } finally {
-    fence.release();
+    // The failed session has ended: the generation moves.
+    fence.release(true);
   }
   if (deletionComplete) {
     Alert.alert(DELETION_COMPLETE_NOTICE.title, DELETION_COMPLETE_NOTICE.body);
@@ -398,19 +406,37 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // A-331-7 (Sol round 2): a 401 for a request first sent in an older
+    // session generation belongs to a session that has ended or is being
+    // replaced (a sign-in or sign-out wrote a session key since, possibly
+    // only one key of the pair so far). It never starts or joins a refresh,
+    // which could otherwise read the old refresh token beside the new access
+    // token. An unbound request keeps its original 401 (C-331-8).
+    if (
+      originalConfig._sessionGeneration !== undefined &&
+      originalConfig._sessionGeneration !== sessionGeneration()
+    ) {
+      return Promise.reject(binding ? new AccountChangedError(false) : error);
+    }
+
     // If a refresh is already in flight, await it. Otherwise start one. The
     // promise is shared across all concurrent 401s so N parallel requests
     // produce a single refresh call per cycle.
     if (!refreshPromise) {
-      // The session this refresh belongs to (sessionFence generation).
-      const startGeneration = sessionGeneration();
-      refreshPromise = performRefresh(startGeneration)
-        .catch(async (err) => {
+      refreshPromise = (async () => {
+        // The session this refresh belongs to (sessionFence generation),
+        // taken once no session-key write is landing.
+        await sessionWritesSettled();
+        const startGeneration = sessionGeneration();
+        try {
+          return await performRefresh(startGeneration);
+        } catch (err) {
           // A refresh overtaken by a sign-out or sign-in is not a failed
           // session: the new session must not be signed out for it.
           if (!isAccountChangedError(err)) await handleRefreshFailure(startGeneration);
           throw err;
-        })
+        }
+      })()
         .finally(() => {
           // Clear the promise so the next 401 burst can trigger a fresh
           // refresh. Reset `loggedOutOnce` on the SAME chain so the guard's

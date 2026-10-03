@@ -237,6 +237,67 @@ describe('refresh overtaken by a sign-in (A-331-7 / B-331-7)', () => {
   });
 });
 
+describe('late old-account 401 during a half-written sign-in (Sol A-331-7 round 2)', () => {
+  it("A's held 401 lands while B's refresh-token write is landing: nothing of A is published", async () => {
+    let release401!: () => void;
+    let reached401!: () => void;
+    const at401 = new Promise<void>((r) => (reached401 = r));
+    const gate401 = new Promise<void>((r) => (release401 = r));
+    respond = async (config) => {
+      if (config.url === '/a-work' && config.headers?.Authorization === `Bearer ${A}`) {
+        reached401();
+        await gate401;
+        return http(config, 401);
+      }
+      return ok(config);
+    };
+    const work = api.get('/a-work').catch((e: unknown) => e);
+    await at401;
+    // B's sign-in: the access token lands, the refresh-token write is paused.
+    const p = pauseNext('set', 'supabase_refresh_token');
+    const bSignIn = signIn(B, 'refresh-b');
+    await p.reached;
+    expect(stored()).toEqual({ access: B, refresh: 'refresh-a' }); // the half-written pair
+    release401();
+    const err = await work;
+    await settle();
+    p.release();
+    await bSignIn;
+    await settle();
+    expect(stored()).toEqual({ access: B, refresh: 'refresh-b' });
+    expect(refreshCalls).toEqual([]); // the old 401 never started a refresh
+    expect((err as AxiosError).response?.status).toBe(401);
+    await expectNextRequestIsB();
+  });
+
+  it('a request made while that write lands waits for the whole pair; its refresh uses B\'s refresh token', async () => {
+    let first = true;
+    respond = (config) => {
+      if (config.url === '/b-work' && first) {
+        first = false;
+        return http(config, 401);
+      }
+      return ok(config);
+    };
+    __setRefreshSessionForTests(async ({ refresh_token }) => {
+      refreshCalls.push(refresh_token);
+      return { data: { session: { access_token: jwt('user-b', 2), refresh_token: 'refresh-b2' } }, error: null };
+    });
+    const p = pauseNext('set', 'supabase_refresh_token');
+    const bSignIn = signIn(B, 'refresh-b');
+    await p.reached; // stored pair is B access / A refresh
+    const work = api.get('/b-work');
+    await settle();
+    expect(sent.filter((x) => x.url === '/b-work')).toEqual([]); // the read waits for the landing write
+    p.release();
+    await bSignIn;
+    const res = await work;
+    expect(res.status).toBe(200);
+    expect(refreshCalls).toEqual(['refresh-b']); // never A's refresh token beside B's access token
+    expect(stored()).toEqual({ access: jwt('user-b', 2), refresh: 'refresh-b2' });
+  });
+});
+
 describe('refresh overtaken by a sign-out (Opus probe 2)', () => {
   it("signed out while A's access-token write is in flight: A's session never comes back", async () => {
     const p = pauseNext('set', 'supabase_token');
