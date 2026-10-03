@@ -18,6 +18,7 @@
     "validate:config": "node scripts/validate-app-config.js",
     "validate:release": "node scripts/validate-app-config.js --release",
     "update:publish": "node scripts/eas-update-guard.js",
+    "update:sourcemaps": "node scripts/eas-update-guard.js --sourcemaps-only",
     "smoke:android": "bash scripts/release-smoke.sh",
     "qa:invite": "bash scripts/invite-qa.sh"
   },

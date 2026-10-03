@@ -177,4 +177,36 @@ describe('validate-app-config — EAS Update gate', () => {
       });
     });
   });
+
+  describe('S-RELEASE-3: runtime code never drives expo-updates (no update mid-session or mid-onboarding)', () => {
+    it.each([
+      ['src/services/updates.ts', "import * as Updates from 'expo-updates';\nexport const go = () => Updates.reloadAsync();\n"],
+      ['src/screens/onboarding/Step.tsx', "const { fetchUpdateAsync } = require('expo-updates');\n"],
+      ['App.tsx', "import 'expo-updates';\n"],
+      ['src/lazy.ts', "export const load = () => import('expo-updates');\n"],
+    ])('rejects %s importing expo-updates', (rel, code) => {
+      withWorkspace((dir) => {
+        fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+        fs.writeFileSync(path.join(dir, rel), code);
+        const r = run(dir);
+        expect(r.status).not.toBe(0);
+        expect(r.parsed.errors.some((e) => e.startsWith(`${rel}: imports expo-updates`))).toBe(true);
+      });
+    });
+
+    it('allows tests, mocks and look-alike names', () => {
+      withWorkspace((dir) => {
+        fs.mkdirSync(path.join(dir, 'src', '__tests__'), { recursive: true });
+        fs.writeFileSync(path.join(dir, 'src', '__tests__', 'u.test.ts'), "jest.mock('expo-updates');\n");
+        fs.writeFileSync(path.join(dir, 'src', 'ok.ts'), "// expo-updates applies on cold start\nimport x from 'expo-updates-interface';\nexport default x;\n");
+        const r = run(dir);
+        expect(r.parsed.errors.filter((e) => /imports expo-updates/.test(e))).toEqual([]);
+      });
+    });
+
+    it('the repository runtime code passes', () => {
+      const res = spawnSync('node', [VALIDATOR, '--json'], { cwd: REPO_ROOT, encoding: 'utf8' });
+      expect(JSON.parse(res.stdout).errors.filter((e) => /imports expo-updates/.test(e))).toEqual([]);
+    });
+  });
 });

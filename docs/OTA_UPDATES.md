@@ -89,6 +89,9 @@ from main after the merge is the first OTA-capable one (any profile).
 
 ## Publishing (operator)
 
+OTA is for post-launch fixes only (owner). New features and anything that
+touches native inputs ship in a store build.
+
 Always publish through the guard:
 
 ```
@@ -96,25 +99,42 @@ npm run update:publish -- --channel clinic --environment production --message "<
 npm run update:publish -- --channel production --environment production --message "<what changed>"   # store builds
 npm run update:publish -- --channel preview --environment preview --message "<what changed>"          # internal builds
 # add --dry-run to run every check without publishing
+# add --rollout-percentage <1-100> for a staged rollout (for example 10)
 ```
 
-The guard (`scripts/eas-update-guard.js`) runs
-`eas update --channel <c> --environment <e> --message <m>` only when all of these hold:
-1. Exactly one eas.json build profile uses the channel, and `--environment` is given and equals that profile's `environment` (after `extends`; `clinic` → `production`). SDK 55+ requires it.
-2. `src/config/purchaseSurfaces.ts` matches the reviewed hash in `scripts/purchase-policy.sha256`.
-3. The **remote** EAS project variable `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` in that environment is exactly `"true"`.
+The guard accepts only `--channel`, `--environment`, `--message`,
+`--rollout-percentage`, `--dry-run` (and `--sourcemaps-only`, below). Any other
+option is refused, not ignored. It runs
+`eas update --channel <c> --environment <e> --message <m> --source-maps true --emit-metadata [--rollout-percentage <n>]`
+only when all of these hold:
+1. **Arguments.** Exactly one eas.json build profile uses the channel; `--environment` is given and equals that profile's `environment` (after `extends`; `clinic` → `production`; SDK 55+ requires it); `--message` is non-empty; `--rollout-percentage`, when given, is a whole number from 1 to 100.
+2. **Purchase gate.** `src/config/purchaseSurfaces.ts` matches the reviewed hash in `scripts/purchase-policy.sha256`.
+3. **Hide flag, remote.** The EAS project variable `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` in that environment is exactly `"true"`.
    - **Lookup:** `eas env:get <env> --variable-name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES --format short --scope project --non-interactive`, with the flag stripped from the child's environment.
-   - **Requirement:** the output must contain exactly one `NAME=true` record.
-   - **Refusals (fail closed):** a missing variable (eas-cli prints "not found" and still exits 0), an empty, masked (sensitive/secret) or duplicate value, or a failed lookup.
-   - **Why not `eas env:exec`:** it merges the parent shell env and skips absent remote values, so a locally exported `true` could pass as remote. The guard therefore never trusts the local shell.
-4. The local shell does not set the flag to anything other than `"true"`. The publish child also runs without the local flag, so the bundle takes the EAS environment's value.
-5. **Build parity.** The publish child gets the target profile's resolved `eas.json` env (for `clinic`: the production values plus every clinic flag, and `TGP_ANDROID_HEALTH_CONNECT=0`, which also keeps the Expo config and so the runtime fingerprint equal to the build's). Every other `EXPO_PUBLIC_*` in the local shell is dropped. eas-cli exports with `{ ...process.env, ...EAS environment }`, so an EAS variable wins over the shell: the guard reads `eas env:list <env> --format short` for the project and the account scope and refuses when any of those names exists there with a different, masked or duplicated value.
-6. Every `kind: "required"` name in `config/expected-env.json` is present in the EAS environment or the profile env.
+   - **Requirement:** exactly one `NAME=true` record. A missing variable (eas-cli prints "not found" and still exits 0), an empty, masked or duplicate value, or a failed lookup refuses.
+   - **Why not `eas env:exec`:** it merges the parent shell env and skips absent remote values, so a locally exported `true` could pass as remote.
+4. **Hide flag, local.** The local shell does not set the flag to anything other than `"true"`. The publish child runs without it, so the bundle takes the EAS value.
+5. **The update ships the bundle the binary was built with.** `eas update --environment <e>` exports with `{ ...process.env, ...EAS plaintext and sensitive values }`; `secret` values are readable only on EAS builders and never reach an update. The guard reads `eas env:list <env> --format short --scope project|account --include-sensitive` and, for every name that reaches the bundle (each `EXPO_PUBLIC_*` and each `eas.json` profile env name), refuses when:
+   - a record is `secret`, a file, masked or not revealed: the update could not carry the value the binary has (fix: make it `sensitive`, which an update can read);
+   - the name is set more than once with different values (project vs account precedence is not documented, so the shipped value would be undefined);
+   - the EAS value differs from the profile's `eas.json` value (for `clinic`: every clinic flag, the hide flag and `TGP_ANDROID_HEALTH_CONNECT=0`, which also keeps the runtime fingerprint equal to the build's).
+   The publish child gets the profile env; every other local `EXPO_PUBLIC_*` is dropped.
+6. **Release values.** The effective bundle values pass the same checks as the build (`scripts/check-expected-env.js` `valueProblem`, see `docs/RELEASE_ENV_CHECK.md`): every `kind: "required"` name plus the profile's `releaseProfiles` list is set, not a placeholder (`REPLACE_WITH_*`, `your_..._here`, a copied `*****` ...), and well formed (https URL on a real host, anon Supabase key, Sentry DSN, Stripe publishable key of the profile's mode). No secret-shaped `EXPO_PUBLIC_*` name is set.
+7. **Sentry symbolication.** When the bundle reports to Sentry (a DSN is set; always on `clinic` and `production`), a usable `SENTRY_AUTH_TOKEN` must be available before anything is published: the local shell first, else a plaintext or sensitive EAS variable in that environment (a `secret` one cannot be read off EAS builders). app.json must name the Sentry organization and project (`@sentry/react-native/expo` plugin).
 
-Tests: `scripts/__tests__/easUpdateGuard.test.js` drives `main()` end to end with an injected runner. No refusal case reaches `eas update`.
+Every refusal line names the variable, its scope and the fix. No configured value is ever printed (only the reviewed `eas.json` value, which is the expected policy).
 
-The unguarded equivalent, for reference only, is
-`eas update --channel production --environment production --message "<what changed>"`.
+**After `eas update` succeeds** the guard checks that `dist/` holds iOS and Android source maps with Sentry Debug IDs written by this publish, and uploads them with `sentry-expo-upload-sourcemaps` (from `@sentry/react-native`; organization, project and URL from app.json; the token is passed to that child only). Then it prints the Sentry searches for the new update ids. If the upload fails, the update is already live: the guard exits non-zero and names the re-upload command:
+
+```
+npm run update:sourcemaps -- --channel <channel> --environment <environment>
+```
+
+It uploads the source maps of the update in `dist/` again (it requires `dist/eas-update-metadata.json` from a guarded publish) and publishes nothing.
+
+Tests: `scripts/__tests__/easUpdateGuard.test.js` drives `main()` end to end with an injected runner. No refusal case reaches `eas update`; the upload runs only after a successful publish.
+
+There is no supported unguarded path: a raw `eas update` would ship without the clinic profile env, without the release-value checks and without source maps in Sentry.
 
 ### Build env vs update env (purchase-critical)
 
@@ -123,7 +143,8 @@ The unguarded equivalent, for reference only, is
 | Variable | Value |
 |---|---|
 | `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` | `true` |
-| `EXPO_PUBLIC_API_URL` (and the other `EXPO_PUBLIC_*` in `.env.example`) | same values as the build |
+| `EXPO_PUBLIC_API_URL` (and the other `EXPO_PUBLIC_*` in `.env.example`) | same values as the build, visibility `plaintext` or `sensitive` (never `secret`: an update cannot read it) |
+| `SENTRY_AUTH_TOKEN` | a Sentry token with `project:releases` scope, visibility `sensitive` (or export it in the publishing shell) |
 
 ```
 eas env:create --environment production --name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES --value true --visibility plaintext
@@ -144,9 +165,11 @@ Update code signing is **not** configured. Updates are authenticated by EAS acco
 
 ### Before the first production publish (device checks)
 
+Hard gate before the first `clinic` or `production` publish. Record for each run the binary (build number and EAS build id), its runtime (`npx expo-updates runtimeversion:resolve --platform <p>` and the runtime on expo.dev), and the update group id.
+
 1. The first OTA-capable build starts offline (embedded bundle), in airplane mode, twice.
-2. A preview update is received on a later launch (and a clinic update reaches only the clinic binary).
-3. An update that fails early recovers to the embedded bundle.
+2. A preview update is received on a later cold start, and a clinic update reaches only the clinic binary.
+3. An update that fails early recovers to the embedded bundle, and Sentry shows the warning "OTA emergency launch" with `expo.updates.emergency:true`.
 4. An operator rollback (`eas update:rollback`) reaches the device.
 
 Expo error recovery is best-effort. None of these checks is covered by Jest or the config validator.
@@ -154,10 +177,34 @@ Expo error recovery is best-effort. None of these checks is covered by Jest or t
 Only JavaScript/asset changes can ship this way. Native changes (new native
 module, permissions, plugins, build numbers) need a new binary.
 
+### Never mid-session, never on the first launch
+
+- The app never checks for, downloads or applies an update from JavaScript. `npm run validate:config` fails if any runtime file imports `expo-updates`.
+- A downloaded update applies on the next cold start only. The first launch after install always runs the embedded bundle (`fallbackToCacheTimeout: 0`), so onboarding is never interrupted by an update.
+- `src/services/otaUpdateTags.ts` reads the running update's identity (no import of `expo-updates`) for Sentry.
+
+### Watching an update in Sentry
+
+An update keeps the binary's Sentry release (`<version>+<build>`), so search by update instead. Every event carries:
+
+| Tag | Meaning |
+|---|---|
+| `expo.updates.update_id` | the running update (the iOS or Android update id that `eas update` prints, lowercase) |
+| `expo.updates.channel` | `clinic`, `production` or `preview` |
+| `expo.updates.runtime_version` | the binary's fingerprint runtime |
+| `expo.updates.embedded` | `true` while the bundle inside the binary runs |
+| `expo.updates.emergency` | `true` when expo-updates fell back to the embedded bundle because an update failed |
+
+The names match what newer `@sentry/react-native` versions set, so the searches keep working after an SDK upgrade. Source maps uploaded for an update have no release in Sentry; Debug IDs match them to events.
+
+### Who may publish (C-305-3)
+
+Update code signing is not configured, so EAS publish rights are the only authorization. Keep them with the owner: on expo.dev → account → Members, no one else should hold the Owner, Admin or Developer role (each can publish updates). Check that list before the first publish.
+
 ## Release procedure (operator-run)
 
 1. Merge the JS fix to `main` (green required checks, audit). Check out that exact commit, clean tree.
 2. Confirm the runtime matches the installed binary: `npx expo-updates runtimeversion:resolve --platform ios` (and `android`) equals the runtime shown for the target build on expo.dev. If not, the change touched native inputs: ship a new binary instead.
 3. `npm run update:publish -- --channel <clinic|production|preview> --environment <its environment> --message "<what changed>" --dry-run`, then the same without `--dry-run`.
-4. Publish to `preview` first and install it on a preview build; then the target channel. For a risky change use `--rollout-percentage` with the raw command only after the dry run passed.
-5. Watch Sentry for the new release; roll back with `eas update:rollback` (or republish the previous commit through the guard).
+4. Publish to `preview` first and check it on a preview build; then the target channel. For a risky change add `--rollout-percentage 10` (through the guard, never the raw command), then raise it with `eas update:edit` once Sentry stays quiet.
+5. Watch Sentry with `expo.updates.update_id:<id>` (the guard prints the searches) and `expo.updates.emergency:true`. Roll back with `eas update:rollback`, or republish the previous commit through the guard.

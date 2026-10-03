@@ -701,6 +701,38 @@ const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER
 // binary has its own channel: it is built with clinic-only EXPO_PUBLIC_FF_*
 // values in eas.json, and an update exported for `production` would turn
 // those features off on clinic devices.
+// S-RELEASE-3 (owner: an update must never interrupt a session or
+// onboarding, and must never brick a build): runtime code never drives
+// expo-updates. A downloaded update then applies only on the next cold start
+// (checkAutomatically ON_LOAD, fallbackToCacheTimeout 0), never through a
+// JS reloadAsync / fetchUpdateAsync in the middle of a flow. Update identity
+// for Sentry is read without importing the module (src/services/otaUpdateTags.ts).
+const EXPO_UPDATES_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"`]expo-updates(?:\/[^'"`]*)?['"`]/;
+
+function runtimeSourceFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== '__tests__' && e.name !== '__mocks__') walk(p);
+      } else if (/\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(e.name) && !/\.(?:test|spec)\.[jt]sx?$/.test(e.name) && !/\.d\.ts$/.test(e.name)) {
+        out.push(path.relative(root, p).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(path.join(root, 'src'));
+  for (const f of ['App.tsx', 'App.js', 'index.ts', 'index.js']) if (fs.existsSync(path.join(root, f))) out.push(f);
+  return out.sort();
+}
+
 const EXPECTED_CHANNELS = {
   preview: { channel: 'preview', environment: 'preview' },
   production: { channel: 'production', environment: 'production' },
@@ -781,6 +813,13 @@ function validateUpdates(app) {
   }
   if (updates.fallbackToCacheTimeout !== 0) {
     fail(`app.json: expo.updates.fallbackToCacheTimeout must be 0 (never block launch on the network), got ${JSON.stringify(updates.fallbackToCacheTimeout)}`);
+  }
+  for (const rel of runtimeSourceFiles(ROOT)) {
+    if (EXPO_UPDATES_IMPORT.test(fs.readFileSync(path.join(ROOT, rel), 'utf8'))) {
+      fail(
+        `${rel}: imports expo-updates. Runtime code must not check for, fetch or reload updates: a downloaded update applies only on the next cold start, so it never interrupts a session or onboarding (owner rule, docs/OTA_UPDATES.md). Fix: remove the import (src/services/otaUpdateTags.ts reads the update identity without it), or get an owner decision and change this rule.`,
+      );
+    }
   }
 
   const easPath = path.join(ROOT, 'eas.json');
