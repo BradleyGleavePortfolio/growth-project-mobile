@@ -402,8 +402,8 @@ function ProgramForm({
             accessibilityLiveRegion="polite"
             style={[styles.help, { color: colors.textSecondary }]}
           >
-            We could not confirm whether this saved, so your entries are kept
-            exactly as sent. Retry to check; it cannot make a second copy.
+            The app could not confirm whether this saved, so your entries are
+            kept exactly as sent. Retry to check; it cannot make a second copy.
           </Text>
         ) : null}
         <SmallButton

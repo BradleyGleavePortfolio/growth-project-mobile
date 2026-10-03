@@ -169,6 +169,8 @@ describe("ProgramFormScreen request keys (B-328-2)", () => {
     expect(
       await screen.findByText(/could not confirm whether this saved/),
     ).toBeTruthy();
+    // S-MWB-3: no first person in coach-facing failure copy.
+    expect(screen.queryByText(/\bWe could not\b/)).toBeNull();
     expect(screen.getByLabelText("Program name").props.editable).toBe(false);
     await fireEvent.press(screen.getByLabelText("Create program"));
     expect(mockCreate).toHaveBeenCalledTimes(2);
