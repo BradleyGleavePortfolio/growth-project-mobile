@@ -42,6 +42,8 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
+import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
+import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
 import { ZodError } from 'zod';
 
 import {
@@ -199,6 +201,30 @@ export function ClientWearableInsightPanel({
         <SkeletonBar width="80%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="86%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
         <SkeletonBar width="100%" height={44} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonCta} />
+      </View>
+    );
+  }
+
+  // ── R2b refusal: AI insights are off until the client allows AI help
+  //    (Allow AI help opens the box 2 choice), or a server-side egress block
+  //    (Contact support with the reference). Never "sign in again". ──
+  const refusal = query.isError ? aiRefusalOf(query.error) : null;
+  if (refusal) {
+    return (
+      <View
+        style={[styles.card, { borderColor: withAlpha(tone.accent, 0.3) }]}
+        accessibilityRole={CARD_REGION_ROLE}
+        accessibilityLabel={`AI insight, ${BUCKET_LABEL[bucket]}`}
+        testID="client-insight-refused"
+      >
+        <AiRefusalNotice
+          refusal={refusal}
+          audience="client"
+          surface="insight"
+          onRetry={onRetry}
+          compact
+          testID="client-insight-ai-refusal"
+        />
       </View>
     );
   }
