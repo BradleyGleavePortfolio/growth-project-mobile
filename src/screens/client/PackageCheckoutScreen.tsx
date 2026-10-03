@@ -1,28 +1,22 @@
 /**
  * PackageCheckoutScreen — client-facing landing page for a coach's package
- * share link. Renders the offering, then mints a Stripe Checkout Session
- * and opens the hosted page in a browser sheet.
+ * share link (`tgp://p/:token`). Renders the offering and its terms, then
+ * sells it through the shared purchase flow (src/hooks/usePackagePurchase.ts)
+ * in the native, TGP-themed Stripe PaymentSheet (OR-113-1: no hosted
+ * Checkout, no in-app browser):
+ *   renewing -> POST /v1/checkout/subscription-intent -> PaymentSheet
+ *               (payment, or setup for a trial) -> "Confirming your plan"
+ *   one-time -> POST /v1/checkout/payment-intent -> PaymentSheet
+ *   $0       -> POST /v1/packages/:id/claim-free
  *
- * Why Stripe Checkout (web sheet) and not PaymentSheet in-app:
- *   • The mobile build is in Expo's managed workflow. PaymentSheet from
- *     @stripe/stripe-react-native requires a native module + Expo config
- *     plugin and a dev-client. Adding that ships a new native binary,
- *     which is outside the pre-TestFlight scope.
- *   • Stripe Checkout has the same compliance + UX guarantees (Apple Pay,
- *     Link, 3DS, SCA) and works in the existing managed binary.
- *   • The backend response leaves the door open for PaymentSheet: if it
- *     returns `paymentIntentClientSecret` + `ephemeralKey` + `customerId`
- *     + `publishableKey`, a future build can swap the open-browser call
- *     for `presentPaymentSheet()` without touching the contract.
- *
- * Real-or-flagged: a `CHECKOUT_NOT_CONFIGURED` / 404 / 503 response is
- * surfaced as an actionable error — never a synthesized success.
+ * The checkout routes sell only the signed-in client's own coach's packages;
+ * a share link from another coach answers PACKAGE_NOT_FOUND, shown with its
+ * own copy (see the B-RECUR-MOB report, CONTRACT GAP).
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -32,22 +26,19 @@ import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { Ionicons } from '@expo/vector-icons';
 // Filing basis: Guideline 3.1.3(d). A client package is real-time 1:1
 // coaching with an individual coach, so it may be paid outside IAP. The
-// branded webview (or any transport) confers NO exemption by itself.
-// Stripe checkout opens in the in-app branded webview. The BrandedCheckoutWebView
-// screen owns the URL allow-list, deep-link short-circuit, and the
-// CheckoutReturn refresh that keeps webhook-derived state authoritative.
+// transport (here the native PaymentSheet) confers NO exemption by itself.
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
-import {
-  publicPackagesApi,
-  PublicPackageView,
-  CheckoutSessionResponse,
-  PACKAGE_CHECKOUT_RETURN_SCHEME,
-} from '../../api/packagesApi';
-import { errorCode, errorMessage, errorStatus } from '../../types/common';
-import { assertStripeUrl } from '../../utils/stripeUrlValidator';
+import { publicPackagesApi, PublicPackageView } from '../../api/packagesApi';
+import { errorCode, errorStatus } from '../../types/common';
 import { isValidPackageShareToken } from '../../utils/packageShare';
-import { mediumTap, successTap, warningTap } from '../../utils/haptics';
+import { mediumTap } from '../../utils/haptics';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { usePackagePurchase } from '../../hooks/usePackagePurchase';
+import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
+import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
+import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import { planTerms, purchasableFromPublicPackage } from '../../lib/planTerms';
 import { track } from '../../lib/analytics';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../theme/tokens';
@@ -87,7 +78,8 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
   const [pkg, setPkg] = useState<PublicPackageView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<{ title: string; body: string } | null>(null);
-  const [paying, setPaying] = useState(false);
+  const { refreshEntitlement } = useEntitlement();
+  const { appearance, colorScheme } = usePaymentSheetAppearance();
 
   const load = useCallback(async () => {
     setError(null);
@@ -126,15 +118,17 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
       } else if (code === 'PACKAGES_NOT_CONFIGURED') {
         setError({
           title: 'Not available yet',
-          body: errorMessage(
-            err,
-            'Coach packages are not available in this environment yet.',
-          ),
+          body: 'Coach plans are not switched on for this app yet. Message the coach who shared the link.',
+        });
+      } else if (httpCode === undefined) {
+        setError({
+          title: 'You are offline',
+          body: 'This plan could not load because the phone is offline. Check your connection, then choose Try again.',
         });
       } else {
         setError({
-          title: 'Could not load this package',
-          body: errorMessage(err, 'Please check your connection and try again.'),
+          title: 'Could not load this plan',
+          body: 'This plan did not load. Choose Try again in a minute, or message the coach who shared the link.',
         });
       }
     } finally {
@@ -147,86 +141,42 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     load();
   }, [load, shareToken]);
 
-  const handlePay = useCallback(async () => {
-    if (!pkg) return;
+  const purchase = usePackagePurchase({
+    surface: 'share_link',
+    shareToken,
+    appearance,
+    colorScheme,
+    onEntitled: () => {
+      void refreshEntitlement().catch(() => false);
+    },
+    onReloadNeeded: () => {
+      void load();
+    },
+  });
+  const sellable = useMemo(() => (pkg ? purchasableFromPublicPackage(pkg) : null), [pkg]);
+
+  const handlePay = useCallback(() => {
+    if (!sellable) return;
     mediumTap();
-    setPaying(true);
-    try {
-      // Backend `POST /v1/checkout/sessions` requires the resolved package
-      // UUID (not the share token). We use the id returned from the public
-      // share lookup. The default redirect URLs minted in packagesApi use the
-      // backend-accepted `com.growthproject.app://checkout/success` /
-      // `.../checkout/cancel` deep links — the SAME scheme + path that the
-      // BrandedCheckoutWebView parser (`returnScheme` below) and RootNavigator
-      // intercept, so a completed Stripe payment is reliably routed to
-      // CheckoutReturn for confirmation.
-      const res = await publicPackagesApi.createCheckoutSession(pkg.id);
-      const data: CheckoutSessionResponse = res.data;
-      if (!data.url) {
-        // Real-or-flagged: backend can return a paymentIntent payload for a
-        // future PaymentSheet path; for now we only know how to open URLs.
-        warningTap();
-        Alert.alert(
-          'Checkout unavailable',
-          'The server returned a payment intent without a hosted Checkout URL. Update the app or contact your coach to enable in-app payments on this environment.',
-        );
-        return;
-      }
-      track('package_checkout_session_created', { share_token: shareToken });
-      try {
-        assertStripeUrl(data.url, 'PackageCheckoutScreen');
-      } catch {
-        warningTap();
-        Alert.alert(
-          'Checkout unavailable',
-          'Payment link is invalid. Please contact your coach.',
-        );
-        return;
-      }
-      // Guideline 3.1.3(d) (real-time 1:1 service); transport is not the
-      // basis. Stripe Checkout opens in the branded in-app webview, which owns
-      // the URL allow-list, deep-link short-circuit, and refresh; webhooks
-      // remain the source of truth for subscription state.
-      successTap();
-      track('package_checkout_returned', { share_token: shareToken });
-      (
-        navigation as unknown as {
-          navigate: (
-            name: string,
-            params: { checkoutUrl: string; packageName: string; returnScheme: string },
-          ) => void;
-        }
-      ).navigate('BrandedCheckoutWebView', {
-        checkoutUrl: data.url,
-        packageName: pkg?.title ?? 'Coaching package',
-        // MUST match the scheme of the success_url/cancel_url minted by
-        // createCheckoutSession (PACKAGE_CHECKOUT_SUCCESS_URL/_CANCEL_URL).
-        // Mismatched schemes mean the webview never intercepts the Stripe
-        // return redirect and the buyer is stranded after paying (P0).
-        returnScheme: PACKAGE_CHECKOUT_RETURN_SCHEME,
-      });
-    } catch (err) {
-      const code = errorCode(err);
-      if (code === 'PACKAGES_NOT_CONFIGURED' || code === 'STRIPE_NOT_CONFIGURED') {
-        Alert.alert(
-          'Payments not enabled',
-          errorMessage(err, 'Payments are not enabled in this environment.'),
-        );
-      } else if (code === 'CONNECT_ONBOARDING_INCOMPLETE') {
-        Alert.alert(
-          'Your coach is finishing setup',
-          'This coach hasn\'t finished setting up payouts. Please check back shortly or message them directly.',
-        );
-      } else {
-        Alert.alert(
-          'Could not start checkout',
-          errorMessage(err, 'Please try again in a moment.'),
-        );
-      }
-    } finally {
-      setPaying(false);
-    }
-  }, [pkg, shareToken]);
+    track('package_checkout_started', {
+      share_token: shareToken,
+      sale: sellable.renewing ? 'subscription' : 'one_time',
+    });
+    void purchase.start(sellable);
+  }, [purchase, sellable, shareToken]);
+
+  const leave = useCallback(() => {
+    purchase.reset();
+    // Membership plans (same More stack): the new plan shows there.
+    navigation.navigate('ClientPackages');
+  }, [navigation, purchase]);
+
+  const phase = purchase.state.phase;
+  const hidePay =
+    phase === 'success' ||
+    phase === 'confirm_slow' ||
+    phase === 'confirmed_pending' ||
+    purchase.state.priceChange !== null;
 
   return (
     <View style={styles.container}>
@@ -263,7 +213,15 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
           package={toDetailViewModel(pkg)}
           mode="buyer"
           onPay={handlePay}
-          paying={paying}
+          paying={purchase.busy}
+          payLabel={sellable ? planTerms(sellable).cta : undefined}
+          hidePay={hidePay || !sellable}
+          purchaseSlot={
+            <>
+              {sellable && !hidePay ? <PlanTermsBlock pkg={sellable} /> : null}
+              <PurchaseFeedback purchase={purchase} onContinue={leave} onOpenPlan={leave} />
+            </>
+          }
         />
       ) : null}
     </View>
