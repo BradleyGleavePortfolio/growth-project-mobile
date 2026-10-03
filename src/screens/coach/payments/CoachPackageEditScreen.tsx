@@ -36,6 +36,7 @@ import {
   PackageBillingInterval,
   PackageCreateInput,
   PackageUpdateInput,
+  trialDaysChange,
 } from '../../../api/packagesApi';
 import { errorCode, errorMessage } from '../../../types/common';
 import { mediumTap, successTap, warningTap } from '../../../utils/haptics';
@@ -43,6 +44,13 @@ import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
+import {
+  isTrialErrorCode,
+  parseTrialDays,
+  TRIAL_COPY,
+  TRIAL_DAY_PRESETS,
+  trialErrorMessage,
+} from '../../../utils/packageTrial';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import PackageDetailSurface, {
@@ -71,6 +79,16 @@ const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> 
   { label: 'Quarterly', value: 'quarterly' },
   { label: 'Yearly', value: 'yearly' },
 ];
+
+/** The backend's own message on a coded 400, never a transport string. */
+function serverMessageOf(err: unknown): string | null {
+  const data = (err as { response?: { data?: unknown } } | null)?.response?.data;
+  if (data && typeof data === 'object') {
+    const message = (data as { message?: unknown }).message;
+    if (typeof message === 'string') return message;
+  }
+  return null;
+}
 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const { semanticColors, tokens } = useTheme();
@@ -144,17 +162,13 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       .split('\n')
       .map((f) => f.trim())
       .filter(Boolean);
-    let trialDays: number | null = null;
-    if (trialText.trim()) {
-      const n = Number(trialText.trim());
-      if (!Number.isInteger(n) || n < 0 || n > 365) {
-        return {
-          payload: null,
-          message: 'Trial days must be a whole number between 0 and 365.',
-        };
-      }
-      trialDays = n;
+    // B-TRIALS-2 — same rule as the backend (#656): 0..30 days, renewing
+    // plans only; a one-time package always sends 0.
+    const trial = parseTrialDays(trialText, billingInterval);
+    if (!trial.ok) {
+      return { payload: null, message: trial.message };
     }
+    const trialDays = trial.days;
     return {
       payload: {
         title: trimmedTitle,
@@ -180,7 +194,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     setSaving(true);
     try {
       if (isEdit && original) {
-        const updated: PackageUpdateInput = v.payload;
+        // B-TRIALS-3 (C-338-3) — trial_days goes on the wire only when the
+        // trial changed.
+        const updated: PackageUpdateInput = {
+          ...v.payload,
+          trialDays: trialDaysChange(original, v.payload),
+        };
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
         successTap();
@@ -212,6 +231,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             'The packages backend module is not deployed in this environment.',
           ),
         );
+      } else if (isTrialErrorCode(code)) {
+        // B-TRIALS-2 — coded trial refusal: say exactly what to change.
+        const message = trialErrorMessage(code, serverMessageOf(err));
+        warningTap();
+        setError(message);
+        Alert.alert(TRIAL_COPY.errorTitle, message);
       } else if (code === 'PACKAGE_PRICING_LOCKED') {
         warningTap();
         Alert.alert(
@@ -301,11 +326,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       .split('\n')
       .map((f) => f.trim())
       .filter(Boolean);
-    const trimmedTrial = trialText.trim();
-    const trialDays =
-      billingInterval !== 'one_time' && trimmedTrial && Number.isInteger(Number(trimmedTrial))
-        ? Number(trimmedTrial)
-        : null;
+    const trialParse = parseTrialDays(trialText, billingInterval);
+    const trialDays = trialParse.ok && trialParse.days > 0 ? trialParse.days : null;
     return {
       id: original?.id ?? 'preview',
       title: title.trim() || 'Untitled package',
@@ -443,16 +465,41 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {billingInterval !== 'one_time' ? (
           <>
-            <Label semanticColors={semanticColors} tokens={tokens}>Trial days (optional)</Label>
+            <Label semanticColors={semanticColors} tokens={tokens}>{TRIAL_COPY.label}</Label>
+            <View style={styles.segment} testID="trial-presets">
+              {[0, ...TRIAL_DAY_PRESETS].map((days) => {
+                const current = parseTrialDays(trialText, billingInterval);
+                const active = current.ok && current.days === days;
+                const label = days === 0 ? TRIAL_COPY.noneLabel : TRIAL_COPY.presetLabel(days);
+                return (
+                  <TouchableOpacity
+                    key={days}
+                    testID={`trial-preset-${days}`}
+                    style={[styles.segmentItem, active && styles.segmentItemActive]}
+                    onPress={() => setTrialText(days === 0 ? '' : String(days))}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={days === 0 ? 'No free trial' : `${days}-day free trial`}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <TextInput
+              testID="trial-days-input"
               value={trialText}
               onChangeText={setTrialText}
-              placeholder="0"
+              placeholder="Days, 1 to 30"
               style={styles.input}
               placeholderTextColor={semanticColors.textMuted}
               keyboardType="number-pad"
-              maxLength={3}
+              maxLength={2}
+              accessibilityLabel="Free trial length in days"
             />
+            <Text style={styles.trialHelp}>{TRIAL_COPY.help}</Text>
           </>
         ) : null}
 
@@ -686,6 +733,12 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       fontSize: 12,
       lineHeight: 17,
       color: semanticColors.textPrimary,
+    },
+    trialHelp: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: semanticColors.textMuted,
+      marginTop: 6,
     },
     input: {
       backgroundColor: semanticColors.bgSurface,
