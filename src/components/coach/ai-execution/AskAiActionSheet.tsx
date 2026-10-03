@@ -49,6 +49,8 @@ import { typography, radius, spacing } from '../../../theme/tokens';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { COACH_AI_PENDING_DRAFTS_QUERY_KEY } from '../../../hooks/usePendingAiDrafts';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import AiRefusalNotice from '../../ai/AiRefusalNotice';
+import { aiRefusalOf, type AiRefusal } from '../../../lib/ai/aiRefusal';
 
 const ALLOWED_ROLES = new Set(['coach', 'owner']);
 
@@ -72,7 +74,9 @@ type Phase =
   | { kind: 'pick' }
   | { kind: 'notification-form' }
   | { kind: 'submitting' }
-  | { kind: 'error'; message: string };
+  | { kind: 'error'; message: string }
+  /** R2b: 403 ai_consent_required for this client, or 503 ai_egress_blocked. */
+  | { kind: 'refused'; refusal: AiRefusal };
 
 export function AskAiActionSheet({
   visible,
@@ -143,6 +147,11 @@ export function AskAiActionSheet({
         onAfterSubmit?.(result.approval.draft_id);
       }
     } catch (err) {
+      const refusal = aiRefusalOf(err);
+      if (refusal) {
+        setPhase({ kind: 'refused', refusal });
+        return;
+      }
       const msg =
         err instanceof Error && err.message
           ? err.message
@@ -230,7 +239,8 @@ export function AskAiActionSheet({
 
           {(phase.kind === 'notification-form' ||
             phase.kind === 'submitting' ||
-            phase.kind === 'error') && (
+            phase.kind === 'error' ||
+            phase.kind === 'refused') && (
             <View style={styles.promptBody}>
               <View style={styles.promptHeaderRow}>
                 <Pressable
@@ -291,6 +301,17 @@ export function AskAiActionSheet({
                 >
                   {phase.message}
                 </Text>
+              )}
+
+              {phase.kind === 'refused' && (
+                <AiRefusalNotice
+                  refusal={phase.refusal}
+                  audience="coach"
+                  surface="draft"
+                  onRetry={() => void handleSubmit()}
+                  compact
+                  testID="ask-ai-refusal"
+                />
               )}
 
               <Pressable
