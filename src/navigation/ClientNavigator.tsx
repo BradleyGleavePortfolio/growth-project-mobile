@@ -57,6 +57,7 @@ import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
+import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
@@ -227,6 +228,9 @@ export type MoreStackParamList = {
   RecipeDetail: { recipeId: string };
   Fast:        undefined;
   Community:   undefined;
+  // B-314-4: Community safety opens from member wins even when the
+  // flag-gated Community tab (which has its own CommunitySafety route) is off.
+  CommunitySafety: undefined;
   Progress:    undefined;
   ProfileMain: undefined;
   EditProfile: undefined;
@@ -423,6 +427,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
+      <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <MoreStackNav.Screen name="Progress"     component={ProgressScreen} />
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />

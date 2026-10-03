@@ -1,25 +1,16 @@
 /**
  * voiceRecorderPort — the capability port the v3-3 voice-note recorder hook
- * depends on, plus the safe default adapter resolved at module load.
+ * depends on, plus the honest "unavailable" adapter.
  *
- * WHY A PORT (and not a direct native call):
- *   The mobile app does not currently bundle a native audio-capture module
- *   (expo-av / expo-audio are not in package.json — only expo-video for
- *   playback). The v3-3 surface ships behind `featureFlags.communityVoiceNotes`
- *   (default OFF) precisely so the UI + upload pipeline can land before the
- *   native recorder is wired. To keep the surface (a) fully type-checked, (b)
- *   deterministically testable without a native module, and (c) gracefully
- *   degrading at runtime, the recorder hook depends on this PORT interface
- *   rather than a concrete recorder. `resolveVoiceRecorder()` returns the real
- *   adapter when a host registers one (via `registerVoiceRecorder`) and an
- *   honest "unavailable" adapter otherwise — never a fake that pretends to
- *   record. The composer reads `recorder.isAvailable` and renders a calm
- *   "voice recording isn't available on this build" state instead of a dead
- *   record button (DESIGN_INTELLIGENCE: no dead controls; honest capability).
- *
- * This mirrors the repo posture for capability-gated surfaces (e.g. the
- * bloodwork flag stays off "until backend storage … is live"): scaffolding is
- * shippable and dark, never a stub that lies about what it can do.
+ * The real recorder is expo-audio (src/services/voiceAudio.ts, B-314-2):
+ * `useVoiceRecorder` passes `useNativeVoiceRecorder()` to
+ * `resolveVoiceRecorder()` on every render, so production records with the
+ * native module by default. The port stays the seam because (a) tests inject
+ * a scripted recorder, (b) a host can still register one, and (c) a binary
+ * built before expo-audio was added has no native module: then the native
+ * recorder is null and the composer shows the calm "voice recording isn't
+ * available on this build" state instead of a dead record button
+ * (DESIGN_INTELLIGENCE: no dead controls; honest capability).
  */
 import {
   MAX_VOICE_DURATION_MS,
@@ -48,9 +39,9 @@ export interface VoiceRecordingResult {
 }
 
 /**
- * The capability the recorder hook needs. A host app provides a concrete
- * adapter once a native recorder is wired; until then `unavailableRecorder` is
- * resolved and `isAvailable` is false.
+ * The capability the recorder hook needs. The expo-audio adapter implements
+ * it; `unavailableRecorder` (isAvailable false) is resolved only when this
+ * binary has no native audio module.
  */
 export interface VoiceRecorderPort {
   /** False on builds without a bundled native recorder. */
@@ -105,16 +96,20 @@ export const unavailableRecorder: VoiceRecorderPort = {
 let registered: VoiceRecorderPort | null = null;
 
 /**
- * Register the concrete recorder adapter (called by a host once a native
- * recorder is bundled). Passing null reverts to the unavailable adapter.
+ * Register a recorder adapter that overrides the native one (hosts and
+ * tests). Passing null reverts to the native recorder.
  */
 export function registerVoiceRecorder(port: VoiceRecorderPort | null): void {
   registered = port;
 }
 
-/** Resolve the active recorder — the registered adapter or the safe default. */
-export function resolveVoiceRecorder(): VoiceRecorderPort {
-  return registered ?? unavailableRecorder;
+/**
+ * Resolve the active recorder: a registered adapter, else the native recorder
+ * the caller got from `useNativeVoiceRecorder()`, else the honest unavailable
+ * adapter (a binary without the ExpoAudio native module).
+ */
+export function resolveVoiceRecorder(native: VoiceRecorderPort | null = null): VoiceRecorderPort {
+  return registered ?? native ?? unavailableRecorder;
 }
 
 /** Re-exported so the hook and composer share one cap without re-importing the API. */

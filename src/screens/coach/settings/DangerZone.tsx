@@ -52,7 +52,7 @@ export function DangerZone({
           onPress={onOpenDataExport}
           accessibilityRole="button"
           accessibilityLabel="Request my data export"
-          accessibilityHint="Download a complete copy of all your personal data"
+          accessibilityHint="Download a copy of your personal data"
         >
           <Ionicons name="download-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>My data</Text>
