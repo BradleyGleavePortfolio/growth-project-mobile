@@ -347,6 +347,25 @@ export const wearablesConnectionsApi = {
   },
 
   /**
+   * S14 — register (or re-activate) the caller's on-device source after the
+   * user granted read access in Apple Health / Health Connect. Idempotent on
+   * the server. Returns the token-free connection; its `id` is the
+   * `connectionId` every ingested sample references. The owner is the JWT
+   * user; the body carries only the provider.
+   *
+   * The server answers 503 `wearables_ingest_disabled` while
+   * FEATURE_WEARABLES_INGEST_POST is off; callers render that as a plain
+   * "not available yet" state.
+   * @throws ZodError on a drifted response.
+   */
+  async registerOnDevice(
+    provider: 'APPLE_HEALTHKIT' | 'HEALTH_CONNECT',
+  ): Promise<WearableConnection> {
+    const res = await api.post<unknown>(`${BASE}/on-device`, { provider });
+    return safeWearableConnectionSchema.parse(res.data);
+  },
+
+  /**
    * Soft-disconnect the caller's connection for a provider. Idempotent from the
    * UI's perspective: a 404 (no connection) is surfaced as a thrown error so
    * the caller never mistakes a no-op for success.
