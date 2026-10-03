@@ -98,6 +98,7 @@ import MoneyChargesScreen from "../MoneyChargesScreen";
 import MoneyChargeScreen from "../MoneyChargeScreen";
 import MoneyRedirect from "../MoneyRedirect";
 import MoneyHomeCard from "../../../../components/coach/money/MoneyHomeCard";
+import { authEvents } from "../../../../utils/authEvents";
 
 function httpError(status: number, data?: Record<string, unknown>) {
   return Object.assign(new Error(`HTTP ${status}`), {
@@ -1476,5 +1477,232 @@ describe("FIX ROUND 2 C-332-4 (Sol): the CSV is a text share, never called a fil
     await findByTestId("money-export-csv-error");
     expect(getAllByText(/CSV text/).length).toBeGreaterThan(0);
     expect(queryAllByText(/\bfile\b/i)).toHaveLength(0);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* FIX ROUND 3 (B-COACH-5, agent 115): Opus RC at 6c193c80             */
+/* B-332-8, B-332-9, B-332-10, C-332-11, C-332-13, C-332-7.             */
+/* B-332-7 lives in moneyNavigation.test.tsx (real navigators).         */
+/* ------------------------------------------------------------------ */
+
+const chargeDetail = (state: string, settled: boolean) => ({
+  data: {
+    charge: { ...CHARGES.charges[0], state },
+    breakdown: {
+      price_cents: 4900,
+      processing_cents: 0,
+      platform_fee_cents: 0,
+      head_coach_split_cents: 0,
+      refunded_cents: 0,
+      net_cents: 0,
+      processing_paid_by: "none",
+      settled,
+    },
+  },
+});
+
+async function renderCharge() {
+  const nav = {
+    navigate: mockNavigate,
+    goBack: jest.fn(),
+    canGoBack: () => true,
+    getParent: () => ({ navigate: mockParentNavigate }),
+  } as never;
+  return render(
+    <MoneyChargeScreen
+      navigation={nav}
+      route={
+        {
+          key: "k",
+          name: "CoachMoneyCharge",
+          params: { chargeId: "ch_1" },
+        } as never
+      }
+    />,
+  );
+}
+
+describe("FIX ROUND 3 B-332-8: a charge that moved no money never says the client paid", () => {
+  it.each([
+    ["failed", /card payment did not go through/],
+    ["canceled", /did not finish it, so nothing was charged/],
+  ])("%s: no Clients paid row, no check-back line, says what happened", async (state, said) => {
+    mockGet.mockResolvedValueOnce(chargeDetail(state, false));
+    const r = await renderCharge();
+    await r.findByTestId("money-charge-no-money");
+    expect(r.getByText("No money moved")).toBeTruthy();
+    expect(r.getByText(said)).toBeTruthy();
+    expect(r.queryByText(/Clients paid/)).toBeNull();
+    expect(r.queryByText(/Check back once the payment clears/)).toBeNull();
+    expect(r.queryByTestId("money-charge-breakdown")).toBeNull();
+    // The coach can still reach the client.
+    expect(r.getByTestId("money-charge-message")).toBeTruthy();
+  });
+
+  it("pending keeps the not-final note and the breakdown", async () => {
+    mockGet.mockResolvedValueOnce(chargeDetail("pending", false));
+    const r = await renderCharge();
+    await r.findByTestId("money-charge-unsettled");
+    expect(r.getByTestId("money-charge-breakdown")).toBeTruthy();
+    expect(r.queryByTestId("money-charge-no-money")).toBeNull();
+  });
+
+  it("a paid charge whose fees are not posted says the fees are not final, not that the payment must clear", async () => {
+    mockGet.mockResolvedValueOnce(chargeDetail("paid", false));
+    const r = await renderCharge();
+    await r.findByTestId("money-charge-fees-pending");
+    expect(r.queryByText(/Check back once the payment clears/)).toBeNull();
+    expect(r.getByTestId("money-charge-breakdown")).toBeTruthy();
+  });
+});
+
+describe("FIX ROUND 3 B-332-9: an active sub-coach gets one head-coach state on Money", () => {
+  const blocked = () =>
+    httpError(403, {
+      kind: "sub_coach_billing_blocked",
+      message: "Sub-coaches cannot access billing or financial surfaces.",
+    });
+
+  it("every route blocked: exactly one notice, no sections, no payout settings, no export", async () => {
+    const all: Record<string, unknown> = {};
+    for (const url of [
+      SUMMARY_URL,
+      "/v1/coach/money/attention",
+      "/v1/coach/money/charges",
+      "/coach/connect/payouts",
+      "/coach/connect/metrics",
+      "/coach/connect/status",
+    ])
+      all[url] = blocked();
+    routeGets(all);
+    const r = await render(<MoneyScreen />);
+    await r.findByTestId("money-head-coach");
+    expect(r.getAllByText("Money is handled by your head coach")).toHaveLength(1);
+    expect(r.queryByTestId("money-payout-settings")).toBeNull();
+    expect(r.queryByTestId("money-export-csv")).toBeNull();
+    expect(r.queryByTestId("money-net")).toBeNull();
+    expect(r.queryByTestId("money-charges")).toBeNull();
+    expect(r.queryByTestId("money-payouts")).toBeNull();
+  });
+
+  it("one section blocked is enough for the page-level state", async () => {
+    routeGets({ "/coach/connect/status": blocked() });
+    const r = await render(<MoneyScreen />);
+    await r.findByTestId("money-head-coach");
+    expect(r.getAllByText("Money is handled by your head coach")).toHaveLength(1);
+  });
+
+  it("the role is remembered for Settings and reset on sign-out", async () => {
+    // Required here so the rest of this file runs on a head without it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { headCoachHandlesMoney } = require("../../../../lib/money/headCoachRole") as {
+      headCoachHandlesMoney: () => boolean;
+    };
+    routeGets({ "/coach/connect/status": blocked() });
+    const r = await render(<MoneyScreen />);
+    await r.findByTestId("money-head-coach");
+    expect(headCoachHandlesMoney()).toBe(true);
+    authEvents.emit("logout");
+    expect(headCoachHandlesMoney()).toBe(false);
+  });
+});
+
+describe("FIX ROUND 3 B-332-10: the bank's decline message is quoted once, never doubled", () => {
+  it("strips the trailing period and presents Stripe's words as the bank's", () => {
+    const c = attentionCopy({
+      kind: "failed_payment",
+      id: "p",
+      client: { id: "u", name: "Sam" },
+      amountCents: 4900,
+      currency: "usd",
+      createdAt: null,
+      failedPayment: {
+        packageName: "North",
+        attempt: 1,
+        maxAttempts: 4,
+        nextRetryAt: null,
+        lockedOutAt: null,
+        cardUpdateLinkSentAt: null,
+        lastFailureReason: "Your card has insufficient funds.",
+      },
+      dispute: null,
+      stripeRequirements: null,
+    });
+    const text = c.lines.join(" ");
+    expect(text).toContain('The bank said: "Your card has insufficient funds"');
+    expect(text).not.toMatch(/\.\./);
+    expect(text).not.toMatch(/Bank reason:/);
+  });
+});
+
+describe("FIX ROUND 3 C-332-11: no false No sales yet", () => {
+  it("charges that failed to load are not no charges", async () => {
+    routeGets({
+      [SUMMARY_URL]: (cfg?: { params?: Record<string, string> }) =>
+        echoWindow(
+          {
+            ...SUMMARY,
+            totals: totals({ charge_count: 0, gross_cents: 0, net_cents: 0 }),
+          },
+          cfg,
+        ),
+      "/v1/coach/money/charges": httpError(503, {}),
+    });
+    const r = await render(<MoneyScreen />);
+    await r.findByTestId("money-charges-error");
+    expect(r.queryByTestId("money-empty")).toBeNull();
+  });
+});
+
+describe("FIX ROUND 3 C-332-13: the Home card shows only the newest load", () => {
+  it("a slower older response never overwrites a newer one", async () => {
+    let releaseOld!: (v: unknown) => void;
+    routeGets({});
+    const base = mockGet.getMockImplementation()!;
+    let summaryCalls = 0;
+    let oldCfg: { params?: Record<string, string> } | undefined;
+    mockGet.mockImplementation(
+      (url: string, cfg?: { params?: Record<string, string> }) => {
+        if (url === SUMMARY_URL) {
+          summaryCalls++;
+          if (summaryCalls === 1) {
+            oldCfg = cfg;
+            return new Promise((resolve) => {
+              releaseOld = resolve;
+            });
+          }
+        }
+        return base(url, cfg);
+      },
+    );
+    const r = await render(
+      <MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />,
+    );
+    await act(async () => {
+      mockFocus.current?.();
+    });
+    await waitFor(() =>
+      expect(r.getByTestId("money-home-card-net").props.children).toBe("$94.80"),
+    );
+    await act(async () => {
+      releaseOld({
+        data: echoWindow({ ...SUMMARY, totals: totals({ net_cents: 1 }) }, oldCfg),
+      });
+    });
+    expect(r.getByTestId("money-home-card-net").props.children).toBe("$94.80");
+  });
+});
+
+describe("FIX ROUND 3 C-332-7 (Sol): payout amounts must state whole cents exactly", () => {
+  it("rejects a half-cent at any size and keeps ordinary amounts exact", () => {
+    const p = (amount: number) => () =>
+      toPayout({ id: "x", amount, currency: "usd", status: "paid" });
+    expect(p(10000.005)).toThrow(MoneyPayloadError);
+    expect(p(0.005)).toThrow(MoneyPayloadError);
+    expect(p(94.8)().amountCents).toBe(9480);
+    expect(p(0.29)().amountCents).toBe(29);
+    expect(p(1234567.89)().amountCents).toBe(123456789);
+    expect(p(-12.34)().amountCents).toBe(-1234);
   });
 });
