@@ -875,6 +875,48 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
     expect(finalLabel).not.toContain('saved on device');
   });
 
+  it('S-MWB-4: a save refused for access says why and never promises to sync', async () => {
+    setFlag(true);
+    jest.useFakeTimers();
+    const { WorkoutAutosaveApiError } = jest.requireMock(
+      '../api/workoutAutosaveApi',
+    ) as {
+      WorkoutAutosaveApiError: new (
+        kind: string,
+        status: number,
+        message: string,
+      ) => Error;
+    };
+    mockAutosaveCall.mockRejectedValueOnce(
+      Object.assign(new WorkoutAutosaveApiError('forbidden', 403, 'refused'), {
+        cause: { response: { status: 403, data: { code: 'client_not_assigned' } } },
+      }),
+    );
+
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId } = await render(<Screen />);
+    await act(async () => {
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(String(getByTestId('mwb-autosave-pill').props.accessibilityLabel ?? '')).toContain(
+        'Not saved — no edit access',
+      ),
+    );
+    expect(String(getByTestId('mwb-autosave-pill').props.accessibilityLabel ?? '')).not.toContain(
+      'will sync',
+    );
+    expect(getByTestId('mwb-autosave-refusal').props.children).toBe(
+      'This client is not assigned to you, so these changes are not saved. Ask your head coach to assign the client to you.',
+    );
+  });
+
   it('clears the degraded state once a later mirror write succeeds', async () => {
     setFlag(true);
     jest.useFakeTimers();
