@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
 import { scrubBreadcrumb, scrubEvent } from './sentryPrivacy';
+import { scrubEvent as scrubUrlCredentials } from './sentryScrub';
 
 let initialized = false;
 
@@ -95,9 +96,19 @@ export function initSentry(): void {
     // does not redact console text or request URLs. beforeBreadcrumb runs
     // before scope sync copies a breadcrumb to native; beforeSend also covers
     // native breadcrumbs merged into JS events; transactions lose URL queries.
-    beforeBreadcrumb: (breadcrumb) => scrubBreadcrumb(breadcrumb),
-    beforeSend: (event) => scrubEvent(event),
-    beforeSendTransaction: (event) => scrubEvent(event),
+    // Then the URL-credential pass (src/services/sentryScrub.ts, B-327-6): a
+    // data-export download link is a bearer credential for the whole archive,
+    // and a Linking rejection quotes it in the exception text, which the
+    // policy above keeps. That pass redacts token/signature query values,
+    // JWT-shaped strings, the download route's query and signed storage URLs
+    // anywhere in the event (message, exception values, extras, contexts,
+    // tags), returning a scrubbed copy.
+    beforeBreadcrumb: (breadcrumb) => {
+      const kept = scrubBreadcrumb(breadcrumb);
+      return kept ? scrubUrlCredentials(kept) : null;
+    },
+    beforeSend: (event) => scrubUrlCredentials(scrubEvent(event)),
+    beforeSendTransaction: (event) => scrubUrlCredentials(scrubEvent(event)),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
