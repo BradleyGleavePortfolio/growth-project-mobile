@@ -21,6 +21,10 @@
  * `useFeatureFlags().flags.community_search` (fail-safe OFF). A defense-in-depth
  * body guard renders a neutral "not available" state if reached with either off.
  *
+ * Safety (Apple 1.2): audio cannot be text-filtered, so the note carries the
+ * SafetyMenu: Report (reason list, reviewed within 24 hours) and Block for
+ * other members' notes, Delete for the viewer's own note.
+ *
  * Tokens only (no raw hex); line Ionicons only (no emoji); fontWeight <= '600'.
  */
 import React, { useEffect, useRef } from 'react';
@@ -33,8 +37,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
@@ -45,11 +49,17 @@ import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
 import { formatRelative } from '../../components/community/SearchResultRow';
 import HapticPressable from '../../components/HapticPressable';
 import { communityVoiceApi } from '../../api/communityVoiceApi';
-import type { CommunityRoute } from './communityNavTypes';
+import SafetyMenu from '../../components/community/SafetyMenu';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { describeCommunityFailure } from '../../api/communityErrors';
+import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 export default function CommunityVoiceNoteDetail(): React.ReactElement {
   const { semanticColors } = useTheme();
   const route = useRoute<CommunityRoute<'CommunityVoiceNoteDetail'>>();
+  const navigation = useNavigation<CommunityNav>();
+  const qc = useQueryClient();
+  const viewer = useCurrentUser();
   const voiceNoteId = route.params?.voiceNoteId ?? '';
   const excerpt = route.params?.excerpt ?? '';
 
@@ -131,7 +141,9 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load this voice note. Please try again.
+            {note.isError
+              ? describeCommunityFailure(note.error, 'load_voice').message
+              : 'This voice note is no longer available. Go back and refresh.'}
           </Text>
           <HapticPressable
             intent="light"
@@ -180,11 +192,31 @@ export default function CommunityVoiceNoteDetail(): React.ReactElement {
               {when}
             </Text>
           ) : null}
+          <SafetyMenu
+            targetType="voice_note"
+            targetId={data.id}
+            authorUserId={data.author_id}
+            viewerUserId={viewer?.id}
+            viewerCoachId={viewer?.coach_id}
+            contentNoun="voice note"
+            onDelete={
+              viewer?.id && viewer.id === data.author_id
+                ? async () => {
+                    await communityVoiceApi.remove(data.id);
+                    await qc.invalidateQueries({ queryKey: ['community'] });
+                    navigation.goBack();
+                  }
+                : undefined
+            }
+            onBlocked={() => navigation.goBack()}
+            testID="community-voice-detail-safety"
+          />
         </View>
 
         <VoiceNotePlayer
           url={data.url}
           durationMs={data.duration_ms}
+          onPlaybackError={() => void note.refetch()}
           testID="community-voice-detail-player"
         />
 

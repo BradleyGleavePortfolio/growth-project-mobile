@@ -8,12 +8,23 @@
  *     and a second press pauses.
  */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return {
     useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
+  };
+});
+
+// HapticPressable is replaced by a plain host element that keeps every prop
+// (onPress included), so a test can deliver two taps inside one frame.
+jest.mock('../../HapticPressable', () => {
+  const ReactActual = jest.requireActual('react');
+  return {
+    __esModule: true,
+    default: ({ children, ...props }: { children?: unknown }) =>
+      ReactActual.createElement('HapticPressableHost', props, children),
   };
 });
 
@@ -89,5 +100,213 @@ describe('VoiceNotePlayer — playback', () => {
 
     fireEvent.press(getByTestId('voice-player-toggle'));
     await waitFor(() => expect(playback.handle.pause).toHaveBeenCalledTimes(1));
+  });
+});
+
+/**
+ * B-314-5: the loaded clip is keyed to its URL. A refreshed signed URL (queue
+ * refetch after an expired link) must be the one that plays; the old clip is
+ * released; a failed clip is dropped so Retry reloads; a load that resolves
+ * after the URL changed is released, never adopted.
+ */
+describe('VoiceNotePlayer — signed URL lifecycle (B-314-5)', () => {
+  function makeSequencedPlayback() {
+    const handles: Array<jest.Mocked<VoicePlaybackHandle>> = [];
+    const events: Array<{ onError?: (e: unknown) => void; onEnd?: () => void }> = [];
+    const port: VoicePlaybackPort & { load: jest.Mock } = {
+      isAvailable: true,
+      load: jest.fn(async (_url: string, ev: { onError?: (e: unknown) => void }) => {
+        const handle = {
+          play: jest.fn().mockResolvedValue(undefined),
+          pause: jest.fn().mockResolvedValue(undefined),
+          seek: jest.fn().mockResolvedValue(undefined),
+          unload: jest.fn().mockResolvedValue(undefined),
+        } as jest.Mocked<VoicePlaybackHandle>;
+        handles.push(handle);
+        events.push(ev);
+        return handle;
+      }),
+    };
+    return { port, handles, events };
+  }
+
+  it('releases the old clip on a new URL and plays the new URL on the next press', async () => {
+    const { port, handles } = makeSequencedPlayback();
+    const { getByTestId, rerender } = await render(
+      <VoiceNotePlayer url={URL} durationMs={5000} playback={port} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(handles[0]?.play).toHaveBeenCalledTimes(1));
+    expect(port.load).toHaveBeenLastCalledWith(URL, expect.any(Object));
+
+    const FRESH = 'https://signed.example/audio.m4a?token=fresh';
+    await rerender(<VoiceNotePlayer url={FRESH} durationMs={5000} playback={port} />);
+    await waitFor(() => expect(handles[0].unload).toHaveBeenCalledTimes(1));
+    // The control is reset, not stuck on "playing" the released clip.
+    expect(getByTestId('voice-player-toggle').props.accessibilityLabel).toBe(
+      'Play voice note, 0:05',
+    );
+
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(port.load).toHaveBeenCalledTimes(2));
+    expect(port.load).toHaveBeenLastCalledWith(FRESH, expect.any(Object));
+    await waitFor(() => expect(handles[1].play).toHaveBeenCalledTimes(1));
+  });
+
+  it('drops a failed clip so Retry reloads, and asks the parent for a fresh URL', async () => {
+    const { port, handles, events } = makeSequencedPlayback();
+    const onPlaybackError = jest.fn();
+    const { getByTestId, findByTestId } = await render(
+      <VoiceNotePlayer
+        url={URL}
+        durationMs={5000}
+        playback={port}
+        onPlaybackError={onPlaybackError}
+      />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(handles[0]?.play).toHaveBeenCalled());
+    // The native player reports the expired link.
+    events[0].onError?.(new Error('403'));
+    const error = await findByTestId('voice-player-error');
+    expect(error.props.children).toBe('Could not play this voice note. Tap play to try again.');
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+    expect(onPlaybackError).toHaveBeenCalledTimes(1);
+
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(port.load).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(handles[1].play).toHaveBeenCalledTimes(1));
+  });
+
+  it('releases a load that resolves after the URL changed', async () => {
+    let resolveLoad: (h: VoicePlaybackHandle) => void = () => undefined;
+    const late = {
+      play: jest.fn().mockResolvedValue(undefined),
+      pause: jest.fn().mockResolvedValue(undefined),
+      seek: jest.fn().mockResolvedValue(undefined),
+      unload: jest.fn().mockResolvedValue(undefined),
+    } as jest.Mocked<VoicePlaybackHandle>;
+    const port: VoicePlaybackPort = {
+      isAvailable: true,
+      load: jest.fn(() => new Promise<VoicePlaybackHandle>((r) => (resolveLoad = r))),
+    };
+    const { getByTestId, rerender } = await render(
+      <VoiceNotePlayer url={URL} durationMs={5000} playback={port} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(port.load).toHaveBeenCalledTimes(1));
+    await rerender(<VoiceNotePlayer url={`${URL}?v=2`} durationMs={5000} playback={port} />);
+    resolveLoad(late);
+    await waitFor(() => expect(late.unload).toHaveBeenCalledTimes(1));
+    expect(late.play).not.toHaveBeenCalled();
+  });
+
+  it('releases the clip on unmount', async () => {
+    const { port, handles } = makeSequencedPlayback();
+    const { getByTestId, unmount } = await render(
+      <VoiceNotePlayer url={URL} durationMs={5000} playback={port} />,
+    );
+    fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() => expect(handles[0]?.play).toHaveBeenCalled());
+    await unmount();
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('B-314-8: one native player per control, never orphaned', () => {
+  function heldPlayback() {
+    const handles: Array<jest.Mocked<VoicePlaybackHandle>> = [];
+    const resolvers: Array<() => void> = [];
+    const port: VoicePlaybackPort = {
+      isAvailable: true,
+      load: jest.fn(
+        () =>
+          new Promise<VoicePlaybackHandle>((resolve) => {
+            const handle = {
+              play: jest.fn().mockResolvedValue(undefined),
+              pause: jest.fn().mockResolvedValue(undefined),
+              seek: jest.fn().mockResolvedValue(undefined),
+              unload: jest.fn().mockResolvedValue(undefined),
+            } as jest.Mocked<VoicePlaybackHandle>;
+            handles.push(handle);
+            resolvers.push(() => resolve(handle));
+          }),
+      ),
+    };
+    return { port, handles, resolvers };
+  }
+
+  const pressTwiceSynchronously = async (toggle: { props: { onPress?: () => void } }) => {
+    // Two taps in the same frame: the second runs before React re-renders,
+    // so only a synchronous ref (not state or the disabled prop) can stop it.
+    await act(async () => {
+      toggle.props.onPress?.();
+      toggle.props.onPress?.();
+    });
+  };
+
+  it('two taps before the load resolves create one player, play it once and release it on unmount', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    const toggle = screen.getByTestId('voice-player-toggle');
+    await pressTwiceSynchronously(toggle);
+    expect(port.load).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      resolvers.forEach((r) => r());
+    });
+    expect(handles).toHaveLength(1);
+    expect(handles[0].play).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+  });
+
+  it('the control is disabled while loading', async () => {
+    const { port } = heldPlayback();
+    const { getByTestId } = await render(
+      <VoiceNotePlayer url={URL} durationMs={4000} playback={port} />,
+    );
+    await fireEvent.press(getByTestId('voice-player-toggle'));
+    await waitFor(() =>
+      expect(getByTestId('voice-player-toggle').props.accessibilityState).toMatchObject({
+        disabled: true,
+        busy: true,
+      }),
+    );
+  });
+
+  it('a URL change while loading releases the stale load; the new URL loads on the next tap', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await screen.rerender(
+      <VoiceNotePlayer url={`${URL}?fresh=1`} durationMs={4000} playback={port} />,
+    );
+    await act(async () => {
+      resolvers[0]();
+    });
+    // The stale handle was released, never played.
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+    expect(handles[0].play).not.toHaveBeenCalled();
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    expect(port.load).toHaveBeenCalledTimes(2);
+    expect(port.load).toHaveBeenLastCalledWith(`${URL}?fresh=1`, expect.any(Object));
+    await act(async () => {
+      resolvers[1]();
+    });
+    expect(handles[1].play).toHaveBeenCalledTimes(1);
+    await screen.unmount();
+    expect(handles[1].unload).toHaveBeenCalledTimes(1);
+  });
+
+  it('unmount while loading releases the handle when it arrives', async () => {
+    const { port, handles, resolvers } = heldPlayback();
+    const screen = await render(<VoiceNotePlayer url={URL} durationMs={4000} playback={port} />);
+    await pressTwiceSynchronously(screen.getByTestId('voice-player-toggle'));
+    await screen.unmount();
+    await act(async () => {
+      resolvers[0]();
+    });
+    expect(handles[0].unload).toHaveBeenCalledTimes(1);
+    expect(handles[0].play).not.toHaveBeenCalled();
   });
 });
