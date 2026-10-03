@@ -27,11 +27,15 @@ import {
   cancelOutcomeCopy,
   cardUpdateOutcomeCopy,
   describeDunningError,
-  SUPPORT_EMAIL,
   type DunningErrorCopy,
 } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
-import { supportMailto } from './DunningLockoutScreen';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import {
+  DUNNING_SUPPORT_SUBJECT,
+  dunningSupportBody,
+  dunningSupportReferenceNote,
+} from './DunningLockoutScreen';
 import { confirmWithBank, handleStripeReturnUrl, runNativeCardUpdate } from './updateCard';
 
 /**
@@ -114,7 +118,6 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
     response: CardUpdateResponse;
     setupIntentId: string;
   } | null>(null);
-  const [mailError, setMailError] = useState<string | null>(null);
   const [quote, setQuote] = useState<PaymentQuote | null>(null);
   const [pending, setPending] = useState<Pending>(null);
   const approvedRef = useRef<ApprovedInvoice[]>([]);
@@ -284,17 +287,15 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
     ]);
   }, [dunning, busy, status, leave]);
 
-  const contactSupport = useCallback(async () => {
-    setMailError(null);
-    const reference = error?.reference ?? null;
-    try {
-      await Linking.openURL(supportMailto(reference));
-    } catch {
-      setMailError(
-        `No email app opened on this device. Write to ${SUPPORT_EMAIL}${reference ? ` and include reference ${reference}` : ''}.`,
-      );
-    }
-  }, [error]);
+  const supportReference = error?.reference ?? null;
+  const supportEmail = useSupportEmail(
+    DUNNING_SUPPORT_SUBJECT,
+    dunningSupportBody(supportReference),
+  );
+  const supportReferenceNote = dunningSupportReferenceNote(supportReference);
+  const contactSupport = useCallback(() => {
+    void supportEmail.open();
+  }, [supportEmail]);
 
   const outcome = result ? cardUpdateOutcomeCopy(result.response) : null;
   const settled = !pending && result && ['paid', 'saved', 'processing'].includes(result.response.outcome);
@@ -444,7 +445,17 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         >
           <Text style={styles.rowText}>Email support</Text>
         </TouchableOpacity>
-        {mailError ? <Text style={styles.notice}>{mailError}</Text> : null}
+        <SupportEmailFallback
+          handle={supportEmail}
+          textStyle={styles.notice}
+          linkColor={semanticColors.textPrimary}
+          testID="update-card-support-fallback"
+        />
+        {supportEmail.state !== 'idle' && supportReferenceNote ? (
+          <Text style={styles.notice} selectable testID="update-card-support-reference">
+            {supportReferenceNote}
+          </Text>
+        ) : null}
 
         <Text style={styles.footnote}>
           Card details go straight to Stripe, our payment provider. The Growth Project never sees your full card number.

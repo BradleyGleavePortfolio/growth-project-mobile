@@ -2,7 +2,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Linking,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -13,7 +12,8 @@ import {
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
-import { cancelOutcomeCopy, SUPPORT_EMAIL, type DunningErrorCopy } from './dunningErrorCopy';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import { cancelOutcomeCopy, type DunningErrorCopy } from './dunningErrorCopy';
 import type { EndPlanResult } from './DunningLockoutProvider';
 
 export interface DunningLockoutScreenProps {
@@ -43,12 +43,19 @@ export function lockoutSummary(status: ClientDunningStatus | null): string {
   return `${what}${when}, so your plan is paused. Your data is safe and nothing has been deleted.`;
 }
 
-export function supportMailto(reference: string | null): string {
-  const subject = encodeURIComponent('Paused plan: payment help');
-  const body = encodeURIComponent(
-    reference ? `Request reference: ${reference}\n\n` : 'My plan is paused after a failed payment.\n\n',
-  );
-  return `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
+/** Subject of every support email from the payment screens. */
+export const DUNNING_SUPPORT_SUBJECT = 'Paused plan: payment help';
+
+/** Prefilled support email body: the request reference when there is one. */
+export function dunningSupportBody(reference: string | null): string {
+  return reference
+    ? `Request reference: ${reference}\n\n`
+    : 'My plan is paused after a failed payment.\n\n';
+}
+
+/** Shown with the copy-address fallback so the reference is never lost. */
+export function dunningSupportReferenceNote(reference: string | null): string | null {
+  return reference ? `Include reference ${reference} in your email.` : null;
 }
 
 export function DunningLockoutScreen({
@@ -68,7 +75,6 @@ export function DunningLockoutScreen({
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState<DunningErrorCopy | null>(null);
-  const [mailError, setMailError] = useState<string | null>(null);
 
   const handleUpdateCard = useCallback(() => {
     onUpdateCard('DunningLockoutScreen');
@@ -104,17 +110,12 @@ export function DunningLockoutScreen({
     );
   }, [ending, onEndPlan, status]);
 
-  const handleContactSupport = useCallback(async () => {
-    setMailError(null);
-    const reference = endError?.reference ?? loadError?.reference ?? supportReference;
-    try {
-      await Linking.openURL(supportMailto(reference));
-    } catch {
-      setMailError(
-        `No email app opened on this device. Write to ${SUPPORT_EMAIL}${reference ? ` and include reference ${reference}` : ''}.`,
-      );
-    }
-  }, [endError, loadError, supportReference]);
+  const reference = endError?.reference ?? loadError?.reference ?? supportReference;
+  const supportEmail = useSupportEmail(DUNNING_SUPPORT_SUBJECT, dunningSupportBody(reference));
+  const referenceNote = dunningSupportReferenceNote(reference);
+  const handleContactSupport = useCallback(() => {
+    void supportEmail.open();
+  }, [supportEmail]);
 
   const card = status?.card_last4 ? ` The card ending ${status.card_last4} was declined.` : '';
   const coachLabel = status?.coach_name ? `Message ${status.coach_name}` : 'Message your coach';
@@ -184,7 +185,17 @@ export function DunningLockoutScreen({
         <Row label="Download my data" onPress={onOpenDataExport} styles={styles} testID="dunning-lockout-data-export" />
         <Row label="Delete my account" onPress={onOpenDeleteAccount} styles={styles} testID="dunning-lockout-delete-account" />
         <Row label="Email support" onPress={handleContactSupport} styles={styles} testID="dunning-lockout-support" />
-        {mailError ? <Text style={styles.notice}>{mailError}</Text> : null}
+        <SupportEmailFallback
+          handle={supportEmail}
+          textStyle={styles.notice}
+          linkColor={semanticColors.textPrimary}
+          testID="dunning-lockout-support-fallback"
+        />
+        {supportEmail.state !== 'idle' && referenceNote ? (
+          <Text style={styles.notice} selectable testID="dunning-lockout-support-reference">
+            {referenceNote}
+          </Text>
+        ) : null}
         <Row label="Sign out" onPress={onSignOut} styles={styles} testID="dunning-lockout-sign-out" />
 
         <Text style={styles.footnote}>

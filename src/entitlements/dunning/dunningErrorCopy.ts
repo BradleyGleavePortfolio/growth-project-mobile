@@ -1,3 +1,4 @@
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { extractRequestId, newRequestId } from '../../utils/correlation';
 import {
   formatDunningAmount,
@@ -15,11 +16,11 @@ import {
  * backend request id as a support reference and are flagged for Sentry.
  *
  * SUPPORT_EMAIL is the owner's one support address (S-ERRORS ruling,
- * 2026-10-01 14:19). Mobile #324 adds src/constants/support.ts with the same
- * value and a guard; once it lands this should re-export that constant.
+ * 2026-10-01 14:19), re-exported from src/constants/support.ts so the
+ * address is written once (supportEmail.guard.test.ts).
  */
 
-export const SUPPORT_EMAIL = 'Bradleyapple1031@gmail.com';
+export { SUPPORT_EMAIL };
 
 /**
  * `update_card`: before the card is saved (setup / quote). `confirm_card`:

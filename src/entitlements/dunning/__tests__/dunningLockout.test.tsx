@@ -3,14 +3,20 @@
  * the Days 0-9 banner, and specific error copy.
  */
 import React from 'react';
-import { Alert, Text } from 'react-native';
+import { Alert, Linking, Text } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { dunningLockoutStore, isLockedDunningResponse } from '../dunningLockoutStore';
 import { describeDunningError, SUPPORT_EMAIL } from '../dunningErrorCopy';
 import { normalizeDunningStatus, formatDunningAmount, type ClientDunningStatus } from '../dunningApi';
 import { DunningLockoutProvider, REACHABLE_WHILE_LOCKED } from '../DunningLockoutProvider';
 import { DunningBanner, bannerCopy } from '../DunningBanner';
-import { lockoutSummary, supportMailto } from '../DunningLockoutScreen';
+import {
+  DUNNING_SUPPORT_SUBJECT,
+  DunningLockoutScreen,
+  dunningSupportBody,
+  lockoutSummary,
+} from '../DunningLockoutScreen';
+import { supportMailto } from '../../../constants/support';
 
 jest.mock('../../../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../../../theme/tokens').default;
@@ -313,7 +319,49 @@ describe('specific error copy', () => {
   });
 
   it('support mailto carries the reference', () => {
-    expect(decodeURIComponent(supportMailto('req-1'))).toContain('Request reference: req-1');
+    const url = supportMailto(DUNNING_SUPPORT_SUBJECT, dunningSupportBody('req-1'));
+    expect(url.startsWith(`mailto:${SUPPORT_EMAIL}?subject=`)).toBe(true);
+    expect(decodeURIComponent(url)).toContain('Request reference: req-1');
+    expect(decodeURIComponent(url)).toContain('Paused plan: payment help');
+  });
+
+  it('the payment copy re-exports the one support address (S-ERRORS guard)', () => {
+    const { SUPPORT_EMAIL: shared } = jest.requireActual('../../../constants/support');
+    expect(SUPPORT_EMAIL).toBe(shared);
+  });
+
+  it('Email support on the lockout opens one draft with the reference; when no email app opens, the shared fallback shows the address, Copy, Try again and the reference', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValueOnce(new Error('no mail app'));
+    const noop = jest.fn();
+    const screen = await render(
+      <DunningLockoutScreen
+        status={LOCKED}
+        loadError={null}
+        refreshing={false}
+        onRefresh={noop}
+        onUpdateCard={noop}
+        onEndPlan={jest.fn()}
+        onMessageCoach={noop}
+        onOpenDataExport={noop}
+        onOpenDeleteAccount={noop}
+        onSignOut={noop}
+        supportReference="req-lock-1"
+      />,
+    );
+    expect(screen.queryByTestId('dunning-lockout-support-fallback')).toBeNull();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('dunning-lockout-support'));
+    });
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(decodeURIComponent(String(open.mock.calls[0][0]))).toContain('Request reference: req-lock-1');
+    await waitFor(() => expect(screen.getByTestId('dunning-lockout-support-fallback')).toBeTruthy());
+    expect(screen.getByTestId('dunning-lockout-support-fallback-address').props.children).toBe(SUPPORT_EMAIL);
+    expect(screen.getByTestId('dunning-lockout-support-fallback-copy')).toBeTruthy();
+    expect(screen.getByTestId('dunning-lockout-support-fallback-retry')).toBeTruthy();
+    expect(screen.getByTestId('dunning-lockout-support-reference').props.children).toBe(
+      'Include reference req-lock-1 in your email.',
+    );
+    open.mockRestore();
   });
 });
 

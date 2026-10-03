@@ -59,6 +59,9 @@ jest.mock('@react-navigation/native', () => {
       isReady: () => true,
       navigate: jest.fn(),
       resetRoot: jest.fn(),
+      // S-DUNNING: the payment-lockout provider reads the focused route.
+      getCurrentRoute: () => undefined,
+      addListener: () => () => undefined,
       current: null,
     }),
   };
