@@ -104,6 +104,17 @@ type HistoryGate =
       outcome: HistoryOutcome;
     };
 
+/**
+ * The live phase of the history barrier. Reading through a function keeps
+ * TypeScript from reusing a narrowing taken before an await (the ref moves
+ * while a flush or request is in flight).
+ */
+function historyGatePhase(ref: {
+  readonly current: HistoryGate | null;
+}): HistoryGate['phase'] | null {
+  return ref.current?.phase ?? null;
+}
+
 type RouteParam = { planId?: string };
 
 /**
@@ -1415,7 +1426,9 @@ export default function CoachWorkoutBuilderScreen() {
           setHistoryNotice(describeHistoryFailure(err, direction).message);
         }
       } finally {
-        if (historyGateRef.current?.phase === 'running') setHistoryGate(null);
+        // Read the ref through a helper: the entry guard narrowed
+        // `historyGateRef.current` to null, but the awaits above moved it.
+        if (historyGatePhase(historyGateRef) === 'running') setHistoryGate(null);
       }
     },
     [autosaveEnabled, planId, autosave, sendHistoryRequest, setHistoryGate],
