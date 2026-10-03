@@ -11,6 +11,7 @@
  */
 import React, { useState } from 'react';
 import {
+  Alert,
   View,
   Text,
   TextInput,
@@ -32,6 +33,7 @@ import {
 } from '../../hooks/useCommunity';
 import { ThreadHeader } from '../../components/community';
 import { romanCopy } from '../../components/community/romanVoice';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -66,11 +68,19 @@ export default function CommunityComposerScreen(): React.ReactElement {
     trimmedBody.length > 0 &&
     (mode === 'dm' ? true : trimmedTitle.length > 0);
 
+  // Apple 1.2 content filter: the server rejects objectionable text with 422.
+  // The draft stays in the fields so the member can rephrase.
+  const showSendError = (err: unknown) => {
+    const failure = describeCommunityFailure(err, mode === 'dm' ? 'send_message' : 'send_post');
+    Alert.alert(failure.title, failure.message);
+  };
+
   const submit = () => {
     if (!canSubmit) return;
     if (mode === 'dm') {
       sendDm.mutate(trimmedBody, {
         onSuccess: () => navigation.goBack(),
+        onError: showSendError,
       });
       return;
     }
@@ -82,6 +92,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           // Brief Roman confirmation, then return to the feed.
           setTimeout(() => navigation.goBack(), 900);
         },
+        onError: showSendError,
       },
     );
   };

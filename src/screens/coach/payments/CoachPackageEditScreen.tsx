@@ -7,7 +7,13 @@
  * inputs. Mode is derived from the `packageId` param: null → create.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -21,14 +27,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import {
   CommonActions,
   type NavigationProp,
   type ParamListBase,
   type RouteProp,
-} from '@react-navigation/native';
+} from "@react-navigation/native";
 
 import {
   coachPackagesApi,
@@ -36,18 +42,20 @@ import {
   PackageBillingInterval,
   PackageCreateInput,
   PackageUpdateInput,
-} from '../../../api/packagesApi';
-import { errorCode, errorMessage } from '../../../types/common';
-import { mediumTap, successTap, warningTap } from '../../../utils/haptics';
-import { track } from '../../../lib/analytics';
-import { useTheme } from '../../../theme/ThemeProvider';
-import type { SemanticTokens, Tokens } from '../../../theme/tokens';
-import { parseDollarsToCents } from '../../../utils/currency';
-import { buildPackageShareUrl } from '../../../utils/packageShare';
-import { useCurrentUser } from '../../../hooks/useCurrentUser';
+} from "../../../api/packagesApi";
+import { errorCode, errorMessage } from "../../../types/common";
+import { generateIdempotencyKey } from "../../../utils/idempotency";
+import { describeError } from "../../../lib/coachSetup/errors";
+import { mediumTap, successTap, warningTap } from "../../../utils/haptics";
+import { track } from "../../../lib/analytics";
+import { useTheme } from "../../../theme/ThemeProvider";
+import type { SemanticTokens, Tokens } from "../../../theme/tokens";
+import { parseDollarsToCents } from "../../../utils/currency";
+import { buildPackageShareUrl } from "../../../utils/packageShare";
+import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import PackageDetailSurface, {
   type PackageDetailViewModel,
-} from '../../client/packageDetail/PackageDetailSurface';
+} from "../../client/packageDetail/PackageDetailSurface";
 
 type ParamList = {
   CoachPackageEdit: {
@@ -62,62 +70,72 @@ type ParamList = {
 };
 interface Props {
   navigation: NavigationProp<ParamListBase>;
-  route: RouteProp<ParamList, 'CoachPackageEdit'>;
+  route: RouteProp<ParamList, "CoachPackageEdit">;
 }
 
-const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> = [
-  { label: 'One-time', value: 'one_time' },
-  { label: 'Monthly', value: 'monthly' },
-  { label: 'Quarterly', value: 'quarterly' },
-  { label: 'Yearly', value: 'yearly' },
+const INTERVAL_OPTIONS: Array<{
+  label: string;
+  value: PackageBillingInterval;
+}> = [
+  { label: "One-time", value: "one_time" },
+  { label: "Monthly", value: "monthly" },
+  { label: "Quarterly", value: "quarterly" },
+  { label: "Yearly", value: "yearly" },
 ];
 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const { semanticColors, tokens } = useTheme();
-  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
+  const styles = useMemo(
+    () => makeStyles(semanticColors, tokens),
+    [semanticColors, tokens],
+  );
   const currentUser = useCurrentUser();
   const { packageId, initialPackage } = route.params;
   const isEdit = Boolean(packageId);
 
   const [loaded, setLoaded] = useState(!isEdit || Boolean(initialPackage));
-  const [original, setOriginal] = useState<CoachPackage | null>(initialPackage ?? null);
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [priceText, setPriceText] = useState('');
+  const [original, setOriginal] = useState<CoachPackage | null>(
+    initialPackage ?? null,
+  );
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priceText, setPriceText] = useState("");
   const [billingInterval, setBillingInterval] =
-    useState<PackageBillingInterval>('monthly');
-  const [trialText, setTrialText] = useState('');
-  const [featuresText, setFeaturesText] = useState('');
+    useState<PackageBillingInterval>("monthly");
+  const [trialText, setTrialText] = useState("");
+  const [featuresText, setFeaturesText] = useState("");
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!packageId) {
-      track('coach_package_create_opened');
+      track("coach_package_create_opened");
       return;
     }
-    track('coach_package_edit_opened', { package_id: packageId });
+    track("coach_package_edit_opened", { package_id: packageId });
     // Future-route: switch to coachPackagesApi.get(packageId) once
     // `GET /v1/coach/packages/:id` is deployed. Today the row is passed
     // through nav params from CoachPackagesListScreen so the edit screen
     // can render without hitting an undeployed route.
     if (initialPackage) {
       setOriginal(initialPackage);
-      setTitle(initialPackage.title ?? '');
-      setDescription(initialPackage.description ?? '');
+      setTitle(initialPackage.title ?? "");
+      setDescription(initialPackage.description ?? "");
       setPriceText(((initialPackage.priceCents ?? 0) / 100).toFixed(2));
       setBillingInterval(initialPackage.billingInterval);
-      setTrialText(initialPackage.trialDays ? String(initialPackage.trialDays) : '');
-      setFeaturesText((initialPackage.features ?? []).join('\n'));
+      setTrialText(
+        initialPackage.trialDays ? String(initialPackage.trialDays) : "",
+      );
+      setFeaturesText((initialPackage.features ?? []).join("\n"));
       setLoaded(true);
       return;
     }
     Alert.alert(
-      'Could not load package',
-      'Open the package from the list to edit it.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }],
+      "Could not load package",
+      "Open the package from the list to edit it.",
+      [{ text: "OK", onPress: () => navigation.goBack() }],
     );
     setLoaded(true);
   }, [packageId, initialPackage, navigation]);
@@ -128,20 +146,21 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   } => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      return { payload: null, message: 'Please give the package a name.' };
+      return { payload: null, message: "Please give the package a name." };
     }
     const cents = parseDollarsToCents(priceText);
     if (cents == null) {
-      return { payload: null, message: 'Enter a valid price.' };
+      return { payload: null, message: "Enter a valid price." };
     }
     if (cents === 0) {
       return {
         payload: null,
-        message: 'Price must be greater than zero. Use a free invite code for comps.',
+        message:
+          "Price must be greater than zero. Use a free invite code for comps.",
       };
     }
     const features = featuresText
-      .split('\n')
+      .split("\n")
       .map((f) => f.trim())
       .filter(Boolean);
     let trialDays: number | null = null;
@@ -150,7 +169,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       if (!Number.isInteger(n) || n < 0 || n > 365) {
         return {
           payload: null,
-          message: 'Trial days must be a whole number between 0 and 365.',
+          message: "Trial days must be a whole number between 0 and 365.",
         };
       }
       trialDays = n;
@@ -169,26 +188,51 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     };
   }, [title, description, priceText, billingInterval, trialText, featuresText]);
 
+  // OR-112-16: one create attempt = one Idempotency-Key. Every retry of the
+  // same attempt (timeout, offline, double tap) re-sends that key, so the
+  // backend returns the package it already made instead of a second one.
+  // The key is dropped only on success or a definitive refusal.
+  const createKey = useRef<string | null>(null);
+  const saveInFlight = useRef(false);
+
   const handleSave = useCallback(async () => {
+    if (saveInFlight.current) return;
     const v = validate();
     if (!v.payload) {
-      setError(v.message ?? 'Invalid input.');
+      setError(v.message ?? "Invalid input.");
       warningTap();
       return;
     }
-    setError('');
+    setError("");
     setSaving(true);
+    saveInFlight.current = true;
     try {
       if (isEdit && original) {
         const updated: PackageUpdateInput = v.payload;
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
         successTap();
-        Alert.alert('Package updated', 'Changes saved.');
+        Alert.alert("Package updated", "Changes saved.");
       } else {
-        const res = await coachPackagesApi.create(v.payload);
+        const key = createKey.current ?? generateIdempotencyKey();
+        createKey.current = key;
+        let res: { data: CoachPackage };
+        try {
+          res = await coachPackagesApi.create(v.payload, key);
+        } catch (createErr) {
+          const adoptId = keyReusedPackageId(createErr);
+          if (adoptId) {
+            // The first try with this key already made the package and the
+            // coach changed details since: save the new details onto it.
+            res = await coachPackagesApi.update(adoptId, v.payload);
+          } else {
+            if (isDefinitiveRejection(createErr)) createKey.current = null;
+            throw createErr;
+          }
+        }
+        createKey.current = null;
         successTap();
-        track('coach_package_created', { package_id: res.data.id });
+        track("coach_package_created", { package_id: res.data.id });
         // After create, replace the route so back arrow returns to the
         // list rather than the empty create form. Native stack `replace`
         // lives on `@react-navigation/native-stack`, but the screen
@@ -196,7 +240,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         // CommonActions.reset equivalent via dispatch with a single route.
         navigation.dispatch(
           CommonActions.navigate({
-            name: 'CoachPackageEdit',
+            name: "CoachPackageEdit",
             params: { packageId: res.data.id, initialPackage: res.data },
           }),
         );
@@ -204,27 +248,29 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       }
     } catch (err) {
       const code = errorCode(err);
-      if (code === 'PACKAGES_NOT_CONFIGURED') {
+      if (code === "PACKAGES_NOT_CONFIGURED") {
         Alert.alert(
-          'Packages not enabled yet',
+          "Packages not enabled yet",
           errorMessage(
             err,
-            'The packages backend module is not deployed in this environment.',
+            "The packages backend module is not deployed in this environment.",
           ),
         );
-      } else if (code === 'PACKAGE_PRICING_LOCKED') {
+      } else if (code === "PACKAGE_PRICING_LOCKED") {
         warningTap();
         Alert.alert(
-          'Pricing is locked',
-          'Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.',
+          "Pricing is locked",
+          "Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.",
         );
       } else {
-        Alert.alert(
-          'Could not save',
-          errorMessage(err, 'Please check your inputs and try again.'),
+        const f = describeError(
+          err,
+          isEdit ? "save this package" : "create this package",
         );
+        Alert.alert(f.title, f.body);
       }
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   }, [validate, isEdit, original, navigation]);
@@ -233,24 +279,24 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     if (!original) return;
     warningTap();
     Alert.alert(
-      'Archive this package?',
-      'New clients will no longer be able to subscribe. Existing subscribers are unaffected — they keep access and continue to be billed until they cancel.',
+      "Archive this package?",
+      "New clients will no longer be able to subscribe. Existing subscribers are unaffected — they keep access and continue to be billed until they cancel.",
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: "Cancel", style: "cancel" },
         {
-          text: 'Archive',
-          style: 'destructive',
+          text: "Archive",
+          style: "destructive",
           onPress: async () => {
             setArchiving(true);
             try {
               const res = await coachPackagesApi.archive(original.id);
               setOriginal(res.data);
               successTap();
-              track('coach_package_archived', { package_id: original.id });
+              track("coach_package_archived", { package_id: original.id });
             } catch (err) {
               Alert.alert(
-                'Could not archive',
-                errorMessage(err, 'Please try again.'),
+                "Could not archive",
+                errorMessage(err, "Please try again."),
               );
             } finally {
               setArchiving(false);
@@ -264,8 +310,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const handleShare = useCallback(async () => {
     if (!original?.shareToken) {
       Alert.alert(
-        'Share link not ready yet',
-        'The share link will appear here once the package is saved and the backend has minted it.',
+        "Share link not ready yet",
+        "The share link will appear here once the package is saved and the backend has minted it.",
       );
       return;
     }
@@ -276,7 +322,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         message: `Join my coaching package: ${original.title}\n${url}`,
         url,
       });
-      track('coach_package_shared', { package_id: original.id });
+      track("coach_package_shared", { package_id: original.id });
     } catch {
       // User dismissed; non-actionable.
     }
@@ -288,8 +334,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const coachDisplayName = useMemo(() => {
     const n =
       currentUser?.name?.trim() ||
-      [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ').trim();
-    return n || 'You';
+      [currentUser?.firstName, currentUser?.lastName]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    return n || "You";
   }, [currentUser]);
 
   // Build the preview view model from the LIVE draft fields so the coach sees
@@ -298,20 +347,22 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const previewViewModel = useMemo<PackageDetailViewModel>(() => {
     const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
     const features = featuresText
-      .split('\n')
+      .split("\n")
       .map((f) => f.trim())
       .filter(Boolean);
     const trimmedTrial = trialText.trim();
     const trialDays =
-      billingInterval !== 'one_time' && trimmedTrial && Number.isInteger(Number(trimmedTrial))
+      billingInterval !== "one_time" &&
+      trimmedTrial &&
+      Number.isInteger(Number(trimmedTrial))
         ? Number(trimmedTrial)
         : null;
     return {
-      id: original?.id ?? 'preview',
-      title: title.trim() || 'Untitled package',
+      id: original?.id ?? "preview",
+      title: title.trim() || "Untitled package",
       description: description.trim() || null,
       priceCents: cents,
-      currency: original?.currency ?? 'usd',
+      currency: original?.currency ?? "usd",
       billingInterval,
       intervalCount: original?.intervalCount ?? 1,
       trialDays,
@@ -337,7 +388,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     );
   }
 
-  const archived = original?.status === 'archived';
+  const archived = original?.status === "archived";
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
   const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
@@ -345,7 +396,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <View style={styles.topBar}>
         <TouchableOpacity
@@ -354,9 +405,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
+          <Ionicons
+            name="arrow-back"
+            size={24}
+            color={semanticColors.textPrimary}
+          />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>{isEdit ? 'Edit package' : 'New package'}</Text>
+        <Text style={styles.topTitle}>
+          {isEdit ? "Edit package" : "New package"}
+        </Text>
         <View style={styles.backBtn} />
       </View>
       <ScrollView
@@ -365,7 +422,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       >
         {archived ? (
           <View style={styles.archivedBanner}>
-            <Ionicons name="archive-outline" size={16} color={tokens.semantic.warning.icon} />
+            <Ionicons
+              name="archive-outline"
+              size={16}
+              color={tokens.semantic.warning.icon}
+            />
             <Text style={styles.archivedText}>
               This package is archived. Restore it by setting status back to
               Active in the form below — current subscribers are unaffected.
@@ -373,7 +434,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        <Label semanticColors={semanticColors} tokens={tokens}>Name</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>
+          Name
+        </Label>
         <TextInput
           value={title}
           onChangeText={setTitle}
@@ -383,7 +446,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           maxLength={120}
         />
 
-        <Label semanticColors={semanticColors} tokens={tokens}>Description</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>
+          Description
+        </Label>
         <TextInput
           value={description}
           onChangeText={setDescription}
@@ -394,7 +459,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           maxLength={1000}
         />
 
-        <Label semanticColors={semanticColors} tokens={tokens}>Price (USD)</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>
+          Price (USD)
+        </Label>
         <TextInput
           value={priceText}
           onChangeText={setPriceText}
@@ -405,7 +472,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           maxLength={12}
         />
 
-        <Label semanticColors={semanticColors} tokens={tokens}>Billing</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>
+          Billing
+        </Label>
         <View style={styles.segment}>
           {INTERVAL_OPTIONS.map((opt) => {
             const active = billingInterval === opt.value;
@@ -433,7 +502,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {pricingLocked ? (
           <View style={styles.lockNotice} accessibilityRole="text">
-            <Ionicons name="lock-closed" size={14} color={tokens.semantic.warning.icon} />
+            <Ionicons
+              name="lock-closed"
+              size={14}
+              color={tokens.semantic.warning.icon}
+            />
             <Text style={styles.lockNoticeText}>
               Pricing is locked after subscribers join. Create a new package for
               new pricing.
@@ -441,9 +514,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {billingInterval !== 'one_time' ? (
+        {billingInterval !== "one_time" ? (
           <>
-            <Label semanticColors={semanticColors} tokens={tokens}>Trial days (optional)</Label>
+            <Label semanticColors={semanticColors} tokens={tokens}>
+              Trial days (optional)
+            </Label>
             <TextInput
               value={trialText}
               onChangeText={setTrialText}
@@ -456,11 +531,13 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </>
         ) : null}
 
-        <Label semanticColors={semanticColors} tokens={tokens}>Features (one per line)</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>
+          Features (one per line)
+        </Label>
         <TextInput
           value={featuresText}
           onChangeText={setFeaturesText}
-          placeholder={'Weekly check-ins\nCustom workout plan\nMeal plan'}
+          placeholder={"Weekly check-ins\nCustom workout plan\nMeal plan"}
           style={[styles.input, styles.inputMultiline, { minHeight: 120 }]}
           placeholderTextColor={semanticColors.textMuted}
           multiline
@@ -473,13 +550,13 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           onPress={handleSave}
           disabled={saving}
           accessibilityRole="button"
-          accessibilityLabel={isEdit ? 'Save changes' : 'Create package'}
+          accessibilityLabel={isEdit ? "Save changes" : "Create package"}
         >
           {saving ? (
             <ActivityIndicator color={semanticColors.textOnAccent} />
           ) : (
             <Text style={styles.primaryBtnText}>
-              {isEdit ? 'Save changes' : 'Create package'}
+              {isEdit ? "Save changes" : "Create package"}
             </Text>
           )}
         </TouchableOpacity>
@@ -495,7 +572,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Preview as buyer"
             >
-              <Ionicons name="eye-outline" size={18} color={semanticColors.accent} />
+              <Ionicons
+                name="eye-outline"
+                size={18}
+                color={semanticColors.accent}
+              />
               <Text style={styles.secondaryBtnText}>Preview as buyer</Text>
             </TouchableOpacity>
 
@@ -506,7 +587,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Share package link"
               >
-                <Ionicons name="share-outline" size={18} color={semanticColors.accent} />
+                <Ionicons
+                  name="share-outline"
+                  size={18}
+                  color={semanticColors.accent}
+                />
                 <Text style={styles.secondaryBtnText}>Share link</Text>
               </TouchableOpacity>
             ) : (
@@ -515,7 +600,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 accessibilityRole="text"
                 accessibilityLabel="Share links are coming soon"
               >
-                <Ionicons name="share-outline" size={18} color={semanticColors.textMuted} />
+                <Ionicons
+                  name="share-outline"
+                  size={18}
+                  color={semanticColors.textMuted}
+                />
                 <Text style={styles.secondaryBtnTextDisabled}>
                   Share links are coming soon
                 </Text>
@@ -523,7 +612,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             )}
 
             <TouchableOpacity
-              style={[styles.tertiaryBtn, archiving && styles.primaryBtnDisabled]}
+              style={[
+                styles.tertiaryBtn,
+                archiving && styles.primaryBtnDisabled,
+              ]}
               onPress={handleArchive}
               disabled={archiving || archived}
               accessibilityRole="button"
@@ -536,7 +628,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                   <Ionicons
                     name="archive-outline"
                     size={18}
-                    color={archived ? semanticColors.textMuted : tokens.semantic.warning.icon}
+                    color={
+                      archived
+                        ? semanticColors.textMuted
+                        : tokens.semantic.warning.icon
+                    }
                   />
                   <Text
                     style={[
@@ -544,7 +640,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                       archived && { color: semanticColors.textMuted },
                     ]}
                   >
-                    {archived ? 'Archived' : 'Archive package'}
+                    {archived ? "Archived" : "Archive package"}
                   </Text>
                 </>
               )}
@@ -555,7 +651,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             <TouchableOpacity
               style={styles.linkBtn}
               onPress={() =>
-                navigation.navigate('CoachPackageContents', {
+                navigation.navigate("CoachPackageContents", {
                   packageId: original.id,
                   title: original.title,
                 })
@@ -564,13 +660,17 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityLabel="Manage content"
             >
               <Text style={styles.linkBtnText}>Manage content</Text>
-              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={semanticColors.accent}
+              />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.linkBtn}
               onPress={() =>
-                navigation.navigate('CoachPackageSubscribers', {
+                navigation.navigate("CoachPackageSubscribers", {
                   packageId: original.id,
                   title: original.title,
                 })
@@ -578,8 +678,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="View subscribers"
             >
-              <Text style={styles.linkBtnText}>View subscribers ({original.subscriberCount})</Text>
-              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
+              <Text style={styles.linkBtnText}>
+                View subscribers ({original.subscriberCount})
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={16}
+                color={semanticColors.accent}
+              />
             </TouchableOpacity>
           </>
         ) : null}
@@ -599,7 +705,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Close preview"
             >
-              <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
+              <Ionicons
+                name="close"
+                size={24}
+                color={semanticColors.textPrimary}
+              />
             </TouchableOpacity>
             <Text style={styles.topTitle}>Buyer preview</Text>
             <View style={styles.backBtn} />
@@ -607,7 +717,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           {/* coachPreview mode: checkout CTA is disabled and never calls a
               checkout session. No network fetch — the view model is built from
               the live draft + saved `original`. */}
-          <PackageDetailSurface package={previewViewModel} mode="coachPreview" />
+          <PackageDetailSurface
+            package={previewViewModel}
+            mode="coachPreview"
+          />
         </View>
       </Modal>
     </KeyboardAvoidingView>
@@ -630,9 +743,9 @@ function Label({
         marginBottom: 6,
         fontSize: 12,
         color: semanticColors.textMuted,
-        textTransform: 'uppercase',
+        textTransform: "uppercase",
         letterSpacing: 0.5,
-        fontWeight: '500',
+        fontWeight: "500",
       }}
     >
       {children}
@@ -643,11 +756,11 @@ function Label({
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
-    center: { justifyContent: 'center', alignItems: 'center' },
+    center: { justifyContent: "center", alignItems: "center" },
     topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       paddingHorizontal: 16,
       paddingTop: 56,
       paddingBottom: 12,
@@ -655,13 +768,17 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     backBtn: {
       width: 40,
       height: 40,
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: "center",
+      alignItems: "center",
     },
-    topTitle: { fontSize: 18, fontWeight: '500', color: semanticColors.textPrimary },
+    topTitle: {
+      fontSize: 18,
+      fontWeight: "500",
+      color: semanticColors.textPrimary,
+    },
     content: { paddingHorizontal: 24, paddingBottom: 60 },
     archivedBanner: {
-      flexDirection: 'row',
+      flexDirection: "row",
       gap: 8,
       padding: 10,
       borderRadius: 4,
@@ -670,8 +787,8 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     archivedText: { flex: 1, fontSize: 12, color: semanticColors.textPrimary },
     lockNotice: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
+      flexDirection: "row",
+      alignItems: "flex-start",
       gap: 8,
       marginTop: 10,
       paddingVertical: 10,
@@ -697,10 +814,10 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     inputMultiline: {
       minHeight: 80,
-      textAlignVertical: 'top',
+      textAlignVertical: "top",
     },
     segment: {
-      flexDirection: 'row',
+      flexDirection: "row",
       backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 4,
@@ -710,16 +827,20 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       flex: 1,
       paddingVertical: 10,
       borderRadius: 2,
-      alignItems: 'center',
+      alignItems: "center",
     },
     segmentItemActive: { backgroundColor: semanticColors.accent },
-    segmentText: { fontSize: 12, color: semanticColors.textMuted, fontWeight: '500' },
+    segmentText: {
+      fontSize: 12,
+      color: semanticColors.textMuted,
+      fontWeight: "500",
+    },
     segmentTextActive: { color: semanticColors.textOnAccent },
     primaryBtn: {
       marginTop: 28,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 8,
       backgroundColor: semanticColors.accent,
       paddingVertical: 14,
@@ -729,25 +850,29 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     primaryBtnText: {
       color: semanticColors.textOnAccent,
       fontSize: 15,
-      fontWeight: '500',
+      fontWeight: "500",
     },
     secondaryBtn: {
       marginTop: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
       borderRadius: 2,
       borderWidth: 1,
       borderColor: semanticColors.accent,
     },
-    secondaryBtnText: { color: semanticColors.accent, fontSize: 15, fontWeight: '500' },
+    secondaryBtnText: {
+      color: semanticColors.accent,
+      fontSize: 15,
+      fontWeight: "500",
+    },
     secondaryBtnDisabled: {
       marginTop: 12,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
       borderRadius: 2,
@@ -758,29 +883,62 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     secondaryBtnTextDisabled: {
       color: semanticColors.textMuted,
       fontSize: 14,
-      fontWeight: '400',
+      fontWeight: "400",
     },
     tertiaryBtn: {
       marginTop: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
       borderRadius: 2,
     },
-    tertiaryBtnText: { color: tokens.semantic.warning.icon, fontSize: 14, fontWeight: '500' },
+    tertiaryBtnText: {
+      color: tokens.semantic.warning.icon,
+      fontSize: 14,
+      fontWeight: "500",
+    },
     linkBtn: {
       marginTop: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
       paddingVertical: 12,
     },
-    linkBtnText: { fontSize: 14, color: semanticColors.accent, fontWeight: '500' },
+    linkBtnText: {
+      fontSize: 14,
+      color: semanticColors.accent,
+      fontWeight: "500",
+    },
     errorText: {
       marginTop: 12,
       color: tokens.colors.error,
       fontSize: 13,
     },
   });
+
+/** 422 IDEMPOTENCY_KEY_REUSED names the package this key already created. */
+function keyReusedPackageId(err: unknown): string | null {
+  const r = (err as { response?: { status?: number; data?: unknown } } | null)
+    ?.response;
+  if (r?.status !== 422 || !r.data || typeof r.data !== "object") return null;
+  const d = r.data as Record<string, unknown>;
+  return d.code === "IDEMPOTENCY_KEY_REUSED" && typeof d.package_id === "string"
+    ? d.package_id
+    : null;
+}
+
+/** A 4xx the same request can never pass (not a timeout, conflict or rate limit). */
+function isDefinitiveRejection(err: unknown): boolean {
+  const status = (err as { response?: { status?: number } } | null)?.response
+    ?.status;
+  return (
+    typeof status === "number" &&
+    status >= 400 &&
+    status < 500 &&
+    status !== 408 &&
+    status !== 409 &&
+    status !== 429
+  );
+}

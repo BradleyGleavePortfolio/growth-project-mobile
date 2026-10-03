@@ -41,6 +41,7 @@ module.exports = {
     'build/',
     'babel.config.js',
     'jest.setup.js',
+    'jest.expoAudioMock.js',
     '**/*.d.ts',
   ],
   rules: {

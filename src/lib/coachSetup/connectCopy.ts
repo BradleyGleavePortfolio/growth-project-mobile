@@ -81,22 +81,44 @@ export function connectCopy(view: ConnectView): ConnectCopy {
       tone: "attention",
       due,
     }),
+    // S-COACH-3: each state says exactly what Stripe allows today. Charges
+    // and payouts are separate switches at Stripe; the copy never claims
+    // one works when Stripe has it off.
     pending_verification: () => ({
       title: "Stripe is checking your details",
-      body: "This usually takes a few minutes, and can take up to 2 business days. You can keep setting up while you wait.",
+      body: view.chargesEnabled
+        ? "Clients can pay you now. Stripe sends payouts to your bank once it has finished checking, usually within 2 business days."
+        : "This usually takes a few minutes, and can take up to 2 business days. Clients can pay you once Stripe has finished. You can keep setting up while you wait.",
       action: null,
       tone: "progress",
       due: [],
     }),
-    restricted: () => ({
-      title: "Stripe needs a little more from you",
-      body: deadline
-        ? `Send these to Stripe by ${deadline} to keep taking payments.`
-        : "Send these to Stripe to start taking payments.",
-      action: "Update details with Stripe",
-      tone: "attention",
-      due,
-    }),
+    restricted: () => {
+      const by = deadline ? ` by ${deadline}` : "";
+      if (view.chargesEnabled && !view.payoutsEnabled)
+        return {
+          title: "Stripe has paused your payouts",
+          body: `Clients can still pay you. Stripe holds your earnings until you send these${by}.`,
+          action: "Update details with Stripe",
+          tone: "attention",
+          due,
+        };
+      if (!view.chargesEnabled && view.payoutsEnabled)
+        return {
+          title: "Stripe has paused new payments",
+          body: `Clients cannot pay you until you send these to Stripe${by}. Money you already earned still pays out.`,
+          action: "Update details with Stripe",
+          tone: "attention",
+          due,
+        };
+      return {
+        title: "Stripe needs a little more from you",
+        body: `Clients cannot pay you and payouts are paused until you send these to Stripe${by}.`,
+        action: "Update details with Stripe",
+        tone: "attention",
+        due,
+      };
+    },
     active: () =>
       // B-329-4: an account that can charge today can still owe Stripe
       // details (currently or past due, with a deadline). Keep the truthful

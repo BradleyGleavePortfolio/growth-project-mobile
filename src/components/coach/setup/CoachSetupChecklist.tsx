@@ -8,7 +8,7 @@
  *   First payment   GET /v1/coach/money/charges?status=paid&limit=1
  *                   (older backend: the first-payment celebration gate)
  * A read that fails shows specific copy with a retry, and its item reads
- * "We could not check this" instead of looking undone. The first payment
+ * "This could not be checked just now" instead of looking undone. The first payment
  * itself is celebrated by FirstPaymentWowHost (flag
  * EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW). The card hides once all four are
  * done.
@@ -55,7 +55,7 @@ export interface ChecklistStatus {
   paid: boolean | null;
 }
 
-const UNKNOWN = "We could not check this just now.";
+const UNKNOWN = "This could not be checked just now.";
 
 export function toChecklistStatus(s: SetupSnapshot): ChecklistStatus {
   return {

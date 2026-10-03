@@ -32,7 +32,7 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | --- | --- |
 | `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
 | `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
-| `community/CommunityWinCard.tsx` | Community feed primitive. |
+| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2). Member wins render in `screens/client/CommunityScreen.tsx`. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
 ### Roman (AI butler) identity
@@ -125,7 +125,7 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 | --- | --- |
 | `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
 | `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
-| `community/CommunityWinCard.tsx` | Community feed primitive. |
+| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2). Member wins render in `screens/client/CommunityScreen.tsx`. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
 ### Logging primitives

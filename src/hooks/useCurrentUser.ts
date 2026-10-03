@@ -63,9 +63,9 @@ export function useCurrentUser(): CurrentUser | null {
 
     const apply = (next: CurrentUser | null) => {
       setUser(next);
-      // Tag Sentry events with the current user so crash reports are
-      // attributable. No-op when Sentry is not configured.
-      setSentryUser(next ? { id: next.id, email: next.email } : null);
+      // Tag Sentry events with the current user id so crash reports are
+      // attributable (id only, no email). No-op when Sentry is not configured.
+      setSentryUser(next ? { id: next.id } : null);
     };
 
     const loadUser = async () => {

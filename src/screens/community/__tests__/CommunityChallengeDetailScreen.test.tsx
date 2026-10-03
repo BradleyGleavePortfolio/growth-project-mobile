@@ -727,10 +727,8 @@ describe('CommunityChallengeDetailScreen — composer keeps a newer draft on fai
   });
 });
 
-describe('CommunityChallengeDetailScreen — report double-submit guard (P2-C4)', () => {
-  function comment(
-    overrides: Partial<CommunityChallengeComment> = {},
-  ): CommunityChallengeComment {
+describe('CommunityChallengeDetailScreen — one report entry per comment (C-314-1)', () => {
+  function comment(overrides: Partial<CommunityChallengeComment> = {}): CommunityChallengeComment {
     return {
       id: 'cm-1',
       challenge_id: 'ch-1',
@@ -741,7 +739,7 @@ describe('CommunityChallengeDetailScreen — report double-submit guard (P2-C4)'
     };
   }
 
-  it('fires exactly one report request on a rapid double-tap and reuses one key', async () => {
+  it('offers Report through the safety menu only (no second one-tap flag)', async () => {
     api.getChallenge.mockResolvedValue({
       challenge: challenge(),
       participation: participation(),
@@ -750,30 +748,11 @@ describe('CommunityChallengeDetailScreen — report double-submit guard (P2-C4)'
       comments: [comment()],
       next_cursor: null,
     });
-    // The report stays pending so the second tap lands while the first is in
-    // flight — the guard must drop it.
-    let resolveReport: (() => void) | undefined;
-    api.reportComment.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveReport = resolve;
-        }),
-    );
     await renderScreen();
 
-    const reportBtn = await screen.findByTestId(
-      'community-challenge-comment-cm-1-report',
-    );
-    await fireEvent.press(reportBtn);
-    await fireEvent.press(reportBtn);
-
-    await waitFor(() => expect(api.reportComment).toHaveBeenCalledTimes(1));
-    // The single call carries a stable idempotency key (5th argument).
-    const key = api.reportComment.mock.calls[0][4];
-    expect(typeof key).toBe('string');
-    expect((key as string).length).toBeGreaterThan(0);
-
-    resolveReport?.();
-    await waitFor(() => expect(api.reportComment).toHaveBeenCalledTimes(1));
+    expect(await screen.findByTestId('community-challenge-comment-cm-1-safety')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-comment-cm-1-report')).toBeNull();
+    expect(screen.queryByLabelText('Report this comment')).toBeNull();
+    expect(api.reportComment).not.toHaveBeenCalled();
   });
 });

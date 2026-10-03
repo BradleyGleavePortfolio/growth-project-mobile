@@ -7,9 +7,10 @@
 import { captureError } from "../../services/sentry";
 import { extractRequestId } from "../../utils/correlation";
 import { errorStatus } from "../../types/common";
+import { SUPPORT_EMAIL } from "../../constants/support";
 
-/** Support inbox for coach money and setup problems (owner-designated). */
-export const COACH_SUPPORT_EMAIL = "Bradleyapple1031@gmail.com";
+/** Support inbox for coach money and setup problems (the one app address). */
+export const COACH_SUPPORT_EMAIL = SUPPORT_EMAIL;
 
 export interface FriendlyError {
   /** Short heading, e.g. "Stripe is not connected yet". */
@@ -75,7 +76,8 @@ const HUMAN_MESSAGE_CODES = new Set([
 
 /**
  * Turn any thrown value into specific copy. `action` completes the sentence
- * "We could not ..." for the unknown case, e.g. "open Stripe".
+ * "TGP could not ..." for the unknown case, e.g. "open Stripe". Copy never
+ * speaks as "we" (owner copy rule): the app names itself TGP.
  */
 export function describeError(err: unknown, action: string): FriendlyError {
   const status = errorStatus(err);
@@ -153,7 +155,24 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       title: "Your setup moved on another device",
-      body: "We picked up where you left off. Continue from here.",
+      body: "Setup picked up where you left off. Continue from here.",
+      retryable: true,
+    };
+  }
+  // OR-112-16: package create is idempotent per Idempotency-Key.
+  if (status === 409 && code === "IDEMPOTENCY_IN_PROGRESS") {
+    return {
+      ...base,
+      title: "Your package is still being saved",
+      body: "The first try is still finishing. Wait a few seconds, then tap Create package again. It will not be made twice.",
+      retryable: true,
+    };
+  }
+  if (code === "IDEMPOTENCY_KEY_REUSED") {
+    return {
+      ...base,
+      title: "Your package was already saved",
+      body: `Tap Create package again to finish it with the details you see now.${referenceSentence(requestId)}`,
       retryable: true,
     };
   }
@@ -185,15 +204,15 @@ export function describeError(err: unknown, action: string): FriendlyError {
     captureError(err, { area: "coach_setup", action, status, code, requestId });
     return {
       ...base,
-      title: "Our server had a problem",
-      body: `We could not ${action}. Try again in a few minutes.${referenceSentence(requestId)}`,
+      title: "TGP had a problem on its side",
+      body: `TGP could not ${action} just now. Try again in a few minutes.${referenceSentence(requestId)}`,
       retryable: true,
     };
   }
   captureError(err, { area: "coach_setup", action, status, code, requestId });
   return {
     ...base,
-    title: `We could not ${action}`,
+    title: `TGP could not ${action}`,
     body: `Try again. If it keeps happening, write to ${COACH_SUPPORT_EMAIL}${
       requestId ? ` and mention reference ${requestId}` : ""
     }.`,

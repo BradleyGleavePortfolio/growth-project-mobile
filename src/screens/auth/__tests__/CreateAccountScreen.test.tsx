@@ -9,7 +9,7 @@
  *  - Apple failures show friendly copy, never the raw server message.
  */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
@@ -31,7 +31,11 @@ jest.mock('../../../services/api', () => ({
 }));
 
 const mockGetString = jest.fn();
-jest.mock('expo-clipboard', () => ({ getStringAsync: () => mockGetString() }));
+const mockSetString = jest.fn();
+jest.mock('expo-clipboard', () => ({
+  getStringAsync: () => mockGetString(),
+  setStringAsync: (...a: unknown[]) => mockSetString(...a),
+}));
 
 const mockSignInWithApple = jest.fn();
 jest.mock('../../../utils/appleAuth', () => ({
@@ -1137,5 +1141,54 @@ describe('CreateAccountScreen', () => {
       await fireEvent.press(utils.getByText('I verified my email'));
       await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'pat@example.com', password: 'Str0ng!pass' }));
     });
+  });
+});
+
+// Sol B-324-1: "Request access" never fails silently. When no email app
+// opens, the screen says so, shows the one support address as selectable
+// text, and offers Copy and Try again.
+describe('CreateAccountScreen Request access email', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    __resetSignupPolicyCacheForTests();
+    await AsyncStorage.clear();
+    jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('opens a draft to the one support inbox with the request-access subject', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const utils = await renderScreen();
+    await fireEvent.press(await utils.findByTestId('request-access-link'));
+    expect(openURL).toHaveBeenCalledWith(
+      'mailto:Bradleyapple1031@gmail.com?subject=Request%20access%20to%20The%20Growth%20Project',
+    );
+    expect(utils.queryByTestId('request-access-fallback')).toBeNull();
+  });
+
+  it('a mail intent that cannot open shows what happened, the address, Copy and Try again', async () => {
+    const openURL = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no mail app'));
+    mockSetString.mockResolvedValue(true);
+    const utils = await renderScreen();
+    await fireEvent.press(await utils.findByTestId('request-access-link'));
+    await waitFor(() => utils.getByTestId('request-access-fallback'));
+    expect(utils.getByTestId('request-access-fallback-status').props.children).toMatch(
+      /could not open an email app/,
+    );
+    const address = utils.getByTestId('request-access-fallback-address');
+    expect(address.props.selectable).toBe(true);
+    expect(address.props.children).toBe('Bradleyapple1031@gmail.com');
+    await fireEvent.press(utils.getByTestId('request-access-fallback-copy'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('Bradleyapple1031@gmail.com'));
+    await waitFor(() =>
+      expect(utils.getByTestId('request-access-fallback-status').props.children).toMatch(/Address copied/),
+    );
+    // Try again opens the same draft; once it opens, the fallback goes away.
+    openURL.mockResolvedValueOnce(true);
+    await fireEvent.press(utils.getByTestId('request-access-fallback-retry'));
+    expect(openURL).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(utils.queryByTestId('request-access-fallback')).toBeNull());
+    expect(Alert.alert).not.toHaveBeenCalled();
   });
 });

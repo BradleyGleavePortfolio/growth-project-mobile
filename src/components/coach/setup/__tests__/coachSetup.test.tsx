@@ -21,6 +21,7 @@ jest.mock("../../../../services/api", () => ({
 const mockCapture = jest.fn();
 jest.mock("../../../../services/sentry", () => ({
   captureError: (...a: unknown[]) => mockCapture(...a),
+  setSentryUser: jest.fn(),
 }));
 
 const mockOpenAuth = jest.fn();
@@ -234,7 +235,7 @@ describe("describeError", () => {
       httpError(418, {}, { "x-request-id": "req_9" }),
       "save this step",
     );
-    expect(u.title).toBe("We could not save this step");
+    expect(u.title).toBe("TGP could not save this step");
     expect(u.body).toContain("req_9");
   });
 });
