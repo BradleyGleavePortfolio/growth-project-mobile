@@ -4,7 +4,8 @@
  */
 import React from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { SchedulingSessionStatus } from '../../../api/schedulingApi';
+import type { CoachingSession, SchedulingSessionStatus } from '../../../api/schedulingApi';
+import { formatWhen } from '../../../calendar/calendarTime';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, spacing, typography } from '../../../theme/tokens';
 
@@ -24,10 +25,49 @@ export function statusLabel(status: SchedulingSessionStatus): string {
       return 'Completed';
     case 'no_show':
       return 'Missed';
+    case 'expired':
+      return 'Not confirmed in time';
     default:
       return 'Status unavailable. Refresh Calendar or message your coach.';
   }
 }
+
+/**
+ * S-SCHED-5: a request past its clear time reads as expired at once, even if
+ * the copy on screen was loaded before the server closed it.
+ */
+export function isRequestLapsed(
+  s: Pick<CoachingSession, 'status' | 'request_expires_at'>,
+  nowMs: number = Date.now(),
+): boolean {
+  if (s.status !== 'requested' || !s.request_expires_at) return false;
+  const at = new Date(s.request_expires_at).getTime();
+  return Number.isFinite(at) && at <= nowMs;
+}
+
+export function asSeen<T extends CoachingSession>(s: T, nowMs: number = Date.now()): T {
+  return isRequestLapsed(s, nowMs)
+    ? { ...s, status: 'expired', cancellable: false, reschedulable: false }
+    : s;
+}
+
+/** The answer-by line on a pending request, per side. Null when unknown. */
+export function requestDeadlineNote(
+  s: Pick<CoachingSession, 'status' | 'request_expires_at'>,
+  viewer: 'client' | 'coach',
+  tz?: string,
+): string | null {
+  if (s.status !== 'requested' || !s.request_expires_at) return null;
+  if (!Number.isFinite(new Date(s.request_expires_at).getTime())) return null;
+  const when = formatWhen(s.request_expires_at, tz);
+  return viewer === 'client'
+    ? `Your coach has until ${when} to confirm. If they have not by then, the request closes and the time opens up again.`
+    : `Answer by ${when}. After that the request closes on its own and the time opens up again.`;
+}
+
+/** Why an expired request closed, and the next step. */
+export const EXPIRED_REQUEST_CLIENT_NOTE =
+  'Your coach did not confirm this request in time, so it closed and the time opened up again. Pick another time whenever it suits you.';
 
 export function Section({ title, children }: { title: string; children: React.ReactNode }) {
   const { semanticColors: sc } = useTheme();

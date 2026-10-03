@@ -54,7 +54,10 @@ export type SchedulingSessionStatus =
   | 'canceled'
   | 'no_show'
   | 'completed'
-  | 'pending_provider';
+  | 'pending_provider'
+  // S-SCHED-5 (backend auto-expiry): the coach did not answer the request by
+  // its clear time; it is closed and the time is open again.
+  | 'expired';
 
 /**
  * Video provider as the backend models it. The mobile shell uses
@@ -330,6 +333,9 @@ export interface CoachingSession {
   calendar_provider: 'stub' | 'google_calendar';
   calendar_event_id: string | null;
   approved_at: string | null;
+  // S-SCHED-5: while requested, the clear time the coach must answer by
+  // (ISO 8601 UTC). Optional so older backends still render.
+  request_expires_at?: string | null;
   ended_at: string | null;
   end_reason: string | null;
   created_at: string;

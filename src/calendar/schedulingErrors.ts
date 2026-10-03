@@ -49,6 +49,7 @@ export const SCHEDULING_CODE_MESSAGES: Readonly<Record<string, string>> = {
   INVALID_MEETING_LINK: 'Enter a complete https call link or a phone number, then save it again.',
   SESSION_MOVED: 'This session was moved to a new time a moment ago. Refresh Calendar to see the new time.',
   INVALID_LIST_QUERY: 'Calendar could not load more sessions from where you were. Refresh Calendar to start the list again.',
+  REQUEST_EXPIRED: 'This request closed because your coach did not confirm it in time, and the time is open again. Pick a new time in Calendar.',
   COACH_NOT_ASSIGNED: 'You are not matched with a coach yet. Ask your coach for an invite code, then open Accept invite in Profile and more.',
 };
 
@@ -68,6 +69,7 @@ export const COACH_CODE_MESSAGES: Readonly<Record<string, string>> = {
   SESSION_NOT_ACTIVE: 'This session is no longer active. Refresh the inbox to see your current sessions.',
   SLOT_TAKEN: 'Another session already uses that time. Refresh and choose a different time.',
   CALENDAR_BUSY: 'Your calendar is busy saving other changes right now. Wait a few seconds, then try again.',
+  REQUEST_EXPIRED: 'This request closed at its answer-by time without a reply, so the time is open again. Refresh the inbox, or message your client to find another time.',
   INVALID_LIST_QUERY: 'The inbox could not load more sessions from where you were. Refresh the inbox to start the list again.',
 };
 
@@ -115,7 +117,7 @@ export function calendarErrorMessage(
     return SCHEDULING_CODE_MESSAGES[code];
   }
   const w = audienceWords(audience);
-  if (status === 401) return `Your login expired before we could ${operation}. Log in again, then check ${w.home}.`;
+  if (status === 401) return `Your login expired before TGP could ${operation}. Log in again, then check ${w.home}.`;
   if (status === 402) {
     return audience === 'coach'
       ? 'Your plan does not include this scheduling action. Open Membership in Profile and more, or contact support.'
@@ -146,8 +148,8 @@ export function calendarErrorMessage(
     (err instanceof Error && err.message === 'Network Error')
   ) {
     return audience === 'coach'
-      ? `The connection dropped before we could ${operation}. Reconnect and refresh your schedule before trying again.`
-      : `The connection dropped before we could ${operation}. Reconnect and check Calendar before sending another booking.`;
+      ? `The connection dropped before TGP could ${operation}. Reconnect and refresh your schedule before trying again.`
+      : `The connection dropped before TGP could ${operation}. Reconnect and check Calendar before sending another booking.`;
   }
   const ref = referenceFor(err);
   if (!err || typeof err !== 'object' || !reported.has(err)) {

@@ -28,6 +28,7 @@ import {
   useCancelSession,
 } from '../../hooks/useScheduling';
 import { useUpcomingSessionsByStatus } from '../../hooks/useCalendar';
+import { isRequestLapsed, requestDeadlineNote } from '../client/calendar/calendarUi';
 import type { CoachingSession, SchedulingSessionStatus } from '../../api/schedulingApi';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -147,7 +148,12 @@ export default function CoachBookingInboxScreen() {
   // Server-filtered pages; the status check stays as a guard for an older
   // backend that ignores the filter.
   const pending = useMemo<CoachingSession[]>(
-    () => (requestsQ.data?.pages ?? []).flat().filter((s) => s.status === 'requested'),
+    // S-SCHED-5: a request past its answer-by time has closed; it leaves
+    // the inbox even if this page was loaded before it closed.
+    () =>
+      (requestsQ.data?.pages ?? [])
+        .flat()
+        .filter((s) => s.status === 'requested' && !isRequestLapsed(s)),
     [requestsQ.data],
   );
   const confirmed = useMemo<CoachingSession[]>(
@@ -240,6 +246,17 @@ export default function CoachBookingInboxScreen() {
             >
               {s.client_name ? `Client: ${s.client_name}` : 'Client not named on this request'}
             </Text>
+            {requestDeadlineNote(s, 'coach') ? (
+              <Text
+                testID={`inbox-request-deadline-${s.id}`}
+                style={[
+                  typography.bodySmall,
+                  { color: colors.textMuted, marginTop: spacing.xs },
+                ]}
+              >
+                {requestDeadlineNote(s, 'coach')}
+              </Text>
+            ) : null}
             <View style={styles.actions}>
               <TouchableOpacity
                 accessibilityRole="button"

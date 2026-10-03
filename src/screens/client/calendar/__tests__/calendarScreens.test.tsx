@@ -63,6 +63,8 @@ import CalendarHomeScreen from '../CalendarHomeScreen';
 import CalendarBookScreen, { bookedMessage, bookingErrorMessage, moveNeedsApprovalWarning } from '../CalendarBookScreen';
 import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
 import { pickWelcomeType } from '../CalendarBookScreen';
+import { isRequestLapsed, requestDeadlineNote } from '../calendarUi';
+import { calendarErrorMessage } from '../../../../calendar/schedulingErrors';
 
 describe('pickWelcomeType', () => {
   const list = [
@@ -622,5 +624,91 @@ describe('S-SCHED-3 C-325-4: moving a confirmed approval-type session warns firs
   it('a moved request repeats the phone-calendar note too', () => {
     expect(bookedMessage(sess({ status: 'requested' }), 'Bradley', true)).toMatch(/update that copy in your calendar app\.$/);
     expect(bookedMessage(sess({ status: 'scheduled' }), 'Bradley', false)).not.toMatch(/phone calendar/);
+  });
+});
+
+describe('S-SCHED-5 request auto-expiry', () => {
+  const calm = (s: string) => {
+    expect(s).not.toMatch(/!/);
+    expect(s).not.toMatch(/\b(we|us|our)\b/i);
+  };
+
+  it('a pending request shows when the coach must answer by, in plain words', async () => {
+    const future = new Date(Date.now() + 26 * 3_600_000);
+    api.getSession.mockResolvedValue(
+      sess({
+        status: 'requested',
+        start_at: future.toISOString(),
+        end_at: new Date(future.getTime() + 15 * 60_000).toISOString(),
+        request_expires_at: new Date(future.getTime() - 3_600_000).toISOString(),
+      }),
+    );
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-request-deadline')).toBeTruthy());
+    expect(
+      r.getByText(/^Your coach has until .+ to confirm\. If they have not by then, the request closes and the time opens up again\.$/),
+    ).toBeTruthy();
+    expect(r.queryByTestId('calendar-request-expired')).toBeNull();
+  });
+
+  it('a request past its clear time reads as not confirmed in time, explains why and offers a new time', async () => {
+    const n = nav();
+    const future = new Date(Date.now() + 26 * 3_600_000);
+    api.getSession.mockResolvedValue(
+      sess({
+        status: 'requested',
+        cancellable: true,
+        reschedulable: true,
+        start_at: future.toISOString(),
+        end_at: new Date(future.getTime() + 15 * 60_000).toISOString(),
+        request_expires_at: new Date(Date.now() - 60_000).toISOString(),
+      }),
+    );
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-request-expired')).toBeTruthy());
+    expect(r.getByTestId('calendar-session-status').props.children).toBe('Not confirmed in time');
+    expect(r.queryByTestId('calendar-cancel')).toBeNull();
+    expect(r.queryByTestId('calendar-reschedule')).toBeNull();
+    expect(r.queryByTestId('calendar-request-deadline')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-request-rebook'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', sessionTypeId: expect.anything() });
+  });
+
+  it('the server expired status renders the same way', async () => {
+    api.getSession.mockResolvedValue(sess({ status: 'expired', cancellable: false, reschedulable: false }));
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-request-expired')).toBeTruthy());
+    expect(r.getByTestId('calendar-session-status').props.children).toBe('Not confirmed in time');
+  });
+
+  it('REQUEST_EXPIRED has its own copy per side, with no blame and no generic text', () => {
+    const err = { response: { status: 409, data: { code: 'REQUEST_EXPIRED', message: 'server text' } } };
+    const client = calendarErrorMessage(err, 'cancel the session');
+    const coach = calendarErrorMessage(err, 'confirm the request', 'coach', 'approve');
+    expect(client).toBe(
+      'This request closed because your coach did not confirm it in time, and the time is open again. Pick a new time in Calendar.',
+    );
+    expect(coach).toMatch(/^This request closed at its answer-by time without a reply/);
+    calm(client);
+    calm(coach);
+  });
+
+  it('connection and login copy no longer speaks as "we"', () => {
+    calm(calendarErrorMessage(new Error('Network Error'), 'cancel the session'));
+    calm(calendarErrorMessage(new Error('Network Error'), 'confirm the request', 'coach'));
+    calm(calendarErrorMessage({ response: { status: 401, data: {} } }, 'cancel the session'));
+  });
+
+  it('the coach answer-by line and lapsed check', () => {
+    const at = '2030-10-07T15:00:00.000Z';
+    const line = requestDeadlineNote({ status: 'requested', request_expires_at: at }, 'coach', 'America/Los_Angeles');
+    expect(line).toMatch(/^Answer by .+\. After that the request closes on its own and the time opens up again\.$/);
+    calm(line ?? '');
+    calm(requestDeadlineNote({ status: 'requested', request_expires_at: at }, 'client') ?? '');
+    expect(requestDeadlineNote({ status: 'scheduled', request_expires_at: at }, 'coach')).toBeNull();
+    expect(requestDeadlineNote({ status: 'requested', request_expires_at: null }, 'coach')).toBeNull();
+    expect(isRequestLapsed({ status: 'requested', request_expires_at: at }, Date.parse(at))).toBe(true);
+    expect(isRequestLapsed({ status: 'requested', request_expires_at: at }, Date.parse(at) - 1)).toBe(false);
+    expect(isRequestLapsed({ status: 'requested', request_expires_at: undefined })).toBe(false);
   });
 });
