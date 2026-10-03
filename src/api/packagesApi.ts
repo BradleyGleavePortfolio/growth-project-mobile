@@ -68,6 +68,11 @@ export interface CoachPackage {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /**
+   * When the package went live (backend PR-6 draft/publish lifecycle).
+   * null = draft; undefined = the payload did not carry the field.
+   */
+  publishedAt?: string | null;
 }
 
 export interface PackageCreateInput {
@@ -342,6 +347,7 @@ interface BackendPackageRow {
   created_at?: string;
   updated_at?: string;
   archived_at?: string | null;
+  published_at?: string | null;
 }
 
 function fromBackendInterval(
@@ -385,6 +391,7 @@ function fromBackend(row: BackendPackageRow): CoachPackage {
     createdAt: row.created_at ?? '',
     updatedAt: row.updated_at ?? '',
     archivedAt: row.archived_at ?? null,
+    ...(row.published_at !== undefined ? { publishedAt: row.published_at } : {}),
   };
 }
 
@@ -437,6 +444,17 @@ function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
   if (input.currency !== undefined) out.currency = input.currency;
   if (input.status !== undefined) out.is_active = input.status === 'active';
   return out;
+}
+
+/**
+ * True only for a package a client can actually buy or join: active, not
+ * archived and published. A draft (published_at null) or archived package is
+ * not live. Rows from a payload without `published_at` fall back to status.
+ */
+export function isLivePackage(p: CoachPackage): boolean {
+  if (p.status !== 'active' || p.archivedAt) return false;
+  if (p.publishedAt === undefined) return true;
+  return typeof p.publishedAt === 'string' && p.publishedAt.length > 0;
 }
 
 // ─── coach API ──────────────────────────────────────────────────────────────
