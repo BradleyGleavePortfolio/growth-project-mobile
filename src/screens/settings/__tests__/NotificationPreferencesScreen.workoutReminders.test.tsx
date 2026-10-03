@@ -276,11 +276,14 @@ async function flip(
   value: boolean,
 ): Promise<{ settled: Promise<unknown> }> {
   const before = mockUpdate.mock.calls.length;
+  // v14: fireEvent resolves with the handler's own promise (held open here by a
+  // deferred save), AFTER its internal act() settles. Never await it and never
+  // open another act() until that internal act has settled: overlapping act()
+  // calls corrupt the renderer for every later test in the file. Two microtask
+  // turns let it settle (same pattern as coachTeamP0Blockers P0-2).
   const settled: Promise<unknown> = fireEvent(el, 'valueChange', value);
-  // Let the handler run up to its first held await.
-  await act(async () => {
-    await Promise.resolve();
-  });
+  await Promise.resolve();
+  await Promise.resolve();
   await waitFor(() => expect(mockUpdate.mock.calls.length).toBeGreaterThanOrEqual(before));
   return { settled };
 }
