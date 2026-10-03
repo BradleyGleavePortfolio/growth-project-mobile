@@ -480,7 +480,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             onPress={() => navigation.navigate('DataExport')}
             accessibilityRole="button"
             accessibilityLabel="Request my data export"
-            accessibilityHint="Download a complete copy of all your personal data"
+            accessibilityHint="Download a copy of your personal data"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <Ionicons name="download-outline" size={18} color={colors.primary} />
