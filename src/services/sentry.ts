@@ -2,7 +2,20 @@ import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import { scrubBreadcrumb, scrubEvent } from './sentryPrivacy';
+import { scrubEvent as scrubUrlCredentials } from './sentryScrub';
+
 let initialized = false;
+
+/**
+ * Options only the native SDKs read (not part of the JS option type). iOS:
+ * no NSURLSession breadcrumbs (full request URLs) and no native HTTP spans
+ * (JS owns tracing).
+ */
+export const NATIVE_PRIVACY_OPTIONS = {
+  enableNetworkBreadcrumbs: false,
+  enableNetworkTracking: false,
+} as const;
 
 /**
  * Build the release identifier that the running app reports to Sentry. It
@@ -63,16 +76,39 @@ export function initSentry(): void {
     enableAutoSessionTracking: true,
     // Don't crash the app if Sentry itself blows up.
     enableNative: true,
-    // Strip sensitive headers before transmission.
-    beforeSend(event) {
-      if (event.request?.headers) {
-        delete event.request.headers.Authorization;
-        delete event.request.headers.authorization;
-        delete event.request.headers.Cookie;
-        delete event.request.headers.cookie;
-      }
-      return event;
+    // Native-only keys: the RN SDK forwards every non-function option to
+    // the native SDK it re-initializes (iOS reads them in
+    // SentryOptionsInternal initWithDict), so the pre-JS suppression in
+    // plugins/withSentryNativeInit.js survives JS startup. Android keeps it
+    // through the io.sentry.breadcrumbs.network-events manifest flag that
+    // the same plugin writes (B-330-3).
+    ...NATIVE_PRIVACY_OPTIONS,
+    // No PII (owner rule: no health data, no message content). These match
+    // the pre-JS native init in plugins/withSentryNativeInit.js, which this
+    // call re-initializes: no IP / default PII, no screenshots or view
+    // hierarchy (they can show health values and messages), no failed-request
+    // events (request URLs).
+    sendDefaultPii: false,
+    attachScreenshot: false,
+    attachViewHierarchy: false,
+    enableCaptureFailedRequests: false,
+    // Explicit content policy (src/services/sentryPrivacy.ts): sendDefaultPii
+    // does not redact console text or request URLs. beforeBreadcrumb runs
+    // before scope sync copies a breadcrumb to native; beforeSend also covers
+    // native breadcrumbs merged into JS events; transactions lose URL queries.
+    // Then the URL-credential pass (src/services/sentryScrub.ts, B-327-6): a
+    // data-export download link is a bearer credential for the whole archive,
+    // and a Linking rejection quotes it in the exception text, which the
+    // policy above keeps. That pass redacts token/signature query values,
+    // JWT-shaped strings, the download route's query and signed storage URLs
+    // anywhere in the event (message, exception values, extras, contexts,
+    // tags), returning a scrubbed copy.
+    beforeBreadcrumb: (breadcrumb) => {
+      const kept = scrubBreadcrumb(breadcrumb);
+      return kept ? scrubUrlCredentials(kept) : null;
     },
+    beforeSend: (event) => scrubUrlCredentials(scrubEvent(event)),
+    beforeSendTransaction: (event) => scrubUrlCredentials(scrubEvent(event)),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
@@ -98,11 +134,16 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   }
 }
 
-/** Tag the current user so events are attributable. Call after login. */
-export function setSentryUser(user: { id: string; email?: string } | null): void {
+/**
+ * Tag the current user so events are attributable. Call after login.
+ * Only the opaque account id is sent: the email is personal data and is
+ * never attached (it would also reach native crash reports through scope
+ * sync).
+ */
+export function setSentryUser(user: { id: string } | null): void {
   if (!initialized) return;
   if (user) {
-    Sentry.setUser({ id: user.id, email: user.email });
+    Sentry.setUser({ id: user.id });
   } else {
     Sentry.setUser(null);
   }

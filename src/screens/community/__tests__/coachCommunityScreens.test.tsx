@@ -32,7 +32,7 @@
  * resolve without standing up the full ThemeProvider.
  */
 import React from 'react';
-import { render, fireEvent, configure } from '@testing-library/react-native';
+import { render, fireEvent, configure, act } from '@testing-library/react-native';
 import {
   CoachCommunityApiError,
   ACK_ILLEGAL_TRANSITION_CODE,
@@ -185,7 +185,7 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
     useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
     useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
     useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
-    useHideFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
+    useModerateFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
   };
 });
 
@@ -772,13 +772,79 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(mockHideMutate).not.toHaveBeenCalled();
     await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
     expect(mockHideMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', target_type: 'post' }),
+      {
+        item: expect.objectContaining({
+          id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+          target_type: 'post',
+        }),
+        action: 'hide',
+      },
       expect.objectContaining({
         onSuccess: expect.any(Function),
         onSettled: expect.any(Function),
       }),
     );
   });
+
+  it.each(['warn', 'ban', 'dismiss'] as const)(
+    '%s routes through the confirmation and sends that action',
+    async (action) => {
+      mockState.flagged = {
+        data: [flaggedItem()],
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId } = await render(<CoachCommunityModerationScreen />);
+      await fireEvent.press(
+        getByTestId(`coach-community-flagged-${action}-cccccccc-cccc-cccc-cccc-cccccccccccc`),
+      );
+      expect(mockHideMutate).not.toHaveBeenCalled();
+      await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
+      expect(mockHideMutate).toHaveBeenCalledWith(
+        { item: expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc' }), action },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+    },
+  );
+
+  it.each([
+    ['warn', true, 'Warning saved. The member reads it in Community safety in the app.'],
+    ['hide', true, 'Hidden. The member can read why in Community safety in the app.'],
+    ['ban', true, 'Member removed. They can read why in Community safety in the app.'],
+    [
+      'warn',
+      false,
+      'The report is closed, but the warning was not saved for the member. Message them directly with the warning.',
+    ],
+  ] as const)(
+    'B-314-6: %s with a stored notice = %s says only what the backend did',
+    async (action, stored, copy) => {
+      mockState.flagged = {
+        data: [flaggedItem()],
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId, findByText, queryByText } = await render(
+        <CoachCommunityModerationScreen />,
+      );
+      await fireEvent.press(
+        getByTestId(`coach-community-flagged-${action}-cccccccc-cccc-cccc-cccc-cccccccccccc`),
+      );
+      await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
+      const opts = mockHideMutate.mock.calls[0][1] as {
+        onSuccess: (o: unknown) => void;
+      };
+      await act(async () => {
+        opts.onSuccess({ memberNotice: { stored, push: stored ? 'attempted' : 'not_sent' } });
+      });
+      expect(await findByText(copy)).toBeTruthy();
+      expect(queryByText('Warning sent.')).toBeNull();
+    },
+  );
 
   it('cancelling the hide confirmation fires no mutation', async () => {
     mockState.flagged = {
@@ -826,6 +892,77 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       postId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
       flagged: true,
     });
+  });
+
+  it('a reported voice note shows a player, the 24-hour respond-by and voice-note copy', async () => {
+    mockState.flagged = {
+      data: [
+        flaggedItem({
+          target_type: 'voice_note',
+          content: 'Voice note, 0:42',
+          author_name: 'Bob',
+          media: {
+            kind: 'voice_note',
+            url: 'https://storage.example.test/signed',
+            duration_ms: 42000,
+            mime_type: 'audio/mp4',
+          },
+          removed: false,
+          respond_by: new Date(Date.now() + 5 * 3_600_000 - 60_000).toISOString(),
+          overdue: false,
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByTestId, getByText } = await render(<CoachCommunityModerationScreen />);
+    const id = 'cccccccc-cccc-cccc-cccc-cccccccccccc';
+    expect(getByTestId(`coach-community-flagged-player-${id}`)).toBeTruthy();
+    expect(getByTestId(`coach-community-flagged-due-${id}`).props.children).toBe(
+      'Review within 5h',
+    );
+    expect(getByText('Spring block · voice note · spam')).toBeTruthy();
+    // Opening a decision names the voice note, not a raw enum.
+    await fireEvent.press(getByTestId(`coach-community-flagged-hide-${id}`));
+    expect(getByText(/Hide this voice note from Bob\?/)).toBeTruthy();
+  });
+
+  it('a reported win and an overdue report read plainly; a removed voice note has no player', async () => {
+    mockState.flagged = {
+      data: [
+        flaggedItem({
+          id: 'cccccccc-cccc-cccc-cccc-ccccccccccc1',
+          target_type: 'win',
+          content: 'Best week',
+          respond_by: new Date(Date.now() - 60_000).toISOString(),
+          overdue: true,
+        }),
+        flaggedItem({
+          id: 'cccccccc-cccc-cccc-cccc-ccccccccccc2',
+          target_type: 'voice_note',
+          content: 'Removed',
+          media: null,
+          removed: true,
+        }),
+      ],
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+    const { getByTestId, getByText, queryByTestId } = await render(
+      <CoachCommunityModerationScreen />,
+    );
+    expect(getByText('Spring block · win · spam')).toBeTruthy();
+    expect(
+      getByTestId('coach-community-flagged-due-cccccccc-cccc-cccc-cccc-ccccccccccc1').props
+        .children,
+    ).toBe('Past 24 hours, review now');
+    expect(
+      queryByTestId('coach-community-flagged-player-cccccccc-cccc-cccc-cccc-ccccccccccc2'),
+    ).toBeNull();
   });
 });
 

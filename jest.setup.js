@@ -161,6 +161,11 @@ jest.mock('./src/ui/skeletons/Skeleton', () => {
 // is already available natively, so this module is a no-op stub.
 jest.mock('react-native-get-random-values', () => {});
 
+// expo-audio (B-314-2): the native recorder / player behind the voice-note
+// ports. A controllable fake (see jest.expoAudioMock.js); virtual so it also
+// resolves where the shared node_modules predates the dependency.
+jest.mock('expo-audio', () => require('./jest.expoAudioMock'), { virtual: true });
+
 // PR-HK-1: on-device wearable connectors (Apple HealthKit / Health Connect /
 // Samsung Health) import these native modules through the single
 // `services/health/onDeviceConnect` seam. The native TurboModules aren't
