@@ -130,6 +130,14 @@
         }
       ],
       "expo-sqlite",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "The Growth Project uses your microphone only while you record a voice note for your coaching community.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
       "expo-apple-authentication",
       "expo-web-browser",
       "expo-font",

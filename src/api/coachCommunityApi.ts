@@ -36,8 +36,12 @@ import { generateIdempotencyKey } from '../utils/idempotency';
 // ─── Shared enums (mirror backend) ───────────────────────────────────────────
 
 /** Moderation surface targets a post or a message. */
-export const COACH_MOD_TARGET_TYPES = ['post', 'message'] as const;
+export const COACH_MOD_TARGET_TYPES = ['post', 'message', 'voice_note', 'win'] as const;
 export type CoachModTargetType = (typeof COACH_MOD_TARGET_TYPES)[number];
+
+/** Moderation decisions accepted by PATCH /community/moderation/items/:id. */
+export const COACH_MODERATION_ACTIONS = ['hide', 'warn', 'ban', 'dismiss'] as const;
+export type CoachModerationAction = (typeof COACH_MODERATION_ACTIONS)[number];
 
 /** Cohort membership role enum (mirrors the client API role language). */
 export const COACH_COHORT_MEMBER_ROLES = ['client', 'coach', 'owner'] as const;
@@ -160,19 +164,64 @@ export const CoachCohortDetailSchema = z
   .passthrough();
 export type CoachCohortDetail = z.infer<typeof CoachCohortDetailSchema>;
 
+/**
+ * Playable media on a flagged voice note: a short-lived (15 minute) signed
+ * link, or null when storage signing is unavailable. Pull to refresh mints a
+ * new link.
+ */
+export const CoachFlaggedMediaSchema = z
+  .object({
+    kind: z.literal('voice_note'),
+    url: z.string().nullable(),
+    duration_ms: z.number().int().nonnegative(),
+    mime_type: z.string(),
+  })
+  .passthrough();
+export type CoachFlaggedMedia = z.infer<typeof CoachFlaggedMediaSchema>;
+
+/**
+ * What the affected member was told after hide / warn / ban (B-610-4,
+ * B-314-6). `stored` means the backend wrote a member-readable notice in the
+ * same transaction (they read it in Community safety); `push` is only ever an
+ * attempted extra, never a promise of delivery. Absent for dismiss.
+ */
+export const CoachModerationMemberNoticeSchema = z
+  .object({ stored: z.boolean(), push: z.enum(['attempted', 'not_sent']) })
+  .passthrough();
+export type CoachModerationMemberNotice = z.infer<typeof CoachModerationMemberNoticeSchema>;
+
+const ModerationDecisionResponseSchema = z
+  .object({ member_notice: CoachModerationMemberNoticeSchema.optional() })
+  .passthrough();
+
+/** The result of a moderation decision the queue needs for its confirmation copy. */
+export interface CoachModerationOutcome {
+  memberNotice: CoachModerationMemberNotice | null;
+}
+
 /** A single flagged-content item awaiting a moderation decision. */
 export const CoachFlaggedItemSchema = z
   .object({
     id: z.string().uuid(),
     target_type: z.enum(COACH_MOD_TARGET_TYPES),
-    /** The post id or message id the decision will act on. */
+    /** The post, message, voice note or win id the decision will act on. */
     target_id: z.string().uuid(),
+    /** Voice notes only: what the reviewer plays (audio is not text-filtered). */
+    media: CoachFlaggedMediaSchema.nullable().optional(),
+    /** True when the content was already hidden or deleted. */
+    removed: z.boolean().optional(),
+    /** created_at + 24 hours: the published review commitment. */
+    respond_by: z.string().optional(),
+    /** Still open past respond_by. */
+    overdue: z.boolean().optional(),
     /** The offending content body, surfaced verbatim for the reviewer. */
     content: z.string(),
     author_name: z.string(),
     cohort_name: z.string().nullable(),
     /** Coarse reason label from the report pipeline (never a raw message). */
     reason: z.string(),
+    /** Author of the reported content (null when the content is gone). */
+    author_user_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
   })
   .passthrough();
@@ -635,31 +684,28 @@ export const coachCommunityApi = {
   },
 
   /**
-   * POST /community/posts/:id/hide — hide a flagged post. Destructive; always
-   * confirmed in the UI before this fires (hard gate §2.3). Idempotent (R19).
+   * PATCH /community/moderation/items/:id — act on a queued report (coach of
+   * that workspace or platform owner only; server-enforced).
+   *   hide    — removes the content for everyone
+   *   warn    — notifies the author; access kept
+   *   ban     — removes the author's access to the community space AND hides
+   *             the content (the coach / platform owner can never be banned)
+   *   dismiss — closes the report with no action
+   * Destructive actions are always confirmed in the UI first. Idempotent (R19).
+   * Replaces the never-implemented POST /community/{posts,messages}/:id/hide.
    */
-  hidePost(postId: string): Promise<void> {
-    return call(z.unknown(), () =>
-      api.post<unknown>(
-        `/community/posts/${postId}/hide`,
-        {},
+  actOnItem(
+    itemId: string,
+    action: CoachModerationAction,
+    notes?: string,
+  ): Promise<CoachModerationOutcome> {
+    return call(ModerationDecisionResponseSchema, () =>
+      api.patch<unknown>(
+        `/community/moderation/items/${itemId}`,
+        notes ? { action, notes } : { action },
         idempotentHeaders(),
       ),
-    ).then(() => undefined);
-  },
-
-  /**
-   * POST /community/messages/:id/hide — hide a flagged message. Destructive;
-   * always confirmed in the UI before this fires. Idempotent (R19).
-   */
-  hideMessage(messageId: string): Promise<void> {
-    return call(z.unknown(), () =>
-      api.post<unknown>(
-        `/community/messages/${messageId}/hide`,
-        {},
-        idempotentHeaders(),
-      ),
-    ).then(() => undefined);
+    ).then((r) => ({ memberNotice: r.member_notice ?? null }));
   },
 };
 
