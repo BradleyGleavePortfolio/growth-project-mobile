@@ -252,7 +252,8 @@ export default function MoneyScreen() {
     : null;
 
   // C-332-4 / C-641-4: the selected period, in the selected currency, as
-  // the server's tax CSV, handed to the share sheet (Mail, Files, AirDrop).
+  // the server's tax CSV, handed to the share sheet as text (C-332-4 Sol:
+  // a text share, never described as a file attachment).
   const exportCsv = async () => {
     setExporting(true);
     setExportError(null);
@@ -264,7 +265,7 @@ export default function MoneyScreen() {
       );
       await Share.share({ title: out.filename, message: out.csv });
     } catch (err) {
-      setExportError(describeError(err, "export your money as a CSV file"));
+      setExportError(describeError(err, "export your money as CSV text"));
       if (!(err as { response?: unknown } | null)?.response)
         captureError(err, { area: "coach_money", action: "export_csv" });
     } finally {

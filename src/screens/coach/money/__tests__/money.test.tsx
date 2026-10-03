@@ -1467,3 +1467,14 @@ describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", ()
     expect(captured(detail.container as unknown as Inst)).toEqual([]);
   });
 });
+
+describe("FIX ROUND 2 C-332-4 (Sol): the CSV is a text share, never called a file", () => {
+  it("a failed export names CSV text, not a file", async () => {
+    routeGets({ "/v1/coach/money/export.csv": httpError(503, {}) });
+    const { findByTestId, queryAllByText, getAllByText } = await render(<MoneyScreen />);
+    await fireEvent.press(await findByTestId("money-export-csv"));
+    await findByTestId("money-export-csv-error");
+    expect(getAllByText(/CSV text/).length).toBeGreaterThan(0);
+    expect(queryAllByText(/\bfile\b/i)).toHaveLength(0);
+  });
+});
