@@ -28,6 +28,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { beforeSessionWrite, type SessionFencePass } from './sessionFence';
 
 const isWeb = Platform.OS === 'web';
 
@@ -35,6 +36,11 @@ const isWeb = Platform.OS === 'web';
 // Kept stable so existing installs don't lose their session on upgrade.
 const SECURE_KEYS = ['supabase_token', 'supabase_refresh_token'] as const;
 type SecureKey = (typeof SECURE_KEYS)[number] | string;
+
+/** The session credential pair: every write or removal is ordered by sessionFence (#331 A-331-7). */
+function isSessionKey(key: SecureKey): boolean {
+  return (SECURE_KEYS as readonly string[]).includes(key);
+}
 
 // In-flight migration promises keyed by storage key. While a migration is in
 // progress, every other caller for that same key awaits the same promise
@@ -83,7 +89,14 @@ export const secureStorage = {
     }
   },
 
-  async setItem(key: SecureKey, value: string): Promise<void> {
+  /**
+   * `pass` is only for the holder of the session fence (the token refresh
+   * commit, or the sign-out after a failed refresh); every other caller
+   * omits it. For a session key the write is ordered by sessionFence: the
+   * generation moves at call time and the write waits for the holder.
+   */
+  async setItem(key: SecureKey, value: string, pass?: SessionFencePass): Promise<void> {
+    if (isSessionKey(key)) await beforeSessionWrite(pass);
     if (isWeb) {
       await AsyncStorage.setItem(key, value);
       return;
@@ -91,7 +104,8 @@ export const secureStorage = {
     await SecureStore.setItemAsync(key, value);
   },
 
-  async removeItem(key: SecureKey): Promise<void> {
+  async removeItem(key: SecureKey, pass?: SessionFencePass): Promise<void> {
+    if (isSessionKey(key)) await beforeSessionWrite(pass);
     if (isWeb) {
       await AsyncStorage.removeItem(key);
       return;
