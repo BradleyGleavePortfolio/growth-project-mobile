@@ -156,7 +156,8 @@ describe('coachPackagesApi mutations', () => {
     });
     // Backend `CreatePackageDto` whitelist rejects unknown fields.
     expect(body.features).toBeUndefined();
-    expect(body.trial_days).toBeUndefined();
+    // B-TRIALS-2 — backend #656 accepts trial_days; no trial chosen = 0.
+    expect(body.trial_days).toBe(0);
     expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
     expect(res.data.id).toBe('pkg_new');
     expect(res.data.title).toBe('Pro');
