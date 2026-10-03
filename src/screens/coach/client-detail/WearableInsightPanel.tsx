@@ -37,6 +37,8 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
+import AiRefusalNotice from '../../../components/ai/AiRefusalNotice';
+import { aiRefusalOf } from '../../../lib/ai/aiRefusal';
 import { ZodError } from 'zod';
 
 import {
@@ -214,6 +216,25 @@ export function WearableInsightPanel({
         </View>
         <SkeletonLine width="90%" height={12} style={styles.skeletonGap} />
         <SkeletonLine width="74%" height={12} style={styles.skeletonGap} />
+      </View>
+    );
+  }
+
+  // ── R2b refusal: this client has not allowed AI help (the coach still sees
+  //    their data), or a server-side egress block with a support reference.
+  //    Never "you don't have access". ──
+  const refusal = query.isError ? aiRefusalOf(query.error) : null;
+  if (refusal) {
+    return (
+      <View style={[styles.card, { borderColor: tone.track }]} testID="coach-insight-refused">
+        <AiRefusalNotice
+          refusal={refusal}
+          audience="coach"
+          surface="insight"
+          onRetry={onRetry}
+          compact
+          testID="coach-insight-ai-refusal"
+        />
       </View>
     );
   }
