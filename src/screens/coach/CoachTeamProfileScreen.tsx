@@ -222,9 +222,9 @@ export default function CoachTeamProfileScreen() {
 
       {!profile.payouts_enabled ? (
         <TouchableOpacity
-          onPress={() => navigation.navigate('CoachBusinessMetrics')}
+          onPress={() => navigation.navigate('CoachSetup', { section: 'get_paid' })}
           accessibilityRole="button"
-          accessibilityLabel="Open business metrics"
+          accessibilityLabel="Payouts are not enabled. Connect Stripe"
           style={styles.warnBanner}
         >
           <Ionicons name="warning-outline" size={16} color="#fff" />
@@ -247,12 +247,12 @@ export default function CoachTeamProfileScreen() {
 
       <TouchableOpacity
         style={styles.linkRow}
-        onPress={() => navigation.navigate('CoachBusinessMetrics')}
+        onPress={() => navigation.navigate('CoachMoney')}
         accessibilityRole="button"
-        accessibilityLabel="Open business metrics"
+        accessibilityLabel="Open Money"
       >
         <Ionicons name="trending-up-outline" size={20} color={colors.primary} />
-        <Text style={styles.linkText}>Business metrics</Text>
+        <Text style={styles.linkText}>Money and business numbers</Text>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
 
