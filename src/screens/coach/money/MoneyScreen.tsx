@@ -51,8 +51,10 @@ import { coachSetupApi } from "../../../api/coachSetupApi";
 import { connectCopy } from "../../../lib/coachSetup/connectCopy";
 import {
   describeError,
+  SUB_COACH_BILLING_BLOCKED,
   type FriendlyError,
 } from "../../../lib/coachSetup/errors";
+import { noteHeadCoachHandlesMoney } from "../../../lib/money/headCoachRole";
 import {
   attentionCopy,
   breakdownRows,
@@ -84,10 +86,17 @@ import MoneyBack from "./MoneyBack";
 
 type Nav = NativeStackNavigationProp<SettingsStackParamList, "CoachMoney">;
 
-export default function MoneyScreen() {
+export default function MoneyScreen({
+  route,
+}: {
+  route?: { params?: SettingsStackParamList["CoachMoney"] };
+} = {}) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<Nav>();
+  // B-332-7: the navigator passes the route; Back returns to Home when the
+  // Home card opened this page.
+  const fromHome = route?.params?.from === "home";
   const { isOnline } = useNetworkStatus();
   const [range, setRange] = useState<MoneyRange>("30d");
   // null = the server's default currency (USD when the coach has any).
@@ -223,15 +232,67 @@ export default function MoneyScreen() {
   // server chose by default.
   const selectedCurrency =
     currency ?? shownCurrency ?? knownCurrencies.serverDefault;
+  // C-332-11 (Opus): "No sales yet" only when the charges list actually
+  // loaded and is empty, never while it loads or after it failed.
   const noSalesYet =
     s !== null &&
     s.totals.chargeCount === 0 &&
-    (charges.data?.charges.length ?? 0) === 0;
+    charges.data !== null &&
+    charges.error === null &&
+    charges.data.charges.length === 0;
+  // B-332-9 (Opus): an active sub-coach's money is the head coach's. Once
+  // any section says so, the page shows that once, with no sections, no
+  // payout settings and no export.
+  const headCoachHandles = [
+    summary,
+    attention,
+    charges,
+    payouts,
+    roster,
+    connect,
+  ].some((x) => x.error?.code === SUB_COACH_BILLING_BLOCKED);
+  const summaryLoaded = summary.data !== null;
+  useEffect(() => {
+    if (headCoachHandles) noteHeadCoachHandlesMoney(true);
+    else if (summaryLoaded) noteHeadCoachHandlesMoney(false);
+  }, [headCoachHandles, summaryLoaded]);
   const anyLoaded = [summary, attention, charges, payouts, connect].some(
     (x) => x.loadedAt !== null,
   );
   const firstLoad =
     !anyLoaded && [summary, connect].some((x) => x.loading) && isOnline;
+
+  if (headCoachHandles) {
+    return (
+      <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
+        <ScrollView
+          style={styles.page}
+          contentContainerStyle={styles.inner}
+          testID="money-screen"
+        >
+          <MoneyBack toHome={fromHome} />
+          <Text style={styles.h1} accessibilityRole="header">
+            Money
+          </Text>
+          <View
+            style={styles.card}
+            testID="money-head-coach"
+            accessible
+            accessibilityLabel="Money is handled by your head coach. Their practice takes payments and receives payouts for the clients you coach. Ask your head coach about payments."
+          >
+            <Text style={styles.rowTitle}>
+              Money is handled by your head coach
+            </Text>
+            <Text style={styles.body}>
+              Your head coach&apos;s practice takes payments and receives
+              payouts for the clients you coach. Ask your head coach about
+              payments.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   if (firstLoad) {
     return (
@@ -287,7 +348,7 @@ export default function MoneyScreen() {
         }
         testID="money-screen"
       >
-        <MoneyBack />
+        <MoneyBack toHome={fromHome} />
         <Text style={styles.h1} accessibilityRole="header">
           Money
         </Text>

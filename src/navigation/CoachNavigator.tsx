@@ -236,8 +236,8 @@ export type SettingsStackParamList = {
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
   /** Retired: redirects to CoachMoney (S-COACH-MOB-2). */
   CoachEarnings: undefined;
-  /** TGP Money (Home card -> Money page). */
-  CoachMoney: undefined;
+  /** TGP Money (Home card -> Money page). `from: "home"`: Back returns to Home. */
+  CoachMoney: { from?: "home" } | undefined;
   CoachMoneyCharges: { filter?: ChargeFilter } | undefined;
   CoachMoneyCharge: { chargeId: string };
   /** iMessage-grade DM — manage blocked users from coach Settings. */

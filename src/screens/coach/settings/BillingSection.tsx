@@ -6,13 +6,11 @@ import type { SettingsStyles } from './styles';
 
 export function BillingSection({
   onOpenTeamProfile,
-  onOpenMoney,
   onOpenBilling,
   colors,
   styles,
 }: {
   onOpenTeamProfile: () => void;
-  onOpenMoney: () => void;
   onOpenBilling: () => void;
   colors: ThemeColors;
   styles: SettingsStyles;
@@ -34,19 +32,7 @@ export function BillingSection({
           <Text style={styles.rowLabel}>Team / Gym profile</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={styles.divider} />
-        {/* S-COACH-MOB-2 — TGP Money: earnings, payouts, failed payments,
-            refunds and the old Business metrics in one place. */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenMoney}
-          accessibilityRole="button"
-          accessibilityLabel="Open Money: earnings, payouts and business numbers"
-        >
-          <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Money and business numbers</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        {/* C-332-12 (Opus): Money opens from the Payments section only. */}
       </View>
 
       {/* Subscription & access */}

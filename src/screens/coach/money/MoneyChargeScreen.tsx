@@ -15,7 +15,7 @@ import {
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "../../../theme/ThemeProvider";
-import { coachMoneyApi } from "../../../api/coachMoneyApi";
+import { coachMoneyApi, type ChargeState } from "../../../api/coachMoneyApi";
 import {
   breakdownRows,
   cadenceLabel,
@@ -35,6 +35,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import MoneyBack from "./MoneyBack";
 
 type Props = NativeStackScreenProps<SettingsStackParamList, "CoachMoneyCharge">;
+
+/**
+ * B-332-8 (Opus): what happened for a charge that moved no money, or null
+ * when money moved (paid, refunded, disputed) or is still moving (pending).
+ */
+export function noMoneyMovedCopy(state: ChargeState | null): string | null {
+  switch (state) {
+    case "failed":
+      return "The card payment did not go through, so the client was not charged and nothing from this charge reaches your payouts. Needs attention on Money shows whether TGP tries the card again.";
+    case "canceled":
+      return "The client started checkout but did not finish it, so nothing was charged.";
+    default:
+      return null;
+  }
+}
 
 export default function MoneyChargeScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
@@ -88,6 +103,10 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
   });
   const tabNav =
     navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
+  // B-332-8 (Opus): a failed payment or an unfinished checkout moved no
+  // money, so it never shows "Clients paid" or "check back once it clears".
+  const noMoney = noMoneyMovedCopy(c.state);
+  const pending = c.state === "pending";
 
   return (
     <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
@@ -111,37 +130,53 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
               .join(", ")}
           </Text>
         </View>
-        <Text style={styles.h2} accessibilityRole="header">
-          How this adds up to your net
-        </Text>
-        <View style={styles.card} testID="money-charge-breakdown">
-          {!d.settled ? (
-            <Text style={styles.body} testID="money-charge-unsettled">
-              This charge has not settled yet, so the fees are not final. Check
-              back once the payment clears.
-            </Text>
-          ) : null}
-          {rows.map((r) => (
-            <View
-              key={r.key}
-              style={styles.bRow}
-              accessible
-              accessibilityLabel={`${r.label}: ${r.sign < 0 ? "minus " : ""}${money(
-                r.cents,
-                c.currency,
-              )}`}
-            >
-              <Text style={r.sign === 0 ? styles.bTotal : styles.bLabel}>
-                {r.label}
+        {noMoney ? (
+          <View style={styles.card} testID="money-charge-no-money">
+            <Text style={styles.rowTitle}>No money moved</Text>
+            <Text style={styles.body}>{noMoney}</Text>
+          </View>
+        ) : null}
+        {noMoney ? null : (
+          <Text style={styles.h2} accessibilityRole="header">
+            How this adds up to your net
+          </Text>
+        )}
+        {noMoney ? null : (
+          <View style={styles.card} testID="money-charge-breakdown">
+            {!d.settled && pending ? (
+              <Text style={styles.body} testID="money-charge-unsettled">
+                This charge has not settled yet, so the fees are not final.
+                Check back once the payment clears.
               </Text>
-              <Text style={r.sign === 0 ? styles.bTotal : styles.bLabel}>
-                {r.sign < 0 ? "-" : ""}
-                {money(r.cents, c.currency)}
+            ) : null}
+            {!d.settled && !pending ? (
+              <Text style={styles.body} testID="money-charge-fees-pending">
+                Stripe has not posted the fees for this charge yet, so the
+                amounts below are not final.
               </Text>
-              {r.note ? <Text style={styles.bNote}>{r.note}</Text> : null}
-            </View>
-          ))}
-        </View>
+            ) : null}
+            {rows.map((r) => (
+              <View
+                key={r.key}
+                style={styles.bRow}
+                accessible
+                accessibilityLabel={`${r.label}: ${r.sign < 0 ? "minus " : ""}${money(
+                  r.cents,
+                  c.currency,
+                )}`}
+              >
+                <Text style={r.sign === 0 ? styles.bTotal : styles.bLabel}>
+                  {r.label}
+                </Text>
+                <Text style={r.sign === 0 ? styles.bTotal : styles.bLabel}>
+                  {r.sign < 0 ? "-" : ""}
+                  {money(r.cents, c.currency)}
+                </Text>
+                {r.note ? <Text style={styles.bNote}>{r.note}</Text> : null}
+              </View>
+            ))}
+          </View>
+        )}
         {c.client.id ? (
           <TouchableOpacity
             onPress={() =>

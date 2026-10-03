@@ -125,6 +125,17 @@ export function chargeStateLabel(c: MoneyCharge): string {
   }
 }
 
+/**
+ * B-332-10 (Opus): Stripe's decline message is written to the cardholder and
+ * already ends in a period. Show it as the bank's words, quoted, without the
+ * trailing punctuation, so it never reads "Your card was declined.." as if
+ * the coach were the cardholder.
+ */
+export function bankSaid(reason: string | null | undefined): string | null {
+  const text = (reason ?? "").trim().replace(/[\s.!?]+$/u, "");
+  return text ? `The bank said: "${text}"` : null;
+}
+
 /** True for states that should read as a problem (colour + label). */
 export function chargeIsProblem(c: MoneyCharge): boolean {
   return (
@@ -272,7 +283,8 @@ export function attentionCopy(a: AttentionItem): AttentionCopy {
     else if (retry) lines.push(`TGP tries the card again on ${retry}.`);
     const sent = shortDate(f.cardUpdateLinkSentAt);
     if (sent) lines.push(`TGP emailed them a card update link on ${sent}.`);
-    if (f.lastFailureReason) lines.push(`Bank reason: ${f.lastFailureReason}.`);
+    const said = bankSaid(f.lastFailureReason);
+    if (said) lines.push(said);
     return {
       title: `${who}'s payment did not go through`,
       lines,
