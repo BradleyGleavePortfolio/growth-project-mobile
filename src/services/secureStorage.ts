@@ -28,6 +28,7 @@
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import { runSessionWrite, type SessionFencePass } from './sessionFence';
 
 const isWeb = Platform.OS === 'web';
 
@@ -35,6 +36,11 @@ const isWeb = Platform.OS === 'web';
 // Kept stable so existing installs don't lose their session on upgrade.
 const SECURE_KEYS = ['supabase_token', 'supabase_refresh_token'] as const;
 type SecureKey = (typeof SECURE_KEYS)[number] | string;
+
+/** The session credential pair: every write or removal is ordered by sessionFence (#331 A-331-7). */
+function isSessionKey(key: SecureKey): boolean {
+  return (SECURE_KEYS as readonly string[]).includes(key);
+}
 
 // In-flight migration promises keyed by storage key. While a migration is in
 // progress, every other caller for that same key awaits the same promise
@@ -69,6 +75,29 @@ function migrateFromAsyncStorageIfPresent(key: SecureKey): Promise<string | null
   return promise;
 }
 
+async function nativeSet(key: SecureKey, value: string): Promise<void> {
+  if (isWeb) {
+    await AsyncStorage.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+}
+
+async function nativeRemove(key: SecureKey): Promise<void> {
+  if (isWeb) {
+    await AsyncStorage.removeItem(key);
+    return;
+  }
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch {
+    // deleteItemAsync throws if the key doesn't exist — safe to ignore.
+  }
+  // Also clear any stale AsyncStorage copy so the migration path can't
+  // resurrect an old token on a later read.
+  await AsyncStorage.removeItem(key).catch(() => {});
+}
+
 export const secureStorage = {
   async getItem(key: SecureKey): Promise<string | null> {
     if (isWeb) return AsyncStorage.getItem(key);
@@ -83,27 +112,21 @@ export const secureStorage = {
     }
   },
 
-  async setItem(key: SecureKey, value: string): Promise<void> {
-    if (isWeb) {
-      await AsyncStorage.setItem(key, value);
-      return;
-    }
-    await SecureStore.setItemAsync(key, value);
+  /**
+   * `pass` is only for the holder of the session fence (the token refresh
+   * commit, or the sign-out after a failed refresh); every other caller
+   * omits it. A session-key write is ordered by sessionFence: the generation
+   * moves at call time, the write waits for any holder, holds the fence
+   * while it lands, and moves the generation again when it has landed.
+   */
+  async setItem(key: SecureKey, value: string, pass?: SessionFencePass): Promise<void> {
+    if (isSessionKey(key)) return runSessionWrite(pass, () => nativeSet(key, value));
+    return nativeSet(key, value);
   },
 
-  async removeItem(key: SecureKey): Promise<void> {
-    if (isWeb) {
-      await AsyncStorage.removeItem(key);
-      return;
-    }
-    try {
-      await SecureStore.deleteItemAsync(key);
-    } catch {
-      // deleteItemAsync throws if the key doesn't exist — safe to ignore.
-    }
-    // Also clear any stale AsyncStorage copy so the migration path can't
-    // resurrect an old token on a later read.
-    await AsyncStorage.removeItem(key).catch(() => {});
+  async removeItem(key: SecureKey, pass?: SessionFencePass): Promise<void> {
+    if (isSessionKey(key)) return runSessionWrite(pass, () => nativeRemove(key));
+    return nativeRemove(key);
   },
 };
 
