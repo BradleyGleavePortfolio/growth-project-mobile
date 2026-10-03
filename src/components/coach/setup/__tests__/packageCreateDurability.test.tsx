@@ -124,9 +124,9 @@ describe("B-329-1 — a fresh create is sent only after its identity is on disk"
     mockStorage.failWrites = 1;
     const first = await mount();
     await fireEvent.press(first.getByTestId("first-package-create"));
-    const notice = await first.findByTestId("first-package-error");
+    await first.findByTestId("first-package-error");
     expect(mockCreate).not.toHaveBeenCalled();
-    expect(JSON.stringify(notice.props)).not.toMatch(/Something went wrong/);
+    expect(first.queryByText(/Something went wrong/)).toBeNull();
     expect(
       first.getByText("This device could not save your package details"),
     ).toBeTruthy();
