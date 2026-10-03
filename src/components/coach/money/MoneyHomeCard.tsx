@@ -86,7 +86,7 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
 
   if (headCoachHandles) {
     return (
-      <View
+      <View ph-no-capture
         style={styles.card}
         testID="money-home-card-head-coach"
         accessible
@@ -102,7 +102,7 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
   }
 
   return (
-    <View style={styles.card} testID="money-home-card">
+    <View ph-no-capture style={styles.card} testID="money-home-card">
       <TouchableOpacity
         onPress={onOpenMoney}
         accessibilityRole="button"

@@ -104,7 +104,7 @@ export default function MoneyChargesScreen({ navigation, route }: Props) {
   }, [filter]);
 
   return (
-    <SafeAreaView
+    <SafeAreaView ph-no-capture
       style={styles.page}
       edges={["top"]}
       testID="money-charges-screen"

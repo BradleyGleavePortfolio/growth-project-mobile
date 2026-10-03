@@ -49,7 +49,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
 
   if (!d) {
     return (
-      <View style={styles.centred} testID="money-charge-screen">
+      <View ph-no-capture style={styles.centred} testID="money-charge-screen">
         {detail.error ? (
           <View style={styles.inner}>
             <SetupNotice
@@ -90,7 +90,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
     navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
 
   return (
-    <SafeAreaView style={styles.page} edges={["top"]}>
+    <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
       <ScrollView
         style={styles.page}
         contentContainerStyle={styles.inner}

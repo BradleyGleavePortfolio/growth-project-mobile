@@ -401,6 +401,24 @@ export function toSummary(
   };
 }
 
+/**
+ * An error response whose body is still JSON text (a text-mode request)
+ * gets its parsed object back in place, so code-based copy can read it.
+ * A non-JSON body is left as it is.
+ */
+export function parseJsonErrorBody(err: unknown): void {
+  const response = (err as { response?: { data?: unknown } } | null)?.response;
+  if (!response || typeof response.data !== "string") return;
+  const text = response.data.replace(/^\uFEFF/, "").trim();
+  if (!text.startsWith("{")) return;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (parsed && typeof parsed === "object") response.data = parsed;
+  } catch {
+    // Not JSON after all: the generic reader keeps the reference path.
+  }
+}
+
 const INTERVALS: readonly BillingUnit[] = ["week", "month", "year"];
 
 function readCharge(r: Reader, raw: unknown, at: string): MoneyCharge {
@@ -419,13 +437,13 @@ function readCharge(r: Reader, raw: unknown, at: string): MoneyCharge {
       : (INTERVALS as readonly unknown[]).includes(unit)
         ? (unit as BillingUnit)
         : null; // a cadence this build does not know reads as "Recurring"
+  // B-332-2 (R2): a missing, null, malformed or non-positive count is an
+  // unknown cadence ("Recurring"); a count is never guessed.
   const count = c.billing_interval_count;
+  const countKnown =
+    typeof count === "number" && Number.isSafeInteger(count) && count >= 1;
   const billingIntervalCount =
-    billingInterval === null
-      ? null
-      : typeof count === "number" && Number.isSafeInteger(count) && count >= 1
-        ? count
-        : 1;
+    billingInterval === null || !countKnown ? null : (count as number);
   return {
     id: r.str(c.id, `${at}.id`),
     client: {
@@ -436,7 +454,10 @@ function readCharge(r: Reader, raw: unknown, at: string): MoneyCharge {
     amountCents: r.cents(c.amount_cents, `${at}.amount_cents`),
     currency: r.currency(c.currency, `${at}.currency`),
     billingType,
-    billingInterval: billingType === "recurring" ? billingInterval : null,
+    billingInterval:
+      billingType === "recurring" && billingIntervalCount !== null
+        ? billingInterval
+        : null,
     billingIntervalCount:
       billingType === "recurring" ? billingIntervalCount : null,
     state: (CHARGE_STATES as readonly string[]).includes(rawState)
@@ -588,10 +609,19 @@ export function toPayout(
   )
     ? (rawStatus as KnownPayoutStatus)
     : "unknown";
+  // B-332-3 (R2): the converted amount must be a safe integer number of
+  // cents that the major-unit value states exactly (at most two decimals).
+  const major = amount as number;
+  const amountCents = Math.round(major * 100);
+  if (
+    !Number.isSafeInteger(amountCents) ||
+    Math.abs(major * 100 - amountCents) > 1e-6 * Math.max(1, Math.abs(amountCents))
+  )
+    r.fail(`${at}.amount`);
   const arrival = strOrNull(p.arrival_date);
   return {
     id: r.str(p.id, `${at}.id`),
-    amountCents: Math.round(amount * 100),
+    amountCents,
     currency: r.currency(p.currency, `${at}.currency`),
     status,
     rawStatus,
@@ -816,15 +846,24 @@ export const coachMoneyApi = {
     window: { from: Date; to: Date },
     currency: string | null,
   ): Promise<{ csv: string; filename: string }> {
-    const res = await api.get("/v1/coach/money/export.csv", {
-      params: {
-        from: window.from.toISOString(),
-        to: window.to.toISOString(),
-        ...(currency ? { currency } : {}),
-      },
-      responseType: "text",
-      transformResponse: (body: unknown) => body,
-    });
+    let res: Awaited<ReturnType<typeof api.get>>;
+    try {
+      res = await api.get("/v1/coach/money/export.csv", {
+        params: {
+          from: window.from.toISOString(),
+          to: window.to.toISOString(),
+          ...(currency ? { currency } : {}),
+        },
+        responseType: "text",
+        transformResponse: (body: unknown) => body,
+      });
+    } catch (err) {
+      // B-332-4 (Opus): the text transform also applies to error bodies, so
+      // a 400 arrives as a JSON string. Parse it back so the server's code
+      // (MONEY_EXPORT_TOO_LARGE, MONEY_WINDOW_INVALID, ...) reaches its copy.
+      parseJsonErrorBody(err);
+      throw err;
+    }
     const csv =
       typeof res.data === "string" ? res.data.replace(/^\uFEFF/, "") : null;
     if (csv === null || !csv.startsWith("date_utc,"))

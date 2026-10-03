@@ -58,9 +58,21 @@ jest.mock("@react-navigation/native", () => {
   };
 });
 
+import path from "path";
+// The installed SDK's own touch extractor (what PostHogProvider runs with
+// autocapture on, as App.tsx configures it). Loaded by path because the
+// package does not export the subpath.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { autocaptureFromTouchEvent } = require(
+  path.resolve(__dirname, "../../../../../node_modules/posthog-react-native/dist/autocapture.js"),
+) as {
+  autocaptureFromTouchEvent: (e: unknown, posthog: { autocapture: jest.Mock }) => void;
+};
+import { Text } from "react-native";
 import {
   MoneyPayloadError,
   nextPayout,
+  parseJsonErrorBody,
   toAttentionItem,
   toCharge,
   toPayout,
@@ -1037,14 +1049,21 @@ describe("C-332-4 Export CSV for taxes (backend #641 export.csv)", () => {
     share.mockRestore();
   });
 
-  it("a period too large to export says what to do", async () => {
-    routeGets({
-      "/v1/coach/money/export.csv": httpError(400, {
-        code: "MONEY_EXPORT_TOO_LARGE",
-        message:
-          "This period has more than 20000 ledger rows, which is too many for one file. Choose a shorter period, for example one quarter, and export each part.",
-      }),
+  it("a period too large to export says what to do (the error body arrives as JSON text, as axios gives it in text mode)", async () => {
+    // B-332-4 (Opus): transformResponse also runs on error bodies, so the
+    // real client sees a string here, not a parsed object.
+    const tooLarge = Object.assign(new Error("HTTP 400"), {
+      response: {
+        status: 400,
+        headers: { "x-request-id": "req-export-1" },
+        data: JSON.stringify({
+          code: "MONEY_EXPORT_TOO_LARGE",
+          message:
+            "This period has more than 20000 ledger rows, which is too many for one file. Choose a shorter period, for example one quarter, and export each part.",
+        }),
+      },
     });
+    routeGets({ "/v1/coach/money/export.csv": tooLarge });
     const { findByTestId, findByText } = await render(<MoneyScreen />);
     await fireEvent.press(await findByTestId("money-export-csv"));
     await findByTestId("money-export-csv-error");
@@ -1105,5 +1124,346 @@ describe("#641 per-currency summary: switch currency, never add currencies toget
     });
     expect(c.lines.join(" ")).toMatch(/TGP tries the card again/);
     expect(c.lines.join(" ")).not.toMatch(/\bWe\b|\bwe\b/);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* FIX ROUND 2 (S-DUNNING-R6 lane, agent 114): Opus RC + Sol BLOCK at  */
+/* c89c5f7e: A-332-1, B-332-2..5, Opus B-332-4, C-332-6.               */
+/* ------------------------------------------------------------------ */
+
+describe("FIX ROUND 2 B-332-2: an unknown count is an unknown cadence", () => {
+  const base = CHARGES.charges[0] as Record<string, unknown>;
+  it.each([
+    ["null", null],
+    ["omitted", undefined],
+    ["a string", "2"],
+    ["zero", 0],
+    ["negative", -1],
+    ["a fraction", 1.5],
+  ])("count %s with a known unit reads Recurring, never Monthly", (_n, count) => {
+    const c = toCharge({
+      ...base,
+      billing_type: "recurring",
+      billing_interval: "month",
+      billing_interval_count: count,
+    });
+    expect(c.billingIntervalCount).toBeNull();
+    expect(cadenceLabel(c)).toBe("Recurring");
+  });
+
+  it("valid counts still read exactly", () => {
+    const read = (unit: string, count: number) =>
+      cadenceLabel(
+        toCharge({
+          ...base,
+          billing_type: "recurring",
+          billing_interval: unit,
+          billing_interval_count: count,
+        }),
+      );
+    expect(read("month", 1)).toBe("Monthly");
+    expect(read("month", 3)).toBe("Every 3 months");
+    expect(read("week", 2)).toBe("Every 2 weeks");
+    expect(read("year", 1)).toBe("Yearly");
+    expect(
+      cadenceLabel({
+        billingType: "recurring",
+        billingInterval: "month",
+        billingIntervalCount: null,
+      }),
+    ).toBe("Recurring");
+  });
+});
+
+describe("FIX ROUND 2 B-332-3: payout cents are finite safe integers", () => {
+  const code = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as MoneyPayloadError).response.data.code;
+    }
+    return "parsed";
+  };
+  it.each([
+    ["Number.MAX_VALUE", Number.MAX_VALUE],
+    ["beyond the safe-integer range", 1e17],
+    ["more than two decimals", 10.005],
+  ])("rejects an amount %s", (_n, amount) => {
+    expect(
+      code(() => toPayout({ id: "po", amount, currency: "usd", status: "paid" })),
+    ).toBe("MONEY_PAYLOAD_INVALID");
+  });
+  it("keeps normal major-unit amounts exact", () => {
+    expect(toPayout({ id: "po", amount: 94.8, currency: "usd", status: "paid" }).amountCents).toBe(9480);
+    expect(toPayout({ id: "po", amount: 19.99, currency: "usd", status: "paid" }).amountCents).toBe(1999);
+    expect(toPayout({ id: "po", amount: 0, currency: "usd", status: "paid" }).amountCents).toBe(0);
+  });
+});
+
+describe("FIX ROUND 2 B-332-4 (Opus): export errors keep their server code", () => {
+  it("parseJsonErrorBody turns a JSON text body back into an object and leaves other text alone", () => {
+    const e1 = { response: { data: '{"code":"MONEY_WINDOW_INVALID","message":"m"}' } };
+    parseJsonErrorBody(e1);
+    expect(e1.response.data).toEqual({ code: "MONEY_WINDOW_INVALID", message: "m" });
+    const e2 = { response: { data: "<html>bad gateway</html>" } };
+    parseJsonErrorBody(e2);
+    expect(e2.response.data).toBe("<html>bad gateway</html>");
+    const e3 = { response: { data: "{not json" } };
+    parseJsonErrorBody(e3);
+    expect(e3.response.data).toBe("{not json");
+    expect(() => parseJsonErrorBody(new Error("offline"))).not.toThrow();
+  });
+});
+
+describe("FIX ROUND 2 B-332-4 (Sol): a failed currency keeps the way back", () => {
+  function twoCurrencies(gbp: () => unknown) {
+    routeGets({
+      [SUMMARY_URL]: (cfg?: { params?: Record<string, string> }) => {
+        const cur = cfg?.params?.currency ?? "usd";
+        if (cur === "gbp") return gbp();
+        return echoWindow(
+          {
+            ...SUMMARY,
+            currency: "usd",
+            currencies: ["gbp", "usd"],
+            totals: totals({ net_cents: 9480 }),
+            compare_totals: totals({ net_cents: 4740 }),
+            change_cents: 4740,
+          },
+          cfg,
+        );
+      },
+    });
+  }
+
+  it("GBP fails with 503: both currency chips stay, GBP is selected, and USD loads again", async () => {
+    twoCurrencies(() => {
+      throw httpError(503, { code: "SERVICE_UNAVAILABLE" });
+    });
+    const { findByTestId, getByTestId, queryByTestId } = await render(<MoneyScreen />);
+    expect((await findByTestId("money-net-amount")).props.children).toBe("$94.80");
+    await fireEvent.press(getByTestId("money-currency-gbp"));
+    await findByTestId("money-summary-failed");
+    expect(queryByTestId("money-net-amount")).toBeNull();
+    expect(getByTestId("money-currency-usd")).toBeTruthy();
+    expect(getByTestId("money-currency-gbp").props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(getByTestId("money-currency-usd"));
+    await waitFor(() =>
+      expect(getByTestId("money-net-amount").props.children).toBe("$94.80"),
+    );
+  });
+
+  it("an invalid currency answer keeps the chips, so the copy's pick-a-currency step works", async () => {
+    twoCurrencies(() => {
+      throw httpError(400, { code: "MONEY_CURRENCY_INVALID", message: "Pick a currency." });
+    });
+    const { findByTestId, getByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    await fireEvent.press(getByTestId("money-currency-gbp"));
+    await findByTestId("money-summary-failed");
+    expect(getByTestId("money-currencies")).toBeTruthy();
+    expect(getByTestId("money-currency-usd")).toBeTruthy();
+  });
+
+  it("switching back while the GBP request is still pending shows USD, and the late GBP answer never relabels it", async () => {
+    let releaseGbp: (v: unknown) => void = () => undefined;
+    twoCurrencies(
+      () =>
+        new Promise((resolve) => {
+          releaseGbp = resolve;
+        }),
+    );
+    const { findByTestId, getByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    await fireEvent.press(getByTestId("money-currency-gbp"));
+    expect(getByTestId("money-currency-usd")).toBeTruthy();
+    await fireEvent.press(getByTestId("money-currency-usd"));
+    await waitFor(() =>
+      expect(getByTestId("money-net-amount").props.children).toBe("$94.80"),
+    );
+    await act(async () => {
+      releaseGbp(
+        echoWindow({ ...SUMMARY, currency: "gbp", currencies: ["gbp", "usd"] }, undefined),
+      );
+    });
+    expect(getByTestId("money-net-amount").props.children).toBe("$94.80");
+  });
+});
+
+describe("FIX ROUND 2 B-332-5: signed contributions always add up to the net", () => {
+  const explained = (rows: ReturnType<typeof breakdownRows>) =>
+    rows.filter((r) => r.sign !== 0).reduce((sum, r) => sum + r.sign * r.cents, 0);
+  const zero = {
+    priceCents: 0,
+    processingCents: 0,
+    platformFeeCents: 0,
+    headCoachSplitCents: 0,
+    refundedCents: 0,
+    headCoachIncomeCents: 0,
+    netCents: 0,
+    processingPaidBy: "coach" as const,
+  };
+
+  it("head coach view: a refund-only period with team income -500 shows the reversal row", () => {
+    const rows = breakdownRows({ ...zero, headCoachIncomeCents: -500, netCents: -500 });
+    const team = rows.find((r) => r.key === "team_income")!;
+    expect(team).toMatchObject({ cents: 500, sign: -1 });
+    expect(team.label).toBe("Your share of refunds on your team's sales");
+    expect(explained(rows)).toBe(-500);
+  });
+
+  it("seller view: a prior-period refund returns the head-coach share (added) and the refund is taken away", () => {
+    const rows = breakdownRows({
+      ...zero,
+      headCoachSplitCents: -300,
+      refundedCents: 4900,
+      netCents: -4600,
+    });
+    expect(rows.find((r) => r.key === "head_coach")).toMatchObject({
+      label: "Head coach share returned on refunds",
+      cents: 300,
+      sign: 1,
+    });
+    expect(explained(rows)).toBe(-4600);
+  });
+
+  it("a normal period still reads as before", () => {
+    const rows = breakdownRows({
+      ...zero,
+      priceCents: 10000,
+      processingCents: 320,
+      platformFeeCents: 200,
+      headCoachSplitCents: 1000,
+      headCoachIncomeCents: 700,
+      netCents: 9180,
+    });
+    expect(rows.find((r) => r.key === "head_coach")).toMatchObject({ label: "Head coach share", sign: -1 });
+    expect(rows.find((r) => r.key === "team_income")).toMatchObject({ label: "Your share of your team's sales", sign: 1 });
+    expect(explained(rows)).toBe(9180);
+  });
+});
+
+describe("FIX ROUND 2 C-332-6: Business tiles say when they are from an earlier load", () => {
+  it("a failed period switch keeps the tiles and labels them stale", async () => {
+    routeGets({
+      [SUMMARY_URL]: (cfg?: { params?: Record<string, string> }) => {
+        const from = cfg?.params?.from ?? "";
+        const day = 24 * 3600 * 1000;
+        const to = Date.parse(cfg?.params?.to ?? "");
+        if (to - Date.parse(from) < 2 * day) throw httpError(503, {});
+        return echoWindow(SUMMARY, cfg);
+      },
+    });
+    const { findByTestId, getByTestId, queryByTestId } = await render(<MoneyScreen />);
+    await findByTestId("money-net-amount");
+    expect(queryByTestId("money-business-stale")).toBeNull();
+    await fireEvent.press(getByTestId("money-range-today"));
+    await findByTestId("money-summary-failed");
+    expect(getByTestId("money-business")).toBeTruthy();
+    expect(getByTestId("money-business-stale").props.children).toMatch(/could not be refreshed/);
+  });
+});
+
+describe("FIX ROUND 2 A-332-1: Money surfaces never reach touch autocapture", () => {
+  type HostInstance = { unstable_fiber: unknown };
+  type Inst = { queryAll: (p: (n: HostInstance) => boolean) => HostInstance[] };
+  // Touch every host element on screen through the SDK's own extractor
+  // (real fibers, real ancestor walk); return what reached the SDK.
+  function captured(container: Inst): unknown[] {
+    const posthog = { autocapture: jest.fn() };
+    const hosts = container.queryAll(() => true);
+    expect(hosts.length).toBeGreaterThan(0);
+    for (const h of hosts) {
+      autocaptureFromTouchEvent(
+        { _targetInst: h.unstable_fiber, nativeEvent: { pageX: 1, pageY: 1 } },
+        posthog,
+      );
+    }
+    return posthog.autocapture.mock.calls;
+  }
+
+  it("positive control: an unguarded tree with a client name is captured by the installed SDK", async () => {
+    const r = await render(<Text testID="ctl">Synthetic Rivera</Text>);
+    const calls = captured(r.container as unknown as Inst);
+    expect(JSON.stringify(calls)).toContain("Synthetic Rivera");
+  });
+
+  it("Money page (loaded, with client names and amounts): no host node is captured", async () => {
+    routeGets();
+    const r = await render(<MoneyScreen />);
+    await r.findByTestId("money-net-amount");
+    expect(r.getAllByText(/Sam/).length).toBeGreaterThan(0);
+    expect(captured(r.container as unknown as Inst)).toEqual([]);
+  });
+
+  it("Money page loading state: no host node is captured", async () => {
+    const pending: Array<(e: unknown) => void> = [];
+    mockGet.mockImplementation(
+      () => new Promise((_resolve, reject) => pending.push(reject)),
+    );
+    const loading = await render(<MoneyScreen />);
+    await loading.findByTestId("money-loading");
+    expect(captured(loading.container as unknown as Inst)).toEqual([]);
+    // Settle the held requests so no in-flight load leaks into later tests.
+    await act(async () => {
+      pending.forEach((reject) => reject(httpError(503, {})));
+    });
+  });
+
+  it("Money page error state: no host node is captured", async () => {
+    routeGets({ [SUMMARY_URL]: httpError(503, {}) });
+    const failed = await render(<MoneyScreen />);
+    await failed.findByTestId("money-summary-failed");
+    expect(captured(failed.container as unknown as Inst)).toEqual([]);
+  });
+
+  it("Home Money card: no host node is captured", async () => {
+    routeGets();
+    const r = await render(<MoneyHomeCard onOpenMoney={jest.fn()} onSetUpStripe={jest.fn()} />);
+    await r.findByTestId("money-home-card-net");
+    expect(captured(r.container as unknown as Inst)).toEqual([]);
+  });
+
+  it("charges list: no host node is captured", async () => {
+    mockGet.mockImplementation(async () => ({
+      data: { charges: CHARGES.charges, next_cursor: null },
+    }));
+    const nav = { navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
+    const list = await render(
+      <MoneyChargesScreen
+        navigation={nav as never}
+        route={{ key: "k", name: "CoachMoneyCharges", params: {} } as never}
+      />,
+    );
+    await list.findByTestId("money-charges-row-ch_1");
+    expect(captured(list.container as unknown as Inst)).toEqual([]);
+  });
+
+  it("charge detail: no host node is captured", async () => {
+    const nav = { navigate: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
+    mockGet.mockResolvedValueOnce({
+      data: {
+        charge: CHARGES.charges[0],
+        breakdown: {
+          price_cents: 4900,
+          processing_cents: 172,
+          platform_fee_cents: 98,
+          head_coach_split_cents: 0,
+          refunded_cents: 0,
+          net_cents: 4630,
+          processing_paid_by: "coach",
+          settled: true,
+        },
+      },
+    });
+    const detail = await render(
+      <MoneyChargeScreen
+        navigation={{ ...nav, getParent: () => undefined } as never}
+        route={{ key: "k", name: "CoachMoneyCharge", params: { chargeId: "ch_1" } } as never}
+      />,
+    );
+    await detail.findByLabelText("Net to you: $46.30");
+    expect(captured(detail.container as unknown as Inst)).toEqual([]);
   });
 });

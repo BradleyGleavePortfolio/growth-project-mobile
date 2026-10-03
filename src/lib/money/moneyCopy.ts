@@ -60,7 +60,10 @@ export function cadenceLabel(
   >,
 ): string {
   if (c.billingType !== "recurring") return "One time";
-  const n = c.billingIntervalCount ?? 1;
+  // B-332-2 (R2): an unknown count is an unknown cadence, never "Monthly".
+  const n = c.billingIntervalCount;
+  if (typeof n !== "number" || !Number.isSafeInteger(n) || n < 1)
+    return "Recurring";
   switch (c.billingInterval) {
     case "week":
       return n === 1 ? "Weekly" : `Every ${n} weeks`;
@@ -182,29 +185,54 @@ export function breakdownRows(t: {
       sign: -1,
     },
   ];
-  if (t.headCoachSplitCents > 0) {
-    rows.push({
-      key: "head_coach",
-      label: "Head coach share",
-      cents: t.headCoachSplitCents,
-      sign: -1,
-    });
+  // B-332-5: every nonzero contribution is listed with its real direction,
+  // so the rows always add up to the net. A refund or chargeback booked in
+  // this period on an earlier sale reverses the head-coach share: for the
+  // seller the share comes back (added), for the head coach their team
+  // income goes down (taken away).
+  const split = t.headCoachSplitCents;
+  if (split !== 0) {
+    rows.push(
+      split > 0
+        ? {
+            key: "head_coach",
+            label: "Head coach share",
+            cents: split,
+            sign: -1,
+          }
+        : {
+            key: "head_coach",
+            label: "Head coach share returned on refunds",
+            cents: -split,
+            sign: 1,
+          },
+    );
   }
-  if (t.refundedCents > 0) {
+  if (t.refundedCents !== 0) {
     rows.push({
       key: "refunds",
       label: "Refunds and chargebacks",
-      cents: t.refundedCents,
-      sign: -1,
+      cents: Math.abs(t.refundedCents),
+      sign: t.refundedCents > 0 ? -1 : 1,
     });
   }
-  if ((t.headCoachIncomeCents ?? 0) > 0) {
-    rows.push({
-      key: "team_income",
-      label: "Your share of your team's sales",
-      cents: t.headCoachIncomeCents ?? 0,
-      sign: 1,
-    });
+  const team = t.headCoachIncomeCents ?? 0;
+  if (team !== 0) {
+    rows.push(
+      team > 0
+        ? {
+            key: "team_income",
+            label: "Your share of your team's sales",
+            cents: team,
+            sign: 1,
+          }
+        : {
+            key: "team_income",
+            label: "Your share of refunds on your team's sales",
+            cents: -team,
+            sign: -1,
+          },
+    );
   }
   rows.push({ key: "net", label: "Net to you", cents: t.netCents, sign: 0 });
   return rows;

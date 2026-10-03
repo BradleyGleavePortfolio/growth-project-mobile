@@ -22,7 +22,7 @@
  * Every state is handled: loading, empty (no Stripe yet -> set up), error
  * with specific copy and a reference, offline (last numbers kept).
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -111,6 +111,23 @@ export default function MoneyScreen() {
     "load your Money numbers",
     [range, currency],
   );
+  // B-332-4 (Sol): the currencies this coach has, remembered from the last
+  // summary that loaded, so a failed or slow currency switch never removes
+  // the way back to a currency that works.
+  const [knownCurrencies, setKnownCurrencies] = useState<{
+    list: string[];
+    serverDefault: string | null;
+  }>({ list: [], serverDefault: null });
+  const loadedSummary = summary.data;
+  useEffect(() => {
+    if (!loadedSummary) return;
+    const sm = loadedSummary.summary;
+    setKnownCurrencies((prev) => ({
+      list: sm.currencies.length > 0 ? sm.currencies : prev.list,
+      serverDefault:
+        loadedSummary.currency === null ? sm.currency : prev.serverDefault,
+    }));
+  }, [loadedSummary]);
   const attention = useSection(
     () => coachMoneyApi.attention(),
     "load what needs your attention",
@@ -197,8 +214,15 @@ export default function MoneyScreen() {
   // period, so the last summary in the same currency can show them.
   const business =
     s ?? (tagged && tagged.currency === currency ? tagged.summary : null);
-  const currencies = business?.currencies ?? [];
+  const currencies =
+    business && business.currencies.length > 0
+      ? business.currencies
+      : knownCurrencies.list;
   const shownCurrency = business?.currency ?? null;
+  // The chip that is selected: the requested currency, else the one the
+  // server chose by default.
+  const selectedCurrency =
+    currency ?? shownCurrency ?? knownCurrencies.serverDefault;
   const noSalesYet =
     s !== null &&
     s.totals.chargeCount === 0 &&
@@ -211,7 +235,7 @@ export default function MoneyScreen() {
 
   if (firstLoad) {
     return (
-      <View style={styles.centred} testID="money-loading">
+      <View ph-no-capture style={styles.centred} testID="money-loading">
         <ActivityIndicator
           color={colors.primary}
           accessibilityLabel="Loading Money"
@@ -249,7 +273,7 @@ export default function MoneyScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.page} edges={["top"]}>
+    <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
       <ScrollView
         style={styles.page}
         contentContainerStyle={styles.inner}
@@ -341,7 +365,7 @@ export default function MoneyScreen() {
               testID="money-currencies"
             >
               {currencies.map((cur) => {
-                const on = cur === shownCurrency;
+                const on = cur === selectedCurrency;
                 return (
                   <TouchableOpacity
                     key={cur}
@@ -520,6 +544,12 @@ export default function MoneyScreen() {
         </Text>
         {business ? (
           <View testID="money-business">
+            {summary.error && lastLoaded ? (
+              // C-332-6: kept from an earlier load; say when.
+              <Text style={styles.bNote} testID="money-business-stale">
+                {`These are the numbers from ${lastLoaded}. They could not be refreshed.`}
+              </Text>
+            ) : null}
             <View style={styles.tiles}>
               <KpiTile
                 label="Monthly recurring"
@@ -791,8 +821,8 @@ function NetBlock({
             </View>
           ))}
           <Text style={styles.bNote}>
-            Counts sales made in this period, minus refunds and chargebacks on
-            them.
+            Counts sales made in this period, minus refunds and chargebacks
+            made in this period, including those on earlier sales.
           </Text>
         </View>
       ) : null}
