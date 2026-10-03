@@ -3,6 +3,7 @@ import { captureError } from '../../services/sentry';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import {
   COACH_CODE_MESSAGES,
+  COACH_INTENT_CODE_MESSAGES,
   SCHEDULING_CODE_MESSAGES,
   bookingOutcomeUncertain,
   calendarErrorMessage,
@@ -40,7 +41,8 @@ it('unknown failures carry a short server reference and redact raw diagnostic co
     config: { headers: { Authorization: 'secret' } },
   };
   expect(calendarErrorMessage(err, 'book')).toMatch(/reference req-12345678/);
-  expect(calendarErrorMessage(err, 'book')).toMatch(/We could not book/);
+  expect(calendarErrorMessage(err, 'book')).toMatch(/The app could not book\. /);
+  expect(calendarErrorMessage(err, 'book')).toContain(SUPPORT_EMAIL);
   const [, metadata] = jest.mocked(captureError).mock.calls[0];
   expect(metadata).toEqual({ area: 'calendar', audience: 'client', status: 500, code: null, request_id: 'req-12345678' });
   expect(JSON.stringify(metadata)).not.toMatch(/secret|not diagnostic|Authorization/);
@@ -134,6 +136,61 @@ describe('S-SCHED-4 B-325-2: SESSION_STARTED next step depends on what the coach
   it('an intent never changes client copy', () => {
     expect(calendarErrorMessage(started, 'cancel the session', 'client', 'approve')).toBe(
       SCHEDULING_CODE_MESSAGES.SESSION_STARTED,
+    );
+  });
+});
+
+// B-325-4: every owned scheduling message (coded, HTTP, network, unknown) for both audiences is in the
+// product voice: no first person, no exclamation marks, no emojis, and it still ends as a full sentence.
+describe('B-325-4 scheduling copy voice', () => {
+  const FIRST_PERSON = /\b(we|us|our|ours|we're|we've|we'll|we'd)\b/i;
+  const EMOJI = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
+  const audiences = ['client', 'coach'] as const;
+  const outcomes: Array<[string, unknown]> = [
+    ...[400, 401, 402, 403, 404, 409, 422, 429].map((status): [string, unknown] => [`HTTP ${status}`, { response: { status } }]),
+    ['ERR_NETWORK', { code: 'ERR_NETWORK' }],
+    ['ECONNABORTED', { code: 'ECONNABORTED' }],
+    ['ETIMEDOUT', { code: 'ETIMEDOUT' }],
+    ['Network Error', new Error('Network Error')],
+    ['unknown 500', { response: { status: 500, data: { request_id: 'req-abcdef123456' } } }],
+    ['no response', null],
+  ];
+
+  function assertVoice(msg: string) {
+    expect(msg).not.toMatch(FIRST_PERSON);
+    expect(msg).not.toMatch(/!/);
+    expect(msg).not.toMatch(EMOJI);
+    expect(msg).toMatch(/\.$/);
+  }
+
+  it.each(audiences.flatMap((a) => outcomes.map(([label, err]) => [a, label, err] as const)))(
+    '%s / %s fallback has no first person, exclamation mark or emoji',
+    (audience, _label, err) => {
+      assertVoice(calendarErrorMessage(err, 'book this session', audience));
+    },
+  );
+
+  it.each([
+    ...Object.entries(SCHEDULING_CODE_MESSAGES),
+    ...Object.entries(COACH_CODE_MESSAGES),
+    ...Object.values(COACH_INTENT_CODE_MESSAGES).flatMap((m) => Object.entries(m ?? {})),
+  ])('coded message %s is in the product voice', (_code, msg) => {
+    assertVoice(msg as string);
+  });
+
+  it('keeps each recovery action and the uncertainty caution after the rewrite', () => {
+    expect(calendarErrorMessage({ response: { status: 401 } }, 'cancel the session', 'client')).toBe(
+      'Your login expired before the app could cancel the session. Log in again, then check Calendar.',
+    );
+    expect(calendarErrorMessage({ code: 'ETIMEDOUT' }, 'book this session', 'client')).toBe(
+      'The connection dropped before the app could book this session. Reconnect and check Calendar before sending another booking.',
+    );
+    expect(calendarErrorMessage({ code: 'ETIMEDOUT' }, 'save time off', 'coach')).toBe(
+      'The connection dropped before the app could save time off. Reconnect and refresh your schedule before trying again.',
+    );
+    const coachUnknown = calendarErrorMessage({ response: { status: 500, data: { request_id: 'req-coach0000001' } } }, 'save time off', 'coach');
+    expect(coachUnknown).toBe(
+      `The app could not save time off. Refresh your schedule and try again. If it keeps failing, contact support at ${SUPPORT_EMAIL} with reference req-coach000.`,
     );
   });
 });

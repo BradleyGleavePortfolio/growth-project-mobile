@@ -115,7 +115,7 @@ export function calendarErrorMessage(
     return SCHEDULING_CODE_MESSAGES[code];
   }
   const w = audienceWords(audience);
-  if (status === 401) return `Your login expired before we could ${operation}. Log in again, then check ${w.home}.`;
+  if (status === 401) return `Your login expired before the app could ${operation}. Log in again, then check ${w.home}.`;
   if (status === 402) {
     return audience === 'coach'
       ? 'Your plan does not include this scheduling action. Open Membership in Profile and more, or contact support.'
@@ -146,8 +146,8 @@ export function calendarErrorMessage(
     (err instanceof Error && err.message === 'Network Error')
   ) {
     return audience === 'coach'
-      ? `The connection dropped before we could ${operation}. Reconnect and refresh your schedule before trying again.`
-      : `The connection dropped before we could ${operation}. Reconnect and check Calendar before sending another booking.`;
+      ? `The connection dropped before the app could ${operation}. Reconnect and refresh your schedule before trying again.`
+      : `The connection dropped before the app could ${operation}. Reconnect and check Calendar before sending another booking.`;
   }
   const ref = referenceFor(err);
   if (!err || typeof err !== 'object' || !reported.has(err)) {
@@ -161,8 +161,8 @@ export function calendarErrorMessage(
     if (err && typeof err === 'object') reported.add(err);
   }
   return audience === 'coach'
-    ? `We could not ${operation}. Refresh your schedule and try again. If it keeps failing, contact support at ${SUPPORT_EMAIL} with reference ${ref}.`
-    : `We could not ${operation}. Check Calendar before sending another booking. If it remains unavailable, contact support at ${SUPPORT_EMAIL} with reference ${ref}.`;
+    ? `The app could not ${operation}. Refresh your schedule and try again. If it keeps failing, contact support at ${SUPPORT_EMAIL} with reference ${ref}.`
+    : `The app could not ${operation}. Check Calendar before sending another booking. If it remains unavailable, contact support at ${SUPPORT_EMAIL} with reference ${ref}.`;
 }
 
 export function bookingOutcomeUncertain(err: unknown): boolean {
