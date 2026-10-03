@@ -76,7 +76,7 @@ export const PERMANENTLY_DELETED: readonly string[] = [
 
 // Mirrors the manifest's retained rows (operator retention policy).
 export const KEPT_RECORDS: readonly string[] = [
-  'Payment and tax records that Stripe keeps for as long as the law requires. The Growth Project's own copies keep only amounts, dates and payment references, with no name or contact details.',
+  'Payment and tax records that Stripe keeps for as long as the law requires. The Growth Project\'s own copies keep only amounts, dates and payment references, with no name or contact details.',
   'One deletion record with a random reference, the date and the result. It holds no name, email or account details.',
   'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and are no longer linked to you.',
 ];
