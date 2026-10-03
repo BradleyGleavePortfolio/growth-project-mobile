@@ -84,3 +84,14 @@ export function shortReference(ref: string | null | undefined): string | null {
   const clean = ref.replace(/[^A-Za-z0-9-]/g, '');
   return clean ? clean.slice(0, 8) : null;
 }
+
+/**
+ * The reference for an unknown failure that is shown AND reported (Sol
+ * B-326-4). The request's own reference when one exists; otherwise a fresh
+ * client-generated id. Pass the same value to `captureError(..., { reference })`
+ * (it is set as the Sentry `reference` tag), so support can find the event
+ * from the short form the person quotes, even when no request carried it.
+ */
+export function diagnosticReference(ref: string | null | undefined): string {
+  return typeof ref === 'string' && ref.length > 0 ? ref : newRequestId();
+}

@@ -58,6 +58,7 @@ import {
 import { featureFlags } from '../../config/featureFlags';
 import AiTriageCard from '../../components/community/AiTriageCard';
 import { useInboxTriage } from '../../hooks/useInboxTriage';
+import { aiRefusalOf } from '../../lib/ai/aiRefusal';
 import { useQueryClient } from '@tanstack/react-query';
 import { AckStateSchema } from '../../api/coachCommunityApi';
 import type {
@@ -104,6 +105,7 @@ function InboxTriageBanner(): React.ReactElement {
       triage={triage.data}
       onRetry={() => triage.refetch()}
       retrying={triage.isRefetching}
+      refusal={triage.isError ? aiRefusalOf(triage.error) : null}
       testID="coach-community-inbox-ai-triage"
     />
   );
