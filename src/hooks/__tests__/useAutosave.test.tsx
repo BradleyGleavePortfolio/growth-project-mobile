@@ -1523,3 +1523,65 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
     expect(['saved', 'idle']).toContain(result.current.status);
   });
 });
+
+describe('useAutosave — S-MWB-4 access refusal (OR-112-18)', () => {
+  it('records a 403 refusal with its code, keeps the batch, and clears on the next save', async () => {
+    const refused = Object.assign(
+      new WorkoutAutosaveApiError('forbidden', 403, 'workout autosave request failed (403)'),
+      { cause: { response: { status: 403, data: { code: 'program_read_only' } } } },
+    );
+    mockAutosave.mockResolvedValue(okResponse());
+    mockAutosave.mockRejectedValueOnce(refused);
+    const { result, rerender } = await renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+    expect(result.current.refusal).toBeNull();
+    await rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(result.current.status).toBe('offline'));
+    expect(result.current.refusal).toEqual({ status: 403, code: 'program_read_only' });
+    expect(result.current.hasPending).toBe(true);
+    expect(mockClear).not.toHaveBeenCalled();
+
+    // Access restored (for example the head coach assigned the client): the
+    // next edit saves and the refusal clears.
+    await rerender({ value: { n: 2 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    expect(result.current.refusal).toBeNull();
+    mockAutosave.mockReset();
+  });
+
+  it('a network failure is not an access refusal', async () => {
+    mockAutosave.mockRejectedValueOnce(new WorkoutAutosaveApiError('network', 0, 'offline'));
+    const { result, rerender } = await renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+    await rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(result.current.status).toBe('offline'));
+    expect(result.current.refusal).toBeNull();
+  });
+});

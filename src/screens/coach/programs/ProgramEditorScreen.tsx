@@ -467,7 +467,10 @@ export default function ProgramEditorScreen({
                   }`}
                   accessibilityState={{ selected: isSel }}
                   accessibilityActions={
-                    d
+                    // S-MWB-4: only an editable program offers the builder,
+                    // matching the visible button (a read-only day would
+                    // open a builder whose saves the server refuses).
+                    d && data.can_edit
                       ? [
                           { name: "activate", label: "Select" },
                           { name: "open", label: "Open in workout builder" },
@@ -475,7 +478,8 @@ export default function ProgramEditorScreen({
                       : [{ name: "activate", label: "Select" }]
                   }
                   onAccessibilityAction={(e) => {
-                    if (e.nativeEvent.actionName === "open" && d) openDay(d);
+                    if (e.nativeEvent.actionName === "open" && d && data.can_edit)
+                      openDay(d);
                     else setSelected({ week, day });
                   }}
                   onPress={() => setSelected(isSel ? null : { week, day })}

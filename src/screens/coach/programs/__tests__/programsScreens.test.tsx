@@ -223,6 +223,38 @@ describe("ProgramEditorScreen", () => {
     });
   });
 
+  it("S-MWB-4: a read-only team program offers no builder, not even as an accessibility action", async () => {
+    mockProgram.mockReturnValue({
+      data: {
+        ...SUMMARY,
+        can_edit: false,
+        days: [
+          {
+            week_index: 0,
+            day_index: 0,
+            plan_id: "plan-a",
+            name: "Full body A",
+            type: "strength",
+            duration_estimate_minutes: 45,
+            exercise_count: 6,
+            updated_at: "x",
+          },
+        ],
+        packages: [],
+      },
+      error: null,
+      isLoading: false,
+      refetch: mockRefetch,
+    });
+    const screen = await renderEditor();
+    const cell = screen.getByLabelText("Week 1, Day 1: Full body A, 6 exercises");
+    expect(cell.props.accessibilityActions).toEqual([{ name: "activate", label: "Select" }]);
+    await fireEvent(cell, "accessibilityAction", { nativeEvent: { actionName: "open" } });
+    expect(mockNavigate).not.toHaveBeenCalledWith("CoachWorkoutBuilder", expect.anything());
+    await fireEvent.press(cell);
+    expect(screen.queryByLabelText("Open in workout builder")).toBeNull();
+  });
+
   it("an empty program cannot be assigned or packaged (buttons disabled with a reason)", async () => {
     mockProgram.mockReturnValue({
       data: { ...SUMMARY, filled_days: 0, days: [], packages: [] },

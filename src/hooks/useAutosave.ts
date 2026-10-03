@@ -324,6 +324,33 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
    * the index as the undo's `expected_head_index` fence.
    */
   readHead: () => { index: number; lockToken: string };
+  /**
+   * S-MWB-4 (OR-112-18): the last save the server REFUSED for access (HTTP
+   * 403), with its machine `code` (`program_read_only`, `client_not_assigned`,
+   * `plan_not_yours`, `plan_access_denied`) or null when the body carried
+   * none. The batch stays queued (never a silent loss), but the screen must
+   * say why it is not saving instead of the offline "will sync" copy. Cleared
+   * by the next confirmed save.
+   */
+  refusal: AutosaveRefusal | null;
+}
+
+/** See {@link UseAutosaveResult.refusal}. */
+export interface AutosaveRefusal {
+  status: number;
+  code: string | null;
+}
+
+/** Read the backend's machine `code` off a refused autosave/undo request. */
+export function refusalCodeOf(err: unknown): string | null {
+  if (!(err instanceof WorkoutAutosaveApiError)) return null;
+  const cause: unknown = err.cause;
+  if (!cause || typeof cause !== 'object' || !('response' in cause)) return null;
+  const response: unknown = cause.response;
+  if (!response || typeof response !== 'object' || !('data' in response)) return null;
+  const data: unknown = response.data;
+  if (!data || typeof data !== 'object' || !('code' in data)) return null;
+  return typeof data.code === 'string' && data.code.length > 0 ? data.code : null;
 }
 
 /**
@@ -404,6 +431,8 @@ export function useAutosave<TWorkingCopy>(
   // "saved on device". Cleared on the next successful mirror write or once the
   // batch lands a 200 and the queue drains.
   const [mirrorDegraded, setMirrorDegraded] = useState(false);
+  // S-MWB-4: the last access refusal (403), cleared by the next 200.
+  const [refusal, setRefusal] = useState<AutosaveRefusal | null>(null);
   const mirrorDegradedRef = useRef(false);
   // Whether the LATEST flush's mirror write actually held on disk. The teardown
   // (background/kill) path reads it: when false the batch is NOT durable on
@@ -719,6 +748,7 @@ export function useAutosave<TWorkingCopy>(
         safeSet(setTokenState, res.lock_token);
         safeSet(setLastSavedAt, Number.isFinite(savedMs) ? savedMs : Date.now());
         safeSet(setStatus, 'saved');
+        safeSet(setRefusal, null);
         onSavedRef.current?.({
           headRevisionIndex: res.head_revision_index,
           lockToken: res.lock_token,
@@ -963,6 +993,9 @@ export function useAutosave<TWorkingCopy>(
         // Save indefinitely; the screen's onReplay already forced a cache
         // refetch (MWB-4 #237 R6/R8 P1).
         if (batch.isReplay) clearReplayInFlight();
+        if (err instanceof WorkoutAutosaveApiError && err.kind === 'forbidden') {
+          safeSet(setRefusal, { status: err.status, code: refusalCodeOf(err) });
+        }
         safeSet(setStatus, 'offline');
         safeSet(setHasPending, true);
         logger.error('[useAutosave] flush rejected', { planId, kind });
@@ -1444,7 +1477,8 @@ export function useAutosave<TWorkingCopy>(
       rebaselineToConflict,
       adoptServerHead,
       readHead,
+      refusal,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict, adoptServerHead, readHead],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict, adoptServerHead, readHead, refusal],
   );
 }

@@ -84,6 +84,7 @@ import {
   diffWorkingCopy,
   type WorkoutBuilderWorkingCopy,
 } from './workoutBuilderAutosaveDiff';
+import { describeAutosaveRefusal } from './workoutBuilderAccess';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -1500,6 +1501,7 @@ export default function CoachWorkoutBuilderScreen() {
               status={pillStatus}
               lastSavedAt={autosave.lastSavedAt}
               mirrorDegraded={autosave.mirrorDegraded}
+              refused={!!autosave.refusal}
               onPress={onPillPress}
             />
           ) : null}
@@ -1535,6 +1537,15 @@ export default function CoachWorkoutBuilderScreen() {
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Redo</Text>
             </Pressable>
           </View>
+        ) : null}
+        {autosaveEnabled && autosave.refusal ? (
+          <Text
+            testID="mwb-autosave-refusal"
+            accessibilityLiveRegion="polite"
+            style={[typography.caption, { color: sc.textMuted, marginBottom: spacing.xs }]}
+          >
+            {describeAutosaveRefusal(autosave.refusal)}
+          </Text>
         ) : null}
         {autosaveEnabled && historyNotice ? (
           <Text
