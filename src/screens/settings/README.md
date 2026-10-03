@@ -93,3 +93,81 @@ server value on mount. The device timezone is synced to the backend by
 time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for
 coach and owner accounts.
+
+### DataExportScreen
+
+`DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.
+
+**State machine**
+
+```
+         mount
+           │
+           ▼
+        loading  ──loadStatus── ─── 404 ──► idle
+           │                          ├── PENDING/RUNNING ──► polling
+           │                          ├── READY + download_available ──► ready
+           │                          ├── READY, no stored file ──► unavailable
+           │                          ├── FAILED ──────────► failed (Request my data)
+           │                          ├── EXPIRED ─────────► expired
+           │                          └── error ───────────► failed (Check again)
+           │
+        idle ──press "Request"──► requesting ──success──► polling
+                                              ├── 409 IN_PROGRESS ──► reload (polling)
+                                              ├── 409 RATE_LIMITED ──► reload (ready + notice)
+                                              └── other error ──► failed (Request my data)
+
+        polling ──poll every 5s── ─── READY ──► ready / unavailable
+                                       ├── FAILED ──► failed
+                                       ├── EXPIRED ──► expired
+                                       └── 3 errors in a row ──► failed (Check again)
+
+        ready ──press "Download"──► POST /download-link (fresh 5-minute link)
+                                     ├── ok ──► Linking.openURL (browser saves the file)
+                                     ├── 410 EXPIRED ──► expired
+                                     ├── 410 FILE_MISSING ──► unavailable
+                                     ├── 409 NOT_READY / 404 ──► reload
+                                     └── other error ──► ready + notice (Download stays)
+              ──press "Request new"──► requesting (hidden until next_request_at)
+
+        unavailable ──press "Request a new export"──► requesting
+        failed ──press "Request my data" / "Check again"──► requesting / loading
+               ──press "Cancel"──► idle
+        expired ──press "Request new"──► requesting
+```
+
+Every failure names what happened and the next step that works. Unknown
+failures show a visible "Reference: ..." (server `request_id`, else the
+`X-Request-Id` this app sent, else a fresh id) with `SUPPORT_EMAIL` from
+`src/constants/support.ts`, and the same reference is sent to Sentry;
+offline, ended session, storage down and throttling each have their own copy.
+
+Fix round 1 (#327) guarantees:
+
+- Every 2xx body is validated in `dataExportApi.ts` (`parseDataExportRecord`,
+  `parseDownloadLink`); a malformed answer is a `DataExportResponseError`
+  (`DATA_EXPORT_BAD_RESPONSE`) and nothing is opened.
+- Every async step is bound to the signed-in user and this screen instance;
+  logout, login, auth change, user change or unmount retire it, so a late
+  link for account A never opens in account B's session.
+- Status polling is single-flight (`setTimeout` chain with a generation
+  fence); a vanished export (`null`) ends polling with "We could not find
+  your export".
+- The "Request a new export" action re-renders when `next_request_at`
+  passes (timer plus app-foreground check).
+- Sentry never receives the archive link or token: the screen reports a
+  sanitized `DataExportFailure`, and `src/services/sentryScrub.ts` scrubs
+  every event and breadcrumb in `beforeSend`/`beforeBreadcrumb`.
+
+---
+
+**API surface** (`src/services/dataExportApi.ts`)
+
+| Method | Path | Status |
+|--------|------|--------|
+| `POST` | `/v1/me/data-export/request` | LIVE |
+| `GET` | `/v1/me/data-export/status` | LIVE |
+| `POST` | `/v1/me/data-export/download-link` | LIVE with backend B-EXPORT (fresh 5-minute link per tap) |
+| `GET` | `/v1/me/data-export/download?token=<jwt>` | Opened via `Linking.openURL` (browser); streamed from the private bucket |
+
+Reached from the "Data export" row in the client and coach Settings screens.
