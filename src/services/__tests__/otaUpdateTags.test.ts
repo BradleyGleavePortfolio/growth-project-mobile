@@ -10,7 +10,9 @@ import {
   reportOtaUpdateLaunch,
   resetOtaUpdateReportForTests,
   emergencyReasonCategory,
+  otaUpdatesContext,
   EMERGENCY_REASON_CATEGORIES,
+  OTA_UPDATES_CONTEXT,
 } from '../otaUpdateTags';
 
 const RUNTIME = '0123456789abcdef0123456789abcdef01234567';
@@ -20,7 +22,7 @@ function rootWith(mod: Record<string, unknown> | undefined): { expo: { modules: 
 }
 
 function fakeSentry() {
-  return { setTags: jest.fn(), captureMessage: jest.fn() };
+  return { setTags: jest.fn(), setContext: jest.fn(), captureMessage: jest.fn() };
 }
 
 const UPDATE = {
@@ -43,6 +45,7 @@ describe('otaUpdateTags', () => {
     expect(reportOtaUpdateLaunch(sentry, rootWith({ ...UPDATE, isEnabled: false }))).toBeNull();
     expect(reportOtaUpdateLaunch(sentry)).toBeNull();
     expect(sentry.setTags).not.toHaveBeenCalled();
+    expect(sentry.setContext).not.toHaveBeenCalled();
     expect(sentry.captureMessage).not.toHaveBeenCalled();
   });
 
@@ -57,6 +60,55 @@ describe('otaUpdateTags', () => {
       'expo.updates.emergency': 'false',
     });
     expect(sentry.captureMessage).not.toHaveBeenCalled();
+  });
+
+  it('B-305-12: sets the bounded ota_updates context (SDK field names, no reason text) for every event and native crash', () => {
+    const sentry = fakeSentry();
+    reportOtaUpdateLaunch(
+      sentry,
+      rootWith({
+        ...UPDATE,
+        isEmbeddedLaunch: true,
+        isEmergencyLaunch: true,
+        isUsingEmbeddedAssets: true,
+        checkAutomatically: 'ON_LOAD',
+        launchDuration: 412,
+        emergencyLaunchReason: 'Failed to launch the update for Jane Doe',
+      }),
+    );
+    expect(OTA_UPDATES_CONTEXT).toBe('ota_updates');
+    expect(sentry.setContext).toHaveBeenCalledTimes(1);
+    expect(sentry.setContext).toHaveBeenCalledWith('ota_updates', {
+      is_enabled: true,
+      is_embedded_launch: true,
+      is_emergency_launch: true,
+      is_using_embedded_assets: true,
+      update_id: 'abcdef00-1111-2222-3333-444455556666',
+      channel: 'clinic',
+      runtime_version: RUNTIME,
+      check_automatically: 'on_load',
+      launch_duration: 412,
+      emergency_reason_category: 'launch_failed',
+    });
+    expect(JSON.stringify(sentry.setContext.mock.calls)).not.toContain('Jane');
+  });
+
+  it('B-305-12: unexpected check modes and launch durations are dropped from the context', () => {
+    for (const [checkAutomatically, launchDuration] of [
+      ['ON_LOAD Jane Doe', -1],
+      ['sometimes', Number.NaN],
+      [42, 86_400_001],
+      [null, '412'],
+    ] as const) {
+      const state = readOtaUpdateState(rootWith({ ...UPDATE, checkAutomatically, launchDuration }));
+      if (!state) throw new Error('expected an update state');
+      const ctx = otaUpdatesContext(state);
+      expect(ctx).not.toHaveProperty('check_automatically');
+      expect(ctx).not.toHaveProperty('launch_duration');
+    }
+    const ok = readOtaUpdateState(rootWith({ ...UPDATE, checkAutomatically: 'WIFI_ONLY', launchDuration: 0 }));
+    if (!ok) throw new Error('expected an update state');
+    expect(otaUpdatesContext(ok)).toMatchObject({ check_automatically: 'wifi_only', launch_duration: 0 });
   });
 
   it('marks the embedded bundle', () => {
@@ -114,7 +166,7 @@ describe('otaUpdateTags', () => {
       }),
     );
     expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
-    const sent = JSON.stringify([sentry.setTags.mock.calls, sentry.captureMessage.mock.calls, state]);
+    const sent = JSON.stringify([sentry.setTags.mock.calls, sentry.setContext.mock.calls, sentry.captureMessage.mock.calls, state]);
     for (const fragment of [...CANARY, 'Janet', 'Canaryfield', 'example.com', '415', 'insulin', 'HIV', '7731']) {
       expect(sent).not.toContain(fragment);
     }
@@ -133,6 +185,7 @@ describe('otaUpdateTags', () => {
       setTags: jest.fn(() => {
         throw new Error('scope closed');
       }),
+      setContext: jest.fn(),
       captureMessage: jest.fn(),
     };
     expect(reportOtaUpdateLaunch(sentry, rootWith(UPDATE))).toBeNull();
