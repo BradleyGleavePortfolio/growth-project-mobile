@@ -10,7 +10,7 @@
  */
 import React from "react";
 import { Text, View } from "react-native";
-import { render, fireEvent, act } from "@testing-library/react-native";
+import { render, fireEvent, act, waitFor } from "@testing-library/react-native";
 import {
   NavigationContainer,
   createNavigationContainerRef,
@@ -133,11 +133,15 @@ describe("B-332-7 the Settings root stays reachable after Home opens Money", () 
     expect(settingsRoutes()).toEqual(["SettingsHome", "CoachMoney"]);
     expect(ref.getCurrentRoute()?.name).toBe("CoachMoney");
 
-    // Tapping the focused Settings tab pops to its root.
+    // Tapping the focused Settings tab pops to its root. The native stack
+    // does that on the next animation frame, so wait for it.
     await act(async () => {
       fireEvent.press(r.getByText("SettingsStack"));
     });
-    expect(ref.getCurrentRoute()?.name).toBe("SettingsHome");
+    await waitFor(() =>
+      expect(ref.getCurrentRoute()?.name).toBe("SettingsHome"),
+    );
+    expect(settingsRoutes()).toEqual(["SettingsHome"]);
     expect(r.getByText("Settings root")).toBeTruthy();
   });
 
