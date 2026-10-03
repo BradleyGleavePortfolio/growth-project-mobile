@@ -221,6 +221,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_GOOGLE_PAY_ENABLED": {
+      "kind": "optional",
+      "default": "off → no Google Pay in the PaymentSheet",
+      "reason": "'1' or 'true' turns on Google Pay in the native PaymentSheet on Android and the wallet meta-data in app.config.js (OR-113-2)."
+    },
     "EXPO_PUBLIC_HELP_BASE_URL": {
       "kind": "optional",
       "default": "https://app.trygrowthproject.com/help",
@@ -255,6 +260,16 @@
       "kind": "optional",
       "default": "falls back to expo extra.sentryDsn; neither → Sentry off",
       "reason": "Sentry DSN."
+    },
+    "EXPO_PUBLIC_STRIPE_MERCHANT_COUNTRY": {
+      "kind": "optional",
+      "default": "'US'",
+      "reason": "Two-letter country of the Stripe platform account for Apple Pay / Google Pay."
+    },
+    "EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER": {
+      "kind": "optional",
+      "default": "'' → no Apple Pay in the PaymentSheet (no button, no error)",
+      "reason": "Apple merchant ID (merchant.*) for Apple Pay in the native PaymentSheet; also adds the Stripe config plugin entitlement in app.config.js (OR-113-2)."
     },
     "EXPO_PUBLIC_STRIPE_PK": {
       "kind": "optional",

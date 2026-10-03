@@ -65,6 +65,7 @@
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { purchasableFromCoachPackage, type PurchasablePackage } from '../lib/planTerms';
 
 /**
  * A package as the client sees it. Subset of the coach-side CoachPackage
@@ -103,6 +104,13 @@ export interface ClientCoachPackage {
   trial_days: number | null;
   /** Coach-supplied bullet points. Already plain text — never assemble HTML on the client. */
   features: string[];
+  /**
+   * How the package is sold (subscription / one-time / free) and its terms,
+   * read from the raw CoachPackage row (incl. the combo recurring_* columns).
+   * null when the row cannot be sold honestly (no whole-cent price, renewing
+   * without a cadence); the screen then offers no buy button for it.
+   */
+  purchasable?: PurchasablePackage | null;
 }
 
 /**
@@ -336,8 +344,12 @@ function normalizeClientPackage(raw: Record<string, unknown>): ClientCoachPackag
     price,
     currency: String(raw.currency ?? 'usd'),
     interval: (raw.interval as 'month' | 'year' | null) ?? null,
-    trial_days: null,
+    trial_days:
+      typeof raw.trial_days === 'number' && Number.isInteger(raw.trial_days) && raw.trial_days > 0
+        ? raw.trial_days
+        : null,
     features: Array.isArray(raw.features) ? (raw.features as string[]) : [],
+    purchasable: purchasableFromCoachPackage(raw),
   };
 }
 
