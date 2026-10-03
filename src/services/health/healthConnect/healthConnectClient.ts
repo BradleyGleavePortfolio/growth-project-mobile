@@ -58,7 +58,11 @@ interface HealthConnectLib {
   readRecords: (
     recordType: string,
     options: {
-      timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+      timeRangeFilter: {
+        operator: 'between';
+        startTime: string;
+        endTime: string;
+      };
     },
   ) => Promise<{ records?: unknown[] }>;
 }
@@ -245,35 +249,105 @@ export async function requestPermission(): Promise<HealthConnectPermission[]> {
 }
 
 /**
- * Read all records of a single type within `[startTime, endTime)`. Returns the
- * raw, provider-native records array (opaque to callers other than the
- * normalizer). Uses the library's `'between'` time-range filter.
+ * Page bound for one record type's read. Health Connect returns at most 1000
+ * records per page (its default page size); 30 days of phone step intervals or
+ * watch heart-rate series can exceed one page, so we follow `pageToken` up to
+ * this many pages (S14 history import) instead of silently keeping page one.
+ */
+export const MAX_READ_PAGES = 20;
+
+/** One paged read: the records read and, when stopped early, where to resume. */
+export interface PagedReadResult {
+  records: unknown[];
+  /**
+   * Set when the read stopped at {@link MAX_READ_PAGES} with more pages left
+   * (S14 B-317-2). The caller must treat the type as NOT complete and resume
+   * from this token over the SAME window next time.
+   */
+  nextPageToken?: string;
+}
+
+/**
+ * Stop check for a paged read (S-WEAR-3, Sol B-317-7). Structurally a
+ * {@link import('../sessionFence').SessionFence}: `assertCurrent` re-reads the
+ * signed-in person, `throwIfStopped` is the synchronous check that runs
+ * immediately before each native page request (no await in between).
+ */
+export interface PagedReadStop {
+  assertCurrent(): Promise<void>;
+  throwIfStopped(): void;
+}
+
+/**
+ * Read records of a single type within `[startTime, endTime)`, following
+ * `pageToken` for up to {@link MAX_READ_PAGES} pages, optionally resuming
+ * from a token a previous run returned. Uses the library's `'between'`
+ * time-range filter.
  *
  * The records are typed `unknown[]` deliberately: only the normalizer
  * understands each record type's field shape, and it defends against missing
  * fields at runtime. Keeping this seam `unknown` prevents the native shape
  * from leaking type assumptions into the rest of the app.
  */
+export async function readRecordsPaged(
+  recordType: HealthConnectRecordType,
+  range: TimeRange,
+  resumeFrom?: string,
+  stop?: PagedReadStop,
+): Promise<PagedReadResult> {
+  assertSupported();
+  // The library accepts a record-type string + options; result is
+  // `{ records: T[], pageToken?: string }`. We cast through `unknown` because
+  // our record-type union is wider than the library's per-call generic and we
+  // treat records opaquely until normalization.
+  const read = loadHealthConnectLib().readRecords as unknown as (
+    rt: string,
+    opts: {
+      timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+      pageToken?: string;
+    },
+  ) => Promise<{ records?: unknown[]; pageToken?: string }>;
+
+  const out: unknown[] = [];
+  let pageToken: string | undefined =
+    typeof resumeFrom === 'string' && resumeFrom.length > 0 ? resumeFrom : undefined;
+  for (let page = 0; page < MAX_READ_PAGES; page += 1) {
+    // S-WEAR-3 (Sol B-317-7): no new page starts after sign-out, an account
+    // switch or a cancelled Connect. A request already handed to the native
+    // module is not undone; its records are dropped by the caller.
+    if (stop) {
+      await stop.assertCurrent();
+      stop.throwIfStopped();
+    }
+    const result = await read(recordType, {
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: range.startTime,
+        endTime: range.endTime,
+      },
+      ...(pageToken ? { pageToken } : {}),
+    });
+    if (Array.isArray(result?.records)) out.push(...result.records);
+    pageToken =
+      typeof result?.pageToken === 'string' && result.pageToken.length > 0
+        ? result.pageToken
+        : undefined;
+    if (!pageToken) return { records: out };
+  }
+  return { records: out, nextPageToken: pageToken };
+}
+
+/**
+ * Read records of a single type within `[startTime, endTime)` (first
+ * {@link MAX_READ_PAGES} pages). Kept for callers that only need the
+ * records; the sync service uses {@link readRecordsPaged} so it can tell a
+ * truncated read from a complete one.
+ */
 export async function readRecords(
   recordType: HealthConnectRecordType,
   range: TimeRange,
 ): Promise<unknown[]> {
-  assertSupported();
-  // The library accepts a record-type string + options; result is
-  // `{ records: T[] }`. We cast through `unknown` because our record-type
-  // union is wider than the library's per-call generic and we treat records
-  // opaquely until normalization.
-  const result = (await (loadHealthConnectLib().readRecords as unknown as (
-    rt: string,
-    opts: { timeRangeFilter: { operator: 'between'; startTime: string; endTime: string } },
-  ) => Promise<{ records?: unknown[] }>)(recordType, {
-    timeRangeFilter: {
-      operator: 'between',
-      startTime: range.startTime,
-      endTime: range.endTime,
-    },
-  }));
-  return Array.isArray(result?.records) ? result.records : [];
+  return (await readRecordsPaged(recordType, range)).records;
 }
 
 /**
@@ -309,6 +383,7 @@ export const healthConnectClient = {
   getGrantedPermissions,
   requestPermission,
   readRecords,
+  readRecordsPaged,
   readAllSupportedRecords,
 };
 

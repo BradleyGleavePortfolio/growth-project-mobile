@@ -11,9 +11,8 @@ import {
   type NormalizeContext,
 } from '../healthConnectNormalizer';
 
-const ctx: NormalizeContext = { userId: 'user-1', connectionId: 'conn-1' };
+const ctx: NormalizeContext = { connectionId: 'conn-1' };
 const COMMON = {
-  userId: 'user-1',
   connectionId: 'conn-1',
   provider: 'HEALTH_CONNECT' as const,
 };
@@ -108,6 +107,8 @@ describe('RestingHeartRate', () => {
       metadata: { id: 'rhr-1' },
     });
     expect(s.metric).toBe('RESTING_HEART_RATE_BPM');
+    // S14: canonical bucket (backend METRIC_BUCKET); the ingest schema rejects others.
+    expect(s.bucket).toBe('SLEEP_RECOVERY');
     expect(s.value).toBe(52);
     expect(s.startAt).toEqual(s.endAt);
   });
