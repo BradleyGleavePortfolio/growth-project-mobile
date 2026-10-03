@@ -1186,6 +1186,77 @@ describe("C-332-4 Export CSV for taxes (backend #641 export.csv)", () => {
     textShare.mockRestore();
   });
 
+  // B-340-1 (Sol): the screen guard after the HTTP read is not enough; the
+  // helper waits for the availability lookup before it writes or shares.
+  const holdAvailability = () => {
+    let answer!: (v: boolean) => void;
+    mockSharing.isAvailableAsync.mockImplementationOnce(
+      () =>
+        new Promise<boolean>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    return (v: boolean) => answer(v);
+  };
+  const exportCases: Array<[string, boolean]> = [
+    ["file branch", true],
+    ["text branch", false],
+  ];
+  it.each(exportCases)(
+    "B-340-1 %s: availability held, the screen closes, then availability answers: nothing is written or shared",
+    async (_label: string, available: boolean) => {
+      mockFiles.clear();
+      mockSharing.shareAsync.mockClear();
+      const textShare = jest
+        .spyOn(Share, "share")
+        .mockResolvedValue({ action: "sharedAction" } as never);
+      const answer = holdAvailability();
+      routeGets({
+        "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n",
+      });
+      const screen = await render(<MoneyScreen />);
+      await fireEvent.press(await screen.findByTestId("money-export-csv"));
+      await waitFor(() =>
+        expect(mockSharing.isAvailableAsync).toHaveBeenCalled(),
+      );
+      await screen.unmount();
+      answer(available);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(mockSharing.shareAsync).not.toHaveBeenCalled();
+      expect(textShare).not.toHaveBeenCalled();
+      expect(mockFiles.size).toBe(0);
+      textShare.mockRestore();
+    },
+  );
+
+  it("B-340-1: a sign-out while availability is held shares nothing and frees the button", async () => {
+    mockFiles.clear();
+    mockSharing.isAvailableAsync.mockClear();
+    mockSharing.shareAsync.mockClear();
+    const textShare = jest
+      .spyOn(Share, "share")
+      .mockResolvedValue({ action: "sharedAction" } as never);
+    const answer = holdAvailability();
+    routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
+    const screen = await render(<MoneyScreen />);
+    await fireEvent.press(await screen.findByTestId("money-export-csv"));
+    await waitFor(() =>
+      expect(mockSharing.isAvailableAsync).toHaveBeenCalled(),
+    );
+    await act(async () => {
+      authEvents.emit("logout");
+    });
+    answer(true);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(mockSharing.shareAsync).not.toHaveBeenCalled();
+    expect(textShare).not.toHaveBeenCalled();
+    expect(mockFiles.size).toBe(0);
+    expect(
+      screen.getByTestId("money-export-csv").props.accessibilityState?.disabled,
+    ).toBeFalsy();
+    textShare.mockRestore();
+  });
+
   it("a share sheet that cannot open gets specific copy", async () => {
     mockSharing.shareAsync.mockRejectedValueOnce(new Error("busy"));
     routeGets({ "/v1/coach/money/export.csv": "date_utc,type,charge_id\r\n" });
