@@ -27,6 +27,16 @@
  * off" is said only when a 4xx refusal or the server's own status proves it.
  * Every unknown failure shows a reference that is also on the Sentry event
  * (B-326-4).
+ *
+ * Session fence (Sol B-326-2, round 3): every async step (the status load,
+ * the grant, the reconciliation GET) belongs to the account that started it.
+ * Before the reconciliation GET is sent, and after each await settles, the
+ * sheet checks `sessionUserId() === uid`. When the session has moved on
+ * (sign-out empties the user cache while authenticated screens are still
+ * mounted, or another account signed in), a stale completion does nothing:
+ * no `onGranted` (so the surface never retries the old account's request),
+ * no phase change and no Sentry report. A grant that may already have been
+ * written is never relabelled "nothing changed".
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -145,6 +155,13 @@ export default function AiConsentSheet({
   const styles = makeStyles(colors);
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const active = useRef(true);
+  /** The account whose status the sheet is showing (set by `load`). */
+  const loadedFor = useRef<string | null>(null);
+  // Read through a ref so a caller's inline getter never re-triggers the load effect.
+  const sessionRef = useRef(sessionUserId);
+  sessionRef.current = sessionUserId;
+  /** True while the account that started an async step is still signed in. */
+  const isSession = useCallback((uid: string | null) => sessionRef.current() === uid, []);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -177,9 +194,12 @@ export default function AiConsentSheet({
   );
 
   const load = useCallback(async () => {
+    const uid = sessionRef.current();
+    loadedFor.current = uid;
     setPhase({ kind: 'loading' });
     const out = await api.getStatus();
-    if (!active.current) return;
+    // Stale: the sheet closed, or the session that asked has ended.
+    if (!active.current || !isSession(uid)) return;
     if (out.kind === 'unavailable') return setPhase({ kind: 'unavailable' });
     if (out.kind === 'version_mismatch') return setPhase({ kind: 'update_app' });
     if (out.kind === 'error' || !out.status) {
@@ -191,7 +211,7 @@ export default function AiConsentSheet({
     const status = out.status;
     if (isLiveGrant(status, status.current_version)) return setPhase({ kind: 'already_on' });
     setPhase(readyFrom(status));
-  }, [api, readyFrom, reportUnknown]);
+  }, [api, isSession, readyFrom, reportUnknown]);
 
   useEffect(() => {
     if (visible) void load();
@@ -204,10 +224,12 @@ export default function AiConsentSheet({
    * "could not confirm".
    */
   const reconcile = useCallback(
-    async (sentVersion: string, firstRef: string | null | undefined) => {
+    async (uid: string, sentVersion: string, firstRef: string | null | undefined) => {
+      // Never read the ledger under another session, and never act on it.
+      if (!active.current || !isSession(uid)) return;
       setPhase({ kind: 'checking' });
       const check = await api.getStatus();
-      if (!active.current) return;
+      if (!active.current || !isSession(uid)) return;
       if (check.kind === 'ok' && check.status) {
         const st = check.status;
         if (isLiveGrant(st, st.current_version)) {
@@ -230,15 +252,18 @@ export default function AiConsentSheet({
       });
       setPhase({ kind: 'unconfirmed', reference });
     },
-    [api, onGranted, readyFrom, reportUnknown],
+    [api, isSession, onGranted, readyFrom, reportUnknown],
   );
 
   const allow = useCallback(async () => {
     if (phase.kind !== 'ready') return;
     const { status } = phase;
     const version = status.current_version;
-    setPhase({ ...phase, kind: 'saving' });
     const uid = sessionUserId();
+    // The choice belongs to the account whose wording is on screen: if that
+    // account is no longer the signed-in one, nothing is sent.
+    if (loadedFor.current !== null && uid !== loadedFor.current) return setPhase({ kind: 'not_sent' });
+    setPhase({ ...phase, kind: 'saving' });
     const out: AiConsentOutcome | typeof AI_LEDGER_NOT_SENT = await grantAiChoiceAs(uid, sessionUserId, () =>
       api.grantRoman({
         version,
@@ -247,7 +272,11 @@ export default function AiConsentSheet({
       }),
     );
     if (!active.current) return;
+    // Nothing went out (the account changed before the write's turn): true to say so.
     if (out === AI_LEDGER_NOT_SENT) return setPhase({ kind: 'not_sent' });
+    // The grant was sent, but the session that asked has ended while it was
+    // in flight: a stale completion does nothing (no retry, no state).
+    if (!uid || !isSession(uid)) return;
     if (out.kind === 'ok' && isLiveGrant(out.status, version)) {
       onGranted();
       return;
@@ -261,8 +290,13 @@ export default function AiConsentSheet({
     }
     // Possibly written: no reply, 408/409/5xx, or a success without a
     // readable live grant (null or other status).
-    await reconcile(version, out.kind === 'error' ? out.requestId : null);
-  }, [api, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
+    await reconcile(uid, version, out.kind === 'error' ? out.requestId : null);
+  }, [api, isSession, onGranted, phase, reconcile, reportUnknown, sessionUserId]);
+
+  /** "Already on" retries only for the account whose status was shown. */
+  const retryAlreadyOn = useCallback(() => {
+    if (isSession(loadedFor.current)) onGranted();
+  }, [isSession, onGranted]);
 
   const renderBody = () => {
     switch (phase.kind) {
@@ -328,7 +362,7 @@ export default function AiConsentSheet({
             </Text>
             <TouchableOpacity
               style={styles.primary}
-              onPress={onGranted}
+              onPress={retryAlreadyOn}
               accessibilityRole="button"
               accessibilityLabel={AI_CONSENT_SHEET_COPY.tryAgain}
               testID={`${testID}-retry-request`}
