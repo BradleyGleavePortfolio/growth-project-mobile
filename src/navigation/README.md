@@ -218,3 +218,7 @@ Backend follow-ups: `profile.day_one_completed` (boolean) and
 `GET /profile` and persisted by `PUT /profile`. Until the API returns them,
 the client falls back to the local AsyncStorage flag (fail-open).
   - After a successful attach, the server-confirmed `{role, coach_id}` is kept in screen state. If saving on the device then fails (user cache or `needs_role_selection`), the screen shows "Connected, finishing sign-up" and a "Finish sign-up" button. That button retries only the local save and role completion and never redeems the code again (re-audit R3).
+
+## Payment lockout (S-DUNNING)
+
+Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockoutProvider` (see `src/entitlements/dunning/README.md`). The provider uses the module-level `navigationRef` to read the focused route and to open `MoreTab > DataExport`, `MoreTab > DeleteAccount` and `Home > Messages` from the lockout screen.
