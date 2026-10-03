@@ -16,6 +16,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "environment": "preview",
       "prebuildCommand": "prebuild --no-install",
       "android": {
@@ -30,6 +31,7 @@
     },
     "production": {
       "distribution": "store",
+      "channel": "production",
       "environment": "production",
       "prebuildCommand": "prebuild --no-install",
       "env": {
@@ -41,6 +43,8 @@
     },
     "clinic": {
       "extends": "production",
+      "channel": "clinic",
+      "environment": "production",
       "env": {
         "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
