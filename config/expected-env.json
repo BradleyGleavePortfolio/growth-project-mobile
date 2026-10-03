@@ -295,5 +295,27 @@
       "firebaseProject": "project-2c2ffa46-a1eb-4f5c-b68",
       "reason": "Android push delivery depends on it (operator 2026-10-01; mobile PR #318 swaps google-services.json to this Firebase project). Not an environment variable: nothing in app code reads it."
     }
-  ]
+  ],
+  "releaseProfiles": {
+    "$note": "Pre-build release-env check (scripts/check-expected-env.js --release-env; EAS runs it as the eas-build-pre-install hook with EAS_BUILD_PROFILE). For a listed profile it checks, without printing values: every kind:required name plus `require` is set and not a placeholder (format-checked: https URLs on a real host, a Supabase anon key whose JWT role is anon, a Sentry DSN, a Stripe publishable key of the given mode); every eas.json build.<profile>.env value (after extends) reaches the build unchanged; no secret-shaped EXPO_PUBLIC_* is set. Profiles not listed here (development) are skipped.",
+    "clinic": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Clinic store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
+    },
+    "production": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Store binary."
+    },
+    "preview": {
+      "require": [],
+      "stripe": "any",
+      "reason": "Internal APK/TestFlight test builds: required names and placeholders only; Stripe test keys allowed."
+    }
+  }
 }
