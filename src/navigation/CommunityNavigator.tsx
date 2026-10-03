@@ -42,6 +42,7 @@ import CommunityLessonDetailScreen from '../screens/community/CommunityLessonDet
 import CommunityVoiceComposerScreen from '../screens/community/CommunityVoiceComposerScreen';
 import CommunityFindScreen from '../screens/community/CommunityFindScreen';
 import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
+import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -62,6 +63,7 @@ export default function CommunityNavigator(): React.ReactElement {
         <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />
       )}
       <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
+      <CommunityStack.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
       <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
       {featureFlags.communityChallenges ? (
