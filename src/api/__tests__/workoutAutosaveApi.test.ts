@@ -393,3 +393,63 @@ describe('byteLengthUtf8', () => {
     expect(__byteLengthUtf8ForTest('\uD83D\uDE00')).toBe(4); // surrogate pair
   });
 });
+
+describe('undo() head fence (S-MWB-3 B-328-6)', () => {
+  it('sends expected_head_index with the target', async () => {
+    api.post.mockResolvedValueOnce({
+      data: { head_revision_index: 4, lock_token: VALID_TOKEN },
+    });
+    await workoutAutosaveApi.undo('p1', {
+      to_revision_index: 2,
+      expected_head_index: 3,
+    });
+    expect(api.post).toHaveBeenCalledWith(
+      '/workout-plans/p1/undo',
+      { to_revision_index: 2, expected_head_index: 3 },
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+  });
+
+  it('parses a 409 undo_head_moved body (with code and message) onto headMoved', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, {
+        error: 'undo_head_moved',
+        code: 'undo_head_moved',
+        message: 'This workout changed since Undo was tapped.',
+        head_revision_index: 4,
+        lock_token: VALID_TOKEN,
+      }),
+    );
+    await expect(
+      workoutAutosaveApi.undo('p1', {
+        to_revision_index: 2,
+        expected_head_index: 3,
+      }),
+    ).rejects.toMatchObject({
+      kind: 'conflict',
+      status: 409,
+      headMoved: { head_revision_index: 4, lock_token: VALID_TOKEN },
+    });
+  });
+
+  it('a plain 409 on undo stays a conflict with no headMoved', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, { error: 'autosave_conflict_retry', head_revision_index: 4, lock_token: VALID_TOKEN }),
+    );
+    const err = await workoutAutosaveApi
+      .undo('p1', { to_revision_index: 2 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WorkoutAutosaveApiError);
+    expect((err as WorkoutAutosaveApiError).headMoved).toBeUndefined();
+  });
+
+  it('rejects a negative expected_head_index locally', async () => {
+    await expect(
+      workoutAutosaveApi.undo('p1', {
+        to_revision_index: 2,
+        expected_head_index: -1,
+      }),
+    ).rejects.toMatchObject({ kind: 'contract', status: 400 });
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});
