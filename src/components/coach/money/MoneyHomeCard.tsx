@@ -5,7 +5,13 @@
  * the card offers the setup action instead of empty numbers.
  * Data: GET /v1/coach/money/summary (30d + compare), GET /coach/connect/status.
  */
-import React, { useCallback, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -23,6 +29,7 @@ import {
   type FriendlyError,
 } from "../../../lib/coachSetup/errors";
 import { changeLine, money } from "../../../lib/money/moneyCopy";
+import { noteHeadCoachHandlesMoney } from "../../../lib/money/headCoachRole";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
 import SetupNotice from "../setup/SetupNotice";
 
@@ -43,19 +50,34 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
   // C-332-1 (Opus): an active sub-coach's money is the head coach's.
   const [headCoachHandles, setHeadCoachHandles] = useState(false);
 
+  // C-332-13 (Opus): every focus reloads, so only the newest load may write,
+  // and nothing writes after the card unmounts (sign-out swaps the stack).
+  const seq = useRef(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
   const load = useCallback(async () => {
+    const mine = ++seq.current;
     setLoading(true);
     setError(null);
     const [s, c] = await Promise.allSettled([
       coachMoneyApi.summary("30d"),
       coachSetupApi.connectStatus(),
     ]);
+    if (!alive.current || mine !== seq.current) return;
     if (s.status === "fulfilled") {
       setSummary(s.value);
       setLoadedAt(Date.now());
       setHeadCoachHandles(false);
+      noteHeadCoachHandlesMoney(false);
     } else if (isSubCoachBillingBlocked(s.reason)) {
       setHeadCoachHandles(true);
+      noteHeadCoachHandlesMoney(true);
     } else {
       setError(describeError(s.reason, "load your Money numbers"));
     }
@@ -86,7 +108,8 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
 
   if (headCoachHandles) {
     return (
-      <View ph-no-capture
+      <View
+        ph-no-capture
         style={styles.card}
         testID="money-home-card-head-coach"
         accessible

@@ -613,10 +613,10 @@ export function toPayout(
   // cents that the major-unit value states exactly (at most two decimals).
   const major = amount as number;
   const amountCents = Math.round(major * 100);
-  if (
-    !Number.isSafeInteger(amountCents) ||
-    Math.abs(major * 100 - amountCents) > 1e-6 * Math.max(1, Math.abs(amountCents))
-  )
+  // C-332-7 (Sol): exact, not a relative tolerance. A value with at most two
+  // decimals parses to the same double as its cents / 100 (both are the
+  // nearest double to the same decimal), so 94.8 passes and 10000.005 fails.
+  if (!Number.isSafeInteger(amountCents) || amountCents / 100 !== major)
     r.fail(`${at}.amount`);
   const arrival = strOrNull(p.arrival_date);
   return {

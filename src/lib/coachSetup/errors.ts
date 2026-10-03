@@ -80,6 +80,8 @@ const HUMAN_MESSAGE_CODES = new Set([
  * NoActiveSubCoachGuard, which answers 403 `{ kind: "sub_coach_billing_blocked" }`.
  * That is a role, not a failure: the head coach's practice handles money.
  */
+export const SUB_COACH_BILLING_BLOCKED = "sub_coach_billing_blocked";
+
 export function isSubCoachBillingBlocked(err: unknown): boolean {
   if (errorStatus(err) !== 403) return false;
   const data = (err as { response?: { data?: unknown } } | null)?.response
@@ -206,7 +208,8 @@ export function describeError(err: unknown, action: string): FriendlyError {
   if (isSubCoachBillingBlocked(err)) {
     return {
       ...base,
-      code: base.code ?? "sub_coach_billing_blocked",
+      // B-332-9: one canonical code, so a page can tell a role from a failure.
+      code: SUB_COACH_BILLING_BLOCKED,
       title: "Money is handled by your head coach",
       body: "Your head coach's practice takes payments and receives payouts for the clients you coach. Ask your head coach about payments.",
       retryable: false,
