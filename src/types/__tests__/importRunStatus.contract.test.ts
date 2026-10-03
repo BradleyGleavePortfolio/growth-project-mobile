@@ -8,7 +8,9 @@
 import fixture from '../__fixtures__/s12b3ScoutStatusSurface.54be96f1.json';
 import {
   CLAIMED_STATUSES,
+  CONTRACT_RUN_REASON_CODES,
   LEGACY_TERMINAL_STATUSES,
+  PENDING_RUN_REASON_CODES,
   ROSTER_PERSON_STATES,
   RUN_MODES,
   RUN_PHASES,
@@ -59,8 +61,18 @@ describe('S12-B3 contract pin (54be96f1)', () => {
     expect([...RUN_READ_STATUSES]).toEqual(status.properties.status.enum);
     expect([...RUN_MODES]).toEqual(status.properties.mode.enum);
     expect([...RUN_PHASES]).toEqual(status.properties.phase.enum);
-    expect([...RUN_REASON_CODES]).toEqual(status.properties.reason_code.enum);
+    expect([...CONTRACT_RUN_REASON_CODES]).toEqual(status.properties.reason_code.enum);
     expect([...CLAIMED_STATUSES]).toEqual(status.properties.claimed_status.enum);
+  });
+
+  it('reason codes = the pinned contract enum, in order, then ONLY the declared pending backend additions', () => {
+    // S15a (backend, not yet in the pinned artifact): `no_usable_result`. The recognised list is
+    // exactly contract ++ pending — nothing else is admitted — and a pending member must NOT
+    // already be in the pinned fixture (when a re-pin carries it, this fails until it is folded
+    // into CONTRACT_RUN_REASON_CODES, so the pending list can never silently outlive the contract).
+    expect([...PENDING_RUN_REASON_CODES]).toEqual(['no_usable_result']);
+    expect([...RUN_REASON_CODES]).toEqual([...(status.properties.reason_code.enum ?? []), ...PENDING_RUN_REASON_CODES]);
+    for (const code of PENDING_RUN_REASON_CODES) expect(status.properties.reason_code.enum).not.toContain(code);
   });
 
   it('legacy + server terminal subsets together cover every non-running status', () => {
@@ -139,6 +151,34 @@ describe('decodeRunStatus — fail closed', () => {
     expect(r?.reasonCode).toBeNull();
     expect(r?.phase).toBeNull();
   });
+
+  it('S15a: a server `failed` with `no_usable_result` decodes the reason verbatim (not "unknown")', () => {
+    const r = decodeRunStatus(body({ status: 'failed', phase: null, reason_code: 'no_usable_result' }), INTENT);
+    expect(r?.status).toBe('failed');
+    expect(r?.reasonCode).toBe('no_usable_result');
+  });
+
+  it.each(['partial', 'complete', 'blocked', 'cancelled', 'timed_out', 'running'])(
+    'S15a: `no_usable_result` with server status %s is a pairing the server cannot emit → status unknown',
+    (s) => {
+      const r = decodeRunStatus(body({ status: s, phase: null, reason_code: 'no_usable_result' }), INTENT);
+      expect(r?.status).toBe('unknown');
+    },
+  );
+
+  it('S15a: `no_usable_result` on a legacy row (server never arbitrated it) → status unknown', () => {
+    const r = decodeRunStatus(body({ status: 'failed', mode: 'legacy', phase: null, reason_code: 'no_usable_result' }), INTENT);
+    expect(r?.status).toBe('unknown');
+  });
+
+  it.each([['No_Usable_Result'], ['no_usable_results'], ['no_usable'], [' no_usable_result']])(
+    'a near-miss reason %p stays the safe unknown member (closed enum, exact literal only)',
+    (code) => {
+      const r = decodeRunStatus(body({ status: 'failed', phase: null, reason_code: code }), INTENT);
+      expect(r?.reasonCode).toBe('unknown');
+      expect(r?.status).toBe('failed');
+    },
+  );
 
   it('whole reading is unknown for a non-object, missing intent, or a different intent', () => {
     expect(decodeRunStatus(null, INTENT)).toBeUndefined();

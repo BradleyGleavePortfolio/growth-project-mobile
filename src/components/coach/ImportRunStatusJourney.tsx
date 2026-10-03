@@ -51,8 +51,11 @@
  *   - loading / error / notFound / unreadable: the card's own copy for each,
  *     verbatim.
  *   - reading, terminal or unknown: `verdictLines(reading)` — title, body,
- *     legacy note, reason (all 9 codes, exact text), finishedAt (server
- *     `completedAt`, never hook `readAt`).
+ *     legacy note, reason (every RUN_REASON_CODES member, exact text),
+ *     finishedAt (server `completedAt`, never hook `readAt`).
+ *   - S15a: a server `failed` + `no_usable_result` additionally shows the P2
+ *     catalog's Roman-on/off "nothing usable was imported" voice
+ *     (`result.noUsable.roman` / `.neutral`) as a distinct text node.
  *   - B4 (R300-A): a `complete` server verdict additionally shows the
  *     established P2 result catalog's distinct Roman-on/off completion voice
  *     (`result.complete.roman` / `result.complete.neutral` — the SAME two
@@ -107,7 +110,7 @@
 import React from 'react';
 import { featureFlags } from '../../config/featureFlags';
 import { useImportRunStatus } from '../../hooks/useImportRunStatus';
-import { isTerminal, type RunPhase } from '../../types/importRunStatus';
+import { isTerminal, type DecodedRunStatus, type RunPhase } from '../../types/importRunStatus';
 import { LEGACY_NOTE, NOT_KNOWN_YET, UNKNOWN_VERDICT, staleNote, verdictLines } from './importVerdictContent';
 import { ImportedRosterSection } from './ImportRunVerdictCard';
 import { importJourneyCopy as t } from '../../screens/coach/import-journey/importJourneyCopy';
@@ -201,7 +204,14 @@ export default function ImportRunStatusJourney({ importIntentId }: { importInten
     // voice — the exact same two strings ImportResultView shows for its own
     // `complete` outcome — alongside (never instead of) the server's own
     // title/body.
-    romanVoice = lines.success ? t(romanEnabled ? 'result.complete.roman' : 'result.complete.neutral') : null;
+    romanVoice = lines.success
+      ? t(romanEnabled ? 'result.complete.roman' : 'result.complete.neutral')
+      : isNoUsableResult(run.reading)
+        // S15a: a server `failed` with `no_usable_result` additionally carries the Roman-on/off
+        // "nothing usable was imported; what to do next" voice, alongside (never instead of)
+        // the server's own title/body/reason. No count, cause or retry wiring is invented.
+        ? t(romanEnabled ? 'result.noUsable.roman' : 'result.noUsable.neutral')
+        : null;
   }
 
   // R300-A2-B4: mount the ACTUAL P2 result body — the `verdict` outcome
@@ -237,6 +247,11 @@ export default function ImportRunStatusJourney({ importIntentId }: { importInten
       {roster}
     </ImportInlineStatusFrame>
   );
+}
+
+/** Only a server-arbitrated `failed` carrying `no_usable_result` gets the no-usable voice. */
+function isNoUsableResult(reading: DecodedRunStatus): boolean {
+  return reading.mode === 'server' && reading.status === 'failed' && reading.reasonCode === 'no_usable_result';
 }
 
 function progressAnnouncement(observation: { freshness: 'current'; phase: ImportProgressPhase } | { freshness: 'stale' | 'unavailable'; lastObservedPhase?: ImportProgressPhase }): string {

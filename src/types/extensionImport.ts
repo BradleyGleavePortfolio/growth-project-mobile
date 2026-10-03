@@ -19,9 +19,10 @@
  * Mobile-callable (bearer): POST /api/extension/pair/init, pair/status,
  * pair/current, pair/session. Extension-only (never mobile-callable):
  * pair/redeem (UNAUTHENTICATED; exchanges the code for coach-bound tokens),
- * scout/ingest, scout/progress, scout/ingest/complete. There is NO
- * mobile-readable import progress endpoint, so the UI never claims live
- * progress or completion.
+ * scout/ingest, scout/progress, scout/ingest/complete. This pair surface
+ * carries no run progress or result: the run verdict is read separately from
+ * GET /api/scout/import/status (see ./importRunStatus.ts, S12-B3), so nothing
+ * decoded HERE may ever be presented as live progress or completion.
  *
  * `import_intent_id` is server-issued SETUP CORRELATION only — never
  * authorization, eligibility, accepted Start, connection, or result state.
@@ -261,7 +262,11 @@ export function decodePairInitErrorCode(raw: unknown): DecodedPairInitErrorCode 
     : 'unknown';
 }
 
-/** Terminal state the extension settles to; mobile cannot read it today. */
+/**
+ * The extension's own /complete claim vocabulary (legacy). Mobile reads run
+ * verdicts through ./importRunStatus.ts (`claimed_status` is decoded there and
+ * never shown as the verdict); this legacy decoder is not used for rendering.
+ */
 export type ImportTerminalStatus = 'success' | 'partial' | 'failed';
 export type DecodedTerminalStatus = ImportTerminalStatus | 'unknown';
 

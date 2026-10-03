@@ -55,7 +55,11 @@ export type RunMode = (typeof RUN_MODES)[number];
 export const RUN_PHASES = ['discovering', 'transferring', 'reconciling'] as const;
 export type RunPhase = (typeof RUN_PHASES)[number];
 
-export const RUN_REASON_CODES = [
+/**
+ * Reason codes this app recognises from the frozen contract at 54be96f1. Append-only,
+ * in the backend's own order (src/scout/lifecycle/reason-codes.ts `RUN_REASON_CODES`).
+ */
+export const CONTRACT_RUN_REASON_CODES = [
   'reconciliation_not_performed',
   'cancelled_by_coach',
   'deadline_exceeded',
@@ -66,6 +70,20 @@ export const RUN_REASON_CODES = [
   'relationship_unverified',
   'coverage_basis_unknown',
 ] as const;
+
+/**
+ * Reason codes the backend is ADDING, recognised here ahead of the contract artifact so a
+ * newer server never reads as "not recognised" for them. Backend lane S15a appends
+ * `no_usable_result`: a server run that produced zero usable native/preserved results
+ * settles `failed` (never `partial`) with this reason. Same closed-enum style: an exact
+ * literal, appended after the contract members; any other unrecognised string still
+ * decodes to `'unknown'`. When the backend artifact carrying it lands, re-pin the fixture
+ * and fold these into `CONTRACT_RUN_REASON_CODES` (the contract test enforces this list
+ * stays disjoint from the pinned fixture, so a re-pin makes that test fail until folded).
+ */
+export const PENDING_RUN_REASON_CODES = ['no_usable_result'] as const;
+
+export const RUN_REASON_CODES = [...CONTRACT_RUN_REASON_CODES, ...PENDING_RUN_REASON_CODES] as const;
 export type RunReasonCode = (typeof RUN_REASON_CODES)[number];
 
 export const CLAIMED_STATUSES = ['success', 'partial', 'failed'] as const;
@@ -134,12 +152,21 @@ export function decodeRunStatus(raw: unknown, requestedIntentId: string): Decode
     if (!allowed.includes(status)) status = 'unknown';
   }
 
+  const reasonCode = decodeEnum(v.reason_code, RUN_REASON_CODES);
+  // `no_usable_result` is only ever written with a server `failed` terminal (S15a: zero
+  // usable results settles failed, never partial). Any other pairing is a reading the
+  // server's own rules cannot produce — e.g. "partly finished" + "nothing usable" — so
+  // the verdict is not recognised rather than shown as a contradiction.
+  if (reasonCode === 'no_usable_result' && !(mode === 'server' && status === 'failed')) {
+    status = 'unknown';
+  }
+
   return {
     intentId: v.intent_id,
     status,
     mode: mode === null ? 'unknown' : mode,
     phase: decodeEnum(v.phase, RUN_PHASES),
-    reasonCode: decodeEnum(v.reason_code, RUN_REASON_CODES),
+    reasonCode,
     claimedStatus: decodeEnum(v.claimed_status, CLAIMED_STATUSES),
     completedAt: decodeIsoTime(v.completed_at),
     startedAt: decodeIsoTime(v.started_at),
