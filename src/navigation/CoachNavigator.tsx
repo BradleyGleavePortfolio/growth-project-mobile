@@ -90,6 +90,7 @@ const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutS
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
 import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
+import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
 import PendingAiDraftsScreen from '../screens/coach/PendingAiDraftsScreen';
@@ -223,6 +224,8 @@ export type SettingsStackParamList = {
   CoachTeamProfile: undefined;
   // Payments — Stripe Connect + coach package marketplace.
   CoachConnect: undefined;
+  /** S-COACH — wizard "Get paid" / "Invite" steps, reachable after setup. */
+  CoachSetup: { section: 'get_paid' | 'invite' } | undefined;
   CoachPackagesList: undefined;
   CoachPackageEdit: { packageId: string | null };
   CoachPackageSubscribers: { packageId: string; title: string };
@@ -451,6 +454,7 @@ function SettingsStackNavigator() {
           Package CRUD lives in the CoachPackagesList → CoachPackageEdit →
           CoachPackageSubscribers family below. */}
       <SettingsStack.Screen name="CoachConnect" component={CoachConnectScreen} />
+      <SettingsStack.Screen name="CoachSetup" component={CoachSetupScreen} />
       <SettingsStack.Screen name="CoachPackagesList" component={CoachPackagesListScreen} />
       <SettingsStack.Screen name="CoachPackageEdit" component={CoachPackageEditScreen} />
       <SettingsStack.Screen
