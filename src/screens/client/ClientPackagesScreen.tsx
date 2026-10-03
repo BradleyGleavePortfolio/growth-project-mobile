@@ -6,7 +6,8 @@
  *   - POST /v1/checkout/sessions            (CheckoutController — buy)
  *   - GET  /v1/checkout/purchases           (CheckoutController — purchase history)
  *   - GET  /v1/checkout/entitlement         (CheckoutController — paid-access flag)
- *   - POST /v1/checkout/billing-portal      (CheckoutController — Stripe Billing Portal URL)
+ *   Update card opens the native `UpdateCard` screen (OR-110-2: Stripe
+ *   PaymentSheet themed with TGP tokens; no Stripe-hosted portal).
  *
  * `getPaymentStatus()` is a DERIVED call: there is no backend `/status`
  * route, so subscription state is composed from the REAL purchases list
@@ -30,9 +31,9 @@
  *    list / inactive entitlement, never from a 404 alone.
  *  - The dunning banner is reachable only when the backend ships a real
  *    past-due signal; until then `status.dunning` is always null and the
- *    banner does not render. The standalone
- *    `clientPaymentsApi.createBillingPortalSession()` is still available
- *    for any future surface that needs to mint a portal URL on demand.
+ *    banner does not render. Its Update button opens the native
+ *    `UpdateCard` screen, which in dunning also pays the open invoice
+ *    (owner ruling 1A).
  *  - Tapping a package opens Stripe Checkout in the branded in-app
  *    webview (basis: Guideline 3.1.3(d), real-time 1:1). The success /
  *    cancel deep links are intercepted by the webview screen and routed
@@ -62,6 +63,7 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
+import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import tokens, { type SemanticTokens, type Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -104,27 +106,15 @@ function DunningBanner({
           </Text>
         ) : null}
       </View>
-      {dunning.update_card_url ? (
-        <TouchableOpacity
-          onPress={onUpdateCard}
-          accessibilityRole="button"
-          accessibilityLabel="Update card"
-          style={styles.dunningBtn}
-        >
-          <Text style={styles.dunningBtnText}>Update</Text>
-        </TouchableOpacity>
-      ) : dunning.portal_unavailable ? (
-        // Round-3 fix: surface mint failure so the past-due banner is not
-        // a dead-end. Mirrors the AI-gateway fail-closed posture — show a
-        // clear notice rather than a missing CTA.
-        <Text
-          style={styles.dunningSub}
-          accessibilityLabel="Update card unavailable, contact support"
-          testID="dunning-portal-unavailable"
-        >
-          Update card unavailable — contact support
-        </Text>
-      ) : null}
+      {/* OR-110-2: always the native card screen; no portal link needed. */}
+      <TouchableOpacity
+        onPress={onUpdateCard}
+        accessibilityRole="button"
+        accessibilityLabel="Update card"
+        style={styles.dunningBtn}
+      >
+        <Text style={styles.dunningBtnText}>Update</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -247,19 +237,11 @@ export default function ClientPackagesScreen() {
   );
 
   const handleUpdateCard = useCallback(() => {
-    if (!status?.ok || !status.data.dunning?.update_card_url) return;
-    // Stripe Billing Portal for the client's 1:1 package (Guideline
-    // 3.1.3(d); the webview is UX, not the basis): keep it in the branded webview so the user
-    // never leaves the app. The portal redirects back to
-    // `com.growthproject.app://` on save, which the webview's deep-link
-    // gate intercepts and routes to CheckoutReturn — payment-status is
-    // refreshed there and again when this screen regains focus.
-    navigateToBrandedCheckout({
-      checkoutUrl: status.data.dunning.update_card_url,
-      packageName: 'Update payment method',
-      returnScheme: 'com.growthproject.app',
-    });
-  }, [status, navigateToBrandedCheckout]);
+    // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
+    // replaces the Stripe-hosted portal webview. In dunning it also pays the
+    // open invoice right away (1A).
+    navigation.navigate('UpdateCard', { autostart: true });
+  }, [navigation]);
 
   const handleMessageCoach = useCallback(() => {
     const parent = navigation.getParent?.();
@@ -313,6 +295,11 @@ export default function ClientPackagesScreen() {
           styles={styles}
         />
       ) : null}
+
+      {/* Smart Dunning v2 Days 0-9 notice (GET /v1/checkout/dunning). The
+          legacy banner above only renders from payment-status, whose dunning
+          field is always null today. */}
+      <SmartDunningBanner surface="ClientPackagesScreen" />
 
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
