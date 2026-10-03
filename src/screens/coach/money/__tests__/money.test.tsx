@@ -1644,6 +1644,9 @@ describe("FIX ROUND 3 C-332-11: no false No sales yet", () => {
           {
             ...SUMMARY,
             totals: totals({ charge_count: 0, gross_cents: 0, net_cents: 0 }),
+            compare_totals: null,
+            change_cents: null,
+            change_pct: null,
           },
           cfg,
         ),
@@ -1687,10 +1690,21 @@ describe("FIX ROUND 3 C-332-13: the Home card shows only the newest load", () =>
     );
     await act(async () => {
       releaseOld({
-        data: echoWindow({ ...SUMMARY, totals: totals({ net_cents: 1 }) }, oldCfg),
+        // A coherent older summary (change = net - previous net), so only
+        // the ordering guard can keep it off the card.
+        data: echoWindow(
+          {
+            ...SUMMARY,
+            totals: totals({ net_cents: 100 }),
+            change_cents: 100 - 4740,
+            change_pct: null,
+          },
+          oldCfg,
+        ),
       });
     });
     expect(r.getByTestId("money-home-card-net").props.children).toBe("$94.80");
+    expect(summaryCalls).toBe(2);
   });
 });
 
