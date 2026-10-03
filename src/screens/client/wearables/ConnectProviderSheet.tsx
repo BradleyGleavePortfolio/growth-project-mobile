@@ -65,7 +65,10 @@ import {
   type OnDeviceImportOutcome,
   type OnDeviceSource,
 } from '../../../services/health/onDeviceSync';
-import type { SessionFence } from '../../../services/health/sessionFence';
+import {
+  currentAuthGeneration,
+  type SessionFence,
+} from '../../../services/health/sessionFence';
 import {
   cloudConnectFailureMessage,
   cloudSessionLockedMessage,
@@ -191,7 +194,14 @@ export default function ConnectProviderSheet({
   const handleCloudConnect = useCallback(
     async (target: WearableProvider, epoch: number) => {
       const name = configFor(target).displayName;
-      const current = () => mountedRef.current && epochRef.current === epoch;
+      // Sol B-317-10: the attempt is live only while this sheet is mounted and
+      // showing this attempt (the epoch moves on close, provider change,
+      // unmount and a new Continue) AND nobody has signed out or switched
+      // account since the tap (sign-out bumps the auth generation first,
+      // synchronously). Captured before the first await.
+      const generation = currentAuthGeneration();
+      const sameSession = () => currentAuthGeneration() === generation;
+      const current = () => mountedRef.current && epochRef.current === epoch && sameSession();
       let result: WebBrowser.WebBrowserAuthSessionResult;
       try {
         const { authorizationUrl } = await startOauth.mutateAsync(target);
@@ -205,8 +215,16 @@ export default function ConnectProviderSheet({
         if (current()) showMessage(cloudConnectFailureMessage(err, name));
         return;
       }
+      if (!current()) {
+        // A stale completion (sheet closed, replaced or unmounted while the
+        // browser was open) never announces, connects or closes anything. In
+        // the same session the authoritative list is still re-read, because
+        // the server may have finished the connection.
+        if (sameSession()) invalidate();
+        return;
+      }
       if (result.type === 'locked') {
-        if (current()) showMessage(cloudSessionLockedMessage(name));
+        showMessage(cloudSessionLockedMessage(name));
         return;
       }
       // Regardless of success/dismiss, re-read the authoritative connection
@@ -320,8 +338,31 @@ export default function ConnectProviderSheet({
         return;
       }
 
-      const outcome = await connectOnDeviceProvider(target);
+      // Sol B-317-9: native setup (availability, initialization) awaits before
+      // the permission screen; the helper asks this after each of those awaits
+      // and right before the screen opens, so a close, unmount, provider
+      // change or sign-out during setup opens no new prompt.
+      const live = (): boolean => {
+        if (attemptRef.current !== fence || !current()) return false;
+        try {
+          fence.throwIfStopped();
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const outcome = await connectOnDeviceProvider(target, live);
       if (attemptRef.current !== fence || !current()) return; // sheet closed meanwhile
+      if (outcome === 'stopped') {
+        // Still this sheet, so the session moved during setup: say so (the
+        // same copy as a session change after the prompt). No prompt opened.
+        try {
+          fence.throwIfStopped();
+        } catch (err) {
+          showMessage(connectFailureMessage(err, name));
+        }
+        return;
+      }
       switch (outcome) {
         case 'disabled':
           showMessage({ text: HEALTH_CONNECT_DISABLED_MESSAGE, action: 'none' });

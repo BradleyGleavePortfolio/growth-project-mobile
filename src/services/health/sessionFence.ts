@@ -52,7 +52,11 @@ export function stopOnDeviceHealthWork(): void {
   generation += 1;
 }
 
-/** Current auth generation (tests). */
+/**
+ * Current auth generation. Moves on every auth event and at the start of
+ * sign-out; the Connect sheet's cloud flow compares it after the browser
+ * returns (Sol B-317-10).
+ */
 export function currentAuthGeneration(): number {
   return generation;
 }

@@ -433,7 +433,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-    expect(mockConnectOnDevice).toHaveBeenCalledWith('APPLE_HEALTHKIT');
+    expect(mockConnectOnDevice).toHaveBeenCalledWith('APPLE_HEALTHKIT', expect.any(Function));
     // S14: the grant runs the 30-day history import before closing.
     expect(mockImportHistory).toHaveBeenCalledWith('APPLE_HEALTHKIT', mockFence);
     expect(mockInvalidate).toHaveBeenCalledTimes(1);

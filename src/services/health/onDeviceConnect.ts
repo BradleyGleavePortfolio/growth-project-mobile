@@ -52,8 +52,13 @@ import { buildReadPermissions } from './healthConnect/healthConnectClient';
  *   - disabled        — this build ships without Health Connect.
  *   - error           — the native permission screen failed to open; the
  *                       sheet offers Try again with a reference.
+ *   - stopped         — the Connect attempt ended (sheet closed, unmounted,
+ *                       provider changed, sign-out) during setup, so no
+ *                       permission screen was opened. Not a failure: the
+ *                       caller shows nothing (S-B2, Sol B-317-9).
  */
 export type OnDeviceConnectOutcome =
+  | 'stopped'
   | 'granted'
   | 'denied'
   | 'unavailable'
@@ -81,6 +86,15 @@ export const HEALTH_CONNECT_PLAY_WEB_URL =
  */
 const HEALTH_CONNECT_READ_PERMISSIONS = buildReadPermissions() as HealthConnectPermission[];
 
+/**
+ * Asked synchronously after every native setup await and immediately before
+ * the permission screen opens (Sol B-317-9). Returns false once the attempt
+ * that started this call has ended; then no permission screen opens.
+ */
+export type OnDeviceAttemptCheck = () => boolean;
+
+const ALWAYS_CURRENT: OnDeviceAttemptCheck = () => true;
+
 /** True when the provider is read on the device's native health store. */
 const ANDROID_HEALTH_CONNECT_PROVIDERS: ReadonlySet<WearableProvider> =
   new Set<WearableProvider>(['HEALTH_CONNECT', 'SAMSUNG_HEALTH']);
@@ -91,10 +105,11 @@ const ANDROID_HEALTH_CONNECT_PROVIDERS: ReadonlySet<WearableProvider> =
  * to the app, so a clean (error-free) return is treated as `granted` — the
  * authoritative connection status is then re-read server-side after ingest.
  */
-async function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
+async function connectHealthKit(isCurrent: OnDeviceAttemptCheck): Promise<OnDeviceConnectOutcome> {
   // S14: request the SAME read set the sync service reads, through the
   // HealthKit client's single native seam, so the history import never needs a
   // second consent sheet.
+  if (!isCurrent()) return 'stopped';
   try {
     await healthKitClient.requestAuth(HEALTHKIT_READ_PERMISSIONS);
     return 'granted';
@@ -110,11 +125,15 @@ async function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
 
 /**
  * Run the Android Health Connect permission request. Checks SDK availability
- * first; when Health Connect is not installed/ready we open its settings entry
- * point and report `unavailable` so the user has a concrete next step rather
- * than a silent failure.
+ * first; when Health Connect is not installed or needs an update it returns
+ * `unavailable` or `update_required` and opens nothing on its own (the sheet
+ * offers the Play Store on a tap; Opus C-317-7).
+ *
+ * Sol B-317-9: `isCurrent` is checked after the availability check, after
+ * initialization and synchronously right before the permission screen
+ * opens, so a Connect attempt that ended during setup opens no new prompt.
  */
-async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
+async function connectHealthConnect(isCurrent: OnDeviceAttemptCheck): Promise<OnDeviceConnectOutcome> {
   // Never evaluate the Android TurboModule in an OFF build or on iOS.
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const hc: typeof import('react-native-health-connect') = require('react-native-health-connect');
@@ -124,7 +143,9 @@ async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
     requestPermission: hcRequestPermission,
     SdkAvailabilityStatus,
   } = hc;
+  if (!isCurrent()) return 'stopped';
   const status = await getSdkStatus();
+  if (!isCurrent()) return 'stopped';
   if (status === SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) {
     return 'update_required';
   }
@@ -135,6 +156,8 @@ async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
   }
 
   await hcInitialize();
+  // No await between this check and the permission screen.
+  if (!isCurrent()) return 'stopped';
   const granted = await hcRequestPermission(HEALTH_CONNECT_READ_PERMISSIONS);
   return granted.length > 0 ? 'granted' : 'denied';
 }
@@ -143,18 +166,23 @@ async function connectHealthConnect(): Promise<OnDeviceConnectOutcome> {
  * Request on-device health permissions for a provider, driving the real native
  * permission UI for the current platform. Never throws: native errors and
  * off-platform calls resolve to an explicit, renderable outcome.
+ *
+ * `isCurrent` (Sol B-317-9) is the caller's attempt check: once it returns
+ * false no permission screen is opened and the result is `stopped`, also
+ * when a setup step failed after the attempt ended.
  */
 export async function connectOnDeviceProvider(
   provider: WearableProvider,
+  isCurrent: OnDeviceAttemptCheck = ALWAYS_CURRENT,
 ): Promise<OnDeviceConnectOutcome> {
   if (isHealthConnectProviderDisabled(provider)) return 'disabled';
   try {
     if (provider === 'APPLE_HEALTHKIT') {
-      return Platform.OS === 'ios' ? await connectHealthKit() : 'unsupported';
+      return Platform.OS === 'ios' ? await connectHealthKit(isCurrent) : 'unsupported';
     }
     if (ANDROID_HEALTH_CONNECT_PROVIDERS.has(provider)) {
       return Platform.OS === 'android'
-        ? await connectHealthConnect()
+        ? await connectHealthConnect(isCurrent)
         : 'unsupported';
     }
     // Not an on-device provider — caller should have routed to OAuth.
@@ -162,7 +190,8 @@ export async function connectOnDeviceProvider(
   } catch {
     // The native permission screen failed to open (not a refusal). The sheet
     // shows Try again with a reference. No token/secret material is involved.
-    return 'error';
+    // An attempt that already ended reports nothing.
+    return isCurrent() ? 'error' : 'stopped';
   }
 }
 

@@ -236,10 +236,10 @@ function readsThroughHealthConnect(provider: WearableProvider): boolean {
 /**
  * S-WEAR-3: copy for every native permission outcome other than `granted`
  * (one cause, one message, one working action). `disabled` is handled by the
- * build switch copy in the sheet.
+ * build switch copy in the sheet; `stopped` shows nothing (the attempt ended).
  */
 export function permissionOutcomeMessage(
-  outcome: Exclude<OnDeviceConnectOutcome, 'granted' | 'disabled'>,
+  outcome: Exclude<OnDeviceConnectOutcome, 'granted' | 'disabled' | 'stopped'>,
   provider: WearableProvider,
   name: string,
 ): OnDeviceMessage {

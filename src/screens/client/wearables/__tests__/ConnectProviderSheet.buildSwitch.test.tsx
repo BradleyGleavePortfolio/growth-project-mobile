@@ -113,7 +113,7 @@ test('ON keeps the existing Android connect flow', async () => {
     screen.getByLabelText('Continue connecting Health Connect'),
   );
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-  expect(mockConnect).toHaveBeenCalledWith('HEALTH_CONNECT');
+  expect(mockConnect).toHaveBeenCalledWith('HEALTH_CONNECT', expect.any(Function));
   expect(mockImport).toHaveBeenCalledWith('HEALTH_CONNECT', expect.objectContaining({ userId: 'u1' }));
   expect(mockInvalidate).toHaveBeenCalledTimes(1);
 });

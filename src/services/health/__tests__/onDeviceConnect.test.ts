@@ -211,3 +211,54 @@ describe('connectOnDeviceProvider — non on-device provider', () => {
     await expect(connectOnDeviceProvider('OURA')).resolves.toBe('unsupported');
   });
 });
+
+describe('Sol B-317-9: the attempt check stops setup before any permission screen', () => {
+  it('Health Connect: an attempt that ends during the availability check opens nothing', async () => {
+    setPlatform('android');
+    let live = true;
+    mockedGetSdkStatus.mockImplementationOnce(async () => {
+      live = false;
+      return SdkAvailabilityStatus.SDK_AVAILABLE;
+    });
+    await expect(connectOnDeviceProvider('HEALTH_CONNECT', () => live)).resolves.toBe('stopped');
+    expect(mockedInitialize).not.toHaveBeenCalled();
+    expect(mockedRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it('Health Connect: an attempt that ends during initialization opens nothing', async () => {
+    setPlatform('android');
+    let live = true;
+    mockedGetSdkStatus.mockResolvedValueOnce(SdkAvailabilityStatus.SDK_AVAILABLE);
+    mockedInitialize.mockImplementationOnce(async () => {
+      live = false;
+      return true;
+    });
+    await expect(connectOnDeviceProvider('SAMSUNG_HEALTH', () => live)).resolves.toBe('stopped');
+    expect(mockedRequestPermission).not.toHaveBeenCalled();
+  });
+
+  it('a setup failure after the attempt ended is a stop, not an error', async () => {
+    setPlatform('android');
+    let live = true;
+    mockedGetSdkStatus.mockImplementationOnce(async () => {
+      live = false;
+      throw new Error('binder died');
+    });
+    await expect(connectOnDeviceProvider('HEALTH_CONNECT', () => live)).resolves.toBe('stopped');
+  });
+
+  it('Apple Health: an attempt that already ended opens no HealthKit sheet', async () => {
+    setPlatform('ios');
+    await expect(connectOnDeviceProvider('APPLE_HEALTHKIT', () => false)).resolves.toBe('stopped');
+    expect(mockedHK.initHealthKit).not.toHaveBeenCalled();
+  });
+
+  it('control: a live attempt still reaches the permission screen', async () => {
+    setPlatform('android');
+    mockedGetSdkStatus.mockResolvedValueOnce(SdkAvailabilityStatus.SDK_AVAILABLE);
+    mockedInitialize.mockResolvedValueOnce(true);
+    mockedRequestPermission.mockResolvedValueOnce([{ accessType: 'read', recordType: 'Steps' }]);
+    await expect(connectOnDeviceProvider('HEALTH_CONNECT', () => true)).resolves.toBe('granted');
+    expect(mockedRequestPermission).toHaveBeenCalledTimes(1);
+  });
+});
