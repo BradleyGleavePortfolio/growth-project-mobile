@@ -35,6 +35,9 @@ export class DunningResponseShapeError extends Error {
   }
 }
 
+/** The quote route; a shape error on it stops the payment before the card form opens. */
+export const ROUTE_QUOTE = 'payment-method/quote';
+
 function str(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null;
 }
@@ -144,7 +147,14 @@ export type CardUpdateOutcome =
   | 'processing'
   | 'approval_required'
   | 'payment_uncertain'
-  | 'failed';
+  | 'failed'
+  /**
+   * B-322-7: part of the update ran (e.g. one plan paid) while another
+   * change to a different plan was still being processed on the server.
+   * Not an error: the known payment is shown and "Check again" repeats the
+   * same confirm (same SetupIntent and approval), which never charges twice.
+   */
+  | 'in_progress';
 
 export type AccessState = 'restored' | 'partial' | 'updating' | 'unchanged';
 
@@ -215,10 +225,24 @@ export function normalizeCardSetup(raw: unknown): CardSetup {
   };
 }
 
-export function normalizePaymentQuote(raw: unknown): PaymentQuote {
-  const route = 'payment-method/quote';
+/**
+ * B-322-5: a quote is money the client is about to approve, so it must be
+ * complete and internally consistent or the flow stops before the card form
+ * opens (no fail-open into an approval the button does not show):
+ *  - `complete: true` (the server read every plan and every invoice page);
+ *  - `lines` and `totals` both present; every line a unique invoice with an
+ *    integer amount; every total a unique currency;
+ *  - the per-currency totals equal the per-currency sums of the lines
+ *    (zero amounts aside), so the "Save card and pay ..." label and the
+ *    approved invoices always describe the same money.
+ * A complete quote with no lines and no totals is valid (Save card only).
+ */
+export function normalizePaymentQuote(raw: unknown, route: string = ROUTE_QUOTE): PaymentQuote {
   const r = (raw && typeof raw === 'object' ? raw : null) as Record<string, unknown> | null;
-  if (!r || !str(r.quote_id) || !Array.isArray(r.lines)) throw new DunningResponseShapeError(route);
+  if (!r || !str(r.quote_id) || !Array.isArray(r.lines) || !Array.isArray(r.totals) || r.complete !== true) {
+    throw new DunningResponseShapeError(route);
+  }
+  const seenInvoices = new Set<string>();
   const lines = r.lines.map((l) => {
     const x = (l && typeof l === 'object' ? l : {}) as Record<string, unknown>;
     const invoice = str(x.invoice_id);
@@ -226,6 +250,8 @@ export function normalizePaymentQuote(raw: unknown): PaymentQuote {
     const currency = str(x.currency);
     const amount = cents(x.amount_cents);
     if (!invoice || !purchase || !currency || amount === null) throw new DunningResponseShapeError(route);
+    if (seenInvoices.has(invoice)) throw new DunningResponseShapeError(route);
+    seenInvoices.add(invoice);
     return {
       invoice_id: invoice,
       purchase_id: purchase,
@@ -234,6 +260,22 @@ export function normalizePaymentQuote(raw: unknown): PaymentQuote {
       amount_cents: amount,
     };
   });
+  const quoteTotals = totals(r.totals, route);
+  const byCurrency = (list: Array<{ currency: string; amount_cents: number }>, unique: boolean) => {
+    const out = new Map<string, number>();
+    for (const t of list) {
+      const cur = t.currency.toLowerCase();
+      if (unique && out.has(cur)) throw new DunningResponseShapeError(route);
+      out.set(cur, (out.get(cur) ?? 0) + t.amount_cents);
+    }
+    for (const [cur, amount] of [...out]) if (amount === 0) out.delete(cur);
+    return out;
+  };
+  const fromLines = byCurrency(lines, false);
+  const fromTotals = byCurrency(quoteTotals, true);
+  if (fromLines.size !== fromTotals.size || [...fromLines].some(([cur, amount]) => fromTotals.get(cur) !== amount)) {
+    throw new DunningResponseShapeError(route);
+  }
   const disputes = Array.isArray(r.disputes)
     ? r.disputes.map((d) => {
         const x = (d && typeof d === 'object' ? d : {}) as Record<string, unknown>;
@@ -246,7 +288,7 @@ export function normalizePaymentQuote(raw: unknown): PaymentQuote {
   return {
     quote_id: str(r.quote_id) as string,
     lines,
-    totals: totals(r.totals, route),
+    totals: quoteTotals.filter((t) => t.amount_cents > 0),
     disputes,
   };
 }
@@ -260,6 +302,7 @@ const OUTCOMES: ReadonlySet<string> = new Set([
   'approval_required',
   'payment_uncertain',
   'failed',
+  'in_progress',
 ]);
 const ACCESS: ReadonlySet<string> = new Set(['restored', 'partial', 'updating', 'unchanged']);
 
@@ -308,7 +351,7 @@ export function normalizeCardUpdate(raw: unknown): CardUpdateResponse {
         : [{ currency: str(r.currency) ?? 'usd', amount_cents: due }],
     access_restored: r.access_restored === true && access === 'restored',
     access_state: access,
-    quote: r.quote ? normalizePaymentQuote(r.quote) : null,
+    quote: r.quote ? normalizePaymentQuote(r.quote, route) : null,
     payment_intent_client_secret: secret,
     decline_code: str(r.decline_code),
     message: str(r.message),

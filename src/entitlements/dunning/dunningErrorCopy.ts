@@ -3,6 +3,7 @@ import {
   formatDunningAmount,
   formatDunningDate,
   formatDunningTotals,
+  ROUTE_QUOTE,
   type CancelPlanResponse,
   type CardUpdateResponse,
 } from './dunningApi';
@@ -41,6 +42,8 @@ export type DunningErrorCode =
   | 'CARD_SHEET_UNAVAILABLE'
   | 'CARD_SHEET_FAILED'
   | 'BANK_CONFIRMATION_FAILED'
+  | 'BANK_RESULT_UNCONFIRMED'
+  | 'QUOTE_NOT_VALID'
   | 'BILLING_ACTION_IN_PROGRESS'
   | 'PLAN_NOT_FOUND'
   | 'NOT_A_SUBSCRIPTION'
@@ -89,7 +92,6 @@ export function localDunningError(
   code:
     | 'CARD_SHEET_UNAVAILABLE'
     | 'CARD_SHEET_FAILED'
-    | 'BANK_CONFIRMATION_FAILED'
     | 'PAYMENTS_NOT_CONFIGURED'
     | 'PLAN_NOT_LOADED'
     | 'UNEXPECTED_RESPONSE',
@@ -116,17 +118,10 @@ export function localDunningError(
         null,
         true,
       );
-    case 'BANK_CONFIRMATION_FAILED':
-      return copy(
-        code,
-        'Your new card is saved, but your bank did not confirm the payment, so nothing was charged. Tap Confirm with my bank to try again, or Use a different card.',
-        null,
-        false,
-      );
     case 'PAYMENTS_NOT_CONFIGURED':
       return copy(
         code,
-        `Card payments are not set up in this version of the app, so nothing was charged. Email ${SUPPORT_EMAIL} and we will help you pay.`,
+        `Card payments are not set up in this version of the app, so nothing was charged. Email ${SUPPORT_EMAIL} for help paying.`,
         null,
         true,
       );
@@ -169,18 +164,28 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   if (e.message === 'STRIPE_URL_REJECTED') {
     return copy(
       'LINK_REJECTED',
-      `The card update link did not come from Stripe, so we did not open it. Email ${SUPPORT_EMAIL} and we will send you a working link.`,
+      `The card update link did not come from Stripe, so it was not opened. Email ${SUPPORT_EMAIL} for a working link.`,
       reference,
       true,
     );
   }
   if (e.message === 'DUNNING_RESPONSE_SHAPE') {
+    if ((err as { route?: unknown }).route === ROUTE_QUOTE) {
+      // B-322-5: an incomplete or inconsistent quote stops the payment before
+      // the card form opens, so nothing can be approved that is not shown.
+      return copy(
+        'QUOTE_NOT_VALID',
+        `The amount you owe did not load in full, so the card form did not open and nothing was charged. Pull down to refresh, then tap Update card again. If it keeps happening, email ${SUPPORT_EMAIL} with the reference below.`,
+        reference,
+        true,
+      );
+    }
     if (action === 'confirm_card' || action === 'cancel_plan') {
       return copy(
         'RESULT_NOT_CONFIRMED',
         action === 'confirm_card'
-          ? `The server answered in a way the app did not understand, so we cannot confirm whether your payment went through. Pull down to refresh to see where things stand. Trying again never charges you twice. If it keeps happening, email ${SUPPORT_EMAIL}.`
-          : `The server answered in a way the app did not understand, so we cannot confirm whether your plan ended. Pull down to refresh to see where things stand. If it keeps happening, email ${SUPPORT_EMAIL}.`,
+          ? `The server answered in a way the app did not understand, so it is not confirmed yet whether your payment went through. Pull down to refresh to see where things stand. Trying again never charges you twice. If it keeps happening, email ${SUPPORT_EMAIL}.`
+          : `The server answered in a way the app did not understand, so it is not confirmed yet whether your plan ended. Pull down to refresh to see where things stand. If it keeps happening, email ${SUPPORT_EMAIL}.`,
         reference,
         true,
       );
@@ -197,8 +202,8 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     return copy(
       'RESULT_NOT_CONFIRMED',
       action === 'confirm_card'
-        ? 'We lost the connection while confirming your card, so we cannot tell yet whether the payment went through. Check your connection and pull down to refresh. Trying again never charges you twice.'
-        : 'We lost the connection while ending your plan, so we cannot tell yet whether it went through. Check your connection and pull down to refresh, then tap End my plan again if it still shows. Repeating it is safe.',
+        ? 'The connection dropped while your card was being confirmed, so it is not clear yet whether the payment went through. Check your connection and pull down to refresh. Trying again never charges you twice.'
+        : 'The connection dropped while your plan was ending, so it is not clear yet whether it went through. Check your connection and pull down to refresh, then tap End my plan again if it still shows. Repeating it is safe.',
       null,
       false,
     );
@@ -207,8 +212,8 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     return copy(
       'OFFLINE',
       action === 'update_card'
-        ? `We could not reach the server, so nothing was charged. Check your connection, then ${retryVerb}.`
-        : `We could not reach the server. Check your connection, then ${retryVerb}.`,
+        ? `The server could not be reached, so nothing was charged. Check your connection, then ${retryVerb}.`
+        : `The server could not be reached. Check your connection, then ${retryVerb}.`,
       null,
       false,
     );
@@ -247,8 +252,8 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     return copy(
       'BILLING_ROUTE_NOT_AVAILABLE',
       action === 'cancel_plan'
-        ? `Ending a plan in the app is not available yet, so nothing changed. Email ${SUPPORT_EMAIL} and we will end it for you.`
-        : `Updating your card in the app is not available yet, so nothing was charged. Email ${SUPPORT_EMAIL} and we will help you pay.`,
+        ? `Ending a plan in the app is not available yet, so nothing changed. Email ${SUPPORT_EMAIL} to end it.`
+        : `Updating your card in the app is not available yet, so nothing was charged. Email ${SUPPORT_EMAIL} for help paying.`,
       reference,
       false,
     );
@@ -274,7 +279,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
       return copy(
         'PAYMENT_UNCONFIRMED',
         said ??
-          'We could not confirm whether your payment went through. Wait a minute, then pull down to refresh. Trying again never charges you twice.',
+          'Your payment is not confirmed yet. Wait a minute, then pull down to refresh. Trying again never charges you twice.',
         reference,
         true,
       );
@@ -282,14 +287,14 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
       return copy(
         'PLAN_CHANGE_UNCONFIRMED',
         said ??
-          'We could not confirm that your plan change went through. Wait a minute, then tap End my plan again. Repeating it is safe and never charges you.',
+          'Your plan change is not confirmed yet. Wait a minute, then tap End my plan again. Repeating it is safe and never charges you.',
         reference,
         true,
       );
     case 'CUSTOMER_NOT_FOUND':
       return copy(
         'NO_BILLING_ACCOUNT',
-        `We could not find a billing account for you. Message your coach for a new payment link, or email ${SUPPORT_EMAIL}.`,
+        `No billing account was found for you. Message your coach for a new payment link, or email ${SUPPORT_EMAIL}.`,
         reference,
         false,
       );
@@ -318,7 +323,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     case 'PURCHASE_NOT_FOUND':
       return copy(
         'PLAN_NOT_FOUND',
-        `We could not find that plan on your account. Pull down to refresh. If it is still shown, email ${SUPPORT_EMAIL}.`,
+        `That plan was not found on your account. Pull down to refresh. If it is still shown, email ${SUPPORT_EMAIL}.`,
         reference,
         true,
       );
@@ -340,14 +345,14 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     case 'PAYMENTS_NOT_CONFIGURED':
       return copy(
         'PAYMENTS_NOT_CONFIGURED',
-        `Card updates are not available right now, so nothing was charged. Email ${SUPPORT_EMAIL} with the reference below and we will help you pay.`,
+        `Card updates are not available right now, so nothing was charged. Email ${SUPPORT_EMAIL} with the reference below for help paying.`,
         reference,
         true,
       );
     case 'STRIPE_REQUEST_FAILED':
       return copy(
         'STRIPE_REJECTED',
-        `Our payment provider could not complete this change, so nothing was charged. Email ${SUPPORT_EMAIL} with this reference and we will finish it for you.`,
+        `The payment provider could not complete this change, so nothing was charged. Email ${SUPPORT_EMAIL} with this reference to finish it.`,
         reference,
         true,
       );
@@ -367,8 +372,8 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     return copy(
       'RESULT_NOT_CONFIRMED',
       action === 'confirm_card'
-        ? 'The server did not answer in time, so we cannot tell yet whether your payment went through. Pull down to refresh in a minute. Trying again never charges you twice.'
-        : 'The server did not answer in time, so we cannot tell yet whether your plan ended. Pull down to refresh in a minute, then tap End my plan again if it still shows.',
+        ? 'The server did not answer in time, so it is not clear yet whether your payment went through. Pull down to refresh in a minute. Trying again never charges you twice.'
+        : 'The server did not answer in time, so it is not clear yet whether your plan ended. Pull down to refresh in a minute, then tap End my plan again if it still shows.',
       reference,
       true,
     );
@@ -384,7 +389,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
       // A lost answer on a payment may still have charged: never say "nothing changed".
       return copy(
         'PAYMENT_UNCONFIRMED',
-        'We could not confirm whether your payment went through. Wait a minute, then pull down to refresh. Trying again never charges you twice.',
+        'Your payment is not confirmed yet. Wait a minute, then pull down to refresh. Trying again never charges you twice.',
         reference,
         true,
       );
@@ -392,14 +397,14 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     if (step === 'invoice_void' || step === 'cancel') {
       return copy(
         'PLAN_CHANGE_UNCONFIRMED',
-        'We could not confirm that your plan change went through. Wait a minute, then tap End my plan again. Repeating it is safe and never charges you.',
+        'Your plan change is not confirmed yet. Wait a minute, then tap End my plan again. Repeating it is safe and never charges you.',
         reference,
         true,
       );
     }
     return copy(
       'STRIPE_UNAVAILABLE',
-      `Our payment provider did not respond, so nothing changed. Wait a minute and ${retryVerb}. If it keeps happening, email ${SUPPORT_EMAIL}.`,
+      `The payment provider did not respond, so nothing changed. Wait a minute and ${retryVerb}. If it keeps happening, email ${SUPPORT_EMAIL}.`,
       reference,
       (status ?? 0) >= 500,
     );
@@ -442,13 +447,23 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
       case 'saved':
         return `Your card${ending} is saved. Your next payment will use it.`;
       case 'processing':
-        return `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`;
+        // C-322-2: money already collected is said first, then the payment
+        // that is still processing.
+        return paid
+          ? `Your card${ending} is saved and ${paid} went through. The payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`
+          : `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`;
+      case 'in_progress':
+        // B-322-7: one plan settled while another plan's change was still
+        // being processed; the known payment is never hidden.
+        return paid
+          ? `Your card${ending} is saved and ${paid} went through.${accessLine} Another change to your other plan was still being processed, so it was not charged now. Tap Check again in a few seconds to finish it. Checking again never charges you twice.`
+          : `Your card${ending} is saved. Another change to your plan was still being processed, so nothing was charged now. Tap Check again in a few seconds to finish it. Checking again never charges you twice.`;
       case 'requires_action':
         return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} Your bank wants you to confirm the payment${due ? ` of ${due}` : ''}. Tap Confirm with my bank to finish.`;
       case 'approval_required':
         return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} The amount you owe changed${due ? ` to ${due}` : ''}, so it was not charged. Review it, then tap Pay to confirm.`;
       case 'payment_uncertain':
-        return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} We could not confirm the rest yet. Pull down to refresh in a minute. Trying again never charges you twice.`;
+        return `Your card${ending} is saved.${paid ? ` ${paid} went through.` : ''} The rest is not confirmed yet. Pull down to refresh in a minute. Trying again never charges you twice.`;
       case 'failed':
         return paid
           ? `Your card${ending} is saved and ${paid} went through. The rest${due ? ` (${due})` : ''} did not go through. Tap Update card to try again.`
@@ -473,7 +488,17 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
     case 'saved':
       return { title: 'Card saved', body, tone: 'done' };
     case 'processing':
-      return { title: 'Payment processing', body, tone: 'done' };
+      return {
+        title: paid ? 'Part of your payment went through' : 'Payment processing',
+        body,
+        tone: 'done',
+      };
+    case 'in_progress':
+      return {
+        title: paid ? 'Part of your payment went through' : 'Another change is in progress',
+        body,
+        tone: 'action',
+      };
     case 'requires_action':
       return { title: 'Your bank needs to confirm', body, tone: 'action' };
     case 'approval_required':
@@ -532,4 +557,33 @@ export function cancelOutcomeCopy(r: CancelPlanResponse): {
       ? `The unpaid ${voided} is canceled, so you will not be charged for it. Your data stays in your account until you delete it.`
       : 'You will not be charged again. Your data stays in your account until you delete it.',
   };
+}
+
+/**
+ * B-322-1: copy for a bank step (3DS) that failed, built from what the
+ * server last said about this same SetupIntent: money already collected is
+ * always named, and "not charged" is said only when the server has just
+ * confirmed (`verified`) that the payment still waits for the bank. When the
+ * server could not be asked, the result is "not confirmed yet", never zero.
+ */
+export function bankStepCopy(response: CardUpdateResponse | null, verified: boolean): DunningErrorCopy {
+  const paid = formatDunningTotals(response?.paid_totals ?? []);
+  const due = formatDunningTotals(response?.due_totals ?? []);
+  const saved = `Your new card is saved${paid ? ` and ${paid} went through` : ''}.`;
+  if (verified) {
+    return copy(
+      'BANK_CONFIRMATION_FAILED',
+      `${saved} Your bank did not confirm the payment${due ? ` of ${due}` : ''}, so ${
+        paid ? 'that amount was not charged' : 'nothing was charged'
+      }. Tap Confirm with my bank to try again, or Use a different card.`,
+      null,
+      false,
+    );
+  }
+  return copy(
+    'BANK_RESULT_UNCONFIRMED',
+    `${saved} The bank step did not finish, so the payment${due ? ` of ${due}` : ''} is not confirmed yet. Tap Confirm with my bank to check and finish it. Trying again never charges you twice.`,
+    null,
+    true,
+  );
 }

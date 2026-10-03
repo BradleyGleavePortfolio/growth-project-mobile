@@ -10,7 +10,7 @@ export function bannerCopy(status: ClientDunningStatus): { title: string; body: 
   const amount = formatDunningAmount(status.amount_cents, status.currency);
   const failedOn = formatDunningDate(status.failed_at);
   const lockOn = formatDunningDate(status.lockout_at);
-  const charge = amount ? `We could not charge ${amount}` : 'Your last payment did not go through';
+  const charge = amount ? `Your payment of ${amount} did not go through` : 'Your last payment did not go through';
   const when = amount && failedOn ? ` on ${failedOn}` : '';
   const keep = lockOn
     ? `Update your card by ${lockOn} to keep access to your plan.`
@@ -76,7 +76,13 @@ const makeStyles = (c: SemanticTokens) =>
     title: { fontSize: 15, fontWeight: '600', color: c.textPrimary, marginBottom: 4 },
     body: { fontSize: 13, lineHeight: 19, color: c.textPrimary },
     actions: { flexDirection: 'row', gap: 10, marginTop: 12 },
-    primary: { backgroundColor: c.accent, paddingHorizontal: 14, paddingVertical: 9, minWidth: 110, alignItems: 'center' },
+    primary: {
+      backgroundColor: c.accent,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      minWidth: 110,
+      alignItems: 'center',
+    },
     primaryText: { color: c.textOnAccent, fontSize: 13, fontWeight: '600' },
     secondary: { borderWidth: 1, borderColor: c.border, paddingHorizontal: 14, paddingVertical: 9 },
     secondaryText: { color: c.textPrimary, fontSize: 13, fontWeight: '500' },

@@ -359,8 +359,12 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
     expect(mockSdk.presentPaymentSheet).toHaveBeenCalledTimes(1);
   });
 
-  it('a failed bank step is truthful: card saved, nothing charged', async () => {
+  it('a failed bank step is truthful: card saved, nothing charged (server re-checked)', async () => {
     backend([
+      cardResult('requires_action', {
+        payment_intent_client_secret: 'pi_9_secret_y',
+      }),
+      // R5 B-322-1: the re-check with the same SetupIntent still waits for the bank.
       cardResult('requires_action', {
         payment_intent_client_secret: 'pi_9_secret_y',
       }),
@@ -390,7 +394,7 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
     backend([axiosError(503, { code: 'STRIPE_UNAVAILABLE', step: 'invoice_pay' }, { 'x-request-id': 'req-p' })]);
     const out = await runNativeCardUpdate(OPTS);
     expect(out.kind === 'error' && out.error.code).toBe('PAYMENT_UNCONFIRMED');
-    expect(out.kind === 'error' && out.error.message).toContain('could not confirm whether your payment went through');
+    expect(out.kind === 'error' && out.error.message).toContain('Your payment is not confirmed yet');
     expect(out.kind === 'error' && out.error.message).toContain('req-p');
   });
 
@@ -480,7 +484,7 @@ describe('outcome copy (integer minor units, no exclamation marks)', () => {
   });
 
   it('intro and sheet label say what will be charged before the client acts', () => {
-    expect(updateCardIntro(LOCKED)).toContain('we charge $150.00 to it right away');
+    expect(updateCardIntro(LOCKED)).toContain('$150.00 is charged to it right away');
     expect(updateCardIntro(PAST_DUE)).toContain('You keep full access');
     expect(updateCardIntro(CLEAR)).toContain('If a payment is overdue');
     expect(sheetButtonLabel(normalizePaymentQuote(QUOTE))).toBe('Save card and pay $150.00');
@@ -642,7 +646,7 @@ describe('S-DUNNING-R3 money truth on the device', () => {
     if (out.kind === 'unconfirmed') {
       expect(out.setupIntentId).toBe('seti_1');
       expect(out.error.code).toBe('RESULT_NOT_CONFIRMED');
-      expect(out.error.message).toContain('cannot tell yet whether the payment went through');
+      expect(out.error.message).toContain('not clear yet whether the payment went through');
       expect(out.error.message).not.toContain('nothing was charged');
     }
     const offlineCancel = describeDunningError(axiosError(null), 'cancel_plan');
@@ -676,7 +680,10 @@ describe('S-DUNNING-R3 money truth on the device', () => {
     ]);
     const c = await runNativeCardUpdate(OPTS);
     expect(c.kind).toBe('bank_pending');
-    expect(c.kind === 'bank_pending' && c.error?.code).toBe('BANK_CONFIRMATION_FAILED');
+    // R5 B-322-1: a rejected bank step whose re-check got no answer is "not
+    // confirmed yet", never "nothing was charged".
+    expect(c.kind === 'bank_pending' && c.error?.code).toBe('BANK_RESULT_UNCONFIRMED');
+    expect(c.kind === 'bank_pending' && c.error?.message).not.toContain('nothing was charged');
     expect(mockCaptureError).toHaveBeenCalled();
   });
 
@@ -827,5 +834,286 @@ describe('email link routing', () => {
       pathPrefix: '/billing/update-card',
     });
     expect(data).toContainEqual({ scheme: 'tgp', host: 'billing' });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* S-DUNNING-R5 (Sol RC on #322 @ 0b4813dc): B-322-1, B-322-5,         */
+/* B-322-7, C-322-2 and the first-person copy rule.                    */
+/* ------------------------------------------------------------------ */
+
+// The real backend #628 response for "one plan paid, the other busy",
+// dumped from test/dunning-r3-money-truth-e2e.spec.ts (DUMP_R4_CONTRACT=1)
+// at backend head 342283da.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const BACKEND_IN_PROGRESS = require('./fixtures/backend628-in-progress.json') as Record<string, unknown>;
+
+const PARTIAL_BANK = {
+  outcome: 'requires_action',
+  card: { brand: 'visa', last4: '4444', exp_month: 12, exp_year: 2030 },
+  amount_paid_cents: 15000,
+  amount_due_cents: 9000,
+  currency: 'usd',
+  paid_totals: [{ currency: 'usd', amount_cents: 15000 }],
+  due_totals: [{ currency: 'usd', amount_cents: 9000 }],
+  access_restored: false,
+  access_state: 'partial',
+  payment_intent_client_secret: 'pi_9_secret_y',
+  decline_code: null,
+  message: 'server copy',
+};
+
+describe('S-DUNNING-R5 B-322-1: a bank step that fails after a partial payment', () => {
+  it('server re-check still waits for the bank: names what went through and says only that amount was not charged', async () => {
+    backend([PARTIAL_BANK, PARTIAL_BANK]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Failed', message: 'x' },
+    }));
+    const out = await runNativeCardUpdate(OPTS);
+    expect(out.kind).toBe('bank_pending');
+    if (out.kind !== 'bank_pending') return;
+    expect(out.error?.code).toBe('BANK_CONFIRMATION_FAILED');
+    expect(out.error?.message).toContain('$150.00 went through');
+    expect(out.error?.message).toContain('payment of $90.00, so that amount was not charged');
+    expect(out.error?.message).not.toContain('nothing was charged');
+    expect(out.clientSecret).toBe('pi_9_secret_y');
+    // Both confirms used the same SetupIntent and approval (never a new charge).
+    const confirms = mockPost.mock.calls.filter(([u]) => u === '/v1/checkout/payment-method/confirm');
+    expect(confirms).toHaveLength(2);
+    expect(confirms[1][1]).toEqual(CONFIRM_BODY);
+  });
+
+  it('bank SDK rejects and the re-check is lost: "not confirmed yet" with the paid amount, reported', async () => {
+    backend([PARTIAL_BANK, axiosError(null), axiosError(null), axiosError(null)]);
+    mockSdk.handleNextAction.mockImplementation(async () => {
+      throw new Error('3ds crash');
+    });
+    const out = await runNativeCardUpdate(OPTS);
+    expect(out.kind).toBe('bank_pending');
+    if (out.kind !== 'bank_pending') return;
+    expect(out.error?.code).toBe('BANK_RESULT_UNCONFIRMED');
+    expect(out.error?.message).toContain('$150.00 went through');
+    expect(out.error?.message).toContain('is not confirmed yet');
+    expect(out.error?.message).not.toMatch(/nothing was charged|not charged/);
+    expect(out.error?.reference).toBeTruthy();
+    expect(mockCaptureError).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        dunning_error_code: 'BANK_RESULT_UNCONFIRMED',
+        reconciled: false,
+      }),
+    );
+  });
+
+  it('the re-check shows the bank step actually succeeded: done/paid, no failure copy', async () => {
+    backend([
+      PARTIAL_BANK,
+      cardResult('paid', {
+        amount_paid_cents: 24000,
+        access_state: 'restored',
+      }),
+    ]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Unknown', message: 'x' },
+    }));
+    const out = await runNativeCardUpdate(OPTS);
+    expect(out.kind === 'done' && out.response.outcome).toBe('paid');
+  });
+
+  it('Confirm with my bank retry (screen state): the retained paid amount stays named when the retry fails offline', async () => {
+    backend([PARTIAL_BANK, PARTIAL_BANK, axiosError(null), axiosError(null), axiosError(null)]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Failed', message: 'x' },
+    }));
+    const { findByTestId, getByTestId } = await renderScreen(PAST_DUE);
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-add'));
+    });
+    const first = await findByTestId('update-card-error');
+    expect(first.props.children).toContain('so that amount was not charged');
+    // Retry: the bank step crashes and the server cannot be asked.
+    mockSdk.handleNextAction.mockImplementation(async () => {
+      throw new Error('3ds crash');
+    });
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-confirm-bank'));
+    });
+    await waitFor(() =>
+      expect(getByTestId('update-card-error').props.children).toContain(
+        '$150.00 went through. The bank step did not finish',
+      ),
+    );
+    expect(getByTestId('update-card-error').props.children).not.toContain('nothing was charged');
+    expect(getByTestId('update-card-confirm-bank')).toBeTruthy();
+    expect(getByTestId('update-card-different')).toBeTruthy();
+  });
+
+  it('a direct confirmWithBank retry after a remount uses lastKnown for the paid amount', async () => {
+    backend([axiosError(null), axiosError(null), axiosError(null)]);
+    mockSdk.handleNextAction.mockImplementation(async () => ({
+      error: { code: 'Failed', message: 'x' },
+    }));
+    const out = await confirmWithBank({
+      sdk,
+      surface: 'test',
+      setupIntentId: 'seti_1',
+      clientSecret: 'pi_9_secret_y',
+      approved: APPROVED,
+      retryDelaysMs: [0, 0],
+      lastKnown: normalizeCardUpdate(PARTIAL_BANK),
+    });
+    expect(out.kind === 'bank_pending' && out.error?.message).toContain('$150.00 went through');
+    expect(out.kind === 'bank_pending' && out.error?.message).not.toContain('nothing was charged');
+  });
+});
+
+describe('S-DUNNING-R5 B-322-5: the quote must be complete and consistent', () => {
+  const line = (id: string, amount: number, currency = 'usd') => ({
+    invoice_id: id,
+    purchase_id: 'p1',
+    coach_name: 'Avery',
+    currency,
+    amount_cents: amount,
+  });
+  it('rejects missing totals, missing complete, mismatched totals or currencies, and duplicate invoices', () => {
+    const bad: unknown[] = [
+      { quote_id: 'q', complete: true, lines: [line('in_1', 15000)] },
+      {
+        quote_id: 'q',
+        lines: [line('in_1', 15000)],
+        totals: [{ currency: 'usd', amount_cents: 15000 }],
+      },
+      { ...QUOTE, complete: false },
+      { ...QUOTE, totals: [{ currency: 'usd', amount_cents: 14999 }] },
+      { ...QUOTE, totals: [{ currency: 'eur', amount_cents: 15000 }] },
+      { ...QUOTE, totals: [] },
+      {
+        ...QUOTE,
+        lines: [line('in_1', 15000), line('in_1', 15000)],
+        totals: [{ currency: 'usd', amount_cents: 30000 }],
+      },
+      {
+        ...QUOTE,
+        totals: [
+          { currency: 'usd', amount_cents: 15000 },
+          { currency: 'usd', amount_cents: 0 },
+        ],
+      },
+      {
+        ...QUOTE,
+        lines: [],
+        totals: [{ currency: 'usd', amount_cents: 15000 }],
+      },
+    ];
+    for (const q of bad) expect(() => normalizePaymentQuote(q)).toThrow('DUNNING_RESPONSE_SHAPE');
+  });
+
+  it('accepts multi-currency quotes and the complete empty quote ("Save card")', () => {
+    const multi = normalizePaymentQuote({
+      ...QUOTE,
+      lines: [line('in_1', 15000), line('in_2', 5000), line('in_3', 2000, 'eur')],
+      totals: [
+        { currency: 'eur', amount_cents: 2000 },
+        { currency: 'usd', amount_cents: 20000 },
+      ],
+    });
+    expect(sheetButtonLabel(multi)).toBe('Save card and pay 20.00 EUR and $200.00');
+    const empty = normalizePaymentQuote({
+      quote_id: 'q0',
+      complete: true,
+      lines: [],
+      totals: [],
+      disputes: [],
+    });
+    expect(sheetButtonLabel(empty)).toBe('Save card');
+  });
+
+  it('an inconsistent quote stops before the card form with specific copy and a reference', async () => {
+    currentQuote = { ...QUOTE, totals: [{ currency: 'usd', amount_cents: 1 }] };
+    const { findByTestId, getByTestId } = await renderScreen(LOCKED);
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-add'));
+    });
+    const err = await findByTestId('update-card-error');
+    expect(err.props.children).toContain('The amount you owe did not load in full');
+    expect(err.props.children).toContain('nothing was charged');
+    expect(err.props.children).toMatch(/Reference: \S+/);
+    expect(mockSdk.presentPaymentSheet).not.toHaveBeenCalled();
+    expect(mockPost).not.toHaveBeenCalledWith('/v1/checkout/payment-method/confirm', expect.anything());
+  });
+});
+
+describe('S-DUNNING-R5 B-322-7: in_progress (paired with the backend #628 response)', () => {
+  it('the real backend in_progress response normalizes and keeps the paid amount', () => {
+    const r = normalizeCardUpdate(BACKEND_IN_PROGRESS);
+    expect(r.outcome).toBe('in_progress');
+    expect(r.paid_totals).toEqual([{ currency: 'usd', amount_cents: 15000 }]);
+    expect(r.access_state).toBe('partial');
+    const c = cardUpdateOutcomeCopy(r);
+    expect(c.title).toBe('Part of your payment went through');
+    expect(c.body).toContain('Your card ending 4242 is saved and $150.00 went through.');
+    expect(c.body).toContain('Tap Check again');
+    expect(c.body).not.toContain('nothing was charged');
+    expect(c.tone).toBe('action');
+  });
+
+  it('the screen shows the known payment and "Check again" repeats the same confirm', async () => {
+    const paid = {
+      ...BACKEND_IN_PROGRESS,
+      outcome: 'paid',
+      access_state: 'restored',
+      access_restored: true,
+    };
+    backend([BACKEND_IN_PROGRESS, paid]);
+    const { findByTestId, getByTestId, getByText } = await renderScreen(PAST_DUE);
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-add'));
+    });
+    await findByTestId('update-card-result-in_progress');
+    expect(getByText('Check again')).toBeTruthy();
+    await act(async () => {
+      await fireEvent.press(getByTestId('update-card-resume'));
+    });
+    await findByTestId('update-card-result-paid');
+    const confirms = mockPost.mock.calls.filter(([u]) => u === '/v1/checkout/payment-method/confirm');
+    expect(confirms).toHaveLength(2);
+    expect(confirms[1][1]).toEqual(confirms[0][1]);
+    expect(mockSdk.presentPaymentSheet).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('S-DUNNING-R5 C-322-2 and copy rules', () => {
+  it('processing after a partial payment leads with what went through', () => {
+    const c = cardUpdateOutcomeCopy(
+      normalizeCardUpdate({
+        ...PARTIAL_BANK,
+        outcome: 'processing',
+        payment_intent_client_secret: null,
+      }),
+    );
+    expect(c.body).toContain('$150.00 went through. The payment of $90.00 is processing.');
+    expect(c.title).toBe('Part of your payment went through');
+  });
+
+  it('client-facing dunning copy never speaks as "we" / "our"', () => {
+    const fs = jest.requireActual<typeof import('fs')>('fs');
+    const path = jest.requireActual<typeof import('path')>('path');
+    const dir = path.join(__dirname, '..');
+    for (const file of [
+      'dunningErrorCopy.ts',
+      'UpdateCardScreen.tsx',
+      'DunningBanner.tsx',
+      'DunningLockoutScreen.tsx',
+    ]) {
+      const src: string = fs.readFileSync(path.join(dir, file), 'utf8');
+      const literals =
+        src
+          .split('\n')
+          .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+          .join('\n')
+          .match(/(['`"])(?:(?!\1)[^\\\n]|\\.)*\1/g) ?? [];
+      const offending = literals.filter((t) => /\b(we|We|our|Our|us)\b/.test(t));
+      expect({ file, offending }).toEqual({ file, offending: [] });
+    }
   });
 });

@@ -60,6 +60,8 @@ type Pending =
   | null
   | { kind: 'bank'; setupIntentId: string; clientSecret: string }
   | { kind: 'unconfirmed'; setupIntentId: string }
+  /** B-322-7: another plan's change was busy; the same confirm finishes it. */
+  | { kind: 'in_progress'; setupIntentId: string }
   | { kind: 'approval'; setupIntentId: string; quote: PaymentQuote };
 
 function inDunning(status: ClientDunningStatus | null | undefined): boolean {
@@ -72,15 +74,15 @@ export function updateCardIntro(status: ClientDunningStatus | null | undefined):
   const coach = status?.coach_name ?? 'your coach';
   if (inDunning(status) && status?.state === 'locked') {
     return amount
-      ? `Your payment of ${amount} to ${coach} did not go through, so your plan is paused. Add a card that works and we charge ${amount} to it right away. Your plan comes back as soon as it clears.`
-      : `Your last payment to ${coach} did not go through, so your plan is paused. Add a card that works and we charge the open balance right away. Your plan comes back as soon as it clears.`;
+      ? `Your payment of ${amount} to ${coach} did not go through, so your plan is paused. Add a card that works and ${amount} is charged to it right away. Your plan comes back as soon as it clears.`
+      : `Your last payment to ${coach} did not go through, so your plan is paused. Add a card that works and the open balance is charged to it right away. Your plan comes back as soon as it clears.`;
   }
   if (inDunning(status)) {
     return amount
-      ? `Your payment of ${amount} to ${coach} did not go through. Add a card that works and we charge ${amount} to it right away. You keep full access while you sort it out.`
-      : `Your last payment to ${coach} did not go through. Add a card that works and we charge the open balance right away. You keep full access while you sort it out.`;
+      ? `Your payment of ${amount} to ${coach} did not go through. Add a card that works and ${amount} is charged to it right away. You keep full access while you sort it out.`
+      : `Your last payment to ${coach} did not go through. Add a card that works and the open balance is charged to it right away. You keep full access while you sort it out.`;
   }
-  return 'Add a new card for your plan. If a payment is overdue, we charge it to this card right away. Otherwise your next payment will use it.';
+  return 'Add a new card for your plan. If a payment is overdue, it is charged to this card right away. Otherwise your next payment will use it.';
 }
 
 /**
@@ -142,6 +144,8 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
             setupIntentId: next.setupIntentId,
             quote: next.response.quote,
           });
+        } else if (next.response.outcome === 'in_progress') {
+          setPending({ kind: 'in_progress', setupIntentId: next.setupIntentId });
         } else if (next.response.outcome === 'requires_action' && next.response.payment_intent_client_secret) {
           setPending({
             kind: 'bank',
@@ -233,10 +237,12 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
             clientSecret: pending.kind === 'bank' ? pending.clientSecret : null,
             approved: approvedRef.current,
             onConfirming: () => setBusy('confirming'),
+            // B-322-1: what already went through stays named on a retry.
+            lastKnown: result?.setupIntentId === pending.setupIntentId ? result.response : null,
           }),
         );
       }),
-    [pending, run, settle],
+    [pending, result, run, settle],
   );
 
   useEffect(() => {
@@ -299,7 +305,9 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
       ? `Pay ${formatDunningTotals(pending.quote.totals) ?? 'the new amount'}`
       : pending?.kind === 'unconfirmed'
         ? 'Check my payment again'
-        : null;
+        : pending?.kind === 'in_progress'
+          ? 'Check again'
+          : null;
   const cardOnFile = status?.card_last4
     ? `The card on file ends in ${status.card_last4}${inDunning(status) ? ' and was declined' : ''}.`
     : null;

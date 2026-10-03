@@ -2,7 +2,7 @@ import type * as StripeRN from '@stripe/stripe-react-native';
 import { resolveStripePublishableKey } from '../../config/stripe';
 import { captureError } from '../../services/sentry';
 import { dunningApi, type ApprovedInvoice, type CardUpdateResponse } from './dunningApi';
-import { describeDunningError, localDunningError, type DunningErrorCopy } from './dunningErrorCopy';
+import { bankStepCopy, describeDunningError, localDunningError, type DunningErrorCopy } from './dunningErrorCopy';
 import { buildPaymentSheetAppearance, sheetStyleFor } from './paymentSheetAppearance';
 
 /**
@@ -265,11 +265,17 @@ export async function confirmWithBank(args: {
   approved: ApprovedInvoice[];
   onConfirming?: () => void;
   retryDelaysMs?: number[];
+  /**
+   * The last answer the screen holds for this SetupIntent (a "Confirm with
+   * my bank" retry): its `paid_totals` keep naming money already collected
+   * if the bank step fails again before the server can be asked (B-322-1).
+   */
+  lastKnown?: CardUpdateResponse | null;
 }): Promise<NativeCardUpdateResult> {
   const { surface, setupIntentId } = args;
   const sdk = args.sdk === undefined ? loadStripeSdk() : args.sdk;
   let pendingSecret = args.clientSecret;
-  let last: CardUpdateResponse | null = null;
+  let last: CardUpdateResponse | null = args.lastKnown ?? null;
   // Each round settles one invoice that needed the bank; three covers a
   // client with more than one open invoice without looping forever.
   for (let round = 0; round < 3; round += 1) {
@@ -278,22 +284,36 @@ export async function confirmWithBank(args: {
       const secret = pendingSecret;
       const next = await guarded(() => sdk.handleNextAction(secret, STRIPE_RETURN_URL));
       const nextError = next.ok ? next.value?.error : { code: 'Failed' };
+      if (nextError && nextError.code === 'Canceled') {
+        // The client closed the bank step. B-322-3: keep the SetupIntent and
+        // the bank secret so "Confirm with my bank" works without a new card.
+        return { kind: 'bank_pending', setupIntentId, clientSecret: secret, response: last, error: null };
+      }
       if (nextError) {
-        const canceled = nextError.code === 'Canceled';
-        const error = canceled ? null : localDunningError('BANK_CONFIRMATION_FAILED');
-        if (error) {
-          captureError(next.ok ? new Error('HANDLE_NEXT_ACTION') : next.err, {
-            surface,
-            dunning_error_code: error.code,
-            stripe_error_code: nextError.code,
-          });
+        // B-322-1: a failed, rejected or lost bank step does not prove the
+        // payment was not collected (or that it was). Ask the server, with the
+        // same SetupIntent and approval (never a second charge), before saying
+        // anything about the money.
+        const check = await confirmOnce({ ...args, setupIntentId });
+        if (check.ok && check.response.outcome !== 'requires_action') {
+          // The server already knows the end state (paid, declined, ...).
+          return { kind: 'done', response: check.response, setupIntentId };
         }
-        // B-322-3: keep the SetupIntent and the bank secret for a retry.
+        const verified = check.ok;
+        const known = check.ok ? check.response : last;
+        const error = bankStepCopy(known, verified);
+        captureError(next.ok ? new Error('HANDLE_NEXT_ACTION') : next.err, {
+          surface,
+          dunning_error_code: error.code,
+          stripe_error_code: nextError.code,
+          reconciled: verified,
+          request_id: error.reference,
+        });
         return {
           kind: 'bank_pending',
           setupIntentId,
-          clientSecret: secret,
-          response: last,
+          clientSecret: (check.ok && check.response.payment_intent_client_secret) || secret,
+          response: known,
           error,
         };
       }
