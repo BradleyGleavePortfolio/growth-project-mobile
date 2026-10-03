@@ -34,6 +34,23 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest'),
 );
 
+// expo-calendar (S-SCHED "Add to my calendar"): native module, so tests get
+// a deterministic OS-editor stand-in. Specs that need other behaviour
+// override these jest.fn()s.
+jest.mock('expo-calendar/legacy', () => ({
+  EntityTypes: { EVENT: 'event', REMINDER: 'reminder' },
+  CalendarDialogResultActions: { saved: 'saved', canceled: 'canceled', done: 'done', deleted: 'deleted' },
+  isAvailableAsync: jest.fn(async () => true),
+  createEventInCalendarAsync: jest.fn(async () => ({ action: 'saved', id: 'event' })),
+  getCalendarPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true, status: 'granted' })),
+  requestCalendarPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: true, status: 'granted' })),
+  getDefaultCalendarAsync: jest.fn(async () => ({ id: 'cal-default', allowsModifications: true })),
+  getCalendarsAsync: jest.fn(async () => [{ id: 'cal-default', allowsModifications: true, isPrimary: true }]),
+  createEventAsync: jest.fn(async () => 'evt-1'),
+  updateEventAsync: jest.fn(async (id) => id),
+  deleteEventAsync: jest.fn(async () => undefined),
+}), { virtual: true });
+
 // expo-crypto: counter-backed UUID so tests get distinct ids without pulling
 // in the native module. Format matches the v4-UUID shape we use for the
 // food-log idempotency keys.
