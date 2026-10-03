@@ -19,8 +19,8 @@
  * an optional `{ bucket?: 'fitness' | 'recovery' }` param.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Animated, StyleSheet, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useNavigation,
@@ -29,9 +29,31 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import { colors, spacing } from '../../../theme/tokens';
+import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { configFor } from '../../../api/wearablesConnectionsApi';
+import {
+  connectFailureMessage,
+  ctaLabelFor,
+  notSyncingHereCopy,
+  type OnDeviceMessage,
+} from './onDeviceCopy';
+import {
+  openHealthConnectPermissions,
+  openHealthConnectStore,
+} from '../../../services/health/onDeviceConnect';
+import { signOut } from '../../../services/authActions';
 import type { WearableMetricBucket } from '../../../api/wearablesSamplesApi';
-import { useWearableConnections } from '../../../hooks/useWearableConnections';
+import {
+  useInvalidateWearableConnections,
+  useWearableConnections,
+} from '../../../hooks/useWearableConnections';
+import { featureFlags } from '../../../config/featureFlags';
+import {
+  deviceSourceForPlatform,
+  refreshOnDevice,
+} from '../../../services/health/onDeviceSync';
+import { currentAuthGeneration } from '../../../services/health/sessionFence';
+import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
 import {
   SHELL_CROSSFADE_MS,
@@ -46,6 +68,23 @@ import SleepRecoveryScreen from './SleepRecoveryScreen';
 
 type HealthRouteParams = { bucket?: 'fitness' | 'recovery' };
 
+/** Closed set logged for a failed refresh (C-317-b). */
+export type RefreshErrorClass = 'aborted' | 'network' | 'http' | 'type' | 'error' | 'other';
+
+/**
+ * Classify a refresh failure without logging anything it carries. `name` is
+ * only compared against fixed constants, never copied.
+ */
+export function refreshErrorClass(err: unknown): RefreshErrorClass {
+  if (!(err instanceof Error)) return 'other';
+  if (err.name === 'AbortError' || err.name === 'CanceledError') return 'aborted';
+  if ((err as { isAxiosError?: unknown }).isAxiosError === true) {
+    return (err as { response?: unknown }).response ? 'http' : 'network';
+  }
+  if (err instanceof TypeError) return 'type';
+  return 'error';
+}
+
 export default function WearablesShell() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, HealthRouteParams>, string>>();
@@ -58,11 +97,128 @@ export default function WearablesShell() {
   const fade = useMemo(() => new Animated.Value(1), []);
 
   const connectionsQuery = useWearableConnections();
-  const connections = connectionsQuery.data ?? [];
+  const connections = useMemo(() => connectionsQuery.data ?? [], [connectionsQuery.data]);
+  const invalidateWearables = useInvalidateWearableConnections();
+
+  // S14: refresh on open. A remote "connected" row is NOT enough to read this
+  // phone's health store (A-317-1): refreshOnDevice runs only when the
+  // signed-in person tapped Connect on THIS phone (local authorization keyed
+  // by user + source) and the server still lists that same connection. It
+  // reads what is new since that account's progress, posts it behind a
+  // session fence, then the views refetch. Once per mount; failures are
+  // logged and the views keep showing what is already stored.
+  const deviceSource = deviceSourceForPlatform();
+  const hasDeviceConnection = connections.some(
+    (c) => c.provider === deviceSource && c.status === 'connected',
+  );
+  const [refreshRun, setRefreshRun] = useState(0);
+  const [refreshStartedFor, setRefreshStartedFor] = useState(-1);
+  /**
+   * S14 round 3: what the refresh found, shown above the views instead of
+   * being dropped silently (Opus B-317-5, Sol B-317-2):
+   *   - notSyncing: connected on the server, but this phone holds no Connect
+   *     for the signed-in person, so nothing is read here; Reconnect.
+   *   - partial / failed: some or all new data did not come in; Try again.
+   */
+  const [notice, setNotice] = useState<
+    | { kind: 'notSyncing' }
+    | { kind: 'retry'; text: string; action: OnDeviceMessage['action']; cta?: string }
+    | null
+  >(null);
+  const deviceName = deviceSource != null ? configFor(deviceSource).displayName : '';
+  // C-317-a: a refresh that settles after this screen unmounted, after a
+  // sign-out or account switch, or after a newer refresh started writes no
+  // notice and refetches nothing.
+  const mountedRef = useRef(true);
+  const latestRunRef = useRef(-1);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (refreshStartedFor === refreshRun || deviceSource == null || !hasDeviceConnection) return;
+    setRefreshStartedFor(refreshRun);
+    setNotice(null);
+    const run = refreshRun;
+    latestRunRef.current = run;
+    const generation = currentAuthGeneration();
+    const current = () =>
+      mountedRef.current && latestRunRef.current === run && currentAuthGeneration() === generation;
+    refreshOnDevice(deviceSource, connections)
+      .then((outcome) => {
+        if (!current()) return;
+        if (outcome.kind === 'imported') {
+          invalidateWearables();
+          if (!outcome.complete) {
+            setNotice({
+              kind: 'retry',
+              text: `Some of your ${deviceName} data didn't come in this time. Tap Try again, or it continues the next time you open Health.`,
+              action: 'resume',
+            });
+          }
+        } else if (outcome.kind === 'not_authorized') {
+          setNotice({ kind: 'notSyncing' });
+        }
+      })
+      .catch((err: unknown) => {
+        // A stale failure (sign-out, unmount, a newer run) writes and logs nothing.
+        if (!current()) return;
+        // C-317-b: a closed class only, never the message, body or the
+        // (mutable) Error.name.
+        logger.warn('[wearables] on-device refresh failed', { error: refreshErrorClass(err) });
+        const message = connectFailureMessage(err, deviceName);
+        if (message != null) {
+          setNotice({ kind: 'retry', text: message.text, action: message.action, cta: message.cta });
+        }
+      });
+  }, [
+    refreshRun,
+    refreshStartedFor,
+    deviceSource,
+    deviceName,
+    hasDeviceConnection,
+    connections,
+    invalidateWearables,
+  ]);
+
+  const retryRefresh = useCallback(() => setRefreshRun((n) => n + 1), []);
 
   const goToConnections = useCallback(() => {
     navigation.navigate('Connections');
   }, [navigation]);
+
+  /**
+   * S-WEAR-3: the notice button does what its message says: Try again
+   * re-runs the refresh, Log in again ends the expired session, Open Health
+   * Connect / Get Health Connect open the place the copy names.
+   */
+  const runNoticeAction = useCallback(
+    (action: OnDeviceMessage['action']) => {
+      if (action === 'login') {
+        void signOut();
+        return;
+      }
+      if (action === 'open_settings') {
+        void openHealthConnectPermissions();
+        return;
+      }
+      if (action === 'open_store') {
+        void openHealthConnectStore();
+        return;
+      }
+      if (action === 'connect') {
+        // Connect has to run again (for example, the connection is no
+        // longer linked to this account): open Connections.
+        goToConnections();
+        return;
+      }
+      retryRefresh();
+    },
+    [retryRefresh, goToConnections],
+  );
+
 
   const handleSwitch = useCallback(
     (next: WearableMetricBucket) => {
@@ -98,17 +254,24 @@ export default function WearablesShell() {
     setBucket((prev: WearableMetricBucket) => (prev === fromParam ? prev : fromParam));
   }, [route.params?.bucket]);
 
-  // Each bucket screen renders the client AI insight panel in its `aiPanelSlot`
-  // (the read-only HK-5b surface — no approve/dismiss; that is coach-only, HK-6).
+  // Each bucket screen can render the client AI insight panel in its
+  // `aiPanelSlot` (the read-only HK-5b surface — no approve/dismiss; that is
+  // coach-only, HK-6). S14: only behind `wearableAiInsights` (default OFF)
+  // until the panel honours the D2 AI-processing consent.
+  const aiPanelsOn = featureFlags.wearableAiInsights;
   const content =
     bucket === 'HEALTH_FITNESS' ? (
       <HealthFitnessScreen
-        aiPanelSlot={<ClientWearableInsightPanel bucket="HEALTH_FITNESS" />}
+        aiPanelSlot={
+          aiPanelsOn ? <ClientWearableInsightPanel bucket="HEALTH_FITNESS" /> : undefined
+        }
       />
     ) : (
       <SleepRecoveryScreen
         bucketParam={paramForBucket(bucket)}
-        aiPanelSlot={<ClientWearableInsightPanel bucket="SLEEP_RECOVERY" />}
+        aiPanelSlot={
+          aiPanelsOn ? <ClientWearableInsightPanel bucket="SLEEP_RECOVERY" /> : undefined
+        }
       />
     );
 
@@ -122,6 +285,44 @@ export default function WearablesShell() {
           onPress={goToConnections}
         />
       </View>
+
+      {notice != null && (
+        <View style={styles.notice} accessibilityRole="alert">
+          <Text style={styles.noticeText}>
+            {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
+          </Text>
+          {(notice.kind === 'notSyncing' || notice.action !== 'none') && (
+          <Pressable
+            style={styles.noticeAction}
+            onPress={
+              notice.kind === 'notSyncing'
+                ? goToConnections
+                : () => runNoticeAction(notice.action)
+            }
+            accessibilityRole="button"
+            accessibilityLabel={
+              notice.kind === 'notSyncing'
+                ? `Reconnect ${deviceName}`
+                : notice.action === 'resume'
+                  ? `Try again to sync ${deviceName}`
+                  : notice.action === 'connect'
+                    ? `Reconnect ${deviceName}`
+                    : ctaLabelFor({ action: notice.action, cta: notice.cta })
+            }
+          >
+            <Text style={styles.noticeActionText}>
+              {notice.kind === 'notSyncing'
+                ? 'Reconnect'
+                : notice.action === 'resume'
+                  ? 'Try again'
+                  : notice.action === 'connect'
+                    ? 'Reconnect'
+                    : ctaLabelFor({ action: notice.action, cta: notice.cta })}
+            </Text>
+          </Pressable>
+          )}
+        </View>
+      )}
 
       <Animated.View
         style={[styles.body, reduceMotion ? undefined : { opacity: fade }]}
@@ -153,5 +354,25 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  notice: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.cream,
+  },
+  noticeText: {
+    ...typography.bodySmall,
+    color: colors.charcoal,
+  },
+  noticeAction: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  noticeActionText: {
+    ...typography.bodyMd,
+    color: colors.forest,
   },
 });
