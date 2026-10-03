@@ -10,7 +10,7 @@
  */
 
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 const mockUseWearableSamples = jest.fn();
 jest.mock('../../../../hooks/useWearableSamples', () => ({
@@ -89,5 +89,28 @@ describe('HealthFitnessTab coach anomaly band', () => {
     });
     const { getByText } = await renderTab();
     expect(getByText(/No notable shifts/i)).toBeTruthy();
+  });
+});
+
+// S14 round 3: the coach wearable-prompts screen was orphaned (no route
+// pointed at it). The Health tab now opens it for this client, only when the
+// parent passes the handler (build flag + server flag both on).
+describe('HealthFitnessTab — wearable coaching prompts entry', () => {
+  beforeEach(() =>
+    mockUseWearableSamples.mockReturnValue({ data: { series: [] }, isError: false, isLoading: false }),
+  );
+
+  it('shows no entry when the feature is off (no handler)', async () => {
+    const { queryByTestId } = await renderTab();
+    expect(queryByTestId('open-wearable-prompts')).toBeNull();
+  });
+
+  it('opens the prompts for this client when tapped', async () => {
+    const onOpen = jest.fn();
+    const { getByLabelText } = await render(
+      <HealthFitnessTab clientId="client_1" colors={colors} styles={styles} onOpenWearablePrompts={onOpen} />,
+    );
+    await fireEvent.press(getByLabelText('Open wearable coaching prompts for this client'));
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 });
