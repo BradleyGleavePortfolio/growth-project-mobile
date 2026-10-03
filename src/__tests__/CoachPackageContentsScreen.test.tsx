@@ -54,7 +54,8 @@ describe('CoachPackageContents — nav + wiring source guards', () => {
 
   it('the edit screen has a Manage content button that navigates to CoachPackageContents', () => {
     expect(EDIT_SRC).toMatch(/Manage content/);
-    expect(EDIT_SRC).toMatch(/navigation\.navigate\('CoachPackageContents'/);
+    // Quote style follows the file's formatter (S-COACH-MOB-4); the wiring is what matters.
+    expect(EDIT_SRC).toMatch(/navigation\.navigate\(["']CoachPackageContents["']/);
   });
 
   it('the push affordance is wired through PushPromptSheet → PushConfirmModal (M5)', () => {
