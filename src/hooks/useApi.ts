@@ -29,7 +29,6 @@ import {
 import {
   habitsApi,
   workoutApi,
-  communityApi,
   nudgesApi,
   notificationsApi,
   weightApi,
@@ -116,42 +115,7 @@ export function useDeleteHabit() {
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Community  (real CommunityWin feed, post Fix #9 backend work)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export type ApiCommunityWin = {
-  id: string;
-  user_id: string;
-  coach_id: string | null;
-  title: string;
-  description: string;
-  created_at: string;
-  user?: { id: string; name: string };
-  // Anonymised feed shape returned by backend
-  displayName?: string;
-  action?: string;
-  createdAt?: string;
-  reactions?: { fire: number; clap: number };
-};
-
-export function useCommunityFeed() {
-  return useQuery<ApiCommunityWin[]>({
-    queryKey: ['community', 'feed'],
-    queryFn: async () => (await communityApi.getFeed()).data,
-  });
-}
-
-export function usePostWin() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (data: { title: string; description: string; visibility?: 'circle' | 'public' }) =>
-      communityApi.postWin(data).then((r) => r.data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['community', 'feed'] });
-    },
-  });
-}
+// Community wins: see src/api/communityWinsApi.ts (More > Community screen).
 
 
 export type ApiMilestone = {
@@ -292,7 +256,10 @@ export function useWorkoutVolume(period: 'week' | 'month') {
 // than covers a typical week of training. The result is keyed off the
 // week-start ISO date so it auto-rotates each Monday.
 export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, limit = 50) {
-  return useQuery<{ total: number; breakdown: Array<{ date: string; volume: number }> }>({
+  return useQuery<{
+    total: number;
+    breakdown: Array<{ date: string; volume: number }>;
+  }>({
     queryKey: ['workouts', 'weekly-breakdown', weekStart, weekEnd, limit],
     queryFn: async () => {
       const res = await workoutApi.getAll(limit);
