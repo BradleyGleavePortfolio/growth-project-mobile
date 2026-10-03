@@ -24,8 +24,11 @@ export const CSV_UTI = "public.comma-separated-values-text";
 // A UTF-8 byte-order mark, so spreadsheet apps read names with accents.
 const BOM = "\uFEFF";
 
-/** How the CSV left the app. */
-export type CsvShareOutcome = "file" | "text";
+/**
+ * How the CSV left the app. "canceled": the export stopped belonging to a live
+ * screen and session before anything was written or shared (B-340-1).
+ */
+export type CsvShareOutcome = "file" | "text" | "canceled";
 
 /** The file could not be written, or the share sheet could not open. */
 export class CsvFileError extends Error {
@@ -66,11 +69,20 @@ function writeExport(csv: string, filename: string): File {
 /**
  * Hand the CSV to the share sheet as a .csv file. Resolves when the sheet
  * closes (sharing or dismissing are both fine), with how it was shared.
+ *
+ * B-340-1 (Sol): `isCurrent` says whether the screen and session that asked
+ * for this export are still the live ones. It is checked again after the
+ * availability lookup, the only wait before a side effect, so a CSV whose
+ * screen closed or whose session changed is never written to the phone and
+ * never reaches a share sheet. Between that check and the share there is no
+ * wait (the write is synchronous).
  */
 export async function shareCsvFile(
   csv: string,
   filename: string,
+  isCurrent: () => boolean,
 ): Promise<CsvShareOutcome> {
+  if (!isCurrent()) return "canceled";
   const name = safeCsvFilename(filename);
   let canShareFiles = false;
   try {
@@ -78,6 +90,7 @@ export async function shareCsvFile(
   } catch {
     canShareFiles = false;
   }
+  if (!isCurrent()) return "canceled";
   if (!canShareFiles) {
     try {
       await Share.share({ title: name, message: csv });

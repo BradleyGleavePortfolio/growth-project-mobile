@@ -80,6 +80,7 @@ import { assertStripeUrl } from "../../../utils/stripeUrlValidator";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
 import { CsvFileError, shareCsvFile } from "../../../lib/money/csvFile";
+import { authEvents } from "../../../utils/authEvents";
 import KpiTile from "../../../components/command-center/KpiTile";
 import AlertRow from "../../../components/command-center/AlertRow";
 import type {
@@ -138,6 +139,23 @@ export default function MoneyScreen({
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
+    };
+  }, []);
+  // B-340-1 (Sol): a sign-in or sign-out while an export is in flight ends
+  // that export (the CSV belongs to the session that asked for it), and the
+  // button is usable again.
+  useEffect(() => {
+    const endExport = () => {
+      exportEpoch.current += 1;
+      if (!mountedRef.current) return;
+      setExporting(false);
+      setExportedAsText(false);
+    };
+    authEvents.on("login", endExport);
+    authEvents.on("logout", endExport);
+    return () => {
+      authEvents.off("login", endExport);
+      authEvents.off("logout", endExport);
     };
   }, []);
   const [showBreakdown, setShowBreakdown] = useState(false);
@@ -366,8 +384,9 @@ export default function MoneyScreen({
         currency ?? shownCurrency,
       );
       if (!current()) return;
-      const how = await shareCsvFile(out.csv, out.filename);
-      if (current()) setExportedAsText(how === "text");
+      // B-340-1: the helper re-checks `current` before it writes or shares.
+      const how = await shareCsvFile(out.csv, out.filename, current);
+      if (current() && how !== "canceled") setExportedAsText(how === "text");
     } catch (err) {
       if (!current()) return;
       if (err instanceof CsvFileError) {
