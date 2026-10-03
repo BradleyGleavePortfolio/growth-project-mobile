@@ -29,6 +29,8 @@ const INITIAL_LEAF: Record<string, string> = {
   Home: 'HomeMain',
   WorkoutTab: 'WorkoutMain',
   MoreTab: 'MoreIndex',
+  // S-SCHED Calendar tab (featureFlags.clientCalendar).
+  CalendarTab: 'CalendarHome',
 };
 
 export function withInitialLeaf(path: string[]): string[] {

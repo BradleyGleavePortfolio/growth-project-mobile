@@ -1,19 +1,18 @@
 /**
  * Concierge Phase 1 — screen-logic tests.
  *
- * Four cases:
+ * Three cases:
  *   1. isWithinLockout boundary returns true within 4h, false beyond.
  *   2. CoachBookingInbox confirms a pending session via useApproveSession.
  *   3. CoachBookingInbox declines a pending session via useDeclineSession.
- *   4. ClientBookingRequest renders the empty-state path when the
- *      coach has no availability windows.
+ * (The ClientBookingRequest screen and route were removed in S-SCHED-4;
+ * clients book from the Calendar tab.)
  */
 
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CoachBookingInboxScreen from '../coach/CoachBookingInboxScreen';
-import ClientBookingRequestScreen from '../client/ClientBookingRequestScreen';
 import { isWithinLockout } from '../client/ClientUpcomingSessionsScreen';
 import type { CoachingSession } from '../../api/schedulingApi';
 
@@ -109,7 +108,10 @@ describe('CoachBookingInboxScreen', () => {
     const btn = await findByLabelText('Confirm session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
-      expect(mockApi.approveSession).toHaveBeenCalledWith('sess-pending'),
+      // S-SCHED-3: the start time on the card goes with the answer.
+      expect(mockApi.approveSession).toHaveBeenCalledWith('sess-pending', {
+        expected_start_at: PENDING.start_at,
+      }),
     );
   });
 
@@ -123,24 +125,9 @@ describe('CoachBookingInboxScreen', () => {
     const btn = await findByLabelText('Decline session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
-      expect(mockApi.declineSession).toHaveBeenCalledWith(
-        'sess-pending',
-        undefined,
-      ),
-    );
-  });
-});
-
-describe('ClientBookingRequestScreen', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it('renders empty-state when coach has no availability windows', async () => {
-    mockApi.getAvailability.mockResolvedValueOnce([]);
-    const { findByText } = await withQc(<ClientBookingRequestScreen />);
-    await findByText(
-      'Available times will appear once your coach has set availability.',
+      expect(mockApi.declineSession).toHaveBeenCalledWith('sess-pending', {
+        expected_start_at: PENDING.start_at,
+      }),
     );
   });
 });

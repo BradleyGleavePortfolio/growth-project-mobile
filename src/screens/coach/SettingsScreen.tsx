@@ -537,6 +537,40 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* S-SCHED — appointment types clients book from, and time off. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', {
+              screen: 'CoachAppointmentTypes',
+              params: currentUser?.id ? { coachId: currentUser.id } : undefined,
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open appointment types"
+          testID="settings-appointment-types"
+        >
+          <Ionicons name="list-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Appointment Types</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachTimeOff' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open time off"
+          testID="settings-time-off"
+        >
+          <Ionicons name="airplane-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Time Off</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
         {/* Legacy single-invite generator. The new email-pipeline Bulk
             invite + Invites & email rows live under Client Management. */}
         <TouchableOpacity
