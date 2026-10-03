@@ -2,7 +2,9 @@
  * OR-114-4 (B-COACH-5) — csvFile helper: platform-safe file names and the
  * text fallback when the system cannot share files.
  */
-const mockShare = jest.fn(async () => ({ action: "sharedAction" }));
+const mockShare = jest.fn(async (_content: unknown) => ({
+  action: "sharedAction",
+}));
 jest.mock("react-native", () => ({
   Share: { share: (a: unknown) => mockShare(a) },
 }));

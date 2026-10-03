@@ -59,7 +59,7 @@ jest.mock("expo-file-system", () => {
 });
 const mockSharing = {
   isAvailableAsync: jest.fn(async () => true),
-  shareAsync: jest.fn(async () => undefined),
+  shareAsync: jest.fn(async (_uri: string, _opts: unknown) => undefined),
 };
 jest.mock("expo-sharing", () => ({
   isAvailableAsync: () => mockSharing.isAvailableAsync(),
