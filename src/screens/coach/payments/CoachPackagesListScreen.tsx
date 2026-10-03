@@ -250,7 +250,9 @@ function PackageRow({
         {pkg.billingInterval !== 'one_time' ? (
           <Text style={styles.cardPriceMeta}>
             {' '}/ {pkg.intervalCount > 1 ? `${pkg.intervalCount} ` : ''}
-            {pkg.billingInterval === 'monthly'
+            {pkg.billingInterval === 'weekly'
+              ? 'wk'
+              : pkg.billingInterval === 'monthly'
               ? 'mo'
               : pkg.billingInterval === 'quarterly'
               ? 'qtr'
