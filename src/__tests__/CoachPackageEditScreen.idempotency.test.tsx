@@ -5,6 +5,7 @@
 // it on every retry, so a lost response can never make a second package.
 // Before this change every tap generated a fresh key (no dedupe possible).
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { Alert } from "react-native";
@@ -116,9 +117,10 @@ async function mountCreate() {
   return { ...screen, navigation };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   jest.spyOn(Alert, "alert").mockImplementation(() => {});
+  await AsyncStorage.clear();
 });
 
 describe("OR-112-16 package editor create is idempotent per attempt", () => {
@@ -196,5 +198,34 @@ describe("OR-112-16 package editor create is idempotent per attempt", () => {
     const [title, body] = (Alert.alert as jest.Mock).mock.calls[0];
     expect(title).not.toBe("Could not save");
     expect(String(body)).not.toMatch(/Please check your inputs/);
+  });
+
+  it("B-329-1: the app is killed after a timeout; reopening the editor resumes the same create, once", async () => {
+    mockCreate.mockRejectedValueOnce(offline());
+    const first = await mountCreate();
+    await fireEvent.press(first.getByLabelText("Create package"));
+    await waitFor(() => expect(mockCreate).toHaveBeenCalledTimes(1));
+    const sentKey = mockCreate.mock.calls[0][1];
+    const sentBody = mockCreate.mock.calls[0][0];
+    await first.unmount();
+
+    mockCreate.mockResolvedValueOnce(created());
+    const navigation = {
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      dispatch: jest.fn(),
+    };
+    const second = await render(
+      <CoachPackageEditScreen
+        navigation={navigation as never}
+        route={{ key: "k2", name: "CoachPackageEdit", params: {} } as never}
+      />,
+    );
+    await second.findByTestId("package-edit-resumed");
+    await fireEvent.press(second.getByLabelText("Create package"));
+    await waitFor(() => expect(navigation.dispatch).toHaveBeenCalledTimes(1));
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[1][1]).toBe(sentKey);
+    expect(mockCreate.mock.calls[1][0]).toEqual(sentBody);
   });
 });

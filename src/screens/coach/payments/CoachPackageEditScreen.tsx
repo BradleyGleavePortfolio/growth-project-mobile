@@ -44,7 +44,14 @@ import {
   PackageUpdateInput,
 } from "../../../api/packagesApi";
 import { errorCode, errorMessage } from "../../../types/common";
-import { generateIdempotencyKey } from "../../../utils/idempotency";
+import {
+  createPackageOnce,
+  intentStorageCopy,
+  IntentStorageError,
+  loadIntent,
+  clearIntent,
+  type PackageCreateIntent,
+} from "../../../lib/coachSetup/packageCreateIntent";
 import { describeError } from "../../../lib/coachSetup/errors";
 import { mediumTap, successTap, warningTap } from "../../../utils/haptics";
 import { track } from "../../../lib/analytics";
@@ -108,6 +115,31 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  // B-329-1 (B-COACH-5): a create from this editor is durable like the
+  // wizard's. Its Idempotency-Key and body are on disk before the request
+  // leaves; reopening the editor after a kill resumes that same create.
+  const coachId = currentUser?.id ?? null;
+  const createIntent = useRef<PackageCreateIntent | null>(null);
+  const [resumedCreate, setResumedCreate] = useState(false);
+  useEffect(() => {
+    if (isEdit) return;
+    let live = true;
+    void loadIntent(coachId, "editor").then((read) => {
+      if (!live || read.kind !== "found" || createIntent.current) return;
+      const it = read.intent;
+      createIntent.current = it;
+      setTitle(it.input.title);
+      setDescription(it.input.description ?? "");
+      setPriceText((it.input.priceCents / 100).toFixed(2));
+      setBillingInterval(it.input.billingInterval);
+      setTrialText(it.input.trialDays ? String(it.input.trialDays) : "");
+      setFeaturesText((it.input.features ?? []).join("\n"));
+      setResumedCreate(true);
+    });
+    return () => {
+      live = false;
+    };
+  }, [isEdit, coachId]);
 
   useEffect(() => {
     if (!packageId) {
@@ -188,11 +220,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     };
   }, [title, description, priceText, billingInterval, trialText, featuresText]);
 
-  // OR-112-16: one create attempt = one Idempotency-Key. Every retry of the
-  // same attempt (timeout, offline, double tap) re-sends that key, so the
-  // backend returns the package it already made instead of a second one.
-  // The key is dropped only on success or a definitive refusal.
-  const createKey = useRef<string | null>(null);
+  // OR-112-16 + B-329-1: one create attempt = one Idempotency-Key and one
+  // body, stored on the device before the request leaves (see
+  // lib/coachSetup/packageCreateIntent.ts). Every retry, including after the
+  // app restarts, re-sends that pair, so the backend returns the package it
+  // already made instead of a second one.
   const saveInFlight = useRef(false);
 
   const handleSave = useCallback(async () => {
@@ -214,23 +246,47 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         successTap();
         Alert.alert("Package updated", "Changes saved.");
       } else {
-        const key = createKey.current ?? generateIdempotencyKey();
-        createKey.current = key;
-        let res: { data: CoachPackage };
-        try {
-          res = await coachPackagesApi.create(v.payload, key);
-        } catch (createErr) {
-          const adoptId = keyReusedPackageId(createErr);
-          if (adoptId) {
-            // The first try with this key already made the package and the
-            // coach changed details since: save the new details onto it.
-            res = await coachPackagesApi.update(adoptId, v.payload);
-          } else {
-            if (isDefinitiveRejection(createErr)) createKey.current = null;
-            throw createErr;
-          }
+        const owner = coachId;
+        let earlier = createIntent.current;
+        if (!earlier) {
+          // A failed storage read is not "nothing was sent": stop instead.
+          const read = await loadIntent(owner, "editor");
+          if (read.kind === "unreadable")
+            throw new IntentStorageError("unreadable");
+          if (read.kind === "no_account")
+            throw new IntentStorageError("no_account");
+          if (read.kind === "found") earlier = read.intent;
         }
-        createKey.current = null;
+        let latest: CoachPackage | null = null;
+        const created = await createPackageOnce({
+          coachId: owner,
+          scope: "editor",
+          input: v.payload,
+          earlier,
+          deps: {
+            create: async (body, key) => {
+              const r = await coachPackagesApi.create(body, key);
+              latest = r.data;
+              return r;
+            },
+            update: async (id, body) => {
+              const r = await coachPackagesApi.update(id, body);
+              latest = r.data;
+              return r;
+            },
+          },
+          onIntent: (next) => {
+            createIntent.current = next;
+          },
+        });
+        // A create finished in an earlier session (killed before it opened
+        // the package): read the row back by saving the same details.
+        const res: { data: CoachPackage } = latest
+          ? { data: latest }
+          : await coachPackagesApi.update(created.packageId, v.payload);
+        createIntent.current = null;
+        await clearIntent(owner, "editor");
+        setResumedCreate(false);
         successTap();
         track("coach_package_created", { package_id: res.data.id });
         // After create, replace the route so back arrow returns to the
@@ -248,7 +304,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       }
     } catch (err) {
       const code = errorCode(err);
-      if (code === "PACKAGES_NOT_CONFIGURED") {
+      if (err instanceof IntentStorageError) {
+        const copy = intentStorageCopy(err);
+        Alert.alert(copy.title, copy.body);
+      } else if (code === "PACKAGES_NOT_CONFIGURED") {
         Alert.alert(
           "Packages not enabled yet",
           errorMessage(
@@ -273,7 +332,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [validate, isEdit, original, navigation]);
+  }, [validate, isEdit, original, navigation, coachId]);
 
   const handleArchive = useCallback(() => {
     if (!original) return;
@@ -543,6 +602,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           multiline
         />
 
+        {resumedCreate ? (
+          <Text style={styles.resumedText} testID="package-edit-resumed">
+            Your package from earlier is saved here. Tap Create package to
+            finish it. It will not be made twice.
+          </Text>
+        ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
         <TouchableOpacity
@@ -916,29 +981,9 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       color: tokens.colors.error,
       fontSize: 13,
     },
+    resumedText: {
+      marginTop: 12,
+      color: semanticColors.textMuted,
+      fontSize: 13,
+    },
   });
-
-/** 422 IDEMPOTENCY_KEY_REUSED names the package this key already created. */
-function keyReusedPackageId(err: unknown): string | null {
-  const r = (err as { response?: { status?: number; data?: unknown } } | null)
-    ?.response;
-  if (r?.status !== 422 || !r.data || typeof r.data !== "object") return null;
-  const d = r.data as Record<string, unknown>;
-  return d.code === "IDEMPOTENCY_KEY_REUSED" && typeof d.package_id === "string"
-    ? d.package_id
-    : null;
-}
-
-/** A 4xx the same request can never pass (not a timeout, conflict or rate limit). */
-function isDefinitiveRejection(err: unknown): boolean {
-  const status = (err as { response?: { status?: number } } | null)?.response
-    ?.status;
-  return (
-    typeof status === "number" &&
-    status >= 400 &&
-    status < 500 &&
-    status !== 408 &&
-    status !== 409 &&
-    status !== 429
-  );
-}

@@ -12,21 +12,29 @@
  *
  * The key is replaced only when the server definitively refused the create
  * (nothing exists), or once the package is live and the intent is cleared.
+ *
+ * B-329-1 (B-COACH-5): the guarantee holds across restarts because a fresh
+ * create is sent only after its intent is on disk, and a storage read that
+ * fails is never taken to mean "nothing was sent".
  */
 import { prefsStorage } from "../../storage/mmkv";
 import type { PackageCreateInput } from "../../api/packagesApi";
 import { generateIdempotencyKey } from "../../utils/idempotency";
 
 const KEY_BASE = "coachSetup.packageCreate.v1";
+const EDITOR_KEY_BASE = "coachPackages.editorCreate.v1";
 
 /**
- * How long a remembered attempt is re-sent with its key. The backend keeps
- * package-create keys with no expiry (the WorkoutBuilderIdempotencyKey
- * ledger is never purged), so a replay inside a day always finds the key;
- * after a day the intent is dropped and the coach starts fresh (the wizard
- * then offers any draft that exists as "Make it live").
+ * B-329-1 (B-COACH-5): an unresolved intent is never dropped by age. The
+ * backend keeps package-create keys with no expiry (the
+ * WorkoutBuilderIdempotencyKey ledger is never purged), so re-sending the
+ * stored key and body days later still replays the one package; dropping it
+ * would turn that retry into a second create. An intent ends only when the
+ * package is live (cleared) or the server definitively refused it.
  */
-export const INTENT_TTL_MS = 24 * 60 * 60_000;
+
+/** Which create flow owns the intent (one remembered create per flow). */
+export type IntentScope = "wizard" | "editor";
 
 export interface PackageCreateIntent {
   v: 1;
@@ -40,8 +48,13 @@ export interface PackageCreateIntent {
   createdAt: number;
 }
 
-export function intentStorageKey(coachId: string): string {
-  return `${KEY_BASE}:${coachId}`;
+export function intentStorageKey(
+  coachId: string,
+  scope: IntentScope = "wizard",
+): string {
+  return scope === "wizard"
+    ? `${KEY_BASE}:${coachId}`
+    : `${EDITOR_KEY_BASE}:${coachId}`;
 }
 
 export function newIntent(
@@ -68,10 +81,9 @@ function isInput(x: unknown): x is PackageCreateInput {
   );
 }
 
-/** Parse a stored intent; anything malformed or expired reads as none. */
+/** Parse a stored intent; anything malformed reads as none. Age never does. */
 export function parseIntent(
   raw: string | null | undefined,
-  now: number = Date.now(),
 ): PackageCreateIntent | null {
   if (!raw) return null;
   try {
@@ -86,8 +98,6 @@ export function parseIntent(
     ) {
       return null;
     }
-    if (now - x.createdAt > INTENT_TTL_MS || x.createdAt - now > INTENT_TTL_MS)
-      return null;
     return {
       v: 1,
       key: x.key,
@@ -100,45 +110,230 @@ export function parseIntent(
   }
 }
 
+/**
+ * What device storage holds for this coach and flow. "unreadable" (storage
+ * threw) is NOT "none": an earlier create may be on its way, so the caller
+ * must not send a fresh one; it shows specific copy and lets the coach retry.
+ */
+export type IntentRead =
+  | { kind: "none" }
+  | { kind: "found"; intent: PackageCreateIntent }
+  | { kind: "unreadable" }
+  | { kind: "no_account" };
+
 export async function loadIntent(
   coachId: string | null,
-): Promise<PackageCreateIntent | null> {
-  if (!coachId) return null;
+  scope: IntentScope = "wizard",
+): Promise<IntentRead> {
+  if (!coachId) return { kind: "no_account" };
+  let raw: string | null | undefined;
   try {
-    return parseIntent(
-      await prefsStorage.getStringAsync(intentStorageKey(coachId)),
-    );
+    raw = await prefsStorage.getStringAsync(intentStorageKey(coachId, scope));
   } catch {
-    return null;
+    return { kind: "unreadable" };
   }
+  const intent = parseIntent(raw);
+  return intent ? { kind: "found", intent } : { kind: "none" };
 }
 
 /**
- * Write-ahead: called before the create is sent. A storage failure is not
- * fatal (the in-memory intent still makes in-session retries idempotent),
- * so it resolves false rather than blocking the coach.
+ * Write-ahead: a fresh create is sent ONLY after this resolves true. A false
+ * (no account, or storage refused the write) means the key would live only in
+ * memory, so a restart could send a second create under a new key.
  */
 export async function saveIntent(
   coachId: string | null,
   intent: PackageCreateIntent,
+  scope: IntentScope = "wizard",
 ): Promise<boolean> {
   if (!coachId) return false;
   try {
-    await prefsStorage.set(intentStorageKey(coachId), JSON.stringify(intent));
+    await prefsStorage.set(
+      intentStorageKey(coachId, scope),
+      JSON.stringify(intent),
+    );
     return true;
   } catch {
     return false;
   }
 }
 
-export async function clearIntent(coachId: string | null): Promise<void> {
+export async function clearIntent(
+  coachId: string | null,
+  scope: IntentScope = "wizard",
+): Promise<void> {
   if (!coachId) return;
   try {
-    await prefsStorage.delete(intentStorageKey(coachId));
+    await prefsStorage.delete(intentStorageKey(coachId, scope));
   } catch {
-    // A stale intent expires on its own (INTENT_TTL_MS) and its key only
-    // ever replays the same package, so a failed delete cannot duplicate.
+    // A leftover intent only ever replays its own package (the backend keeps
+    // the key), so a failed delete cannot make a second package.
   }
+}
+
+/** Storage could not hold the create's identity, so nothing was sent. */
+export class IntentStorageError extends Error {
+  constructor(readonly reason: "unreadable" | "unsaved" | "no_account") {
+    super(`package create intent ${reason}`);
+    this.name = "IntentStorageError";
+  }
+}
+
+/** Specific, recoverable copy for an IntentStorageError (never generic). */
+export function intentStorageCopy(err: IntentStorageError): {
+  title: string;
+  body: string;
+} {
+  switch (err.reason) {
+    case "no_account":
+      return {
+        title: "Your account is still loading",
+        body: "Nothing was sent. Wait a moment, then tap Create package again. If it keeps happening, sign out and sign in again.",
+      };
+    case "unreadable":
+      return {
+        title: "Your earlier package details could not be read",
+        body: "Nothing new was sent, so a package cannot be made twice. Try again in a moment. If it keeps happening, restart the app; Packages shows anything already made.",
+      };
+    default:
+      return {
+        title: "This device could not save your package details",
+        body: "Nothing was sent yet. Free up some space on the device if it is full, then try again.",
+      };
+  }
+}
+
+function bodyOf(err: unknown): Record<string, unknown> | null {
+  const data = (err as { response?: { data?: unknown } } | null)?.response
+    ?.data;
+  return data && typeof data === "object"
+    ? (data as Record<string, unknown>)
+    : null;
+}
+
+function statusOf(err: unknown): number | undefined {
+  const s = (err as { response?: { status?: unknown } } | null)?.response
+    ?.status;
+  return typeof s === "number" ? s : undefined;
+}
+
+export function createErrorCode(err: unknown): string | null {
+  const d = bodyOf(err);
+  if (!d) return null;
+  if (typeof d.code === "string") return d.code;
+  return typeof d.error === "string" ? d.error : null;
+}
+
+/** A 4xx (other than 408 / 409 / 422 reuse / 429) means nothing was created. */
+export function isDefinitiveRejection(err: unknown): boolean {
+  const status = statusOf(err);
+  if (status === undefined || status < 400 || status >= 500) return false;
+  if (status === 408 || status === 409 || status === 429) return false;
+  return createErrorCode(err) !== "IDEMPOTENCY_KEY_REUSED";
+}
+
+/**
+ * The server says this key already made a package from other details. The
+ * answer names that package, so the app adopts it instead of creating another.
+ */
+export function reusedPackageId(err: unknown): string | null {
+  if (createErrorCode(err) !== "IDEMPOTENCY_KEY_REUSED") return null;
+  const d = bodyOf(err);
+  return typeof d?.package_id === "string" ? d.package_id : null;
+}
+
+export interface CreateOnceDeps {
+  create: (
+    input: PackageCreateInput,
+    key: string,
+  ) => Promise<{ data: { id: string } }>;
+  update: (id: string, input: PackageCreateInput) => Promise<unknown>;
+}
+
+/**
+ * The one create path both flows use (B-329-1). `earlier` is the intent the
+ * caller already holds (hydrated from storage or kept from a previous tap).
+ *  1. An earlier unresolved intent is re-sent with its own key and body; the
+ *     server replays its package or makes it now, never a second one.
+ *  2. Only when nothing exists (a definitive refusal, or no earlier intent)
+ *     is a fresh intent written to storage and, ONLY if that write
+ *     succeeded, sent. A removed package (410) or changed details after a
+ *     refusal start fresh in the same tap (C-329-8).
+ *  3. Details changed after the package was made, or the key named a package
+ *     made from other details (422 IDEMPOTENCY_KEY_REUSED): that package is
+ *     updated with the coach's current details.
+ * `onIntent` mirrors every intent change into the caller's memory.
+ */
+export async function createPackageOnce(args: {
+  coachId: string | null;
+  scope: IntentScope;
+  input: PackageCreateInput;
+  earlier: PackageCreateIntent | null;
+  deps: CreateOnceDeps;
+  onIntent: (next: PackageCreateIntent | null) => void;
+}): Promise<{ packageId: string; intent: PackageCreateIntent }> {
+  const { coachId, scope, input, deps, onIntent } = args;
+  if (!coachId) throw new IntentStorageError("no_account");
+  const remember = async (next: PackageCreateIntent | null) => {
+    onIntent(next);
+    if (next) await saveIntent(coachId, next, scope);
+    else await clearIntent(coachId, scope);
+  };
+  // The server named a package this key made from OTHER details: adopt it
+  // and save the coach's current details onto it.
+  let adopted = false;
+  const send = async (
+    it: PackageCreateIntent,
+  ): Promise<PackageCreateIntent> => {
+    try {
+      const res = await deps.create(it.input, it.key);
+      const done = { ...it, packageId: res.data.id };
+      // Not strict: the key already made this package, so a lost write
+      // only means a later re-send replays the same package.
+      await remember(done);
+      return done;
+    } catch (err) {
+      const adopt = reusedPackageId(err);
+      if (adopt) {
+        adopted = true;
+        const done = { ...it, packageId: adopt };
+        await remember(done);
+        return done;
+      }
+      if (isDefinitiveRejection(err)) await remember(null);
+      throw err;
+    }
+  };
+
+  let current: PackageCreateIntent | null = args.earlier;
+  if (current && !current.packageId) {
+    try {
+      current = await send(current);
+    } catch (err) {
+      const removed = createErrorCode(err) === "IDEMPOTENT_PACKAGE_REMOVED";
+      if (
+        !isDefinitiveRejection(err) ||
+        (sameCreateInput(current.input, input) && !removed)
+      )
+        throw err;
+      current = null;
+    }
+  }
+  if (!current) {
+    const fresh = newIntent(input);
+    if (!(await saveIntent(coachId, fresh, scope))) {
+      throw new IntentStorageError("unsaved");
+    }
+    onIntent(fresh);
+    current = await send(fresh);
+  }
+  const packageId = current.packageId as string;
+  if (adopted || !sameCreateInput(current.input, input)) {
+    await deps.update(packageId, input);
+    current = { ...current, input };
+    await remember(current);
+  }
+  return { packageId, intent: current };
 }
 
 /** Same body the backend would store for this key. */

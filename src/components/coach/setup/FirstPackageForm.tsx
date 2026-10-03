@@ -26,14 +26,14 @@ import {
 } from "../../../lib/coachSetup/errors";
 import {
   clearIntent,
+  createPackageOnce,
+  intentStorageCopy,
+  IntentStorageError,
+  isDefinitiveRejection,
   loadIntent,
-  newIntent,
-  sameCreateInput,
-  saveIntent,
   type PackageCreateIntent,
 } from "../../../lib/coachSetup/packageCreateIntent";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
-import { errorStatus } from "../../../types/common";
 import SetupNotice from "./SetupNotice";
 
 export const PAID_PACKAGE_MIN_CENTS = 1999;
@@ -70,34 +70,18 @@ export function validatePackage(input: {
   return null;
 }
 
-/** A 4xx (other than 408 / 409 / 422 reuse / 429) means nothing was created. */
-export function isDefinitiveRejection(err: unknown): boolean {
-  const status = errorStatus(err);
-  if (status === undefined || status < 400 || status >= 500) return false;
-  if (status === 408 || status === 409 || status === 429) return false;
-  return errorCode(err) !== "IDEMPOTENCY_KEY_REUSED";
-}
+// Shared with the package editor (B-329-1); re-exported for existing callers.
+export { isDefinitiveRejection };
 
-function errorCode(err: unknown): string | null {
-  const data = (err as { response?: { data?: unknown } } | null)?.response
-    ?.data;
-  if (!data || typeof data !== "object") return null;
-  const d = data as Record<string, unknown>;
-  if (typeof d.code === "string") return d.code;
-  return typeof d.error === "string" ? d.error : null;
-}
-
-/**
- * The server says this key already made a package from other details (it
- * never happens while the app re-sends the stored body, but a server-side
- * normalisation change could cause it). The answer names that package, so
- * the app adopts it instead of creating another one.
- */
-function reusedPackageId(err: unknown): string | null {
-  if (errorCode(err) !== "IDEMPOTENCY_KEY_REUSED") return null;
-  const d = (err as { response?: { data?: Record<string, unknown> } }).response
-    ?.data;
-  return typeof d?.package_id === "string" ? d.package_id : null;
+/** Specific copy when device storage could not hold the create's identity. */
+export function storageFailure(err: IntentStorageError): FriendlyError {
+  const copy = intentStorageCopy(err);
+  return {
+    ...copy,
+    requestId: null,
+    code: `PACKAGE_INTENT_${err.reason.toUpperCase()}`,
+    retryable: true,
+  };
 }
 
 interface Props {
@@ -139,10 +123,24 @@ export default function FirstPackageForm({
   // start a second submit.
   const inFlight = useRef(false);
 
+  // The account this form belongs to, for re-checks after every await: a
+  // sign-out or account switch mid-create must not write into the next
+  // account's form or storage.
+  const coachRef = useRef(coachId);
+  coachRef.current = coachId;
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     let live = true;
-    hydrated.current = loadIntent(coachId).then((stored) => {
-      if (!live || !stored || intent.current) return;
+    hydrated.current = loadIntent(coachId).then((read) => {
+      if (!live || read.kind !== "found" || intent.current) return;
+      const stored = read.intent;
       intent.current = stored;
       // Show the coach the package that was on its way, as it was sent.
       setTitle(stored.input.title);
@@ -157,29 +155,6 @@ export default function FirstPackageForm({
     };
   }, [coachId]);
 
-  const remember = async (next: PackageCreateIntent | null) => {
-    intent.current = next;
-    if (next) await saveIntent(coachId, next);
-    else await clearIntent(coachId);
-  };
-
-  /** Send (or re-send) the intent's create; returns the package id. */
-  const sendCreate = async (it: PackageCreateIntent): Promise<string> => {
-    try {
-      const res = await coachPackagesApi.create(it.input, it.key);
-      await remember({ ...it, packageId: res.data.id });
-      return res.data.id;
-    } catch (err) {
-      const adopt = reusedPackageId(err);
-      if (adopt) {
-        await remember({ ...it, packageId: adopt });
-        return adopt;
-      }
-      if (isDefinitiveRejection(err)) await remember(null);
-      throw err;
-    }
-  };
-
   const submit = async () => {
     const problem = validatePackage({ title, free, priceText });
     setInvalid(problem);
@@ -187,6 +162,8 @@ export default function FirstPackageForm({
     if (problem || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
+    const owner = coachId;
+    const stillOwner = () => mounted.current && coachRef.current === owner;
     const priceCents = free ? 0 : (parsePriceCents(priceText) ?? 0);
     const billingInterval: PackageBillingInterval =
       free || !monthly ? "one_time" : "monthly";
@@ -202,36 +179,32 @@ export default function FirstPackageForm({
     };
     try {
       if (hydrated.current) await hydrated.current;
-      let packageId: string | null = intent.current?.packageId ?? null;
-      const earlier = intent.current;
-      if (!packageId && earlier) {
-        // An earlier try got no definitive answer: re-send exactly that
-        // create with its key. The server returns the package it made, or
-        // makes it now, never a second one.
-        try {
-          packageId = await sendCreate(earlier);
-        } catch (err) {
-          // Refused outright, so nothing exists. If the coach has since
-          // changed the details, send the new details as a fresh create.
-          if (
-            !isDefinitiveRejection(err) ||
-            sameCreateInput(earlier.input, input)
-          )
-            throw err;
-        }
+      let earlier = intent.current;
+      if (!earlier) {
+        // B-329-1: read storage again before any fresh create. A failed read
+        // is not "nothing was sent": stop with specific copy instead.
+        const read = await loadIntent(owner);
+        if (read.kind === "unreadable")
+          throw new IntentStorageError("unreadable");
+        if (read.kind === "no_account")
+          throw new IntentStorageError("no_account");
+        if (read.kind === "found") earlier = read.intent;
       }
-      if (!packageId) {
-        const fresh = newIntent(input);
-        await remember(fresh); // write-ahead, before the request leaves
-        packageId = await sendCreate(fresh);
-      }
-      const current = intent.current;
-      if (current && !sameCreateInput(current.input, input)) {
-        // The details changed after the package was made: update that
-        // package rather than making another one.
-        await coachPackagesApi.update(packageId, input);
-        await remember({ ...current, input });
-      }
+      if (!stillOwner()) return;
+      const { packageId } = await createPackageOnce({
+        coachId: owner,
+        scope: "wizard",
+        input,
+        earlier,
+        deps: {
+          create: (body, key) => coachPackagesApi.create(body, key),
+          update: (id, body) => coachPackagesApi.update(id, body),
+        },
+        onIntent: (next) => {
+          if (coachRef.current === owner) intent.current = next;
+        },
+      });
+      if (!stillOwner()) return;
       await coachSetupApi.publishPackage(packageId);
       let freeOnJoin = false;
       if (priceCents === 0) {
@@ -239,7 +212,9 @@ export default function FirstPackageForm({
         await coachSetupApi.bindFreePackage(invite.code, packageId);
         freeOnJoin = true;
       }
-      await remember(null);
+      if (!stillOwner()) return;
+      intent.current = null;
+      await clearIntent(owner);
       setResumed(false);
       onCreated({
         id: packageId,
@@ -249,7 +224,12 @@ export default function FirstPackageForm({
         freeOnJoin,
       });
     } catch (err) {
-      setError(describeError(err, "create your package"));
+      if (!stillOwner()) return;
+      setError(
+        err instanceof IntentStorageError
+          ? storageFailure(err)
+          : describeError(err, "create your package"),
+      );
     } finally {
       inFlight.current = false;
       setBusy(false);
