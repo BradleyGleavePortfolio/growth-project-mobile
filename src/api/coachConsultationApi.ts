@@ -114,9 +114,11 @@ export function consultationQueryKey(clientId: string) {
  */
 export async function loadClientConsultation(clientId: string): Promise<ConsultationResult> {
   let data: unknown;
+  let okReference: string | null = null;
   try {
     const res = await api.get(`/coach/clients/${encodeURIComponent(clientId)}/consultation`);
     data = res.data;
+    okReference = responseReference(res);
   } catch (err) {
     const failure = classifyFailure(err);
     if (failure === 'none') return { kind: 'none' };
@@ -124,9 +126,22 @@ export async function loadClientConsultation(clientId: string): Promise<Consulta
   }
   const parsed = ConsultationViewSchema.safeParse(data);
   if (!parsed.success) {
-    throw new ConsultationLoadError('unexpected', 200, null, 'contract');
+    // C-335-3: keep the correlation id on a 2xx that breaks the contract, so
+    // the screen's reference, the support subject and Sentry all match.
+    throw new ConsultationLoadError('unexpected', 200, okReference, 'contract');
   }
   return { kind: 'ok', view: parsed.data };
+}
+
+/**
+ * The correlation id for a successful response: the server's `x-request-id`
+ * header, else the `X-Request-Id` this app sent. Never read from the body,
+ * which is the client's answers. Null when neither exists.
+ */
+export function responseReference(res: unknown): string | null {
+  if (!res || typeof res !== 'object') return null;
+  const { headers, config } = res as { headers?: unknown; config?: unknown };
+  return supportReferenceOf({ response: { headers }, config });
 }
 
 export function classifyFailure(err: unknown): ConsultationLoadError | 'none' {

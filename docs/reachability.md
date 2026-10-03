@@ -50,12 +50,22 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
   Production answers `401` unauthenticated (mounted).
 - States: loading; no answers on file (the uniform 404); answers, with the
   readiness questions answered yes shown first and highlighted, then every
-  chapter, then consent; specific failure states for no connection, busy,
-  session ended (Log in again) and unexpected (short reference, Try again,
-  Email support, reported to Sentry with status, code and request id only,
-  never answers). A router 404 (route missing on an older backend) is treated
-  as unexpected, never as "no answers".
+  other readiness question with No or Not answered (notes as given), then
+  every chapter, then consent; specific failure states for no connection,
+  busy, session ended (Log in again) and unexpected (short reference, Try
+  again, Email support with the same reference in the subject, reported to
+  Sentry with status, code and request id only, never answers). A router 404
+  (route missing on an older backend) is treated as unexpected, never as "no
+  answers". A 2xx body that breaks the contract keeps its correlation id
+  (response header, else the outbound `X-Request-Id`; never the body).
 - The answers stay out of the persisted query cache (`meta.persist: false`).
+- Analytics: every state of the screen and the Summary card render inside a
+  `ph-no-capture` boundary, repeated on each card, row and button, so PostHog
+  touch autocapture never sends a client name, answer, note, measurement or
+  the card's yes count. Session replay is off (App.tsx sets no
+  `enableSessionReplay`; the SDK default is off). Tested with the installed
+  SDK's own extractor over every rendered element
+  (`ClientConsultationPrivacy.test.tsx`).
 - Summary card on Client detail shows the status line ("Completed Oct 1, 2026",
   or "In progress") and flags readiness yes answers before any tap.
 
@@ -130,6 +140,7 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `PrepGuide` | Client | More tab | MoreScreen | `GET /prep-guide` live (401)<br>`POST /lists/:p` on backend main |  | Works, reachable |
 | `Fast` | Client | More tab | MoreScreen, WidgetsScreen; deep link | `GET /fasting/history` live (401)<br>`POST /fasting/end` on backend main<br>`POST /fasting/start` on backend main |  | Works, reachable |
 | `Community` | Client | More tab | MoreScreen | `GET /check-ins` live (401)<br>`GET /community/feed` live (401)<br>`GET /habits/logs` live (401)<br>`GET /habits` live (401)<br>+21 more, none missing |  | Works, reachable |
+| `CommunitySafety` | Client | More tab | CommunityScreen (Safety) | `GET /community/safety`, `GET /community/blocks`, `POST /community/blocks`, `DELETE /community/blocks/:p`, `POST /community/moderation/reports` (contract in `src/api/communitySafetyApi.ts`; not probed in this map) |  | Added on main by #314 after this map was built. Reachable from Community. Owned by #314 |
 | `Progress` | Client | More tab | More > Progress | `GET /log/daily` live (401)<br>`GET /me/macros/current` live (401)<br>`GET /weight/history` live (401)<br>`POST /weight` on backend main |  | Wired in this PR (was a retired tab, no menu entry) |
 | `Settings` | Client | More tab | MoreScreen, ProfileScreen | `GET /log/daily` live (401)<br>`GET /nutrition/water` live (401)<br>`GET /profile` live (401)<br>`GET /workouts` live (401)<br>+7 more, none missing |  | Works, reachable |
 | `Widgets` | Client | More tab | MoreScreen, ProfileScreen | `POST /fasting/start` on backend main |  | Works, reachable |
@@ -171,6 +182,7 @@ serves them, its flag, and the verdict. Lane S-REACH (agent 113), 2026-10-02.
 | `WearableMetricDetail` | Client | More tab | HealthFitnessScreen | none (local or static) |  | Works, reachable |
 | `PackageCheckout` | Client | More tab | Package join link (deep link) | `GET /v1/packages/public/join/:p` live (handler 404)<br>`POST /v1/checkout/sessions` on backend main |  | Works: deep link only by design |
 | `CommunityTab` | Client | Community tab | Community tab root | `GET /community/challenges/:p/comments` live (401)<br>`GET /community/challenges/:p/leaderboard` live (401)<br>`GET /community/challenges/:p` live (401)<br>`GET /community/cohorts` live (401)<br>+19 more, none missing |  | Flag `communityTab` (see tab). Owned by #314 |
+| `CommunitySafety` | Client | Community tab | CommunityTabScreen (Safety) | Same as the More tab row (not probed in this map) |  | Added on main by #314 after this map was built. Works behind `communityTab`. Owned by #314 |
 | `CommunityToday` | Client | Community tab | none found | `GET /community/cohorts` live (401)<br>`GET /community/me` live (401)<br>`GET /community/posts/:p/comments` live (401)<br>`GET /community/posts/:p` live (401)<br>+10 more, none missing |  | Owned by #314 (community IA): record only |
 | `CommunitySpace` | Client | Community tab | CommunityTodayScreen | `GET /community/cohorts` live (401)<br>`GET /community/me` live (401)<br>`GET /community/posts/:p/comments` live (401)<br>`GET /community/posts/:p` live (401)<br>+10 more, none missing |  | Works behind `communityTab`. Owned by #314 |
 | `CommunityThread` | Client | Community tab | CommunitySpaceScreen, CommunityTodayScreen, CommunityFindScreen; deep link | `GET /community/cohorts` live (401)<br>`GET /community/me` live (401)<br>`GET /community/posts/:p/comments` live (401)<br>`GET /community/posts/:p` live (401)<br>+10 more, none missing |  | Works behind `communityTab`. Owned by #314 |
@@ -289,4 +301,3 @@ clients the sub-coach has an open assignment with; anyone else gets the same
 | `AIGuide` | #326 | Works; the consent refusal copy lands with #326. Merge it before release. |
 | `invitesApi.singleInvite` | cleanup | Targets `POST /coach/invite-codes/single`, which is not on backend main. No caller; delete in a cleanup PR. |
 | `OnboardingNavigator` (Step1 to Step10, Results) | cleanup | Legacy flow; RootNavigator never mounts it. Delete in a cleanup PR. |
-

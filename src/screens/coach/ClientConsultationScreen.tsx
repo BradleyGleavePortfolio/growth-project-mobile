@@ -16,6 +16,19 @@
  * Sentry with status, bounded code and reference only, never answers. The
  * query opts out of the persisted cache (`meta.persist: false`), so answers
  * are never written to device storage.
+ *
+ * Analytics exclusion (Sol A-335-1): the app's PostHog provider has touch
+ * autocapture on; it walks up from the touched element and drops the event
+ * when any ancestor carries `ph-no-capture`. Every state of this screen
+ * renders inside that boundary, and each card, answer row and button repeats
+ * the marker, so it is always well within the SDK's 20-element ancestor
+ * walk. No client name, answer, note or measurement can reach the SDK.
+ * Session replay is not enabled in this app (App.tsx sets no
+ * enableSessionReplay; the SDK default is off).
+ *
+ * Readiness (Sol B-335-2): every readiness question is shown. Yes answers
+ * come first and are highlighted, because that is what the coach acts on;
+ * then every other question with No or Not answered, with notes as given.
  */
 import React from 'react';
 import {
@@ -63,6 +76,11 @@ export function firstNameOf(name: string | undefined): string | null {
   return first ? first : null;
 }
 
+/** Support email subject, with the short reference when there is one (C-335-3). */
+export function supportSubject(ref: string | null): string {
+  return ref ? `Consultation answers did not load (reference ${ref})` : 'Consultation answers did not load';
+}
+
 /** Copy for each failure kind: what happened, then what to do. */
 export function failureCopy(err: unknown): { title: string; body: string } {
   const kind = err instanceof ConsultationLoadError ? err.kind : 'unexpected';
@@ -94,7 +112,6 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
   const { clientId, clientName } = route.params;
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
-  const support = useSupportEmail('Consultation answers did not load');
   const q = useQuery({
     queryKey: consultationQueryKey(clientId),
     queryFn: () => loadClientConsultation(clientId),
@@ -102,6 +119,13 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
     retry: false,
     staleTime: 30_000,
   });
+  // C-335-3: the short reference shown on an unexpected failure also goes in
+  // the support email subject, so support can find the Sentry event by it.
+  const unexpectedRef =
+    q.error instanceof ConsultationLoadError && q.error.kind === 'unexpected'
+      ? shortReference(q.error.requestId)
+      : null;
+  const support = useSupportEmail(supportSubject(unexpectedRef));
 
   // Report each unexpected failure once (per error object), never the answers.
   const reported = React.useRef<unknown>(null);
@@ -123,6 +147,7 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
   if (q.isLoading) {
     body = (
       <View
+        ph-no-capture
         style={styles.center}
         testID="consultation-loading"
         accessibilityRole="progressbar"
@@ -134,12 +159,9 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
   } else if (q.isError) {
     const copy = failureCopy(q.error);
     const kind = q.error instanceof ConsultationLoadError ? q.error.kind : 'unexpected';
-    const ref =
-      kind === 'unexpected' && q.error instanceof ConsultationLoadError
-        ? shortReference(q.error.requestId)
-        : null;
+    const ref = unexpectedRef;
     body = (
-      <View style={styles.card} testID={`consultation-error-${kind}`} accessibilityRole="alert">
+      <View ph-no-capture style={styles.card} testID={`consultation-error-${kind}`} accessibilityRole="alert">
         <Text style={[typography.h3, { color: sc.textPrimary }]}>{copy.title}</Text>
         <Text style={[typography.body, { color: sc.textPrimary }]}>{copy.body}</Text>
         {ref ? (
@@ -196,7 +218,7 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
     );
   } else if (!q.data || q.data.kind === 'none') {
     body = (
-      <View style={styles.card} testID="consultation-none">
+      <View ph-no-capture style={styles.card} testID="consultation-none">
         <Text style={[typography.h3, { color: sc.textPrimary }]}>No answers yet</Text>
         <Text style={[typography.body, { color: sc.textPrimary }]}>
           {`No consultation answers are on file for ${first ?? 'this client'} yet.`}
@@ -211,26 +233,31 @@ export default function ClientConsultationScreen({ route }: Props): React.ReactE
   }
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      testID="client-consultation-screen"
-      refreshControl={
-        <RefreshControl
-          refreshing={q.isRefetching}
-          onRefresh={() => {
-            void q.refetch();
-          }}
-          tintColor={sc.textMuted}
-        />
-      }
-    >
-      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Consultation</Text>
-      <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">
-        {clientName?.trim() ? clientName.trim() : 'Client'}
-      </Text>
-      {body}
-    </ScrollView>
+    <View ph-no-capture style={styles.screen} testID="client-consultation-excluded">
+      <ScrollView
+        ph-no-capture
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        testID="client-consultation-screen"
+        refreshControl={
+          <RefreshControl
+            refreshing={q.isRefetching}
+            onRefresh={() => {
+              void q.refetch();
+            }}
+            tintColor={sc.textMuted}
+          />
+        }
+      >
+        <Text style={[typography.eyebrow, { color: sc.textMuted }]}>Consultation</Text>
+        <View ph-no-capture testID="client-consultation-heading">
+          <Text style={[typography.h2, { color: sc.textPrimary }]} accessibilityRole="header">
+            {clientName?.trim() ? clientName.trim() : 'Client'}
+          </Text>
+        </View>
+        {body}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -251,6 +278,7 @@ function ActionButton({
 }) {
   return (
     <Pressable
+      ph-no-capture
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={label}
@@ -278,6 +306,9 @@ function ConsultationBody({
   styles: Styles;
 }): React.ReactElement {
   const flagged = view.screening.items.filter((i) => i.answer === 'yes');
+  // Sol B-335-2: yes first (highlighted), then every other question in the
+  // order the client saw it, with No or Not answered.
+  const ordered = [...flagged, ...view.screening.items.filter((i) => i.answer !== 'yes')];
   const summary = screeningSummary(view);
   const status = view.submitted_at
     ? `Completed ${formatConsultationDate(view.submitted_at)}`
@@ -288,48 +319,61 @@ function ConsultationBody({
     readinessLine = `No to the ${summary.answered} answered so far, ${summary.total - summary.answered} still to answer.`;
   else readinessLine = 'No to every readiness question.';
   return (
-    <View testID="consultation-answers" style={{ gap: spacing.sm }}>
+    <View ph-no-capture testID="consultation-answers" style={{ gap: spacing.sm }}>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]} testID="consultation-status">
         {status}
       </Text>
 
       <View
+        ph-no-capture
         style={[styles.card, view.screening.any_yes ? { borderColor: sc.accent, borderWidth: 1 } : null]}
         testID="consultation-readiness"
       >
         <Text style={[typography.h3, { color: sc.textPrimary }]}>Readiness questions</Text>
         {view.screening.any_yes ? (
-          <>
-            <Text style={[typography.bodySmall, { color: sc.textMuted }]} testID="consultation-screening-flag">
-              {flagged.length === 1
-                ? 'Yes to one question. Talk it through with them before the first session.'
-                : `Yes to ${flagged.length} questions. Talk them through with them before the first session.`}
-            </Text>
-            {flagged.map((item) => (
-              <View key={item.key} style={styles.answer}>
-                <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{item.question}</Text>
-                <Text style={[typography.body, { color: sc.textPrimary }]}>Yes</Text>
-                {item.note ? (
-                  <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{item.note}</Text>
-                ) : null}
-              </View>
-            ))}
-          </>
+          <Text style={[typography.bodySmall, { color: sc.textMuted }]} testID="consultation-screening-flag">
+            {flagged.length === 1
+              ? 'Yes to one question. Talk it through with them before the first session.'
+              : `Yes to ${flagged.length} questions. Talk them through with them before the first session.`}
+          </Text>
         ) : (
           <Text style={[typography.bodySmall, { color: sc.textMuted }]} testID="consultation-readiness-line">
             {readinessLine}
           </Text>
         )}
+        {ordered.map((item) => {
+          const yes = item.answer === 'yes';
+          const label = yes ? 'Yes' : item.answer === 'no' ? 'No' : 'Not answered';
+          const answerColor = yes ? sc.accentText : item.answer === null ? sc.textMuted : sc.textPrimary;
+          return (
+            <View
+              ph-no-capture
+              key={item.key}
+              style={[styles.answer, yes ? [styles.answerFlagged, { borderLeftColor: sc.accent }] : null]}
+              testID={`consultation-readiness-${item.key}`}
+            >
+              <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{item.question}</Text>
+              <Text style={[typography.body, { color: answerColor }]} testID={`consultation-readiness-${item.key}-answer`}>
+                {label}
+              </Text>
+              {item.note ? (
+                <Text style={[typography.bodySmall, { color: sc.textMuted }]} selectable>
+                  {item.note}
+                </Text>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
 
       {view.chapters.map((chapter) => (
-        <View key={chapter.key} style={styles.card} testID={`consultation-chapter-${chapter.key}`}>
+        <View ph-no-capture key={chapter.key} style={styles.card} testID={`consultation-chapter-${chapter.key}`}>
           <Text style={[typography.h3, { color: sc.textPrimary }]}>{chapter.title}</Text>
           {chapter.answers.length === 0 ? (
             <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Not answered yet.</Text>
           ) : (
             chapter.answers.map((a) => (
-              <View key={a.screen} style={styles.answer}>
+              <View ph-no-capture key={a.screen} style={styles.answer}>
                 <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{a.question}</Text>
                 <Text style={[typography.body, { color: sc.textPrimary }]} selectable>
                   {a.answer_label}
@@ -365,6 +409,7 @@ function makeStyles(sc: SemanticTokens) {
       borderColor: sc.border,
     },
     answer: { paddingTop: spacing.sm, gap: 2 },
+    answerFlagged: { borderLeftWidth: 2, paddingLeft: spacing.sm },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingTop: spacing.sm },
     action: {
       minHeight: 44,

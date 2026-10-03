@@ -7,6 +7,11 @@
  * shows the one thing the coach must not miss before opening anything: how
  * many readiness questions were answered yes. Failures here stay quiet and
  * point to the screen, which owns the specific error copy and actions.
+ *
+ * Analytics exclusion (Sol A-335-1): the card line and its accessibility
+ * label say how many readiness questions were answered yes, so the whole
+ * card carries `ph-no-capture` and PostHog touch autocapture drops any
+ * touch on it.
  */
 import React from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
@@ -64,6 +69,7 @@ export function ConsultationSummaryCard({
   const { line, flagged } = consultationCardLine(q.data, state);
   return (
     <Pressable
+      ph-no-capture
       onPress={() => navigation.navigate('ClientConsultation', { clientId, clientName })}
       accessibilityRole="button"
       accessibilityLabel={`Consultation answers. ${line}`}
@@ -87,7 +93,7 @@ export function ConsultationSummaryCard({
       ]}
     >
       <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-      <View style={{ flex: 1, gap: 2 }}>
+      <View ph-no-capture style={{ flex: 1, gap: 2 }}>
         <Text style={{ fontSize: 15, fontWeight: '600', color: colors.textPrimary }}>Consultation</Text>
         <Text
           style={{ fontSize: 13, color: flagged ? colors.primary : colors.textSecondary }}

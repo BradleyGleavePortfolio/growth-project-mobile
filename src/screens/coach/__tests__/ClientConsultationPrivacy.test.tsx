@@ -158,13 +158,13 @@ describe('A-335-1 analytics exclusion: coach consultation', () => {
     const loading = await mountScreen();
     expect(screen.getByTestId('consultation-loading')).toBeTruthy();
     expectNothingCaptured(loading.container, 5);
-    loading.unmount();
+    await loading.unmount();
 
     mockGet.mockRejectedValueOnce(httpError(404, { message: 'Consultation not found' }));
     const none = await mountScreen();
     await screen.findByTestId('consultation-none');
     expectNothingCaptured(none.container, 5);
-    none.unmount();
+    await none.unmount();
 
     const failures: Array<[number | null, string]> = [
       [null, 'offline'],
@@ -177,7 +177,7 @@ describe('A-335-1 analytics exclusion: coach consultation', () => {
       const r = await mountScreen();
       await screen.findByTestId(`consultation-error-${kind}`);
       expectNothingCaptured(r.container, 5);
-      r.unmount();
+      await r.unmount();
     }
   });
 
@@ -188,13 +188,13 @@ describe('A-335-1 analytics exclusion: coach consultation', () => {
     await screen.findByText(/Yes to one readiness question/);
     expect(card.props.accessibilityLabel).toMatch(/Yes to one readiness question/);
     expectNothingCaptured(ready.container, 3);
-    ready.unmount();
+    await ready.unmount();
 
     mockGet.mockReturnValueOnce(new Promise(() => undefined));
     const loading = await mountCard();
     expect(screen.getByText('Loading answers')).toBeTruthy();
     expectNothingCaptured(loading.container, 3);
-    loading.unmount();
+    await loading.unmount();
 
     mockGet.mockRejectedValueOnce(httpError(500, { message: 'x' }));
     const failed = await mountCard();
