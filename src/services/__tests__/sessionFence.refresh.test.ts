@@ -208,7 +208,7 @@ describe('refresh overtaken by a sign-in (A-331-7 / B-331-7)', () => {
     const p = pauseNext('set', 'supabase_token');
     const work = api.get('/a-work').catch((e: unknown) => e);
     await p.reached;
-    expect(sessionFenceHeld()).toBe(true);
+    const heldDuringWrite = sessionFenceHeld();
     const bSignIn = signIn(B, 'refresh-b');
     await tick();
     p.release();
@@ -220,6 +220,7 @@ describe('refresh overtaken by a sign-in (A-331-7 / B-331-7)', () => {
     expect(sent.filter((s) => s.url === '/a-work').map((s) => s.authorization)).not.toContain(`Bearer ${B}`);
     expect((result as AxiosError).response?.status).toBe(401);
     await expectNextRequestIsB();
+    expect(heldDuringWrite).toBe(true);
   });
 
   it('A signs out and back in (new session) during the refresh: the old refresh writes nothing', async () => {
@@ -289,9 +290,10 @@ describe('failed refresh never signs out a newer session (B-331-8)', () => {
     const reached = new Promise<void>((r) => (signOutReached = r));
     const gate = new Promise<void>((r) => (releaseSignOut = r));
     respond = (config) => (config.url === '/account-deletion/receipt' ? http(config, 404) : respond401ForA(config));
+    let sawPass = false;
     __setSignOutForTests(async (_userId, opts) => {
       signOutCalls += 1;
-      expect(opts?.sessionFence).toBeDefined();
+      sawPass = opts?.sessionFence !== undefined;
       signOutReached();
       await gate; // the sign-out's own awaited steps
       await Promise.all([
@@ -313,6 +315,7 @@ describe('failed refresh never signs out a newer session (B-331-8)', () => {
     expect(stored()).toEqual({ access: B, refresh: 'refresh-b' });
     expect(sessionFenceHeld()).toBe(false);
     await expectNextRequestIsB();
+    expect(sawPass).toBe(true);
   });
 
   it('positive control: a failed refresh with no other sign-in still signs A out', async () => {
