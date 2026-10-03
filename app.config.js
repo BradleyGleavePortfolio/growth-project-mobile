@@ -17,6 +17,31 @@ function isHealthPermission(permission) {
   );
 }
 
+// OR-113-2: Apple Pay / Google Pay in the native PaymentSheet are off by
+// config. The Stripe config plugin (Apple Pay entitlement, Google Pay wallet
+// meta-data) is added only when a merchant ID or the Google Pay switch is
+// set, with the same values src/config/wallets.ts reads at runtime, so a
+// build without a merchant ID never ships a dead wallet button.
+const STRIPE_PLUGIN = '@stripe/stripe-react-native';
+const MERCHANT_ID_RE = /^merchant\.[A-Za-z0-9.-]+$/;
+
+function stripeWalletPlugin() {
+  const merchantIdentifier = (process.env.EXPO_PUBLIC_STRIPE_MERCHANT_IDENTIFIER || '').trim();
+  const googleFlag = (process.env.EXPO_PUBLIC_GOOGLE_PAY_ENABLED || '').trim().toLowerCase();
+  const enableGooglePay = googleFlag === '1' || googleFlag === 'true';
+  const apple = MERCHANT_ID_RE.test(merchantIdentifier);
+  if (!apple && !enableGooglePay) return null;
+  return [STRIPE_PLUGIN, { ...(apple ? { merchantIdentifier } : {}), enableGooglePay }];
+}
+
+function withWalletPlugin(plugins) {
+  const wallet = stripeWalletPlugin();
+  const rest = (plugins || []).filter(
+    (plugin) => (Array.isArray(plugin) ? plugin[0] : plugin) !== STRIPE_PLUGIN,
+  );
+  return wallet ? [...rest, wallet] : plugins;
+}
+
 // Opt in only with 1. Every other value (including unset) builds without HC.
 module.exports = ({ config = app } = {}) => {
   const enabled = process.env.TGP_ANDROID_HEALTH_CONNECT === '1';
@@ -39,14 +64,16 @@ module.exports = ({ config = app } = {}) => {
             ]),
           ],
         },
-    plugins: enabled
-      ? config.plugins
-      : config.plugins?.filter(
-          (plugin) =>
-            !HEALTH_CONNECT_PLUGINS.has(
-              Array.isArray(plugin) ? plugin[0] : plugin,
-            ),
-        ),
+    plugins: withWalletPlugin(
+      enabled
+        ? config.plugins
+        : config.plugins?.filter(
+            (plugin) =>
+              !HEALTH_CONNECT_PLUGINS.has(
+                Array.isArray(plugin) ? plugin[0] : plugin,
+              ),
+          ),
+    ),
     extra: { ...config.extra, healthConnectEnabled: enabled },
   };
 };
