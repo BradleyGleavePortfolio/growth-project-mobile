@@ -102,7 +102,7 @@ describe('ExtensionPairingPanel — copy never asserts what the extension did', 
     const { getByText, getByTestId, queryByTestId } = await render(
       <ExtensionPairingPanel platformId="truecoach" />,
     );
-    expect(getByText("We couldn't confirm your account")).toBeTruthy();
+    expect(getByText("Your account could not be confirmed")).toBeTruthy();
     expect(getByText(/no pairing code was created/i)).toBeTruthy();
     expect(queryByTestId('pairing-minting')).toBeNull(); // not the indefinite spinner
     fireEvent.press(getByTestId('pairing-retry'));

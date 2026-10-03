@@ -142,7 +142,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Apple Health',
     icon: '',
     dataDescription:
-      "We'll read your activity, heart rate, workouts and sleep from Apple Health on this device.",
+      "Reads your activity, heart rate, workouts and sleep from Apple Health on this device.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   HEALTH_CONNECT: {
@@ -150,7 +150,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Health Connect',
     icon: '',
     dataDescription:
-      "We'll read your steps, heart rate, workouts and sleep from Health Connect on this device.",
+      "Reads your steps, heart rate, workouts and sleep from Health Connect on this device.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   SAMSUNG_HEALTH: {
@@ -158,7 +158,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Samsung Health',
     icon: '',
     dataDescription:
-      "We'll read your steps, heart rate, body composition and sleep from Samsung Health on this device.",
+      "Reads your steps, heart rate, body composition and sleep from Samsung Health on this device.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   GARMIN: {
@@ -166,7 +166,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Garmin',
     icon: '',
     dataDescription:
-      "We'll read your activities, daily stats, sleep, HRV and Body Battery from Garmin Connect.",
+      "Reads your activities, daily stats, sleep, HRV and Body Battery from Garmin Connect.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   FITBIT: {
@@ -174,14 +174,14 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Fitbit',
     icon: '',
     dataDescription:
-      "We'll read your activity, heart rate, sleep, weight and SpO2 from Fitbit.",
+      "Reads your activity, heart rate, sleep, weight and SpO2 from Fitbit.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   STRAVA: {
     provider: 'STRAVA',
     displayName: 'Strava',
     icon: '',
-    dataDescription: "We'll read your activities and workouts from Strava.",
+    dataDescription: "Reads your activities and workouts from Strava.",
     buckets: ['HEALTH_FITNESS'],
   },
   POLAR: {
@@ -189,14 +189,14 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Polar',
     icon: '',
     dataDescription:
-      "We'll read your exercises, sleep and nightly recharge from Polar Flow.",
+      "Reads your exercises, sleep and nightly recharge from Polar Flow.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   WAHOO: {
     provider: 'WAHOO',
     displayName: 'Wahoo',
     icon: '',
-    dataDescription: "We'll read your workouts and heart rate from Wahoo.",
+    dataDescription: "Reads your workouts and heart rate from Wahoo.",
     buckets: ['HEALTH_FITNESS'],
   },
   WITHINGS: {
@@ -204,21 +204,21 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Withings',
     icon: '',
     dataDescription:
-      "We'll read your weight, body composition, blood pressure and sleep from Withings.",
+      "Reads your weight, body composition, blood pressure and sleep from Withings.",
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   PELOTON: {
     provider: 'PELOTON',
     displayName: 'Peloton',
     icon: '',
-    dataDescription: "We'll read your workouts and heart rate from Peloton.",
+    dataDescription: "Reads your workouts and heart rate from Peloton.",
     buckets: ['HEALTH_FITNESS'],
   },
   MYFITNESSPAL: {
     provider: 'MYFITNESSPAL',
     displayName: 'MyFitnessPal',
     icon: '',
-    dataDescription: "We'll read your nutrition diary from MyFitnessPal.",
+    dataDescription: "Reads your nutrition diary from MyFitnessPal.",
     buckets: ['HEALTH_FITNESS'],
   },
   OURA: {
@@ -226,7 +226,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Oura',
     icon: '',
     dataDescription:
-      "We'll read your sleep, readiness, HRV and SpO2 from your Oura ring.",
+      "Reads your sleep, readiness, HRV and SpO2 from your Oura ring.",
     buckets: ['SLEEP_RECOVERY', 'HEALTH_FITNESS'],
   },
   WHOOP: {
@@ -234,7 +234,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'WHOOP',
     icon: '',
     dataDescription:
-      "We'll read your recovery, strain, sleep and HRV from WHOOP.",
+      "Reads your recovery, strain, sleep and HRV from WHOOP.",
     buckets: ['SLEEP_RECOVERY', 'HEALTH_FITNESS'],
   },
   EIGHT_SLEEP: {
@@ -242,14 +242,14 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Eight Sleep',
     icon: '',
     dataDescription:
-      "We'll read your sleep, HRV and respiratory rate from Eight Sleep.",
+      "Reads your sleep, HRV and respiratory rate from Eight Sleep.",
     buckets: ['SLEEP_RECOVERY'],
   },
   BEDDIT: {
     provider: 'BEDDIT',
     displayName: 'Beddit',
     icon: '',
-    dataDescription: "We'll read your sleep from Beddit (via Apple Health).",
+    dataDescription: "Reads your sleep from Beddit (via Apple Health).",
     buckets: ['SLEEP_RECOVERY'],
   },
 };

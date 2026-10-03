@@ -22,7 +22,7 @@ export interface SleepConsistencyCardProps {
 /** Reassurance-first copy keyed off the bedtime spread. Tighter = more settled. */
 function consistencyCopy(c: ConsistencyView): string {
   if (c.nights === 0 || c.bedtimeSpreadMin === null) {
-    return "We'll track how steady your sleep schedule is once a few nights sync";
+    return "Sleep schedule steadiness appears once a few nights sync";
   }
   if (c.bedtimeSpreadMin <= 45) {
     return 'Your sleep schedule is beautifully steady — your body knows what to expect';

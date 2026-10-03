@@ -32,7 +32,7 @@ export function SleepRecoveryErrorState({
 
   const message = lastSyncedLabel
     ? `Showing your last synced data from ${lastSyncedLabel}.`
-    : "We couldn't reach the health server just now. Your data is safe — let's try again.";
+    : "The health server did not answer just now. Your data is safe — try again.";
 
   return (
     <View style={styles.wrap} testID={testID ?? 'sleep-recovery-error'}>

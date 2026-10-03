@@ -85,7 +85,7 @@ export interface WearableInsightPanelProps {
  */
 function sanitizeError(error: unknown): string {
   if (error instanceof ZodError) {
-    return "This insight came back in an unexpected shape. We're looking into it.";
+    return "This insight came back in an unexpected shape, so it is not shown. It has been reported.";
   }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
@@ -94,7 +94,7 @@ function sanitizeError(error: unknown): string {
     if (status >= 500) return 'The server is temporarily unavailable.';
     if (status === 0) return 'Check your connection and try again.';
   }
-  return "We couldn't load this insight.";
+  return "This insight did not load.";
 }
 
 /**
@@ -194,7 +194,7 @@ export function WearableInsightPanel({
           </Text>
         </View>
         <Text style={styles.secondary}>
-          We&apos;ll fold their reply into the next insight.
+          Their reply is folded into the next insight.
         </Text>
       </View>
     );
@@ -229,7 +229,7 @@ export function WearableInsightPanel({
         <View style={styles.row}>
           <Ionicons name="cloud-offline-outline" size={18} color={colors.stone} />
           <Text style={styles.primary} accessibilityRole="alert">
-            We couldn&apos;t load this insight.
+            This insight did not load.
           </Text>
         </View>
         <Text style={styles.secondary} numberOfLines={1}>
@@ -347,7 +347,7 @@ function EmptyPanel({ tone }: { tone: ReturnType<typeof toneTokens> }) {
         <Text style={styles.primary}>Not enough data yet — keep syncing.</Text>
       </View>
       <Text style={styles.secondary}>
-        Once we have ~3 days of data, your AI will flag patterns.
+        Once there are about 3 days of data, your AI will flag patterns.
       </Text>
     </View>
   );

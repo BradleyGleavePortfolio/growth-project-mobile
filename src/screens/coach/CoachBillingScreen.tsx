@@ -320,7 +320,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
             </TouchableOpacity>
 
             <Text style={styles.fineprint}>
-              Billing is handled by our payment provider in a secure browser session. Card
+              Billing is handled by the payment provider in a secure browser session. Card
               details never touch the app.
             </Text>
           </>

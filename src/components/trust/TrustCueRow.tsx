@@ -32,7 +32,7 @@ const TRUST_CUES: TrustCue[] = [
     explainer: {
       title: 'End-to-end encrypted',
       body:
-        'All data between your phone and our servers travels over TLS 1.3 — the strongest transport encryption available. Your meals, workouts, and body stats are also encrypted at rest using AES-256, so even if our storage were ever accessed without authorisation, your data would be unreadable.',
+        'All data between your phone and The Growth Project servers travels over TLS 1.3 — the strongest transport encryption available. Your meals, workouts, and body stats are also encrypted at rest using AES-256, so even if that storage were ever accessed without authorisation, your data would be unreadable.',
     },
   },
   {
@@ -41,7 +41,7 @@ const TRUST_CUES: TrustCue[] = [
     explainer: {
       title: 'Your data is yours',
       body:
-        'You own everything you log in this app. You can request a full export of your data at any time from the Trust Center in Settings, and you can permanently delete your account with a 14-day grace period. We will never sell, license, or share your personal data with third parties for commercial purposes.',
+        'You own everything you log in this app. You can request a full export of your data at any time from the Trust Center in Settings, and you can permanently delete your account with a 14-day grace period. The Growth Project never sells, licenses, or shares your personal data with third parties for commercial purposes.',
     },
   },
   {
@@ -50,7 +50,7 @@ const TRUST_CUES: TrustCue[] = [
     explainer: {
       title: 'Zero ads · Zero data sales',
       body:
-        'The Growth Project runs on your subscription — not advertising revenue. We do not sell, rent, or trade your personal data to advertisers or data brokers. Analytics we collect are limited to anonymised, aggregate product-improvement signals and are never linked back to you individually.',
+        'The Growth Project runs on your subscription — not advertising revenue. The Growth Project does not sell, rent, or trade your personal data to advertisers or data brokers. Analytics are limited to anonymised, aggregate product-improvement signals and are never linked back to you individually.',
     },
   },
 ];

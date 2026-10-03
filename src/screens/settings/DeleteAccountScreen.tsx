@@ -76,7 +76,7 @@ export const PERMANENTLY_DELETED: readonly string[] = [
 
 // Mirrors the manifest's retained rows (operator retention policy).
 export const KEPT_RECORDS: readonly string[] = [
-  'Payment and tax records that Stripe keeps for as long as the law requires. Our own copies keep only amounts, dates and payment references, with no name or contact details.',
+  'Payment and tax records that Stripe keeps for as long as the law requires. The Growth Project's own copies keep only amounts, dates and payment references, with no name or contact details.',
   'One deletion record with a random reference, the date and the result. It holds no name, email or account details.',
   'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and are no longer linked to you.',
 ];
@@ -121,7 +121,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
   const [phase, setPhase] = useState<LoadPhase>('loading');
   const [statusError, setStatusError] = useState(
-    'We could not check your account deletion status. Check your connection, then try again.',
+    'Your account deletion status could not be checked. Check your connection, then try again.',
   );
   const [status, setStatus] = useState<DeletionStatus | null>(null);
   const [appleOutcome, setAppleOutcome] = useState<AppleRevocationOutcome | null>(null);
@@ -561,7 +561,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         <Text style={styles.sectionHeading}>Permanently deleted</Text>
         {deletedList}
         <Text style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}>
-          If you signed in with Apple, we also ask Apple to remove this app&apos;s access to your
+          If you signed in with Apple, Apple is also asked to remove this app&apos;s access to your
           Apple ID. You will see whether that worked, and how to do it yourself if it did not.
         </Text>
 

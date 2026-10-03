@@ -302,7 +302,7 @@ export default function ClientPackagesScreen() {
       <Text style={styles.subheader}>
         Each plan is personal coaching delivered one to one by your coach.
         Payment is handled by Stripe's secure checkout. Your card never
-        touches our servers.
+        touches The Growth Project servers.
       </Text>
 
       {/* Past-due / dunning banner */}

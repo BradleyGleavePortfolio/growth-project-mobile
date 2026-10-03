@@ -305,7 +305,7 @@ export default function CheckoutReturnScreen() {
         <ActivityIndicator color={semanticColors.accent} size="large" />
         <Text style={styles.title}>Confirming payment…</Text>
         <Text style={styles.body}>
-          We're verifying your subscription with Stripe. This usually takes a
+          Your subscription is being verified with Stripe. This usually takes a
           few seconds.
         </Text>
       </View>
@@ -392,7 +392,7 @@ export default function CheckoutReturnScreen() {
       <Text style={styles.title}>Payment received</Text>
       <Text style={styles.body}>
         {status?.package_name
-          ? `We're confirming ${status.package_name} now. Your coach has been notified and will be in touch shortly.`
+          ? `${status.package_name} is being confirmed now. Your coach has been notified and will be in touch shortly.`
           : 'Your coach has been notified and will be in touch shortly.'}
       </Text>
       <TouchableOpacity style={styles.cta} onPress={goHome} accessibilityRole="button">

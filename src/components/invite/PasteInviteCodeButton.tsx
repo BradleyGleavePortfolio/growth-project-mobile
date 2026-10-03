@@ -18,7 +18,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 
 export const PASTE_EMPTY_MESSAGE =
-  'We could not find an invite code on your clipboard. Copy the code from your coach, then tap Paste again.';
+  'No invite code was found on your clipboard. Copy the code from your coach, then tap Paste again.';
 
 interface Props {
   onCode: (code: string) => void;

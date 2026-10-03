@@ -26,7 +26,7 @@ describe("deletionErrorCopy", () => {
   it("network: says the server was not reached and to check the connection", () => {
     const copy = deletionErrorCopy(new Error("Network Error"), "schedule", "t");
     expect(copy).toBe(
-      "We could not reach the server to schedule your account deletion. Check your connection, then try again.",
+      "The server could not be reached to schedule your account deletion. Check your connection, then try again.",
     );
     expect(captureError).not.toHaveBeenCalled();
   });
@@ -77,7 +77,7 @@ describe("deletionErrorCopy", () => {
       "trust_center.export",
     );
     expect(copy).toBe(
-      `We could not start your data export because of a problem on our side. Reference: 3f0c7a52. Try again in a few minutes, or write to ${DELETION_SUPPORT_EMAIL} and mention the reference.`,
+      `The app could not start your data export because of a server problem. Reference: 3f0c7a52. Try again in a few minutes, or write to ${DELETION_SUPPORT_EMAIL} and mention the reference.`,
     );
     expect(captureError).toHaveBeenCalledWith(
       expect.anything(),

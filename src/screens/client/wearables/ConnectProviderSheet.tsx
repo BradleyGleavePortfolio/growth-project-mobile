@@ -155,7 +155,7 @@ export default function ConnectProviderSheet({
           return;
         case 'unavailable':
           setError(
-            `${name} isn't set up on this device yet. We've opened its settings — finish setup there, then try again.`,
+            `${name} isn't set up on this device yet. Its settings are now open — finish setup there, then try again.`,
           );
           return;
         case 'unsupported':
@@ -184,7 +184,7 @@ export default function ConnectProviderSheet({
     } catch {
       // Generic, action-oriented error copy (Stripe-quality: says what to do).
       // No token/secret material is ever surfaced (#12).
-      setError("We couldn't start the connection. Please try again.");
+      setError("The connection did not start. Check your internet connection, then try again.");
     } finally {
       setRequestingOnDevice(false);
     }

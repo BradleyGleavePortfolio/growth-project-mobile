@@ -120,7 +120,7 @@ function macroLine(c: CopyContext): string {
   const m = c.macros;
   if (!m) return 'Tap How to use these numbers.';
   if (c.macroMode === 'simple') {
-    return `This first week, we keep it to two numbers: ${n(m.calories)} calories and ${n(m.protein_g)} grams of protein. Carbohydrate and fat are already worked out for you, and they will join these on Home when the week is done. Tap How to use these numbers.`;
+    return `This first week keeps it to two numbers: ${n(m.calories)} calories and ${n(m.protein_g)} grams of protein. Carbohydrate and fat are already worked out for you, and they will join these on Home when the week is done. Tap How to use these numbers.`;
   }
   return `Each day: ${n(m.calories)} calories, ${n(m.protein_g)} grams of protein, ${n(m.carbs_g)} grams of carbohydrate and ${n(m.fat_g)} grams of fat. Tap How to use these numbers.`;
 }
@@ -170,7 +170,7 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     ],
     doneLine: () => 'Your plan stays pinned here on Train.',
     pendingLine: (c) =>
-      `${c.coachName} is still setting up your first plan. It will appear on Train once it is ready. For now, we will carry on.`,
+      `${c.coachName} is still setting up your first plan. It will appear on Train once it is ready. For now, the tour carries on.`,
   },
   {
     id: 'macros',

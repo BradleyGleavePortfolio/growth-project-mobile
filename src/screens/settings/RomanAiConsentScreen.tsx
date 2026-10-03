@@ -60,7 +60,7 @@ export const ROMAN_AI_COPY = {
   reconsentBody: 'The wording of this choice has changed since you last chose, so it is off for now. You can allow it again below.',
   updateApp: 'This choice has been updated since this version of the app. Please update the app to change it.',
   notSent: 'You were signed out before this choice was saved, so nothing changed. Sign in and choose again.',
-  unavailable: `The Roman and AI setting is switched off on our side at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
+  unavailable: `The Roman and AI setting is switched off by The Growth Project at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
   loadOffline: 'I could not reach the server to load your choice. Check your connection, then tap Try again.',
   loadServer: (ref: string | null) =>
     `The server could not load your choice. Tap Try again. If it keeps happening, write to support at ${SUPPORT_EMAIL}${ref ? ` and mention reference ${ref}` : ''}.`,

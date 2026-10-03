@@ -485,7 +485,7 @@ export default function AIWorkoutDraftScreen() {
           <View style={styles.rejectCard}>
             <Text style={styles.rejectTitle}>Reject draft</Text>
             <Text style={styles.rejectDesc}>
-              Tell the system what was wrong so we can improve.
+              Say what was wrong so future drafts improve.
             </Text>
             <TextInput
               style={styles.rejectInput}

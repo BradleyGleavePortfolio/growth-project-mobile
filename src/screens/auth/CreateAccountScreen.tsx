@@ -889,7 +889,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         <View style={styles.verifyContent}>
           <Text style={styles.verifyTitle}>Check your inbox</Text>
           <Text style={styles.verifyBody}>
-            We sent a verification link to{'\n'}
+            A verification link was sent to{'\n'}
             <Text style={styles.emailHighlight}>{email}</Text>
           </Text>
           <Text style={styles.verifySubBody}>
@@ -899,8 +899,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           {inviteAttachError !== null ? (
             <View style={styles.noticeBox} testID="invite-attach-pending-notice">
               <Text style={styles.noticeText}>
-                Your account was created, but we could not connect you to your coach yet. After
-                you verify, we will ask for your invite code again.
+                Your account was created, but it is not connected to your coach yet. After
+                you verify, the app asks for your invite code again.
               </Text>
             </View>
           ) : null}
@@ -1012,7 +1012,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         ? 'You chose to coach clients, but coach sign-up was switched off while you were signing up. No account has been created. You can create a client account instead, or check again later.'
         : withdrawal === 'refused'
           ? 'You chose to coach clients, but coach sign-up was switched off while your request was being sent, and your coach sign-up was not completed. You can create a client account instead, or check again later.'
-          : 'You chose to coach clients, but coach sign-up has been switched off, and we could not confirm what happened to your coach sign-up request. An account may or may not have been created. Sign in with the same email, Apple ID or Google account first; if the account exists, you will be signed in to it. You can also check again later or contact support.';
+          : 'You chose to coach clients, but coach sign-up has been switched off, and what happened to your coach sign-up request could not be confirmed. An account may or may not have been created. Sign in with the same email, Apple ID or Google account first; if the account exists, you will be signed in to it. You can also check again later or contact support.';
     return (
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scroll}>

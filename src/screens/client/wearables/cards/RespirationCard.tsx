@@ -31,7 +31,7 @@ export function RespirationCard({ respiration, colors, revealDelay = 0 }: Respir
   // Reassurance-first copy. Soft clinician-referral suffix ONLY when SpO2 is
   // sustained below threshold — phrased as a gentle suggestion, not a verdict.
   const copy = !hasAny
-    ? "We'll show your breathing and blood-oxygen once your tracker syncs overnight"
+    ? "Breathing and blood-oxygen appear once your tracker syncs overnight"
     : spo2NeedsAttention
       ? `Your overnight readings are in. Blood oxygen has been dipping a little lower than usual — it may be worth mentioning to your clinician next time you chat.`
       : 'Your breathing and blood oxygen look settled through the night';

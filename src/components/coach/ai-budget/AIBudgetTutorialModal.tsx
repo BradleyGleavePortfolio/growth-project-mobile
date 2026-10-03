@@ -109,12 +109,12 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card
   return [
     {
       title: 'How AI usage works',
-      body: `Every AI draft — workouts, meal plans, briefs, client chat — runs on a real model and has a real cost. We bundle ${total} of AI value into your monthly plan so most coaches never think about it.`,
+      body: `Every AI draft — workouts, meal plans, briefs, client chat — runs on a real model and has a real cost. Your monthly plan bundles ${total} of AI value so most coaches never think about it.`,
       icon: 'sparkles-outline',
     },
     {
       title: 'Why a budget?',
-      body: 'A per-coach budget protects you (a runaway client chat loop can\'t bankrupt your month) and protects us (so we can keep AI in your plan instead of bolting on a per-call surcharge).',
+      body: 'A per-coach budget protects you (a runaway client chat loop can\'t bankrupt your month) and keeps AI inside your plan instead of a per-call surcharge.',
       icon: 'shield-checkmark-outline',
     },
     {
@@ -124,7 +124,7 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card
     },
     {
       title: 'Buy credits',
-      body: 'Pick a pack to keep AI features uninterrupted. Or tap "I\'ll buy later" — we\'ll show this once per month, and you can always top up from the Coach Home meter.',
+      body: 'Pick a pack to keep AI features uninterrupted. Or tap "I\'ll buy later" — this appears once per month, and you can always top up from the Coach Home meter.',
       icon: 'card-outline',
     },
   ];

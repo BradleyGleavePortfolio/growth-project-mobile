@@ -54,7 +54,7 @@ export function ReportMessageSheet({
       await onSubmit({ reason, details: details.trim() ? details.trim() : undefined });
       reset();
     } catch {
-      setError("We couldn't submit that report. Please try again.");
+      setError("Your report was not sent. Check your connection, then try again.");
       setSubmitting(false);
     }
   }, [reason, submitting, details, onSubmit, reset]);
@@ -87,7 +87,7 @@ export function ReportMessageSheet({
 
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={styles.lede}>
-            Reports are reviewed by our team within 24 hours. The user will not be told who
+            Reports are reviewed by the safety team within 24 hours. The user will not be told who
             reported them.
           </Text>
 
@@ -135,7 +135,7 @@ export function ReportMessageSheet({
             maxLength={DETAILS_MAX}
             value={details}
             onChangeText={setDetails}
-            placeholder="Add anything our team should know."
+            placeholder="Add anything the safety team should know."
             placeholderTextColor={colors.textMuted}
             accessibilityLabel="Additional details"
           />

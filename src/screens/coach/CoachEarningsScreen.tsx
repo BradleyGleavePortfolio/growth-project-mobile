@@ -201,7 +201,7 @@ export default function CoachEarningsScreen() {
           <Text style={styles.gateBody}>
             Connect Stripe and publish a package — your gross revenue, net
             after fees, payout history, and reconciliation health will live
-            here. We never fabricate numbers.
+            here. Numbers are never estimated or invented.
           </Text>
           <TouchableOpacity
             style={[styles.cta, onboardBusy && styles.ctaDisabled]}

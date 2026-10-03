@@ -87,7 +87,7 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
       return;
     }
     void Linking.openURL(safe).catch(() => {
-      setLinkError('We couldn’t open that link. Please try again.');
+      setLinkError('That link did not open on this phone. Try again, or open it from your browser.');
     });
   }, [event?.external_url]);
 
@@ -144,7 +144,7 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.errorCopy, { color: semanticColors.textPrimary }]}>
-            We could not load this event. Check your connection and try again.
+            This event did not load. Check your connection and try again.
           </Text>
           <HapticPressable
             intent="medium"

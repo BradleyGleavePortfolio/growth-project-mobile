@@ -59,7 +59,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     // can change their mind without re-running signup.
     Alert.alert(
       'Skip personalisation?',
-      "We won't know your goal, body metrics, or any allergies — meal and workout suggestions will use generic defaults until you finish your profile from Settings.",
+      "Without your goal, body metrics, or any allergies, meal and workout suggestions will use generic defaults until you finish your profile from Settings.",
       [
         { text: 'Back', style: 'cancel' },
         {

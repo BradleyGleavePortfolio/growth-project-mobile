@@ -234,7 +234,7 @@ export default function CommunityFindScreen(): React.ReactElement {
           color={semanticColors.textMuted}
         />
         <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-          We could not open search. Please try again.
+          Search did not open. Check your connection, then try again.
         </Text>
         <HapticPressable
           intent="light"

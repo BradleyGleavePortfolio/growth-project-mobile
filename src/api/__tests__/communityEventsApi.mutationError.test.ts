@@ -39,7 +39,7 @@ describe('describeMutationError (F4)', () => {
       new CommunityApiError('server', 500, 'server'),
     );
     expect(info.conflict).toBe(false);
-    expect(info.message).toMatch(/our end|went wrong/i);
+    expect(info.message).toMatch(/event service had a problem and nothing was changed/);
   });
 
   it('falls back to a calm generic message for an unknown error', () => {

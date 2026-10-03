@@ -71,7 +71,7 @@ export default function OnboardingStep2({ navigation }: Props) {
       step={2}
       totalSteps={10}
       title="Body Metrics"
-      subtitle="We'll use this to calculate your targets"
+      subtitle="This sets your targets"
       onBack={() => navigation.goBack()}
       onContinue={handleContinue}
       continueEnabled={canContinue}

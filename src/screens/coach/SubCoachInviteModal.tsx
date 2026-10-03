@@ -203,7 +203,7 @@ export default function SubCoachInviteModal({
           {result ? (
             <>
               <Text style={styles.body}>
-                We emailed an invite link to{' '}
+                An invite link was emailed to{' '}
                 <Text style={{ fontWeight: '600' }}>{result.email}</Text>. If they
                 don't see it, share the link directly:
               </Text>

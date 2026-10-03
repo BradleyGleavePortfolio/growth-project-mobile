@@ -85,9 +85,9 @@ function describeError(err: unknown, action: CommunityAction = 'challenge_action
       case 'gone':
         return 'This challenge is no longer available.';
       case 'conflict':
-        return 'Your progress was updated elsewhere. We have refreshed it for you.';
+        return 'Your progress was updated elsewhere. It has been refreshed.';
       case 'network':
-        return 'We could not reach the server. Check your connection and try again.';
+        return 'The server could not be reached. Check your connection and try again.';
       default:
         break;
     }
@@ -474,7 +474,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.errorTitle, { color: semanticColors.textPrimary }]}>
-            We could not load this challenge
+            This challenge did not load
           </Text>
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
             {detailErrorMessage}
@@ -699,7 +699,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             </View>
           ) : leaderboard.isError ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-              We could not load the leaderboard right now.
+              The leaderboard did not load just now.
             </Text>
           ) : leaderboardRows.length === 0 ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
@@ -783,7 +783,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         color={semanticColors.textMuted}
       />
       <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-        We could not load the encouragement notes. Your message will still send.
+        Encouragement notes did not load. Your message will still send.
       </Text>
       <HapticPressable
         intent="light"

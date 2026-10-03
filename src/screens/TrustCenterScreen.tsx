@@ -240,7 +240,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
         </View>
         <Text style={styles.heroSubtitle}>
-          Your health data is sensitive. Here is exactly how we protect it.
+          Your health data is sensitive. Here is exactly how it is protected.
         </Text>
       </View>
 
@@ -345,7 +345,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
           <BulletItem text="Your assigned coach — only what you log (meals + workouts)" />
-          <BulletItem text="No one else — we do not sell, share, or license your data" />
+          <BulletItem text="No one else — your data is never sold, shared, or licensed" />
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>What is encrypted</Text>
           <BulletItem text="All data in transit uses TLS 1.3 (the strongest available)" />
@@ -354,7 +354,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>Where your data lives</Text>
           <BulletItem text="Servers located in US East data centres" />
-          <BulletItem text="We do not transfer data outside the US without your consent" />
+          <BulletItem text="Data is not transferred outside the US without your consent" />
           <BulletItem text="Backups are encrypted and stored in the same region" />
         </View>
       </View>

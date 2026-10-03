@@ -201,7 +201,7 @@ describe('loading / empty / error states', () => {
     expect(getByTestId('client-insight-empty')).toBeTruthy();
     expect(getByText('Not enough data yet — keep syncing.')).toBeTruthy();
     expect(
-      getByText("We'll add insights here as your devices report more."),
+      getByText("We'Insights appear here as your devices report more."),
     ).toBeTruthy();
     expect(queryByTestId('client-insight-confidence')).toBeNull();
     expect(queryByTestId('client-insight-cta')).toBeNull();
@@ -218,7 +218,7 @@ describe('loading / empty / error states', () => {
     expect(getByTestId('client-insight-error')).toBeTruthy();
     // Raw error text must never reach the surface (#12).
     expect(queryByText('internal db path leak')).toBeNull();
-    expect(getByText("We couldn't load this insight.")).toBeTruthy();
+    expect(getByText("This insight did not load.")).toBeTruthy();
     await fireEvent.press(getByLabelText('Retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
   });

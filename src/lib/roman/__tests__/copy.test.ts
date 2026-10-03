@@ -406,7 +406,7 @@ describe('romanFirstPayment — §2.6 exact spec strings', () => {
     expect(
       romanFirstPayment({ coachName: COACH, amount: AMOUNT, clientName: CLIENT, mode: 'celebration' }),
     ).toBe(
-      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations!',
+      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations.',
     );
   });
 

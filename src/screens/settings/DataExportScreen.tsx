@@ -182,7 +182,7 @@ function describeError(err: unknown, step: Step): Notice {
   if (isNetworkError(err)) {
     return {
       title: "You appear to be offline",
-      message: `We could not reach The Growth Project. Check your connection, then ${NEXT_STEP[step]}.`,
+      message: `The Growth Project could not be reached. Check your connection, then ${NEXT_STEP[step]}.`,
       reference: null,
     };
   }
@@ -221,11 +221,11 @@ function describeError(err: unknown, step: Step): Notice {
         : "prepare your download";
   const what =
     err instanceof DataExportResponseError || code === DATA_EXPORT_BAD_RESPONSE
-      ? "The answer from our server was incomplete, so nothing was opened. "
+      ? "The server's answer was incomplete, so nothing was opened. "
       : "";
   const nextStep = NEXT_STEP[step];
   return {
-    title: `We could not ${verb}`,
+    title: `Could not ${verb}`,
     message: `${what}${nextStep.charAt(0).toUpperCase()}${nextStep.slice(1)}. If it keeps happening, email ${SUPPORT_EMAIL} and quote reference ${reference}.`,
     reference,
   };
@@ -258,7 +258,7 @@ function stateFor(
 
 /** No export on record (any more): start state with a plain note. */
 const GONE_NOTICE: Notice = {
-  title: "We could not find your export",
+  title: "Your export was not found",
   message:
     "There is no export on record for your account now. Tap Request my data to start a new one.",
   reference: null,
@@ -553,7 +553,7 @@ export default function DataExportScreen() {
                 reference,
               }
             : {
-                title: "We could not open your download",
+                title: "Your download did not open",
                 message: `Tap Download file again. If it keeps happening, email ${SUPPORT_EMAIL} and quote reference ${reference}.`,
                 reference,
               },
@@ -665,7 +665,7 @@ export default function DataExportScreen() {
 
       <Text style={styles.caption}>
         The file is in JSON format and can be opened in any text editor or
-        imported into compatible tools. We keep it for {KEEP_DAYS} days after it
+        imported into compatible tools. It is kept for {KEEP_DAYS} days after it
         is ready. Each tap on Download file makes a private link that works for{" "}
         {LINK_MINUTES} minutes and only for you.
       </Text>
@@ -700,7 +700,7 @@ export default function DataExportScreen() {
           <ActivityIndicator color={colors.primary} />
           <Text style={styles.statusHeading}>Export in progress</Text>
           <Text style={styles.statusBody}>
-            We are assembling your file. This usually takes under 60 seconds.
+            Your file is being assembled. This usually takes under 60 seconds.
             Your export will be available to download from this screen when it
             is ready. This screen updates automatically, and you can leave it
             and come back.

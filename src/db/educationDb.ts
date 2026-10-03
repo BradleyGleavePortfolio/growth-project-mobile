@@ -130,7 +130,7 @@ export async function seedLessonsIfNeeded(): Promise<void> {
       subtitle: 'Why water matters',
       category: 'Nutrition Basics',
       durationMin: 4,
-      content: `Water is involved in virtually every bodily function — digestion, temperature regulation, nutrient transport, and joint lubrication.\n\n**How much?** A good baseline is half your body weight in ounces (e.g., 180 lbs → 90 oz). Increase during exercise, hot weather, or if you drink caffeine.\n\n**Signs of dehydration:**\n• Dark yellow urine\n• Headaches and fatigue\n• Decreased performance\n• Hunger (often confused with thirst)\n\n**Tips for drinking more water:**\n• Keep a water bottle visible at all times\n• Drink a glass before each meal\n• Set hourly reminders\n• Add lemon, cucumber, or berries for flavor\n• Track intake in this app!\n\nHerbal teas and sparkling water count toward your goal. Coffee counts partially but is also a diuretic.`,
+      content: `Water is involved in virtually every bodily function — digestion, temperature regulation, nutrient transport, and joint lubrication.\n\n**How much?** A good baseline is half your body weight in ounces (e.g., 180 lbs → 90 oz). Increase during exercise, hot weather, or if you drink caffeine.\n\n**Signs of dehydration:**\n• Dark yellow urine\n• Headaches and fatigue\n• Decreased performance\n• Hunger (often confused with thirst)\n\n**Tips for drinking more water:**\n• Keep a water bottle visible at all times\n• Drink a glass before each meal\n• Set hourly reminders\n• Add lemon, cucumber, or berries for flavor\n• Track intake in this app\n\nHerbal teas and sparkling water count toward your goal. Coffee counts partially but is also a diuretic.`,
     },
     {
       title: 'Meal Timing & Frequency',

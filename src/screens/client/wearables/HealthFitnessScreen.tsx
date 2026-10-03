@@ -232,7 +232,7 @@ export default function HealthFitnessScreen({
           Couldn&apos;t reach health server
         </Text>
         <Text style={styles.errorBody}>
-          We&apos;ll keep your data safe — try again.
+          Your data is safe — try again.
         </Text>
         <Pressable
           onPress={() => void refetch()}

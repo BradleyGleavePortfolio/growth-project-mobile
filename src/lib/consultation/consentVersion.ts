@@ -33,7 +33,7 @@ export const CONSENT_TITLE = 'Before we start';
  * Server copy version of the box 2 AI processing paragraph and label (R2a).
  * v4 (backend #635): paragraph 4's retention sentence now says Roman chats
  * are kept until the client deletes them or their account (owner 2026-10-01
- * 20:32, OR-110-1); v3 said 180 days, which was never true. The P0 version
+ * 20:32, OR-110-1); v3 named a fixed retention period, which was never true. The P0 version
  * moved to consult-consent-v3 with it, because the whole screen's text
  * changed (backend #607 must accept consult-consent-v3).
  */

@@ -107,7 +107,7 @@ export interface ClientWearableInsightPanelProps {
  */
 function sanitizeWearableError(error: unknown): string {
   if (error instanceof ZodError) {
-    return "This insight came back in an unexpected shape. We're looking into it.";
+    return "This insight came back in an unexpected shape, so it is not shown. It has been reported.";
   }
   if (axios.isAxiosError(error)) {
     const status = error.response?.status ?? 0;
@@ -118,7 +118,7 @@ function sanitizeWearableError(error: unknown): string {
     if (status >= 500) return 'The server is temporarily unavailable.';
     if (status === 0) return 'Check your connection and try again.';
   }
-  return "We couldn't load this insight.";
+  return "This insight did not load.";
 }
 
 export function ClientWearableInsightPanel({
@@ -295,7 +295,7 @@ function EmptyPanel({
         </Text>
       </View>
       <Text style={styles.secondary} accessibilityRole="text">
-        We&apos;ll add insights here as your devices report more.
+        Insights appear here as your devices report more.
       </Text>
     </View>
   );

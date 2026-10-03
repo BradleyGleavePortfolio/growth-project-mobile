@@ -127,7 +127,7 @@ const PROVIDERS = ['email', 'apple', 'google'];
 const COACH_POLICY = { ...ROLE_CHOICE_POLICY, providers: PROVIDERS };
 const NO_ACCOUNT = /No account was created/;
 const MAYBE_CREATED = /An account may or may not have been created/;
-const UNCONFIRMED = /We could not confirm your coach account/;
+const UNCONFIRMED = /Your coach account could not be confirmed/;
 
 async function fillAndSubmit(utils: Awaited<ReturnType<typeof renderScreen>>, email = 'pat@example.com') {
   await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Example');

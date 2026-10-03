@@ -78,7 +78,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         <Text style={styles.subtitle}>
           {sent
             ? 'Check your email for a reset link'
-            : "Enter your email and we'll send you a reset link"}
+            : "Enter your email to get a reset link"}
         </Text>
       </View>
 

@@ -31,7 +31,7 @@ export interface HrvTrendCardProps {
  */
 function hrvCopy(trend: TrendPoint[], latestMs: number | null): string {
   if (latestMs === null || trend.length === 0) {
-    return "We'll chart your HRV as your mornings sync in";
+    return "Your HRV chart fills in as your mornings sync";
   }
   if (trend.length < 3) {
     return 'Your HRV is settling in — a few more mornings will round out the picture';

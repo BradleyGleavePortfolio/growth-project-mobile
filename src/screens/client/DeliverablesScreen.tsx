@@ -152,7 +152,7 @@ function DeliverablesContent({
         <Text style={styles.header}>{headerTitle}</Text>
         <View style={styles.empty}>
           <Ionicons name="alert-circle-outline" size={36} color={tokens.colors.error} />
-          <Text style={styles.emptyTitle}>We couldn&apos;t load deliverables</Text>
+          <Text style={styles.emptyTitle}>Deliverables did not load</Text>
           <Text style={styles.emptyBody}>
             Check your connection and try again. If this keeps happening,
             message your coach.
