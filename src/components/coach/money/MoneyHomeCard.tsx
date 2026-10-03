@@ -19,6 +19,7 @@ import { coachMoneyApi, type MoneySummary } from "../../../api/coachMoneyApi";
 import { coachSetupApi, type ConnectView } from "../../../api/coachSetupApi";
 import {
   describeError,
+  isSubCoachBillingBlocked,
   type FriendlyError,
 } from "../../../lib/coachSetup/errors";
 import { changeLine, money } from "../../../lib/money/moneyCopy";
@@ -38,6 +39,9 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
   const [connect, setConnect] = useState<ConnectView | null>(null);
   const [error, setError] = useState<FriendlyError | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  // C-332-1 (Opus): an active sub-coach's money is the head coach's.
+  const [headCoachHandles, setHeadCoachHandles] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,8 +50,15 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
       coachMoneyApi.summary("30d"),
       coachSetupApi.connectStatus(),
     ]);
-    if (s.status === "fulfilled") setSummary(s.value);
-    else setError(describeError(s.reason, "load your Money numbers"));
+    if (s.status === "fulfilled") {
+      setSummary(s.value);
+      setLoadedAt(Date.now());
+      setHeadCoachHandles(false);
+    } else if (isSubCoachBillingBlocked(s.reason)) {
+      setHeadCoachHandles(true);
+    } else {
+      setError(describeError(s.reason, "load your Money numbers"));
+    }
     if (c.status === "fulfilled") setConnect(c.value);
     setLoading(false);
   }, []);
@@ -63,6 +74,32 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
     connect.state === "not_started" &&
     (summary?.totals.chargeCount ?? 0) === 0;
   const attention = summary?.attentionCount ?? 0;
+  const lastLoaded = loadedAt
+    ? new Date(loadedAt).toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : null;
+  const otherCurrencies = (summary?.currencies ?? []).filter(
+    (c) => c !== summary?.currency,
+  );
+
+  if (headCoachHandles) {
+    return (
+      <View
+        style={styles.card}
+        testID="money-home-card-head-coach"
+        accessible
+        accessibilityLabel="Money is handled by your head coach. Their practice takes payments and receives payouts for the clients you coach."
+      >
+        <Text style={styles.title}>Money</Text>
+        <Text style={styles.sub}>
+          Your head coach&apos;s practice takes payments and receives payouts
+          for the clients you coach.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.card} testID="money-home-card">
@@ -114,9 +151,24 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
                 )}
               </Text>
             ) : null}
+            {otherCurrencies.length > 0 ? (
+              <Text style={styles.sub} testID="money-home-card-currencies">
+                {`In ${summary.currency.toUpperCase()}. You also have sales in ${otherCurrencies
+                  .map((c) => c.toUpperCase())
+                  .join(", ")}; open Money to see each.`}
+              </Text>
+            ) : null}
             {!isOnline ? (
               <Text style={styles.sub} testID="money-home-card-offline">
-                You are offline. These are the last numbers we loaded.
+                {lastLoaded
+                  ? `You are offline. These are the numbers from ${lastLoaded}.`
+                  : "You are offline. These are the last numbers loaded."}
+              </Text>
+            ) : error ? (
+              <Text style={styles.sub} testID="money-home-card-stale">
+                {lastLoaded
+                  ? `These are the numbers from ${lastLoaded}. They could not be refreshed.`
+                  : "These numbers could not be refreshed."}
               </Text>
             ) : null}
           </>
@@ -127,7 +179,7 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
           />
         ) : null}
       </TouchableOpacity>
-      {error && !summary ? (
+      {error && (!summary || isOnline) ? (
         <SetupNotice
           error={error}
           onRetry={() => void load()}

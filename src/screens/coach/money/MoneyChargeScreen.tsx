@@ -18,6 +18,7 @@ import { useTheme } from "../../../theme/ThemeProvider";
 import { coachMoneyApi } from "../../../api/coachMoneyApi";
 import {
   breakdownRows,
+  cadenceLabel,
   chargeIsProblem,
   chargeStateLabel,
   money,
@@ -104,10 +105,10 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
         </Text>
         <View style={styles.card}>
           <Text style={styles.rowTitle}>{c.client.name}</Text>
-          <Text style={styles.rowSub}>
+          <Text style={styles.rowSub} testID="money-charge-meta">
             {[
               c.packageName,
-              c.billingType === "recurring" ? "Monthly" : "One time",
+              cadenceLabel(c),
               shortDate(c.createdAt),
             ]
               .filter(Boolean)
@@ -115,7 +116,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
           </Text>
         </View>
         <Text style={styles.h2} accessibilityRole="header">
-          How we got to your net
+          How this adds up to your net
         </Text>
         <View style={styles.card} testID="money-charge-breakdown">
           {!d.settled ? (

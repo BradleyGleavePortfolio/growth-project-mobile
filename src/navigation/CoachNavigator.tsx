@@ -29,9 +29,8 @@ import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesList
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
 import CoachPackageContentsScreen from '../screens/coach/payments/CoachPackageContentsScreen';
-// NOTE: payments/CoachEarningsScreen exists on disk (from feat branch) but
-// is intentionally not imported. The `CoachEarnings` route now redirects to
-// TGP Money (screens/coach/money), the production money surface.
+// The `CoachEarnings` route redirects to TGP Money (screens/coach/money),
+// the production money surface (the old earnings screens are deleted).
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding. The screen registrations below only mount

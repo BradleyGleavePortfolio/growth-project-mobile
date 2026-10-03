@@ -45,7 +45,33 @@ export const FILTER_LABEL: Record<ChargeFilter, string> = {
   paid: "Paid",
   failed: "Failed",
   refunded: "Refunded",
+  disputed: "Disputed",
 };
+
+/**
+ * B-332-2: the cadence a charge bills at, in plain words, from the
+ * backend's billing_interval / billing_interval_count. Never assumes
+ * "Monthly": a recurring charge with no known cadence says "Recurring".
+ */
+export function cadenceLabel(
+  c: Pick<MoneyCharge, "billingType" | "billingInterval" | "billingIntervalCount">,
+): string {
+  if (c.billingType !== "recurring") return "One time";
+  const n = c.billingIntervalCount ?? 1;
+  switch (c.billingInterval) {
+    case "week":
+      return n === 1 ? "Weekly" : `Every ${n} weeks`;
+    case "month":
+      if (n === 1) return "Monthly";
+      if (n === 3) return "Every 3 months";
+      if (n === 12) return "Yearly";
+      return `Every ${n} months`;
+    case "year":
+      return n === 1 ? "Yearly" : `Every ${n} years`;
+    default:
+      return "Recurring";
+  }
+}
 
 /** "Up $40.00 on yesterday", "Down 12.5% on the 30 days before". */
 export function changeLine(
@@ -81,7 +107,9 @@ export function chargeStateLabel(c: MoneyCharge): string {
     case "disputed":
       return "Disputed";
     case "charged_back":
-      return "Charged back";
+      return c.chargedBackCents > 0
+        ? `Charged back (${money(c.chargedBackCents, c.currency)})`
+        : "Charged back";
     case "pending":
       return "Processing";
     case "canceled":
@@ -107,9 +135,10 @@ export const PAYOUT_LABEL: Record<PayoutStatus, string> = {
   paid: "In your bank",
   failed: "Payout failed",
   canceled: "Payout canceled",
+  unknown: "Status from Stripe not recognised",
 };
 
-/** One line per fee row, for the "how we got to net" breakdown. */
+/** One line per fee row, for the "how this adds up" breakdown. */
 export interface BreakdownRow {
   key: string;
   label: string;
@@ -209,9 +238,9 @@ export function attentionCopy(a: AttentionItem): AttentionCopy {
     const locked = shortDate(f.lockedOutAt);
     const retry = shortDate(f.nextRetryAt);
     if (locked) lines.push(`Access paused on ${locked}.`);
-    else if (retry) lines.push(`We try the card again on ${retry}.`);
+    else if (retry) lines.push(`TGP tries the card again on ${retry}.`);
     const sent = shortDate(f.cardUpdateLinkSentAt);
-    if (sent) lines.push(`We sent them a card update link on ${sent}.`);
+    if (sent) lines.push(`TGP emailed them a card update link on ${sent}.`);
     if (f.lastFailureReason) lines.push(`Bank reason: ${f.lastFailureReason}.`);
     return {
       title: `${who}'s payment did not go through`,

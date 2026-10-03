@@ -73,7 +73,9 @@ function readSrc(...rel: string[]): string {
 const PROGRESS = readSrc('screens', 'client', 'ProgressScreen.tsx');
 const WORKOUT = readSrc('screens', 'client', 'WorkoutScreen.tsx');
 const ACTIVE = readSrc('screens', 'client', 'ActiveWorkoutScreen.tsx');
-const EARNINGS = readSrc('screens', 'coach', 'payments', 'CoachEarningsScreen.tsx');
+// C-332-2 (S-COACH-MOB-4): the payout notice moved from the deleted
+// payments/CoachEarningsScreen to TGP Money.
+const EARNINGS = readSrc('screens', 'coach', 'money', 'MoneyScreen.tsx');
 const BRIEF = readSrc('screens', 'coach', 'CoachBriefScreen.tsx');
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -113,9 +115,9 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
     expect(ACTIVE).toContain('reps={lastCompletedSet.reps}');
   });
 
-  it('§2.12 RomanPayoutNotice → CoachEarningsScreen', () => {
-    expect(EARNINGS).toContain("import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice'");
-    expect(EARNINGS).toMatch(/featureFlags\.romanChat &&\s*data\.lastPayoutAmountCents != null &&\s*formatDate\(data\.lastPayoutAt\)/);
+  it('§2.12 RomanPayoutNotice → MoneyScreen (Money page)', () => {
+    expect(EARNINGS).toMatch(/import RomanPayoutNotice from ["']\.\.\/\.\.\/\.\.\/components\/roman\/RomanPayoutNotice["']/);
+    expect(EARNINGS).toMatch(/featureFlags\.romanChat &&\s*lastPaid != null &&\s*shortDate\(lastPaid\.arrivalDate\)/);
     expect(EARNINGS).toContain('testID="roman-payout-card"');
   });
 

@@ -22,6 +22,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -35,6 +36,7 @@ import {
   coachMoneyApi,
   MONEY_RANGES,
   nextPayout,
+  windowsFor,
   type AttentionItem,
   type MoneyPayout,
   type MoneyRange,
@@ -57,6 +59,11 @@ import {
   RANGE_LABEL,
   shortDate,
 } from "../../../lib/money/moneyCopy";
+import { captureError } from "../../../services/sentry";
+import { featureFlags } from "../../../config/featureFlags";
+// §2.12 Roman payout notice, moved here from the deleted Earnings screen
+// (C-332-2). Gated behind romanChat.
+import RomanPayoutNotice from "../../../components/roman/RomanPayoutNotice";
 import { assertStripeUrl } from "../../../utils/stripeUrlValidator";
 import { useNetworkStatus } from "../../../hooks/useNetworkStatus";
 import SetupNotice from "../../../components/coach/setup/SetupNotice";
@@ -78,15 +85,26 @@ export default function MoneyScreen() {
   const navigation = useNavigation<Nav>();
   const { isOnline } = useNetworkStatus();
   const [range, setRange] = useState<MoneyRange>("30d");
+  // null = the server's default currency (USD when the coach has any).
+  const [currency, setCurrency] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<FriendlyError | null>(null);
   const [showBreakdown, setShowBreakdown] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [opening, setOpening] = useState(false);
   const [dashError, setDashError] = useState<FriendlyError | null>(null);
 
+  // B-332-1: every summary is tagged with the period and currency it was
+  // loaded for. Numbers are shown only under their own period's name; a
+  // slow or failed switch never relabels the previous period's money.
   const summary = useSection(
-    () => coachMoneyApi.summary(range),
+    async () => ({
+      range,
+      currency,
+      summary: await coachMoneyApi.summary(range, { currency }),
+    }),
     "load your Money numbers",
-    [range],
+    [range, currency],
   );
   const attention = useSection(
     () => coachMoneyApi.attention(),
@@ -153,9 +171,29 @@ export default function MoneyScreen() {
     }
   };
 
+  // The newest payout Stripe has put in the bank, for the Roman notice.
+  const lastPaid =
+    payouts.data
+      ?.filter((p) => p.status === "paid" && p.arrivalDate)
+      .sort(
+        (a, b) =>
+          Date.parse(b.arrivalDate as string) -
+          Date.parse(a.arrivalDate as string),
+      )[0] ?? null;
   const c = connect.data;
   const stripeActive = c?.state === "active";
-  const s = summary.data;
+  const tagged = summary.data;
+  // The summary for exactly the period and currency on screen, or null.
+  const s =
+    tagged && tagged.range === range && tagged.currency === currency
+      ? tagged.summary
+      : null;
+  // Business figures (MRR, paying, new, canceled) do not depend on the
+  // period, so the last summary in the same currency can show them.
+  const business =
+    s ?? (tagged && tagged.currency === currency ? tagged.summary : null);
+  const currencies = business?.currencies ?? [];
+  const shownCurrency = business?.currency ?? null;
   const noSalesYet =
     s !== null &&
     s.totals.chargeCount === 0 &&
@@ -183,6 +221,27 @@ export default function MoneyScreen() {
         minute: "2-digit",
       })
     : null;
+
+  // C-332-4 / C-641-4: the selected period, in the selected currency, as
+  // the server's tax CSV, handed to the share sheet (Mail, Files, AirDrop).
+  const exportCsv = async () => {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const w = windowsFor(range, new Date());
+      const out = await coachMoneyApi.exportCsv(
+        { from: w.from, to: w.to },
+        currency ?? shownCurrency,
+      );
+      await Share.share({ title: out.filename, message: out.csv });
+    } catch (err) {
+      setExportError(describeError(err, "export your money as a CSV file"));
+      if (!(err as { response?: unknown } | null)?.response)
+        captureError(err, { area: "coach_money", action: "export_csv" });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.page} edges={["top"]}>
@@ -269,25 +328,74 @@ export default function MoneyScreen() {
               </TouchableOpacity>
             ))}
           </View>
-          {summary.error && !s ? (
-            <SetupNotice
-              error={summary.error}
-              onRetry={() => void summary.reload()}
-              testID="money-summary-error"
-            />
-          ) : s ? (
-            <NetBlock
-              s={s}
-              range={range}
-              loading={summary.loading}
-              open={showBreakdown}
-              onToggle={() => setShowBreakdown((v) => !v)}
-              styles={styles}
-            />
+          {currencies.length > 1 ? (
+            <View
+              style={styles.chips}
+              accessibilityRole="tablist"
+              accessibilityLabel="Currency"
+              testID="money-currencies"
+            >
+              {currencies.map((cur) => {
+                const on = cur === shownCurrency;
+                return (
+                  <TouchableOpacity
+                    key={cur}
+                    onPress={() => setCurrency(cur)}
+                    style={[styles.chip, on && styles.chipOn]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`Show amounts in ${cur.toUpperCase()}`}
+                    testID={`money-currency-${cur}`}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                      {cur.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+          {s ? (
+            <>
+              <NetBlock
+                s={s}
+                range={range}
+                loading={summary.loading}
+                open={showBreakdown}
+                onToggle={() => setShowBreakdown((v) => !v)}
+                styles={styles}
+              />
+              {summary.error ? (
+                <View testID="money-summary-stale">
+                  <Text style={styles.bNote}>
+                    {lastLoaded
+                      ? `These are the numbers from ${lastLoaded}. They could not be refreshed.`
+                      : "These numbers could not be refreshed."}
+                  </Text>
+                  <SetupNotice
+                    error={summary.error}
+                    onRetry={() => void summary.reload()}
+                    testID="money-summary-error"
+                  />
+                </View>
+              ) : null}
+            </>
+          ) : summary.error ? (
+            <View testID="money-summary-failed">
+              <Text style={styles.eyebrow}>
+                Net to you, {RANGE_LABEL[range]}
+              </Text>
+              <SetupNotice
+                error={summary.error}
+                onRetry={() => void summary.reload()}
+                testID="money-summary-error"
+              />
+            </View>
           ) : (
             <ActivityIndicator
               color={colors.primary}
-              accessibilityLabel="Loading net to you"
+              accessibilityLabel={`Loading net to you, ${RANGE_LABEL[range]}`}
+              testID="money-summary-loading"
             />
           )}
           {noSalesYet ? (
@@ -376,11 +484,23 @@ export default function MoneyScreen() {
               testID="money-payouts-error"
             />
           ) : payouts.data ? (
+            <>
+            {featureFlags.romanChat &&
+            lastPaid != null &&
+            shortDate(lastPaid.arrivalDate) ? (
+              <RomanPayoutNotice
+                amount={money(lastPaid.amountCents, lastPaid.currency)}
+                sentOn={shortDate(lastPaid.arrivalDate) as string}
+                mode="default"
+                testID="roman-payout-card"
+              />
+            ) : null}
             <PayoutsBlock
               list={payouts.data}
               stripeActive={stripeActive}
               styles={styles}
             />
+            </>
           ) : (
             <ActivityIndicator
               color={colors.primary}
@@ -393,29 +513,29 @@ export default function MoneyScreen() {
         <Text style={styles.h2} accessibilityRole="header">
           Business
         </Text>
-        {s ? (
+        {business ? (
           <View testID="money-business">
             <View style={styles.tiles}>
               <KpiTile
                 label="Monthly recurring"
-                value={money(s.recurring.mrrCents, s.currency)}
+                value={money(business.recurring.mrrCents, business.currency)}
                 testID="money-kpi-mrr"
               />
               <KpiTile
                 label="Paying clients"
-                value={s.recurring.payingClients}
+                value={business.recurring.payingClients}
                 testID="money-kpi-paying"
               />
             </View>
             <View style={styles.tiles}>
               <KpiTile
                 label="New paying, 30 days"
-                value={s.recurring.newClients30d}
+                value={business.recurring.newClients30d}
                 testID="money-kpi-new"
               />
               <KpiTile
                 label="Canceled, 30 days"
-                value={s.recurring.churned30d}
+                value={business.recurring.churned30d}
                 testID="money-kpi-churn"
               />
             </View>
@@ -561,6 +681,31 @@ export default function MoneyScreen() {
             />
           ) : null}
           <TouchableOpacity
+            onPress={() => void exportCsv()}
+            disabled={exporting}
+            style={styles.footerRow}
+            accessibilityRole="button"
+            accessibilityLabel={`Export CSV for taxes, ${RANGE_LABEL[range]}`}
+            accessibilityHint="Sales, refunds and chargebacks for the selected period, ready for your accountant"
+            accessibilityState={{ busy: exporting, disabled: exporting }}
+            testID="money-export-csv"
+          >
+            <Text style={styles.footerText}>
+              {exporting ? "Preparing your CSV" : "Export CSV for taxes"}
+            </Text>
+            <Text style={styles.rowSub}>
+              {RANGE_LABEL[range]}
+              {shownCurrency ? `, ${shownCurrency.toUpperCase()}` : ""}
+            </Text>
+          </TouchableOpacity>
+          {exportError ? (
+            <SetupNotice
+              error={exportError}
+              onRetry={() => void exportCsv()}
+              testID="money-export-csv-error"
+            />
+          ) : null}
+          <TouchableOpacity
             onPress={() => navigation.navigate("CoachPackagesList")}
             style={styles.footerRow}
             accessibilityRole="button"
@@ -610,7 +755,7 @@ function NetBlock({
         accessibilityLabel={`Net to you, ${RANGE_LABEL[range]}: ${money(
           s.totals.netCents,
           s.currency,
-        )}. ${change ?? ""}. ${open ? "Hide" : "Show"} how we got there`}
+        )}. ${change ?? ""}. ${open ? "Hide" : "Show"} how this adds up`}
         testID="money-net-toggle"
       >
         <Text style={styles.eyebrow}>Net to you, {RANGE_LABEL[range]}</Text>
@@ -623,7 +768,7 @@ function NetBlock({
           </Text>
         ) : null}
         <Text style={styles.link}>
-          {open ? "Hide how we got there" : "How we got there"}
+          {open ? "Hide how this adds up" : "How this adds up"}
         </Text>
       </TouchableOpacity>
       {open ? (

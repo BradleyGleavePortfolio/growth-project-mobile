@@ -1,6 +1,6 @@
 /**
  * S-COACH-MOB-2 — "See all" charges from the Money page, filtered by
- * All / Paid / Failed / Refunded, newest first, paged by the server cursor
+ * All / Paid / Failed / Refunded / Disputed, newest first, paged by the server cursor
  * (GET /v1/coach/money/charges). Tap a charge for its fee breakdown.
  */
 import React, {
@@ -53,6 +53,7 @@ const EMPTY: Record<ChargeFilter, string> = {
   paid: "No paid charges yet.",
   failed: "No failed payments. Good news.",
   refunded: "No refunds or chargebacks.",
+  disputed: "No disputed charges.",
 };
 
 export default function MoneyChargesScreen({ navigation, route }: Props) {

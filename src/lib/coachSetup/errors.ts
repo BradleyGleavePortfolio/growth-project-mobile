@@ -72,7 +72,26 @@ const HUMAN_MESSAGE_CODES = new Set([
   "PACKAGE_INVALID",
   "MONEY_WINDOW_INVALID",
   "MONEY_COMPARE_WINDOW_INVALID",
+  "MONEY_EXPORT_TOO_LARGE",
 ]);
+
+/**
+ * C-332-1 (Opus): an active sub-coach reads Money and Connect routes behind
+ * NoActiveSubCoachGuard, which answers 403 `{ kind: "sub_coach_billing_blocked" }`.
+ * That is a role, not a failure: the head coach's practice handles money.
+ */
+export function isSubCoachBillingBlocked(err: unknown): boolean {
+  if (errorStatus(err) !== 403) return false;
+  const data = (err as { response?: { data?: unknown } } | null)?.response
+    ?.data;
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  return (
+    d.kind === "sub_coach_billing_blocked" ||
+    d.code === "sub_coach_billing_blocked" ||
+    d.error === "sub_coach_billing_blocked"
+  );
+}
 
 /**
  * Turn any thrown value into specific copy. `action` completes the sentence
@@ -181,6 +200,34 @@ export function describeError(err: unknown, action: string): FriendlyError {
       ...base,
       title: "Check the package details",
       body: message,
+      retryable: false,
+    };
+  }
+  if (isSubCoachBillingBlocked(err)) {
+    return {
+      ...base,
+      code: base.code ?? "sub_coach_billing_blocked",
+      title: "Money is handled by your head coach",
+      body: "Your head coach's practice takes payments and receives payouts for the clients you coach. Ask your head coach about payments.",
+      retryable: false,
+    };
+  }
+  if (code === "MONEY_PAYLOAD_INVALID") {
+    // B-332-3: the app refused figures it could not check rather than show
+    // a made-up number.
+    captureError(err, { area: "coach_money", action, status, code, requestId });
+    return {
+      ...base,
+      title: "These money figures could not be checked",
+      body: `TGP received figures for this that did not add up, so it is not showing them. Try again in a minute.${referenceSentence(requestId)}`,
+      retryable: true,
+    };
+  }
+  if (code === "MONEY_CURRENCY_INVALID") {
+    return {
+      ...base,
+      title: "That currency is not on your account",
+      body: "Pick one of the currencies shown at the top of Money.",
       retryable: false,
     };
   }

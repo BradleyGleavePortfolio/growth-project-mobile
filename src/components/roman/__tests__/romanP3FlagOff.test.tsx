@@ -58,7 +58,8 @@ function readSrc(...rel: string[]): string {
 const PROGRESS = readSrc('screens', 'client', 'ProgressScreen.tsx');
 const WORKOUT = readSrc('screens', 'client', 'WorkoutScreen.tsx');
 const ACTIVE = readSrc('screens', 'client', 'ActiveWorkoutScreen.tsx');
-const EARNINGS = readSrc('screens', 'coach', 'payments', 'CoachEarningsScreen.tsx');
+// C-332-2: the payout notice lives on TGP Money now.
+const EARNINGS = readSrc('screens', 'coach', 'money', 'MoneyScreen.tsx');
 const BRIEF = readSrc('screens', 'coach', 'CoachBriefScreen.tsx');
 
 function vp(over: Partial<VerifiedProgressItem>): VerifiedProgressItem {
@@ -164,7 +165,7 @@ describe('P3 surfaces are gated behind featureFlags.romanChat in their hosts', (
 
   it('§2.12 payout notice is gated on romanChat', () => {
     expect(EARNINGS).toMatch(
-      /featureFlags\.romanChat &&\s*data\.lastPayoutAmountCents != null/,
+      /featureFlags\.romanChat &&\s*lastPaid != null/,
     );
   });
 
