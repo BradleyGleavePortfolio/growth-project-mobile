@@ -59,7 +59,7 @@ export const REASON_COPY: Record<RunReasonCode, string> = {
   revoked: 'Access for this import was withdrawn.',
   unresolved_identities: 'Some people couldn’t be matched to TGP accounts yet.',
   relationship_unverified: 'Links between records couldn’t be checked.',
-  coverage_basis_unknown: 'We can’t tell yet whether everything was found.',
+  coverage_basis_unknown: 'It is not clear yet whether everything was found.',
 };
 
 export function formatTime(isoOrMs: string | number): string | null {

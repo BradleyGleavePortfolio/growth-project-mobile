@@ -298,7 +298,7 @@ export default function ConnectionsScreen() {
         <Header />
         <View style={styles.center}>
           <Text style={styles.errorTitle} accessibilityRole="alert">
-            We couldn&apos;t load your connections
+            Your connections did not load
           </Text>
           <Pressable
             style={styles.retry}

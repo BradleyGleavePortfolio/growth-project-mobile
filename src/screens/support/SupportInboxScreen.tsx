@@ -104,8 +104,8 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
         <Text style={styles.heading}>Live Support</Text>
         {unavailable ? (
           <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-unavailable">
-            Live chat is not available in this version of the app. Email us at {SUPPORT_EMAIL} and
-            a person from our team will reply.
+            Live chat is not available in this version of the app. Email {SUPPORT_EMAIL} and
+            a person from the support team will reply.
           </Text>
         ) : blocked ? (
           <Text style={styles.body_text} accessibilityRole="alert" testID="support-chat-blocked">
@@ -114,7 +114,7 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
           </Text>
         ) : (
           <Text style={styles.body_text}>
-            Connect with our support team via the chat overlay. The window
+            Connect with the support team via the chat overlay. The window
             should open automatically. If it did not appear, tap the button
             below.
           </Text>

@@ -145,7 +145,7 @@ export default function CoachBriefScreen() {
         <EmptyState
           icon="lock-closed-outline"
           title="Coach Brief is preview-only"
-          subtitle="The morning brief is in development. We'll enable it for your account once the live data feed ships."
+          subtitle="The morning brief is in development. It turns on for your account once the live data feed ships."
         />
       </View>
     );

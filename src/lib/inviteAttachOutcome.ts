@@ -61,12 +61,12 @@ const MESSAGES: Array<{ test: RegExp; message: string }> = [
   },
   {
     test: /invalid|not_found|unknown|no_such|bad_code/i,
-    message: 'We could not find that invite code. Check it with your coach and enter it below.',
+    message: 'That invite code was not found. Check it with your coach and enter it below.',
   },
 ];
 
 export const DEFAULT_INVITE_ATTACH_MESSAGE =
-  'Your account is ready, but we could not connect you to your coach yet. Enter your invite code to try again.';
+  'Your account is ready, but it is not connected to your coach yet. Enter your invite code to try again.';
 
 export function inviteAttachErrorMessage(reason: string | null | undefined): string {
   if (!reason) return DEFAULT_INVITE_ATTACH_MESSAGE;

@@ -194,6 +194,6 @@ describe('VoiceNoteComposer — recorder failure (B-314-7)', () => {
       <VoiceNoteComposer workspaceId={WS} target={target} recorder={port} />,
     );
     fireEvent.press(getByTestId('voice-record-button'));
-    expect(await findByText(/We could not check microphone access on this phone\./)).toBeTruthy();
+    expect(await findByText(/Microphone access could not be checked on this phone\./)).toBeTruthy();
   });
 });

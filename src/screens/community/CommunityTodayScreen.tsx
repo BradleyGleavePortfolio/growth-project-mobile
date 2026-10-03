@@ -92,7 +92,7 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load today. Please try again.
+            Today did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

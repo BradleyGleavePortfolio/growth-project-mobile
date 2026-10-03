@@ -207,7 +207,7 @@ describe('CreateAccountScreen', () => {
     mockGetString.mockResolvedValue('see you at the clinic!');
     const { getByTestId, findByText } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
-    expect(await findByText(/could not find an invite code on your clipboard/i)).toBeTruthy();
+    expect(await findByText(/No invite code was found on your clipboard/i)).toBeTruthy();
     expect(getByTestId('invite-code-input').props.value).toBe('');
   });
 
@@ -570,7 +570,7 @@ describe('CreateAccountScreen', () => {
       mockSignInWithGoogle.mockResolvedValue({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(await utils.findByText('Continue with Google'));
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       expect(utils.queryByText(CREATED_AS_CLIENT)).toBeNull();
       expect(utils.queryByText(/No account was created/)).toBeNull();
       expect(utils.nav.replace).not.toHaveBeenCalled();
@@ -586,7 +586,7 @@ describe('CreateAccountScreen', () => {
       });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(await utils.findByText('Continue with Google'));
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       expect(utils.nav.replace).not.toHaveBeenCalled();
       expect(mockEmit).not.toHaveBeenCalled();
       expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
@@ -598,7 +598,7 @@ describe('CreateAccountScreen', () => {
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'u1' } });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(utils.getByTestId('apple-button'));
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       expect(utils.nav.replace).not.toHaveBeenCalled();
       expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
     });
@@ -869,7 +869,7 @@ describe('CreateAccountScreen', () => {
       mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
       const utils = await renderScreen(undefined, 'coach');
       await fillAndSubmit(utils);
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       expect(utils.queryByText(/No account was created/)).toBeNull();
     });
 
@@ -880,7 +880,7 @@ describe('CreateAccountScreen', () => {
         .mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(await utils.findByText('Continue with Google'));
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       await fireEvent.press(utils.getByText('Continue with Google'));
       await waitFor(() =>
         expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_retry_not_applied' }),
@@ -896,7 +896,7 @@ describe('CreateAccountScreen', () => {
         .mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(utils.getByTestId('apple-button'));
-      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(await utils.findByText(/Your coach account could not be confirmed/)).toBeTruthy();
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() =>
         expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_retry_not_applied' }),
@@ -926,7 +926,7 @@ describe('CreateAccountScreen', () => {
   describe('#306 fix round 4 (Sol B1-R3: an unresolved attempt outlives its request)', () => {
     const PROVIDERS = ['email', 'apple', 'google'];
     const NO_ACCOUNT = /No account has been created/;
-    const UNCONFIRMED = /We could not confirm your coach account/;
+    const UNCONFIRMED = /Your coach account could not be confirmed/;
 
     async function renderCoachWithHeldLive() {
       await loadSignupPolicy(async () => ({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS } }));

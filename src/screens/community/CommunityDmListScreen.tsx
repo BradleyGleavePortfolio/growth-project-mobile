@@ -146,7 +146,7 @@ export default function CommunityDmListScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load your messages. Please try again.
+            Your messages did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"
@@ -177,7 +177,7 @@ export default function CommunityDmListScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load your conversations. Please try again.
+            Your conversations did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

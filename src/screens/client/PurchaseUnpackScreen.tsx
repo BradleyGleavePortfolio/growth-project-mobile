@@ -271,7 +271,7 @@ function PurchaseUnpackContent({
         {ReceiptHeader}
         <View style={styles.empty}>
           <Ionicons name="alert-circle-outline" size={36} color={tokens.colors.error} />
-          <Text style={styles.emptyTitle}>We couldn&apos;t load what&apos;s included</Text>
+          <Text style={styles.emptyTitle}>What is included did not load</Text>
           <Text style={styles.emptyBody}>
             Your purchase went through. Check your connection and try again,
             or open Deliverables from your packages screen later.

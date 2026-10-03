@@ -161,7 +161,7 @@ export default function CommunitySpaceScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            {`We could not load this space. Check your connection, then tap Try again. If it keeps happening, email ${COMMUNITY_SUPPORT_EMAIL}.`}
+            {`This space did not load. Check your connection, then tap Try again. If it keeps happening, email ${COMMUNITY_SUPPORT_EMAIL}.`}
           </Text>
           <HapticPressable
             intent="light"

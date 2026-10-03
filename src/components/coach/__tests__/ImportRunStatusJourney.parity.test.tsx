@@ -189,7 +189,7 @@ describe('rendered parity — loading / error / notFound / unreadable: same fact
   it('error shows the card\'s own network-failure copy', async () => {
     mockRun = { view: 'error' };
     const roman = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-    expect(JSON.stringify(roman.toJSON())).toContain('We couldn\u2019t reach the server to check this import. Check your connection and try again.');
+    expect(JSON.stringify(roman.toJSON())).toContain('The server could not be reached to check this import. Check your connection and try again.');
   });
 
   it('notFound shows the card\'s own 404 copy', async () => {

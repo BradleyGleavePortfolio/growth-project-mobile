@@ -92,7 +92,7 @@ export default function ImportRunVerdictCard({ importIntentId }: { importIntentI
     content = (
       <>
         <Text style={styles.title} testID="verdict-error">Import status: {NOT_KNOWN_YET.toLowerCase()}</Text>
-        <Text style={styles.body}>We couldn’t reach the server to check this import. Check your connection and try again.</Text>
+        <Text style={styles.body}>The server could not be reached to check this import. Check your connection and try again.</Text>
       </>
     );
   } else if (run.view === 'notFound') {

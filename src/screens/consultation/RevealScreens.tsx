@@ -164,7 +164,7 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
   },
   unknown: {
     head: 'I could not prepare your plan just now.',
-    body: `The server ran into a problem on our side. Your answers are kept on this phone, so nothing is lost. Tap Try again. If it happens again, write to ${SUPPORT_EMAIL}.`,
+    body: `The server ran into a problem. Your answers are kept on this phone, so nothing is lost. Tap Try again. If it happens again, write to ${SUPPORT_EMAIL}.`,
     cta: 'Try again',
   },
 };
@@ -174,7 +174,7 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
  * the short reference of the failed request, to quote to support.
  */
 export function referenceLine(reference: string | null | undefined): string | null {
-  return reference ? `Reference: ${reference}. Please mention it if you write to us.` : null;
+  return reference ? `Reference: ${reference}. Mention it if you write to support.` : null;
 }
 
 /**
@@ -259,7 +259,7 @@ export function PausedScreen({ ctx, onResume, onSignOut }: { ctx: CopyContext; o
   return (
     <Frame testID="consult-paused" footer={<PrimaryButton label="Continue my consultation" onPress={onResume} testID="consult-resume" />}>
       <Text style={[s.h1, { marginTop: 48 }]} accessibilityRole="header">Your place is kept.</Text>
-      <RomanLine text={fillCopy("Whenever you're ready, we'll pick up exactly where you left off. {Coach} will see your answers once you finish.", ctx)} />
+      <RomanLine text={fillCopy("Whenever you're ready, you can pick up exactly where you left off. {Coach} will see your answers once you finish.", ctx)} />
       <EscapeRow onSignOut={onSignOut} />
     </Frame>
   );

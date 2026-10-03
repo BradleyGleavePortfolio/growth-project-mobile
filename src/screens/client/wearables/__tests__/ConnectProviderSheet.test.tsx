@@ -104,7 +104,7 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText("We couldn't start the connection. Please try again."),
+        screen.getByText("The connection did not start. Check your internet connection, then try again."),
       ).toBeTruthy(),
     );
   });

@@ -209,7 +209,7 @@ export default function ChallengeProgressSheet({
       // Surface a calm, non-shaming error and KEEP the draft so the user can
       // retry, never silently swallowing the failure or leaving state dangling.
       setSubmitError(
-        'We could not save your progress just now. Please try again.',
+        'Your progress was not saved. Check your connection, then try again.',
       );
     } finally {
       submittingRef.current = false;

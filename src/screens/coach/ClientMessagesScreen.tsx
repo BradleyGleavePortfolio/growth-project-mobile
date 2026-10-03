@@ -222,7 +222,7 @@ export default function ClientMessagesScreen() {
       setReportTarget(null);
       Alert.alert(
         'Reported',
-        'Our team will review within 24 hours. Thanks for keeping the community safe.',
+        'The safety team reviews reports within 24 hours. Thank you for keeping the community safe.',
       );
     },
     [reportTarget],

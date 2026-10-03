@@ -79,7 +79,7 @@ export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293f
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {
   intro:
-    'One of your answers means we will start gently, and give your physician a say before anything demanding.',
+    'One of your answers means your plan starts gently, and your physician gets a say before anything demanding.',
   guidanceTitle: 'Until then, a few good habits',
   guidance: [
     'Choose an effort where you can still hold a conversation. If you are breathless, ease off.',
@@ -89,12 +89,12 @@ export const P8_COPY = {
   nextTitle: "Here's what happens next",
   next: [
     'You can finish setting up today and explore the app.',
-    'Your plan will start with our gentlest, lowest-impact program as a safe default.',
+    'Your plan will start with the gentlest, lowest-impact program as a safe default.',
     '{Coach} will be told, so they can check in with you.',
     'Your safest next step: book a visit with your physician and mention you are starting a training program. Once you have their OK, message {coach} and your plan can be adjusted.',
   ],
   physician:
-    'Based on your answers, we recommend you check with your physician before starting a new exercise program. This is a standard precaution, not a diagnosis.',
+    'Based on your answers, check with your physician before starting a new exercise program. This is a standard precaution, not a diagnosis.',
   emergency:
     'If you ever have chest pain, trouble breathing or feel faint, call 911. If you are struggling emotionally, call or text 988.',
   disclaimer:

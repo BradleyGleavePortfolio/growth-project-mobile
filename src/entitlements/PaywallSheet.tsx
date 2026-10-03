@@ -208,7 +208,7 @@ function PackagePaywallSheet({
       const copy =
         pkgState.reason === 'not_configured'
           ? 'Your coach has not enabled plans yet. Please reach out to them.'
-          : "We couldn't load plans right now. Tap Subscribe to keep trying.";
+          : "Plans did not load just now. Tap Subscribe to keep trying.";
       return (
         <Text
           style={[

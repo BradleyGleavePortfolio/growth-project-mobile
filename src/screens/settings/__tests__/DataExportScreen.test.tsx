@@ -247,7 +247,7 @@ describe("DataExportScreen", () => {
       await findByRole("button", { name: /Request my data/i }),
     );
 
-    await findByText("We could not start your export");
+    await findByText("Could not start your export");
     await findByText(
       /Tap Request my data again\. If it keeps happening, email Bradleyapple1031@gmail\.com and quote reference req-42\./,
     );
@@ -299,7 +299,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
 
-    await findByText("We could not load your export");
+    await findByText("Could not load your export");
     await fireEvent.press(
       await findByRole("button", { name: /Check your export status again/i }),
     );
@@ -451,7 +451,7 @@ describe("DataExportScreen", () => {
       await findByRole("button", { name: /Download your data file/i }),
     );
 
-    await findByText("We could not open your download");
+    await findByText("Your download did not open");
     await findByText(/email Bradleyapple1031@gmail\.com and quote reference/);
     expect(mockCaptureError.mock.calls[0][1]).toMatchObject({
       step: "open_browser",
@@ -530,7 +530,7 @@ describe("DataExportScreen", () => {
       await findByRole("button", { name: /Download your data file/i }),
     );
 
-    await findByText("We could not prepare your download");
+    await findByText("Could not prepare your download");
     await findByText("Reference: req-77");
     expect(mockCaptureError).toHaveBeenCalledWith(
       expect.anything(),
@@ -583,7 +583,7 @@ describe("DataExportScreen", () => {
     const { findByText } = await render(<DataExportScreen />);
 
     await findByText("Previous export expired");
-    await findByText(/kept for 7 days/i);
+    await findByText(/files are kept for 7 days/i);
   });
 
   it("shows Request new export button in expired state", async () => {
@@ -810,9 +810,9 @@ describe("DataExportScreen fix round 1", () => {
       await findByRole("button", { name: /Download your data file/i }),
     );
 
-    await findByText("We could not prepare your download");
+    await findByText("Could not prepare your download");
     await findByText(
-      /The answer from our server was incomplete, so nothing was opened/,
+      /The server's answer was incomplete, so nothing was opened/,
     );
     await findByText("Reference: ref-bad-1");
     expect(openURL).not.toHaveBeenCalled();
@@ -842,7 +842,7 @@ describe("DataExportScreen fix round 1", () => {
         jest.advanceTimersByTime(5500);
       });
     }
-    await findByText("We could not load your export");
+    await findByText("Could not load your export");
     await findByText("Reference: ref-st-1");
     expect(queryByText("Export in progress")).toBeNull();
   });
@@ -931,7 +931,7 @@ describe("DataExportScreen fix round 1", () => {
     await act(async () => {
       jest.advanceTimersByTime(5500);
     });
-    await findByText("We could not find your export");
+    await findByText("Your export was not found");
     expect(
       await findByRole("button", { name: /Request my data export/i }),
     ).toBeTruthy();

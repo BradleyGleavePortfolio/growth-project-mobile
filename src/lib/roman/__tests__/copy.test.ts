@@ -406,7 +406,7 @@ describe('romanFirstPayment — §2.6 exact spec strings', () => {
     expect(
       romanFirstPayment({ coachName: COACH, amount: AMOUNT, clientName: CLIENT, mode: 'celebration' }),
     ).toBe(
-      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations!',
+      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations.',
     );
   });
 
@@ -466,15 +466,17 @@ describe('voice contract (§1.1-§1.4)', () => {
     });
   });
 
-  it('spends exactly ONE exclamation, and only on the §2.6 celebration variant', () => {
+  // OR-115-4 (owner voice rule, 2026-10-03): no exclamation marks in shipped copy,
+  // so the §2.6 celebration variant no longer spends one; it is still distinct.
+  it('spends no exclamation, not even on the §2.6 celebration variant', () => {
     const celebration = romanFirstPayment({ coachName: COACH, amount: AMOUNT, clientName: CLIENT, mode: 'celebration' });
     const others = [
       romanFirstPayment({ coachName: COACH, amount: AMOUNT, clientName: CLIENT, mode: 'default' }),
       romanFirstPayment({ coachName: COACH, amount: AMOUNT, clientName: CLIENT, mode: 'error' }),
       romanPRDetected({ liftName: 'Back Squat', weight: 315 }),
     ];
-    // Celebration carries exactly one exclamation.
-    expect((celebration.match(/!/g) ?? []).length).toBe(1);
+    expect(celebration).not.toContain('!');
+    expect(celebration).toMatch(/Congratulations\.$/);
     // No other P4 string spends one.
     others.forEach((s) => expect(s).not.toContain('!'));
   });

@@ -287,7 +287,7 @@ export const SCREENS: readonly ScreenDef[] = [
     question:
       'Is any part of your body asking for extra care right now? An injury, a sore joint, or a recent surgery.',
     longQuestion: true,
-    why: "We'll start you with moves that respect it.",
+    why: "Your first moves will respect it.",
     options: YES_NO,
     autoAdvance: true,
     cta: 'Continue',
@@ -438,7 +438,7 @@ export const SCREENS: readonly ScreenDef[] = [
     eyebrow: chapterEyebrow(6),
     timeLeft: 'About 2 minutes left',
     question: "Anything you can't or won't eat?",
-    why: 'So nothing we suggest is something you avoid.',
+    why: 'So nothing suggested is something you avoid.',
     options: [
       { value: 'nothing', label: 'Nothing' },
       { value: 'dairy', label: 'Dairy' },

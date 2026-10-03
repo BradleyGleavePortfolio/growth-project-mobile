@@ -35,7 +35,7 @@ describe('inviteAttachErrorMessage', () => {
     expect(inviteAttachErrorMessage('max_uses_reached')).toMatch(/used up/);
     expect(inviteAttachErrorMessage('coach_inactive')).toMatch(/not accepting new clients/);
     expect(inviteAttachErrorMessage('already_has_coach')).toMatch(/different coach/);
-    expect(inviteAttachErrorMessage('invalid_code')).toMatch(/could not find/);
+    expect(inviteAttachErrorMessage('invalid_code')).toMatch(/was not found/);
   });
 
   it('never echoes an unknown raw server string', () => {

@@ -49,9 +49,9 @@ const STATUS_LABEL: Record<CoachApplicationStatus, string> = {
 
 const STATUS_DESCRIPTION: Record<CoachApplicationStatus, string> = {
   pending:
-    'Your application has been received and is being reviewed by our team. We aim to respond within 5 business days.',
+    'Your application has been received and is being reviewed by The Growth Project team. Expect an answer within 5 business days.',
   reviewed:
-    'Our team has reviewed your application. A decision is being finalised.',
+    'The Growth Project team has reviewed your application. A decision is being finalised.',
   approved:
     'Your application has been approved. You will be added to the talent pool shortly.',
   pool:
@@ -167,7 +167,7 @@ export default function ApplicationStatusScreen() {
         </Text>
         <Text style={styles.emptyBody}>
           You have not yet submitted a coach application. The application form
-          is available on our website.
+          is available on The Growth Project website.
         </Text>
       </ScrollView>
     );

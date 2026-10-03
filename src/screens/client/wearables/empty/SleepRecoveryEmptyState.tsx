@@ -49,7 +49,7 @@ export function SleepRecoveryEmptyState({ colors, onConnect, testID }: SleepReco
         </View>
       </View>
 
-      <Text style={styles.title}>Connect a tracker and we&apos;ll show your recovery story.</Text>
+      <Text style={styles.title}>Connect a tracker to see your recovery story.</Text>
       <Text style={styles.subtitle}>
         Sleep stages, heart-rate variability and overnight breathing — all in one calm view.
       </Text>

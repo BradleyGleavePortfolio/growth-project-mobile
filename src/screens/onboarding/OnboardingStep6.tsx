@@ -64,7 +64,7 @@ export default function OnboardingStep6({ navigation }: Props) {
       step={6}
       totalSteps={10}
       title="Eating Habits"
-      subtitle="Help us understand your current eating patterns"
+      subtitle="Your current eating patterns"
       onBack={() => navigation.goBack()}
       onContinue={handleContinue}
       continueEnabled={eatHabits !== null}

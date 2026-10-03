@@ -187,7 +187,7 @@ describe('#306 r7 provider failures through the real helpers and screens', () =>
       mockGoogleBackend.mockRejectedValue(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
       const ui = await renderLogin();
       await fireEvent.press(ui.getByLabelText('Continue with Google'));
-      expect(await ui.findByText(/couldn’t reach the server/)).toBeTruthy();
+      expect(await ui.findByText(/server could not be reached/)).toBeTruthy();
       expect(mockCaptureError).not.toHaveBeenCalled();
       expect(ui.nav.replace).not.toHaveBeenCalled();
     });

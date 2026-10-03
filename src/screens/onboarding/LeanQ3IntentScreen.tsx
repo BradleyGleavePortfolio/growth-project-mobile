@@ -103,7 +103,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
           </View>
           <Text style={styles.headline}>Where does it begin?</Text>
           <Text style={styles.subtext}>
-            We'll set up your home screen to make it instant.
+            Your home screen is set up to make it instant.
           </Text>
         </View>
 

@@ -99,7 +99,7 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
       <View style={localStyles.centered} testID="coach-recovery-error">
         <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
         <Text style={[styles.sectionTitle, { textAlign: 'center', marginTop: 12 }]}>
-          We couldn&apos;t load this client&apos;s recovery data.
+          This client&apos;s recovery data did not load.
         </Text>
         <TouchableOpacity
           onPress={onRetry}

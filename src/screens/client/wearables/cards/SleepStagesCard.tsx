@@ -39,7 +39,7 @@ export function SleepStagesCard({ stages, colors, revealDelay = 0 }: SleepStages
   const headline =
     stages && asleepMin > 0
       ? `Solid restorative night — ${formatMinutes(asleepMin)} asleep`
-      : "We'll map your sleep stages once your tracker syncs a night";
+      : "Sleep stages appear once your tracker syncs a night";
 
   return (
     <SrCard title="Sleep stages" icon="bed-outline" colors={colors} revealDelay={revealDelay} testID="sleep-stages-card">

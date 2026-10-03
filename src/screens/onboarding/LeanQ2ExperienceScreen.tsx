@@ -74,7 +74,7 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
             <View style={styles.dot} />
           </View>
           <Text style={styles.headline}>How long have you been at this?</Text>
-          <Text style={styles.subtext}>We shape the first steps to fit.</Text>
+          <Text style={styles.subtext}>The first steps are shaped to fit.</Text>
         </View>
 
         {/* Options */}

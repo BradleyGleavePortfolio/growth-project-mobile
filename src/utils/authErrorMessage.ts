@@ -60,7 +60,7 @@ const PATTERNS: Array<{
   {
     test: /network|timeout|fetch failed|enotfound|econnreset|offline/i,
     category: 'network',
-    message: 'We couldn’t reach the server. Check your connection and try again.',
+    message: 'The server could not be reached. Check your connection and try again.',
   },
   {
     test: /redirect[_ ]?uri|invalid[_ ]?client|invalid[_ ]?request|misconfigured|client[_ ]?not[_ ]?found/i,
@@ -153,7 +153,7 @@ export const SIGNUP_INVITE_INVALID_MESSAGE =
 export const SIGNUP_INVALID_EMAIL_MESSAGE = 'Enter a valid email address.';
 export const SIGNUP_PASSWORD_RULE_FALLBACK =
   'Password must be at least 8 characters with one uppercase letter, one number, and one special character.';
-export const SIGNUP_UNKNOWN_MESSAGE = 'We could not create your account. Please try again.';
+export const SIGNUP_UNKNOWN_MESSAGE = 'Your account was not created. Try again, and if it keeps happening, contact support.';
 
 function signupErrorParts(err: unknown): { status?: number; code?: string; messages: string[] } {
   // #306 r7: a provider helper's sanitised detail (utils/authErrorDetail).
@@ -218,7 +218,7 @@ export function toFriendlySignupError(err: unknown): FriendlySignupError {
   // No response at all (the API client rewrites the message to "Cannot reach
   // server ...") is a connection problem, not a refusal.
   if (base.category === 'network' || (status === undefined && /cannot reach server/i.test(raw))) {
-    return { kind: 'network', message: 'We couldn’t reach the server. Check your connection and try again.' };
+    return { kind: 'network', message: 'The server could not be reached. Check your connection and try again.' };
   }
   if (base.category === 'rate_limited') return { kind: 'rate_limited', message: base.message };
   return { kind: 'unknown', message: SIGNUP_UNKNOWN_MESSAGE };

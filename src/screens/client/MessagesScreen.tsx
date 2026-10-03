@@ -330,7 +330,7 @@ export default function MessagesScreen() {
       setReportTarget(null);
       Alert.alert(
         'Reported',
-        'Our team will review within 24 hours. Thanks for keeping the community safe.',
+        'The safety team reviews reports within 24 hours. Thank you for keeping the community safe.',
       );
     },
     [reportTarget],
@@ -408,7 +408,7 @@ export default function MessagesScreen() {
               next step instead of a sign-up-time instruction. */}
           <Text style={styles.noCoachText}>
             You are not connected to a coach yet, so there is no one to message here. If you have a
-            code from a coach, contact support and we will connect you.
+            code from a coach, contact support to get connected.
           </Text>
           <TouchableOpacity
             onPress={() => navigation.getParent()?.navigate('MoreTab', { screen: 'SupportInbox' })}

@@ -212,7 +212,7 @@ export function describeMutationError(err: unknown): MutationErrorInfo {
     switch (err.kind) {
       case 'conflict':
         return {
-          message: 'This event just changed. We refreshed it for you.',
+          message: 'This event just changed. It has been refreshed with the latest details.',
           conflict: true,
         };
       case 'unauthorized':
@@ -234,7 +234,7 @@ export function describeMutationError(err: unknown): MutationErrorInfo {
         };
       case 'server':
         return {
-          message: 'Something went wrong on our end. Please try again.',
+          message: 'The event service had a problem and nothing was changed. Try again in a moment.',
           conflict: false,
         };
       default:

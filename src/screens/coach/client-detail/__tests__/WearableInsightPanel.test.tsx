@@ -106,7 +106,7 @@ describe('loading / empty / error states', () => {
     expect(getByTestId('coach-insight-empty')).toBeTruthy();
     expect(getByText('Not enough data yet — keep syncing.')).toBeTruthy();
     expect(
-      getByText('Once we have ~3 days of data, your AI will flag patterns.'),
+      getByText('Once there are about 3 days of data, your AI will flag patterns.'),
     ).toBeTruthy();
     expect(queryByTestId('coach-insight-confidence')).toBeNull();
   });

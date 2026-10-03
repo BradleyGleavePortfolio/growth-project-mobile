@@ -168,7 +168,7 @@ export default function VoiceNoteComposer({
   if (rec.status === 'error') {
     const what =
       rec.error?.kind === 'permission_check'
-        ? 'We could not check microphone access on this phone.'
+        ? 'Microphone access could not be checked on this phone.'
         : rec.error?.kind === 'stop'
           ? 'The recording could not be finished and saved.'
           : 'The microphone could not start recording.';
