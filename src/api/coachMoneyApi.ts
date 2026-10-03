@@ -846,9 +846,11 @@ export const coachMoneyApi = {
     window: { from: Date; to: Date },
     currency: string | null,
   ): Promise<{ csv: string; filename: string }> {
-    let res: Awaited<ReturnType<typeof api.get>>;
-    try {
-      res = await api.get("/v1/coach/money/export.csv", {
+    // B-332-4 (Opus): the text transform also applies to error bodies, so
+    // a 400 arrives as a JSON string. Parse it back so the server's code
+    // (MONEY_EXPORT_TOO_LARGE, MONEY_WINDOW_INVALID, ...) reaches its copy.
+    const res = await api
+      .get("/v1/coach/money/export.csv", {
         params: {
           from: window.from.toISOString(),
           to: window.to.toISOString(),
@@ -856,14 +858,11 @@ export const coachMoneyApi = {
         },
         responseType: "text",
         transformResponse: (body: unknown) => body,
+      })
+      .catch((err: unknown) => {
+        parseJsonErrorBody(err);
+        throw err;
       });
-    } catch (err) {
-      // B-332-4 (Opus): the text transform also applies to error bodies, so
-      // a 400 arrives as a JSON string. Parse it back so the server's code
-      // (MONEY_EXPORT_TOO_LARGE, MONEY_WINDOW_INVALID, ...) reaches its copy.
-      parseJsonErrorBody(err);
-      throw err;
-    }
     const csv =
       typeof res.data === "string" ? res.data.replace(/^\uFEFF/, "") : null;
     if (csv === null || !csv.startsWith("date_utc,"))
