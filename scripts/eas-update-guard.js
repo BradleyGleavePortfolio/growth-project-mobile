@@ -613,11 +613,6 @@ function readBothScopes(environment, run, env) {
   return { remoteByScope, errors };
 }
 
-/**
- * Sentry upload plan: { skip } when the bundle has no DSN (it reports
- * nothing), else token + project + script, or { errors }. `force` (the
- * re-upload mode) always plans an upload.
- */
 /** The file sentry-expo-upload-sourcemaps loads into its env from the project root. */
 const SENTRY_PLUGIN_ENV_FILE = '.env.sentry-build-plugin';
 
@@ -632,6 +627,11 @@ function sentryPluginEnvFileError(root) {
   return `${SENTRY_PLUGIN_ENV_FILE} exists in the project root; the Sentry upload would read its token and project instead of the ones this guard checked. Fix: delete or rename ${SENTRY_PLUGIN_ENV_FILE}, then run this again (nothing was published).`;
 }
 
+/**
+ * Sentry upload plan: { skip } when the bundle has no DSN (it reports
+ * nothing), else token + project + script, or { errors }. `force` (the
+ * re-upload mode) always plans an upload.
+ */
 function sentryPlan(root, effective, remoteByScope, env, environment, force = false, resolveScript = sentryUploadScript) {
   const dsn = String(effective[SENTRY_DSN] || '').trim() || appExtraDsn(root);
   if (!dsn && !force) return { skip: true };

@@ -18,6 +18,23 @@ export const NATIVE_PRIVACY_OPTIONS = {
 } as const;
 
 /**
+ * Default SDK integrations the app removes (B-305-12). `ExpoContext` copies
+ * the native ExpoUpdates `emergencyLaunchReason` (an exception's free-form
+ * text) verbatim into `contexts.ota_updates` on every JS event, and into the
+ * native crash scope through NATIVE.setContext at init, where no JS
+ * beforeSend can reach it. The app publishes its own bounded `ota_updates`
+ * context instead (src/services/otaUpdateTags.ts). Filtering by name is
+ * pinned by src/services/__tests__/otaUpdateTags.canary.test.ts, which runs
+ * the real SDK: a rename in an SDK upgrade fails that canary.
+ */
+export const REMOVED_SDK_INTEGRATIONS: readonly string[] = ['ExpoContext'];
+
+/** The default integrations without the ones listed in REMOVED_SDK_INTEGRATIONS. */
+export function withoutRemovedIntegrations<T extends { name: string }>(defaults: T[]): T[] {
+  return defaults.filter((integration) => !REMOVED_SDK_INTEGRATIONS.includes(integration.name));
+}
+
+/**
  * Build the release identifier that the running app reports to Sentry. It
  * must match the release name the EAS build uploaded source maps under,
  * otherwise Sentry cannot symbolicate the stack and the issue page reads
@@ -109,6 +126,8 @@ export function initSentry(): void {
     },
     beforeSend: (event) => scrubUrlCredentials(scrubEvent(event)),
     beforeSendTransaction: (event) => scrubUrlCredentials(scrubEvent(event)),
+    // B-305-12: no ExpoContext (raw native update text); see above.
+    integrations: (defaults) => withoutRemovedIntegrations(defaults),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
