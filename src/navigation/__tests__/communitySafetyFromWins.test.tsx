@@ -107,6 +107,7 @@ jest.mock('../../api/communitySafetyApi', () => {
 
 import CommunityScreen from '../../screens/client/CommunityScreen';
 import CommunitySafetyScreen from '../../screens/community/CommunitySafetyScreen';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import type { MoreStackParamList } from '../ClientNavigator';
 
 const ALICE_WIN = {
@@ -170,8 +171,10 @@ describe('Community safety from More > Community with the Community tab OFF (B-3
     // Open Community safety from the wins screen.
     await fireEvent.press(screen.getByTestId('wins-open-safety'));
     expect(await screen.findByTestId('community-safety-screen')).toBeTruthy();
-    // The published safety contact from the server is shown.
-    expect(await screen.findByText('safety@example.test')).toBeTruthy();
+    // The app's one support email is shown, never the server-sent address (B-314-11).
+    expect(await screen.findByText('Be kind.')).toBeTruthy();
+    expect(screen.getByText(SUPPORT_EMAIL)).toBeTruthy();
+    expect(screen.queryByText('safety@example.test')).toBeNull();
     expect(await screen.findByTestId('community-safety-block-u-alice')).toBeTruthy();
 
     // Unblock Alice.

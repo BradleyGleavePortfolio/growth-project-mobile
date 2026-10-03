@@ -7,7 +7,10 @@ import React from 'react';
 import { Alert, Linking, type AlertButton } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import CommunitySafetyScreen from '../CommunitySafetyScreen';
+import CommunitySafetyScreen, { COMMUNITY_SAFETY_EMAIL_SUBJECT } from '../CommunitySafetyScreen';
+import { SUPPORT_EMAIL_COPY } from '../../../components/support/SupportEmailFallback';
+
+const SAFETY_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=Community%20safety`;
 
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
@@ -90,7 +93,7 @@ beforeEach(() => {
 afterEach(() => alertSpy.mockRestore());
 
 describe('CommunitySafetyScreen', () => {
-  it('shows server guidelines, commitment and a mailto contact', async () => {
+  it('shows server guidelines, commitment and the support email contact', async () => {
     mockGetInfo.mockResolvedValue({
       contact_email: 'safety@example.com',
       report_reasons: [],
@@ -104,7 +107,7 @@ describe('CommunitySafetyScreen', () => {
     expect(await findByText('Reports are reviewed within 24 hours.')).toBeTruthy();
     expect(await findByText('You have not blocked anyone.')).toBeTruthy();
     await fireEvent.press(getByTestId('community-safety-email'));
-    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:safety@example\.com/));
+    expect(open).toHaveBeenCalledWith(SAFETY_MAILTO);
     open.mockRestore();
   });
 
@@ -142,7 +145,37 @@ describe('CommunitySafetyScreen', () => {
   });
 });
 
-describe('CommunitySafetyScreen — safety email when no mail app opens (B-314-3)', () => {
+describe('CommunitySafetyScreen — one support email (B-314-11, #324 guard)', () => {
+  beforeEach(() => {
+    mockListBlocks.mockResolvedValue([]);
+  });
+
+  it('never shows or mails a server-sent contact address; the app support email is used', async () => {
+    mockGetInfo.mockResolvedValue({
+      contact_email: 'other-contact@example.test',
+      report_reasons: [],
+      guidelines: ['Be kind.'],
+      response_commitment: 'Reviewed within 24 hours.',
+    });
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const { findByText, getByTestId, queryByText } = await renderScreen();
+    // Server info has loaded (its guideline is on screen) ...
+    await findByText('Be kind.');
+    // ... yet the address shown is the app's one support email.
+    expect(queryByText('other-contact@example.test')).toBeNull();
+    expect(await findByText(SUPPORT_EMAIL)).toBeTruthy();
+    await fireEvent.press(getByTestId('community-safety-email'));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(SAFETY_MAILTO);
+    open.mockRestore();
+  });
+
+  it('uses the "Community safety" subject', () => {
+    expect(COMMUNITY_SAFETY_EMAIL_SUBJECT).toBe('Community safety');
+  });
+});
+
+describe('CommunitySafetyScreen — safety email when no mail app opens (B-314-3, shared fallback)', () => {
   beforeEach(() => {
     mockGetInfo.mockResolvedValue({
       contact_email: 'safety@example.test',
@@ -159,30 +192,30 @@ describe('CommunitySafetyScreen — safety email when no mail app opens (B-314-3
       .mockRejectedValueOnce(new Error('No Activity found to handle Intent'))
       .mockResolvedValueOnce(true);
     const { getByTestId, findByTestId, findByText, queryByTestId } = await renderScreen();
-    // The server contact has loaded (not the fallback address).
-    await findByText('safety@example.test');
+    await findByText('Be kind.');
+    expect(queryByTestId('community-safety-email-fallback')).toBeNull();
 
     fireEvent.press(getByTestId('community-safety-email'));
-    const status = await findByTestId('community-safety-email-status');
-    expect(status.props.children).toBe(
-      'No email app opened on this device. Copy the address and email us from any email app or device.',
-    );
-    const address = getByTestId('community-safety-email-address');
+    const status = await findByTestId('community-safety-email-fallback-status');
+    expect(status.props.children).toBe(SUPPORT_EMAIL_COPY.failed);
+    expect(status.props.accessibilityRole).toBe('alert');
+    const address = getByTestId('community-safety-email-fallback-address');
     expect(address.props.selectable).toBe(true);
-    expect(address.props.children).toBe('safety@example.test');
+    expect(address.props.children).toBe(SUPPORT_EMAIL);
 
-    fireEvent.press(getByTestId('community-safety-email-copy'));
-    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith('safety@example.test'));
+    fireEvent.press(getByTestId('community-safety-email-fallback-copy'));
+    await waitFor(() => expect(mockSetString).toHaveBeenCalledWith(SUPPORT_EMAIL));
     await waitFor(() =>
-      expect(getByTestId('community-safety-email-status').props.children).toBe(
-        'Address copied. Paste it into any email app to write to safety@example.test.',
+      expect(getByTestId('community-safety-email-fallback-status').props.children).toBe(
+        SUPPORT_EMAIL_COPY.copied,
       ),
     );
 
     // Try again: this time a mail app opens, so the fallback goes away.
-    fireEvent.press(getByTestId('community-safety-email-retry'));
+    fireEvent.press(getByTestId('community-safety-email-fallback-retry'));
     await waitFor(() => expect(open).toHaveBeenCalledTimes(2));
-    expect(open).toHaveBeenLastCalledWith('mailto:safety@example.test?subject=Community%20safety');
+    expect(open).toHaveBeenNthCalledWith(1, SAFETY_MAILTO);
+    expect(open).toHaveBeenLastCalledWith(SAFETY_MAILTO);
     await waitFor(() => expect(queryByTestId('community-safety-email-fallback')).toBeNull());
     open.mockRestore();
   });
@@ -191,14 +224,17 @@ describe('CommunitySafetyScreen — safety email when no mail app opens (B-314-3
     const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no handler'));
     mockSetString.mockRejectedValueOnce(new Error('clipboard unavailable'));
     const { getByTestId, findByTestId, findByText } = await renderScreen();
-    await findByText('safety@example.test');
+    await findByText('Be kind.');
     fireEvent.press(getByTestId('community-safety-email'));
-    await findByTestId('community-safety-email-copy');
-    fireEvent.press(getByTestId('community-safety-email-copy'));
+    await findByTestId('community-safety-email-fallback-copy');
+    fireEvent.press(getByTestId('community-safety-email-fallback-copy'));
     await waitFor(() =>
-      expect(getByTestId('community-safety-email-status').props.children).toBe(
-        'The address could not be copied. Press and hold it to select it: safety@example.test',
+      expect(getByTestId('community-safety-email-fallback-status').props.children).toBe(
+        SUPPORT_EMAIL_COPY.copyFailed,
       ),
+    );
+    expect(getByTestId('community-safety-email-fallback-address').props.children).toBe(
+      SUPPORT_EMAIL,
     );
     open.mockRestore();
   });

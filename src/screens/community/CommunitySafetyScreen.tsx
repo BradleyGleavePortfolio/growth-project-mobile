@@ -6,9 +6,13 @@
  *     ban; GET /community/safety/notices, B-314-6), marked read once shown
  *   - the community guidelines and how reports are handled (GET /community/safety)
  *   - how to report and block (every post, comment and message has a More menu)
- *   - the contact email (mailto), with a static fallback if the request fails.
- *     If no email app opens (B-314-3), the address stays selectable, can be
- *     copied, and the member can try again.
+ *   - the app's one support email (SUPPORT_EMAIL, owner ruling 2026-10-01
+ *     14:19 PDT), opened through the shared useSupportEmail hook with a
+ *     "Community safety" subject. If no email app opens (B-314-3), the shared
+ *     SupportEmailFallback keeps the address selectable, copyable and lets the
+ *     member try again (B-314-11). The server's contact_email is not used to
+ *     build a mailto or shown: the support address is written once, in
+ *     src/constants/support.ts.
  *   - the member's block list with Unblock (GET/DELETE /community/blocks)
  */
 import React from 'react';
@@ -19,11 +23,9 @@ import {
   StyleSheet,
   ScrollView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
 import { NavigationContext } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import HapticPressable from '../../components/HapticPressable';
@@ -31,11 +33,12 @@ import { ThreadHeader } from '../../components/community';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { describeCommunityFailure } from '../../api/communityErrors';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import {
   communitySafetyApi,
   COMMUNITY_GUIDELINES,
   COMMUNITY_RESPONSE_COMMITMENT,
-  COMMUNITY_SAFETY_FALLBACK_EMAIL,
   communitySafetyKeys,
   type CommunityModerationNotice,
 } from '../../api/communitySafetyApi';
@@ -54,7 +57,8 @@ function noticeDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-type EmailState = 'idle' | 'failed' | 'copied' | 'copy_failed';
+/** Subject line of the draft the safety contact opens. */
+export const COMMUNITY_SAFETY_EMAIL_SUBJECT = 'Community safety';
 
 export default function CommunitySafetyScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -88,21 +92,18 @@ export default function CommunitySafetyScreen(): React.ReactElement {
       qc.invalidateQueries({ queryKey: communitySafetyKeys.notices }),
     );
   }, [notices.data, qc]);
-  const [emailState, setEmailState] = React.useState<EmailState>('idle');
+  // B-314-11: one support address and one shared mailto path (#324 guard).
+  const supportEmail = useSupportEmail(COMMUNITY_SAFETY_EMAIL_SUBJECT);
+  const email = SUPPORT_EMAIL;
   const unblock = useMutation({
     mutationFn: (userId: string) => communitySafetyApi.unblock(userId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['community'] }),
     onError: (err: unknown) => {
-      const failure = describeCommunityFailure(
-        err,
-        'unblock',
-        info.data?.contact_email || COMMUNITY_SAFETY_FALLBACK_EMAIL,
-      );
+      const failure = describeCommunityFailure(err, 'unblock', email);
       Alert.alert(failure.title, failure.message);
     },
   });
 
-  const email = info.data?.contact_email || COMMUNITY_SAFETY_FALLBACK_EMAIL;
   const guidelines = info.data?.guidelines?.length ? info.data.guidelines : COMMUNITY_GUIDELINES;
   const commitment = info.data?.response_commitment || COMMUNITY_RESPONSE_COMMITMENT;
   // Described once per error (an unexpected one is reported to Sentry once).
@@ -115,24 +116,6 @@ export default function CommunitySafetyScreen(): React.ReactElement {
     () => (notices.isError ? describeCommunityFailure(notices.error, 'load_notices', email) : null),
     [notices.isError, notices.error, email],
   );
-
-  // B-314-3: no mail app (or it refused the link) must not be a dead end.
-  const openEmail = async () => {
-    try {
-      await Linking.openURL(`mailto:${email}?subject=Community%20safety`);
-      setEmailState('idle');
-    } catch {
-      setEmailState('failed');
-    }
-  };
-  const copyEmail = async () => {
-    try {
-      await Clipboard.setStringAsync(email);
-      setEmailState('copied');
-    } catch {
-      setEmailState('copy_failed');
-    }
-  };
 
   const confirmUnblock = (userId: string, name: string) =>
     Alert.alert(`Unblock ${name}?`, 'You will both see each other’s community content again, and you can message each other.', [
@@ -240,7 +223,7 @@ export default function CommunitySafetyScreen(): React.ReactElement {
           </Text>
           <HapticPressable
             intent="light"
-            onPress={() => void openEmail()}
+            onPress={() => void supportEmail.open()}
             accessibilityRole="link"
             accessibilityLabel={`Email ${email}`}
             style={styles.linkRow}
@@ -249,42 +232,13 @@ export default function CommunitySafetyScreen(): React.ReactElement {
             <Ionicons name="mail-outline" size={18} color={semanticColors.accent} />
             <Text style={[styles.link, { color: semanticColors.accent }]}>{email}</Text>
           </HapticPressable>
-          {emailState !== 'idle' ? (
-            <View testID="community-safety-email-fallback">
-              <Text style={[body, styles.item]} testID="community-safety-email-status">
-                {emailState === 'copied'
-                  ? `Address copied. Paste it into any email app to write to ${email}.`
-                  : emailState === 'copy_failed'
-                    ? `The address could not be copied. Press and hold it to select it: ${email}`
-                    : 'No email app opened on this device. Copy the address and email us from any email app or device.'}
-              </Text>
-              <Text selectable style={[body, styles.item]} testID="community-safety-email-address">
-                {email}
-              </Text>
-              <View style={styles.emailActions}>
-                <HapticPressable
-                  intent="light"
-                  onPress={() => void copyEmail()}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Copy ${email}`}
-                  style={styles.unblock}
-                  testID="community-safety-email-copy"
-                >
-                  <Text style={[styles.link, { color: semanticColors.accent }]}>Copy address</Text>
-                </HapticPressable>
-                <HapticPressable
-                  intent="light"
-                  onPress={() => void openEmail()}
-                  accessibilityRole="button"
-                  accessibilityLabel="Try opening your email app again"
-                  style={styles.unblock}
-                  testID="community-safety-email-retry"
-                >
-                  <Text style={[styles.link, { color: semanticColors.accent }]}>Try again</Text>
-                </HapticPressable>
-              </View>
-            </View>
-          ) : null}
+          {/* B-314-3 / B-314-11: no mail app is not a dead end. */}
+          <SupportEmailFallback
+            handle={supportEmail}
+            textStyle={[body, styles.item]}
+            linkColor={semanticColors.accent}
+            testID="community-safety-email-fallback"
+          />
         </View>
 
         <Text style={heading}>Blocked members</Text>
@@ -360,7 +314,6 @@ const styles = StyleSheet.create({
   },
   link: { fontSize: 15, fontWeight: '600' },
   blockRow: { flexDirection: 'row', alignItems: 'center', minHeight: 44 },
-  emailActions: { flexDirection: 'row', gap: spacing.lg },
   back: {
     minHeight: 44,
     flexDirection: 'row',
