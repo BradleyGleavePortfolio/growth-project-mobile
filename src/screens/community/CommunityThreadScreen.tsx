@@ -8,7 +8,15 @@
  * on semanticColors / tokens.ts.
  */
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  Alert,
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
@@ -22,6 +30,8 @@ import {
 } from '../../hooks/useCommunity';
 import { communityApi } from '../../api/communityApi';
 import { useQuery } from '@tanstack/react-query';
+import { describeCommunityFailure } from '../../api/communityErrors';
+import SafetyMenu from '../../components/community/SafetyMenu';
 import {
   CommunityEmptyState,
   ThreadHeader,
@@ -62,10 +72,25 @@ export default function CommunityThreadScreen(): React.ReactElement {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ThreadHeader
-          title={post.data?.title ?? 'Post'}
-          testID="community-thread-header"
-        />
+        <View style={styles.headerRow}>
+          <View style={styles.flex}>
+            <ThreadHeader
+              title={post.data?.title ?? 'Post'}
+              testID="community-thread-header"
+            />
+          </View>
+          {post.data ? (
+            <SafetyMenu
+              targetType="post"
+              targetId={post.data.id}
+              authorUserId={post.data.author_user_id}
+              viewerUserId={client?.id}
+              viewerCoachId={client?.coach_id}
+              onBlocked={() => navigation.goBack()}
+              testID="community-thread-post-safety"
+            />
+          ) : null}
+        </View>
 
         {post.data?.body ? (
           <Text style={[styles.body, { color: semanticColors.textPrimary }]}>
@@ -106,6 +131,14 @@ export default function CommunityThreadScreen(): React.ReactElement {
                 <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
                   {item.body}
                 </Text>
+                <SafetyMenu
+                  targetType="comment"
+                  targetId={item.id}
+                  authorUserId={item.author_user_id}
+                  viewerUserId={client?.id}
+                  viewerCoachId={client?.coach_id}
+                  testID={`comment-safety-${item.id}`}
+                />
               </View>
             )}
             contentContainerStyle={styles.list}
@@ -117,7 +150,19 @@ export default function CommunityThreadScreen(): React.ReactElement {
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
           sending={addComment.isPending}
-          onSubmit={(body) => addComment.mutate(body)}
+          onSubmit={(body) =>
+            addComment.mutateAsync(body).then(
+              () => undefined,
+              (err: unknown) => {
+                // Apple 1.2 content filter: keep the draft (the composer
+                // restores it on rejection) and say why. Every other failure
+                // gets specific copy or a support reference.
+                const failure = describeCommunityFailure(err, 'send_reply');
+                Alert.alert(failure.title, failure.message);
+                throw err;
+              },
+            )
+          }
           testID="community-thread-composer"
         />
       </KeyboardAvoidingView>
@@ -136,12 +181,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   list: { paddingVertical: spacing.sm },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingRight: spacing.sm },
   comment: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   commentBody: {
+    flex: 1,
     fontSize: 15,
     lineHeight: 21,
   },

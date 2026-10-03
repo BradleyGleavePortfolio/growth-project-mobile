@@ -18,12 +18,15 @@ import type { CommunityPost } from '../../api/communityApi';
 export interface PostCardProps {
   post: CommunityPost;
   onPress: (post: CommunityPost) => void;
+  /** Trailing control in the meta row (e.g. the Report / Block SafetyMenu). */
+  accessory?: React.ReactNode;
   testID?: string;
 }
 
 export default function PostCard({
   post,
   onPress,
+  accessory,
   testID,
 }: PostCardProps): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -72,9 +75,12 @@ export default function PostCard({
           {preview}
         </Text>
       ) : null}
-      <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
-        {sending ? 'Sending…' : post.scope === 'hall' ? 'Hall' : 'Cohort'}
-      </Text>
+      <View style={styles.metaRow}>
+        <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
+          {sending ? 'Sending…' : post.scope === 'hall' ? 'Hall' : 'Cohort'}
+        </Text>
+        {!sending && accessory ? accessory : null}
+      </View>
     </HapticPressable>
   );
 }
@@ -105,6 +111,11 @@ const styles = StyleSheet.create({
   preview: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   meta: {
     fontSize: 12,
