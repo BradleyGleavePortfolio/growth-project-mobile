@@ -127,6 +127,15 @@ describe('permission-denied path', () => {
     expect((await getSyncProgress(SCOPE)).completedThrough).toEqual({});
   });
 
+  it('S-WEAR-3: never opens the permission screen itself (revoked access is reported, not re-prompted)', async () => {
+    const client = makeClient({ getGrantedPermissions: jest.fn().mockResolvedValue([]) });
+    await expect(syncHealthConnect(SCOPE, makeDeps(client))).rejects.toBeInstanceOf(
+      HealthConnectPermissionDeniedError,
+    );
+    expect(client.requestPermission).not.toHaveBeenCalled();
+    expect(client.readRecordsPaged).not.toHaveBeenCalled();
+  });
+
   it('proceeds with a partial grant (subset of record types)', async () => {
     const client = makeClient({
       getGrantedPermissions: grantOnly('Steps'),

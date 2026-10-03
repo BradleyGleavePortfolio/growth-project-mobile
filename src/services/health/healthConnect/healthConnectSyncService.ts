@@ -137,8 +137,8 @@ function grantedReadRecordTypes(
  *
  * Steps:
  *   1. Platform guard (Android only), initialize the SDK.
- *   2. Read the granted permissions; only when none of our read types is
- *      granted, show the permission UI once. If still NONE granted → throw
+ *   2. Read the granted permissions (never prompts; Connect asked on the
+ *      tap). If NONE of our read types is granted → throw
  *      HealthConnectPermissionDeniedError.
  *   3. For every granted type: resume a truncated read, or read from its
  *      progress (or the 30-day import start) to now.
@@ -168,13 +168,11 @@ export async function syncHealthConnect(
   await client.initialize();
 
   fence.throwIfStopped();
-  let grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
-  if (grantedRecordTypes.length === 0) {
-    fence.throwIfStopped();
-    await client.requestPermission();
-    fence.throwIfStopped();
-    grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
-  }
+  // S-WEAR-3: the sync never opens the permission screen. Connect asks once,
+  // on the person's tap; a refresh that finds every type revoked reports it
+  // (the Health screen offers Open Health Connect) instead of prompting
+  // unasked when Health opens.
+  const grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
   if (grantedRecordTypes.length === 0) {
     logger.warn('healthConnectSync', 'all read permissions denied', {
       requested: HEALTH_CONNECT_RECORD_TYPES.length,

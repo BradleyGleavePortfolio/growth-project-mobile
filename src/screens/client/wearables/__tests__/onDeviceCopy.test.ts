@@ -100,8 +100,8 @@ describe('connectFailureMessage', () => {
     [new OnDeviceStepError('import', httpError(429, {})), 'resume', /too many requests/],
     [
       new OnDeviceStepError('import', new HealthConnectPermissionDeniedError(['Steps'])),
-      'resume',
-      /access wasn't granted/,
+      'open_settings',
+      /access is turned off for The Growth Project/,
     ],
     [
       new OnDeviceStepError('import', new HealthConnectUnavailableError()),

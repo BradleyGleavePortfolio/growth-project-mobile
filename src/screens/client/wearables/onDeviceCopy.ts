@@ -133,9 +133,12 @@ export function connectFailureMessage(err: unknown, name: string): OnDeviceMessa
   const retryWord = connected ? 'Try again' : 'Continue';
 
   if (cause instanceof HealthConnectPermissionDeniedError) {
+    // Every Health Connect type is off for the app (refused or revoked).
     return {
-      text: `${name} access wasn't granted. Open ${name} permissions, allow access for The Growth Project, then tap ${retryWord}.`,
-      action,
+      text:
+        `${name} access is turned off for The Growth Project, so nothing new came in. Tap Open Health ` +
+        `Connect, choose App permissions, then The Growth Project, and allow access. Then tap ${retryWord}.`,
+      action: 'open_settings',
     };
   }
   if (cause instanceof HealthConnectUnavailableError) {
