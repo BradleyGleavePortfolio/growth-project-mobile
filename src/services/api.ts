@@ -766,6 +766,13 @@ export const notificationsApi = {
   getPreferences: () => api.get('/notifications/preferences'),
   updatePreferences: (data: Record<string, unknown>) =>
     api.patch('/notifications/preferences', data),
+  // B-NOTIF-6: the device zone with provenance (backend #647). Quiet hours
+  // (21:00-08:00) and booking times in notifications use it.
+  setTimezone: (timezone: string) =>
+    api.put<{ timezone: string | null; stored: boolean }>('/notifications/timezone', {
+      timezone,
+      source: 'device',
+    }),
 };
 
 export const communityApi = {
