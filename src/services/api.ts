@@ -79,6 +79,13 @@ import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
 import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
+import {
+  AccountChangedError,
+  assertBindingMatches,
+  bindingIsCurrent,
+  isAccountChangedError,
+  type AccountBinding,
+} from './accountBinding';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -106,6 +113,13 @@ const api = axios.create({
 // via the secureStorage adapter, not plain AsyncStorage.
 api.interceptors.request.use(async (config) => {
   const token = await secureStorage.getItem('supabase_token');
+  // Mobile #331 Sol A-331-4: a request bound to an account (destructive
+  // Roman chat deletes, and the reads that offer them) goes out only with a
+  // credential of that same account and sign-in. This check runs after the
+  // asynchronous token read, immediately before transport; on a mismatch the
+  // request is cancelled here and never sent (see accountBinding.ts).
+  const binding = (config as RetryableConfig).accountBinding;
+  if (binding) assertBindingMatches(binding, token);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -156,7 +170,14 @@ type RetryableConfig = AxiosRequestConfig & {
   // session expired". Refresh-and-retry would replay a wrong password against
   // a 5/min throttle, so these 401s go straight back to the caller.
   skipAuthRefresh?: boolean;
+  // Mobile #331 Sol A-331-4: the account and sign-in this request belongs
+  // to. Checked before every send (including a 401 replay); a 401 refreshes
+  // only while that sign-in is still current.
+  accountBinding?: AccountBinding;
 };
+
+/** Request options for a request bound to one account (see accountBinding.ts). */
+export type BoundRequestConfig = AxiosRequestConfig & { accountBinding: AccountBinding };
 
 async function performRefresh(): Promise<string> {
   // Read refresh token from the SAME store the writers use (SecureStore via
@@ -181,6 +202,14 @@ async function performRefresh(): Promise<string> {
   const { data, error: refreshError } = await refreshSession({
     refresh_token: refreshToken,
   });
+  // Mobile #331 Sol A-331-4: a refresh belongs to the session it started
+  // in. If that session ended meanwhile (signed out, or another sign-in
+  // stored its own refresh token), these tokens are for a session that is
+  // over: they are never written over the new session's tokens, and nobody
+  // is signed out for it.
+  if ((await secureStorage.getItem('supabase_refresh_token')) !== refreshToken) {
+    throw new AccountChangedError(false);
+  }
   if (refreshError || !data.session) {
     throw refreshError || new Error('Refresh returned no session');
   }
@@ -258,7 +287,15 @@ async function deletedByReceipt(accessToken: string): Promise<boolean> {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // A bound request stopped before it was sent: pass it through untouched.
+    if (isAccountChangedError(error)) return Promise.reject(error);
     const originalConfig = error.config as RetryableConfig | undefined;
+    const binding = originalConfig?.accountBinding;
+    // A bound request whose sign-in ended while it was in flight (aborted, or
+    // answered late): its answer belongs to a session that is over.
+    if (binding && !bindingIsCurrent(binding)) {
+      return Promise.reject(new AccountChangedError(true));
+    }
 
     // Network error — no response from server (cold start, no wifi, etc.).
     // Do NOT log the user out; just surface a friendly message.
@@ -311,7 +348,9 @@ api.interceptors.response.use(
     if (!refreshPromise) {
       refreshPromise = performRefresh()
         .catch(async (err) => {
-          await handleRefreshFailure();
+          // A refresh overtaken by a sign-out or sign-in is not a failed
+          // session: the new session must not be signed out for it.
+          if (!isAccountChangedError(err)) await handleRefreshFailure();
           throw err;
         })
         .finally(() => {
@@ -325,6 +364,10 @@ api.interceptors.response.use(
 
     try {
       const newToken = await refreshPromise;
+      // The replay below goes through the request interceptor, which checks
+      // the binding against the stored token again; stop here already when
+      // the sign-in changed during the refresh.
+      if (binding && !bindingIsCurrent(binding)) throw new AccountChangedError(false);
       originalConfig._refreshAttempts = attempts + 1;
       originalConfig._lastUsedCycleId = currentCycleId;
       originalConfig.headers = originalConfig.headers || {};

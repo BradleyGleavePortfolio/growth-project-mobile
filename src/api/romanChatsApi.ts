@@ -19,11 +19,22 @@
  * known case gets its own copy on the screen and only an unknown case falls
  * back to a support reference.
  *
+ * Every call is bound to one account and sign-in (`AccountBinding`, mobile
+ * #331 Sol A-331-4): the request goes out only with that account's
+ * credential, is aborted when the sign-in changes, and an answer that arrives
+ * after the change resolves to `account_changed` instead of being applied.
+ *
  * Ids are opaque strings (the backend uses cuid, not uuid), validated only
  * for shape and length. Message text is never logged or reported anywhere.
  */
 import { z } from 'zod';
-import api from '../services/api';
+import api, { type BoundRequestConfig } from '../services/api';
+import {
+  bindingIsCurrent,
+  boundRequestSignal,
+  isAccountChangedError,
+  type AccountBinding,
+} from '../services/accountBinding';
 import { supportReferenceOf } from '../utils/correlation';
 import type { RomanMessage, RomanSurface } from './romanApi';
 
@@ -124,6 +135,13 @@ export type RomanChatsFailure =
   | { reason: 'erase_incomplete' }
   /** 429: too many requests in a row. */
   | { reason: 'busy' }
+  /**
+   * The signed-in account or sign-in changed after this was asked for. The
+   * request was stopped (never sent with another account's credential) or
+   * its answer dropped. `mayHaveBeenSent` is false when it never left the
+   * phone.
+   */
+  | { reason: 'account_changed'; mayHaveBeenSent: boolean }
   /** Anything else, including a response that does not match the contract. */
   | { reason: 'unexpected'; status: number | null; code: string | null; requestId: string | null };
 
@@ -178,10 +196,14 @@ function drift(res: { status?: number; headers?: unknown } | undefined): RomanCh
 }
 
 export interface RomanChatsApi {
-  list(opts?: { cursor?: string | null; limit?: number }): Promise<RomanChatsOutcome<RomanChatPage>>;
-  deleteOne(id: string): Promise<RomanChatsOutcome<null>>;
-  deleteAll(): Promise<RomanChatsOutcome<null>>;
-  readMessages(id: string, opts?: { cursor?: string | null; limit?: number }): Promise<RomanChatsOutcome<RomanTranscriptPage>>;
+  list(binding: AccountBinding, opts?: { cursor?: string | null; limit?: number }): Promise<RomanChatsOutcome<RomanChatPage>>;
+  deleteOne(binding: AccountBinding, id: string): Promise<RomanChatsOutcome<null>>;
+  deleteAll(binding: AccountBinding): Promise<RomanChatsOutcome<null>>;
+  readMessages(
+    binding: AccountBinding,
+    id: string,
+    opts?: { cursor?: string | null; limit?: number },
+  ): Promise<RomanChatsOutcome<RomanTranscriptPage>>;
 }
 
 function clampLimit(limit: number | undefined): number {
@@ -189,43 +211,77 @@ function clampLimit(limit: number | undefined): number {
   return Math.min(Math.max(1, Math.trunc(limit)), ROMAN_CHATS_MAX_LIMIT);
 }
 
+/**
+ * Run one request bound to `binding`. A request whose sign-in is already over
+ * is not started; one that settles after the sign-in changed resolves to
+ * `account_changed`, whatever the server said.
+ *
+ * Reads are aborted on the next auth change. An erase is not: once it may
+ * have left the phone (with this account's own credential, checked by the
+ * API client right before sending), aborting it would not undo it, only hide
+ * when it finished. Its answer is still dropped, and its settling tells the
+ * next list read of the same account when the server state is final
+ * (romanEraseTracker, Sol B-331-5).
+ */
+async function bound<T>(
+  binding: AccountBinding,
+  kind: 'read' | 'erase',
+  send: (config: BoundRequestConfig) => Promise<RomanChatsOutcome<T>>,
+): Promise<RomanChatsOutcome<T>> {
+  if (!bindingIsCurrent(binding)) return { ok: false, failure: { reason: 'account_changed', mayHaveBeenSent: false } };
+  const { signal, done } =
+    kind === 'read' ? boundRequestSignal(binding) : { signal: undefined, done: () => undefined };
+  try {
+    const out = await send(signal ? { accountBinding: binding, signal } : { accountBinding: binding });
+    if (!bindingIsCurrent(binding)) return { ok: false, failure: { reason: 'account_changed', mayHaveBeenSent: true } };
+    return out;
+  } catch (err) {
+    if (isAccountChangedError(err)) {
+      return { ok: false, failure: { reason: 'account_changed', mayHaveBeenSent: err.mayHaveBeenSent !== false } };
+    }
+    if (!bindingIsCurrent(binding)) return { ok: false, failure: { reason: 'account_changed', mayHaveBeenSent: true } };
+    return { ok: false, failure: failureOf(err) };
+  } finally {
+    done();
+  }
+}
+
+function pageParams(opts: { cursor?: string | null; limit?: number }): { limit: number; cursor?: string } {
+  const params: { limit: number; cursor?: string } = { limit: clampLimit(opts.limit) };
+  if (opts.cursor) params.cursor = opts.cursor;
+  return params;
+}
+
 export const romanChatsApi: RomanChatsApi = {
-  async list(opts = {}) {
-    const params: { limit: number; cursor?: string } = { limit: clampLimit(opts.limit) };
-    if (opts.cursor) params.cursor = opts.cursor;
-    try {
-      const res = await api.get<unknown>('/roman/sessions', { params });
+  list(binding, opts = {}) {
+    return bound<RomanChatPage>(binding, 'read', async (config) => {
+      const res = await api.get<unknown>('/roman/sessions', { ...config, params: pageParams(opts) });
       const parsed = RomanChatPageSchema.safeParse(res?.data);
       if (!parsed.success) return { ok: false, failure: drift(res) };
       return { ok: true, value: parsed.data as RomanChatPage };
-    } catch (err) {
-      return { ok: false, failure: failureOf(err) };
-    }
+    });
   },
 
-  async deleteOne(id) {
-    try {
-      await api.delete(`/roman/sessions/${encodeURIComponent(id)}`);
+  deleteOne(binding, id) {
+    return bound<null>(binding, 'erase', async (config) => {
+      await api.delete(`/roman/sessions/${encodeURIComponent(id)}`, config);
       return { ok: true, value: null };
-    } catch (err) {
-      return { ok: false, failure: failureOf(err) };
-    }
+    });
   },
 
-  async deleteAll() {
-    try {
-      await api.delete('/roman/sessions');
+  deleteAll(binding) {
+    return bound<null>(binding, 'erase', async (config) => {
+      await api.delete('/roman/sessions', config);
       return { ok: true, value: null };
-    } catch (err) {
-      return { ok: false, failure: failureOf(err) };
-    }
+    });
   },
 
-  async readMessages(id, opts = {}) {
-    const params: { limit: number; cursor?: string } = { limit: clampLimit(opts.limit) };
-    if (opts.cursor) params.cursor = opts.cursor;
-    try {
-      const res = await api.get<unknown>(`/roman/sessions/${encodeURIComponent(id)}/messages`, { params });
+  readMessages(binding, id, opts = {}) {
+    return bound<RomanTranscriptPage>(binding, 'read', async (config) => {
+      const res = await api.get<unknown>(`/roman/sessions/${encodeURIComponent(id)}/messages`, {
+        ...config,
+        params: pageParams(opts),
+      });
       const parsed = RomanTranscriptPageSchema.safeParse(res?.data);
       if (!parsed.success) return { ok: false, failure: drift(res) };
       return {
@@ -241,9 +297,7 @@ export const romanChatsApi: RomanChatsApi = {
           nextCursor: parsed.data.nextCursor,
         },
       };
-    } catch (err) {
-      return { ok: false, failure: failureOf(err) };
-    }
+    });
   },
 };
 

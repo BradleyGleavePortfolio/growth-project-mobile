@@ -642,8 +642,10 @@ export default function SettingsScreen() {
         </TouchableOpacity>
         {/* Roman chat history (backend #635): a coach's own Roman chats are
             kept until they delete them or their account. Shown in builds
-            where Roman exists, like the client Roman and AI row. */}
-        {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
+            where Roman exists, like the client Roman and AI row. Hidden for
+            a sub-coach (C-331-3): the backend Roman routes allow student,
+            coach and owner only, so a sub-coach would reach a 403. */}
+        {(featureFlags.consultationOnboarding || featureFlags.romanChat) && currentUser?.role !== 'sub_coach' ? (
           <TouchableOpacity
             style={styles.row}
             onPress={() => navigation.navigate('RomanConversations')}

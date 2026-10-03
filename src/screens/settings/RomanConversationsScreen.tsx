@@ -10,6 +10,11 @@
  * not confirm. Roman chats are never visible to coaches; this screen only
  * ever shows the signed-in user's own chats (useRomanChats).
  *
+ * Account binding (Sol A-331-4): each confirm sheet records the binding of
+ * the list it was opened on and is shown only while that binding is still the
+ * list's; any auth change closes it, clears the typed DELETE (the sheet is
+ * keyed by sign-in) and a stale confirm can no longer delete anything.
+ *
  * Backend: #635 GET /roman/sessions, DELETE /roman/sessions[/:id]. These
  * routes are not behind the Roman chat switch, so this screen is reachable
  * whatever that switch says.
@@ -19,7 +24,6 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   FlatList,
-  Linking,
   StyleSheet,
   Text,
   View,
@@ -30,15 +34,16 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import type { RomanChatsApi, RomanChatSummary } from '../../api/romanChatsApi';
+import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { logger } from '../../utils/logger';
 import { useRomanChats, type RomanChatsNotice } from './useRomanChats';
 import RomanChatsConfirmSheet from './RomanChatsConfirmSheet';
+import RomanChatsSupportAction from './RomanChatsSupportAction';
 import {
   chatDateLabel,
+  chatIdentity,
   messageCountLabel,
   ROMAN_CHATS_COPY,
-  supportMailto,
   type RomanChatsFailureView,
 } from './romanChatsCopy';
 
@@ -46,6 +51,8 @@ import {
 export interface RomanConversationParams {
   id: string;
   ownerId: string;
+  /** The account and sign-in the list was loaded under; the transcript is bound to it. */
+  binding: AccountBinding;
   startedAt: string;
   surface: RomanChatSummary['surface'];
   messageCount: number;
@@ -55,23 +62,19 @@ export interface RomanConversationsScreenProps {
   navigation: NavigationProp<ParamListBase>;
   api?: RomanChatsApi;
   sessionUserId?: () => string | null;
-}
-
-export function openSupport(reference: string | null): void {
-  Linking.openURL(supportMailto(reference)).catch((err) => {
-    // The address is already in the message text, so the person still has it.
-    logger.warn('RomanConversations.openSupport', err);
-  });
+  /** Who is signed in right now, as a binding (tests may replace it). */
+  captureBinding?: () => Promise<AccountBinding | null>;
 }
 
 export default function RomanConversationsScreen({
   navigation,
   api,
   sessionUserId,
+  captureBinding,
 }: RomanConversationsScreenProps): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const state = useRomanChats({ api, sessionUserId });
+  const state = useRomanChats({ api, sessionUserId, captureBinding });
   const {
     phase,
     loadFailure,
@@ -82,13 +85,22 @@ export default function RomanConversationsScreen({
     pendingCount,
     notice,
     ownerId,
+    binding,
     reload,
     loadMore,
     deleteOne,
     deleteAll,
   } = state;
-  const [confirmOne, setConfirmOne] = useState<RomanChatSummary | null>(null);
-  const [confirmAll, setConfirmAll] = useState(false);
+  /** A confirm sheet remembers the binding of the list it was opened on. */
+  const [confirmOne, setConfirmOne] = useState<{ chat: RomanChatSummary; binding: AccountBinding } | null>(null);
+  const [confirmAll, setConfirmAll] = useState<{ binding: AccountBinding } | null>(null);
+  // Any auth change: close every sheet (a new sign-in never inherits one).
+  useEffect(() => {
+    setConfirmOne(null);
+    setConfirmAll(null);
+  }, [binding]);
+  const oneOpen = confirmOne !== null && binding !== null && confirmOne.binding === binding;
+  const allOpen = confirmAll !== null && binding !== null && confirmAll.binding === binding;
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
   const wasOnline = useRef(online);
@@ -109,17 +121,18 @@ export default function RomanConversationsScreen({
 
   const open = useCallback(
     (chat: RomanChatSummary) => {
-      if (!ownerId) return;
+      if (!ownerId || !binding) return;
       const params: RomanConversationParams = {
         id: chat.id,
         ownerId,
+        binding,
         startedAt: chat.startedAt,
         surface: chat.surface,
         messageCount: chat.messageCount,
       };
       navigation.navigate('RomanConversation', params);
     },
-    [navigation, ownerId],
+    [binding, navigation, ownerId],
   );
 
   const actions = (view: RomanChatsFailureView, retry: (() => void) | undefined, prefix: string) => (
@@ -137,16 +150,14 @@ export default function RomanConversationsScreen({
         </HapticPressable>
       ) : null}
       {view.action === 'retry_support' ? (
-        <HapticPressable
-          intent="light"
-          onPress={() => openSupport(view.reference)}
-          accessibilityRole="button"
-          accessibilityLabel={ROMAN_CHATS_COPY.contactSupport}
-          style={styles.quiet}
+        <RomanChatsSupportAction
+          reference={view.reference}
           testID={`${prefix}-support`}
-        >
-          <Text style={styles.quietText}>{ROMAN_CHATS_COPY.contactSupport}</Text>
-        </HapticPressable>
+          buttonStyle={styles.quiet}
+          buttonTextStyle={styles.quietText}
+          bodyStyle={styles.noticeText}
+          linkColor={colors.primary}
+        />
       ) : null}
     </View>
   );
@@ -183,8 +194,10 @@ export default function RomanConversationsScreen({
           </HapticPressable>
           <HapticPressable
             intent="light"
-            onPress={() => setConfirmOne(item)}
-            disabled={deletingAll}
+            onPress={() => {
+              if (binding) setConfirmOne({ chat: item, binding });
+            }}
+            disabled={deletingAll || !binding}
             accessibilityRole="button"
             accessibilityLabel={`Delete the conversation from ${when}`}
             style={styles.rowDelete}
@@ -195,7 +208,7 @@ export default function RomanConversationsScreen({
         </View>
       );
     },
-    [colors.textSecondary, deletingAll, open, styles],
+    [binding, colors.textSecondary, deletingAll, open, styles],
   );
 
   const intro = (
@@ -295,7 +308,9 @@ export default function RomanConversationsScreen({
             {!empty && !deletingAll ? (
               <HapticPressable
                 intent="light"
-                onPress={() => setConfirmAll(true)}
+                onPress={() => {
+                  if (binding) setConfirmAll({ binding });
+                }}
                 disabled={pendingCount > 0}
                 accessibilityRole="button"
                 accessibilityLabel={ROMAN_CHATS_COPY.deleteAll}
@@ -332,28 +347,31 @@ export default function RomanConversationsScreen({
       </View>
       {body()}
       <RomanChatsConfirmSheet
-        visible={confirmOne !== null}
+        key={`one-${binding?.epoch ?? 'none'}`}
+        visible={oneOpen}
         title={ROMAN_CHATS_COPY.confirmOneTitle}
-        body={confirmOne ? ROMAN_CHATS_COPY.confirmOneBody(chatDateLabel(confirmOne)) : ''}
+        body={oneOpen && confirmOne ? ROMAN_CHATS_COPY.confirmOneBody(chatIdentity(confirmOne.chat)) : ''}
         confirmLabel={ROMAN_CHATS_COPY.confirmOneAction}
         onCancel={() => setConfirmOne(null)}
         onConfirm={() => {
           const target = confirmOne;
           setConfirmOne(null);
-          if (target) deleteOne(target);
+          if (target) deleteOne(target.chat, target.binding);
         }}
         testID="roman-chats-confirm-one"
       />
       <RomanChatsConfirmSheet
-        visible={confirmAll}
+        key={`all-${binding?.epoch ?? 'none'}`}
+        visible={allOpen}
         typed
         title={ROMAN_CHATS_COPY.confirmAllTitle}
         body={ROMAN_CHATS_COPY.confirmAllBody}
         confirmLabel={ROMAN_CHATS_COPY.deleteAll}
-        onCancel={() => setConfirmAll(false)}
+        onCancel={() => setConfirmAll(null)}
         onConfirm={() => {
-          setConfirmAll(false);
-          deleteAll();
+          const target = confirmAll;
+          setConfirmAll(null);
+          if (target) deleteAll(target.binding);
         }}
         testID="roman-chats-confirm-all"
       />

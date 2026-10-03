@@ -8,13 +8,15 @@
  * and the copy for every mapped backend failure.
  */
 import React from 'react';
-import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
+import { act, fireEvent, render, renderHook, waitFor, within } from '@testing-library/react-native';
 import RomanConversationsScreen from '../RomanConversationsScreen';
-import { compareChats } from '../useRomanChats';
-import { failureView, ROMAN_CHATS_COPY, chatDateLabel, type RomanChatsOp } from '../romanChatsCopy';
+import { compareChats, useRomanChats } from '../useRomanChats';
+import { failureView, ROMAN_CHATS_COPY, chatDateLabel, chatIdentity, type RomanChatsOp } from '../romanChatsCopy';
 import { romanChatsEvents } from '../romanChatsEvents';
 import { authEvents } from '../../../utils/authEvents';
+import { authEpoch, type AccountBinding } from '../../../services/accountBinding';
 import { captureError } from '../../../services/sentry';
+import { __erasesInFlightForTests } from '../romanEraseTracker';
 import type {
   RomanChatPage,
   RomanChatsApi,
@@ -74,9 +76,21 @@ function makeApi(over: Partial<Record<keyof RomanChatsApi, jest.Mock>> = {}): Re
 
 let signedIn: string | null = 'user-a';
 const sessionUserId = () => signedIn;
+/** Who is signed in, as the real binding module would see it (real auth epoch). */
+const captureBinding = async (): Promise<AccountBinding | null> =>
+  signedIn ? { subject: `sub:${signedIn}`, epoch: authEpoch() } : null;
+/** Matches the binding of a list loaded for `uid` (any epoch). */
+const bindingOf = (uid: string) => expect.objectContaining({ subject: `sub:${uid}` });
 const navigation = { goBack: jest.fn(), navigate: jest.fn() };
 const renderScreen = (api: RomanChatsApi) =>
-  render(<RomanConversationsScreen navigation={navigation as never} api={api} sessionUserId={sessionUserId} />);
+  render(
+    <RomanConversationsScreen
+      navigation={navigation as never}
+      api={api}
+      sessionUserId={sessionUserId}
+      captureBinding={captureBinding}
+    />,
+  );
 
 beforeEach(() => {
   signedIn = 'user-a';
@@ -108,7 +122,7 @@ describe('list', () => {
       `Delete the conversation from ${chatDateLabel(A1)}`,
     );
     expect(screen.getByText(ROMAN_CHATS_COPY.intro)).toBeTruthy();
-    expect(api.list).toHaveBeenCalledWith({});
+    expect(api.list).toHaveBeenCalledWith(bindingOf('user-a'), {});
   });
 
   it('pages with the backend cursor and labels coach-tool chats', async () => {
@@ -121,7 +135,7 @@ describe('list', () => {
     const screen = await renderScreen(api);
     await fireEvent.press(await screen.findByTestId('roman-chats-load-more'));
     await screen.findByTestId('roman-chat-row-ca3');
-    expect(api.list).toHaveBeenLastCalledWith({ cursor: 'ca2' });
+    expect(api.list).toHaveBeenLastCalledWith(bindingOf('user-a'), { cursor: 'ca2' });
     expect(screen.getByText(`4 messages. ${ROMAN_CHATS_COPY.coachTools}`)).toBeTruthy();
     expect(screen.queryByTestId('roman-chats-load-more')).toBeNull();
   });
@@ -139,7 +153,7 @@ describe('list', () => {
     await screen.findByTestId('roman-chat-row-ca2');
     expect(screen.getByText(ROMAN_CHATS_COPY.refreshed)).toBeTruthy();
     expect(api.list).toHaveBeenCalledTimes(3);
-    expect(api.list).toHaveBeenLastCalledWith({});
+    expect(api.list).toHaveBeenLastCalledWith(bindingOf('user-a'), {});
   });
 
   it('shows the empty state and no Delete all when there are no chats', async () => {
@@ -171,12 +185,13 @@ describe('list', () => {
     expect(ctx).toEqual({ where: 'roman-chats GET /roman/sessions', status: 500, code: null, request_id: 'abcdef1234567890' });
   });
 
-  it('opening a chat passes the owner so the transcript is bound to this account', async () => {
+  it('opening a chat passes the owner and binding so the transcript is bound to this account and sign-in', async () => {
     const screen = await renderScreen(makeApi());
     await fireEvent.press(await screen.findByTestId('roman-chat-open-ca1'));
     expect(navigation.navigate).toHaveBeenCalledWith('RomanConversation', {
       id: 'ca1',
       ownerId: 'user-a',
+      binding: { subject: 'sub:user-a', epoch: authEpoch() },
       startedAt: A1.startedAt,
       surface: 'client',
       messageCount: 4,
@@ -190,11 +205,11 @@ describe('delete one', () => {
     const api = makeApi({ deleteOne: jest.fn(() => d.promise) });
     const screen = await renderScreen(api);
     await fireEvent.press(await screen.findByTestId('roman-chat-delete-ca1'));
-    expect(screen.getByText(ROMAN_CHATS_COPY.confirmOneBody(chatDateLabel(A1)))).toBeTruthy();
+    expect(screen.getByText(ROMAN_CHATS_COPY.confirmOneBody(chatIdentity(A1)))).toBeTruthy();
     expect(ROMAN_CHATS_COPY.confirmOneBody('x')).toMatch(/permanently deletes .* cannot be undone\./);
     await fireEvent.press(screen.getByTestId('roman-chats-confirm-one-confirm'));
     expect(screen.queryByTestId('roman-chat-row-ca1')).toBeNull();
-    expect(api.deleteOne).toHaveBeenCalledWith('ca1');
+    expect(api.deleteOne).toHaveBeenCalledWith(bindingOf('user-a'), 'ca1');
     await act(async () => d.resolve(ok(null)));
     expect(screen.getByText(ROMAN_CHATS_COPY.deletedOne)).toBeTruthy();
     expect(screen.queryByTestId('roman-chat-row-ca1')).toBeNull();
@@ -238,9 +253,14 @@ describe('delete one', () => {
   it('a chat erased on the transcript screen leaves the list (same account only)', async () => {
     const screen = await renderScreen(makeApi());
     await screen.findByTestId('roman-chat-row-ca1');
-    await act(async () => romanChatsEvents.emitGone({ ownerId: 'user-b', id: 'ca1', notice: 'x' }));
+    await act(async () => romanChatsEvents.emitGone({ ownerId: 'user-b', epoch: authEpoch(), id: 'ca1', notice: 'x' }));
     expect(screen.getByTestId('roman-chat-row-ca1')).toBeTruthy();
-    await act(async () => romanChatsEvents.emitGone({ ownerId: 'user-a', id: 'ca1', notice: ROMAN_CHATS_COPY.deletedOne }));
+    // Same account, an older sign-in: ignored too.
+    await act(async () => romanChatsEvents.emitGone({ ownerId: 'user-a', epoch: authEpoch() - 1, id: 'ca1', notice: 'x' }));
+    expect(screen.getByTestId('roman-chat-row-ca1')).toBeTruthy();
+    await act(async () =>
+      romanChatsEvents.emitGone({ ownerId: 'user-a', epoch: authEpoch(), id: 'ca1', notice: ROMAN_CHATS_COPY.deletedOne }),
+    );
     expect(screen.queryByTestId('roman-chat-row-ca1')).toBeNull();
     expect(screen.getByText(ROMAN_CHATS_COPY.deletedOne)).toBeTruthy();
   });
@@ -367,6 +387,8 @@ describe('copy for every mapped failure', () => {
     { reason: 'erase_incomplete' },
     { reason: 'query_invalid', requestId: 'req-1234567890' },
     { reason: 'busy' },
+    { reason: 'account_changed', mayHaveBeenSent: false },
+    { reason: 'account_changed', mayHaveBeenSent: true },
     { reason: 'unexpected', status: 500, code: null, requestId: 'req-1234567890' },
   ];
   const ops: RomanChatsOp[] = ['load', 'load_more', 'delete_one', 'delete_all', 'read'];
@@ -415,4 +437,248 @@ it('the row exposes list structure for assistive tech', async () => {
   const row = await screen.findByTestId('roman-chat-row-ca1');
   expect(row.props.role).toBe('listitem');
   expect(within(row).getByTestId('roman-chat-open-ca1').props.accessibilityHint).toBe(ROMAN_CHATS_COPY.open);
+});
+
+describe('B-331-1: two chats on the same local day are told apart', () => {
+  it('rows, accessibility labels and the permanent-delete confirm name the start time', async () => {
+    // Two backend sessions (one per UTC day) can start on one local date, for
+    // example 3 PM and 6 PM on a Pacific Thursday. Built in the runner's local
+    // time so the case holds in every time zone.
+    const afternoon = chat('cp1', new Date(2026, 9, 1, 15, 0).toISOString());
+    const evening = chat('cp2', new Date(2026, 9, 1, 18, 0).toISOString(), { messageCount: 2 });
+    expect(chatDateLabel(afternoon)).toBe('Thursday, October 1 at 3:00 PM');
+    expect(chatDateLabel(evening)).toBe('Thursday, October 1 at 6:00 PM');
+    const screen = await renderScreen(makeApi({ list: jest.fn(async () => page([evening, afternoon])) }));
+    expect(await screen.findByText('Thursday, October 1 at 6:00 PM')).toBeTruthy();
+    expect(screen.getByText('Thursday, October 1 at 3:00 PM')).toBeTruthy();
+    expect(screen.getByTestId('roman-chat-delete-cp1').props.accessibilityLabel).not.toBe(
+      screen.getByTestId('roman-chat-delete-cp2').props.accessibilityLabel,
+    );
+    await fireEvent.press(screen.getByTestId('roman-chat-delete-cp2'));
+    expect(
+      screen.getByText(
+        'This permanently deletes your conversation with Roman from Thursday, October 1 at 6:00 PM (2 messages). It cannot be undone.',
+      ),
+    ).toBeTruthy();
+    expect(chatIdentity(afternoon)).not.toBe(chatIdentity(evening));
+    expect(chatIdentity(chat('cc', afternoon.startedAt, { surface: 'coach' }))).toBe(
+      'Thursday, October 1 at 3:00 PM (4 messages, in your coach tools)',
+    );
+  });
+});
+
+describe('Sol A-331-4: a confirm or retry never outlives its sign-in', () => {
+  const byAccount = () => jest.fn(async () => (signedIn === 'user-a' ? page([A1, A2]) : page([B1])));
+
+  it("A's typed Delete all sheet closes on sign-out; signed in as B, nothing of A's confirm remains", async () => {
+    const api = makeApi({ list: byAccount() });
+    const screen = await renderScreen(api);
+    await screen.findByTestId('roman-chat-row-ca1');
+    await fireEvent.press(screen.getByTestId('roman-chats-delete-all'));
+    await fireEvent.changeText(await screen.findByTestId('roman-chats-confirm-all-input'), 'DELETE');
+    expect(screen.getByTestId('roman-chats-confirm-all-confirm').props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: false }),
+    );
+    signedIn = null;
+    await act(async () => authEvents.emit('logout'));
+    expect(screen.queryByTestId('roman-chats-confirm-all-confirm')).toBeNull();
+    signedIn = 'user-b';
+    await act(async () => authEvents.emit('login'));
+    await screen.findByTestId('roman-chat-row-cb1');
+    expect(screen.queryByTestId('roman-chats-confirm-all-confirm')).toBeNull();
+    expect(api.deleteAll).not.toHaveBeenCalled();
+    // B opens the sheet: the typed text did not carry over.
+    await fireEvent.press(screen.getByTestId('roman-chats-delete-all'));
+    expect((await screen.findByTestId('roman-chats-confirm-all-input')).props.value).toBe('');
+    expect(screen.getByTestId('roman-chats-confirm-all-confirm').props.accessibilityState).toEqual(
+      expect.objectContaining({ disabled: true }),
+    );
+    await fireEvent.press(screen.getByTestId('roman-chats-confirm-all-confirm'));
+    expect(api.deleteAll).not.toHaveBeenCalled();
+  });
+
+  it("A's single-delete confirm (with A's date) is gone after sign-out", async () => {
+    const api = makeApi({ list: byAccount() });
+    const screen = await renderScreen(api);
+    await fireEvent.press(await screen.findByTestId('roman-chat-delete-ca1'));
+    const body = ROMAN_CHATS_COPY.confirmOneBody(chatIdentity(A1));
+    expect(screen.getByText(body)).toBeTruthy();
+    signedIn = null;
+    await act(async () => authEvents.emit('logout'));
+    expect(screen.queryByText(body)).toBeNull();
+    expect(screen.queryByTestId('roman-chats-confirm-one-confirm')).toBeNull();
+    expect(api.deleteOne).not.toHaveBeenCalled();
+  });
+
+  it('the hook refuses a delete intent captured under another sign-in (stale closure), for one and for all', async () => {
+    const api = makeApi({ list: byAccount() });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    const staleA = hook.result.current.binding;
+    expect(staleA).toEqual({ subject: 'sub:user-a', epoch: authEpoch() });
+    signedIn = 'user-b';
+    await act(async () => authEvents.emit('login'));
+    await waitFor(() => expect(hook.result.current.chats.map((c) => c.id)).toEqual(['cb1']));
+    await act(async () => hook.result.current.deleteAll(staleA));
+    await act(async () => hook.result.current.deleteOne(B1, staleA));
+    expect(api.deleteAll).not.toHaveBeenCalled();
+    expect(api.deleteOne).not.toHaveBeenCalled();
+    // Same account, newer sign-in: an intent from the older sign-in is refused too.
+    const b1 = hook.result.current.binding;
+    await act(async () => authEvents.emit('login'));
+    await waitFor(() => expect(hook.result.current.binding?.epoch).toBe(authEpoch()));
+    await act(async () => hook.result.current.deleteAll(b1));
+    expect(api.deleteAll).not.toHaveBeenCalled();
+    // The current binding works.
+    await act(async () => hook.result.current.deleteAll(hook.result.current.binding));
+    expect(api.deleteAll).toHaveBeenCalledWith(bindingOf('user-b'));
+  });
+
+  it('a retry offered under A does nothing once B is signed in', async () => {
+    const api = makeApi({ list: byAccount(), deleteOne: jest.fn(async () => fail({ reason: 'busy' })) });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    await act(async () => hook.result.current.deleteOne(A1, hook.result.current.binding));
+    await waitFor(() => expect(hook.result.current.notice?.retry).toBeDefined());
+    const retry = hook.result.current.notice?.retry;
+    signedIn = 'user-b';
+    await act(async () => authEvents.emit('login'));
+    await waitFor(() => expect(hook.result.current.chats.map((c) => c.id)).toEqual(['cb1']));
+    await act(async () => retry?.());
+    expect(api.deleteOne).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Sol B-331-5: an erased chat never comes back from an older read', () => {
+  it('single delete: a page read before the erase settled cannot re-add the erased row', async () => {
+    const late = deferred<RomanChatsOutcome<RomanChatPage>>();
+    const del = deferred<RomanChatsOutcome<null>>();
+    const api = makeApi({
+      list: jest.fn().mockResolvedValueOnce(page([A1, A2])).mockImplementationOnce(() => late.promise),
+      deleteOne: jest.fn(() => del.promise),
+    });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    // A reload starts first (its answer will be from before the erase)...
+    await act(async () => hook.result.current.reload());
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    // ...then the delete, which the server confirms.
+    await act(async () => hook.result.current.deleteOne(A1, hook.result.current.binding));
+    await act(async () => del.resolve(ok(null)));
+    await act(async () => late.resolve(page([A1, A2])));
+    expect(hook.result.current.chats.map((c) => c.id)).toEqual(['ca2']);
+    expect(hook.result.current.notice?.text).toBe(ROMAN_CHATS_COPY.deletedOne);
+  });
+
+  it('single delete in flight: a reload waits for it, then reads (and still hides the erased row)', async () => {
+    const del = deferred<RomanChatsOutcome<null>>();
+    const api = makeApi({ deleteOne: jest.fn(() => del.promise) });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    await act(async () => hook.result.current.deleteOne(A1, hook.result.current.binding));
+    expect(__erasesInFlightForTests('sub:user-a')).toBe(1);
+    await act(async () => hook.result.current.reload());
+    expect(api.list).toHaveBeenCalledTimes(1);
+    await act(async () => del.resolve(ok(null)));
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    expect(hook.result.current.chats.map((c) => c.id)).toEqual(['ca2']);
+  });
+
+  it('delete all: a reload asked for while it runs waits, and the list never shows erased rows with "all deleted"', async () => {
+    const del = deferred<RomanChatsOutcome<null>>();
+    const api = makeApi({
+      list: jest.fn().mockResolvedValueOnce(page([A1, A2])).mockResolvedValue(page([A1, A2])),
+      deleteAll: jest.fn(() => del.promise),
+    });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    await act(async () => hook.result.current.deleteAll(hook.result.current.binding));
+    await act(async () => hook.result.current.reload());
+    expect(api.list).toHaveBeenCalledTimes(1);
+    await act(async () => del.resolve(ok(null)));
+    // The deferred reload runs after the erase; even a stale answer cannot
+    // bring back what the server confirmed erased.
+    await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    expect(hook.result.current.chats).toEqual([]);
+    expect(hook.result.current.notice?.text).toBe(ROMAN_CHATS_COPY.deletedAll);
+  });
+
+  it('delete all: a page started before it is dropped and read again', async () => {
+    const early = deferred<RomanChatsOutcome<RomanChatPage>>();
+    const api = makeApi({
+      list: jest
+        .fn()
+        .mockResolvedValueOnce(page([A1, A2], 'ca2'))
+        .mockImplementationOnce(() => early.promise)
+        .mockResolvedValue(page([])),
+    });
+    const hook = await renderHook(() => useRomanChats({ api, sessionUserId, captureBinding }));
+    await waitFor(() => expect(hook.result.current.phase).toBe('ready'));
+    await act(async () => hook.result.current.loadMore());
+    await act(async () => hook.result.current.deleteAll(hook.result.current.binding));
+    await act(async () => early.resolve(page([A3])));
+    await waitFor(() => expect(hook.result.current.notice?.text).toBe(ROMAN_CHATS_COPY.deletedAll));
+    expect(hook.result.current.chats).toEqual([]);
+  });
+
+  it('A -> sign out -> A with an erase in flight: the new list waits for the erase before reading', async () => {
+    const del = deferred<RomanChatsOutcome<null>>();
+    const api = makeApi({
+      list: jest.fn().mockResolvedValueOnce(page([A1, A2])).mockResolvedValue(page([A2])),
+      deleteOne: jest.fn(() => del.promise),
+    });
+    const screen = await renderScreen(api);
+    await screen.findByTestId('roman-chat-row-ca1');
+    await confirmDeleteOne(screen, 'ca1');
+    signedIn = null;
+    await act(async () => authEvents.emit('logout'));
+    signedIn = 'user-a';
+    await act(async () => authEvents.emit('login'));
+    // Signed in again as A, but A's erase has not settled: no read yet.
+    expect(api.list).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('roman-chats-loading')).toBeTruthy();
+    await act(async () => del.resolve(ok(null)));
+    await screen.findByTestId('roman-chat-row-ca2');
+    expect(api.list).toHaveBeenCalledTimes(2);
+    expect(screen.queryByTestId('roman-chat-row-ca1')).toBeNull();
+    // The old sign-in's answer was dropped: no notice from it.
+    expect(screen.queryByText(ROMAN_CHATS_COPY.deletedOne)).toBeNull();
+  });
+
+  it('A -> sign out -> B with an erase of A in flight: B is not kept waiting', async () => {
+    const del = deferred<RomanChatsOutcome<null>>();
+    const api = makeApi({
+      list: jest.fn(async () => (signedIn === 'user-a' ? page([A1, A2]) : page([B1]))),
+      deleteOne: jest.fn(() => del.promise),
+    });
+    const screen = await renderScreen(api);
+    await screen.findByTestId('roman-chat-row-ca1');
+    await confirmDeleteOne(screen, 'ca1');
+    signedIn = null;
+    await act(async () => authEvents.emit('logout'));
+    signedIn = 'user-b';
+    await act(async () => authEvents.emit('login'));
+    await screen.findByTestId('roman-chat-row-cb1');
+    await act(async () => del.resolve(ok(null)));
+  });
+});
+
+describe('Contact support (one support email, never a silent failure)', () => {
+  it('opens the shared support email with the reference only, and says so when no email app opens', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { Linking } = require('react-native');
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValueOnce(new Error('no mail app'));
+    const api = makeApi({
+      list: jest.fn(async () => fail({ reason: 'unexpected', status: 500, code: null, requestId: 'abcdef1234567890' })),
+    });
+    const screen = await renderScreen(api);
+    await fireEvent.press(await screen.findByTestId('roman-chats-error-support'));
+    expect(open).toHaveBeenCalledWith(
+      'mailto:Bradleyapple1031@gmail.com?subject=' + encodeURIComponent('Roman conversations (reference abcdef12)'),
+    );
+    expect(await screen.findByTestId('roman-chats-error-support-fallback-status')).toBeTruthy();
+    open.mockRestore();
+  });
 });

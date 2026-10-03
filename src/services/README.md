@@ -16,6 +16,7 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 | File | What it does |
 | --- | --- |
 | `api.ts` | Axios instance, auth interceptor, single-flight refresh, all typed API surfaces (`authApi`, `profileApi`, `foodApi`, `logApi`, `aiApi`, `workoutApi`, `coachApi`, `messagesApi`, `nudgesApi`, `recipesApi`, `listsApi`, …). |
+| `accountBinding.ts` | Binds a request to one account and sign-in (`AccountBinding`: token subject + auth epoch). The request interceptor sends a bound request only with that account's credential and sign-in, every `authEvents` emit bumps the epoch and aborts bound reads in flight. Used by the Roman chat history and delete calls (mobile #331). |
 | `authActions.ts` | `signOut()` and `refreshProfile()` — the only callers that touch `SIGN_OUT_KEYS` directly. Emits `authEvents`. |
 | `secureStorage.ts` | `getItem` / `setItem` / `removeItem` shim that uses `expo-secure-store` on native and `AsyncStorage` on web. Migrates legacy AsyncStorage tokens on first read. |
 | `realtime.ts` | Subscribes to Supabase Realtime broadcast channels. Used only for "ping → go fetch" — never for row delivery. |

@@ -6,7 +6,7 @@
  * unknown failure shows a short reference and the support address.
  */
 import type { RomanChatsFailure, RomanChatSummary } from '../../api/romanChatsApi';
-import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { shortReference } from '../../utils/correlation';
 
 export type RomanChatsOp = 'load' | 'load_more' | 'delete_one' | 'delete_all' | 'read';
@@ -38,11 +38,13 @@ export const ROMAN_CHATS_COPY = {
   alreadyGone: 'This conversation was already deleted, so there was nothing left to remove.',
   refreshed: 'This list of conversations was out of date, so it has been refreshed.',
   signedOutState: 'You are signed out, so your conversations with Roman are not shown. Sign in to see or delete them.',
-  otherAccount: 'This conversation belongs to an account that is no longer signed in, so it is not shown.',
+  otherAccount:
+    'You signed out or switched accounts after opening this conversation, so it is no longer shown. Go back to open it again.',
 
   confirmOneTitle: 'Delete this conversation?',
-  confirmOneBody: (when: string) =>
-    `This permanently deletes your conversation with Roman from ${when}. It cannot be undone.`,
+  /** `which` comes from chatIdentity: the start date and time, the message count and, for coach tools, where it was. */
+  confirmOneBody: (which: string) =>
+    `This permanently deletes your conversation with Roman from ${which}. It cannot be undone.`,
   confirmOneAction: 'Delete conversation',
   keep: 'Keep it',
   confirmAllTitle: 'Delete all your conversations with Roman?',
@@ -64,13 +66,36 @@ export function messageCountLabel(n: number): string {
   return n === 1 ? '1 message' : `${n} messages`;
 }
 
-/** "Thursday, October 1" (plus the year when it is not this year), local time. */
+/**
+ * "Thursday, October 1 at 6:12 PM" (plus the year when it is not this year),
+ * in the phone's local time. Opus/Sol B-331-1: the backend keeps one chat per
+ * UTC day, so two chats can start on the same local date (every evening in
+ * the Americas); the start time tells them apart on the row, the transcript
+ * title and the permanent-delete confirm.
+ */
 export function chatDateLabel(chat: Pick<RomanChatSummary, 'startedAt'>, now: Date = new Date()): string {
   const d = new Date(chat.startedAt);
   if (Number.isNaN(d.getTime())) return 'an earlier day';
   const opts: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'long', day: 'numeric' };
   if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
-  return d.toLocaleDateString('en-US', opts);
+  const day = d.toLocaleDateString('en-US', opts);
+  // Newer ICU puts a narrow no-break space before AM/PM; keep plain spaces.
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(/\s/g, ' ');
+  return `${day} at ${time}`;
+}
+
+/**
+ * Which conversation a permanent delete is about, in words: start date and
+ * time, message count and, for coach tools chats, where it happened.
+ * "Thursday, October 1 at 6:12 PM (4 messages, in your coach tools)".
+ */
+export function chatIdentity(
+  chat: Pick<RomanChatSummary, 'startedAt' | 'messageCount' | 'surface'>,
+  now: Date = new Date(),
+): string {
+  const details = [messageCountLabel(chat.messageCount)];
+  if (chat.surface === 'coach') details.push('in your coach tools');
+  return `${chatDateLabel(chat, now)} (${details.join(', ')})`;
 }
 
 /** What the screen shows for a failure, and which action it offers. */
@@ -94,12 +119,12 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
       return {
         message:
           op === 'delete_one'
-            ? 'I could not reach the server, so this conversation may not be deleted yet. Check your connection, then delete it again. Deleting again is safe.'
+            ? 'The app could not reach the server, so this conversation may not be deleted yet. Check your connection, then delete it again. Deleting again is safe.'
             : op === 'delete_all'
-              ? 'I could not reach the server, so your conversations may not be deleted yet. Check your connection, then try again. Deleting again is safe.'
+              ? 'The app could not reach the server, so your conversations may not be deleted yet. Check your connection, then try again. Deleting again is safe.'
               : op === 'read'
-                ? 'I could not reach the server to open this conversation. Check your connection, then tap Try again.'
-                : 'I could not reach the server to load your conversations. Check your connection, then tap Try again.',
+                ? 'The app could not reach the server to open this conversation. Check your connection, then tap Try again.'
+                : 'The app could not reach the server to load your conversations. Check your connection, then tap Try again.',
         action: 'retry',
         reference: null,
         report: false,
@@ -138,20 +163,20 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
       return op === 'read'
         ? {
             message:
-              'Reading past conversations is switched off on our side right now. You can still delete this conversation here.',
+              'Reading past conversations is switched off on the server right now. You can still delete this conversation here.',
             action: 'none',
             reference: null,
             report: false,
           }
         : op === 'delete_one' || op === 'delete_all'
           ? {
-              message: `Deleting conversations is not available on our side yet, so nothing was deleted. Check back later, or ${withRef(null)}.`,
+              message: `Deleting conversations is not available on the server yet, so nothing was deleted. Check back later, or ${withRef(null)}.`,
               action: 'retry_support',
               reference: null,
               report: false,
             }
           : {
-              message: `Your conversation history is not available on our side yet, so nothing can be shown here. Nothing was changed. Check back later, or ${withRef(null)}.`,
+              message: `Your conversation history is not available on the server yet, so nothing can be shown here. Nothing was changed. Check back later, or ${withRef(null)}.`,
               action: 'retry_support',
               reference: null,
               report: false,
@@ -178,6 +203,19 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
         report: true,
       };
     }
+    case 'account_changed':
+      // Normally never read: the screen clears itself on the same auth change.
+      return {
+        message:
+          op === 'delete_one' || op === 'delete_all'
+            ? f.mayHaveBeenSent
+              ? 'The account signed in on this phone changed while this was being deleted, so the result is not shown. Open Your conversations with Roman again to see what is there.'
+              : 'The account signed in on this phone changed, so nothing was deleted. Open Your conversations with Roman again to see what is there.'
+            : 'The account signed in on this phone changed, so this is no longer shown. Open Your conversations with Roman again to see what is there.',
+        action: 'none',
+        reference: null,
+        report: false,
+      };
     case 'busy':
       return {
         message: 'There were too many requests in a row, so this one was not done. Wait a minute, then try again.',
@@ -189,7 +227,7 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
       const ref = shortReference(f.requestId);
       const what =
         op === 'delete_one'
-          ? 'The server could not confirm that this conversation was deleted, so it is still listed. Try again. Deleting again is safe.'
+          ? 'The server could not confirm that this conversation was deleted, so it has not been removed here. Try again. Deleting again is safe.'
           : op === 'delete_all'
             ? 'The server could not confirm that your conversations were deleted, so the list shows what is still there. Try again. Deleting again is safe.'
             : op === 'read'
@@ -200,10 +238,7 @@ export function failureView(op: RomanChatsOp, f: RomanChatsFailure): RomanChatsF
   }
 }
 
-/** mailto link for Contact support: the reference only, never chat content. */
-export function supportMailto(reference: string | null): string {
-  const subject = encodeURIComponent(
-    `Roman conversations${reference ? ` (reference ${reference})` : ''}`,
-  );
-  return `mailto:${SUPPORT_EMAIL}?subject=${subject}`;
+/** Subject of the Contact support email: the reference only, never chat content. */
+export function supportSubject(reference: string | null): string {
+  return `Roman conversations${reference ? ` (reference ${reference})` : ''}`;
 }

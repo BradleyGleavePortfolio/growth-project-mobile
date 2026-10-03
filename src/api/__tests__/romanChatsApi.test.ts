@@ -10,6 +10,8 @@
  */
 import { failureOf, romanChatsApi, ROMAN_CHATS_MAX_LIMIT } from '../romanChatsApi';
 import { RomanSessionSchema, RomanStreamChunkSchema, RomanWireMessageSchema } from '../romanApi';
+import { authEpoch, type AccountBinding } from '../../services/accountBinding';
+import { authEvents } from '../../utils/authEvents';
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -39,6 +41,11 @@ function networkError() {
 }
 
 const CUID = 'cmg9x2k3l0000abcd1234efgh';
+/** The current sign-in of a synthetic account (every request is bound, Sol A-331-4). */
+const B = (): AccountBinding => ({ subject: 'sub:user-a', epoch: authEpoch() });
+/** The request options every bound call sends: the binding, plus `extra`. */
+const sentWith = (extra: Record<string, unknown> = {}) =>
+  expect.objectContaining({ accountBinding: expect.objectContaining({ subject: 'sub:user-a' }), ...extra });
 const chat = (over: Record<string, unknown> = {}) => ({
   id: CUID,
   surface: 'client',
@@ -52,19 +59,19 @@ const chat = (over: Record<string, unknown> = {}) => ({
 describe('list', () => {
   it('reads a page with cuid ids and the cursor, sending limit and cursor', async () => {
     api.get.mockResolvedValue({ status: 200, data: { sessions: [chat()], nextCursor: CUID } });
-    const out = await romanChatsApi.list({ cursor: 'cprev', limit: 30 });
-    expect(api.get).toHaveBeenCalledWith('/roman/sessions', { params: { limit: 30, cursor: 'cprev' } });
+    const out = await romanChatsApi.list(B(), { cursor: 'cprev', limit: 30 });
+    expect(api.get).toHaveBeenCalledWith('/roman/sessions', sentWith({ params: { limit: 30, cursor: 'cprev' } }));
     expect(out).toEqual({ ok: true, value: { sessions: [chat()], nextCursor: CUID } });
   });
 
   it('clamps the page size to the backend bounds (1..100) and omits an empty cursor', async () => {
     api.get.mockResolvedValue({ status: 200, data: { sessions: [], nextCursor: null } });
-    await romanChatsApi.list({ limit: 1000, cursor: null });
-    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', { params: { limit: ROMAN_CHATS_MAX_LIMIT } });
-    await romanChatsApi.list({ limit: 0 });
-    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', { params: { limit: 1 } });
-    await romanChatsApi.list();
-    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', { params: { limit: 30 } });
+    await romanChatsApi.list(B(), { limit: 1000, cursor: null });
+    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', sentWith({ params: { limit: ROMAN_CHATS_MAX_LIMIT } }));
+    await romanChatsApi.list(B(), { limit: 0 });
+    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', sentWith({ params: { limit: 1 } }));
+    await romanChatsApi.list(B());
+    expect(api.get).toHaveBeenLastCalledWith('/roman/sessions', sentWith({ params: { limit: 30 } }));
   });
 
   it('a body that drifts from the contract is a coded unexpected failure (never thrown, never shown)', async () => {
@@ -73,34 +80,34 @@ describe('list', () => {
       data: { sessions: [{ ...chat(), content: 'secret text' }], nextCursor: null },
       headers: { 'x-request-id': 'srv-ref-9' },
     });
-    const out = await romanChatsApi.list();
+    const out = await romanChatsApi.list(B());
     expect(out).toEqual({
       ok: false,
       failure: { reason: 'unexpected', status: 200, code: 'WIRE_DRIFT', requestId: 'srv-ref-9' },
     });
     api.get.mockResolvedValue({ status: 200, data: { sessions: [chat({ surface: 'admin' })], nextCursor: null } });
-    expect((await romanChatsApi.list()).ok).toBe(false);
+    expect((await romanChatsApi.list(B())).ok).toBe(false);
     api.get.mockResolvedValue({ status: 200, data: { sessions: [chat({ id: '' })], nextCursor: null } });
-    expect((await romanChatsApi.list()).ok).toBe(false);
+    expect((await romanChatsApi.list(B())).ok).toBe(false);
   });
 });
 
 describe('delete', () => {
   it('deleteOne sends DELETE /roman/sessions/:id with the id path-encoded', async () => {
     api.delete.mockResolvedValue({ status: 204 });
-    expect(await romanChatsApi.deleteOne('a/b c')).toEqual({ ok: true, value: null });
-    expect(api.delete).toHaveBeenCalledWith('/roman/sessions/a%2Fb%20c');
+    expect(await romanChatsApi.deleteOne(B(), 'a/b c')).toEqual({ ok: true, value: null });
+    expect(api.delete).toHaveBeenCalledWith('/roman/sessions/a%2Fb%20c', sentWith());
   });
 
   it('deleteAll sends DELETE /roman/sessions', async () => {
     api.delete.mockResolvedValue({ status: 204 });
-    expect(await romanChatsApi.deleteAll()).toEqual({ ok: true, value: null });
-    expect(api.delete).toHaveBeenCalledWith('/roman/sessions');
+    expect(await romanChatsApi.deleteAll(B())).toEqual({ ok: true, value: null });
+    expect(api.delete).toHaveBeenCalledWith('/roman/sessions', sentWith());
   });
 
   it('a 503 ROMAN_ERASE_INCOMPLETE is its own reason', async () => {
     api.delete.mockRejectedValue(httpError(503, { statusCode: 503, code: 'ROMAN_ERASE_INCOMPLETE', message: 'x' }));
-    expect(await romanChatsApi.deleteAll()).toEqual({ ok: false, failure: { reason: 'erase_incomplete' } });
+    expect(await romanChatsApi.deleteAll(B())).toEqual({ ok: false, failure: { reason: 'erase_incomplete' } });
   });
 });
 
@@ -116,12 +123,48 @@ describe('readMessages', () => {
         nextCursor: null,
       },
     });
-    const out = await romanChatsApi.readMessages(CUID);
-    expect(api.get).toHaveBeenCalledWith(`/roman/sessions/${CUID}/messages`, { params: { limit: 30 } });
+    const out = await romanChatsApi.readMessages(B(), CUID);
+    expect(api.get).toHaveBeenCalledWith(`/roman/sessions/${CUID}/messages`, sentWith({ params: { limit: 30 } }));
     expect(out.ok && out.value.messages.map((m) => [m.id, m.role])).toEqual([
       ['cm2', 'assistant'],
       ['cm1', 'user'],
     ]);
+  });
+});
+
+describe('every call is bound to one sign-in (Sol A-331-4)', () => {
+  it('a binding from an older sign-in sends nothing', async () => {
+    const stale = B();
+    authEvents.emit();
+    expect(await romanChatsApi.deleteAll(stale)).toEqual({
+      ok: false,
+      failure: { reason: 'account_changed', mayHaveBeenSent: false },
+    });
+    expect(await romanChatsApi.deleteOne(stale, CUID)).toEqual({
+      ok: false,
+      failure: { reason: 'account_changed', mayHaveBeenSent: false },
+    });
+    expect((await romanChatsApi.list(stale)).ok).toBe(false);
+    expect(api.delete).not.toHaveBeenCalled();
+    expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it('reads carry an abort signal; erases do not (an erase already sent is never hidden)', async () => {
+    api.get.mockResolvedValue({ status: 200, data: { sessions: [], nextCursor: null } });
+    api.delete.mockResolvedValue({ status: 204 });
+    await romanChatsApi.list(B());
+    await romanChatsApi.deleteAll(B());
+    expect(api.get.mock.calls[0][1].signal).toBeDefined();
+    expect(api.delete.mock.calls[0][1].signal).toBeUndefined();
+  });
+
+  it('an answer that arrives after the sign-in changed is dropped as account_changed', async () => {
+    let answer!: (v: unknown) => void;
+    api.delete.mockImplementation(() => new Promise((r) => (answer = r)));
+    const pending = romanChatsApi.deleteOne(B(), CUID);
+    authEvents.emit('logout');
+    answer({ status: 204 });
+    expect(await pending).toEqual({ ok: false, failure: { reason: 'account_changed', mayHaveBeenSent: true } });
   });
 });
 

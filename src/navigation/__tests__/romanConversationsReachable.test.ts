@@ -61,3 +61,14 @@ it('the Roman chat header carries the entry', () => {
   expect(header).toMatch(/<RomanConversationsButton \/>/);
   expect(read('components/roman/RomanConversationsButton.tsx')).toMatch(/navigation\.navigate\('RomanConversations'\)/);
 });
+
+it('C-331-3: the coach Settings row is hidden for a sub-coach (backend Roman routes allow student, coach and owner)', () => {
+  const s = read('screens/coach/SettingsScreen.tsx');
+  const row = s.indexOf("navigation.navigate('RomanConversations')");
+  const gateStart = s.lastIndexOf('{(featureFlags.consultationOnboarding || featureFlags.romanChat)', row);
+  expect(gateStart).toBeGreaterThan(-1);
+  const gate = s.slice(gateStart, s.indexOf('? (', gateStart));
+  expect(gate).toMatch(/currentUser\?\.role !== 'sub_coach'/);
+  // Head coaches and coaches whose team role is still loading keep the row.
+  expect(gate).not.toMatch(/head_coach|unknown/);
+});
