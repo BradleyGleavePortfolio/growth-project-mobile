@@ -52,7 +52,7 @@ Food log offline:
 Sentry:
   initSentry() ─► reads EXPO_PUBLIC_SENTRY_DSN
               ─► strips Authorization / Cookie before send
-  setSentryUser({id, email}) ─► tags subsequent events
+  setSentryUser({id}) ─► tags subsequent events with the account id only (never the email)
 ```
 
 ### Token-refresh contract
@@ -67,7 +67,7 @@ The header comment in `api.ts` is the canonical write-up. Short version:
 
 None directly, but several side-effects matter for review:
 
-- `sentry.ts` strips `Authorization` and `Cookie` headers in `beforeSend` so we don't leak tokens to Sentry. Auditors checking the Data Safety form rely on this.
+- `sentry.ts` applies the content policy in `sentryPrivacy.ts` through `beforeBreadcrumb`, `beforeSend` and `beforeSendTransaction`: console breadcrumbs are dropped; request URLs keep only their route (no query, fragment or credentials, ID-like path segments become `:id`); other breadcrumbs lose free text; events keep `user.id` only; `Authorization` and `Cookie` headers, request bodies, cookies and query strings are removed. The native SDKs get `enableNetworkBreadcrumbs: false` / `enableNetworkTracking: false` (iOS) and the `io.sentry.breadcrumbs.network-events=false` manifest flag (Android) so native capture stays quiet after JS re-initializes it. Auditors checking the Data Safety form rely on this.
 - `services/realtime.ts` is the reason the Data Safety form lists *App activity → analytics* but **not** *Personal communications* over a WebSocket — Realtime here carries no PII.
 - `secureStorage.ts` is the implementation behind the security claim that auth tokens are stored encrypted at rest on device.
 
