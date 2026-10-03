@@ -1,5 +1,7 @@
 import type { Breadcrumb, Event } from '@sentry/react-native';
 
+import { sanitizeOtaEmergencyContext, sanitizeOtaUpdatesContext } from './otaUpdateShape';
+
 /**
  * What the app lets Sentry keep (owner rule: no health data, no message
  * content, no PII; OR-112-15: the account id only, never the email).
@@ -23,7 +25,11 @@ import type { Breadcrumb, Event } from '@sentry/react-native';
  *   - events keep `user.id` only, request URLs are route-shaped, and request
  *     bodies, cookies and query strings are removed;
  *   - transaction spans lose `http.query` / `http.fragment`, and URL
- *     attributes and http.client span names are route-shaped.
+ *     attributes and http.client span names are route-shaped;
+ *   - the over-the-air update contexts keep only their closed shapes
+ *     (src/services/otaUpdateShape.ts, B-305-12): `ota_updates` loses every
+ *     key outside its allowlist (the SDK's raw `emergency_launch_reason`
+ *     first of all) and `ota_emergency` keeps only `reason_category`.
  */
 
 type Data = Record<string, unknown>;
@@ -142,6 +148,20 @@ function scrubSpanName(name: string | undefined): string | undefined {
   return m ? `${m[1]} ${routeOnlyUrl(m[2])}` : name;
 }
 
+/** Over-the-air update contexts reduced to their closed shapes; a context with nothing safe left is removed. */
+function scrubOtaContexts(contexts: NonNullable<Event['contexts']>): void {
+  if ('ota_updates' in contexts) {
+    const safe = sanitizeOtaUpdatesContext(contexts.ota_updates);
+    if (safe) contexts.ota_updates = safe;
+    else delete contexts.ota_updates;
+  }
+  if ('ota_emergency' in contexts) {
+    const safe = sanitizeOtaEmergencyContext(contexts.ota_emergency);
+    if (safe) contexts.ota_emergency = safe;
+    else delete contexts.ota_emergency;
+  }
+}
+
 /**
  * Applies the policy to an error or transaction event in place and returns
  * it. Never drops the event itself.
@@ -177,5 +197,6 @@ export function scrubEvent<T extends Event>(event: T): T {
   }
   const trace = event.contexts && event.contexts.trace;
   if (trace) scrubAttributes(trace.data);
+  if (event.contexts) scrubOtaContexts(event.contexts);
   return event;
 }

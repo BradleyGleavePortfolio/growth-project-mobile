@@ -145,4 +145,52 @@ describe('scrubEvent', () => {
       'http.method': 'GET',
     });
   });
+  it('B-305-12: the OTA contexts keep only their closed shapes (raw emergency_launch_reason removed)', () => {
+    const event: Event = {
+      contexts: {
+        ota_updates: {
+          is_enabled: true,
+          is_embedded_launch: true,
+          is_emergency_launch: true,
+          is_using_embedded_assets: 'yes',
+          update_id: 'ABCDEF00-1111-2222-3333-444455556666',
+          channel: `clinic ${EMAIL}`,
+          runtime_version: `1.0.0 ${CANARY}`,
+          check_automatically: 'on_load',
+          launch_duration: 412,
+          emergency_launch_reason: `Failed to launch for ${CANARY} ${EMAIL}`,
+          emergency_reason_category: 'asset_or_bundle',
+          created_at: CANARY,
+        },
+        ota_emergency: { reason_category: 'timeout', reason: CANARY },
+        device: { family: 'iPhone' },
+      },
+    };
+    const out = scrubEvent(event);
+    expect(out.contexts?.ota_updates).toEqual({
+      is_enabled: true,
+      is_embedded_launch: true,
+      is_emergency_launch: true,
+      update_id: 'abcdef00-1111-2222-3333-444455556666',
+      channel: 'other',
+      check_automatically: 'on_load',
+      launch_duration: 412,
+      emergency_reason_category: 'asset_or_bundle',
+    });
+    expect(out.contexts?.ota_emergency).toEqual({ reason_category: 'timeout' });
+    expect(out.contexts?.device).toEqual({ family: 'iPhone' });
+    expect(JSON.stringify(out)).not.toContain(CANARY);
+    expect(JSON.stringify(out)).not.toContain(EMAIL);
+  });
+
+  it('B-305-12: an OTA context with nothing safe left is removed, not forwarded', () => {
+    const event: Event = {
+      contexts: {
+        ota_updates: { emergency_launch_reason: CANARY },
+        ota_emergency: { reason_category: CANARY },
+      },
+    };
+    const out = scrubEvent(event);
+    expect(out.contexts).toEqual({});
+  });
 });
