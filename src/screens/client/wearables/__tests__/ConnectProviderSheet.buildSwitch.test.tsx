@@ -22,6 +22,22 @@ const mockConnect = jest.fn();
 jest.mock('../../../../services/health/onDeviceConnect', () => ({
   connectOnDeviceProvider: (...args: unknown[]) => mockConnect(...args),
 }));
+// S14: the sheet binds the run to the signed-in person, then registers and
+// imports. This file is about the build switch, so that seam is stubbed.
+const mockImport = jest.fn();
+jest.mock('../../../../services/health/onDeviceSync', () => {
+  const actual = jest.requireActual('../../../../services/health/onDeviceSync');
+  return {
+    ...actual,
+    beginOnDeviceConnect: async () => ({
+      userId: 'u1',
+      assertCurrent: async () => undefined,
+      throwIfStopped: () => undefined,
+      cancel: () => undefined,
+    }),
+    connectOnDevice: (...args: unknown[]) => mockImport(...args),
+  };
+});
 
 import ConnectProviderSheet from '../ConnectProviderSheet';
 import { HEALTH_CONNECT_DISABLED_MESSAGE } from '../../../../config/healthConnect';
@@ -78,6 +94,13 @@ test('ON keeps the existing Android connect flow', async () => {
     value: { extra: { healthConnectEnabled: true } },
   });
   mockConnect.mockResolvedValue('granted');
+  mockImport.mockResolvedValue({
+    kind: 'imported',
+    source: 'HEALTH_CONNECT',
+    connectionId: 'c1',
+    postedCount: 1,
+    complete: true,
+  });
   const onClose = jest.fn();
   await render(
     <ConnectProviderSheet
@@ -90,7 +113,8 @@ test('ON keeps the existing Android connect flow', async () => {
     screen.getByLabelText('Continue connecting Health Connect'),
   );
   await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
-  expect(mockConnect).toHaveBeenCalledWith('HEALTH_CONNECT');
+  expect(mockConnect).toHaveBeenCalledWith('HEALTH_CONNECT', expect.any(Function));
+  expect(mockImport).toHaveBeenCalledWith('HEALTH_CONNECT', expect.objectContaining({ userId: 'u1' }));
   expect(mockInvalidate).toHaveBeenCalledTimes(1);
 });
 

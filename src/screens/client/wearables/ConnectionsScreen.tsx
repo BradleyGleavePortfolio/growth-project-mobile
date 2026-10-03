@@ -19,7 +19,7 @@
  * The list is the join of the user's existing connections with the full
  * provider catalog so providers the user has not connected yet still appear
  * with a Connect button. Tapping Connect / Reconnect opens
- * `ConnectProviderSheet`; Disconnect calls the soft-disconnect mutation.
+ * `ConnectProviderSheet`; Disconnect asks first (DisconnectConfirmDialog, S14 round 4b) and then calls the soft-disconnect mutation.
  *
  * States: loading skeleton, error-with-retry, and a per-row pending state on
  * disconnect. Every interactive element carries an accessibilityLabel + role.
@@ -43,14 +43,28 @@ import {
 } from '../../../api/wearablesConnectionsApi';
 import {
   useDisconnectProvider,
+  useLocalOnDeviceAuthorization,
   useWearableConnections,
 } from '../../../hooks/useWearableConnections';
 import { colors, radius, semantic, spacing, typography } from '../../../theme/tokens';
 import ConnectProviderSheet from './ConnectProviderSheet';
+import {
+  deviceSourceForPlatform,
+  isConnectedButNotSyncingHere,
+} from '../../../services/health/onDeviceSync';
+import { notSyncingHereCopy } from './onDeviceCopy';
+import DisconnectConfirmDialog from './DisconnectConfirmDialog';
+import { disconnectFailureMessage } from './disconnectCopy';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
 
-type BadgeTone = 'connected' | 'expired' | 'error' | 'disconnected';
+/**
+ * `notSyncing` (S14 B-317-5): the server lists this phone's on-device source
+ * as connected, but this phone holds no Connect authorization for the
+ * signed-in person and that connection (after a sign-out, on a second phone,
+ * after a reinstall), so Health does not read it here until Reconnect.
+ */
+type BadgeTone = 'connected' | 'notSyncing' | 'expired' | 'error' | 'disconnected';
 
 /** Map a (possibly unknown) backend status string to a UI badge tone. */
 function badgeTone(status: string): BadgeTone {
@@ -69,6 +83,7 @@ function badgeTone(status: string): BadgeTone {
 
 const BADGE_COLORS: Record<BadgeTone, { bg: string; fg: string; label: string }> = {
   connected: { bg: semantic.success.bg, fg: semantic.success.fg, label: 'Connected' },
+  notSyncing: { bg: semantic.warning.bg, fg: semantic.warning.fg, label: 'Not syncing here' },
   expired: { bg: semantic.warning.bg, fg: semantic.warning.fg, label: 'Expired' },
   error: { bg: semantic.danger.bg, fg: semantic.danger.fg, label: 'Error' },
   disconnected: { bg: colors.cream, fg: colors.charcoal, label: 'Not connected' },
@@ -79,7 +94,7 @@ type RowAction = 'connect' | 'reconnect' | 'disconnect';
 
 function rowAction(status: BadgeTone): RowAction {
   if (status === 'connected') return 'disconnect';
-  if (status === 'expired' || status === 'error') return 'reconnect';
+  if (status === 'expired' || status === 'error' || status === 'notSyncing') return 'reconnect';
   return 'connect';
 }
 
@@ -133,7 +148,10 @@ interface ProviderRow {
  * first (they need attention or are active); not-connected rows follow. Within
  * a tier, alphabetical by display name for stable ordering.
  */
-export function buildRows(connections: WearableConnection[]): ProviderRow[] {
+export function buildRows(
+  connections: WearableConnection[],
+  local?: { provider: WearableProvider; connectionId: string | null } | null,
+): ProviderRow[] {
   const byProvider = new Map<WearableProvider, WearableConnection>();
   for (const c of connections) {
     // If multiple rows exist for a provider (re-links), keep the most recent.
@@ -145,15 +163,25 @@ export function buildRows(connections: WearableConnection[]): ProviderRow[] {
 
   const rows: ProviderRow[] = WEARABLE_PROVIDERS.map((provider) => {
     const conn = byProvider.get(provider);
+    let status: BadgeTone = conn ? badgeTone(conn.status) : 'disconnected';
+    if (
+      status === 'connected' &&
+      local != null &&
+      local.provider === provider &&
+      (provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT') &&
+      isConnectedButNotSyncingHere(provider, connections, local.connectionId)
+    ) {
+      status = 'notSyncing';
+    }
     return {
       provider,
-      status: conn ? badgeTone(conn.status) : 'disconnected',
+      status,
       lastSyncedAt: conn?.last_synced_at ?? null,
     };
   });
 
   const tier = (s: BadgeTone): number =>
-    s === 'connected' ? 0 : s === 'error' || s === 'expired' ? 1 : 2;
+    s === 'connected' ? 0 : s === 'error' || s === 'expired' || s === 'notSyncing' ? 1 : 2;
 
   return rows.sort((a, b) => {
     const ta = tier(a.status);
@@ -212,6 +240,9 @@ function ConnectionRow({
           </View>
           {synced != null && <Text style={styles.synced}>{synced}</Text>}
         </View>
+        {row.status === 'notSyncing' && (
+          <Text style={styles.synced}>{notSyncingHereCopy(config.displayName)}</Text>
+        )}
       </View>
 
       <Pressable
@@ -258,7 +289,18 @@ export default function ConnectionsScreen() {
   );
   const [sheetVisible, setSheetVisible] = useState(false);
 
-  const rows = useMemo(() => buildRows(data ?? []), [data]);
+  // S14 B-317-5: app storage only (no health store read) — does THIS phone
+  // sync the platform source for the signed-in person?
+  const deviceSource = deviceSourceForPlatform();
+  const localAuth = useLocalOnDeviceAuthorization(deviceSource);
+  const local = useMemo(
+    () =>
+      deviceSource != null && localAuth.data != null
+        ? { provider: deviceSource, connectionId: localAuth.data.connectionId }
+        : null,
+    [deviceSource, localAuth.data],
+  );
+  const rows = useMemo(() => buildRows(data ?? [], local), [data, local]);
 
   const openConnect = useCallback((provider: WearableProvider) => {
     setSheetProvider(provider);
@@ -270,12 +312,44 @@ export default function ConnectionsScreen() {
     setSheetProvider(null);
   }, []);
 
-  const handleDisconnect = useCallback(
-    (provider: WearableProvider) => {
-      disconnect.mutate(provider);
-    },
-    [disconnect],
-  );
+  // S14 round 4b (C-317-4): Disconnect asks first. Cancel is the default;
+  // a failure keeps the dialog open with coded copy.
+  const [confirmProvider, setConfirmProvider] = useState<WearableProvider | null>(null);
+  const [disconnectError, setDisconnectError] = useState<{
+    text: string;
+    canRetry: boolean;
+  } | null>(null);
+
+  const handleDisconnect = useCallback((provider: WearableProvider) => {
+    setDisconnectError(null);
+    setConfirmProvider(provider);
+  }, []);
+
+  const cancelDisconnect = useCallback(() => {
+    setConfirmProvider(null);
+    setDisconnectError(null);
+  }, []);
+
+  const confirmDisconnect = useCallback(() => {
+    if (confirmProvider == null) return;
+    const provider = confirmProvider;
+    const name = configFor(provider).displayName;
+    setDisconnectError(null);
+    disconnect.mutate(provider, {
+      onSuccess: () => {
+        setConfirmProvider(null);
+      },
+      onError: (err: unknown) => {
+        const failure = disconnectFailureMessage(err, name);
+        if (failure.kind === 'already') {
+          setConfirmProvider(null);
+          void refetch();
+          return;
+        }
+        setDisconnectError({ text: failure.text, canRetry: failure.kind === 'retry' });
+      },
+    });
+  }, [confirmProvider, disconnect, refetch]);
 
   if (isLoading) {
     return (
@@ -344,6 +418,16 @@ export default function ConnectionsScreen() {
         visible={sheetVisible}
         onClose={closeSheet}
         onConnected={closeSheet}
+      />
+      <DisconnectConfirmDialog
+        provider={confirmProvider}
+        name={confirmProvider != null ? configFor(confirmProvider).displayName : ''}
+        visible={confirmProvider != null}
+        pending={disconnect.isPending}
+        errorText={disconnectError?.text ?? null}
+        canRetry={disconnectError?.canRetry ?? true}
+        onCancel={cancelDisconnect}
+        onConfirm={confirmDisconnect}
       />
     </SafeAreaView>
   );

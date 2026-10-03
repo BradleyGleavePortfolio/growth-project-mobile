@@ -21,6 +21,8 @@ import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
+import { ON_DEVICE_STATE_PREFIX } from './health/onDeviceState';
+import { stopOnDeviceHealthWork } from './health/sessionFence';
 import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
@@ -32,7 +34,15 @@ import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
-const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
+const SECURE_SIGN_OUT_KEYS = [
+  'supabase_token',
+  'supabase_refresh_token',
+  // S14 (B-317-1): legacy provider-global on-device health cursors (pre-S14,
+  // shared by every account on the phone). No longer read; removed here so
+  // nothing from a previous account lingers.
+  'healthkit_last_sync_at',
+  'health_connect_last_sync_at',
+];
 const ASYNC_SIGN_OUT_KEYS = [
   'user_data',
   'needs_role_selection',
@@ -42,6 +52,9 @@ const ASYNC_SIGN_OUT_KEYS = [
   'macro_targets',
   'pending_email',
   'day_one_completed',
+  // S14 (B-317-1): dormant Samsung Health cursor (provider-global, not read by
+  // any screen); removed so it can never carry over to another account.
+  'wearable:samsung-health:lastSyncAt',
   'lean_onboarding_done',
   'lean_onboarding_intent',
   'lean_onboarding_synced',
@@ -96,6 +109,11 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // inherit it and be handed a session that pairs into someone else's account.
   // Swept via the exported constant so the literal lives in one place.
   IMPORT_PAIRING_MIRROR_KEY_PREFIX,
+  // S14 (A-317-1 / B-317-1): on-device health Connect authorizations and
+  // per-account sync progress (`services/health/onDeviceState.ts`). Swept for
+  // every account on sign-out (and therefore after account deletion): the
+  // phone's health store must not be read again until someone taps Connect.
+  ON_DEVICE_STATE_PREFIX,
   // Legacy plaintext consultation drafts (first build of PR #310, keyed
   // `consultation_v1:<userId>`): health and screening answers must never
   // survive sign-out. Current drafts live in SecureStore and are purged by
@@ -277,6 +295,12 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
 }
 
 export async function signOut(userId?: string | null): Promise<void> {
+  // S-WEAR-3 (Sol B-317-7): the first statement, before any await. Every
+  // running Apple Health / Health Connect read for this person stops here:
+  // no new native page, record type, upload or progress write starts after
+  // the person taps Log out (the `logout` event below comes much later).
+  stopOnDeviceHealthWork();
+
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
