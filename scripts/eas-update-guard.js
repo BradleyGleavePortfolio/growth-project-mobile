@@ -618,6 +618,20 @@ function readBothScopes(environment, run, env) {
  * nothing), else token + project + script, or { errors }. `force` (the
  * re-upload mode) always plans an upload.
  */
+/** The file sentry-expo-upload-sourcemaps loads into its env from the project root. */
+const SENTRY_PLUGIN_ENV_FILE = '.env.sentry-build-plugin';
+
+/**
+ * Opus C-305-10: sentry-expo-upload-sourcemaps runs
+ * Object.assign(process.env, parse('.env.sentry-build-plugin')) from the
+ * project root, so a stale local file would silently replace the token, org,
+ * project and url this guard resolved. Refuse before anything is published.
+ */
+function sentryPluginEnvFileError(root) {
+  if (!fs.existsSync(path.join(root, SENTRY_PLUGIN_ENV_FILE))) return null;
+  return `${SENTRY_PLUGIN_ENV_FILE} exists in the project root; the Sentry upload would read its token and project instead of the ones this guard checked. Fix: delete or rename ${SENTRY_PLUGIN_ENV_FILE}, then run this again (nothing was published).`;
+}
+
 function sentryPlan(root, effective, remoteByScope, env, environment, force = false, resolveScript = sentryUploadScript) {
   const dsn = String(effective[SENTRY_DSN] || '').trim() || appExtraDsn(root);
   if (!dsn && !force) return { skip: true };
@@ -628,6 +642,8 @@ function sentryPlan(root, effective, remoteByScope, env, environment, force = fa
   if (cfg.error) errors.push(cfg.error);
   const bin = resolveScript(root);
   if (bin.error) errors.push(bin.error);
+  const pluginEnv = sentryPluginEnvFileError(root);
+  if (pluginEnv) errors.push(pluginEnv);
   if (errors.length) return { errors };
   return { token: tok.token, source: tok.source, org: cfg.org, project: cfg.project, url: cfg.url, script: bin.script };
 }
@@ -726,7 +742,8 @@ function main(argv, deps = {}) {
 module.exports = {
   parseArgs, checkArgs, loadChannels, checkPolicyHash, checkEnvValue, parseRemoteValue, readRemoteFlag, lookupEnv, policyHash,
   parseEnvList, readRemoteList, classifyRecord, analyzeRemote, checkBundleValues, publishEnv, bundleEnv, rolloutPercentage,
-  resolveSentryToken, sentryProjectConfig, checkDistSourceMaps, sentryUploadScript, readUpdateIds, main,
+  resolveSentryToken, sentryProjectConfig, checkDistSourceMaps, sentryUploadScript, readUpdateIds, sentryPluginEnvFileError, main,
+  SENTRY_PLUGIN_ENV_FILE,
   FLAG, POLICY_FILE, LOCK_FILE, METADATA_FILE,
 };
 

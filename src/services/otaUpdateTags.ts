@@ -17,6 +17,14 @@
  * by expo-updates error recovery) is also reported once as a warning, so a
  * bad update shows up in Sentry even though the device keeps working.
  *
+ * No free-form text leaves the device (Sol B-305-10): the native
+ * `emergencyLaunchReason` is an exception's localizedDescription / message and
+ * can hold anything, so it is mapped HERE to a closed category
+ * (EmergencyReasonCategory, `unknown` fallback) and only the category is sent.
+ * The identifiers are shape-checked too: the update id must be a UUID, the
+ * channel one of the configured channels (else `other`), the runtime a short
+ * fingerprint-like token; anything else is dropped.
+ *
  * Read-only: values come from the native ExpoUpdates module constants that
  * expo-modules exposes on `globalThis.expo.modules` (the object the Sentry SDK
  * reads for its own `ota_updates` context). Nothing here imports
@@ -32,8 +40,26 @@ export type OtaUpdateState = {
   runtimeVersion: string | null;
   embedded: boolean;
   emergency: boolean;
-  emergencyReason: string | null;
+  /** A closed category of the native reason; the reason text itself is never kept. */
+  emergencyReason: EmergencyReasonCategory;
 };
+
+/** The only emergency-launch reason values that are ever sent. */
+export const EMERGENCY_REASON_CATEGORIES = [
+  'not_reported',
+  'launch_failed',
+  'asset_or_bundle',
+  'database',
+  'timeout',
+  'unknown',
+] as const;
+export type EmergencyReasonCategory = (typeof EMERGENCY_REASON_CATEGORIES)[number];
+
+/** The OTA channels configured in eas.json; any other value is reported as `other`. */
+export const OTA_CHANNELS = ['clinic', 'production', 'preview'] as const;
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const RUNTIME_TOKEN = /^[a-z0-9][a-z0-9._-]{0,79}$/;
 
 type SentryLike = {
   setTags: (tags: Record<string, string>) => void;
@@ -57,15 +83,23 @@ function text(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-/** The emergency-launch reason without paths, URLs or long text (no PII). */
-export function scrubReason(reason: string | null): string | null {
-  if (!reason) return null;
-  const cleaned = reason
-    .replace(/[a-z][a-z0-9+.-]*:\/\/\S+/gi, '<url>')
-    .replace(/(?:[A-Za-z]:)?(?:[\\/][^\s\\/:]+){2,}[\\/]?/g, '<path>')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return cleaned.length > 200 ? `${cleaned.slice(0, 199)}…` : cleaned;
+/**
+ * The native emergency-launch reason as a closed category. The text is read
+ * on the device only to choose the category; it is never stored or sent.
+ */
+export function emergencyReasonCategory(reason: string | null): EmergencyReasonCategory {
+  if (!reason) return 'not_reported';
+  if (/time(?:d)?\s*out|timeout/i.test(reason)) return 'timeout';
+  if (/database|sqlite/i.test(reason)) return 'database';
+  if (/asset|bundle|manifest|\.hbc\b|\.js\b/i.test(reason)) return 'asset_or_bundle';
+  if (/launch/i.test(reason)) return 'launch_failed';
+  return 'unknown';
+}
+
+function channelOf(value: string | null): string | null {
+  if (!value) return null;
+  const v = value.toLowerCase();
+  return (OTA_CHANNELS as readonly string[]).includes(v) ? v : 'other';
 }
 
 /** Current update state, or null when expo-updates is absent or disabled (dev, Expo Go, web, tests). */
@@ -75,13 +109,15 @@ export function readOtaUpdateState(root: unknown = globalThis): OtaUpdateState |
   const updateId = text(field(mod, 'updateId'));
   const channel = text(field(mod, 'channel'));
   const runtimeVersion = text(field(mod, 'runtimeVersion'));
+  const id = updateId ? updateId.toLowerCase() : null;
+  const runtime = runtimeVersion ? runtimeVersion.toLowerCase() : null;
   return {
-    updateId: updateId ? updateId.toLowerCase() : null,
-    channel: channel ? channel.toLowerCase() : null,
-    runtimeVersion: runtimeVersion ? runtimeVersion.toLowerCase() : null,
+    updateId: id && UUID.test(id) ? id : null,
+    channel: channelOf(channel),
+    runtimeVersion: runtime && RUNTIME_TOKEN.test(runtime) ? runtime : null,
     embedded: field(mod, 'isEmbeddedLaunch') === true,
     emergency: field(mod, 'isEmergencyLaunch') === true,
-    emergencyReason: scrubReason(text(field(mod, 'emergencyLaunchReason'))),
+    emergencyReason: emergencyReasonCategory(text(field(mod, 'emergencyLaunchReason'))),
   };
 }
 
@@ -116,7 +152,7 @@ export function reportOtaUpdateLaunch(sentry: SentryLike = Sentry, root: unknown
         level: 'warning',
         tags,
         fingerprint: ['ota-emergency-launch', state.runtimeVersion || 'unknown-runtime'],
-        contexts: { ota_emergency: { reason: state.emergencyReason || 'not reported' } },
+        contexts: { ota_emergency: { reason_category: state.emergencyReason } },
       });
     }
     return state;

@@ -134,6 +134,8 @@ It uploads the source maps of the update in `dist/` again (it requires `dist/eas
 
 Tests: `scripts/__tests__/easUpdateGuard.test.js` drives `main()` end to end with an injected runner. No refusal case reaches `eas update`; the upload runs only after a successful publish.
 
+The guard refuses before publishing when a local `.env.sentry-build-plugin` exists in the project root: the upload script would load its token and project over the ones the guard checked (Opus C-305-10). Delete or rename it.
+
 There is no supported unguarded path: a raw `eas update` would ship without the clinic profile env, without the release-value checks and without source maps in Sentry.
 
 ### Build env vs update env (purchase-critical)
@@ -194,6 +196,8 @@ An update keeps the binary's Sentry release (`<version>+<build>`), so search by 
 | `expo.updates.runtime_version` | the binary's fingerprint runtime |
 | `expo.updates.embedded` | `true` while the bundle inside the binary runs |
 | `expo.updates.emergency` | `true` when expo-updates fell back to the embedded bundle because an update failed |
+
+The emergency warning adds one context value, `ota_emergency.reason_category`: one of `not_reported`, `launch_failed`, `asset_or_bundle`, `database`, `timeout` or `unknown`. The native reason text itself never leaves the phone (it can hold anything), and an update id, channel or runtime that does not have the expected shape is dropped or reported as `other` (Sol B-305-10).
 
 The names match what newer `@sentry/react-native` versions set, so the searches keep working after an SDK upgrade. Source maps uploaded for an update have no release in Sentry; Debug IDs match them to events.
 

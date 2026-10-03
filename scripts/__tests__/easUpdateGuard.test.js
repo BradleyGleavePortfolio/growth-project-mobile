@@ -318,6 +318,30 @@ describe('eas-update-guard', () => {
       expect(logs.join('\n')).not.toContain(shellToken);
     });
 
+    it('Opus C-305-10: a local .env.sentry-build-plugin refuses before anything is published, with a named fix', () => {
+      const tmp = tmpDir('tgp-guard-root-');
+      expect(guard.sentryPluginEnvFileError(tmp)).toBeNull();
+      fs.writeFileSync(path.join(tmp, guard.SENTRY_PLUGIN_ENV_FILE), 'SENTRY_AUTH_TOKEN=stale-token-value\n');
+      const msg = guard.sentryPluginEnvFileError(tmp);
+      expect(msg).toMatch(/delete or rename \.env\.sentry-build-plugin/);
+      expect(msg).not.toContain('stale-token-value');
+
+      // Through main(): the real project root holds the file -> no publish, no upload.
+      const file = path.join(ROOT, guard.SENTRY_PLUGIN_ENV_FILE);
+      expect(fs.existsSync(file)).toBe(false);
+      fs.writeFileSync(file, 'SENTRY_AUTH_TOKEN=stale-token-value\n');
+      try {
+        const { code, h, logs } = runMain(CLINIC);
+        expect(code).toBe(1);
+        expect(h.published()).toBe(false);
+        expect(h.uploaded()).toBe(false);
+        expect(logs.join('\n')).toMatch(/delete or rename \.env\.sentry-build-plugin/);
+        expect(logs.join('\n')).not.toContain('stale-token-value');
+      } finally {
+        fs.unlinkSync(file);
+      }
+    });
+
     it('a failed publish uploads nothing and propagates the status', () => {
       const h = harness({ publish: () => ({ status: 3 }) });
       const { code, logs } = runMain(PROD, { h });

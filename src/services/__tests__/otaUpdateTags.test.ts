@@ -9,7 +9,8 @@ import {
   readOtaUpdateState,
   reportOtaUpdateLaunch,
   resetOtaUpdateReportForTests,
-  scrubReason,
+  emergencyReasonCategory,
+  EMERGENCY_REASON_CATEGORIES,
 } from '../otaUpdateTags';
 
 const RUNTIME = '0123456789abcdef0123456789abcdef01234567';
@@ -63,7 +64,7 @@ describe('otaUpdateTags', () => {
     expect(state && otaUpdateTags(state)['expo.updates.embedded']).toBe('true');
   });
 
-  it('reports an emergency launch (update rolled back natively) once per process, without paths or URLs', () => {
+  it('reports an emergency launch (update rolled back natively) once per process, with only a reason category', () => {
     const sentry = fakeSentry();
     const root = rootWith({
       ...UPDATE,
@@ -80,13 +81,51 @@ describe('otaUpdateTags', () => {
     expect(ctx.level).toBe('warning');
     expect(ctx.tags['expo.updates.emergency']).toBe('true');
     expect(ctx.fingerprint).toEqual(['ota-emergency-launch', RUNTIME]);
-    expect(ctx.contexts.ota_emergency.reason).toBe('Failed to launch <path> from <url>');
+    expect(ctx.contexts).toEqual({ ota_emergency: { reason_category: 'asset_or_bundle' } });
   });
 
-  it('scrubReason caps long text', () => {
-    expect(scrubReason(null)).toBeNull();
-    const long = scrubReason('x'.repeat(500));
-    expect(long && long.length).toBe(200);
+  it('Sol B-305-10: the reason is a closed category with an unknown fallback, never text', () => {
+    expect(emergencyReasonCategory(null)).toBe('not_reported');
+    expect(emergencyReasonCategory('Failed to launch embedded or launchable update')).toBe('launch_failed');
+    expect(emergencyReasonCategory('Asset download failed for bundle')).toBe('asset_or_bundle');
+    expect(emergencyReasonCategory('SQLite database is locked')).toBe('database');
+    expect(emergencyReasonCategory('The request timed out')).toBe('timeout');
+    expect(emergencyReasonCategory('Jane Doe +1 415 555 0142')).toBe('unknown');
+    expect([...EMERGENCY_REASON_CATEGORIES]).toEqual(['not_reported', 'launch_failed', 'asset_or_bundle', 'database', 'timeout', 'unknown']);
+    for (const r of ['x'.repeat(500), 'Failed to launch', 'nothing', 'database', 'timeout']) {
+      expect(EMERGENCY_REASON_CATEGORIES).toContain(emergencyReasonCategory(r));
+    }
+  });
+
+  it('Sol B-305-10 canary: personal data in any native field never reaches setTags or captureMessage', () => {
+    const CANARY = ['Janet Canaryfield', 'janet.canaryfield@example.com', '+1 415 555 0142', 'patient-7731', 'HIV positive, insulin dependent'];
+    const text = CANARY.join(' ');
+    const sentry = fakeSentry();
+    const state = reportOtaUpdateLaunch(
+      sentry,
+      rootWith({
+        ...UPDATE,
+        updateId: `${UPDATE.updateId} ${CANARY[0]}`,
+        channel: `clinic ${CANARY[1]}`,
+        runtimeVersion: `${RUNTIME} ${CANARY[2]}`,
+        isEmbeddedLaunch: true,
+        isEmergencyLaunch: true,
+        emergencyLaunchReason: `Failed to launch update for ${text}`,
+      }),
+    );
+    expect(sentry.captureMessage).toHaveBeenCalledTimes(1);
+    const sent = JSON.stringify([sentry.setTags.mock.calls, sentry.captureMessage.mock.calls, state]);
+    for (const fragment of [...CANARY, 'Janet', 'Canaryfield', 'example.com', '415', 'insulin', 'HIV', '7731']) {
+      expect(sent).not.toContain(fragment);
+    }
+    // Malformed identifiers are dropped or mapped, never echoed.
+    expect(state).toMatchObject({ updateId: null, channel: 'other', runtimeVersion: null, emergencyReason: 'launch_failed' });
+  });
+
+  it('well-formed identifiers are kept; an unknown channel is reported as other', () => {
+    expect(readOtaUpdateState(rootWith(UPDATE))).toMatchObject({ updateId: 'abcdef00-1111-2222-3333-444455556666', channel: 'clinic', runtimeVersion: RUNTIME });
+    expect(readOtaUpdateState(rootWith({ ...UPDATE, channel: 'Staging' }))?.channel).toBe('other');
+    expect(readOtaUpdateState(rootWith({ ...UPDATE, runtimeVersion: '1.0.0' }))?.runtimeVersion).toBe('1.0.0');
   });
 
   it('never throws (diagnostics must not break launch)', () => {
