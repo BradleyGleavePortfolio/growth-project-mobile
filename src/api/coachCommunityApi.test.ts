@@ -30,6 +30,7 @@ jest.mock('../services/api', () => ({
   default: {
     get: jest.fn(),
     post: jest.fn(),
+    patch: jest.fn(),
     delete: jest.fn(),
   },
 }));
@@ -44,12 +45,14 @@ jest.mock('../utils/idempotency', () => ({
 const api = require('../services/api').default as {
   get: jest.Mock;
   post: jest.Mock;
+  patch: jest.Mock;
   delete: jest.Mock;
 };
 
 beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
+  api.patch.mockReset();
   api.delete.mockReset();
 });
 
@@ -197,24 +200,115 @@ describe('coachCommunityApi — mutations carry Idempotency-Key + no coachId', (
     );
   });
 
-  it('hidePost posts to the post hide endpoint', async () => {
-    api.post.mockResolvedValueOnce({ data: {} });
-    await coachCommunityApi.hidePost('dddddddd-dddd-dddd-dddd-dddddddddddd');
-    expect(api.post).toHaveBeenCalledWith(
-      '/community/posts/dddddddd-dddd-dddd-dddd-dddddddddddd/hide',
-      {},
+  it.each(['hide', 'warn', 'ban', 'dismiss'] as const)(
+    'actOnItem(%s) PATCHes the moderation item route with an idempotency header',
+    async (action) => {
+      api.patch.mockResolvedValueOnce({ data: {} });
+      await coachCommunityApi.actOnItem('dddddddd-dddd-dddd-dddd-dddddddddddd', action);
+      expect(api.patch).toHaveBeenCalledWith(
+        '/community/moderation/items/dddddddd-dddd-dddd-dddd-dddddddddddd',
+        { action },
+        { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+      );
+      expect(api.post).not.toHaveBeenCalled();
+    },
+  );
+
+  it('actOnItem forwards moderator notes', async () => {
+    api.patch.mockResolvedValueOnce({ data: {} });
+    await coachCommunityApi.actOnItem('dddddddd-dddd-dddd-dddd-dddddddddddd', 'warn', 'first warning');
+    expect(api.patch).toHaveBeenCalledWith(
+      '/community/moderation/items/dddddddd-dddd-dddd-dddd-dddddddddddd',
+      { action: 'warn', notes: 'first warning' },
       { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
     );
   });
 
-  it('hideMessage posts to the message hide endpoint', async () => {
-    api.post.mockResolvedValueOnce({ data: {} });
-    await coachCommunityApi.hideMessage('ffffffff-ffff-ffff-ffff-ffffffffffff');
-    expect(api.post).toHaveBeenCalledWith(
-      '/community/messages/ffffffff-ffff-ffff-ffff-ffffffffffff/hide',
-      {},
-      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
-    );
+  it('no longer calls the non-existent POST /community/{posts,messages}/:id/hide routes', () => {
+    expect('hidePost' in coachCommunityApi).toBe(false);
+    expect('hideMessage' in coachCommunityApi).toBe(false);
+  });
+
+  it('getFlagged accepts the backend flagged shape (author_user_id, workspace_id, notes)', async () => {
+    api.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+            workspace_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            target_type: 'message',
+            target_id: 'ffffffff-ffff-ffff-ffff-ffffffffffff',
+            content: 'Removed',
+            author_user_id: null,
+            author_name: 'Member',
+            cohort_name: null,
+            reason: 'harassment',
+            notes: null,
+            created_at: '2026-09-30T00:00:00.000Z',
+          },
+        ],
+      },
+    });
+    const res = await coachCommunityApi.getFlagged();
+    expect(res[0].reason).toBe('harassment');
+  });
+
+  it('getFlagged accepts voice-note and win reports with playback media and the 24-hour respond-by', async () => {
+    api.get.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+            workspace_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            target_type: 'voice_note',
+            target_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
+            content: 'Voice note, 0:42',
+            media: {
+              kind: 'voice_note',
+              url: 'https://storage.example.test/signed',
+              duration_ms: 42000,
+              mime_type: 'audio/mp4',
+            },
+            removed: false,
+            author_user_id: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
+            author_name: 'Bob Member',
+            cohort_name: 'Spring plan',
+            reason: 'harassment',
+            notes: null,
+            created_at: '2026-09-30T00:00:00.000Z',
+            respond_by: '2026-10-01T00:00:00.000Z',
+            overdue: true,
+          },
+          {
+            id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2',
+            workspace_id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee',
+            target_type: 'win',
+            target_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2',
+            content: 'Best week\n\nBuy my plan here',
+            media: null,
+            removed: false,
+            author_user_id: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
+            author_name: 'Alice Member',
+            cohort_name: null,
+            reason: 'spam',
+            notes: null,
+            created_at: '2026-09-30T00:00:00.000Z',
+            respond_by: '2026-10-01T00:00:00.000Z',
+            overdue: false,
+          },
+        ],
+      },
+    });
+    const res = await coachCommunityApi.getFlagged();
+    expect(res.map((r) => r.target_type)).toEqual(['voice_note', 'win']);
+    expect(res[0].media).toEqual({
+      kind: 'voice_note',
+      url: 'https://storage.example.test/signed',
+      duration_ms: 42000,
+      mime_type: 'audio/mp4',
+    });
+    expect(res[0].overdue).toBe(true);
+    expect(res[1].media).toBeNull();
   });
 });
 

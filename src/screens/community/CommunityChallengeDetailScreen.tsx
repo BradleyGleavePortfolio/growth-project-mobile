@@ -61,14 +61,23 @@ import {
   type CommunityChallengeParticipation,
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
-import { generateIdempotencyKey } from '../../utils/idempotency';
+import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import SafetyMenu from '../../components/community/SafetyMenu';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
+import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
 
-/** A human, non-shaming reason for an error surface (no raw error leakage). */
-function describeError(err: unknown): string {
+/**
+ * A human, non-shaming reason for an error surface (no raw error leakage).
+ * Known kinds get specific copy; anything else gets a support reference and
+ * a Sentry report (owner rule 13:34: no generic errors).
+ */
+function describeError(err: unknown, action: CommunityAction = 'challenge_action'): string {
+  // Apple 1.2 content filter: show the server's rephrase message.
+  const rejected = contentRejectedMessage(err);
+  if (rejected) return rejected;
   if (err instanceof CommunityApiError) {
     switch (err.kind) {
       case 'forbidden':
@@ -79,13 +88,11 @@ function describeError(err: unknown): string {
         return 'Your progress was updated elsewhere. We have refreshed it for you.';
       case 'network':
         return 'We could not reach the server. Check your connection and try again.';
-      case 'contract':
-        return 'Something looks off on our end. Please try again shortly.';
       default:
-        return 'We could not load this challenge. Please try again.';
+        break;
     }
   }
-  return 'We could not load this challenge. Please try again.';
+  return describeCommunityFailure(err, action).message;
 }
 
 export default function CommunityChallengeDetailScreen(): React.ReactElement {
@@ -100,13 +107,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   // comment). Every mutation has an onError that sets this, and the banner is
   // dismissible, so a failure is never silently swallowed.
   const [actionError, setActionError] = useState<string | null>(null);
-  // The comment id whose report is currently in flight, so its report control
-  // can be disabled to block a double-submit while the request is pending.
-  const [reportingId, setReportingId] = useState<string | null>(null);
-  // One stable Idempotency-Key per comment-report intent, so a double-tap or
-  // retry of the same report deduplicates server-side rather than minting a
-  // fresh key each tap. Keyed by comment id; persists across renders.
-  const reportKeys = useRef<Map<string, string>>(new Map());
   // Imperative handle to the composer so the empty-state CTA can focus it.
   const composerRef = useRef<ComposerInputHandle>(null);
 
@@ -115,6 +115,11 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     queryFn: () => communityChallengesApi.getChallenge(challengeId),
     enabled: !!challengeId && featureFlags.communityChallenges,
   });
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const detailErrorMessage = useMemo(
+    () => (detail.isError ? describeError(detail.error, 'load_challenge') : ''),
+    [detail.isError, detail.error],
+  );
 
   // Comments are cursor-paginated: the page limit is part of the key (a
   // distinct page size is a distinct cache entry) and the cursor is threaded
@@ -366,40 +371,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     onError: (err: unknown) => setActionError(describeError(err)),
   });
 
-  const reportMutation = useMutation({
-    mutationFn: (commentId: string) => {
-      let key = reportKeys.current.get(commentId);
-      if (!key) {
-        key = generateIdempotencyKey();
-        reportKeys.current.set(commentId, key);
-      }
-      return communityChallengesApi.reportComment(
-        challengeId,
-        commentId,
-        'inappropriate',
-        undefined,
-        key,
-      );
-    },
-    onMutate: (commentId: string) => {
-      setActionError(null);
-      setReportingId(commentId);
-    },
-    onSuccess: () =>
-      setActionError('Thanks -- our team will take a look at this.'),
-    onError: (err: unknown) => setActionError(describeError(err)),
-    onSettled: () => setReportingId(null),
-  });
-
-  const onReport = useCallback(
-    (commentId: string) => {
-      // Guard the double-submit: ignore taps while any report is in flight.
-      if (reportMutation.isPending) return;
-      reportMutation.mutate(commentId);
-    },
-    [reportMutation],
-  );
-
   const handleSubmitProgress = useCallback(
     async (value: number): Promise<{ completed: boolean }> => {
       // Rejects on failure so the sheet keeps the draft + shows its calm inline
@@ -506,7 +477,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             We could not load this challenge
           </Text>
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            {describeError(detail.error)}
+            {detailErrorMessage}
           </Text>
           <HapticPressable
             intent="light"
@@ -550,40 +521,28 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
-    // Disable this row's report control while any report is in flight; the
-    // tapped row also shows a busy state so a double-tap cannot fire twice.
-    const reporting = reportMutation.isPending;
-    const reportingThis = reportingId === item.id;
     return (
       <View
         // The wrapper carries `listitem` semantics so assistive tech receives
         // the list structure (the parent FlatList carries the `list` role),
-        // while the inner report control keeps `button`. RN types the W3C
+        // while the inner safety control keeps `button`. RN types the W3C
         // `role` prop (not `accessibilityRole`) for list/listitem.
         role="listitem"
         style={[styles.comment, { borderColor: semanticColors.border }]}
         testID={`community-challenge-comment-${item.id}`}
       >
-        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
-          {item.body}
-        </Text>
+        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>{item.body}</Text>
+        {/* One report entry per comment (C-314-1): the SafetyMenu, with the
+            reason list and the 24-hour review copy. */}
         {!mine ? (
-          <HapticPressable
-            intent="light"
-            onPress={() => onReport(item.id)}
-            disabled={reporting}
-            accessibilityRole="button"
-            accessibilityLabel="Report this comment"
-            accessibilityState={{ disabled: reporting, busy: reportingThis }}
-            testID={`community-challenge-comment-${item.id}-report`}
-            style={styles.reportButton}
-          >
-            <Ionicons
-              name="flag-outline"
-              size={16}
-              color={semanticColors.textMuted}
-            />
-          </HapticPressable>
+          <SafetyMenu
+            targetType="comment"
+            targetId={item.id}
+            authorUserId={item.author_user_id}
+            viewerUserId={client?.id}
+            viewerCoachId={client?.coach_id}
+            testID={`community-challenge-comment-${item.id}-safety`}
+          />
         ) : null}
       </View>
     );
@@ -1034,14 +993,6 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
-  reportButton: {
-    // >=48dp touch target (WCAG 2.5.5). The icon is visually small but the hit
-    // area is a full 48dp square.
-    minWidth: 48,
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   emptyComments: {
     paddingVertical: spacing.lg,
     alignItems: 'center',
