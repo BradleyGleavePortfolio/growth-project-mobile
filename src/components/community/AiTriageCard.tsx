@@ -28,6 +28,8 @@ import { spacing, radius, typography } from '../../theme/tokens';
 import HapticPressable from '../HapticPressable';
 import type { TriageCategory, TriageResponse } from '../../api/communityAiTriageApi';
 import { TRIAGE_CATEGORIES } from '../../api/communityAiTriageApi';
+import AiRefusalNotice from '../ai/AiRefusalNotice';
+import type { AiRefusal } from '../../lib/ai/aiRefusal';
 
 // Professional, calm display copy per category. `urgent` is framed as a
 // prioritisation signal ("Needs you soon") — never alarmist or medical.
@@ -63,6 +65,13 @@ export interface AiTriageCardProps {
   triage?: TriageResponse;
   onRetry?: () => void;
   retrying?: boolean;
+  /**
+   * R2b: when the error is a 503 `ai_egress_blocked` (a server-side policy
+   * block), the card shows the support path and reference instead of the
+   * plain retry line. A 503 `ai_triage_unavailable` (backend C-626-4) keeps
+   * the calm "triage is unavailable" line with Retry.
+   */
+  refusal?: AiRefusal | null;
   testID?: string;
 }
 
@@ -76,6 +85,7 @@ export default function AiTriageCard({
   triage,
   onRetry,
   retrying = false,
+  refusal = null,
   testID = 'ai-triage-card',
 }: AiTriageCardProps): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -114,6 +124,28 @@ export default function AiTriageCard({
   }
 
   // ── Error (calm, recoverable — never panicky, never a fake all-clear) ───────
+  if (status === 'error' && refusal) {
+    return (
+      <View
+        testID={`${testID}-refused`}
+        style={[
+          styles.card,
+          { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border },
+          { borderLeftColor: semanticColors.accent },
+        ]}
+      >
+        {eyebrow}
+        <AiRefusalNotice
+          refusal={refusal}
+          audience="coach"
+          surface="triage"
+          onRetry={onRetry}
+          compact
+          testID={`${testID}-ai-refusal`}
+        />
+      </View>
+    );
+  }
   if (status === 'error') {
     return (
       <View
