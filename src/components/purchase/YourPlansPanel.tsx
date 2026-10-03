@@ -119,12 +119,10 @@ export default function YourPlansPanel({
         }
         await load();
       } catch (err) {
-        if (mounted.current) {
-          setNotice({
-            purchaseId: plan.purchaseId,
-            notice: describeBackendFailure(err, "plan_action", null),
-          });
-        }
+        const n = describeBackendFailure(err, "plan_action", null);
+        if (mounted.current)
+          setNotice({ purchaseId: plan.purchaseId, notice: n });
+        if (n.reload) void load();
       } finally {
         if (mounted.current) setBusyId(null);
       }

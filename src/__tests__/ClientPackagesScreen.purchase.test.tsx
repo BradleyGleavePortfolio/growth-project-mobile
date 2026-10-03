@@ -134,3 +134,24 @@ it('Your plans: End my plan confirms, then cancels at period end through the #62
   );
   alertSpy.mockRestore();
 });
+
+it('Your plans: a plan that already ended gets its own copy, never a generic error', async () => {
+  plans = [PLAN];
+  mockPost.mockImplementation(async () => {
+    throw Object.assign(new Error('409'), {
+      response: { status: 409, data: { code: 'PLAN_ALREADY_ENDED', error: 'PLAN_ALREADY_ENDED', message: 'x' }, headers: {} },
+      config: { headers: {} },
+    });
+  });
+  const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _b, buttons) => {
+    (buttons ?? []).find((b) => b.style === 'destructive')?.onPress?.();
+  });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('your-plan-purchase-1')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('your-plan-end-purchase-1'));
+  await waitFor(() => expect(r.getByTestId('your-plan-error')).toBeTruthy());
+  expect(r.getByTestId('your-plan-error').props.children[0]).toBe(
+    'This plan has already ended, so nothing changed and nothing more is charged. Choose a plan below to start again.',
+  );
+  alertSpy.mockRestore();
+});

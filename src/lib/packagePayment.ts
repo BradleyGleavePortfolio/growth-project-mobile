@@ -424,6 +424,10 @@ export const PACKAGE_PAYMENT_COPY = {
   alreadyActiveEnding:
     "You already have this plan, and it is set to end at the close of this period. Open your plan to keep it instead of starting it again.",
   openPlan: "Open your plan",
+  planNotFound:
+    "This plan could not be found on your account, so nothing changed. Pull down to refresh your plans.",
+  planAlreadyEnded:
+    "This plan has already ended, so nothing changed and nothing more is charged. Choose a plan below to start again.",
   freePending:
     "This free plan is saved. It starts once your coaching agreement is accepted. Message your coach if it does not start.",
   freeRevoked:
@@ -687,6 +691,16 @@ export function describeBackendFailure(
       );
     case "GRANT_REVOKED":
       return notice("free_revoked", PACKAGE_PAYMENT_COPY.freeRevoked);
+    // Plan actions (End my plan / Keep my plan, backend #628 / #654)
+    case "PURCHASE_NOT_FOUND":
+    case "INVALID_PLAN_ID":
+      return notice("plan_not_found", PACKAGE_PAYMENT_COPY.planNotFound, true);
+    case "PLAN_ALREADY_ENDED":
+      return notice(
+        "plan_already_ended",
+        PACKAGE_PAYMENT_COPY.planAlreadyEnded,
+        true,
+      );
     case "SUBSCRIPTION_SETUP_UNAVAILABLE": {
       const n = supportNotice(
         "setup_unavailable",
