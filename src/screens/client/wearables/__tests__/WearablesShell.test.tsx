@@ -340,6 +340,7 @@ describe('WearablesShell', () => {
     it.each(['resolves partial', 'rejects'] as const)(
       'sign-out while the refresh runs, then it %s: no notice, no refetch, no report',
       async (how) => {
+        jest.mocked(logger.warn).mockClear();
         const held = heldRefresh();
         await render(<WearablesShell />);
         await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(1));
@@ -352,6 +353,8 @@ describe('WearablesShell', () => {
         expect(screen.queryByText(/Reference /)).toBeNull();
         expect(mockInvalidateWearables).not.toHaveBeenCalled();
         expect(mockReportUnexpected).not.toHaveBeenCalled();
+        // C-317-b r2: a stale failure is not logged either.
+        expect(jest.mocked(logger.warn)).not.toHaveBeenCalledWith('[wearables] on-device refresh failed', expect.anything());
       },
     );
 
@@ -375,13 +378,39 @@ describe('WearablesShell', () => {
     });
   });
 
-  it('C-317-b: a refresh failure is logged by error class only, never its text', async () => {
+  it('C-317-b: a refresh failure is logged by a closed class only, never its text', async () => {
     const warn = jest.mocked(logger.warn);
     warn.mockClear();
     mockImportHistory.mockRejectedValue(new Error('synthetic private text Janet'));
     await render(<WearablesShell />);
     await waitFor(() => expect(mockReportUnexpected).toHaveBeenCalled());
-    expect(warn).toHaveBeenCalledWith('[wearables] on-device refresh failed', { error: 'Error' });
+    expect(warn).toHaveBeenCalledWith('[wearables] on-device refresh failed', { error: 'error' });
     expect(JSON.stringify(warn.mock.calls)).not.toContain('Janet');
+  });
+
+  // C-317-b r2: `Error.name` is mutable, so a native or library error can
+  // carry arbitrary text there. The log uses a closed set of classes only.
+  it('C-317-b: an arbitrary Error.name never reaches the log', async () => {
+    const warn = jest.mocked(logger.warn);
+    warn.mockClear();
+    const err = new Error('synthetic');
+    err.name = 'Janet Doe heart rate 182';
+    mockImportHistory.mockRejectedValue(err);
+    await render(<WearablesShell />);
+    await waitFor(() => expect(mockReportUnexpected).toHaveBeenCalled());
+    expect(warn).toHaveBeenCalledTimes(1);
+    const logged = warn.mock.calls[0][1] as { error: string };
+    expect(['error', 'type', 'network', 'http', 'aborted', 'other']).toContain(logged.error);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('Janet');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('182');
+  });
+
+  it('C-317-b: a non-Error rejection is logged as other, never its value', async () => {
+    const warn = jest.mocked(logger.warn);
+    warn.mockClear();
+    mockImportHistory.mockRejectedValue('Janet Doe');
+    await render(<WearablesShell />);
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(warn).toHaveBeenCalledWith('[wearables] on-device refresh failed', { error: 'other' });
   });
 });
