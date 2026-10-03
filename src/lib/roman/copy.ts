@@ -465,7 +465,7 @@ export interface RomanFirstPaymentArgs {
  *                   a living. Well earned."`
  *   - celebration: `"{coachName} — your first payment has arrived. {amount},
  *                   from {clientName}. I have seen a great many first payments,
- *                   and they never stop meaning something. Congratulations!"`
+ *                   and they never stop meaning something. Congratulations."`
  *                   (full warmth; carries the one permitted exclamation.)
  *   - error:       `"{coachName}, your first payment from {clientName} has
  *                   cleared — {amount}. My own records lagged a moment behind

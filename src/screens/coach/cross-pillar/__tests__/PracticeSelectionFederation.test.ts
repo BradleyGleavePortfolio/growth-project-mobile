@@ -27,7 +27,7 @@ const SRC = fs.readFileSync(
 describe('PracticeSelectionScreen federation handling', () => {
   it('special-cases PRACTICE_FEDERATION_FAILED with a retry message', () => {
     expect(SRC).toMatch(/PRACTICE_FEDERATION_FAILED/);
-    expect(SRC).toMatch(/sync your practice across both products/i);
+    expect(SRC).toMatch(/did not sync across both products/i);
   });
 
   it('checks the response status for 503', () => {

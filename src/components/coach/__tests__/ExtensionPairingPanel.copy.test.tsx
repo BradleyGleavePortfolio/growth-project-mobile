@@ -82,7 +82,7 @@ describe('ExtensionPairingPanel — copy never asserts what the extension did', 
   it('failed: says the STATUS could not be checked and points to the extension if a code was already entered', async () => {
     mockHookState = { status: 'failed', code: null, supportReference: null };
     const { getByText } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByText(/could not check the pairing status/i)).toBeTruthy();
+    expect(getByText(/pairing status could not be checked/i)).toBeTruthy();
     expect(getByText(/already entered a code in the browser extension, check there/i)).toBeTruthy();
     fireEvent.press(getByText('Try again'));
     expect(mockRetry).toHaveBeenCalledTimes(1);

@@ -583,7 +583,7 @@ describe("DataExportScreen", () => {
     const { findByText } = await render(<DataExportScreen />);
 
     await findByText("Previous export expired");
-    await findByText(/kept for 7 days/i);
+    await findByText(/files are kept for 7 days/i);
   });
 
   it("shows Request new export button in expired state", async () => {
@@ -812,7 +812,7 @@ describe("DataExportScreen fix round 1", () => {
 
     await findByText("Could not prepare your download");
     await findByText(
-      /The answer from our server was incomplete, so nothing was opened/,
+      /The server's answer was incomplete, so nothing was opened/,
     );
     await findByText("Reference: ref-bad-1");
     expect(openURL).not.toHaveBeenCalled();

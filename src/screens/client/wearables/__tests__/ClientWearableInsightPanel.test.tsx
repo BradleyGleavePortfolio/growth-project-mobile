@@ -201,7 +201,7 @@ describe('loading / empty / error states', () => {
     expect(getByTestId('client-insight-empty')).toBeTruthy();
     expect(getByText('Not enough data yet — keep syncing.')).toBeTruthy();
     expect(
-      getByText("We'Insights appear here as your devices report more."),
+      getByText('Insights appear here as your devices report more.'),
     ).toBeTruthy();
     expect(queryByTestId('client-insight-confidence')).toBeNull();
     expect(queryByTestId('client-insight-cta')).toBeNull();

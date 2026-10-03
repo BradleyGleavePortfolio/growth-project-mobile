@@ -442,7 +442,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
       mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
       const utils = await renderScreen();
       await fillAndSubmit(utils);
-      expect(await utils.findByText(/reach the server/i)).toBeTruthy();
+      expect(await utils.findByText(/server could not be reached/i)).toBeTruthy();
       expect(mockCaptureError).not.toHaveBeenCalled();
     });
 

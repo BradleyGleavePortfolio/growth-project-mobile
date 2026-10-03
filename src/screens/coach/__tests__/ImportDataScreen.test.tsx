@@ -104,13 +104,13 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
   // only after a platform is already opened.
   it('shows the credential-handling prerequisite reassurance before any platform is chosen', async () => {
     const { getByText } = await render(<ImportDataScreen />);
-    expect(getByText(/never see or store your other platform's password/i)).toBeTruthy();
+    expect(getByText(/never sees or stores your other platform's password/i)).toBeTruthy();
   });
 
   it('still shows the prerequisite reassurance on the Custom/Other step, before Continue', async () => {
     const { getByLabelText, getByText } = await render(<ImportDataScreen />);
     await fireEvent.press(getByLabelText('Custom / Other'));
-    expect(getByText(/never see or store your other platform's password/i)).toBeTruthy();
+    expect(getByText(/never sees or stores your other platform's password/i)).toBeTruthy();
     // Still present pre-Continue, i.e. before openLogin has any chance to fire.
     expect(openUrl).not.toHaveBeenCalled();
   });
@@ -206,7 +206,7 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
     openUrl.mockClear();
     await choosePlatform(getByLabelText, 'TrueCoach');
     const status = await waitFor(() => getByTestId('import-status'));
-    expect(status).toHaveTextContent(/couldn't open that site/i);
+    expect(status).toHaveTextContent(/That site did not open/i);
     expect(openUrl).not.toHaveBeenCalled();
     expect(mockTrack).toHaveBeenCalledWith(
       AnalyticsEvents.IMPORT_LOGIN_OPEN_FAILED, { platform: 'truecoach', reason: 'open_failed' },
@@ -218,7 +218,7 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
     const { getByLabelText, getByTestId } = await render(<ImportDataScreen />);
     await choosePlatform(getByLabelText, 'Everfit');
     const status = await waitFor(() => getByTestId('import-status'));
-    expect(status).toHaveTextContent(/couldn't open that site/i);
+    expect(status).toHaveTextContent(/That site did not open/i);
     expect(mockTrack).toHaveBeenCalledWith(
       AnalyticsEvents.IMPORT_LOGIN_OPEN_FAILED, { platform: 'everfit', reason: 'open_failed' },
     );
@@ -231,7 +231,7 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
     // The failed phase renders the screen's original (unmodified) shell, not
     // ImportSetupView — this slice only restyles the source-selection step.
     const status = await waitFor(() => getByTestId('import-status'));
-    expect(status).toHaveTextContent(/couldn't open that site/i);
+    expect(status).toHaveTextContent(/That site did not open/i);
     expect(getByTestId('import-data-screen')).toBeTruthy();
   });
 
@@ -242,7 +242,7 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
     canOpen.mockResolvedValueOnce(false).mockResolvedValue(true);
     const { getByLabelText, getByTestId, getByText } = await render(<ImportDataScreen />);
     await choosePlatform(getByLabelText, 'TrueCoach');
-    await waitFor(() => expect(getByTestId('import-status')).toHaveTextContent(/couldn't open/i));
+    await waitFor(() => expect(getByTestId('import-status')).toHaveTextContent(/did not open/i));
 
     const retry = getByLabelText('Choose a different platform');
     expect(retry.props.accessibilityRole).toBe('button');

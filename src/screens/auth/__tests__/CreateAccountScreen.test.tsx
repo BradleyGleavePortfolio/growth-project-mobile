@@ -207,7 +207,7 @@ describe('CreateAccountScreen', () => {
     mockGetString.mockResolvedValue('see you at the clinic!');
     const { getByTestId, findByText } = await renderScreen();
     await fireEvent.press(getByTestId('paste-invite-code'));
-    expect(await findByText(/could not find an invite code on your clipboard/i)).toBeTruthy();
+    expect(await findByText(/No invite code was found on your clipboard/i)).toBeTruthy();
     expect(getByTestId('invite-code-input').props.value).toBe('');
   });
 

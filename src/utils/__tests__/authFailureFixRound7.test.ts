@@ -42,7 +42,7 @@ describe('Opus C-306-8', () => {
 
   it('Apple: names Apple; email sign-in keeps the link copy', () => {
     expect(describeSignInFailure(httpError(401, 'Email not verified'), { provider: 'apple' }).message).toMatch(/Verify it with Apple/);
-    expect(describeSignInFailure(httpError(401, 'Email not confirmed.')).message).toMatch(/Open the link we sent/);
+    expect(describeSignInFailure(httpError(401, 'Email not confirmed.')).message).toMatch(/Open the link in that email/);
   });
 });
 
