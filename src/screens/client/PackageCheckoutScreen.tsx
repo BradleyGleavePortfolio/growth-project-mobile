@@ -30,7 +30,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
 import { publicPackagesApi, PublicPackageView } from '../../api/packagesApi';
-import { errorCode, errorMessage, errorStatus } from '../../types/common';
+import { errorCode, errorStatus } from '../../types/common';
 import { isValidPackageShareToken } from '../../utils/packageShare';
 import { mediumTap } from '../../utils/haptics';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -118,15 +118,17 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
       } else if (code === 'PACKAGES_NOT_CONFIGURED') {
         setError({
           title: 'Not available yet',
-          body: errorMessage(
-            err,
-            'Coach packages are not available in this environment yet.',
-          ),
+          body: 'Coach plans are not switched on for this app yet. Message the coach who shared the link.',
+        });
+      } else if (httpCode === undefined) {
+        setError({
+          title: 'You are offline',
+          body: 'This plan could not load because the phone is offline. Check your connection, then choose Try again.',
         });
       } else {
         setError({
-          title: 'Could not load this package',
-          body: errorMessage(err, 'Please check your connection and try again.'),
+          title: 'Could not load this plan',
+          body: 'This plan did not load. Choose Try again in a minute, or message the coach who shared the link.',
         });
       }
     } finally {

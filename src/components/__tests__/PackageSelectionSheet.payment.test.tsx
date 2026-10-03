@@ -1,6 +1,7 @@
 /**
- * OR-112-22: the Day 1 / package_prompt sheet takes payment through
- * POST /v1/checkout/payment-intent and the native PaymentSheet.
+ * OR-112-22: the Day 1 / package_prompt sheet takes payment for ONE-TIME
+ * plans through POST /v1/checkout/payment-intent and the native PaymentSheet.
+ * Renewing plans: PackageSelectionSheet.subscription.test.tsx (B-RECUR-MOB).
  *
  * Failing before: on main the sheet POSTed { package_id, idempotency_key } to
  * /v1/checkout/sessions (400 under forbidNonWhitelisted; that route never
@@ -146,6 +147,14 @@ async function pressSelect(r: Awaited<ReturnType<typeof mountAndSelect>>) {
   await fireEvent.press(r.getByTestId('select-plan-btn'));
 }
 
+/** The success moment shows; Continue leaves the sheet the paid way. */
+async function finishSuccess(r: Awaited<ReturnType<typeof mountAndSelect>>) {
+  await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
+  expect(r.onPaymentSuccess).not.toHaveBeenCalled();
+  await fireEvent.press(r.getByTestId('payment-continue'));
+  expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1);
+}
+
 function paymentIntentCalls() {
   return mockPost.mock.calls.filter((c) => c[0] === '/v1/checkout/payment-intent');
 }
@@ -186,7 +195,7 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     expect(body.package_id).toMatch(IS_UUID);
     expect(body.idempotency_key).toMatch(IS_UUID);
 
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     expect(mockPost.mock.calls.map((c) => c[0])).toEqual(['/v1/checkout/payment-intent']);
 
     expect(mockInitStripe).toHaveBeenCalledWith(
@@ -216,7 +225,7 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     mockPost.mockResolvedValueOnce({ data: { ...SECRETS, publishable_key: '' } });
     const r = await mountAndSelect();
     await pressSelect(r);
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     expect(mockInitStripe).toHaveBeenCalledWith(expect.objectContaining({ publishableKey: 'pk_test_build' }));
   });
 
@@ -232,8 +241,8 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
 
   it('shows the price from amount_cents (the backend field)', async () => {
     const r = await mountAndSelect();
-    expect(r.getByText('$149.00 one-time')).toBeTruthy();
-    expect(r.getByText('$99.00 / month')).toBeTruthy();
+    expect(r.getByText('$149.00 once')).toBeTruthy();
+    expect(r.getByText('$99.00 a month')).toBeTruthy();
     expect(r.getByText('Free')).toBeTruthy();
     expect(r.queryByText(/NaN/)).toBeNull();
   });
@@ -243,12 +252,12 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     const r = await mountAndSelect();
     await pressSelect(r);
     await waitFor(() => expect(mockPresent).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(r.getByTestId('select-plan-btn')).toBeTruthy());
+    await waitFor(() => expect(r.getByTestId('select-plan-btn').props.accessibilityState.disabled).toBe(false));
     expect(r.queryByTestId('payment-error')).toBeNull();
     expect(r.onPaymentSuccess).not.toHaveBeenCalled();
 
     await pressSelect(r);
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     const keys = paymentIntentCalls().map((c) => (c[1] as { idempotency_key: string }).idempotency_key);
     expect(keys).toHaveLength(2);
     expect(keys[0]).toBe(keys[1]);
@@ -261,7 +270,7 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     await waitFor(() => expect(mockPresent).toHaveBeenCalledTimes(1));
     await fireEvent.press(r.getByTestId(`package-card-${PKG_B}`));
     await pressSelect(r);
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     const calls = paymentIntentCalls().map((c) => c[1] as { package_id: string; idempotency_key: string });
     expect(calls.map((c) => c.package_id)).toEqual([PKG_A, PKG_B]);
     expect(calls[0].idempotency_key).not.toBe(calls[1].idempotency_key);
@@ -272,11 +281,11 @@ describe('PackageSelectionSheet pays through POST /v1/checkout/payment-intent', 
     const r = await mountAndSelect();
     await pressSelect(r);
     await waitFor(() => expect(r.getByTestId('payment-confirmed-pending')).toBeTruthy());
-    expect(r.getByTestId('payment-confirmed-pending').props.children).toBe(
+    expect(r.getByText(
       'Your payment went through. Your plan can take a minute to show in the app. Choose Continue to carry on.',
-    );
+    )).toBeTruthy();
     expect(r.onPaymentSuccess).not.toHaveBeenCalled();
-    await fireEvent.press(r.getByTestId('select-plan-btn'));
+    await fireEvent.press(r.getByTestId('payment-continue'));
     expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1);
   });
 });
@@ -298,7 +307,7 @@ describe('specific copy per cause', () => {
       mockPost.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { config: {} })),
     );
     expect(text).toBe(
-      'This phone is offline, so the payment did not start and your card was not charged. Check your connection, then choose Select this plan again.',
+      'This phone is offline, so the payment did not start and nothing was charged. Check your connection, then start again.',
     );
     expect(mockInitPaymentSheet).not.toHaveBeenCalled();
     expect(r.queryByTestId('payment-support')).toBeNull();
@@ -309,7 +318,7 @@ describe('specific copy per cause', () => {
       mockPresent.mockResolvedValueOnce({ error: { code: 'Failed', message: 'Your card was declined.', declineCode: 'generic_decline', type: 'card_error' } }),
     );
     expect(text).toBe(
-      'Your bank declined this card, so nothing was charged. Choose Select this plan to use a different card, or ask your bank about the decline.',
+      'Your bank declined this card, so nothing was charged. Start again with a different card, or ask your bank about the decline.',
     );
   });
 
@@ -317,7 +326,7 @@ describe('specific copy per cause', () => {
     const { text } = await failWith(() =>
       mockPresent.mockResolvedValueOnce({ error: { code: 'Failed', message: 'x', declineCode: 'insufficient_funds', type: 'card_error' } }),
     );
-    expect(text).toBe('This card does not have enough funds, so nothing was charged. Choose Select this plan to use a different card.');
+    expect(text).toBe('This card does not have enough funds, so nothing was charged. Start again with a different card.');
   });
 
   it('bank authentication failed (3DS)', async () => {
@@ -325,7 +334,7 @@ describe('specific copy per cause', () => {
       mockPresent.mockResolvedValueOnce({ error: { code: 'Failed', message: 'x', stripeErrorCode: 'payment_intent_authentication_failure' } }),
     );
     expect(text).toBe(
-      'Your bank could not confirm this payment, so nothing was charged. Choose Select this plan to confirm with your bank again or use a different card.',
+      'Your bank could not confirm this payment, so nothing was charged. Start again to confirm with your bank, or use a different card.',
     );
   });
 
@@ -333,7 +342,7 @@ describe('specific copy per cause', () => {
     const { text } = await failWith(() =>
       mockPost.mockRejectedValueOnce(httpError(404, { error: 'PACKAGE_NOT_FOUND', message: 'Package not available' })),
     );
-    expect(text).toBe('This plan is no longer offered. Choose another plan below, or message your coach about it.');
+    expect(text).toBe('This plan is no longer offered, so nothing was charged. Pull down to see your coach’s current plans, or message your coach.');
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
@@ -342,7 +351,7 @@ describe('specific copy per cause', () => {
       mockPost.mockRejectedValueOnce(httpError(409, { error: 'COACH_NOT_PAYOUT_READY', message: 'x' })),
     );
     expect(text).toBe(
-      'Your coach has not finished setting up card payments yet, so this plan cannot be bought right now. Message your coach, then choose Select this plan once they are set up.',
+      'Your coach cannot take card payments right now, so this plan cannot start and nothing was charged. Message your coach, then choose the plan once they are ready.',
     );
   });
 
@@ -351,10 +360,10 @@ describe('specific copy per cause', () => {
       mockPost.mockRejectedValueOnce(httpError(503, { error: 'PAYMENT_IN_PROGRESS', message: 'x' })),
     );
     expect(text).toBe(
-      'This payment is still being set up. Wait a few seconds, then choose Select this plan again. You will not be charged twice.',
+      'This payment is still being set up. Wait a few seconds, then start again. You will not be charged twice.',
     );
     await pressSelect(r);
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     const keys = paymentIntentCalls().map((c) => (c[1] as { idempotency_key: string }).idempotency_key);
     expect(keys[0]).toBe(keys[1]);
   });
@@ -363,7 +372,7 @@ describe('specific copy per cause', () => {
     const { text } = await failWith(() =>
       mockPost.mockRejectedValueOnce(httpError(429, { statusCode: 429, error: 'Too Many Requests', message: 'x', retryAfter: 3600 })),
     );
-    expect(text).toBe('There have been too many payment attempts. Wait 60 minutes, then choose Select this plan again.');
+    expect(text).toBe('There have been too many payment attempts, so this one did not start. Wait 60 minutes, then start again.');
   });
 
   it('payments not configured (503 CONNECT_NOT_CONFIGURED): support email, reference, Sentry', async () => {
@@ -443,21 +452,16 @@ describe('plans the payment-intent route must not charge', () => {
     });
     const r = await mountAndSelect(PKG_FREE);
     await pressSelect(r);
-    await waitFor(() => expect(r.onPaymentSuccess).toHaveBeenCalledTimes(1));
+    await finishSuccess(r);
     expect(mockPost.mock.calls.map((c) => c[0])).toEqual([`/v1/packages/${PKG_FREE}/claim-free`]);
     expect(mockInitPaymentSheet).not.toHaveBeenCalled();
   });
 
-  it('a renewing plan is not sold as a one-off PaymentIntent', async () => {
+  it('a renewing plan is never sold as a one-off PaymentIntent (it goes to subscription-intent)', async () => {
     const r = await mountAndSelect(PKG_MONTHLY);
     await pressSelect(r);
-    await waitFor(() => expect(r.getByTestId('payment-error')).toBeTruthy());
-    const text = r.getByTestId('payment-error').props.children as string;
-    expectCopyRules(text);
-    expect(text).toBe(
-      'Plans that renew each month or year are started from Membership. Choose Skip for now, then open More, Membership and View coaching plans.',
-    );
-    expect(mockPost).not.toHaveBeenCalled();
-    expect(mockInitPaymentSheet).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockPost).toHaveBeenCalled());
+    expect(paymentIntentCalls()).toHaveLength(0);
+    expect(mockPost.mock.calls[0][0]).toBe('/v1/checkout/subscription-intent');
   });
 });

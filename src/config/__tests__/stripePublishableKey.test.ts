@@ -49,12 +49,18 @@ describe('resolveStripePublishableKey', () => {
     expect(src).not.toMatch(/process\.env\[/);
   });
 
-  it('PackageSelectionSheet uses the resolver instead of reading EXPO_PUBLIC_STRIPE_PK directly', () => {
-    const sheet = fs.readFileSync(
-      path.join(__dirname, '..', '..', 'components', 'PackageSelectionSheet.tsx'),
-      'utf8',
-    );
-    expect(sheet).toContain('resolveStripePublishableKey()');
-    expect(sheet).not.toMatch(/process\.env\.EXPO_PUBLIC_STRIPE_PK/);
+  it('the shared purchase flow uses the resolver; no sell surface reads EXPO_PUBLIC_STRIPE_PK directly', () => {
+    const read = (...rel: string[]) => fs.readFileSync(path.join(__dirname, '..', '..', ...rel), 'utf8');
+    // B-RECUR-MOB: the PaymentSheet is initialised in one place for every surface.
+    expect(read('hooks', 'usePackagePurchase.ts')).toContain('resolveStripePublishableKey()');
+    for (const rel of [
+      ['components', 'PackageSelectionSheet.tsx'],
+      ['hooks', 'usePackagePurchase.ts'],
+      ['screens', 'client', 'ClientPackagesScreen.tsx'],
+      ['screens', 'client', 'PackageCheckoutScreen.tsx'],
+    ]) {
+      expect(read(...rel)).not.toMatch(/process\.env\.EXPO_PUBLIC_STRIPE_PK/);
+    }
+    expect(read('components', 'PackageSelectionSheet.tsx')).toContain('usePackagePurchase(');
   });
 });
