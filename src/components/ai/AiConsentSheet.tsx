@@ -115,11 +115,11 @@ export const AI_CONSENT_SHEET_COPY = {
     'This choice cannot be changed right now, so nothing has changed. Try again in a few minutes, or contact support if it keeps happening.',
   updateApp:
     'The wording for this choice has changed since this version of the app. Update the app from the App Store or Google Play, then allow AI help.',
-  loadFailed: 'We could not load this choice, so nothing has changed. Check your connection and try again.',
+  loadFailed: 'This choice did not load, so nothing has changed. Check your connection and try again.',
   saveFailed:
-    'We could not save your choice, so AI help is still off. Try again, or contact support and share the reference below.',
+    'Your choice was not saved, so AI help is still off. Try again, or contact support and share the reference below.',
   unconfirmed:
-    'We could not confirm your choice, so it may or may not be saved. Try again to check, or see Settings > Privacy.',
+    'Your choice could not be confirmed, so it may or may not be saved. Try again to check, or see Settings > Privacy.',
   checking: 'Checking whether your choice was saved',
   reconsent: 'The AI help wording changed, so it needs your OK again.',
   notSent:

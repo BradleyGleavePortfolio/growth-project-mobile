@@ -9,7 +9,7 @@
  *                             already stored, B-326-3).
  *   consent_required, coach   "AI help is off for this client" + the
  *                             coach can still coach as usual; "Try again".
- *   egress_blocked (503)      "AI help is paused on our side" + the short
+ *   egress_blocked (503)      "AI help is paused by a service problem" + the short
  *                             reference, "Contact support" and "Copy reference".
  *
  * Never a generic "Something went wrong"; never asks the person to change

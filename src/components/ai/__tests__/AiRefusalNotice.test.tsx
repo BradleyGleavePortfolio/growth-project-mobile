@@ -297,7 +297,7 @@ describe('AiRefusalNotice — egress_blocked', () => {
         testID="n"
       />,
     );
-    expect(r.getByTestId('n-title').props.children).toBe('AI help is paused on our side');
+    expect(r.getByTestId('n-title').props.children).toBe('AI help is paused by a service problem');
     expect(r.getByTestId('n-reference').props.children).toBe('Reference: 7f3a9c21');
     expect(r.queryByTestId('n-allow')).toBeNull();
     await fireEvent.press(r.getByTestId('n-support'));

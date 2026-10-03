@@ -158,8 +158,8 @@ describe('aiRefusalCopy (owner copy rules)', () => {
       'client',
       'guide',
     );
-    expect(copy.title).toBe('AI help is paused on our side');
-    expect(copy.body).toContain('problem on our side');
+    expect(copy.title).toBe('AI help is paused by a service problem');
+    expect(copy.body).toContain('problem with The Growth Project service');
     expect(copy.body).toContain('Contact support');
     expect(copy.body).not.toContain('Settings');
     expect(copy.body).not.toMatch(/allow/i);

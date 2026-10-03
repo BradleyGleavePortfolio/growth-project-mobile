@@ -128,7 +128,7 @@ describe('CoachAiSection — R2b refusals', () => {
     mockedPost.mockRejectedValueOnce(egressError());
     const r = await openInsightForm();
     await pressSubmit(r);
-    await waitFor(() => expect(r.getByTestId('coach-ai-refusal-title').props.children).toBe('AI help is paused on our side'));
+    await waitFor(() => expect(r.getByTestId('coach-ai-refusal-title').props.children).toBe('AI help is paused by a service problem'));
     expect(r.getByTestId('coach-ai-refusal-reference').props.children).toBe('Reference: egress-r');
     expect(r.getByTestId('coach-ai-refusal-copy-reference')).toBeTruthy();
   });
@@ -160,11 +160,11 @@ describe('AskAiActionSheet — R2b refusals', () => {
     await waitFor(() => expect(mockInvokeSendNotification).toHaveBeenCalledTimes(2));
   });
 
-  it('503 ai_egress_blocked: paused on our side with the reference', async () => {
+  it('503 ai_egress_blocked: paused by a service problem, with the reference', async () => {
     mockInvokeSendNotification.mockRejectedValueOnce(egressError());
     const r = await renderSheet();
     await fireEvent.press(r.getByTestId('ask-ai-submit'));
-    await waitFor(() => expect(r.getByTestId('ask-ai-refusal-title').props.children).toBe('AI help is paused on our side'));
+    await waitFor(() => expect(r.getByTestId('ask-ai-refusal-title').props.children).toBe('AI help is paused by a service problem'));
     expect(r.getByTestId('ask-ai-refusal-reference')).toBeTruthy();
   });
 });
@@ -188,7 +188,7 @@ describe('WearableInsightPanel (coach) — R2b refusals', () => {
   it('503 ai_egress_blocked: support path with the reference', async () => {
     mockUseCoachInsight.mockReturnValue(queryError(egressError()));
     const r = await render(<WearableInsightPanel side="coach" clientId="c1" clientFirstName="Jane" bucket="SLEEP_RECOVERY" />);
-    expect(r.getByTestId('coach-insight-ai-refusal-title').props.children).toBe('AI help is paused on our side');
+    expect(r.getByTestId('coach-insight-ai-refusal-title').props.children).toBe('AI help is paused by a service problem');
   });
 
   it('a plain 403 (not the AI code) keeps the existing access copy', async () => {
@@ -210,7 +210,7 @@ describe('AiTriageCard — R2b / C-626-4', () => {
       />,
     );
     expect(r.getByTestId('t-refused')).toBeTruthy();
-    expect(r.getByTestId('t-ai-refusal-title').props.children).toBe('AI help is paused on our side');
+    expect(r.getByTestId('t-ai-refusal-title').props.children).toBe('AI help is paused by a service problem');
   });
 
   it('503 ai_triage_unavailable (no refusal): the explicit "triage unavailable" state with Retry, not an empty inbox', async () => {

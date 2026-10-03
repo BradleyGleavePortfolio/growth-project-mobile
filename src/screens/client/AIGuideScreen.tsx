@@ -30,6 +30,16 @@ import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
 import { shortReference, supportReferenceOf, diagnosticReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
+
+/** The HTTP status of a failed request, or null (no other error detail is reported). */
+function httpStatusOf(err: unknown): number | null {
+  if (typeof err !== 'object' || err === null) return null;
+  const response = 'response' in err ? err.response : undefined;
+  if (typeof response === 'object' && response !== null && 'status' in response && typeof response.status === 'number') {
+    return response.status;
+  }
+  return null;
+}
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // Quiet-luxury prompts. The AI is the coach's voice; the prompts should read
@@ -254,9 +264,15 @@ export default function AIGuideScreen() {
         // otherwise a generated one; the same value goes to Sentry.
         const fullRef = diagnosticReference(supportReferenceOf(err));
         const ref = shortReference(fullRef);
-        captureError(err, { surface: 'ai_guide', reference: fullRef });
+        // Checklist (a): no exception text leaves the phone, only a fixed
+        // event name, the HTTP status and the reference.
+        captureError(new Error('ai_guide request failed'), {
+          surface: 'ai_guide',
+          reference: fullRef,
+          status: httpStatusOf(err),
+        });
         aiText =
-          'Guidance could not answer this time because of a problem on our side. ' +
+          'Guidance could not answer this time because of a problem with The Growth Project service. ' +
           'Send your message again in a minute. If it keeps happening, contact support' +
           (ref ? ` and share reference ${ref}.` : '.');
         setIsDegraded(true);

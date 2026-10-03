@@ -168,12 +168,12 @@ export function aiRefusalCopy(
   }
   const short = shortReference(refusal.reference);
   return {
-    title: 'AI help is paused on our side',
+    title: 'AI help is paused by a service problem',
     body:
-      `${what} could not run because of a problem on our side. Your account and privacy settings are fine. ` +
+      `${what} could not run because of a problem with The Growth Project service. Your account and privacy settings are fine. ` +
       (short
-        ? 'Contact support and share the reference below so we can fix it.'
-        : 'Contact support and tell us what you were doing so we can fix it.'),
+        ? 'Contact support and share the reference below.'
+        : 'Contact support and say what you were doing when this happened.'),
     referenceLine: short ? `Reference: ${short}` : null,
   };
 }

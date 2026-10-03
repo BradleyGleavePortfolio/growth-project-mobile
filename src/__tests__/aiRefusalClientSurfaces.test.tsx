@@ -146,7 +146,7 @@ describe('RomanChatScreen — R2b refusals', () => {
     expect(r.queryByTestId('roman-ai-refusal-allow')).toBeNull();
   });
 
-  it('egress_blocked (in-stream or HTTP): paused on our side with the reference', async () => {
+  it('egress_blocked (in-stream or HTTP): paused by a service problem, with the reference', async () => {
     mockUseRomanChat.mockReturnValue(
       romanState({
         kind: 'aiRefused',
@@ -155,7 +155,7 @@ describe('RomanChatScreen — R2b refusals', () => {
       }),
     );
     const r = await render(<RomanChatScreen surface="client" />);
-    expect(r.getByTestId('roman-ai-refusal-title').props.children).toBe('AI help is paused on our side');
+    expect(r.getByTestId('roman-ai-refusal-title').props.children).toBe('AI help is paused by a service problem');
     expect(r.getByTestId('roman-ai-refusal-reference').props.children).toBe('Reference: sse-ref-');
     expect(r.queryByTestId('roman-send-error')).toBeNull();
   });
@@ -210,10 +210,10 @@ describe('AIGuideScreen — R2b refusals', () => {
     expect(r.queryByText(CLIENT_MESSAGE)).toBeNull();
   });
 
-  it('503 ai_egress_blocked: paused on our side, reference from X-Request-ID', async () => {
+  it('503 ai_egress_blocked: paused by a service problem, reference from X-Request-ID', async () => {
     mockChat.mockRejectedValueOnce(egressError());
     const r = await send('Hello');
-    await waitFor(() => expect(r.getByTestId('ai-guide-refusal-title').props.children).toBe('AI help is paused on our side'));
+    await waitFor(() => expect(r.getByTestId('ai-guide-refusal-title').props.children).toBe('AI help is paused by a service problem'));
     expect(r.getByTestId('ai-guide-refusal-reference').props.children).toBe('Reference: guide-re');
     expect(mockSaveChatMessage).not.toHaveBeenCalled();
   });
@@ -222,7 +222,7 @@ describe('AIGuideScreen — R2b refusals', () => {
     mockChat.mockRejectedValueOnce(httpError(500, { message: 'boom' }, { 'x-request-id': 'unk-ref-123456' }));
     const r = await send('Hello');
     await waitFor(() =>
-      expect(r.getByText(/Guidance could not answer this time because of a problem on our side/)).toBeTruthy(),
+      expect(r.getByText(/Guidance could not answer this time because of a problem with The Growth Project service/)).toBeTruthy(),
     );
     expect(r.getByText(/share reference unk-ref-/)).toBeTruthy();
     expect(r.queryByTestId('ai-guide-refusal')).toBeNull();
@@ -250,6 +250,26 @@ describe('AIGuideScreen — R2b refusals', () => {
     const reported = (calls[calls.length - 1][1] as { reference: string }).reference;
     expect(shown && reported.startsWith(shown)).toBe(true);
   });
+
+  it('checklist (a): no exception text reaches Sentry, only a fixed name, the status and the reference', async () => {
+    const CANARY = 'Janet Canaryfield janet.canaryfield@example.com +1 415 555 0142 insulin dependent';
+    mockChat.mockRejectedValueOnce(
+      Object.assign(new Error(`upstream said: ${CANARY}`), {
+        isAxiosError: true,
+        response: { status: 502, data: { message: CANARY }, headers: { 'x-request-id': 'canary-ref-1234' } },
+      }),
+    );
+    const r = await send('Hello');
+    await waitFor(() => expect(r.getByText(/share reference canary-r/)).toBeTruthy());
+    const calls = (captureError as jest.Mock).mock.calls;
+    const [err, ctx] = calls[calls.length - 1] as [Error, Record<string, unknown>];
+    expect(err.message).toBe('ai_guide request failed');
+    expect(ctx).toEqual({ surface: 'ai_guide', reference: 'canary-ref-1234', status: 502 });
+    const sent = JSON.stringify([err.message, err.stack ?? '', ctx]);
+    for (const fragment of ['Janet', 'Canaryfield', 'example.com', '415 555', 'insulin', 'upstream said']) {
+      expect(sent).not.toContain(fragment);
+    }
+  });
 });
 
 describe('ClientWearableInsightPanel — R2b refusals', () => {
@@ -268,7 +288,7 @@ describe('ClientWearableInsightPanel — R2b refusals', () => {
   it('503 ai_egress_blocked: support path', async () => {
     mockUseClientInsight.mockReturnValue(queryError(egressError()));
     const r = await render(<ClientWearableInsightPanel bucket="HEALTH_FITNESS" />);
-    expect(r.getByTestId('client-insight-ai-refusal-title').props.children).toBe('AI help is paused on our side');
+    expect(r.getByTestId('client-insight-ai-refusal-title').props.children).toBe('AI help is paused by a service problem');
   });
 
   it('a plain 503 (not the AI code) keeps the existing error state', async () => {
