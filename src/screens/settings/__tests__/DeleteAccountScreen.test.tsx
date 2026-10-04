@@ -828,7 +828,7 @@ describe('B-368-1 / C-368-1: an Apple card for every outcome the form note promi
       expect(text).not.toMatch(/\b(we|our|us)\b/i);
       expect(text).not.toMatch(/!/);
     }
-    expect(APPLE_FALLBACK_IF_APPLE).toMatch(/^If you signed in with Apple, Apple has not confirmed that this app’s access was removed\./);
+    expect(APPLE_FALLBACK_IF_APPLE).toMatch(/^If you signed in with Apple, Apple has not confirmed that this app’s access was removed, /);
   });
 });
 
@@ -846,7 +846,8 @@ describe('C-368-2: DeleteAccountScreen copy has no first person', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/^\s*\/\/.*$/gm, '');
     const strings = source.match(/'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g) ?? [];
-    const firstPerson = strings.filter((literal) => /\b(we|our|us)\b/i.test(literal));
+    // Case-sensitive on purpose: 'en-US' is a locale, not a pronoun.
+    const firstPerson = strings.filter((literal) => /\b([Ww]e|[Oo]ur|[Uu]s)\b/.test(literal));
     expect(firstPerson).toEqual([]);
   });
 });
