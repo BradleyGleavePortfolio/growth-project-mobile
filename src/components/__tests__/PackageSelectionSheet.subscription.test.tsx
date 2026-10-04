@@ -70,7 +70,7 @@ const PackageSelectionSheet: typeof import('../PackageSelectionSheet').default =
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { usePackagePurchase }: typeof import('../../hooks/usePackagePurchase') = require('../../hooks/usePackagePurchase');
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { purchasableFromCoachPackage }: typeof import('../../lib/planTerms') = require('../../lib/planTerms');
+const { purchasableFromCoachPackage, formatPlanDate }: typeof import('../../lib/planTerms') = require('../../lib/planTerms');
 
 const PACKAGES = [
   { id: PKG_MONTHLY, name: 'Monthly coaching', amount_cents: 9900, currency: 'usd', billing_type: 'recurring', interval: 'month', description: null },
@@ -230,12 +230,16 @@ describe('a renewing plan sells as a subscription', () => {
   });
 
   it('a trial uses PaymentSheet setup mode and states the first charge date', async () => {
+    // B-343-4: the pinned trial end matches the date the sheet shows (today + 7).
+    const end = new Date();
+    end.setDate(end.getDate() + 7);
+    const trialEndsAt = end.toISOString();
     mockPost.mockImplementation(async () => ({
       data: intent('setup', {
-        plan: { ...intent('setup').plan, amount_cents: 4900, first_charge_cents: 0, trial_days: 7, trial_ends_at: '2026-10-10T12:00:00.000Z', package_id: PKG_TRIAL, package_name: 'Trial coaching' },
+        plan: { ...intent('setup').plan, amount_cents: 4900, first_charge_cents: 0, trial_days: 7, trial_ends_at: trialEndsAt, package_id: PKG_TRIAL, package_name: 'Trial coaching' },
       }),
     }));
-    planResponses = [planView('trialing', { package_id: PKG_TRIAL, package_name: 'Trial coaching', amount_cents: 4900, trial_days: 7, trial_ends_at: '2026-10-10T12:00:00.000Z' })];
+    planResponses = [planView('trialing', { package_id: PKG_TRIAL, package_name: 'Trial coaching', amount_cents: 4900, trial_days: 7, trial_ends_at: trialEndsAt })];
     const r = await mountAndSelect(PKG_TRIAL);
     expect(r.getByTestId('select-plan-btn').props.accessibilityLabel).toBe('Start free trial');
     expect(r.getByText(/Free for 7 days, then your first charge of \$49\.00/)).toBeTruthy();
@@ -246,7 +250,7 @@ describe('a renewing plan sells as a subscription', () => {
     expect(params.paymentIntentClientSecret).toBeUndefined();
     expect(params.primaryButtonLabel).toBe('Start free trial');
     expect(r.getByText('Your trial has started')).toBeTruthy();
-    expect(r.getAllByText(/October 10, 2026/).length).toBeGreaterThan(0);
+    expect(r.getAllByText(new RegExp(formatPlanDate(end))).length).toBeGreaterThan(0);
   });
 
   it('a mode/secret mismatch (setup mode with a pi_ secret) is never handed to the sheet', async () => {

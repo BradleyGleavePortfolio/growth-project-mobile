@@ -89,7 +89,10 @@ const MONTHLY_PLAN = {
 };
 const TRIAL_PLAN = {
   ...MONTHLY_PLAN, amount_cents: 4900, first_charge_cents: 0, trial_days: 7,
-  trial_ends_at: '2026-10-10T12:00:00.000Z', package_id: PKG_TRIAL, package_name: 'Trial coaching',
+  // B-343-4: a pinned date that differs from today + 7 is reviewed first, so
+  // the fixture follows the date the sheet shows.
+  trial_ends_at: (() => { const d = new Date(); d.setDate(d.getDate() + 7); return d.toISOString(); })(),
+  package_id: PKG_TRIAL, package_name: 'Trial coaching',
 };
 const COMBO_PLAN = {
   ...MONTHLY_PLAN, amount_cents: 5000, first_charge_cents: 25000, one_time_cents: 20000,
