@@ -247,6 +247,16 @@ describe('Sol B-317-9: the attempt check stops setup before any permission scree
     await expect(connectOnDeviceProvider('HEALTH_CONNECT', () => live)).resolves.toBe('stopped');
   });
 
+  it('B-360-1: Apple Health: a permission-screen failure after the attempt ended is a stop, not an error', async () => {
+    setPlatform('ios');
+    let live = true;
+    (mockedHK.initHealthKit as jest.Mock).mockImplementationOnce((_perms, cb: (e: string) => void) => {
+      live = false;
+      cb('permission error');
+    });
+    await expect(connectOnDeviceProvider('APPLE_HEALTHKIT', () => live)).resolves.toBe('stopped');
+  });
+
   it('Apple Health: an attempt that already ended opens no HealthKit sheet', async () => {
     setPlatform('ios');
     await expect(connectOnDeviceProvider('APPLE_HEALTHKIT', () => false)).resolves.toBe('stopped');

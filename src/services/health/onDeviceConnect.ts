@@ -114,6 +114,8 @@ async function connectHealthKit(isCurrent: OnDeviceAttemptCheck): Promise<OnDevi
     await healthKitClient.requestAuth(HEALTHKIT_READ_PERMISSIONS);
     return 'granted';
   } catch (err) {
+    // B-360-1: an attempt that ended while the sheet was up reports nothing.
+    if (!isCurrent()) return 'stopped';
     // HealthKit never tells an app what was declined, so a failure here is
     // not a refusal. `react-native-health` rejects with "HealthKit data is
     // not available" on devices without Health (some iPads); anything else
