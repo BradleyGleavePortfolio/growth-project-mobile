@@ -355,7 +355,7 @@ export default function PackageSelectionSheet({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
+const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
   StyleSheet.create({
     sheet: {
       flex: 1,
@@ -399,9 +399,14 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginBottom: 12,
       backgroundColor: semanticColors.bgSurface,
     },
+    // B-343-5: the selected card keeps the theme surface, so its payment
+    // terms stay AA-readable in light and dark; selection shows as a 2 px
+    // accent border (padding keeps the content from shifting).
     packageCardSelected: {
       borderColor: semanticColors.accent,
-      backgroundColor: tokens.brand[50],
+      borderWidth: 2,
+      padding: 15,
+      backgroundColor: semanticColors.bgSurface,
     },
     packageName: {
       fontFamily: 'Inter_500Medium',

@@ -15,8 +15,13 @@
  *
  * Idempotency: one key per purchase attempt (package + sale kind), reused on
  * every retry, cancel, decline and price confirmation, so the backend hands
- * back the same PaymentIntent / Subscription and nobody is charged twice. A
- * synchronous in-flight guard drops double taps before any request.
+ * back the same PaymentIntent / Subscription and nobody is charged twice.
+ * B-343-2: keys are kept per package, so choosing another plan never forgets
+ * an unresolved one; a key is retired only when its attempt is proven
+ * finished. A synchronous in-flight guard drops double taps before any
+ * request. B-343-1 (Sol): every await is followed by a liveness check (still
+ * mounted, same signed-in account) before the next side effect, so a flow
+ * that outlived its screen or account never opens a payable sheet.
  *
  * Secrets (client secret, ephemeral key) live only in local variables of one
  * attempt: never in React state, storage, logs, Sentry or analytics.
@@ -26,6 +31,7 @@ import { resolveStripePublishableKey } from "../config/stripe";
 import { resolveWalletConfig } from "../config/wallets";
 import { clientPaymentsApi } from "../api/clientPaymentsApi";
 import { generateIdempotencyKey } from "../utils/idempotency";
+import { authEvents } from "../utils/authEvents";
 import { shortReference } from "../utils/correlation";
 import {
   PACKAGE_PAYMENT_COPY,
@@ -105,6 +111,8 @@ export interface PurchaseState {
   success: PurchaseSuccess | null;
   /** The calm slow-state copy (no sheet ran: never "Your card was accepted"). */
   slowMessage: string | null;
+  /** B-343-1 (Opus): reading an unclear card result; never "Payment received". */
+  checking: boolean;
 }
 
 export type PurchaseSurface = "sheet" | "plans" | "share_link";
@@ -149,6 +157,7 @@ const IDLE: PurchaseState = {
   alreadyActive: null,
   success: null,
   slowMessage: null,
+  checking: false,
 };
 
 type SheetOutcome =
@@ -158,7 +167,11 @@ type SheetOutcome =
   // B-334-3: the sheet was presented but ended without a clear answer (the
   // native call threw, timed out, lost the connection, or failed without
   // any card detail). The payment may have committed: read before telling.
-  | { kind: "uncertain"; cause: string; stripe: StripeSdkError | null };
+  | { kind: "uncertain"; cause: string; stripe: StripeSdkError | null }
+  // The screen or the signed-in account went away: stop without a side effect.
+  | { kind: "stale" };
+
+const STALE: SheetOutcome = { kind: "stale" };
 
 const wait = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -175,11 +188,17 @@ function dateCopy(iso: string | null | undefined): string | null {
   return Number.isNaN(d.getTime()) ? null : formatPlanDate(d);
 }
 
+/** B-343-2: the attempt identity a key belongs to (package + sale kind). */
+function attemptId(pkg: PurchasablePackage): string {
+  return `${pkg.id}:${saleKindOf(pkg)}`;
+}
+
 /** B-334-4: the price-change / terms-review state for an adopted package. */
 function priceChangeFor(
   pkg: PurchasablePackage,
   adopted: PurchasablePackage,
   trialRemoved = pkg.trialDays > 0 && adopted.trialDays === 0,
+  trialDateMoved = false,
 ): PriceChange {
   const onlyPrice =
     adopted.amountCents !== pkg.amountCents &&
@@ -201,7 +220,9 @@ function priceChangeFor(
     newCents: adopted.amountCents,
     message: trialRemoved
       ? PACKAGE_PAYMENT_COPY.termsReviewTrialRemoved
-      : PACKAGE_PAYMENT_COPY.termsReview,
+      : trialDateMoved && adopted.amountCents === pkg.amountCents
+        ? PACKAGE_PAYMENT_COPY.termsReviewTrialDate
+        : PACKAGE_PAYMENT_COPY.termsReview,
     confirmLabel: planTerms(adopted).cta,
   };
 }
@@ -231,13 +252,11 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     };
   }, []);
 
-  /** One key per attempt: same package + same sale kind reuses it. */
-  const attemptRef = useRef<{
-    packageId: string;
-    kind: SaleKind;
-    key: string;
-  } | null>(null);
+  /** B-343-2: one key per package + sale kind, kept until proven finished. */
+  const attemptsRef = useRef(new Map<string, string>());
   const inFlightRef = useRef(false);
+  /** B-343-1 (Sol): bumped on sign-out / sign-in; a flow of another account stops. */
+  const epochRef = useRef(0);
   /** The plan being confirmed (for Check again). Ids only, never secrets. */
   const confirmingRef = useRef<{
     purchaseId: string;
@@ -260,18 +279,38 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     if (mountedRef.current) setState((s) => ({ ...s, ...patch }));
   }, []);
 
+  useEffect(() => {
+    // Keys, reads and notices belong to the account that started them.
+    const onAccountChange = () => {
+      epochRef.current += 1;
+      attemptsRef.current.clear();
+      confirmingRef.current = null;
+      oneTimeUnknownRef.current = null;
+      if (mountedRef.current) setState(IDLE);
+    };
+    authEvents.on("logout", onAccountChange);
+    authEvents.on("login", onAccountChange);
+    return () => {
+      authEvents.off("logout", onAccountChange);
+      authEvents.off("login", onAccountChange);
+    };
+  }, []);
+
   const attemptKeyFor = useCallback((pkg: PurchasablePackage): string => {
-    const kind = saleKindOf(pkg);
-    const cur = attemptRef.current;
-    if (cur && cur.packageId === pkg.id && cur.kind === kind) return cur.key;
-    const next = { packageId: pkg.id, kind, key: generateIdempotencyKey() };
-    attemptRef.current = next;
-    return next.key;
+    const id = attemptId(pkg);
+    const cur = attemptsRef.current.get(id);
+    if (cur) return cur;
+    const next = generateIdempotencyKey();
+    attemptsRef.current.set(id, next);
+    return next;
+  }, []);
+  const retireAttempt = useCallback((pkg: PurchasablePackage) => {
+    attemptsRef.current.delete(attemptId(pkg));
   }, []);
 
   const finishSuccess = useCallback(
-    (success: PurchaseSuccess) => {
-      attemptRef.current = null;
+    (success: PurchaseSuccess, pkg?: PurchasablePackage) => {
+      if (pkg) retireAttempt(pkg);
       confirmingRef.current = null;
       oneTimeUnknownRef.current = null;
       try {
@@ -285,14 +324,24 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         notice: null,
         priceChange: null,
         alreadyActive: null,
+        checking: false,
       });
     },
-    [set],
+    [retireAttempt, set],
   );
 
   const showNotice = useCallback(
-    (n: PackagePaymentNotice) => {
-      set({ phase: "idle", notice: n });
+    (n: PackagePaymentNotice, pkg?: PurchasablePackage) => {
+      // B-342-2 / B-343-3: the backend's machine flags drive the next step.
+      if (pkg && n.retireKey) retireAttempt(pkg);
+      if (n.completed) {
+        try {
+          optsRef.current.onEntitled?.();
+        } catch {
+          // best effort
+        }
+      }
+      set({ phase: "idle", notice: n, checking: false });
       if (n.reload) {
         try {
           optsRef.current.onReloadNeeded?.();
@@ -301,7 +350,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         }
       }
     },
-    [set],
+    [retireAttempt, set],
   );
 
   // ── PaymentSheet ──────────────────────────────────────────────────────────
@@ -311,6 +360,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       mode: "payment" | "setup",
       pkg: PurchasablePackage,
       ref: string | null,
+      live: () => boolean,
     ): Promise<SheetOutcome> => {
       const sdk = loadPackageStripeSdk();
       if (!sdk) return { kind: "notice", notice: describeSdkMissing() };
@@ -335,6 +385,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           urlScheme: STRIPE_URL_SCHEME,
           setReturnUrlSchemeOnAndroid: true,
         });
+        if (!live()) return STALE;
         init = await sdk.initPaymentSheet({
           merchantDisplayName: MERCHANT_DISPLAY_NAME,
           customerId: secrets.customerId,
@@ -358,6 +409,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           notice: describeSheetCrash("sheet_init", ref),
         };
       }
+      if (!live()) return STALE;
       if (init?.error) {
         return {
           kind: "notice",
@@ -368,6 +420,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       try {
         presented = await sdk.presentPaymentSheet();
       } catch {
+        if (!live()) return STALE;
         // The native call threw after the sheet was shown: the payment may
         // have committed (B-334-3).
         return {
@@ -376,6 +429,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           stripe: null,
         };
       }
+      if (!live()) return STALE;
       if (presented?.error) {
         if (isSheetCanceled(presented.error)) return { kind: "canceled" };
         if (isUncertainSheetResult(presented.error)) {
@@ -471,7 +525,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
             plan.state === "trialing" ||
             plan.state === "past_due")
         ) {
-          finishSuccess(successForPlan(plan, c.pkg, c.trial));
+          finishSuccess(successForPlan(plan, c.pkg, c.trial), c.pkg);
           return true;
         }
         if (plan.state === "payment_failed") {
@@ -509,6 +563,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     set({
       phase: "confirm_slow",
       slowMessage: c?.noSheet ? PACKAGE_PAYMENT_COPY.confirmSlowNoSheet : null,
+      checking: false,
     });
   }, [set]);
 
@@ -523,7 +578,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         checkAgain: true,
       };
       reportPackagePaymentFailure("sheet_present", n, { stripe });
-      set({ phase: "idle", notice: n });
+      set({ phase: "idle", notice: n, checking: false });
     },
     [set],
   );
@@ -558,7 +613,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
             plan.state === "trialing" ||
             plan.state === "past_due")
         ) {
-          finishSuccess(successForPlan(plan, c.pkg, c.trial));
+          finishSuccess(successForPlan(plan, c.pkg, c.trial), c.pkg);
           return;
         }
         if (plan.state === "payment_failed") {
@@ -568,7 +623,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         }
         if (plan.state === "ended" || plan.checkoutState === "ended") {
           confirmingRef.current = null;
-          attemptRef.current = null;
+          retireAttempt(c.pkg);
           showNotice({
             cause: "checkout_ended",
             message: PACKAGE_PAYMENT_COPY.checkoutEnded,
@@ -583,7 +638,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           plan.checkoutState === "card_saved"
         ) {
           // The card step did finish: the webhook is on its way.
-          attemptRef.current = null;
+          retireAttempt(c.pkg);
           confirmingRef.current = { ...c, uncertain: false };
           const finished = await pollPlan(planPollDelaysMs);
           if (!finished && mountedRef.current) showSlow();
@@ -594,7 +649,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           plan.checkoutState === "awaiting_card"
         ) {
           // Stripe shows no payment and no saved card: proven not charged.
-          // attemptRef stays, so the next tap replays the same attempt.
+          // The key stays, so the next tap replays the same attempt.
           confirmingRef.current = null;
           showNotice({
             cause: "sheet_not_finished",
@@ -615,6 +670,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       planPollDelaysMs,
       pollPlan,
       recheckDelaysMs,
+      retireAttempt,
       set,
       showNotice,
       showOutcomeUnknown,
@@ -632,7 +688,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     async (stripe: StripeSdkError | null, cause: string): Promise<void> => {
       const u = oneTimeUnknownRef.current;
       if (!u) return;
-      set({ phase: "confirming", notice: null });
+      set({ phase: "confirming", notice: null, checking: true });
       for (const delay of entitlementPollDelaysMs) {
         if (delay > 0) await wait(delay);
         if (!mountedRef.current || oneTimeUnknownRef.current !== u) return;
@@ -648,11 +704,14 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
                 (p.status === "paid" || p.status === "active"),
             );
           if (paid) {
-            finishSuccess({
-              kind: "one_time",
-              title: PACKAGE_PAYMENT_COPY.successTitle,
-              body: PACKAGE_PAYMENT_COPY.successBody(u.pkg.name, null),
-            });
+            finishSuccess(
+              {
+                kind: "one_time",
+                title: PACKAGE_PAYMENT_COPY.successTitle,
+                body: PACKAGE_PAYMENT_COPY.successBody(u.pkg.name, null),
+              },
+              u.pkg,
+            );
             return;
           }
         } catch {
@@ -665,33 +724,40 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     [entitlementPollDelaysMs, finishSuccess, set, showOutcomeUnknown],
   );
 
-  const waitForEntitlement = useCallback(async (): Promise<boolean> => {
-    for (const delay of entitlementPollDelaysMs) {
-      if (delay > 0) await wait(delay);
-      if (!mountedRef.current) return false;
-      try {
-        const res = await clientPaymentsApi.getEntitlement();
-        if (res.ok && res.data?.active === true) return true;
-      } catch {
-        // keep polling; the payment itself is already confirmed
+  const waitForEntitlement = useCallback(
+    async (live: () => boolean): Promise<boolean> => {
+      for (const delay of entitlementPollDelaysMs) {
+        if (delay > 0) await wait(delay);
+        if (!live()) return false;
+        try {
+          const res = await clientPaymentsApi.getEntitlement();
+          if (!live()) return false;
+          if (res.ok && res.data?.active === true) return true;
+        } catch {
+          // keep polling; the payment itself is already confirmed
+        }
       }
-    }
-    return false;
-  }, [entitlementPollDelaysMs]);
+      return false;
+    },
+    [entitlementPollDelaysMs],
+  );
 
   // ── The three sale kinds ──────────────────────────────────────────────────
   const claimFree = useCallback(
-    async (pkg: PurchasablePackage) => {
+    async (pkg: PurchasablePackage, live: () => boolean) => {
       set({ phase: "confirming" });
       let active: boolean;
       try {
         active = await claimFreePackage(pkg.id);
       } catch (err) {
+        if (!live()) return;
         showNotice(
           describeBackendFailure(err, "claim_free", null, { surface }),
+          pkg,
         );
         return;
       }
+      if (!live()) return;
       if (!active) {
         showNotice(
           infoNotice("free_pending", PACKAGE_PAYMENT_COPY.freePending),
@@ -708,7 +774,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
   );
 
   const buyOneTime = useCallback(
-    async (pkg: PurchasablePackage) => {
+    async (pkg: PurchasablePackage, live: () => boolean) => {
       if (!loadPackageStripeSdk()) {
         showNotice(describeSdkMissing());
         return;
@@ -719,18 +785,22 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       try {
         secrets = await createPackagePaymentIntent(pkg.id, key);
       } catch (err) {
+        if (!live()) return;
         // The coach made the plan free since the list loaded.
         if (backendCodeOf(err) === "PACKAGE_IS_FREE") {
-          await claimFree({ ...pkg, amountCents: 0 });
+          await claimFree({ ...pkg, amountCents: 0 }, live);
           return;
         }
         showNotice(
           describeBackendFailure(err, "payment_intent", ref, { surface }),
+          pkg,
         );
         return;
       }
+      if (!live()) return;
       set({ phase: "paying" });
-      const outcome = await runSheet(secrets, "payment", pkg, ref);
+      const outcome = await runSheet(secrets, "payment", pkg, ref, live);
+      if (outcome.kind === "stale") return;
       if (outcome.kind === "canceled") {
         set({ phase: "idle" });
         return;
@@ -745,10 +815,10 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         await settleOneTimeUnknown(outcome.stripe, outcome.cause);
         return;
       }
-      attemptRef.current = null;
-      set({ phase: "confirming" });
-      const active = await waitForEntitlement();
-      if (!mountedRef.current) return;
+      retireAttempt(pkg);
+      set({ phase: "confirming", checking: false });
+      const active = await waitForEntitlement(live);
+      if (!live()) return;
       if (active) {
         finishSuccess({
           kind: "one_time",
@@ -768,6 +838,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       attemptKeyFor,
       claimFree,
       finishSuccess,
+      retireAttempt,
       runSheet,
       set,
       settleOneTimeUnknown,
@@ -852,7 +923,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
   );
 
   const buySubscription = useCallback(
-    async (pkg: PurchasablePackage) => {
+    async (pkg: PurchasablePackage, live: () => boolean) => {
       if (!loadPackageStripeSdk()) {
         showNotice(describeSdkMissing());
         return;
@@ -874,27 +945,27 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         } catch (first) {
           // The attempt behind this key has ended on the server (expired or
           // retired): its key is dead. Start once more with a fresh key.
-          if (backendCodeOf(first) !== "SUBSCRIPTION_ATTEMPT_EXPIRED")
+          if (
+            backendCodeOf(first) !== "SUBSCRIPTION_ATTEMPT_EXPIRED" ||
+            !live()
+          )
             throw first;
-          attemptRef.current = null;
+          retireAttempt(pkg);
           key = attemptKeyFor(pkg);
           ref = shortReference(key);
           intent = await request(key);
         }
       } catch (err) {
+        if (!live()) return;
         const code = backendCodeOf(err);
-        if (code === "SUBSCRIPTION_ATTEMPT_EXPIRED") {
-          // Never resend a dead key: the next tap starts a new attempt.
-          attemptRef.current = null;
-        }
         // The coach made the plan free since the list loaded.
         if (code === "PACKAGE_IS_FREE") {
-          attemptRef.current = null;
-          await claimFree({ ...pkg, amountCents: 0 });
+          retireAttempt(pkg);
+          await claimFree({ ...pkg, amountCents: 0 }, live);
           return;
         }
         if (code === "PACKAGE_ALREADY_INCLUDED") {
-          attemptRef.current = null;
+          retireAttempt(pkg);
           set({
             phase: "idle",
             alreadyActive: { purchaseId: null },
@@ -906,6 +977,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         }
         if (code === "PACKAGE_PRICE_CHANGED") {
           const change = await resolvePriceChange(pkg, err);
+          if (!live()) return;
           if (change) {
             set({ phase: "idle", priceChange: change, notice: null });
             return;
@@ -913,6 +985,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         }
         if (code === "SUBSCRIPTION_ALREADY_ACTIVE") {
           const purchaseId = await resolveExistingPlan(pkg, err);
+          if (!live()) return;
           set({
             phase: "idle",
             alreadyActive: { purchaseId },
@@ -922,17 +995,25 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           });
           return;
         }
+        // Never resend a dead key (SUBSCRIPTION_ATTEMPT_EXPIRED and other
+        // retireKey answers): the next tap starts a new attempt.
         showNotice(
           describeBackendFailure(err, "subscription_intent", ref, { surface }),
+          pkg,
         );
         return;
       }
-      if (!mountedRef.current) return;
+      if (!live()) return;
       // B-334-4: the terms the backend is about to charge must be the terms
       // the client saw. Any difference (trial no longer offered, today's
       // charge, one-time part, currency, cadence) is reviewed first; the
       // confirm replays the SAME key, so it is the same attempt.
-      const reconciled = reconcileIntentTerms(pkg, intent.plan, intent.mode);
+      const reconciled = reconcileIntentTerms(
+        pkg,
+        intent.plan,
+        intent.mode,
+        (optsRef.current.now ?? (() => new Date()))(),
+      );
       if (reconciled.inconsistent) {
         const n: PackagePaymentNotice = {
           cause: "intent_terms_inconsistent",
@@ -952,6 +1033,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
             pkg,
             reconciled.adopted,
             reconciled.trialRemoved,
+            reconciled.trialDateMoved,
           ),
         });
         return;
@@ -965,7 +1047,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       };
       if (intent.mode === "none") {
         // B-654-6: Stripe needs nothing from the client; confirm the plan.
-        attemptRef.current = null;
+        retireAttempt(pkg);
         confirmingRef.current = { ...confirming, noSheet: true };
         set({ phase: "confirming" });
         const settled = await pollPlan(planPollDelaysMs);
@@ -973,7 +1055,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         return;
       }
       set({ phase: "paying" });
-      const outcome = await runSheet(intent, intent.mode, pkg, ref);
+      const outcome = await runSheet(intent, intent.mode, pkg, ref, live);
+      if (outcome.kind === "stale") return;
       if (outcome.kind === "canceled") {
         set({ phase: "idle" });
         return;
@@ -990,7 +1073,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       }
       // The card step finished: this attempt's key is spent. A later tap on
       // the same plan gets SUBSCRIPTION_ALREADY_ACTIVE or the open attempt.
-      attemptRef.current = null;
+      retireAttempt(pkg);
       confirmingRef.current = confirming;
       set({ phase: "confirming" });
       const finished = await pollPlan(planPollDelaysMs);
@@ -1003,6 +1086,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       pollPlan,
       resolveExistingPlan,
       resolvePriceChange,
+      retireAttempt,
       runSheet,
       set,
       settleUncertain,
@@ -1017,8 +1101,10 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     async (pkg: PurchasablePackage): Promise<void> => {
       if (inFlightRef.current) return; // double tap: one attempt only
       inFlightRef.current = true;
-      // A new tap supersedes an earlier unknown outcome; its key (kept in
-      // attemptRef) still makes the backend replay that same attempt.
+      const epoch = epochRef.current;
+      const live = () => mountedRef.current && epochRef.current === epoch;
+      // A new tap supersedes an earlier unknown outcome; its key (kept per
+      // package) still makes the backend replay that same attempt.
       confirmingRef.current = null;
       oneTimeUnknownRef.current = null;
       setState({
@@ -1029,14 +1115,14 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       });
       try {
         const kind = saleKindOf(pkg);
-        if (kind === "free") await claimFree(pkg);
-        else if (kind === "one_time") await buyOneTime(pkg);
-        else await buySubscription(pkg);
+        if (kind === "free") await claimFree(pkg, live);
+        else if (kind === "one_time") await buyOneTime(pkg, live);
+        else await buySubscription(pkg, live);
       } catch {
+        if (!live()) return;
         // Anything not mapped above (e.g. no secure random source for the key).
-        const ref = attemptRef.current
-          ? shortReference(attemptRef.current.key)
-          : null;
+        const key = attemptsRef.current.get(attemptId(pkg));
+        const ref = key ? shortReference(key) : null;
         const n: PackagePaymentNotice = {
           cause: "unexpected",
           message: PACKAGE_PAYMENT_COPY.unknown(ref),

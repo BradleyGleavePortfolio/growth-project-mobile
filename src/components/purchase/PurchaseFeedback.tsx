@@ -23,7 +23,7 @@ export interface PurchaseFeedbackProps {
   purchase: PackagePurchase;
   /** Leave the purchase surface (after success or the slow state). */
   onContinue: () => void;
-  /** Open the client's plan (SUBSCRIPTION_ALREADY_ACTIVE). */
+  /** Open the client's plan (already active, or to check where it stands). */
   onOpenPlan: (purchaseId: string | null) => void;
 }
 
@@ -50,7 +50,9 @@ export default function PurchaseFeedback({
         ? state.saleKind === "free"
           ? PACKAGE_PAYMENT_COPY.confirmingFree
           : state.saleKind === "one_time"
-            ? PACKAGE_PAYMENT_COPY.confirming
+            ? state.checking
+              ? PACKAGE_PAYMENT_COPY.checkingPayment
+              : PACKAGE_PAYMENT_COPY.confirming
             : PACKAGE_PAYMENT_COPY.confirmingPlan
         : null;
 
@@ -183,7 +185,7 @@ export default function PurchaseFeedback({
               testID="payment-check-again"
             />
           ) : null}
-          {state.alreadyActive ? (
+          {state.alreadyActive || notice.openPlan ? (
             <Secondary
               label={PACKAGE_PAYMENT_COPY.openPlan}
               onPress={() =>

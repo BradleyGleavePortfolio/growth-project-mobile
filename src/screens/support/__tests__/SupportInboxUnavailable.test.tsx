@@ -45,7 +45,7 @@ describe('SupportInboxScreen when live chat is unavailable', () => {
     await fireEvent.press(utils.getByTestId('support-email'));
     await waitFor(() => utils.getByTestId('support-email-fallback'));
     expect(utils.getByTestId('support-email-fallback-status').props.children).toBe(
-      'This phone could not open an email app. Copy the address below and write to us from any email app or device.',
+      'This phone could not open an email app. Copy the address below and email support from any email app or device.',
     );
     const address = utils.getByTestId('support-email-fallback-address');
     expect(address.props.selectable).toBe(true);

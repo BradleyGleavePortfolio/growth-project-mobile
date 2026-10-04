@@ -34,6 +34,11 @@ export interface PurchasablePackage {
   oneTimeCents: number;
   /** Free trial before the first charge (pure renewing packages only). */
   trialDays: number;
+  /**
+   * B-343-4: the first-charge instant the backend already pinned for this
+   * client's trial (a resumed checkout). Shown instead of now + trialDays.
+   */
+  trialEndsAt?: string | null;
 }
 
 export type SaleKind = "subscription" | "one_time" | "free";
@@ -221,7 +226,8 @@ export function planTerms(
     `Renews automatically at ${amount} ${cadence} until you cancel. ` +
     "Cancel anytime in Membership; you keep the plan until the end of the period you paid for.";
   if (pkg.trialDays > 0) {
-    const parsed = trialEndsAt ? new Date(trialEndsAt) : null;
+    const pinned = trialEndsAt ?? pkg.trialEndsAt ?? null;
+    const parsed = pinned ? new Date(pinned) : null;
     const firstDate =
       parsed && !Number.isNaN(parsed.getTime())
         ? parsed
@@ -307,6 +313,8 @@ export interface IntentTerms {
   firstChargeCents: number | null;
   oneTimeCents: number | null;
   trialDays: number | null;
+  /** The first-charge instant of the trial the backend set (setup mode). */
+  trialEndsAt?: string | null;
 }
 
 /** What the client is told is charged today for this package. */
@@ -325,10 +333,13 @@ export function reconcileIntentTerms(
   pkg: PurchasablePackage,
   plan: IntentTerms,
   mode: "payment" | "setup" | "none",
+  now: Date = new Date(),
 ): {
   adopted: PurchasablePackage;
   changed: boolean;
   trialRemoved: boolean;
+  /** B-343-4: the pinned first-charge date is not the date the client saw. */
+  trialDateMoved: boolean;
   /** Today's charge does not follow from the answered terms: never open a sheet. */
   inconsistent: boolean;
 } {
@@ -364,6 +375,22 @@ export function reconcileIntentTerms(
         : pkg.oneTimeCents,
     trialDays,
   };
+  // B-343-4: a resumed trial keeps the end date pinned when its checkout first
+  // opened. The client consents to a calendar date, so compare dates as shown.
+  const pinned =
+    mode === "setup" && trialDays > 0 && plan.trialEndsAt
+      ? new Date(plan.trialEndsAt)
+      : null;
+  let trialDateMoved = false;
+  if (pinned && !Number.isNaN(pinned.getTime())) {
+    const shownIso = pkg.trialEndsAt ? new Date(pkg.trialEndsAt) : null;
+    const shown =
+      shownIso && !Number.isNaN(shownIso.getTime())
+        ? shownIso
+        : trialFirstChargeDate(pkg.trialDays, now);
+    trialDateMoved = formatPlanDate(pinned) !== formatPlanDate(shown);
+    adopted.trialEndsAt = plan.trialEndsAt;
+  }
   // Today's charge follows from the terms; a mismatch is a broken answer, not
   // a change to review (reviewing it again would show the same terms).
   const inconsistent =
@@ -375,11 +402,13 @@ export function reconcileIntentTerms(
     adopted.interval !== pkg.interval ||
     adopted.intervalCount !== pkg.intervalCount ||
     adopted.oneTimeCents !== pkg.oneTimeCents ||
-    adopted.trialDays !== pkg.trialDays;
+    adopted.trialDays !== pkg.trialDays ||
+    trialDateMoved;
   return {
     adopted,
     changed,
     trialRemoved: pkg.trialDays > 0 && adopted.trialDays === 0,
+    trialDateMoved,
     inconsistent,
   };
 }
