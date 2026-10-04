@@ -685,7 +685,10 @@ describe('APPLE_FALLBACK: Apple’s current names and steps (B-PRIV-FU-117)', ()
   });
 
   it('gives earlier iOS versions and other devices the web steps', () => {
-    const web = APPLE_FALLBACK.split('. ').filter((sentence) => sentence.includes('account.apple.com'));
+    // Match the phrase, not a bare host name (CodeQL js/incomplete-url-substring-sanitization).
+    const web = APPLE_FALLBACK.split('. ').filter((sentence) =>
+      sentence.includes('sign in at account.apple.com, go to'),
+    );
     expect(web).toHaveLength(1);
     expect(web[0]).toMatch(/^On an earlier version of iOS, or on any other device, /);
     expect(web[0]).toMatch(/Sign-In & Security/);
