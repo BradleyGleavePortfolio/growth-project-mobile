@@ -14,8 +14,10 @@ jest.mock('expo-constants', () => ({
   default: { expoConfig: { extra: { healthConnectEnabled: true } } },
 }));
 jest.mock('../utils/logger', () => ({ logger: { warn: jest.fn(), log: jest.fn(), error: jest.fn() } }));
-let mockSignedIn = 'user-a';
-jest.mock('../lib/userCache', () => ({ readUserCache: jest.fn(async () => ({ id: mockSignedIn })) }));
+let mockSignedIn: string | null = 'user-a';
+jest.mock('../lib/userCache', () => ({
+  readUserCache: jest.fn(async () => (mockSignedIn == null ? null : { id: mockSignedIn })),
+}));
 const mockDisconnect = jest.fn();
 jest.mock('../api/wearablesConnectionsApi', () => ({
   wearablesConnectionsApi: { disconnect: (...args: unknown[]) => mockDisconnect(...args) },
@@ -115,6 +117,17 @@ describe('useDisconnectProvider: on-device cleanup', () => {
     expect((await getLocalAuthorization('user-b', scope.source))?.connectionId).toBe('conn-b');
     expect(invalidate).not.toHaveBeenCalled();
     expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('with no readable session, a current Disconnect still retires the source (Sol H6 probe)', async () => {
+    await recordLocalAuthorization(scope);
+    mockSignedIn = null;
+    const { result } = await disconnectHook();
+    await act(async () => {
+      await result.current.mutateAsync('SAMSUNG_HEALTH');
+    });
+    expect(mockDisconnect).toHaveBeenCalledWith('HEALTH_CONNECT');
+    await waitFor(async () => expect(await getLocalAuthorization('user-a', scope.source)).toBeNull());
   });
 
   it('a newer Connect by the same person during the Disconnect is kept', async () => {

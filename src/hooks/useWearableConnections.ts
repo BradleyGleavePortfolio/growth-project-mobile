@@ -23,6 +23,7 @@ import { Platform } from 'react-native';
 import {
   getLocalAuthorization,
   retireOnDeviceSource,
+  retireOnDeviceState,
   type OnDeviceSource,
 } from '../services/health/onDeviceState';
 import {
@@ -137,6 +138,9 @@ function phoneSource(): OnDeviceSource | null {
  *   every running on-device read stops synchronously, before any cleanup
  *   await: no further native page, ingest request or progress write.
  * - Sol B-362-1 / C-362-1: a failed cleanup logs a fixed class only.
+ * - Sol H6 probe: when the person is unknown (no readable session cache), a
+ *   current Disconnect retires the source for every account on this phone,
+ *   so Disconnect still stops reading.
  */
 export function useDisconnectProvider() {
   const qc = useQueryClient();
@@ -150,17 +154,19 @@ export function useDisconnectProvider() {
       const grant =
         userId != null && source != null ? await getLocalAuthorization(userId, source) : null;
       const result = await wearablesConnectionsApi.disconnect(provider);
-      const retire = () =>
+      const retireOwn = () =>
         userId != null && source != null
           ? retireOnDeviceSource(userId, source, grant?.grantedAt ?? null)
           : Promise.resolve();
       if (currentAuthGeneration() !== generation) {
         // Stale: only the originating person's own records are retired.
-        void retire().catch(() => undefined);
+        void retireOwn().catch(() => undefined);
         return result;
       }
       if (source != null && source === phoneSource()) stopOnDeviceHealthWork();
       const live = currentAuthGeneration(); // the stop above moves it
+      const retire = () =>
+        source != null && userId == null ? retireOnDeviceState(source) : retireOwn();
       void retire()
         .catch((err: unknown) => {
           if (currentAuthGeneration() !== live) return;
