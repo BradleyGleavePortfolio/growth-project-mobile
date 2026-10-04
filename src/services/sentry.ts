@@ -158,6 +158,42 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
 }
 
 /**
+ * Strip what can identify a person from one event: the signed-in user (the
+ * account id set app-wide by setSentryUser), request data and breadcrumbs
+ * (HTTP and navigation breadcrumbs can carry URLs).
+ */
+export function stripPersonalData<E extends { user?: unknown; request?: unknown; breadcrumbs?: unknown }>(
+  event: E,
+): E {
+  delete event.user;
+  delete event.request;
+  delete event.breadcrumbs;
+  return event;
+}
+
+/**
+ * Like captureError, but the event carries no personal data: stripPersonalData
+ * runs as a scope event processor, after the SDK's own processors (including
+ * the native device-context one that copies the native user), so the
+ * app-wide user tag is not attached. Context values must already be free of
+ * personal data. Used where the report must not identify the person (Trust &
+ * Privacy link failures, OR-112-15).
+ */
+export function captureErrorWithoutPii(err: unknown, context: Record<string, unknown>): void {
+  if (!initialized) return;
+  Sentry.withScope((scope) => {
+    Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+    // The support reference a person quotes is searchable as a tag (same rule
+    // as captureError, B-326-4); it is a generated id, never personal data.
+    if (typeof context.reference === 'string' && context.reference) {
+      scope.setTag('reference', context.reference);
+    }
+    scope.addEventProcessor((event) => stripPersonalData(event));
+    Sentry.captureException(err);
+  });
+}
+
+/**
  * Tag the current user so events are attributable. Call after login.
  * Only the opaque account id is sent: the email is personal data and is
  * never attached (it would also reach native crash reports through scope
