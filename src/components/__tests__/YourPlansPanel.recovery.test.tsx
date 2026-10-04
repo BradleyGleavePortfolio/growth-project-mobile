@@ -39,7 +39,7 @@ const autoConfirm = () =>
   jest.spyOn(Alert, 'alert').mockImplementation((_t, _b, buttons) => {
     (buttons ?? []).find((b) => b.style === 'destructive')?.onPress?.();
   });
-const line = (r: ReturnType<typeof render>) => r.getByTestId(`your-plan-line-${ID}`).props.children;
+const line = (r: Awaited<ReturnType<typeof render>>) => r.getByTestId(`your-plan-line-${ID}`).props.children;
 
 beforeEach(() => {
   jest.clearAllMocks();
