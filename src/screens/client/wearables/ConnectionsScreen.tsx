@@ -161,7 +161,7 @@ export function buildRows(
     }
   }
 
-  const rows: ProviderRow[] = WEARABLE_PROVIDERS.map((provider) => {
+  const rowFor = (provider: WearableProvider): ProviderRow => {
     const conn = byProvider.get(provider);
     let status: BadgeTone = conn ? badgeTone(conn.status) : 'disconnected';
     if (
@@ -178,7 +178,14 @@ export function buildRows(
       status,
       lastSyncedAt: conn?.last_synced_at ?? null,
     };
-  });
+  };
+  // B-364-1: Samsung Health has no connection of its own (it shares through
+  // Health Connect), so its row mirrors the Health Connect row: the same
+  // status, sync time and action. A stored SAMSUNG_HEALTH row is never shown
+  // as an active source.
+  const rows: ProviderRow[] = WEARABLE_PROVIDERS.map((provider) =>
+    provider === 'SAMSUNG_HEALTH' ? { ...rowFor('HEALTH_CONNECT'), provider } : rowFor(provider),
+  );
 
   const tier = (s: BadgeTone): number =>
     s === 'connected' ? 0 : s === 'error' || s === 'expired' || s === 'notSyncing' ? 1 : 2;
@@ -242,6 +249,12 @@ function ConnectionRow({
         </View>
         {row.status === 'notSyncing' && (
           <Text style={styles.synced}>{notSyncingHereCopy(config.displayName)}</Text>
+        )}
+        {row.provider === 'SAMSUNG_HEALTH' && (
+          <Text style={styles.synced}>
+            Samsung Health shares its data through Health Connect, so this row shows the Health
+            Connect connection.
+          </Text>
         )}
       </View>
 
@@ -335,6 +348,7 @@ export default function ConnectionsScreen() {
     const provider = confirmProvider;
     const name = configFor(provider).displayName;
     setDisconnectError(null);
+    // For the Samsung Health row the hook disconnects Health Connect (B-364-1).
     disconnect.mutate(provider, {
       onSuccess: () => {
         setConfirmProvider(null);

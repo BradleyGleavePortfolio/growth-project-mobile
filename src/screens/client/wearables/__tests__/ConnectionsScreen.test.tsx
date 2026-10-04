@@ -62,8 +62,10 @@ jest.mock('../../../../lib/consultation/report', () => ({
   reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
 }));
 
-import ConnectionsScreen from '../ConnectionsScreen';
-import { WEARABLE_PROVIDERS } from '../../../../api/wearablesConnectionsApi';
+import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
+import { configFor, WEARABLE_PROVIDERS } from '../../../../api/wearablesConnectionsApi';
+import { disconnectConfirmCopy } from '../disconnectCopy';
+import { emptyImportMessage } from '../onDeviceCopy';
 
 function connection(
   provider: string,
@@ -358,5 +360,54 @@ describe('ConnectionsScreen — not syncing on this phone (B-317-5)', () => {
     await render(<ConnectionsScreen />);
     expect(screen.getByLabelText('Disconnect Apple Health')).toBeTruthy();
     expect(screen.queryByText('Not syncing here')).toBeNull();
+  });
+});
+
+// B-364-1 (Sol and Opus H6 probes, runs 37220265977 and 37220573091): Samsung
+// Health has no connection of its own; it shares through Health Connect. Its
+// row mirrors Health Connect and a stored SAMSUNG_HEALTH row is never active.
+describe('ConnectionsScreen — Samsung Health row (B-364-1)', () => {
+  const hc = connection('HEALTH_CONNECT', 'connected', '2026-05-31T09:00:00.000Z');
+  const legacy = connection('SAMSUNG_HEALTH', 'connected', '2026-05-31T09:00:00.000Z');
+  const here = { provider: 'HEALTH_CONNECT' as const, connectionId: hc.id };
+  const none = { provider: 'HEALTH_CONNECT' as const, connectionId: null };
+  type Conns = Parameters<typeof buildRows>[0];
+
+  it.each([
+    ['nothing connected', [], none],
+    ['Health Connect syncing here', [hc], here],
+    ['Health Connect not syncing here', [hc], none],
+    ['a stored Samsung row only', [legacy], none],
+    ['a stored Samsung row and Health Connect', [legacy, hc], here],
+  ])('mirrors Health Connect: %s', (_case, conns, local) => {
+    const rows = buildRows(conns as Conns, local);
+    const samsung = rows.find((r) => r.provider === 'SAMSUNG_HEALTH');
+    expect({ ...samsung, provider: 'HEALTH_CONNECT' }).toEqual(
+      rows.find((r) => r.provider === 'HEALTH_CONNECT'),
+    );
+  });
+
+  it('after a Samsung Health connect: Connected and Disconnect, which disconnects Health Connect', async () => {
+    mockUseWearableConnections.mockReturnValue(queryResult({ data: [hc] }));
+    mockLocalAuth.mockReturnValue({ data: { userId: 'u1', source: 'HEALTH_CONNECT', connectionId: hc.id } });
+    await render(<ConnectionsScreen />);
+    expect(screen.getByLabelText(/^Samsung Health, Connected/)).toBeTruthy();
+    expect(screen.queryByLabelText('Connect Samsung Health')).toBeNull();
+    expect(screen.getByText(/so this row shows the Health Connect connection/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Disconnect Samsung Health'));
+    expect(screen.getByText(/so this disconnects Health Connect/)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Disconnect Samsung Health now'));
+    // The hook disconnects HEALTH_CONNECT for it (useWearableConnections.disconnect.test).
+    expect(mockDisconnectMutate).toHaveBeenCalledWith('SAMSUNG_HEALTH', expect.anything());
+  });
+
+  it('copy names Health Connect and every app; empty import names the Samsung setting (C-364-2)', () => {
+    expect(disconnectConfirmCopy('SAMSUNG_HEALTH', 'Samsung Health').body).toContain('every other app');
+    expect(configFor('SAMSUNG_HEALTH').dataDescription).toBe(
+      'The Growth Project reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
+    );
+    const empty = emptyImportMessage('SAMSUNG_HEALTH', 'Health Connect').text;
+    expect(empty).toContain('Samsung Health is connected through Health Connect');
+    expect(empty).toContain('In Samsung Health, open Settings, then Health Connect');
   });
 });

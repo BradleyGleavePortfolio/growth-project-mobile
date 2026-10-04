@@ -140,6 +140,8 @@ export default function ConnectProviderSheet({
   } | null>(null);
   const [requestingOnDevice, setRequestingOnDevice] = useState(false);
   const [importing, setImporting] = useState(false);
+  /** The source connected and the sheet stays open to explain (empty import). */
+  const [connectedNotice, setConnectedNotice] = useState(false);
 
   /**
    * S14 round 3 (Sol A-317-1): the session fence for the current on-device
@@ -177,6 +179,7 @@ export default function ConnectProviderSheet({
     setRetry('connect');
     setCtaOverride(undefined);
     setResumeTarget(null);
+    setConnectedNotice(false);
     // B-317-11: busy state belongs to the attempt; a run that is still
     // settling for the previous sheet never keeps this one disabled.
     setImporting(false);
@@ -294,8 +297,10 @@ export default function ConnectProviderSheet({
       emitTutorialSignal('wearable_connected');
       if (firstRun && outcome.postedCount === 0) {
         // Connected, nothing to bring in (S-WEAR-3): say so and where to check,
-        // instead of closing as if data had arrived.
-        onConnected?.();
+        // instead of closing as if data had arrived. B-362-1 / Sol B-362-4:
+        // the host's onConnected closes the sheet, so it is not called; the
+        // list was re-read above and the person closes the sheet.
+        setConnectedNotice(true);
         showMessage(emptyImportMessage(target, name));
         return;
       }
@@ -361,7 +366,7 @@ export default function ConnectProviderSheet({
 
   const handleOnDeviceConnect = useCallback(
     async (target: WearableProvider, epoch: number) => {
-      const name = configFor(target).displayName;
+      const name = messageNameFor(target);
       // Sol B-317-6: the attempt is live only while the sheet is mounted,
       // visible and showing this provider (the epoch moves on any of those).
       const current = () => mountedRef.current && epochRef.current === epoch;
@@ -454,7 +459,7 @@ export default function ConnectProviderSheet({
 
   const handleResume = useCallback(async () => {
     if (provider == null || resumeTarget == null) return;
-    const name = configFor(provider).displayName;
+    const name = messageNameFor(provider);
     const fence = attemptRef.current;
     if (fence == null) {
       showMessage({
@@ -484,7 +489,7 @@ export default function ConnectProviderSheet({
 
   const handleContinue = useCallback(async () => {
     if (provider == null) return;
-    const name = configFor(provider).displayName;
+    const name = messageNameFor(provider);
     if (isHealthConnectProviderDisabled(provider)) {
       setError(HEALTH_CONNECT_DISABLED_MESSAGE);
       setRetry('none');
@@ -511,6 +516,7 @@ export default function ConnectProviderSheet({
     setRetry('connect');
     setCtaOverride(undefined);
     setResumeTarget(null);
+    setConnectedNotice(false);
 
     setRequestingOnDevice(true);
     try {
@@ -546,6 +552,9 @@ export default function ConnectProviderSheet({
   // attempts alike). The shared mint mutation's isPending is not used: a
   // mint still pending for a closed sheet must not disable the next one.
   const continuing = requestingOnDevice;
+  // A connected source is closed, not cancelled (Sol B-362-4).
+  const dismissLabel =
+    buildDisabled || !showCta || resumeTarget != null || connectedNotice ? 'Close' : 'Cancel';
 
   return (
     <Modal
@@ -590,9 +599,11 @@ export default function ConnectProviderSheet({
                 <View
                   style={styles.note}
                   accessibilityRole="text"
-                  accessibilityLabel={onDeviceDisclosure(config.displayName)}
+                  accessibilityLabel={onDeviceDisclosure(config.displayName, config.provider)}
                 >
-                  <Text style={styles.noteText}>{onDeviceDisclosure(config.displayName)}</Text>
+                  <Text style={styles.noteText}>
+                    {onDeviceDisclosure(config.displayName, config.provider)}
+                  </Text>
                 </View>
               )}
 
@@ -638,11 +649,9 @@ export default function ConnectProviderSheet({
                 style={styles.cancel}
                 onPress={onClose}
                 accessibilityRole="button"
-                accessibilityLabel={buildDisabled || !showCta || resumeTarget != null ? 'Close' : 'Cancel'}
+                accessibilityLabel={dismissLabel}
               >
-                <Text style={styles.cancelText}>
-                  {buildDisabled || !showCta || resumeTarget != null ? 'Close' : 'Cancel'}
-                </Text>
+                <Text style={styles.cancelText}>{dismissLabel}</Text>
               </Pressable>
             </>
           )}
@@ -653,17 +662,31 @@ export default function ConnectProviderSheet({
 }
 
 /**
+ * B-364-1: the name on-device messages use. Samsung Health shares its data
+ * through Health Connect, so what connects, asks and reads is Health Connect.
+ */
+function messageNameFor(provider: WearableProvider): string {
+  return provider === 'SAMSUNG_HEALTH' ? 'Health Connect' : configFor(provider).displayName;
+}
+
+/**
  * S14 (C-317-2): what Continue does, shown BEFORE the permission prompt.
  * Plain copy consistent with the approved Apple Health usage string in
  * app.json (coach personalizes training, recovery and check-ins). This is the
  * required data collection for the feature, not the optional AI processing
- * choice (consent box 2), which this sheet does not change.
+ * choice (consent box 2), which this sheet does not change. B-364-1: for
+ * Samsung Health, Health Connect asks, and every app's Health Connect data
+ * is read, not only Samsung Health's.
  */
-export function onDeviceDisclosure(displayName: string): string {
+export function onDeviceDisclosure(displayName: string, provider?: WearableProvider): string {
+  const data =
+    provider === 'SAMSUNG_HEALTH'
+      ? 'Health Connect data, from Samsung Health and every other app that shares with Health Connect,'
+      : `${displayName} data,`;
   return (
-    `When you continue, ${displayName} asks for permission on this phone. ` +
-    `The Growth Project then brings in your last 30 days of ${displayName} data, and new data ` +
-    `each time you open Health, so your coach can personalize your training, ` +
+    `When you continue, ${provider === 'SAMSUNG_HEALTH' ? 'Health Connect' : displayName} asks ` +
+    `for permission on this phone. The Growth Project then brings in your last 30 days of ${data} ` +
+    `and new data each time you open Health, so your coach can personalize your training, ` +
     `recovery, and check-ins. Nothing is read or shared until you allow it.`
   );
 }
