@@ -317,9 +317,49 @@ describe('WearablesShell', () => {
     mockNavigate.mockClear();
     await render(<WearablesShell />);
     await waitFor(() => expect(screen.getByText(/no longer linked to your account/)).toBeTruthy());
+    // C-362-2: the copy names the button this screen shows.
+    expect(screen.getByText(/Tap Reconnect to connect Apple Health again\./)).toBeTruthy();
+    expect(screen.queryByText(/Tap Continue/)).toBeNull();
     await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
     expect(mockNavigate).toHaveBeenCalledWith('Connections');
   });
+
+  // Opus B-362-2 (probe run 37220188407): after Open Health Connect the
+  // notice names a step that exists here, and Try again re-runs the refresh.
+  describe('B-362-2: every Health Connect permission off', () => {
+    beforeEach(async () => {
+      mockDeviceSource = 'HEALTH_CONNECT';
+      const [row] = mockUseWearableConnections().data;
+      mockUseWearableConnections.mockReturnValue({ data: [{ ...row, provider: 'HEALTH_CONNECT' }] });
+      const { HealthConnectPermissionDeniedError } = jest.requireActual(
+        '../../../../services/health/healthConnect/errors',
+      );
+      mockImportHistory.mockRejectedValue(new HealthConnectPermissionDeniedError(['Steps']));
+      mockOpenHcPermissions.mockReset();
+    });
+
+    it('after Open Health Connect, Try again exists and re-runs the refresh', async () => {
+      mockOpenHcPermissions.mockResolvedValue(true);
+      await render(<WearablesShell />);
+      await fireEvent.press(await screen.findByLabelText('Open Health Connect'));
+      expect(
+        await screen.findByText(
+          'When Health Connect access is allowed for The Growth Project, tap Try again to bring in new data.',
+        ),
+      ).toBeTruthy();
+      await fireEvent.press(screen.getByLabelText('Try again to sync Health Connect'));
+      await waitFor(() => expect(mockImportHistory).toHaveBeenCalledTimes(2));
+    });
+
+    it('when Health Connect does not open, the notice says so and offers Try again', async () => {
+      mockOpenHcPermissions.mockResolvedValue(false);
+      await render(<WearablesShell />);
+      await fireEvent.press(await screen.findByLabelText('Open Health Connect'));
+      expect(await screen.findByText(/^Health Connect didn't open\. Open Settings/)).toBeTruthy();
+      expect(screen.getByLabelText('Try again to sync Health Connect')).toBeTruthy();
+    });
+  });
+
   describe('C-317-a: a refresh that settles late writes nothing', () => {
     function heldRefresh() {
       const held: { resolve: (v: unknown) => void; reject: (e: unknown) => void } = {

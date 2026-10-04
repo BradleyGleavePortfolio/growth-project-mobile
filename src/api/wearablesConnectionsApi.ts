@@ -158,7 +158,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Samsung Health',
     icon: '',
     dataDescription:
-      "We'll read your steps, heart rate, body composition and sleep from Samsung Health on this device.",
+      'The Growth Project reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   GARMIN: {

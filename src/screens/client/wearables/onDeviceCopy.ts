@@ -333,6 +333,18 @@ export function returnFromSettingsMessage(name: string): OnDeviceMessage {
  * an app what was declined), so the copy says where to check.
  */
 export function emptyImportMessage(provider: WearableProvider, name: string): OnDeviceMessage {
+  if (provider === 'SAMSUNG_HEALTH') {
+    // C-364-2: Samsung Health shares only what its own Health Connect setting allows.
+    return {
+      text:
+        `Samsung Health is connected through Health Connect, but there was no data from the last 30 ` +
+        `days to bring in. In Samsung Health, open Settings, then Health Connect, and let Samsung ` +
+        `Health share its data. If you turned some data types off for The Growth Project, tap Open ` +
+        `Health Connect, choose App permissions, then The Growth Project, and turn them on. New data ` +
+        `comes in each time you open Health.`,
+      action: 'open_settings',
+    };
+  }
   if (readsThroughHealthConnect(provider)) {
     return {
       text:

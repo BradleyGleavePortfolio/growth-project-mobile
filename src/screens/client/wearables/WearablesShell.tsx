@@ -85,6 +85,32 @@ export function refreshErrorClass(err: unknown): RefreshErrorClass {
   return 'error';
 }
 
+/**
+ * C-362-2: on this screen a Connect-again message's button reads Reconnect
+ * (it opens Connections), so the copy names that button.
+ */
+function healthScreenMessage(message: OnDeviceMessage): OnDeviceMessage {
+  if (message.action !== 'connect') return message;
+  return { ...message, text: message.text.replace(/\b([Tt])ap Continue\b/g, '$1ap Reconnect') };
+}
+
+/**
+ * Opus B-362-2: after Health Connect settings or the Play Store opened from
+ * the notice (or failed to open), the next step is Try again on this screen.
+ */
+function returnToHealthMessage(target: 'settings' | 'store', opened: boolean, name: string) {
+  if (opened) {
+    return target === 'settings'
+      ? `When ${name} access is allowed for The Growth Project, tap Try again to bring in new data.`
+      : 'When Health Connect is installed or updated, tap Try again to bring in new data.';
+  }
+  return target === 'settings'
+    ? `Health Connect didn't open. Open Settings on this phone, search for Health Connect, choose ` +
+        `App permissions, then The Growth Project, and allow access. Then come back and tap Try again.`
+    : `The Play Store didn't open. Open the Play Store, search for Health Connect and install or ` +
+        `update it, then come back and tap Try again.`;
+}
+
 export default function WearablesShell() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, HealthRouteParams>, string>>();
@@ -168,8 +194,9 @@ export default function WearablesShell() {
         // C-317-b: a closed class only, never the message, body or the
         // (mutable) Error.name.
         logger.warn('[wearables] on-device refresh failed', { error: refreshErrorClass(err) });
-        const message = connectFailureMessage(err, deviceName);
-        if (message != null) {
+        const failure = connectFailureMessage(err, deviceName);
+        if (failure != null) {
+          const message = healthScreenMessage(failure);
           setNotice({ kind: 'retry', text: message.text, action: message.action, cta: message.cta });
         }
       });
@@ -200,12 +227,20 @@ export default function WearablesShell() {
         void signOut();
         return;
       }
-      if (action === 'open_settings') {
-        void openHealthConnectPermissions();
-        return;
-      }
-      if (action === 'open_store') {
-        void openHealthConnectStore();
+      if (action === 'open_settings' || action === 'open_store') {
+        // Opus B-362-2: the notice then names a step that exists here (Try
+        // again re-runs the refresh), or says the app did not open. Only for
+        // the run that showed it, on this screen, in this session.
+        const target = action === 'open_settings' ? 'settings' : 'store';
+        const run = latestRunRef.current;
+        const generation = currentAuthGeneration();
+        const open = target === 'settings' ? openHealthConnectPermissions : openHealthConnectStore;
+        void open().then((opened) => {
+          if (!mountedRef.current || latestRunRef.current !== run) return;
+          if (currentAuthGeneration() !== generation) return;
+          const text = returnToHealthMessage(target, opened, deviceName);
+          setNotice({ kind: 'retry', text, action: 'resume' });
+        });
         return;
       }
       if (action === 'connect') {
@@ -216,7 +251,7 @@ export default function WearablesShell() {
       }
       retryRefresh();
     },
-    [retryRefresh, goToConnections],
+    [retryRefresh, goToConnections, deviceName],
   );
 
 

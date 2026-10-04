@@ -31,6 +31,17 @@ export function disconnectConfirmCopy(
   provider: WearableProvider,
   name: string,
 ): DisconnectConfirmCopy {
+  if (provider === 'SAMSUNG_HEALTH') {
+    // B-364-1: this row disconnects Health Connect, which Samsung Health shares through.
+    return {
+      title: `Disconnect ${name}?`,
+      body:
+        `${name} shares its data through Health Connect, so this disconnects Health Connect. The ` +
+        `Growth Project stops bringing in new Health Connect data from this phone, from ${name} and ` +
+        `every other app, and your coach stops seeing it. Data already shared stays with your coach. ` +
+        `You can connect again at any time.`,
+    };
+  }
   const stops = isOnDevice(provider)
     ? `The Growth Project stops bringing in new ${name} data from this phone, and your coach stops seeing new ${name} data.`
     : `The Growth Project stops receiving new ${name} data, and your coach stops seeing new ${name} data.`;
