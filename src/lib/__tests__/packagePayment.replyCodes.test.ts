@@ -183,3 +183,48 @@ describe('B-343-4 a resumed trial keeps its pinned first-charge date', () => {
     expect(reconcileIntentTerms(trial, plan(null), 'setup', now).changed).toBe(false);
   });
 });
+
+describe('B-342-1 (Sol, 119) a package refusal proves nothing about an earlier same-key attempt', () => {
+  // Production checks availability before the idempotency key lookup, so an
+  // archived package answers PACKAGE_NOT_FOUND even when the same key's
+  // earlier payment went through.
+  const refusal = (data: Record<string, unknown> = {}) =>
+    ({ response: { status: 404, data: { error: 'PACKAGE_NOT_FOUND', ...data } } });
+
+  it.each([['payment_intent'], ['subscription_intent']] as const)(
+    '%s: no charge claim; key kept; plan, support and the attempt reference offered',
+    (step) => {
+      const n = describeBackendFailure(refusal({ request_id: 'ffee0011-2233' }), step, 'def01234');
+      expect(n.cause).toBe('package_unavailable');
+      expect(n.message).toMatch(/^This plan is no longer offered, so it cannot be started from here\./);
+      expect(n.message).not.toMatch(NO_CHARGE);
+      expect(n.message).toContain('quote reference def01234');
+      expect(n).toEqual(expect.objectContaining({ support: true, openPlan: true, reference: 'def01234', reload: true }));
+      expect(n.retireKey).toBeUndefined();
+      expect(n.completed).toBeUndefined();
+      expect(mockCapture).not.toHaveBeenCalled();
+    },
+  );
+
+  it('share link: the same truth, its own wording, no reload', () => {
+    const n = describeBackendFailure(refusal(), 'payment_intent', 'def01234', { surface: 'share_link' });
+    expect(n.message).toMatch(/^This plan cannot be bought from this account\./);
+    expect(n.message).not.toMatch(NO_CHARGE);
+    expect(n).toEqual(expect.objectContaining({ support: true, openPlan: true, reference: 'def01234' }));
+    expect(n.reload).toBeUndefined();
+    expect(n.retireKey).toBeUndefined();
+  });
+
+  it('without an attempt key the server reference is used, and none at all still reads cleanly', () => {
+    expect(describeBackendFailure(refusal({ request_id: 'ffee0011-2233' }), 'payment_intent', null).reference).toBe('ffee0011');
+    const bare = describeBackendFailure(refusal(), 'payment_intent', null);
+    expect(bare.reference).toBeNull();
+    expect(bare.message).toBe(PACKAGE_PAYMENT_COPY.packageUnavailable(null));
+    expect(bare.message).not.toMatch(/reference|undefined|null/);
+  });
+
+  it('controls: authoritative replay answers keep their meaning', () => {
+    expect(describeBackendFailure(coded(409, 'PAYMENT_ALREADY_COMPLETE'), 'payment_intent', 'def01234').completed).toBe(true);
+    expect(describeBackendFailure(coded(409, 'PAYMENT_CHECKOUT_CLOSED'), 'payment_intent', 'def01234').retireKey).toBe(true);
+  });
+});
