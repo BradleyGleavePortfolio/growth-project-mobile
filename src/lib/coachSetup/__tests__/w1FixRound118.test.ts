@@ -215,6 +215,28 @@ describe("B-345-1 / B-345-2: the PATCH carries the billing the coach picked", ()
     );
   });
 
+  it("recurring cadence must match too: yearly sent, monthly kept, fails closed", async () => {
+    patch().mockImplementation((async () => ({
+      data: { ...stored },
+    })) as never);
+    const err = await coachPackagesApi
+      .update("pkg_1", { ...monthly, billingInterval: "yearly" })
+      .catch((e: unknown) => e);
+    expect(
+      (err as { response?: { data?: { field?: string } } }).response?.data
+        ?.field,
+    ).toBe("billing_interval");
+  });
+
+  it("one-time: a leftover cadence on the row is not a mismatch (billing_type decides)", async () => {
+    patch().mockImplementation((async (_u: string, body: Row) => ({
+      data: { ...stored, ...body, billing_type: "one_time", interval: "month" },
+    })) as never);
+    await expect(
+      coachPackagesApi.update("pkg_1", { ...free }),
+    ).resolves.toMatchObject({ data: { billingInterval: "one_time" } });
+  });
+
   it("control: a name-only edit sends no billing fields and is not checked", async () => {
     patch().mockResolvedValueOnce({ data: {} } as never);
     await coachPackagesApi.update("pkg_1", { title: "Renamed" });

@@ -480,8 +480,9 @@ export const PACKAGE_UPDATE_NOT_APPLIED = 'PACKAGE_UPDATE_NOT_APPLIED';
 
 /**
  * B-345-2: the PATCH answer is the package as the server now stores it. When
- * the app sent a billing choice, the row must carry exactly that price, billing
- * type and cadence before anything reports it as saved. A row that disagrees,
+ * the app sent a billing choice, the row must carry exactly that price and
+ * billing type (and, for a recurring price, that cadence) before anything
+ * reports it as saved. A row that disagrees,
  * or that does not say, fails closed with PACKAGE_UPDATE_NOT_APPLIED (an older
  * server that ignores a field must never look like a saved change).
  */
@@ -495,10 +496,9 @@ export function pricingAppliedMismatch(
     return 'amount_cents';
   }
   if (row.billing_type !== sent.billing_type) return 'billing_type';
-  if (sent.billing_type === 'one_time') {
-    const cadence = row.billing_interval ?? row.interval ?? null;
-    return cadence === null ? null : 'billing_interval';
-  }
+  // One-time: billing_type alone decides how a client pays; a leftover cadence
+  // on the row is never charged (the server also clears it, B-629-4).
+  if (sent.billing_type === 'one_time') return null;
   if ((row.billing_interval ?? row.interval) !== sent.billing_interval) {
     return 'billing_interval';
   }
