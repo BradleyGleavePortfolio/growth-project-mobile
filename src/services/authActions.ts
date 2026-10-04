@@ -21,7 +21,7 @@ import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
-import { ON_DEVICE_STATE_PREFIX } from './health/onDeviceState';
+import { retireOnDeviceStateAtSignOut } from './health/onDeviceState';
 import { stopOnDeviceHealthWork } from './health/sessionFence';
 import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
@@ -109,11 +109,6 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // inherit it and be handed a session that pairs into someone else's account.
   // Swept via the exported constant so the literal lives in one place.
   IMPORT_PAIRING_MIRROR_KEY_PREFIX,
-  // S14 (A-317-1 / B-317-1): on-device health Connect authorizations and
-  // per-account sync progress (`services/health/onDeviceState.ts`). Swept for
-  // every account on sign-out (and therefore after account deletion): the
-  // phone's health store must not be read again until someone taps Connect.
-  ON_DEVICE_STATE_PREFIX,
   // Legacy plaintext consultation drafts (first build of PR #310, keyed
   // `consultation_v1:<userId>`): health and screening answers must never
   // survive sign-out. Current drafts live in SecureStore and are purged by
@@ -300,6 +295,8 @@ export async function signOut(userId?: string | null): Promise<void> {
   // no new native page, record type, upload or progress write starts after
   // the person taps Log out (the `logout` event below comes much later).
   stopOnDeviceHealthWork();
+  // Sol B-362-7: health grants and progress leave through their own chain.
+  const healthStateRetired = retireOnDeviceStateAtSignOut();
 
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
@@ -394,6 +391,7 @@ export async function signOut(userId?: string | null): Promise<void> {
       // `logout` is emitted below. clearAllStorage() also wipes the namespace;
       // this is the explicit, mirror-aware path.
       clearUserCache(),
+      healthStateRetired,
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
       AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage
