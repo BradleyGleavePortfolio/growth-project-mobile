@@ -370,8 +370,9 @@ describe('one attempt, one key', () => {
 });
 
 describe('every backend code has its own calm copy and next action', () => {
-  const cases: Array<[string, number, string]> = [
-    ['PACKAGE_NOT_FOUND', 404, 'This plan is no longer offered, so nothing was charged. Pull down to see your coach’s current plans, or message your coach.'],
+  const cases: Array<[string, number, string | RegExp]> = [
+    // B-342-1 (Sol, 119): a refusal proves nothing about an earlier same-key attempt.
+    ['PACKAGE_NOT_FOUND', 404, /^This plan is no longer offered, so it cannot be started from here\. If an earlier payment for it did not show a clear result, open your plan in Membership to check it, or email support and quote reference [0-9a-f]{8}\. Pull down to see your coach’s current plans, or message your coach\.$/],
     ['CLIENT_NOT_FOUND', 404, 'Your account could not be found, so nothing was charged. Sign out, sign back in, then choose your plan.'],
     ['COACH_NOT_CONNECTED', 409, 'Your coach has not set up card payments yet, so this plan cannot start and nothing was charged. Message your coach, then choose the plan once they are set up.'],
     ['COACH_NOT_PAYOUT_READY', 409, 'Your coach cannot take card payments right now, so this plan cannot start and nothing was charged. Message your coach, then choose the plan once they are ready.'],
@@ -387,7 +388,8 @@ describe('every backend code has its own calm copy and next action', () => {
     await fireEvent.press(r.getByTestId('select-plan-btn'));
     await waitFor(() => expect(r.getByTestId('payment-error')).toBeTruthy());
     const text = r.getByTestId('payment-error').props.children as string;
-    expect(text).toBe(copy);
+    if (typeof copy === 'string') expect(text).toBe(copy);
+    else expect(text).toMatch(copy);
     expectCopyRules(text);
     expect(mockInitPaymentSheet).not.toHaveBeenCalled();
   });

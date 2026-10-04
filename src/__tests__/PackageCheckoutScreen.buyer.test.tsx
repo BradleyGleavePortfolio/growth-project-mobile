@@ -173,8 +173,9 @@ describe('PackageCheckoutScreen — buyer flow', () => {
     await waitFor(() => expect(getByText('Strength Builder')).toBeTruthy());
     await fireEvent.press(getByLabelText('Continue to payment'));
     await waitFor(() => expect(getByTestId('payment-error')).toBeTruthy());
-    expect(getByTestId('payment-error').props.children).toBe(
-      'This plan cannot be bought from this account. It is either no longer offered or it belongs to a coach you are not connected with. Nothing was charged. Message the coach who shared the link.',
+    // B-342-1 (Sol, 119): never a no-charge claim; plan check and support offered.
+    expect(getByTestId('payment-error').props.children).toMatch(
+      /^This plan cannot be bought from this account\. It is either no longer offered or it belongs to a coach you are not connected with\. If an earlier payment for it did not show a clear result, open your plan in Membership to check it, or email support and quote reference [0-9a-f]{8}\. Otherwise, message the coach who shared the link\.$/,
     );
     expect(mockInitPaymentSheet).not.toHaveBeenCalled();
   });
