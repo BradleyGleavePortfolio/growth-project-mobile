@@ -297,7 +297,19 @@ export async function signOut(userId?: string | null): Promise<void> {
   stopOnDeviceHealthWork();
   // Sol B-362-7: health grants and progress leave through their own chain.
   const healthStateRetired = retireOnDeviceStateAtSignOut();
+  try {
+    await signOutWhileHealthRetires(userId, healthStateRetired);
+  } finally {
+    // Sol B-362-9: even when the rest of sign-out throws, it settles only after
+    // the health retirement (which never rejects) has finished.
+    await healthStateRetired;
+  }
+}
 
+async function signOutWhileHealthRetires(
+  userId: string | null | undefined,
+  healthStateRetired: Promise<void>,
+): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
@@ -391,7 +403,6 @@ export async function signOut(userId?: string | null): Promise<void> {
       // `logout` is emitted below. clearAllStorage() also wipes the namespace;
       // this is the explicit, mirror-aware path.
       clearUserCache(),
-      healthStateRetired,
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
       AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage
@@ -407,6 +418,10 @@ export async function signOut(userId?: string | null): Promise<void> {
     ]);
   } catch (err) {
     logger.error('AuthActions', 'signOut: clear failed', err);
+  } finally {
+    // Sol B-362-9: a rejection above (clearUserCache, clearAllStorage, ...)
+    // never skips the health drain: `logout` is emitted only after it.
+    await healthStateRetired;
   }
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.
