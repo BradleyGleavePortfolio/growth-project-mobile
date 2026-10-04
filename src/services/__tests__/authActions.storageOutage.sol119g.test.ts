@@ -109,6 +109,47 @@ beforeEach(async () => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+it('one AsyncStorage mutation outage: completed actual signOut must not revive old consent after recovered storage and restart', async () => {
+  await recordLocalAuthorization(scope);
+  const grantKey = `${ON_DEVICE_STATE_PREFIX}auth:${scope.source}:${scope.userId}`;
+  const sessionKey = 'wearables_on_device_session';
+  const oldGrant = await AsyncStorage.getItem(grantKey);
+  const oldSession = await AsyncStorage.getItem(sessionKey);
+  expect(oldGrant).not.toBeNull();
+  expect(oldSession).not.toBeNull();
+  // One backing-store write outage, not three unrelated chance failures.
+  // Reads remain possible; the outage is gone before the next app lifetime.
+  const failure = new Error('synthetic backing-store mutation outage');
+  const set = jest.spyOn(AsyncStorage, 'setItem').mockRejectedValue(failure);
+  const remove = jest.spyOn(AsyncStorage, 'removeItem').mockRejectedValue(failure);
+  const removeMany = jest.spyOn(AsyncStorage, 'removeMany').mockRejectedValue(failure);
+  const logout = jest.fn();
+  authEvents.on('logout', logout);
+  try {
+    await expect(signOut(scope.userId)).resolves.toBeUndefined();
+    expect(logout).toHaveBeenCalledTimes(1);
+    expect(set).toHaveBeenCalledWith(sessionKey, expect.any(String));
+    expect(remove).toHaveBeenCalledWith(sessionKey);
+    expect(removeMany).toHaveBeenCalledWith(expect.arrayContaining([grantKey]));
+    expect(await getLocalAuthorization(scope.userId, scope.source)).toBeNull();
+  } finally {
+    authEvents.off('logout', logout);
+    jest.restoreAllMocks();
+  }
+  expect(await AsyncStorage.getItem(grantKey)).toBe(oldGrant);
+  expect(await AsyncStorage.getItem(sessionKey)).toBe(oldSession);
+  const cold = coldModules();
+  // This is not a cross-account claim.
+  expect(await cold.state.getLocalAuthorization('another-user', scope.source)).toBeNull();
+  const syncHealthConnect = jest.fn(async () => ({ normalizedCount: 0, complete: true }));
+  const result = await cold.sync.refreshOnDevice(scope.source, [row], {
+    readUserId,
+    syncHealthConnect,
+  });
+  expect({ kind: result.kind, syncCalls: syncHealthConnect.mock.calls.length })
+    .toEqual({ kind: 'not_authorized', syncCalls: 0 });
+});
+
 /**
  * Fresh JS module lifetime with the SAME disk service. This deliberately
  * resets signOutEpoch/authWrittenAt, not the stored keys. A positive control
