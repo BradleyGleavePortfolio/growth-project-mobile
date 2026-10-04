@@ -73,7 +73,7 @@ jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 
 // ─── Import after mocks ────────────────────────────────────────────────────────
 
-import DeleteAccountScreen from '../DeleteAccountScreen';
+import DeleteAccountScreen, { APPLE_FALLBACK } from '../DeleteAccountScreen';
 import { deletionApi } from '../../../services/api';
 import { signOut } from '../../../services/authActions';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
@@ -395,7 +395,7 @@ describe('DeleteAccountScreen', () => {
     });
 
     it.each(['not_configured', 'exchange_failed', 'revoke_failed', 'not_requested'])(
-      'outcome %s: no revocation claim, shows the Apple ID settings fallback',
+      'outcome %s: no revocation claim, shows the Apple Account settings fallback',
       async (outcome) => {
         const utils = await confirmWithApple(outcome);
         expect(utils.queryByTestId('apple-revoked')).toBeNull();
@@ -403,6 +403,37 @@ describe('DeleteAccountScreen', () => {
         expect(JSON.stringify(utils.toJSON())).not.toMatch(/no longer has access/);
       },
     );
+
+    // B-PRIV-FU-117 (agent 117): the copy uses Apple's current name, "Apple
+    // Account", on every view, and the form's Apple note has no first person.
+    it.each(['revoked', 'not_configured', 'revoke_failed'])(
+      'outcome %s: the scheduled view says Apple Account, never Apple ID',
+      async (outcome) => {
+        const utils = await confirmWithApple(outcome);
+        const json = JSON.stringify(utils.toJSON());
+        expect(json).not.toMatch(/Apple ID/);
+        expect(json).toMatch(/your Apple Account/);
+      },
+    );
+
+    it('the revoked view names the Apple Account', async () => {
+      const utils = await confirmWithApple('revoked');
+      expect(utils.getByTestId('apple-revoked').props.children).toBe(
+        'Apple confirmed that this app no longer has access to your Apple Account.',
+      );
+    });
+
+    it('the form says Apple Account, and its Apple note has no first person', async () => {
+      const utils = await renderScreen();
+      await waitFor(() => utils.getByTestId('apple-confirm-button'));
+      expect(JSON.stringify(utils.toJSON())).not.toMatch(/Apple ID/);
+      const note = utils.getByTestId('apple-note');
+      const text = [note.props.children].flat().join('');
+      expect(text).toBe(
+        'If you signed in with Apple, after you confirm you will see whether Apple removed this app’s access to your Apple Account, and how to remove it yourself if not.',
+      );
+      expect(text).not.toMatch(/\b(we|our|us)\b/i);
+    });
 
     it('hides the password field for an Apple-only account', async () => {
       const utils = await renderScreen();
@@ -626,5 +657,45 @@ describe('DeleteAccountScreen', () => {
       fireEvent.press(utils.getByLabelText('Cancel, go back to Settings'));
       expect(mockNavigation.goBack).toHaveBeenCalled();
     });
+  });
+});
+
+// B-PRIV-FU-117 (agent 117): the removal steps are Apple's own (Apple Support
+// 102571, https://support.apple.com/en-us/102571) and match the backend's
+// SIGN_IN_WITH_APPLE_DELETION_TEXT (#611, C-611-18). The iPhone path
+// (Settings > your name > Sign in with Apple) is the iOS 18 and later one;
+// the app supports iOS 16.4 and later, so earlier versions get the
+// account.apple.com steps, which do not depend on the iOS version.
+describe('APPLE_FALLBACK: Apple’s current names and steps (B-PRIV-FU-117)', () => {
+  it('is pinned word for word', () => {
+    expect(APPLE_FALLBACK).toBe(
+      'You can also remove this app from your Apple Account yourself. ' +
+        'On an iPhone with iOS 18 or later, open Settings, tap your name, then Sign in with Apple, choose this app, tap Delete and follow the steps on screen to confirm. ' +
+        'On an earlier version of iOS, or on any other device, sign in at account.apple.com, go to Sign-In & Security, select Sign in with Apple, choose this app and stop using Sign in with Apple for it.',
+    );
+  });
+
+  it('says iOS 18 or later before the first iPhone step', () => {
+    const iphone = APPLE_FALLBACK.split('. ').find((sentence) => sentence.includes('open Settings'));
+    expect(iphone).toBeDefined();
+    expect(iphone?.indexOf('iOS 18 or later')).toBeGreaterThanOrEqual(0);
+    expect(iphone?.indexOf('iOS 18 or later')).toBeLessThan(iphone?.indexOf('open Settings') ?? -1);
+    // Sign-In & Security is the web menu, not an iPhone step.
+    expect(iphone).not.toMatch(/Sign-In & Security/);
+  });
+
+  it('gives earlier iOS versions and other devices the web steps', () => {
+    const web = APPLE_FALLBACK.split('. ').filter((sentence) => sentence.includes('account.apple.com'));
+    expect(web).toHaveLength(1);
+    expect(web[0]).toMatch(/^On an earlier version of iOS, or on any other device, /);
+    expect(web[0]).toMatch(/Sign-In & Security/);
+    expect(web[0]).not.toMatch(/Settings,/);
+  });
+
+  it('uses no old Apple names, no first person and no exclamation mark', () => {
+    expect(APPLE_FALLBACK).not.toMatch(/Apple ID/);
+    expect(APPLE_FALLBACK).not.toMatch(/Password (and|&) Security|Apps Using/);
+    expect(APPLE_FALLBACK).not.toMatch(/\b(we|our|us)\b/i);
+    expect(APPLE_FALLBACK).not.toMatch(/!/);
   });
 });
