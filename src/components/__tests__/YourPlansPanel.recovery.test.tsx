@@ -188,8 +188,16 @@ describe('B-SHEET5-119: receipt truth (B-344-7), no stale End (B-344-2), newer r
     expect(alert.mock.calls[1][1]).toMatch(/until November 2, 2026, .* If a payment is overdue, ending it ends access now instead/);
     expect(mockPost).not.toHaveBeenCalled();
   });
-  it('a newer read showing the plan renewing again replaces the old cancel receipt', async () => {
-    mockGet.mockResolvedValueOnce(ok(PLAN)).mockRejectedValueOnce(http(503, { code: 'X_DOWN' })).mockResolvedValue(ok(PLAN));
+  const DEC = { ...ENDING, access_ends_at: '2026-12-02T12:00:00.000Z' };
+  it.each([
+    [PLAN, PLAN, 'Next charge of $99.00 a month on November 2, 2026.'],
+    [PLAN, DEC, 'Ends on December 2, 2026. Nothing more is charged.'],
+    [TRIAL, DEC, 'Ends on December 2, 2026. Nothing more is charged.'],
+    [TRIAL, ENDING, 'Ends on November 2, 2026. Nothing more is charged.'],
+    [TRIAL, { ...TRIAL, ...ENDING, state: 'trialing' }, 'Your free trial ends on November 2, 2026, and nothing is charged.'],
+    [PLAN, ENDING, 'Your plan will not renew. Access continues until November 2, 2026, and nothing more is charged.'],
+  ])('a newer read %# keeps the cancel receipt only when its date and trial or paid kind agree (B-SHEET6-119)', async (first, newer, copy) => {
+    mockGet.mockResolvedValueOnce(ok(first)).mockRejectedValueOnce(http(503, { code: 'X_DOWN' })).mockResolvedValue(ok(newer));
     mockPost.mockResolvedValue(cancelResult({ outcome: 'scheduled', access_ends_at: '2026-11-02T12:00:00.000Z' }));
     autoConfirm();
     const r = await render(<YourPlansPanel />);
@@ -197,6 +205,7 @@ describe('B-SHEET5-119: receipt truth (B-344-7), no stale End (B-344-2), newer r
     await fireEvent.press(r.getByTestId(`your-plan-end-${ID}`));
     await waitFor(() => expect(r.getByTestId('your-plans-stale')).toBeTruthy());
     await fireEvent.press(r.getByTestId('your-plans-retry'));
-    await waitFor(() => expect(line(r)).toBe('Next charge of $99.00 a month on November 2, 2026.'));
+    await waitFor(() => expect(r.queryByTestId('your-plans-stale')).toBeNull());
+    expect(line(r)).toBe(copy);
   });
 });
