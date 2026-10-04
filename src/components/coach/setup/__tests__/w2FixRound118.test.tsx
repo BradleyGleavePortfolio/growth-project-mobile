@@ -246,7 +246,7 @@ describe("B-345-1 at the form: the cadence the coach picks is the cadence that g
 });
 
 describe("B-329-5: nothing is sent or written after the form closed or the account changed", () => {
-  it("closed while the write-ahead saves: no create", async () => {
+  it("closed while the write-ahead saves: no create, and the written intent stays (B-345-1)", async () => {
     mockHold.writes = true;
     const s = await render(form());
     await fireEvent.press(s.getByTestId("first-package-create"));
@@ -256,7 +256,8 @@ describe("B-329-5: nothing is sent or written after the form closed or the accou
     mockHold.pending.splice(0).forEach((go) => go());
     await flush();
     expect(mockServer.creates).toBe(0);
-    expect(mockStore.has(KEY)).toBe(false);
+    // B-345-1 (agent 119): another form may have read and sent it.
+    expect(mockStore.has(KEY)).toBe(true);
   });
 
   it("account changed while the write-ahead saves: no create, and the form starts clean", async () => {
