@@ -1,0 +1,2 @@
+src/services/health/healthConnect/__tests__/healthConnectSyncService.test.ts
+src/services/health/__tests__/onDeviceConnect.test.ts
