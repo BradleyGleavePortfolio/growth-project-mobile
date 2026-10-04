@@ -22,7 +22,7 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 | `queryClient.ts` | The shared `QueryClient` plus an AsyncStorage-backed cache persister. Defaults: 30 s stale, 10 min gc, no focus refetch, 2 retries on read, 0 on mutate. |
 | `foodLogQueue.ts` | Offline queue for `POST /log/food`. Stored as a JSON array under `pending_food_logs`. Flushed by `RootNavigator` on offline → online. |
 | `refreshQueue.ts` | Single-flight refresh coordinator (currently unwired; `api.ts` has its own equivalent). Kept as a tested helper for a follow-up consolidation. |
-| `sentry.ts` | `initSentry`, `wrap`, `captureError`, `setSentryUser`. No-ops when `EXPO_PUBLIC_SENTRY_DSN` is missing. |
+| `sentry.ts` | `initSentry`, `wrap`, `captureError`, `captureErrorWithoutPii` (same, but the event drops the signed-in user, request data and breadcrumbs via `stripPersonalData`), `setSentryUser`. No-ops when `EXPO_PUBLIC_SENTRY_DSN` is missing. |
 
 ## Data flow
 
