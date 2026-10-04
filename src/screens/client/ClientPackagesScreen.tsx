@@ -516,9 +516,9 @@ export default function ClientPackagesScreen() {
       ) : null}
 
       <Text style={styles.fineprint}>
-        Payments are processed securely by Stripe inside the app. Renewing
-        plans can be canceled anytime from your plan here; refunds are
-        handled by your coach.
+        Payments are processed securely by Stripe inside the app. A renewing
+        plan can be ended at any time in Your plans when it shows End my
+        plan, or through your coach; refunds are handled by your coach.
       </Text>
     </ScrollView>
   );
