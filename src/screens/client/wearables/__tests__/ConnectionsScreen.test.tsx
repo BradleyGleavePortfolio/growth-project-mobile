@@ -66,6 +66,7 @@ import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
 import { configFor, WEARABLE_PROVIDERS } from '../../../../api/wearablesConnectionsApi';
 import { disconnectConfirmCopy } from '../disconnectCopy';
 import { emptyImportMessage } from '../onDeviceCopy';
+import { OnDeviceSessionChangedError } from '../../../../services/health/sessionFence';
 
 function connection(
   provider: string,
@@ -290,6 +291,17 @@ describe('ConnectionsScreen — disconnect confirm (C-317-4)', () => {
       'wearables.disconnect',
       expect.objectContaining({ status: 500, code: 'internal_error', requestId: 'req12345-abcd' }),
     );
+  });
+
+  it('Sol B-362-6: an account change before the request closes the dialog, with no copy or report', async () => {
+    mockDisconnectMutate.mockImplementation((_p: string, opts: { onError: (e: unknown) => void }) =>
+      opts.onError(new OnDeviceSessionChangedError()),
+    );
+    await openConfirm();
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura now'));
+    expect(screen.queryByText('Disconnect Oura?')).toBeNull();
+    expect(screen.queryByText(/still connected/)).toBeNull();
+    expect(mockReportUnexpected).not.toHaveBeenCalled();
   });
 });
 
