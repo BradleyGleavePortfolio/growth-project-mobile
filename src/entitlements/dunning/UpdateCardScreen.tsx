@@ -30,13 +30,19 @@ import {
   type DunningErrorCopy,
 } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
+import { dunningLockoutStore } from './dunningLockoutStore';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 import {
   DUNNING_SUPPORT_SUBJECT,
   dunningSupportBody,
   dunningSupportReferenceNote,
+  endPlanAlertBody,
+  isDisputeCycle,
 } from './DunningLockoutScreen';
 import { confirmWithBank, handleStripeReturnUrl, runNativeCardUpdate } from './updateCard';
+
+// One End my plan confirmation for both payment screens (moved next to the lockout).
+export { endPlanAlertBody };
 
 /**
  * Native "Update card" screen (OR-110-2). Target of the in-app banner, the
@@ -76,6 +82,11 @@ function inDunning(status: ClientDunningStatus | null | undefined): boolean {
 export function updateCardIntro(status: ClientDunningStatus | null | undefined): string {
   const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
   const coach = status?.coach_name ?? 'your coach';
+  if (inDunning(status) && isDisputeCycle(status)) {
+    // B-353-2: a new card does not settle a payment the bank took back, so
+    // no charge and no comeback are promised (backend B-628-8).
+    return `Your bank took back an earlier payment${amount ? ` of ${amount}` : ''} to ${coach}${status?.state === 'locked' ? ', so your plan is paused' : ''}. A new card does not settle that; email support to sort it out. A card saved here is used for your future payments.`;
+  }
   if (inDunning(status) && status?.state === 'locked') {
     return amount
       ? `Your payment of ${amount} to ${coach} did not go through, so your plan is paused. Add a card that works and ${amount} is charged to it right away. Your plan comes back as soon as it clears.`
@@ -98,15 +109,6 @@ export function sheetButtonLabel(quote: PaymentQuote | null | undefined): string
   return total ? `Save card and pay ${total}` : 'Save card';
 }
 
-/** C-322-1: "access ends now" only while a payment is overdue; otherwise period end. */
-export function endPlanAlertBody(status: ClientDunningStatus | null | undefined): string {
-  const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
-  if (inDunning(status) && status?.kind !== 'dispute') {
-    return `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your access ends now. If a payment went through in the meantime, you keep the period you paid for instead. Your data stays in your account.`;
-  }
-  return 'Your plan ends at the end of the period you already paid for, and you will not be charged again. There is no refund for the current period. Your data stays in your account.';
-}
-
 export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   const dunning = useDunning();
   const { semanticColors, colorScheme } = useTheme();
@@ -122,6 +124,20 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   const [pending, setPending] = useState<Pending>(null);
   const approvedRef = useRef<ApprovedInvoice[]>([]);
   const autostarted = useRef(false);
+  // B-353-2: every action is owned by this mounted screen and the auth
+  // generation it started under. After any await, a retired owner writes no
+  // state, shows nothing, and starts no further request or native step.
+  const aliveRef = useRef(true);
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
+  const claimOwner = useCallback(() => {
+    const generation = dunningLockoutStore.currentGeneration();
+    return () => aliveRef.current && generation === dunningLockoutStore.currentGeneration();
+  }, []);
 
   // Bank redirects during 3DS come back on tgp://stripe-redirect.
   useEffect(() => {
@@ -132,7 +148,8 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   }, []);
 
   const settle = useCallback(
-    async (next: Awaited<ReturnType<typeof runNativeCardUpdate>>) => {
+    async (next: Awaited<ReturnType<typeof runNativeCardUpdate>>, isCurrent: () => boolean) => {
+      if (next.kind === 'retired' || !isCurrent()) return;
       setPending(null);
       if (next.kind === 'error') {
         setError(next.error);
@@ -181,24 +198,25 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
 
   /** Every screen action runs through here so no rejection goes uncaught (autostart included). */
   const run = useCallback(
-    async (kind: Exclude<Busy, null>, work: () => Promise<void>) => {
+    async (kind: Exclude<Busy, null>, work: (isCurrent: () => boolean) => Promise<void>) => {
       if (busy) return;
+      const isCurrent = claimOwner();
       setBusy(kind);
       setError(null);
       try {
-        await work();
+        await work(isCurrent);
       } catch (err) {
-        setError(describeDunningError(err, kind === 'card' ? 'update_card' : 'confirm_card'));
+        if (isCurrent()) setError(describeDunningError(err, kind === 'card' ? 'update_card' : 'confirm_card'));
       } finally {
-        setBusy(null);
+        if (isCurrent()) setBusy(null);
       }
     },
-    [busy],
+    [busy, claimOwner],
   );
 
   const startCard = useCallback(
     () =>
-      run('card', async () => {
+      run('card', async (isCurrent) => {
         setResult(null);
         setPending(null);
         // B-322-6: read what is owed right now, before the sheet opens.
@@ -206,9 +224,10 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         try {
           fresh = await dunningApi.getPaymentQuote();
         } catch (err) {
-          setError(describeDunningError(err, 'update_card'));
+          if (isCurrent()) setError(describeDunningError(err, 'update_card'));
           return;
         }
+        if (!isCurrent()) return;
         setQuote(fresh);
         approvedRef.current = approvalFor(fresh);
         await settle(
@@ -217,8 +236,12 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
             colorScheme,
             primaryButtonLabel: sheetButtonLabel(fresh),
             approved: approvedRef.current,
-            onConfirming: () => setBusy('confirming'),
+            onConfirming: () => {
+              if (isCurrent()) setBusy('confirming');
+            },
+            isCurrent,
           }),
+          isCurrent,
         );
       }),
     [colorScheme, run, settle],
@@ -226,7 +249,7 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
 
   const resume = useCallback(
     () =>
-      run(pending?.kind === 'bank' ? 'bank' : 'confirming', async () => {
+      run(pending?.kind === 'bank' ? 'bank' : 'confirming', async (isCurrent) => {
         if (!pending) return;
         if (pending.kind === 'approval') {
           // Re-approve the fresh amounts the server just quoted, same card.
@@ -239,10 +262,14 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
             setupIntentId: pending.setupIntentId,
             clientSecret: pending.kind === 'bank' ? pending.clientSecret : null,
             approved: approvedRef.current,
-            onConfirming: () => setBusy('confirming'),
+            onConfirming: () => {
+              if (isCurrent()) setBusy('confirming');
+            },
             // B-322-1: what already went through stays named on a retry.
             lastKnown: result?.setupIntentId === pending.setupIntentId ? result.response : null,
+            isCurrent,
           }),
+          isCurrent,
         );
       }),
     [pending, result, run, settle],
@@ -268,24 +295,29 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         text: 'End my plan',
         style: 'destructive',
         onPress: () => {
+          const isCurrent = claimOwner();
           setBusy('cancel');
           setError(null);
           void dunning
             .endPlan('UpdateCardScreen')
             .then((out) => {
+              // B-353-2: a retired screen shows no late answer and does not navigate.
+              if (!isCurrent() || ('retired' in out && out.retired)) return;
               if (out.ok) {
-                const c = cancelOutcomeCopy(out.response);
+                const c = cancelOutcomeCopy(out.response, { dispute: isDisputeCycle(status) });
                 Alert.alert(c.title, c.body);
                 leave();
-              } else {
+              } else if (out.error) {
                 setError(out.error);
               }
             })
-            .finally(() => setBusy(null));
+            .finally(() => {
+              if (isCurrent()) setBusy(null);
+            });
         },
       },
     ]);
-  }, [dunning, busy, status, leave]);
+  }, [dunning, busy, status, leave, claimOwner]);
 
   const supportReference = error?.reference ?? null;
   const supportEmail = useSupportEmail(
@@ -297,7 +329,14 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
     void supportEmail.open();
   }, [supportEmail]);
 
-  const outcome = result ? cardUpdateOutcomeCopy(result.response) : null;
+  // B-353-2: disputes the confirm reports (or the quote read before the card
+  // form named) stay in the outcome: saving a card does not settle them.
+  const outcome = result ? cardUpdateOutcomeCopy(result.response, quote?.disputes ?? []) : null;
+  const dispute = isDisputeCycle(status);
+  const quoteDisputeNote =
+    !outcome && !dispute && quote && quote.disputes.length > 0
+      ? 'Another plan has a payment your bank reversed. Saving a card does not settle that; email support to sort it out.'
+      : null;
   const settled = !pending && result && ['paid', 'saved', 'processing'].includes(result.response.outcome);
   const needsBank = pending?.kind === 'bank';
   const quoteTotal = formatDunningTotals(quote?.totals ?? []);
@@ -309,8 +348,9 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         : pending?.kind === 'in_progress'
           ? 'Check again'
           : null;
+  // C-353-2: "declined" only for a failed payment and before this visit saved a card.
   const cardOnFile = status?.card_last4
-    ? `The card on file ends in ${status.card_last4}${inDunning(status) ? ' and was declined' : ''}.`
+    ? `The card on file ends in ${status.card_last4}${inDunning(status) && !dispute && !result ? ' and was declined' : ''}.`
     : null;
 
   return (
@@ -335,6 +375,11 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         {quoteTotal && !settled ? (
           <Text style={styles.meta} testID="update-card-quote">
             {`Saving this card pays ${quoteTotal} now.`}
+          </Text>
+        ) : null}
+        {quoteDisputeNote ? (
+          <Text style={styles.meta} testID="update-card-quote-dispute">
+            {quoteDisputeNote}
           </Text>
         ) : null}
         {busy === 'confirming' ? (
@@ -458,7 +503,7 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
         ) : null}
 
         <Text style={styles.footnote}>
-          Card details go straight to Stripe, our payment provider. The Growth Project never sees your full card number.
+          Card details go straight to Stripe, the payment provider. The Growth Project never sees your full card number.
         </Text>
       </ScrollView>
     </SafeAreaView>

@@ -22,7 +22,12 @@ export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
 
 export type EndPlanResult =
   | { ok: true; response: CancelPlanResponse }
-  | { ok: false; error: DunningErrorCopy };
+  | { ok: false; error: DunningErrorCopy }
+  /**
+   * The provider (or the account) that started the request is gone; the
+   * answer belongs to nobody on screen, so nothing is shown or refreshed.
+   */
+  | { ok: false; retired: true; error: null };
 
 export interface DunningContextValue {
   status: ClientDunningStatus | null;
@@ -70,49 +75,89 @@ export function DunningLockoutProvider({
   subscribeToRouteChanges,
 }: DunningLockoutProviderProps) {
   const [status, setStatus] = useState<ClientDunningStatus | null>(null);
-  const [locked, setLocked] = useState<boolean>(dunningLockoutStore.isLocked());
+  // B-353-1: not seeded during render; the subscription effect syncs the
+  // store, which every identity boundary retires (sign-out, sign-in, this
+  // provider unmounting), so a previous account's lock never paints.
+  const [locked, setLocked] = useState(false);
   const [loadError, setLoadError] = useState<DunningErrorCopy | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [routeName, setRouteName] = useState<string | undefined>(getCurrentRouteName());
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasLockedRef = useRef(locked);
+  // B-353-1 (Sol): every status read is owned by this provider's lifetime,
+  // the auth generation it started under, and its sequence number; only the
+  // newest read of a live provider in the same generation may write state.
+  const aliveRef = useRef(true);
+  const seqRef = useRef(0);
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   const refresh = useCallback(async () => {
     if (!enabled) return;
+    seqRef.current += 1;
+    const seq = seqRef.current;
+    const generation = dunningLockoutStore.currentGeneration();
+    const owns = () =>
+      aliveRef.current &&
+      enabledRef.current &&
+      seq === seqRef.current &&
+      generation === dunningLockoutStore.currentGeneration();
     setRefreshing(true);
     try {
       // A malformed answer throws (strict normaliser), so the last known
       // state stays: a bad body never clears a lockout or a banner (B-322-5).
       const next = await dunningApi.getStatus();
+      if (!owns()) return;
       setStatus(next);
       setLoadError(null);
-      if (next.state === 'locked' && !next.lock_waived) {
-        dunningLockoutStore.reportLocked({ requestId: null, requestUrl: '/v1/checkout/dunning' });
+      // Lock only on what the server decided: an enabled cycle in its locked
+      // state, not waived. Flag off ({ enabled: false }) is never a lock.
+      if (next.enabled && next.state === 'locked' && !next.lock_waived) {
+        dunningLockoutStore.reportLocked({ requestId: null, requestUrl: '/v1/checkout/dunning', generation });
       } else {
-        dunningLockoutStore.clear();
+        dunningLockoutStore.clear(generation);
       }
     } catch (err) {
+      if (!owns()) return;
       const copy = describeDunningError(err, 'load_status');
       setLoadError(copy);
       if (copy.report) {
         captureError(err, { surface: 'dunning_status', dunning_error_code: copy.code, request_id: copy.reference });
       }
     } finally {
-      setRefreshing(false);
+      if (aliveRef.current && seq === seqRef.current) setRefreshing(false);
     }
   }, [enabled]);
+
+  // Unmount is an identity boundary: the client tree goes away on sign-out
+  // and on an account switch, so this provider's generation is retired and
+  // nothing it started can lock the next account.
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      dunningLockoutStore.retire();
+    };
+  }, []);
 
   // Bootstrap + store subscription (403 LOCKED_DUNNING from any request).
   useEffect(() => {
     if (!enabled) {
+      // Any read in flight is now stale.
+      seqRef.current += 1;
       dunningLockoutStore.clear();
       setStatus(null);
+      setLocked(false);
+      setRefreshing(false);
       return undefined;
     }
-    void refresh();
-    return dunningLockoutStore.subscribe((isLocked) => {
+    const unsubscribe = dunningLockoutStore.subscribe((isLocked) => {
       setLocked(isLocked);
     });
+    // A 403 from this generation may already have landed before mount.
+    setLocked(dunningLockoutStore.isLocked());
+    void refresh();
+    return unsubscribe;
   }, [enabled, refresh]);
 
   // When a 403 flips us into the locked state, load the amount and dates.
@@ -158,17 +203,24 @@ export function DunningLockoutProvider({
     async (surface: string): Promise<EndPlanResult> => {
       const purchaseId = status?.purchase_id;
       if (!purchaseId) return { ok: false, error: localDunningError('PLAN_NOT_LOADED') };
+      const generation = dunningLockoutStore.currentGeneration();
+      const owns = () => aliveRef.current && generation === dunningLockoutStore.currentGeneration();
       try {
         const response = await dunningApi.cancelPlan(purchaseId);
+        // B-353-1: a late answer for a retired provider or account is not shown.
+        if (!owns()) return { ok: false, retired: true, error: null };
         await refresh();
+        if (!owns()) return { ok: false, retired: true, error: null };
         return { ok: true, response };
       } catch (err) {
         const error = describeDunningError(err, 'cancel_plan');
         if (error.report) {
           captureError(err, { surface, dunning_error_code: error.code, request_id: error.reference });
         }
+        if (!owns()) return { ok: false, retired: true, error: null };
         // A lost answer may still have ended the plan: show the truth.
         await refresh();
+        if (!owns()) return { ok: false, retired: true, error: null };
         return { ok: false, error };
       }
     },
@@ -180,11 +232,22 @@ export function DunningLockoutProvider({
     [status, locked, refreshing, refresh, updateCard, endPlan, onMessageCoach],
   );
 
+  // B-353-4: while the lockout shows, the app underneath is hidden from
+  // screen readers (iOS: accessibilityViewIsModal on the overlay and
+  // accessibilityElementsHidden on the app; Android: no-hide-descendants).
+  // The app is always wrapped in the same View so it never remounts.
   return (
     <DunningContext.Provider value={value}>
-      {children}
+      <View
+        style={styles.app}
+        testID="dunning-app-content"
+        accessibilityElementsHidden={showLockout}
+        importantForAccessibility={showLockout ? 'no-hide-descendants' : 'auto'}
+      >
+        {children}
+      </View>
       {showLockout ? (
-        <View style={StyleSheet.absoluteFill} testID="dunning-lockout-overlay">
+        <View style={StyleSheet.absoluteFill} testID="dunning-lockout-overlay" accessibilityViewIsModal>
           <DunningLockoutScreen
             status={status}
             loadError={loadError}
@@ -203,3 +266,7 @@ export function DunningLockoutProvider({
     </DunningContext.Provider>
   );
 }
+
+const styles = StyleSheet.create({
+  app: { flex: 1 },
+});

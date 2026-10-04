@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { cancelOutcomeCopy, type DunningErrorCopy } from './dunningErrorCopy';
 import type { EndPlanResult } from './DunningLockoutProvider';
 
@@ -33,14 +34,66 @@ export interface DunningLockoutScreenProps {
   supportReference: string | null;
 }
 
-/** What happened, in one calm paragraph. Never invents an amount or a date. */
+/** True when the cycle is a payment the bank reversed (a new card does not settle it). */
+export function isDisputeCycle(status: ClientDunningStatus | null | undefined): boolean {
+  return status?.kind === 'dispute';
+}
+
+/** True while a payment is overdue or reversed and the plan is not ended. */
+function inDunning(status: ClientDunningStatus | null | undefined): boolean {
+  return Boolean(status?.enabled && (status.state === 'past_due' || status.state === 'locked'));
+}
+
+/**
+ * What happened, in one calm paragraph. Never invents an amount, a date or
+ * a cause: before the status loads it says only that a payment problem
+ * paused the plan (the 403 does not say which kind).
+ */
 export function lockoutSummary(status: ClientDunningStatus | null): string {
-  const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
-  const since = formatDunningDate(status?.failed_at ?? null);
-  const coach = status?.coach_name ?? 'your coach';
+  const safe = 'Your data is safe and nothing has been deleted.';
+  if (!status) return `Your plan is paused because of a payment problem. ${safe}`;
+  const amount = formatDunningAmount(status.amount_cents ?? null, status.currency ?? null);
+  const coach = status.coach_name ?? 'your coach';
+  if (isDisputeCycle(status)) {
+    // B-353-2: the bank took back a payment already made (backend B-628-8).
+    return `Your bank reversed an earlier payment${amount ? ` of ${amount}` : ''} to ${coach}, so your plan is paused. ${safe}`;
+  }
+  const since = formatDunningDate(status.failed_at ?? null);
   const what = amount ? `Your payment of ${amount} to ${coach}` : `Your payment to ${coach}`;
   const when = since ? ` has not gone through since ${since}` : ' has not gone through for 10 days';
-  return `${what}${when}, so your plan is paused. Your data is safe and nothing has been deleted.`;
+  return `${what}${when}, so your plan is paused. ${safe}`;
+}
+
+/**
+ * The next step, true for the lock kind. A failed payment: a working card is
+ * charged right away and the plan comes back once it clears (ruling D12). A
+ * reversed payment: a new card does not settle it, so the step is support.
+ */
+export function lockoutNextStep(status: ClientDunningStatus | null): string {
+  if (!status) return 'Pull down to load the details, or email support.';
+  if (isDisputeCycle(status)) {
+    const coach = status.coach_name ? `message ${status.coach_name}` : 'message your coach';
+    return `Saving a new card does not settle it. To sort it out, email ${SUPPORT_EMAIL} or ${coach}.`;
+  }
+  return 'To restore access, tap Update card and add a card that works. The card is charged right away, and your plan comes back as soon as the payment clears.';
+}
+
+/**
+ * The End my plan confirmation, shared by the lockout and the Update card
+ * screen. In dunning (2A) access ends now; a payment that landed in the
+ * meantime keeps the paid period (backend cancel rule). A reversed payment
+ * also ends now, and ending the plan does not settle it (backend B-628-8).
+ * Outside dunning (option A) access runs to the end of the paid period.
+ */
+export function endPlanAlertBody(status: ClientDunningStatus | null | undefined): string {
+  const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
+  if (inDunning(status) && isDisputeCycle(status)) {
+    return `Your access ends now. Ending the plan does not settle the payment your bank reversed. Email ${SUPPORT_EMAIL} to sort it out. Your data stays in your account.`;
+  }
+  if (inDunning(status)) {
+    return `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your access ends now. If a payment went through in the meantime, you keep the period you paid for instead. Your data stays in your account.`;
+  }
+  return 'Your plan ends at the end of the period you already paid for, and you will not be charged again. There is no refund for the current period. Your data stays in your account.';
 }
 
 /** Subject of every support email from the payment screens. */
@@ -75,6 +128,16 @@ export function DunningLockoutScreen({
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
   const [ending, setEnding] = useState(false);
   const [endError, setEndError] = useState<DunningErrorCopy | null>(null);
+  // B-353-1: a lockout that went away (account switch, unlock) never shows a
+  // late End my plan answer or writes state.
+  const aliveRef = useRef(true);
+  useEffect(
+    () => () => {
+      aliveRef.current = false;
+    },
+    [],
+  );
+  const dispute = isDisputeCycle(status);
 
   const handleUpdateCard = useCallback(() => {
     onUpdateCard('DunningLockoutScreen');
@@ -82,33 +145,31 @@ export function DunningLockoutScreen({
 
   const handleEndPlan = useCallback(() => {
     if (ending) return;
-    const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
-    Alert.alert(
-      'End your plan now?',
-      `${amount ? `The unpaid ${amount} is canceled, so you are not charged for it.` : 'The unpaid balance is canceled, so you are not charged for it.'} Your plan ends today. Your data stays in your account.`,
-      [
-        { text: 'Keep my plan', style: 'cancel' },
-        {
-          text: 'End my plan',
-          style: 'destructive',
-          onPress: () => {
-            setEnding(true);
-            setEndError(null);
-            void onEndPlan('DunningLockoutScreen')
-              .then((out) => {
-                if (out.ok) {
-                  const c = cancelOutcomeCopy(out.response);
-                  Alert.alert(c.title, c.body);
-                } else {
-                  setEndError(out.error);
-                }
-              })
-              .finally(() => setEnding(false));
-          },
+    Alert.alert('End your plan now?', endPlanAlertBody(status), [
+      { text: 'Keep my plan', style: 'cancel' },
+      {
+        text: 'End my plan',
+        style: 'destructive',
+        onPress: () => {
+          setEnding(true);
+          setEndError(null);
+          void onEndPlan('DunningLockoutScreen')
+            .then((out) => {
+              if (!aliveRef.current || ('retired' in out && out.retired)) return;
+              if (out.ok) {
+                const c = cancelOutcomeCopy(out.response, { dispute });
+                Alert.alert(c.title, c.body);
+              } else if (out.error) {
+                setEndError(out.error);
+              }
+            })
+            .finally(() => {
+              if (aliveRef.current) setEnding(false);
+            });
         },
-      ],
-    );
-  }, [ending, onEndPlan, status]);
+      },
+    ]);
+  }, [ending, onEndPlan, status, dispute]);
 
   const reference = endError?.reference ?? loadError?.reference ?? supportReference;
   const supportEmail = useSupportEmail(DUNNING_SUPPORT_SUBJECT, dunningSupportBody(reference));
@@ -117,7 +178,8 @@ export function DunningLockoutScreen({
     void supportEmail.open();
   }, [supportEmail]);
 
-  const card = status?.card_last4 ? ` The card ending ${status.card_last4} was declined.` : '';
+  // C-353-2: "declined" only for a failed payment, never for a reversal.
+  const card = status?.card_last4 && status && !dispute ? ` The card ending ${status.card_last4} was declined.` : '';
   const coachLabel = status?.coach_name ? `Message ${status.coach_name}` : 'Message your coach';
 
   return (
@@ -134,9 +196,8 @@ export function DunningLockoutScreen({
           {lockoutSummary(status)}
           {card}
         </Text>
-        <Text style={styles.body}>
-          To restore access, tap Update card and add a card that works. We charge it right away,
-          and your plan comes back as soon as the payment clears.
+        <Text style={styles.body} testID="dunning-lockout-next-step">
+          {lockoutNextStep(status)}
         </Text>
         {loadError ? (
           <Text style={styles.notice} testID="dunning-lockout-load-error">
@@ -144,13 +205,23 @@ export function DunningLockoutScreen({
           </Text>
         ) : null}
 
+        {dispute ? (
+          <TouchableOpacity
+            style={styles.primary}
+            onPress={handleContactSupport}
+            accessibilityRole="button"
+            testID="dunning-lockout-support-primary"
+          >
+            <Text style={styles.primaryText}>Email support</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
-          style={styles.primary}
+          style={dispute ? styles.secondary : styles.primary}
           onPress={handleUpdateCard}
           accessibilityRole="button"
           testID="dunning-lockout-update-card"
         >
-          <Text style={styles.primaryText}>Update card</Text>
+          <Text style={dispute ? styles.secondaryText : styles.primaryText}>Update card</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
