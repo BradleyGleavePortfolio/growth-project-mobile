@@ -1012,7 +1012,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         ? 'You chose to coach clients, but coach sign-up was switched off while you were signing up. No account has been created. You can create a client account instead, or check again later.'
         : withdrawal === 'refused'
           ? 'You chose to coach clients, but coach sign-up was switched off while your request was being sent, and your coach sign-up was not completed. You can create a client account instead, or check again later.'
-          : 'You chose to coach clients, but coach sign-up has been switched off, and we could not confirm what happened to your coach sign-up request. An account may or may not have been created. Sign in with the same email, Apple ID or Google account first; if the account exists, you will be signed in to it. You can also check again later or contact support.';
+          : 'You chose to coach clients, but coach sign-up has been switched off, and the app could not confirm what happened to your coach sign-up request. An account may or may not have been created. Sign in with the same email, Apple Account or Google account first; if the account exists, you will be signed in to it. You can also check again later or contact support.';
     return (
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scroll}>
