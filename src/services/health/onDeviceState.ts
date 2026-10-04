@@ -88,6 +88,20 @@ async function readJson(key: string): Promise<unknown> {
   }
 }
 
+/**
+ * Sol B-362-2: every local authorization written in this app run gets the
+ * next sequence number, set synchronously when the write starts. A Disconnect
+ * captures the sequence when it starts, and its retirement never removes a
+ * grant (or that person's progress) written after that point.
+ */
+let authWriteSeq = 0;
+const authWrittenAt = new Map<string, number>();
+
+/** The local authorization write sequence now (capture it before any await). */
+export function localAuthorizationSeq(): number {
+  return authWriteSeq;
+}
+
 /** Record that the current user authorized this phone's source (Connect tap). */
 export async function recordLocalAuthorization(
   scope: OnDeviceScope,
@@ -100,7 +114,10 @@ export async function recordLocalAuthorization(
     connectionId: scope.connectionId,
     grantedAt: now.toISOString(),
   };
-  await AsyncStorage.setItem(authKey(scope.userId, scope.source), JSON.stringify(record));
+  const key = authKey(scope.userId, scope.source);
+  authWriteSeq += 1; // before the await: a retirement already running sees it (Sol B-362-2)
+  authWrittenAt.set(key, authWriteSeq);
+  await AsyncStorage.setItem(key, JSON.stringify(record));
   return record;
 }
 
@@ -149,22 +166,41 @@ export async function retireOnDeviceState(source?: OnDeviceSource): Promise<void
 }
 
 /**
- * Disconnect cleanup for ONE person and source (Sol B-362-2): removes that
- * person's local authorization and progress for `source`, never another
- * account's. `grantedAt` is the authorization seen when the disconnect
- * started (null for none): when a different one is stored now (a newer
- * Connect), nothing is removed.
+ * Disconnect cleanup for `source` (Sol B-362-2): removes `userId`'s local
+ * authorization and progress, never another account's; with `userId` null
+ * (no readable session), every account's on this phone. `grantedAt` is the
+ * authorization seen when the disconnect started (null for none): when a
+ * different one is stored now, nothing is removed. `since` is
+ * {@link localAuthorizationSeq} at that start: a grant written after it, and
+ * that person's progress, are kept. The check and the removal run with no
+ * await between them, and storage applies writes in call order, so a newer
+ * Connect is never removed by an older Disconnect.
  */
 export async function retireOnDeviceSource(
-  userId: string,
+  userId: string | null,
   source: OnDeviceSource,
   grantedAt: string | null,
+  since: number = authWriteSeq,
 ): Promise<void> {
-  const current = await getLocalAuthorization(userId, source);
-  if ((current?.grantedAt ?? null) !== grantedAt) return;
-  const progressPrefix = `${ON_DEVICE_STATE_PREFIX}progress:${source}:${userId}:`;
+  if (userId != null) {
+    const current = await getLocalAuthorization(userId, source);
+    if ((current?.grantedAt ?? null) !== grantedAt) return;
+  }
   const keys = await AsyncStorage.getAllKeys();
-  const doomed = keys.filter((k) => k === authKey(userId, source) || k.startsWith(progressPrefix));
+  const authPrefix = `${ON_DEVICE_STATE_PREFIX}auth:${source}:`;
+  const progressPrefix = `${ON_DEVICE_STATE_PREFIX}progress:${source}:`;
+  const ownerOf = (k: string): string | null => {
+    if (k.startsWith(authPrefix)) return k.slice(authPrefix.length);
+    if (!k.startsWith(progressPrefix)) return null;
+    const rest = k.slice(progressPrefix.length);
+    const cut = rest.lastIndexOf(':');
+    return cut > 0 ? rest.slice(0, cut) : null;
+  };
+  const doomed = keys.filter((k) => {
+    const owner = ownerOf(k);
+    if (owner == null || (userId != null && owner !== userId)) return false;
+    return (authWrittenAt.get(authKey(owner, source)) ?? 0) <= since;
+  });
   if (doomed.length > 0) await AsyncStorage.removeMany(doomed);
 }
 
