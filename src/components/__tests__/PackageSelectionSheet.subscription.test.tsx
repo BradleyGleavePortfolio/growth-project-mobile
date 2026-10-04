@@ -361,9 +361,8 @@ describe('one attempt, one key', () => {
     const r = await mountAndSelect();
     await fireEvent.press(r.getByTestId('select-plan-btn'));
     await waitFor(() => expect(r.getByTestId('payment-error')).toBeTruthy());
-    expect(r.getByTestId('payment-error').props.children).toBe(
-      'This phone is offline, so the payment did not start and nothing was charged. Check your connection, then start again.',
-    );
+    // B-342-1 (Sol): no answer is not proof of no charge.
+    expect(r.getByTestId('payment-error').props.children).toMatch(/^The app could not reach the server, so this step is not confirmed\./);
     await fireEvent.press(r.getByTestId('select-plan-btn'));
     await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
     expect(new Set(keysOf()).size).toBe(1);
