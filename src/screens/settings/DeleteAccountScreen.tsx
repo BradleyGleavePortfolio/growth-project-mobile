@@ -17,7 +17,8 @@
  *     the server can revoke Sign in with Apple tokens.
  *  4. Timing copy uses the server's grace_days, purge_after and completes_by.
  *     Apple copy says access was removed only when the server reports
- *     `revoked`; otherwise it explains how to remove the app from Apple ID.
+ *     `revoked`; otherwise anyone who may have signed in with Apple sees how
+ *     to remove the app from their Apple Account (appleFallbackCopy).
  *
  * Copy rules: every claim must match the backend erasure manifest
  * (src/account-deletion/account-deletion.manifest.ts). No emoji, no
@@ -76,7 +77,7 @@ export const PERMANENTLY_DELETED: readonly string[] = [
 
 // Mirrors the manifest's retained rows (operator retention policy).
 export const KEPT_RECORDS: readonly string[] = [
-  'Payment and tax records that Stripe keeps for as long as the law requires. Our own copies keep only amounts, dates and payment references, with no name or contact details.',
+  'Payment and tax records that Stripe keeps for as long as the law requires. The app’s own copies keep only amounts, dates and payment references, with no name or contact details.',
   'One deletion record with a random reference, the date and the result. It holds no name, email or account details.',
   'If you coach: your clients are not deleted. They keep their own data and the plans you assigned, unchanged and without your contact details, and are no longer linked to you.',
 ];
@@ -84,14 +85,70 @@ export const KEPT_RECORDS: readonly string[] = [
 export const BILLING_NOTE =
   'Any subscription or payment plan you have, as a client or as a coach, is cancelled when the deletion completes, and scheduled reminders and emails stop. Until then it stays active.';
 
+// The steps are Apple's (Apple Support 102571) and match the backend's
+// SIGN_IN_WITH_APPLE_DELETION_TEXT (#611, C-611-18). Settings > your name >
+// Sign in with Apple is the iOS 18 and later path; the app supports iOS 16.4
+// and later, so earlier versions get the account.apple.com steps, which do not
+// depend on the iOS version. "Apple Account" is Apple's current name for what
+// it used to call the Apple ID (B-PRIV-FU-117).
+export const APPLE_REMOVAL_STEPS =
+  'On an iPhone with iOS 18 or later, open Settings, tap your name, then Sign in with Apple, choose this app, tap Delete and follow the steps on screen to confirm. ' +
+  'On an earlier version of iOS, or on any other device, sign in at account.apple.com, go to Sign-In & Security, select Sign in with Apple, choose this app and stop using Sign in with Apple for it.';
+
+// C-368-1: each fallback says only what this screen knows. Right after a
+// confirmation it has the server's apple_revocation (anything but `revoked`
+// means Apple has not confirmed); on a later visit it has no outcome, since
+// GET /me/delete-account/status does not carry one. When the provider lookup
+// cannot tell whether the account uses Apple, the copy is conditional.
 export const APPLE_FALLBACK =
-  'You can also remove this app from your Apple ID yourself: on your iPhone open Settings, tap your name, then Sign-In & Security, then Sign in with Apple, choose this app and stop using it with your Apple ID.';
+  'Apple has not confirmed that this app’s access was removed. ' +
+  'You can remove this app from your Apple Account yourself. ' +
+  APPLE_REMOVAL_STEPS;
+export const APPLE_FALLBACK_IF_APPLE =
+  'If you signed in with Apple, Apple has not confirmed that this app’s access was removed, and you can remove this app from your Apple Account yourself. ' +
+  APPLE_REMOVAL_STEPS;
+export const APPLE_FALLBACK_LATER =
+  'If Apple did not confirm that this app’s access was removed when you confirmed the deletion, you can remove this app from your Apple Account yourself. ' +
+  APPLE_REMOVAL_STEPS;
+export const APPLE_FALLBACK_LATER_IF_APPLE =
+  'If you signed in with Apple and Apple did not confirm that this app’s access was removed when you confirmed the deletion, you can remove this app from your Apple Account yourself. ' +
+  APPLE_REMOVAL_STEPS;
+
+/**
+ * B-368-1: the Apple card for the status view, or null for none. `revoked`
+ * shows Apple's confirmation instead. Otherwise a card is shown whenever the
+ * person may have signed in with Apple: the account lists Apple, they
+ * confirmed with Apple here, the server tried to revoke, or the provider
+ * lookup could not tell.
+ */
+export function appleFallbackCopy(input: {
+  outcome: AppleRevocationOutcome | null;
+  confirmedHereWith: ReauthMethod | null;
+  appleAccount: boolean;
+  providersUnknown: boolean;
+}): string | null {
+  if (input.outcome === 'revoked') return null;
+  const outcomeInHand = input.confirmedHereWith !== null;
+  const appleKnown =
+    input.appleAccount ||
+    input.confirmedHereWith === 'apple' ||
+    (input.outcome !== null && input.outcome !== 'not_requested');
+  if (appleKnown) return outcomeInHand ? APPLE_FALLBACK : APPLE_FALLBACK_LATER;
+  if (input.providersUnknown) return outcomeInHand ? APPLE_FALLBACK_IF_APPLE : APPLE_FALLBACK_LATER_IF_APPLE;
+  return null;
+}
+
+// Shown on the form. True whatever the server reports: after confirming, the
+// status view shows Apple's confirmation or a fallback to anyone who may have
+// signed in with Apple (appleFallbackCopy).
+export const APPLE_FORM_NOTE =
+  'If you signed in with Apple, after you confirm you will see whether Apple removed this app’s access to your Apple Account, and how to remove it yourself if not.';
 
 interface DeleteAccountScreenProps {
   navigation: NavigationProp<ParamListBase>;
 }
 
-type ReauthMethod = 'password' | 'apple' | 'google';
+export type ReauthMethod = 'password' | 'apple' | 'google';
 type LoadPhase = 'loading' | 'ready' | 'error' | 'deleted';
 
 export function formatDeletionDate(iso?: string | null): string | null {
@@ -121,14 +178,18 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
   const [phase, setPhase] = useState<LoadPhase>('loading');
   const [statusError, setStatusError] = useState(
-    'We could not check your account deletion status. Check your connection, then try again.',
+    'The account deletion status could not be checked. Check your connection, then try again.',
   );
   const [status, setStatus] = useState<DeletionStatus | null>(null);
   const [appleOutcome, setAppleOutcome] = useState<AppleRevocationOutcome | null>(null);
+  // B-368-1: the method used to confirm on this visit, so the status view
+  // knows an outcome is in hand and whether Apple was used.
+  const [confirmedWith, setConfirmedWith] = useState<ReauthMethod | null>(null);
   const [confirmText, setConfirmText] = useState('');
   const [password, setPassword] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
   const [providers, setProviders] = useState<SignInProvider[] | null>(null);
+  const [providersChecked, setProvidersChecked] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const signedOut = useRef(false);
@@ -176,9 +237,15 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       .catch(() => setAppleAvailable(false));
     getSignInProviders()
       .then((list) => {
-        if (mounted) setProviders(list);
+        if (!mounted) return;
+        setProviders(list);
+        setProvidersChecked(true);
       })
-      .catch(() => setProviders(null));
+      .catch(() => {
+        if (!mounted) return;
+        setProviders(null);
+        setProvidersChecked(true);
+      });
     return () => {
       mounted = false;
     };
@@ -230,6 +297,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       setPassword('');
       setConfirmText('');
       setAppleOutcome(res.data.apple_revocation ?? null);
+      setConfirmedWith(method);
       setStatus({
         state: 'confirmed',
         requested_at: res.data.requested_at,
@@ -302,6 +370,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
             await deletionApi.cancelDeletion();
             successTap();
             setAppleOutcome(null);
+            setConfirmedWith(null);
             await loadStatus();
             Alert.alert('Deletion cancelled', 'Your account is no longer scheduled for deletion.');
           } catch (err) {
@@ -416,8 +485,13 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
   if (status?.state === 'confirmed') {
     const date = formatDeletionDate(status.purge_after);
     const cancellable = status.cancellable !== false;
-    const showAppleFallback =
-      appleOutcome !== 'revoked' && (isAppleAccount || (appleOutcome !== null && appleOutcome !== 'not_requested'));
+    // A confirmation made before the lookup finished counts as unknown.
+    const appleFallback = appleFallbackCopy({
+      outcome: appleOutcome,
+      confirmedHereWith: confirmedWith,
+      appleAccount: isAppleAccount,
+      providersUnknown: providers === null && (providersChecked || confirmedWith !== null),
+    });
     return (
       <View style={styles.container}>
         {header}
@@ -447,14 +521,14 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           {appleOutcome === 'revoked' ? (
             <View style={styles.card}>
               <Text style={styles.bodyText} testID="apple-revoked">
-                Apple confirmed that this app no longer has access to your Apple ID.
+                Apple confirmed that this app no longer has access to your Apple Account.
               </Text>
             </View>
           ) : null}
-          {showAppleFallback ? (
+          {appleFallback ? (
             <View style={styles.card}>
               <Text style={styles.bodyText} testID="apple-fallback">
-                {APPLE_FALLBACK}
+                {appleFallback}
               </Text>
             </View>
           ) : null}
@@ -560,9 +634,11 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
         <Text style={styles.sectionHeading}>Permanently deleted</Text>
         {deletedList}
-        <Text style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}>
-          If you signed in with Apple, we also ask Apple to remove this app&apos;s access to your
-          Apple ID. You will see whether that worked, and how to do it yourself if it did not.
+        <Text
+          style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}
+          testID="apple-note"
+        >
+          {APPLE_FORM_NOTE}
         </Text>
 
         <Text style={styles.sectionHeading}>What is kept</Text>
