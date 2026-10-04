@@ -64,6 +64,44 @@ export const DEFAULT_BACKFILL_DAYS = 30;
  */
 export const SYNC_OVERLAP_MINUTES = 5;
 
+/**
+ * B-360-1: the closed set logged for a failed Health Connect read. A native
+ * rejection's message is free-form text (it can echo record content), so it
+ * is never logged; only this class, the record type and the resumed bit are.
+ */
+export type HealthConnectReadErrorClass =
+  | 'permission'
+  | 'service_unavailable'
+  | 'io'
+  | 'sdk_version'
+  | 'invalid_request'
+  | 'unknown';
+
+/** The library's rejection codes (`ExceptionsUtils.kt`), compared, never copied. */
+const READ_ERROR_CLASS_BY_CODE: ReadonlyMap<string, HealthConnectReadErrorClass> = new Map<
+  string,
+  HealthConnectReadErrorClass
+>([
+  ['PERMISSION_ERROR', 'permission'],
+  ['SERVICE_UNAVAILABLE', 'service_unavailable'],
+  ['CLIENT_NOT_INITIALIZED', 'service_unavailable'],
+  ['UNDERLYING_ERROR', 'service_unavailable'],
+  ['IO_EXCEPTION', 'io'],
+  ['SDK_VERSION_ERROR', 'sdk_version'],
+  ['ARGUMENT_VALIDATION_ERROR', 'invalid_request'],
+  ['INVALID_RECORD_TYPE', 'invalid_request'],
+]);
+
+/** Classify a read rejection without copying anything it carries. Never throws. */
+export function healthConnectReadErrorClass(err: unknown): HealthConnectReadErrorClass {
+  try {
+    const code = typeof err === 'object' && err !== null ? (err as { code?: unknown }).code : undefined;
+    return (typeof code === 'string' && READ_ERROR_CLASS_BY_CODE.get(code)) || 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 /** Injectable dependencies — defaults wire the real client/api; tests inject mocks. */
 export interface HealthConnectSyncDeps {
   client?: HealthConnectClient;
@@ -172,7 +210,10 @@ export async function syncHealthConnect(
   // on the person's tap; a refresh that finds every type revoked reports it
   // (the Health screen offers Open Health Connect) instead of prompting
   // unasked when Health opens.
-  const grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
+  const granted = await client.getGrantedPermissions();
+  // B-360-1: nothing is reported or logged for a run that stopped meanwhile.
+  fence.throwIfStopped();
+  const grantedRecordTypes = grantedReadRecordTypes(granted);
   if (grantedRecordTypes.length === 0) {
     logger.warn('healthConnectSync', 'all read permissions denied', {
       requested: HEALTH_CONNECT_RECORD_TYPES.length,
@@ -216,6 +257,10 @@ export async function syncHealthConnect(
         next.completedThrough[recordType] = range.endTime;
       }
     } catch (err) {
+      // B-360-1: the fence first, synchronously. A page that rejects after
+      // sign-out, an account switch or a cancelled Connect ends the run here:
+      // nothing is classified, recorded or logged for it.
+      fence.throwIfStopped();
       // A stop (sign-out, account switch, cancelled Connect) ends the whole
       // run; it is never an ordinary per-type read failure (Sol B-317-7).
       if (isOnDeviceStop(err)) throw err;
@@ -228,7 +273,7 @@ export async function syncHealthConnect(
       logger.error('healthConnectSync', 'readRecords failed', {
         recordType,
         resumed: Boolean(resume),
-        error: err instanceof Error ? err.message : String(err),
+        error: healthConnectReadErrorClass(err),
       });
     }
   }

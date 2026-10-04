@@ -31,6 +31,7 @@ jest.mock('../../../../lib/userCache', () => ({
 import { HealthConnectPermissionDeniedError, HealthConnectUnsupportedError } from '../errors';
 import {
   DEFAULT_BACKFILL_DAYS,
+  healthConnectReadErrorClass,
   SYNC_OVERLAP_MINUTES,
   syncHealthConnect,
   type HealthConnectSyncDeps,
@@ -46,6 +47,7 @@ import {
   type SessionFence,
 } from '../../sessionFence';
 import { authEvents } from '../../../../utils/authEvents';
+import { logger } from '../../../../utils/logger';
 
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
@@ -431,5 +433,113 @@ describe('B-317-7: no native read starts after sign-out', () => {
     });
     expect(mockNativeRead).toHaveBeenCalledTimes(4);
     expect(res.complete).toBe(true);
+  });
+});
+
+/**
+ * B-360-1 (Sol probe AUD-SOL-W12-116, CI run 37175348201, reused): the REAL
+ * paged client and the REAL fence. A rejected native page logs only a closed
+ * class, never native text; a page that rejects after the fence retired
+ * (sign-out, account switch, cancelled Connect) logs and saves nothing.
+ */
+describe('B-360-1: a rejected native page never logs native text, nor anything after the fence retires', () => {
+  const CANARY = 'AUDIT_360_PRIVATE_WEIGHT_81_6_KG';
+  const mockNativeRead = hcNative.readRecords as jest.Mock;
+  const client = {
+    ...makeClient({ getGrantedPermissions: grantOnly('Steps', 'Weight') }),
+    readRecordsPaged: realClient.readRecordsPaged,
+  };
+  const logged = (): string =>
+    JSON.stringify([logger.log, logger.warn, logger.error].map((fn) => (fn as jest.Mock).mock.calls));
+  const nativeError = (code?: unknown): Error =>
+    Object.assign(new Error(CANARY), code === undefined ? {} : { code });
+  const sync = (
+    fence: SessionFence,
+    ingest: jest.Mock = jest.fn().mockResolvedValue({ inserted: 0, skipped: 0 }),
+    c: unknown = client,
+  ) => syncHealthConnect(SCOPE, { client: c as never, ingestApi: { ingest }, now: () => NOW, fence });
+
+  beforeEach(() => {
+    mockSignedIn = 'user-a';
+    mockNativeRead.mockReset();
+  });
+
+  it.each([
+    ['an Error carrying native text', () => nativeError(), 'unknown'],
+    ['a library PERMISSION_ERROR', () => nativeError('PERMISSION_ERROR'), 'permission'],
+    ['a library IO_EXCEPTION', () => nativeError('IO_EXCEPTION'), 'io'],
+    ['a code outside the allow-list', () => nativeError(CANARY), 'unknown'],
+    ['a non-Error rejection', () => CANARY, 'unknown'],
+    ['a rejection whose code getter throws', () => Object.defineProperty(new Error(CANARY), 'code', {
+      get: () => { throw new Error(CANARY); },
+    }), 'unknown'],
+  ])('%s: that type fails, the next is read, only the class is logged', async (_label, rejection, cls) => {
+    mockNativeRead.mockImplementationOnce(async () => { throw rejection(); });
+    const res = await sync((await beginSessionFence()) as SessionFence);
+    expect(mockNativeRead).toHaveBeenCalledTimes(2);
+    expect(res.complete).toBe(false);
+    expect(res.failedRecordTypes).toEqual(['Steps']);
+    expect(logger.error).toHaveBeenCalledWith('healthConnectSync', 'readRecords failed', {
+      recordType: 'Steps',
+      resumed: false,
+      error: cls,
+    });
+    expect(logged()).not.toContain(CANARY);
+  });
+
+  it.each([
+    ['the start of sign-out', () => stopOnDeviceHealthWork(), 'session_changed'],
+    ['an account switch', () => {
+      mockSignedIn = 'user-b';
+      authEvents.emit('login');
+    }, 'session_changed'],
+    ['a cancelled Connect', (fence: SessionFence) => fence.cancel(), 'cancelled'],
+  ])('%s while a page is in flight, then it rejects: silent, nothing sent or saved', async (_label, stop, reason) => {
+    const fence = (await beginSessionFence()) as SessionFence;
+    mockNativeRead.mockImplementationOnce(async () => {
+      stop(fence);
+      throw nativeError('PERMISSION_ERROR');
+    });
+    const ingest = jest.fn();
+    const err = await sync(fence, ingest).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(OnDeviceSessionChangedError);
+    expect((err as OnDeviceSessionChangedError).reason).toBe(reason);
+    expect(mockNativeRead).toHaveBeenCalledTimes(1);
+    expect(ingest).not.toHaveBeenCalled();
+    expect(await getSyncProgress(SCOPE)).toEqual({ v: 1, completedThrough: {}, resume: {} });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logged()).not.toContain(CANARY);
+  });
+
+  it('a grant read that resolves after sign-out started reports and logs nothing', async () => {
+    const fence = (await beginSessionFence()) as SessionFence;
+    const revoked = {
+      ...client,
+      getGrantedPermissions: jest.fn(async () => {
+        stopOnDeviceHealthWork();
+        return [];
+      }),
+    };
+    await expect(sync(fence, jest.fn(), revoked)).rejects.toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(mockNativeRead).not.toHaveBeenCalled();
+  });
+
+  it('control: an unchanged session with empty reads completes and logs no failure', async () => {
+    mockNativeRead.mockResolvedValue({ records: [] });
+    const res = await sync((await beginSessionFence()) as SessionFence);
+    expect(res.complete).toBe(true);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('classifies only the library codes; everything else is unknown', () => {
+    const codes = ['PERMISSION_ERROR', 'SERVICE_UNAVAILABLE', 'CLIENT_NOT_INITIALIZED', 'UNDERLYING_ERROR',
+      'IO_EXCEPTION', 'SDK_VERSION_ERROR', 'ARGUMENT_VALIDATION_ERROR', 'INVALID_RECORD_TYPE', 'UNKNOWN_ERROR',
+      '__proto__', 'constructor'];
+    expect(codes.map((code) => healthConnectReadErrorClass({ code }))).toEqual(['permission',
+      'service_unavailable', 'service_unavailable', 'service_unavailable', 'io', 'sdk_version',
+      'invalid_request', 'invalid_request', 'unknown', 'unknown', 'unknown']);
+    expect([null, undefined, 42, CANARY, { code: 7 }].map(healthConnectReadErrorClass)).toEqual(
+      ['unknown', 'unknown', 'unknown', 'unknown', 'unknown']);
   });
 });
