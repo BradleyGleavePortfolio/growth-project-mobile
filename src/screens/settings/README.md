@@ -19,8 +19,9 @@ In-app account deletion for both roles (Apple App Review 5.1.1(v); GDPR Art. 17;
 3. The user types `DELETE` (case-insensitive) or their account email, then **re-authenticates**:
    - password, or
    - on iOS when available, the native Sign in with Apple sheet (`reauthenticateWithApple()` in `src/utils/appleAuth.ts`; requests no scopes and does NOT create a new session).
-4. `POST /auth/recent-auth-token` (`{ password }` or `{ provider: 'apple', provider_token }`) returns a short-lived single-use token; `POST /me/delete-account` with header `X-Recent-Auth-Token` schedules the deletion **in the same request** (the 14-day grace period starts now). Apple users also send `apple_authorization_code` so the server revokes their Sign in with Apple tokens. The request is idempotent on the server.
+4. `POST /auth/recent-auth-token` (`{ password }` or `{ provider: 'apple', provider_token }`) returns a short-lived single-use token; `POST /me/delete-account` with header `X-Recent-Auth-Token` schedules the deletion **in the same request** (the 14-day grace period starts now). Apple users also send `apple_authorization_code` so the server can revoke their Sign in with Apple tokens; the response's `apple_revocation` says whether it did. The request is idempotent on the server.
 5. **Status view:** the exact permanent-deletion date (`purge_after`), the deleted-data list, **Keep my account** (`POST /me/delete-account/cancel`, after a confirm alert) while `cancellable`, and Sign out. The user is not signed out automatically; the account stays usable during the grace period.
+   - Apple copy: the view says Apple removed the app's access to the Apple Account only when `apple_revocation` is `revoked`. Otherwise an Apple account sees `APPLE_FALLBACK`: Apple's own steps (Apple Support 102571), Settings > your name > Sign in with Apple on iOS 18 or later, and account.apple.com > Sign-In & Security on earlier iOS versions (the app supports iOS 16.4 and later) or any other device. It matches the backend's `SIGN_IN_WITH_APPLE_DELETION_TEXT`. Apple's current name is "Apple Account", not "Apple ID".
 
 Errors: 401 on re-auth shows "That password is not correct" / "Apple could not confirm it is you"; 429 shows a wait-a-minute message; other failures show the server message. The re-auth request is sent with `skipAuthRefresh` so a wrong password is not replayed by the 401 refresh interceptor against the 5/min throttle.
 
@@ -66,7 +67,8 @@ The screen is scanned by `src/__tests__/quietLuxuryDoctrine.test.ts`. It contain
 Coverage:
 - Request form: lists and grace copy, no email/support promises, doctrine tokens, DELETE/email gate plus password requirement, Apple option hidden when unavailable
 - Password re-auth: token minted then deletion scheduled with it, date shown, no auto sign-out; 401 wrong password, 429, scheduling failure stays on form
-- Apple re-auth: identity token proof, authorization code forwarded, silent cancel
+- Apple re-auth: identity token proof, authorization code forwarded, silent cancel; "Apple Account" on every view, no first person in the form's Apple note
+- `APPLE_FALLBACK`: pinned word for word, iOS 18 qualifier before the iPhone steps, web steps for earlier versions
 - Status view: scheduled date, cancel returns to the form, cancel hidden when not cancellable, sign out
 - Navigation: back and "Cancel — keep my account"
 

@@ -17,7 +17,8 @@
  *     the server can revoke Sign in with Apple tokens.
  *  4. Timing copy uses the server's grace_days, purge_after and completes_by.
  *     Apple copy says access was removed only when the server reports
- *     `revoked`; otherwise it explains how to remove the app from Apple ID.
+ *     `revoked`; otherwise it explains how to remove the app from the
+ *     person's Apple Account (APPLE_FALLBACK).
  *
  * Copy rules: every claim must match the backend erasure manifest
  * (src/account-deletion/account-deletion.manifest.ts). No emoji, no
@@ -84,8 +85,21 @@ export const KEPT_RECORDS: readonly string[] = [
 export const BILLING_NOTE =
   'Any subscription or payment plan you have, as a client or as a coach, is cancelled when the deletion completes, and scheduled reminders and emails stop. Until then it stays active.';
 
+// The steps are Apple's (Apple Support 102571) and match the backend's
+// SIGN_IN_WITH_APPLE_DELETION_TEXT (#611, C-611-18). Settings > your name >
+// Sign in with Apple is the iOS 18 and later path; the app supports iOS 16.4
+// and later, so earlier versions get the account.apple.com steps, which do not
+// depend on the iOS version. "Apple Account" is Apple's current name for what
+// it used to call the Apple ID (B-PRIV-FU-117).
 export const APPLE_FALLBACK =
-  'You can also remove this app from your Apple ID yourself: on your iPhone open Settings, tap your name, then Sign-In & Security, then Sign in with Apple, choose this app and stop using it with your Apple ID.';
+  'You can also remove this app from your Apple Account yourself. ' +
+  'On an iPhone with iOS 18 or later, open Settings, tap your name, then Sign in with Apple, choose this app, tap Delete and follow the steps on screen to confirm. ' +
+  'On an earlier version of iOS, or on any other device, sign in at account.apple.com, go to Sign-In & Security, select Sign in with Apple, choose this app and stop using Sign in with Apple for it.';
+
+// Shown on the form. True whatever the server reports: after confirming, the
+// status view shows either Apple's confirmation or APPLE_FALLBACK.
+export const APPLE_FORM_NOTE =
+  'If you signed in with Apple, after you confirm you will see whether Apple removed this app’s access to your Apple Account, and how to remove it yourself if not.';
 
 interface DeleteAccountScreenProps {
   navigation: NavigationProp<ParamListBase>;
@@ -447,7 +461,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           {appleOutcome === 'revoked' ? (
             <View style={styles.card}>
               <Text style={styles.bodyText} testID="apple-revoked">
-                Apple confirmed that this app no longer has access to your Apple ID.
+                Apple confirmed that this app no longer has access to your Apple Account.
               </Text>
             </View>
           ) : null}
@@ -560,9 +574,11 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
         <Text style={styles.sectionHeading}>Permanently deleted</Text>
         {deletedList}
-        <Text style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}>
-          If you signed in with Apple, we also ask Apple to remove this app&apos;s access to your
-          Apple ID. You will see whether that worked, and how to do it yourself if it did not.
+        <Text
+          style={[styles.bodyText, { marginTop: 8, fontSize: 13, color: colors.textMuted }]}
+          testID="apple-note"
+        >
+          {APPLE_FORM_NOTE}
         </Text>
 
         <Text style={styles.sectionHeading}>What is kept</Text>
