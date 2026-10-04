@@ -226,7 +226,11 @@ describe('B-353-1: the lockout belongs to the signed-in account', () => {
 
   it("a retired provider's late locked read cannot lock the next account", async () => {
     const old = deferred<{ data: ClientDunningStatus }>();
-    mockGet.mockReturnValueOnce(old.promise).mockResolvedValue({ data: CLEAR });
+    // B's first read is clear; any later read fails, so nothing heals a wrong lock.
+    mockGet
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ data: CLEAR })
+      .mockRejectedValue(networkError());
     const a = await render(<Provider><Reader /></Provider>);
     await waitFor(() => expect(mockGet).toHaveBeenCalledTimes(1));
     await a.unmount();
