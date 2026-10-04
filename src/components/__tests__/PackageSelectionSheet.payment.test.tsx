@@ -391,9 +391,11 @@ describe('specific copy per cause', () => {
     const { r, text } = await failWith(() =>
       mockPost.mockRejectedValueOnce(httpError(500, { error: 'INTERNAL', message: 'boom', request_id: 'f00dbabe-1234' })),
     );
+    // B-342-1: an unmapped answer proves nothing about money: no no-charge claim.
     expect(text).toBe(
-      'The payment did not go through and nothing was charged. Email support and quote reference f00dbabe, and the team will sort it out with you.',
+      'This step did not finish, and its result is not confirmed yet. Open your plan in Membership to see where it stands before you start again. If it is still unclear, email support and quote reference f00dbabe.',
     );
+    expect(r.getByTestId('payment-open-plan')).toBeTruthy();
     expect(r.getByTestId('payment-support')).toBeTruthy();
     expect(mockCapture).toHaveBeenCalledTimes(1);
     const [err, ctx] = mockCapture.mock.calls[0];
