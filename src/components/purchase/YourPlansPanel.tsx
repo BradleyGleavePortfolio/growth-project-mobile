@@ -117,11 +117,17 @@ const endsInTrial = (p: ClientPlan, o: CancelOutcome) =>
   !!p.trialEndsAt &&
   Date.parse(o.accessEndsAt) <= Date.parse(p.trialEndsAt);
 
-/** B-344-3: a receipt stands only while a newer read agrees with it. */
+const sameInstant = (a: string | null, b: string | null) =>
+  a === b || (!!a && !!b && Date.parse(a) === Date.parse(b));
+/** B-344-3: a receipt stands only while a newer read agrees with it: the
+ * same access end and the same trial or paid kind. */
 const agrees = (r: Receipt, p: ClientPlan | undefined) =>
   !!p &&
   (r.result.outcome === "scheduled"
-    ? p.cancelAtPeriodEnd && p.state !== "ended"
+    ? p.cancelAtPeriodEnd &&
+      p.state !== "ended" &&
+      sameInstant(p.accessEndsAt, r.result.accessEndsAt) &&
+      endsInTrial(p, r.result) === r.trial
     : p.state === "ended");
 
 export default function YourPlansPanel({
