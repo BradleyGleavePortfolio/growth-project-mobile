@@ -2,19 +2,43 @@ import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
+import { SUPPORT_EMAIL } from '../../constants/support';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
 import { useDunning } from './DunningLockoutProvider';
+import { isDisputeCycle } from './DunningLockoutScreen';
+
+/**
+ * The lock date, only while it is still ahead and the lock is not waived
+ * (C-353-3: a waived lock keeps access past its date, so no past date).
+ */
+function upcomingLockDate(status: ClientDunningStatus, now: number): string | null {
+  if (status.lock_waived || !status.lockout_at) return null;
+  const at = Date.parse(status.lockout_at);
+  if (!Number.isFinite(at) || at <= now) return null;
+  return formatDunningDate(status.lockout_at);
+}
 
 /** Banner copy for Days 0-9. Never invents an amount or a date. */
-export function bannerCopy(status: ClientDunningStatus): { title: string; body: string } {
+export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()): { title: string; body: string } {
   const amount = formatDunningAmount(status.amount_cents, status.currency);
+  const lockOn = upcomingLockDate(status, now);
+  if (isDisputeCycle(status)) {
+    // B-353-2: a reversed payment is not fixed by a new card (backend B-628-8).
+    const what = amount ? `Your bank reversed an earlier payment of ${amount}.` : 'Your bank reversed an earlier payment.';
+    const when = lockOn ? ` Access pauses on ${lockOn} unless it is sorted out by then.` : '';
+    return {
+      title: 'A payment was reversed',
+      body: `${what} Saving a new card does not settle it. Email ${SUPPORT_EMAIL} or message your coach to sort it out.${when}`,
+    };
+  }
   const failedOn = formatDunningDate(status.failed_at);
-  const lockOn = formatDunningDate(status.lockout_at);
   const charge = amount ? `Your payment of ${amount} did not go through` : 'Your last payment did not go through';
   const when = amount && failedOn ? ` on ${failedOn}` : '';
   const keep = lockOn
     ? `Update your card by ${lockOn} to keep access to your plan.`
-    : 'Update your card to keep access to your plan.';
+    : status.lock_waived
+      ? 'Update your card to settle it.'
+      : 'Update your card to keep access to your plan.';
   return { title: 'Your payment did not go through', body: `${charge}${when}. ${keep}` };
 }
 
@@ -36,20 +60,23 @@ export function DunningBanner({ surface }: { surface: string }) {
   const status = dunning?.status;
   if (!dunning || !status || !status.enabled || status.state !== 'past_due') return null;
   const copy = bannerCopy(status);
+  const dispute = isDisputeCycle(status);
 
   return (
     <View style={styles.wrap} testID="dunning-banner" accessibilityRole="alert">
       <Text style={styles.title}>{copy.title}</Text>
       <Text style={styles.body}>{copy.body}</Text>
       <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.primary}
-          onPress={onUpdate}
-          accessibilityRole="button"
-          testID="dunning-banner-update-card"
-        >
-          <Text style={styles.primaryText}>Update card</Text>
-        </TouchableOpacity>
+        {dispute ? null : (
+          <TouchableOpacity
+            style={styles.primary}
+            onPress={onUpdate}
+            accessibilityRole="button"
+            testID="dunning-banner-update-card"
+          >
+            <Text style={styles.primaryText}>Update card</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={styles.secondary}
           onPress={dunning.messageCoach}

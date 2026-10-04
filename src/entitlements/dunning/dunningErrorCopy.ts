@@ -7,6 +7,8 @@ import {
   ROUTE_QUOTE,
   type CancelPlanResponse,
   type CardUpdateResponse,
+  type MoneyTotal,
+  type QuoteDispute,
 } from './dunningApi';
 
 /**
@@ -84,6 +86,20 @@ function copy(code: DunningErrorCode, message: string, reference: string | null,
   return { code, message: withReference(message, ref), reference: ref, report };
 }
 
+/**
+ * The backend's machine code: `code`, or an `error` written as a code
+ * (SCREAMING_SNAKE). Nest's generic `error` is the HTTP reason phrase
+ * ("Not Found", "Service Unavailable"), which is not a code: a 404 for a
+ * route the server does not have (today's production for every native card
+ * route) must read as "not available yet", and a bare 503 on a money call as
+ * "not confirmed", never as an unknown code.
+ */
+function machineCode(body: { code?: unknown; error?: unknown }): string | null {
+  if (typeof body.code === 'string' && body.code) return body.code;
+  if (typeof body.error === 'string' && /^[A-Z][A-Z0-9_]+$/.test(body.error)) return body.error;
+  return null;
+}
+
 function serverMessage(body: { message?: unknown }): string | null {
   return typeof body.message === 'string' && body.message.trim().length > 0 ? body.message.trim() : null;
 }
@@ -152,8 +168,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   };
   const status = e.response?.status;
   const body = e.response?.data ?? {};
-  const machine =
-    (typeof body.code === 'string' && body.code) || (typeof body.error === 'string' && body.error) || null;
+  const machine = machineCode(body);
   const step = typeof body.step === 'string' ? body.step : null;
   const retryVerb =
     action === 'update_card' || action === 'confirm_card'
@@ -248,8 +263,10 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     );
   }
   if (status === 404 && !machine) {
-    // A bare 404 (no machine code) means the server predates the native
-    // card routes (backend #628). Expected during rollout, so not reported.
+    // A 404 without a machine code means the server predates the native
+    // card routes (backend #628): production answers its generic
+    // { error: 'Not Found' } envelope. Expected during rollout, so not
+    // reported, and nothing was sent to the payment provider.
     return copy(
       'BILLING_ROUTE_NOT_AVAILABLE',
       action === 'cancel_plan'
@@ -419,17 +436,46 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   return copy('UNKNOWN', unknown, reference, true);
 }
 
+/** "$150.00" / "$150.00 and 80.00 EUR" for the reversed amounts that are known. */
+function disputedTotals(disputes: QuoteDispute[]): string | null {
+  const byCurrency = new Map<string, number>();
+  for (const d of disputes) {
+    if (d.amount_cents == null || !d.currency) continue;
+    const cur = d.currency.toLowerCase();
+    byCurrency.set(cur, (byCurrency.get(cur) ?? 0) + d.amount_cents);
+  }
+  const list: MoneyTotal[] = [...byCurrency].map(([currency, amount_cents]) => ({ currency, amount_cents }));
+  return formatDunningTotals(list.filter((t) => t.amount_cents > 0));
+}
+
+/**
+ * B-353-2 / C-352-5: the limitation the server states for a disputed
+ * payment (backend B-628-8: a card update never settles it), with the
+ * working next step.
+ */
+export function disputeNotSettledLine(disputes: QuoteDispute[]): string | null {
+  if (disputes.length === 0) return null;
+  const amount = disputedTotals(disputes);
+  return `Your bank reversed an earlier payment${amount ? ` of ${amount}` : ''}. Saving a card does not settle that. Email ${SUPPORT_EMAIL} to sort it out.`;
+}
+
 /**
  * Calm, specific copy for each card-update outcome. Never invents an amount
  * and never sums currencies (B-322-1): amounts come from the per-currency
  * totals, "active again" only when the server confirmed access is back, and
  * the server's own sentence (which leads with what was paid) is preferred.
  */
-export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
+export function cardUpdateOutcomeCopy(
+  r: CardUpdateResponse,
+  /** Disputes from the quote read before the card form, used when the answer reports none. */
+  knownDisputes: QuoteDispute[] = [],
+): {
   title: string;
   body: string;
   tone: 'done' | 'action';
 } {
+  const disputes = r.disputes ?? knownDisputes;
+  const disputeLine = disputeNotSettledLine(disputes);
   const ending = r.card_last4 ? ` ending ${r.card_last4}` : '';
   const paid = formatDunningTotals(r.paid_totals);
   const due = formatDunningTotals(r.due_totals);
@@ -446,7 +492,10 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
           ? `Your card${ending} is saved and ${paid} went through.${accessLine}`
           : `Your card${ending} is saved and your balance is paid.${accessLine}`;
       case 'saved':
-        return `Your card${ending} is saved. Your next payment will use it.`;
+        // A dispute-only update has no open invoice to pay (backend copy).
+        return disputeLine
+          ? `Your card${ending} is saved. There was no open invoice to pay, so nothing was charged.`
+          : `Your card${ending} is saved. Your next payment will use it.`;
       case 'processing':
         // C-322-2: money already collected is said first, then the payment
         // that is still processing.
@@ -477,8 +526,9 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
     }
   };
   // Built from the structured fields so the copy always names buttons that
-  // are on screen; the server's `message` is for logs and older clients.
-  const body = local();
+  // are on screen; the server's `message` is for logs and older clients. The
+  // dispute limitation is always kept (B-353-2).
+  const body = disputeLine ? `${local()} ${disputeLine}` : local();
   switch (r.outcome) {
     case 'paid':
       return {
@@ -487,7 +537,7 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
         tone: 'done',
       };
     case 'saved':
-      return { title: 'Card saved', body, tone: 'done' };
+      return { title: 'Card saved', body, tone: disputeLine ? 'action' : 'done' };
     case 'processing':
       return {
         title: paid ? 'Part of your payment went through' : 'Payment processing',
@@ -522,11 +572,28 @@ export function cardUpdateOutcomeCopy(r: CardUpdateResponse): {
   }
 }
 
-/** Copy after ending a plan. 2A (ended now) vs option A (scheduled). */
-export function cancelOutcomeCopy(r: CancelPlanResponse): {
+/**
+ * Copy after ending a plan. 2A (ended now) vs option A (scheduled). With
+ * `dispute` (the plan's cycle is a reversed payment), the server's
+ * limitation is kept: ending the plan does not settle the reversal.
+ */
+export function cancelOutcomeCopy(
+  r: CancelPlanResponse,
+  opts: { dispute?: boolean } = {},
+): {
   title: string;
   body: string;
 } {
+  const base = cancelOutcomeBase(r);
+  return opts.dispute
+    ? {
+        title: base.title,
+        body: `${base.body} Ending the plan does not settle the payment your bank reversed. Email ${SUPPORT_EMAIL} to sort it out.`,
+      }
+    : base;
+}
+
+function cancelOutcomeBase(r: CancelPlanResponse): { title: string; body: string } {
   if (r.outcome === 'scheduled' && r.paid_period_kept) {
     const until = formatDunningDate(r.access_ends_at);
     return {

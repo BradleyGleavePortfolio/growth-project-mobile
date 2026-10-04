@@ -179,7 +179,7 @@ describe('DunningLockoutProvider', () => {
     const { findByTestId, queryByText, getByText } = await renderProvider();
     await findByTestId('dunning-lockout-screen');
     expect(queryByText(/Invoice history/)).toBeNull();
-    expect(getByText(/We charge it right away/)).toBeTruthy();
+    expect(getByText(/The card is charged right away/)).toBeTruthy();
   });
 
   it('End my plan (2A) asks first, then voids the unpaid invoice and ends the plan', async () => {
@@ -268,7 +268,7 @@ describe('DunningBanner (Days 0-9)', () => {
   });
 
   it('banner copy names the amount and the lock date and has no exclamation mark', () => {
-    const copy = bannerCopy(PAST_DUE);
+    const copy = bannerCopy(PAST_DUE, Date.parse('2026-10-04T12:00:00.000Z'));
     expect(copy.body).toContain('$150.00');
     expect(copy.body).toMatch(/Update your card by \w+day, October 1[01] to keep access/);
     expect(`${copy.title}${copy.body}${lockoutSummary(LOCKED)}`).not.toContain('!');

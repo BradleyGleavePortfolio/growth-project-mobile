@@ -65,8 +65,14 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
   const hasSettledRef = useRef(false);
 
   const isStudent = user?.role === 'student';
-  const [dunningLocked, setDunningLocked] = useState<boolean>(dunningLockoutStore.isLocked());
-  useEffect(() => dunningLockoutStore.subscribe((locked) => setDunningLocked(locked)), []);
+  // B-353-1: synced after mount from the store, which every identity
+  // boundary retires (sign-out, sign-in, the client tree unmounting).
+  const [dunningLocked, setDunningLocked] = useState(false);
+  useEffect(() => {
+    const unsubscribe = dunningLockoutStore.subscribe((locked) => setDunningLocked(locked));
+    setDunningLocked(dunningLockoutStore.isLocked());
+    return unsubscribe;
+  }, []);
 
   const refreshEntitlement = useCallback(async (): Promise<boolean> => {
     if (!isStudent) return true;

@@ -17,6 +17,14 @@ import { buildPaymentSheetAppearance, sheetStyleFor } from './paymentSheetAppear
  * handleNextAction runs on the PaymentIntent the backend returns, then the
  * confirm call is repeated. Every backend step is idempotent, so a retry
  * after a lost answer can never charge twice.
+ *
+ * B-353-2 (ownership): the caller passes `isCurrent`, true while the screen
+ * that started the update is mounted and the auth generation it started
+ * under is live. It is checked after every await and before every request
+ * or native step, so a retired screen never creates a SetupIntent, opens the
+ * card form, confirms or pays. A request already sent stays on the server
+ * (idempotent, account-bound); stopping here claims nothing about it, and
+ * the next status read shows the truth.
  */
 
 export type StripeSdk = Pick<
@@ -61,6 +69,11 @@ export function __resetStripeSdkForTests(): void {
 export type NativeCardUpdateResult =
   /** The client closed the card form; nothing was saved or charged. */
   | { kind: 'canceled' }
+  /**
+   * The screen (or the signed-in account) that started this update is gone,
+   * so no further step ran. Says nothing about requests already sent.
+   */
+  | { kind: 'retired' }
   /** The backend answered; `response.outcome` says what happened to the money. */
   | { kind: 'done'; response: CardUpdateResponse; setupIntentId: string }
   /**
@@ -96,7 +109,12 @@ export interface NativeCardUpdateOptions {
   onConfirming?: () => void;
   /** Backoff between confirm re-asks after a lost answer (tests pass zeros). */
   retryDelaysMs?: number[];
+  /** False once the initiating screen or auth generation is retired; defaults to always current. */
+  isCurrent?: () => boolean;
 }
+
+const RETIRED = { kind: 'retired' } as const;
+const always = () => true;
 
 function fail(error: DunningErrorCopy, surface: string, err: unknown, extra: Record<string, unknown> = {}) {
   if (error.report) {
@@ -134,6 +152,8 @@ const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, 
 
 export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promise<NativeCardUpdateResult> {
   const { surface } = opts;
+  const isCurrent = opts.isCurrent ?? always;
+  if (!isCurrent()) return RETIRED;
   const sdk = opts.sdk === undefined ? loadStripeSdk() : opts.sdk;
   if (!sdk) {
     return fail(localDunningError('CARD_SHEET_UNAVAILABLE'), surface, null);
@@ -143,10 +163,12 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
   try {
     setup = await dunningApi.createCardSetup();
   } catch (err) {
+    if (!isCurrent()) return RETIRED;
     return fail(describeDunningError(err, 'update_card'), surface, err, {
       step: 'setup_intent',
     });
   }
+  if (!isCurrent()) return RETIRED;
 
   // The backend key always matches the secret key that minted the
   // SetupIntent (same mode, same account); the build-time key is the fallback.
@@ -173,6 +195,7 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
       appearance: buildPaymentSheetAppearance(),
     });
   });
+  if (!isCurrent()) return RETIRED;
   if (!init.ok) {
     return fail(localDunningError('CARD_SHEET_FAILED'), surface, init.err, {
       step: 'sheet_init',
@@ -185,6 +208,9 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
   }
 
   const presented = await guarded(() => sdk.presentPaymentSheet());
+  // The card form confirmed only the SetupIntent; nothing is charged until
+  // the backend confirm below, which a retired screen never sends.
+  if (!isCurrent()) return RETIRED;
   if (!presented.ok) {
     return fail(localDunningError('CARD_SHEET_FAILED'), surface, presented.err, { step: 'sheet_present' });
   }
@@ -204,6 +230,7 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
     approved: opts.approved,
     onConfirming: opts.onConfirming,
     retryDelaysMs: opts.retryDelaysMs,
+    isCurrent,
   });
 }
 
@@ -214,6 +241,7 @@ async function confirmOnce(args: {
   approved: ApprovedInvoice[];
   onConfirming?: () => void;
   retryDelaysMs?: number[];
+  isCurrent: () => boolean;
 }): Promise<{ ok: true; response: CardUpdateResponse } | { ok: false; result: NativeCardUpdateResult }> {
   const delays = args.retryDelaysMs ?? [1000, 3000];
   let lastErr: unknown = null;
@@ -222,12 +250,13 @@ async function confirmOnce(args: {
       args.onConfirming?.();
       await wait(delays[attempt - 1]);
     }
+    if (!args.isCurrent()) return { ok: false, result: RETIRED };
     try {
-      return {
-        ok: true,
-        response: await dunningApi.confirmCardUpdate(args.setupIntentId, args.approved),
-      };
+      const response = await dunningApi.confirmCardUpdate(args.setupIntentId, args.approved);
+      if (!args.isCurrent()) return { ok: false, result: RETIRED };
+      return { ok: true, response };
     } catch (err) {
+      if (!args.isCurrent()) return { ok: false, result: RETIRED };
       lastErr = err;
       if (!isLostAnswer(err)) {
         return {
@@ -271,8 +300,12 @@ export async function confirmWithBank(args: {
    * if the bank step fails again before the server can be asked (B-322-1).
    */
   lastKnown?: CardUpdateResponse | null;
+  /** False once the initiating screen or auth generation is retired (B-353-2). */
+  isCurrent?: () => boolean;
 }): Promise<NativeCardUpdateResult> {
   const { surface, setupIntentId } = args;
+  const isCurrent = args.isCurrent ?? always;
+  if (!isCurrent()) return RETIRED;
   const sdk = args.sdk === undefined ? loadStripeSdk() : args.sdk;
   let pendingSecret = args.clientSecret;
   let last: CardUpdateResponse | null = args.lastKnown ?? null;
@@ -282,7 +315,9 @@ export async function confirmWithBank(args: {
     if (pendingSecret) {
       if (!sdk) return fail(localDunningError('CARD_SHEET_UNAVAILABLE'), surface, null);
       const secret = pendingSecret;
+      if (!isCurrent()) return RETIRED;
       const next = await guarded(() => sdk.handleNextAction(secret, STRIPE_RETURN_URL));
+      if (!isCurrent()) return RETIRED;
       const nextError = next.ok ? next.value?.error : { code: 'Failed' };
       if (nextError && nextError.code === 'Canceled') {
         // The client closed the bank step. B-322-3: keep the SetupIntent and
@@ -294,7 +329,8 @@ export async function confirmWithBank(args: {
         // payment was not collected (or that it was). Ask the server, with the
         // same SetupIntent and approval (never a second charge), before saying
         // anything about the money.
-        const check = await confirmOnce({ ...args, setupIntentId });
+        const check = await confirmOnce({ ...args, setupIntentId, isCurrent });
+        if (!check.ok && check.result.kind === 'retired') return RETIRED;
         if (check.ok && check.response.outcome !== 'requires_action') {
           // The server already knows the end state (paid, declined, ...).
           return { kind: 'done', response: check.response, setupIntentId };
@@ -318,7 +354,7 @@ export async function confirmWithBank(args: {
         };
       }
     }
-    const out = await confirmOnce({ ...args, setupIntentId });
+    const out = await confirmOnce({ ...args, setupIntentId, isCurrent });
     if (!out.ok) return out.result;
     last = out.response;
     if (last.outcome !== 'requires_action' || !last.payment_intent_client_secret) {
