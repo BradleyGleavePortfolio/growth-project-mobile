@@ -117,12 +117,24 @@ export interface QuoteLine {
   amount_cents: number;
 }
 
+/**
+ * A plan with a disputed payment open: the bank reversed a payment already
+ * made. A card update never settles it (backend B-628-8); the amount is known
+ * only on a dispute cycle.
+ */
+export interface QuoteDispute {
+  purchase_id: string;
+  coach_name: string | null;
+  currency: string | null;
+  amount_cents: number | null;
+}
+
 export interface PaymentQuote {
   quote_id: string;
   lines: QuoteLine[];
   totals: MoneyTotal[];
   /** Plans with a disputed payment open (a card update does not settle them). */
-  disputes: Array<{ purchase_id: string; coach_name: string | null }>;
+  disputes: QuoteDispute[];
 }
 
 export interface ApprovedInvoice {
@@ -175,6 +187,14 @@ export interface CardUpdateResponse {
   quote: PaymentQuote | null;
   payment_intent_client_secret: string | null;
   decline_code: string | null;
+  /**
+   * B-353-2 / C-352-5: plans whose disputed payment is still open after this
+   * update (from the server's per-plan `dispute_open`, merged with the quote's
+   * disputes). Saving a card did not settle them, so the copy says so. Null
+   * when the answer carries neither (the screen then uses the quote it read
+   * before the card form).
+   */
+  disputes: QuoteDispute[] | null;
   /** The server's own truthful sentence (leads with what was paid). */
   message: string | null;
 }
@@ -276,21 +296,44 @@ export function normalizePaymentQuote(raw: unknown, route: string = ROUTE_QUOTE)
   if (fromLines.size !== fromTotals.size || [...fromLines].some(([cur, amount]) => fromTotals.get(cur) !== amount)) {
     throw new DunningResponseShapeError(route);
   }
-  const disputes = Array.isArray(r.disputes)
-    ? r.disputes.map((d) => {
-        const x = (d && typeof d === 'object' ? d : {}) as Record<string, unknown>;
-        return {
-          purchase_id: str(x.purchase_id) ?? '',
-          coach_name: str(x.coach_name),
-        };
-      })
-    : [];
+  const disputes = Array.isArray(r.disputes) ? r.disputes.map(normalizeDispute) : [];
   return {
     quote_id: str(r.quote_id) as string,
     lines,
     totals: quoteTotals.filter((t) => t.amount_cents > 0),
     disputes,
   };
+}
+
+function normalizeDispute(d: unknown): QuoteDispute {
+  const x = (d && typeof d === 'object' ? d : {}) as Record<string, unknown>;
+  return {
+    purchase_id: str(x.purchase_id) ?? '',
+    coach_name: str(x.coach_name),
+    currency: str(x.currency),
+    amount_cents: cents(x.amount_cents),
+  };
+}
+
+/**
+ * Open disputes after a confirm: every plan the server marks `dispute_open`,
+ * plus the quote's disputes (which carry the reversed amount), one per plan.
+ * A dispute flag is never dropped, even when the plan entry is incomplete.
+ */
+function confirmDisputes(plans: unknown, quote: PaymentQuote | null): QuoteDispute[] | null {
+  if (!Array.isArray(plans) && !quote) return null;
+  const out = new Map<string, QuoteDispute>();
+  for (const d of quote?.disputes ?? []) out.set(d.purchase_id, d);
+  if (Array.isArray(plans)) {
+    plans.forEach((p, i) => {
+      const x = (p && typeof p === 'object' ? p : {}) as Record<string, unknown>;
+      if (x.dispute_open !== true) return;
+      const id = str(x.purchase_id) ?? `plan-${i}`;
+      if (out.has(id)) return;
+      out.set(id, { purchase_id: id, coach_name: str(x.coach_name), currency: str(x.currency), amount_cents: null });
+    });
+  }
+  return [...out.values()];
 }
 
 const OUTCOMES: ReadonlySet<string> = new Set([
@@ -334,6 +377,7 @@ export function normalizeCardUpdate(raw: unknown): CardUpdateResponse {
         ? 'restored'
         : 'unchanged';
   const card = (r.card && typeof r.card === 'object' ? r.card : {}) as Record<string, unknown>;
+  const quote = r.quote ? normalizePaymentQuote(r.quote, route) : null;
   return {
     outcome,
     card_last4: str(card.last4),
@@ -351,9 +395,10 @@ export function normalizeCardUpdate(raw: unknown): CardUpdateResponse {
         : [{ currency: str(r.currency) ?? 'usd', amount_cents: due }],
     access_restored: r.access_restored === true && access === 'restored',
     access_state: access,
-    quote: r.quote ? normalizePaymentQuote(r.quote, route) : null,
+    quote,
     payment_intent_client_secret: secret,
     decline_code: str(r.decline_code),
+    disputes: confirmDisputes(r.plans, quote),
     message: str(r.message),
   };
 }

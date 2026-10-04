@@ -26,6 +26,7 @@ import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
+import { dunningLockoutStore } from '../entitlements/dunning/dunningLockoutStore';
 import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
@@ -437,6 +438,8 @@ export function resetUserScopedStores(): void {
     ['clientStore', () => useClientStore.getState().reset()],
     ['fastingStore', () => useFastingStore.getState().reset()],
     ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
+    // B-352-1: the payment lockout belongs to the signed-in account.
+    ['dunningLockoutStore', () => dunningLockoutStore.retire()],
   ];
   for (const [name, reset] of stores) {
     try {
