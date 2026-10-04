@@ -67,9 +67,10 @@ export interface PackageSelectionSheetProps {
   onDismiss: () => void;
   onPaymentSuccess: () => void;
   /**
-   * "Open your plan" when the client already has the plan
-   * (SUBSCRIPTION_ALREADY_ACTIVE). Defaults to leaving the sheet the same way
-   * a successful payment does: the client is already on the plan.
+   * "Open your plan" (the plan is active, or its status needs checking). B-343-3
+   * (Sol): without it the action reads "Continue to the app" and closes the
+   * sheet like a dismissal, never like a payment success; the notice says
+   * where the plan shows (Membership).
    */
   onOpenPlan?: (purchaseId: string | null) => void;
   /** Waits between plan polls while confirming a subscription. Tests pass zeros. */
@@ -246,9 +247,9 @@ export default function PackageSelectionSheet({
   const openPlan = useCallback(
     (purchaseId: string | null) => {
       if (onOpenPlan) onOpenPlan(purchaseId);
-      else onPaymentSuccess();
+      else onDismiss();
     },
-    [onOpenPlan, onPaymentSuccess],
+    [onOpenPlan, onDismiss],
   );
 
   if (!visible || !ready) return null;
@@ -313,7 +314,12 @@ export default function PackageSelectionSheet({
             })
           )}
 
-          <PurchaseFeedback purchase={purchase} onContinue={onPaymentSuccess} onOpenPlan={openPlan} />
+          <PurchaseFeedback
+            purchase={purchase}
+            onContinue={onPaymentSuccess}
+            onOpenPlan={openPlan}
+            openPlanLabel={onOpenPlan ? undefined : 'Continue to the app'}
+          />
 
           {/* CTA */}
           {done || state.priceChange ? null : (
