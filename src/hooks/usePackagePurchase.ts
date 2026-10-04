@@ -404,6 +404,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           ...(wallet.googlePay ? { googlePay: wallet.googlePay } : {}),
         });
       } catch {
+        // B-343-1 (Sol, 119): a rejected init is fenced like a fulfilled one.
+        if (!live()) return STALE;
         return {
           kind: "notice",
           notice: describeSheetCrash("sheet_init", ref),
@@ -815,7 +817,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       if (!live()) return;
       set({ phase: "paying" });
       const outcome = await runSheet(secrets, "payment", pkg, ref, live);
-      if (outcome.kind === "stale") return;
+      if (outcome.kind === "stale" || !live()) return;
       if (outcome.kind === "canceled") {
         set({ phase: "idle" });
         return;
@@ -1070,7 +1072,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       }
       set({ phase: "paying" });
       const outcome = await runSheet(intent, intent.mode, pkg, ref, live);
-      if (outcome.kind === "stale") return;
+      if (outcome.kind === "stale" || !live()) return;
       if (outcome.kind === "canceled") {
         set({ phase: "idle" });
         return;
