@@ -257,7 +257,7 @@ describe("B-345-1 / B-345-2: the PATCH carries the billing the coach picked", ()
 });
 
 describe("B-329-5: nothing runs after the owner, session or form ended", () => {
-  it("retired while the write-ahead is saving: no create, no callback, no leftover intent", async () => {
+  it("retired while the write-ahead is saving: no create, no callback, the written intent stays (B-345-1)", async () => {
     let release: () => void = () => undefined;
     mockHold.set = new Promise<void>((r) => (release = r));
     let live = true;
@@ -278,7 +278,8 @@ describe("B-329-5: nothing runs after the owner, session or form ended", () => {
     await expect(run).rejects.toBeInstanceOf(PackageCreateStoppedError);
     expect(post()).not.toHaveBeenCalled();
     expect(onIntent).not.toHaveBeenCalled();
-    expect(mockStore.has(KEY)).toBe(false);
+    // B-345-1 (agent 119): another form may have read and sent it.
+    expect(mockStore.has(KEY)).toBe(true);
   });
 
   it("a re-sent create answers after sign-out: no callback, the sent intent stays for the same account", async () => {
