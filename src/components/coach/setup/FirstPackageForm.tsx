@@ -26,11 +26,13 @@ import {
 } from "../../../lib/coachSetup/errors";
 import {
   clearIntent,
+  createErrorCode,
   createPackageOnce,
   intentStorageCopy,
   IntentStorageError,
   isDefinitiveRejection,
   loadIntent,
+  PackageCreateStoppedError,
   type PackageCreateIntent,
 } from "../../../lib/coachSetup/packageCreateIntent";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
@@ -84,6 +86,15 @@ export function storageFailure(err: IntentStorageError): FriendlyError {
   };
 }
 
+/**
+ * C-346-2 (agent 118): the server says the remembered package was archived or
+ * removed since it was made. It can never go live, so the form forgets it and
+ * makes a fresh package in the same tap (machine codes only, never a bare 404).
+ */
+const GONE_PACKAGE_CODES = new Set(["PACKAGE_ARCHIVED", "PACKAGE_NOT_FOUND"]);
+
+const DEFAULT_PRICE_TEXT = "49.00";
+
 interface Props {
   defaultTitle: string;
   defaultDescription?: string | null;
@@ -103,7 +114,7 @@ export default function FirstPackageForm({
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [title, setTitle] = useState(defaultTitle);
   const [free, setFree] = useState(false);
-  const [priceText, setPriceText] = useState("49.00");
+  const [priceText, setPriceText] = useState(DEFAULT_PRICE_TEXT);
   const [monthly, setMonthly] = useState(true);
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
@@ -129,6 +140,12 @@ export default function FirstPackageForm({
   const coachRef = useRef(coachId);
   coachRef.current = coachId;
   const mounted = useRef(true);
+  // B-329-5 (agent 118): bumped on every account change, so a create started
+  // for an earlier account (even one that signs back in) is retired.
+  const generation = useRef(0);
+  const shownFor = useRef(coachId);
+  const resetTitle = useRef(defaultTitle);
+  resetTitle.current = defaultTitle;
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -138,6 +155,22 @@ export default function FirstPackageForm({
 
   useEffect(() => {
     let live = true;
+    if (shownFor.current !== coachId) {
+      // A different account: nothing from the earlier one stays on screen
+      // or in memory, and its running create can no longer write here.
+      shownFor.current = coachId;
+      generation.current += 1;
+      intent.current = null;
+      inFlight.current = false;
+      setBusy(false);
+      setError(null);
+      setInvalid(null);
+      setResumed(false);
+      setTitle(resetTitle.current);
+      setFree(false);
+      setPriceText(DEFAULT_PRICE_TEXT);
+      setMonthly(true);
+    }
     hydrated.current = loadIntent(coachId).then((read) => {
       if (!live || read.kind !== "found" || intent.current) return;
       const stored = read.intent;
@@ -163,7 +196,11 @@ export default function FirstPackageForm({
     inFlight.current = true;
     setBusy(true);
     const owner = coachId;
-    const stillOwner = () => mounted.current && coachRef.current === owner;
+    const myGeneration = generation.current;
+    const stillOwner = () =>
+      mounted.current &&
+      coachRef.current === owner &&
+      generation.current === myGeneration;
     const priceCents = free ? 0 : (parsePriceCents(priceText) ?? 0);
     const billingInterval: PackageBillingInterval =
       free || !monthly ? "one_time" : "monthly";
@@ -191,30 +228,51 @@ export default function FirstPackageForm({
         if (read.kind === "found") earlier = read.intent;
       }
       if (!stillOwner()) return;
-      const { packageId } = await createPackageOnce({
-        coachId: owner,
-        scope: "wizard",
-        input,
-        earlier,
-        deps: {
-          create: (body, key) => coachPackagesApi.create(body, key),
-          update: (id, body) => coachPackagesApi.update(id, body),
-        },
-        onIntent: (next) => {
-          if (coachRef.current === owner) intent.current = next;
-        },
-      });
-      if (!stillOwner()) return;
-      await coachSetupApi.publishPackage(packageId);
+      const makeLive = async (
+        from: PackageCreateIntent | null,
+      ): Promise<string> => {
+        const made = await createPackageOnce({
+          coachId: owner,
+          scope: "wizard",
+          input,
+          earlier: from,
+          deps: {
+            create: (body, key) => coachPackagesApi.create(body, key),
+            update: (id, body) => coachPackagesApi.update(id, body),
+          },
+          onIntent: (next) => {
+            if (stillOwner()) intent.current = next;
+          },
+          isLive: stillOwner,
+        });
+        if (!stillOwner()) throw new PackageCreateStoppedError();
+        await coachSetupApi.publishPackage(made.packageId);
+        if (!stillOwner()) throw new PackageCreateStoppedError();
+        return made.packageId;
+      };
+      let packageId: string;
+      try {
+        packageId = await makeLive(earlier);
+      } catch (err) {
+        const code = createErrorCode(err);
+        if (!earlier || !code || !GONE_PACKAGE_CODES.has(code)) throw err;
+        if (!stillOwner()) return;
+        intent.current = null;
+        await clearIntent(owner);
+        if (!stillOwner()) return;
+        packageId = await makeLive(null);
+      }
       let freeOnJoin = false;
       if (priceCents === 0) {
         const invite = await coachSetupApi.inviteLink();
+        if (!stillOwner()) return;
         await coachSetupApi.bindFreePackage(invite.code, packageId);
+        if (!stillOwner()) return;
         freeOnJoin = true;
       }
-      if (!stillOwner()) return;
       intent.current = null;
       await clearIntent(owner);
+      if (!stillOwner()) return;
       setResumed(false);
       onCreated({
         id: packageId,
@@ -224,15 +282,18 @@ export default function FirstPackageForm({
         freeOnJoin,
       });
     } catch (err) {
-      if (!stillOwner()) return;
+      if (err instanceof PackageCreateStoppedError || !stillOwner()) return;
       setError(
         err instanceof IntentStorageError
           ? storageFailure(err)
           : describeError(err, "create your package"),
       );
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      // An account change already reset the form for the new account.
+      if (generation.current === myGeneration) {
+        inFlight.current = false;
+        if (mounted.current) setBusy(false);
+      }
     }
   };
 
@@ -240,8 +301,8 @@ export default function FirstPackageForm({
     <View testID={testID}>
       {resumed ? (
         <Text style={styles.help} testID={`${testID}-resumed`}>
-          Your package from earlier is saved here. Tap Create package to finish
-          it. It will not be made twice.
+          Your package from earlier is saved on this device. Tap Create package
+          to finish that same package.
         </Text>
       ) : null}
       <Text style={styles.label} nativeID={`${testID}-name-label`}>

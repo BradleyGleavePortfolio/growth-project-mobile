@@ -16,6 +16,11 @@
  * B-329-1 (B-COACH-5): the guarantee holds across restarts because a fresh
  * create is sent only after its intent is on disk, and a storage read that
  * fails is never taken to mean "nothing was sent".
+ *
+ * C-345-1: the intent lives in this device's storage for this account, and
+ * sign-out wipes device storage (R15 shared-device rule). So the guarantee is
+ * "for the same account on this device"; after a sign-out the server keeps
+ * the package, and Packages shows it.
  */
 import { prefsStorage } from "../../storage/mmkv";
 import type { PackageCreateInput } from "../../api/packagesApi";
@@ -171,6 +176,19 @@ export async function clearIntent(
   }
 }
 
+/**
+ * B-329-5 (agent 118): the account, session or screen that started this
+ * create is gone (sign-out, account switch, the form closed). Nothing more is
+ * sent, no callback runs and storage is left as it was, so the same account
+ * can finish the same create later with the same key.
+ */
+export class PackageCreateStoppedError extends Error {
+  constructor() {
+    super("package create stopped");
+    this.name = "PackageCreateStoppedError";
+  }
+}
+
 /** Storage could not hold the create's identity, so nothing was sent. */
 export class IntentStorageError extends Error {
   constructor(readonly reason: "unreadable" | "unsaved" | "no_account") {
@@ -263,6 +281,14 @@ export interface CreateOnceDeps {
  *     made from other details (422 IDEMPOTENCY_KEY_REUSED): that package is
  *     updated with the coach's current details.
  * `onIntent` mirrors every intent change into the caller's memory.
+ *
+ * B-329-5 (agent 118): `isLive` says whether the account, session and screen
+ * that started this create are still the current ones. It is checked before
+ * the first step and again after every await, before any request, callback or
+ * storage write. Once it answers false the create stops with
+ * PackageCreateStoppedError: no request is sent, `onIntent` is not called and
+ * an intent that may already have been sent stays on disk (a fresh intent
+ * that was never sent is removed again).
  */
 export async function createPackageOnce(args: {
   coachId: string | null;
@@ -271,13 +297,21 @@ export async function createPackageOnce(args: {
   earlier: PackageCreateIntent | null;
   deps: CreateOnceDeps;
   onIntent: (next: PackageCreateIntent | null) => void;
+  isLive?: () => boolean;
 }): Promise<{ packageId: string; intent: PackageCreateIntent }> {
   const { coachId, scope, input, deps, onIntent } = args;
+  const isLive = args.isLive ?? (() => true);
+  const stopIfRetired = () => {
+    if (!isLive()) throw new PackageCreateStoppedError();
+  };
   if (!coachId) throw new IntentStorageError("no_account");
+  stopIfRetired();
   const remember = async (next: PackageCreateIntent | null) => {
+    stopIfRetired();
     onIntent(next);
     if (next) await saveIntent(coachId, next, scope);
     else await clearIntent(coachId, scope);
+    stopIfRetired();
   };
   // The server named a package this key made from OTHER details: adopt it
   // and save the coach's current details onto it.
@@ -285,14 +319,18 @@ export async function createPackageOnce(args: {
   const send = async (
     it: PackageCreateIntent,
   ): Promise<PackageCreateIntent> => {
+    stopIfRetired();
     try {
       const res = await deps.create(it.input, it.key);
+      stopIfRetired();
       const done = { ...it, packageId: res.data.id };
       // Not strict: the key already made this package, so a lost write
       // only means a later re-send replays the same package.
       await remember(done);
       return done;
     } catch (err) {
+      if (err instanceof PackageCreateStoppedError) throw err;
+      stopIfRetired();
       const adopt = reusedPackageId(err);
       if (adopt) {
         adopted = true;
@@ -310,6 +348,7 @@ export async function createPackageOnce(args: {
     try {
       current = await send(current);
     } catch (err) {
+      if (err instanceof PackageCreateStoppedError) throw err;
       const removed = createErrorCode(err) === "IDEMPOTENT_PACKAGE_REMOVED";
       if (
         !isDefinitiveRejection(err) ||
@@ -321,15 +360,22 @@ export async function createPackageOnce(args: {
   }
   if (!current) {
     const fresh = newIntent(input);
-    if (!(await saveIntent(coachId, fresh, scope))) {
-      throw new IntentStorageError("unsaved");
+    const saved = await saveIntent(coachId, fresh, scope);
+    if (!isLive()) {
+      // Written but never sent: nothing exists for this key, so removing it
+      // cannot lose a package, and no residue outlives a sign-out wipe.
+      if (saved) await clearIntent(coachId, scope);
+      throw new PackageCreateStoppedError();
     }
+    if (!saved) throw new IntentStorageError("unsaved");
     onIntent(fresh);
     current = await send(fresh);
   }
   const packageId = current.packageId as string;
   if (adopted || !sameCreateInput(current.input, input)) {
+    stopIfRetired();
     await deps.update(packageId, input);
+    stopIfRetired();
     current = { ...current, input };
     await remember(current);
   }
