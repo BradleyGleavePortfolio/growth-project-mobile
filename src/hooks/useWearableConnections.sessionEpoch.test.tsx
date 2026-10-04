@@ -79,7 +79,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
     async (switchAccount) => {
       await recordLocalAuthorization(scope);
       const identity = deferred<{ id: string }>();
-      jest.mocked(readUserCache).mockImplementationOnce(() => identity.promise);
+      jest.mocked(readUserCache).mockImplementationOnce(() => identity.promise as never);
       const { result } = await disconnectHook();
       let pending: Promise<unknown> = Promise.resolve();
       await act(async () => {
@@ -135,7 +135,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
     async (reconnect) => {
       const prior = await recordLocalAuthorization(scope, new Date('2026-10-01T00:00:00.000Z'));
       const keys = await AsyncStorage.getAllKeys();
-      const enumeration = deferred<readonly string[]>();
+      const enumeration = deferred<string[]>();
       jest.spyOn(AsyncStorage, 'getAllKeys').mockClear().mockImplementationOnce(() => enumeration.promise);
       const retiring = retireOnDeviceSource(scope.userId, scope.source, prior.grantedAt);
       await waitFor(() => expect(AsyncStorage.getAllKeys).toHaveBeenCalled());
@@ -159,7 +159,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
       await recordLocalAuthorization({ ...scope, userId: 'user-b', connectionId: 'old-b' });
       mockSignedIn = null;
       const keys = await AsyncStorage.getAllKeys();
-      const enumeration = deferred<readonly string[]>();
+      const enumeration = deferred<string[]>();
       jest.spyOn(AsyncStorage, 'getAllKeys').mockClear().mockImplementationOnce(() => enumeration.promise);
       const { result } = await disconnectHook();
       await act(async () => {
@@ -184,7 +184,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
   it('an account switch during identity capture rejects with the session-change class and sends nothing', async () => {
     await recordLocalAuthorization(scope);
     const identity = deferred<{ id: string }>();
-    jest.mocked(readUserCache).mockImplementationOnce(() => identity.promise);
+    jest.mocked(readUserCache).mockImplementationOnce(() => identity.promise as never);
     const { result } = await disconnectHook();
     let outcome: unknown = 'pending';
     let pending: Promise<unknown> = Promise.resolve();
@@ -209,7 +209,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
   it('a newer Connect during enumeration keeps its grant and its import progress', async () => {
     const prior = await recordLocalAuthorization(scope, new Date('2026-10-01T00:00:00.000Z'));
     await setSyncProgress(scope, { ...emptyProgress(), completedThrough: { Steps: '2026-10-01T00:00:00.000Z' } });
-    const enumeration = deferred<readonly string[]>();
+    const enumeration = deferred<string[]>();
     jest.spyOn(AsyncStorage, 'getAllKeys').mockClear().mockImplementationOnce(() => enumeration.promise);
     const retiring = retireOnDeviceSource(scope.userId, scope.source, prior.grantedAt);
     await waitFor(() => expect(AsyncStorage.getAllKeys).toHaveBeenCalled());
@@ -226,7 +226,7 @@ describe('useDisconnectProvider: session epoch and grant generation', () => {
     await recordLocalAuthorization({ ...scope, userId: 'user-b', connectionId: 'old-b' });
     await recordLocalAuthorization({ ...scope, userId: 'user-c', connectionId: 'old-c' });
     mockSignedIn = null;
-    const enumeration = deferred<readonly string[]>();
+    const enumeration = deferred<string[]>();
     jest.spyOn(AsyncStorage, 'getAllKeys').mockClear().mockImplementationOnce(() => enumeration.promise);
     const { result } = await disconnectHook();
     await act(async () => {

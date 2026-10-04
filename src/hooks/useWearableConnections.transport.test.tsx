@@ -66,7 +66,7 @@ it.each([false, true])(
     };
     let release: (value: { id: string }) => void = () => undefined;
     jest.mocked(readUserCache).mockImplementationOnce(
-      () => new Promise((resolve) => { release = resolve; }),
+      () => new Promise((resolve) => { release = resolve as (value: { id: string }) => void; }),
     );
     const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const wrapper = ({ children }: { children: React.ReactNode }) => (
