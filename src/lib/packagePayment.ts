@@ -509,8 +509,31 @@ export const PACKAGE_PAYMENT_COPY = {
     "This plan needs a signed coaching agreement before payment, so nothing was charged. Message your coach for the agreement, then choose the plan again.",
   inProgress:
     "This payment is still being set up. Wait a few seconds, then start again. You will not be charged twice.",
+  // One-time payment-intent only: there PAYMENT_RETRY means the first request
+  // failed before the card form ever got its secret (proven no charge).
   retrySameAttempt:
     "The last attempt did not finish and nothing was charged. Start again to continue where it stopped. You will not be charged twice.",
+  // B-342-1: the backend has not confirmed the result (recurring PAYMENT_RETRY,
+  // STRIPE_CHECKOUT_ERROR, SUBSCRIPTION_SETUP_UNAVAILABLE). Never a no-charge claim.
+  notConfirmed: (ref: string | null) =>
+    `The last attempt to start this plan did not finish, and its result is not confirmed yet. Open your plan in Membership to check whether it started before you start again. If it is still unclear, email support${ref ? ` and quote reference ${ref}` : ""}.`,
+  // B-342-2: backend #661 answers for a one-time key whose payment finished.
+  alreadyComplete:
+    "This payment already went through, so nothing more was charged. Open your plan to use it.",
+  refundedOrInReview: (ref: string | null) =>
+    `This payment was refunded or is under review, so it cannot be paid again from here. Open your plan in Membership to see its status, or email support${ref ? ` and quote reference ${ref}` : ""}.`,
+  checkoutClosed:
+    "This checkout has closed, so it can no longer be paid. Choose the plan again to start a new checkout.",
+  keyOtherPlan:
+    "That checkout was opened for a different plan, so it was not used for this one. Choose the plan again to start a new checkout.",
+  planChangeUnconfirmed:
+    "The change to this plan was sent, but the payment service has not confirmed it yet. Pull down in a minute to refresh your plans, and choose the change again if your plan still shows the old state.",
+  // The backend in use has no renewing-plan checkout yet (route not found).
+  renewingUnavailable:
+    "This plan renews automatically, and renewing plans cannot be started from the app yet, so this plan did not start and nothing was charged. Message your coach to arrange it.",
+  // B-343-4: the trial already started when this checkout first opened.
+  termsReviewTrialDate:
+    "The free trial on this plan started when this checkout first opened, so the first charge date differs from the one shown. Nothing was charged yet. Review the date, then confirm to continue.",
   rateLimited: (minutes: number) =>
     `There have been too many payment attempts, so this one did not start. Wait ${minutes} ${minutes === 1 ? "minute" : "minutes"}, then start again.`,
   termsChanged:
@@ -553,20 +576,21 @@ export const PACKAGE_PAYMENT_COPY = {
     "Your coach removed this plan from your account. Message your coach to have it restored.",
   freeNoLongerFree:
     "This plan is no longer free, so it was not added. Pull down to see its current price, then choose it again.",
-  setupUnavailable: (ref: string | null) =>
-    `The trial could not be set up right now and nothing was charged. Wait a minute, then start again. If it keeps happening, email support${ref ? ` and quote reference ${ref}` : ""}.`,
   stripeUnavailable: (ref: string | null) =>
     `The payment service did not answer, so nothing was charged. Wait a minute, then start again. If it keeps happening, email support${ref ? ` and quote reference ${ref}` : ""}.`,
   paymentsOff: (ref: string | null) =>
     `Card payments are not switched on for this app yet, so nothing was charged. Email support${ref ? ` and quote reference ${ref}` : ""}.`,
+  // B-342-1: an unmapped answer proves nothing about money: no charge claim.
   unknown: (ref: string | null) =>
-    `The payment did not go through and nothing was charged. Email support${ref ? ` and quote reference ${ref}` : ""}, and the team will sort it out with you.`,
+    `This step did not finish, and its result is not confirmed yet. Open your plan in Membership to see where it stands before you start again. If it is still unclear, email support${ref ? ` and quote reference ${ref}` : ""}.`,
   planPaymentFailed:
     "Your card was not charged for this plan. Start again with a different card, or ask your bank about the payment.",
   // Progress and success
   starting: "Preparing a secure payment form.",
   confirmingPlan: "Confirming your plan.",
   confirming: "Payment received. Setting up your plan.",
+  // B-343-1 (Opus): the card step ended without a clear answer; still reading.
+  checkingPayment: "Checking whether the payment went through.",
   confirmingFree: "Adding your free plan.",
   confirmSlow:
     "Your card was accepted. Stripe is still confirming your plan, which usually takes under a minute. You can carry on; your plan appears in Membership as soon as it is confirmed.",
@@ -606,6 +630,12 @@ export interface PackagePaymentNotice {
   reload?: boolean;
   /** B-334-3: offer Check again (the outcome of the card step is unknown). */
   checkAgain?: boolean;
+  /** Offer "Open your plan" (Membership shows where the plan stands). */
+  openPlan?: boolean;
+  /** The attempt behind this key is finished: the next tap starts a new one. */
+  retireKey?: boolean;
+  /** The backend proved this payment completed: refresh the entitlement. */
+  completed?: boolean;
 }
 
 export type PaymentStep =
@@ -632,20 +662,39 @@ export function reportPackagePaymentFailure(
   } = {},
 ): void {
   try {
-    captureError(new Error(`package payment failed: ${notice.cause}`), {
-      where: "packagePurchase",
-      step,
-      cause: notice.cause,
-      status: extra.status ?? null,
-      code: extra.code ?? null,
-      reference: notice.reference,
-      stripe_error_code: extra.stripe?.code ?? null,
-      stripe_decline_code: extra.stripe?.declineCode ?? null,
-      stripe_error_type: extra.stripe?.type ?? null,
-    });
+    captureError(
+      new Error(
+        `package payment failed: ${machineLabel(notice.cause) ?? "unrecognized"}`,
+      ),
+      {
+        where: "packagePurchase",
+        step,
+        cause: machineLabel(notice.cause) ?? "unrecognized",
+        status: extra.status ?? null,
+        code: machineCode(extra.code),
+        reference: notice.reference,
+        stripe_error_code: machineLabel(extra.stripe?.code),
+        stripe_decline_code: machineLabel(extra.stripe?.declineCode),
+        stripe_error_type: machineLabel(extra.stripe?.type),
+      },
+    );
   } catch {
     // Reporting can never break the payment flow.
   }
+}
+
+/**
+ * C-342-1 (Sol): only bounded machine labels reach Sentry. A backend code is
+ * UPPER_SNAKE; a Stripe native label is a short identifier. Anything else
+ * (free text, an address, a sentence) is dropped.
+ */
+const MACHINE_CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
+const MACHINE_LABEL = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
+export function machineCode(v: unknown): string | null {
+  return typeof v === "string" && MACHINE_CODE.test(v) ? v : null;
+}
+function machineLabel(v: unknown): string | null {
+  return typeof v === "string" && MACHINE_LABEL.test(v) ? v : null;
 }
 
 /** The backend machine code (`code`, else the thrown body's `error`), or null. */
@@ -726,11 +775,14 @@ export function describeBackendFailure(
   ctx: DescribeContext = {},
 ): PackagePaymentNotice {
   if (err instanceof PaymentIntentShapeError) {
-    const n = supportNotice(
-      "response_shape",
-      attemptRef,
-      PACKAGE_PAYMENT_COPY.unknown(attemptRef),
-    );
+    const n: PackagePaymentNotice = {
+      ...supportNotice(
+        "response_shape",
+        attemptRef,
+        PACKAGE_PAYMENT_COPY.unknown(attemptRef),
+      ),
+      openPlan: true,
+    };
     reportPackagePaymentFailure(step, n, { status: 200, code: err.message });
     return n;
   }
@@ -738,6 +790,34 @@ export function describeBackendFailure(
   if (status === null) return notice("offline", PACKAGE_PAYMENT_COPY.offline);
   const code = backendCodeOf(err);
   const ref = shortReference(supportReferenceOf(err)) ?? attemptRef;
+
+  // Today's production backend has no renewing-plan checkout: the route
+  // itself is missing (a bare 404, no machine code), so nothing ran.
+  if (
+    status === 404 &&
+    step === "subscription_intent" &&
+    (code === null || code === "Not Found")
+  ) {
+    const n = notice(
+      "renewing_unavailable",
+      PACKAGE_PAYMENT_COPY.renewingUnavailable,
+    );
+    reportPackagePaymentFailure(step, n, { status });
+    return n;
+  }
+  /** B-342-1: the backend has not confirmed the result; the key is kept. */
+  const notConfirmed = (): PackagePaymentNotice => {
+    const n: PackagePaymentNotice = {
+      ...supportNotice(
+        "not_confirmed",
+        ref,
+        PACKAGE_PAYMENT_COPY.notConfirmed(ref),
+      ),
+      openPlan: true,
+    };
+    reportPackagePaymentFailure(step, n, { status, code });
+    return n;
+  };
 
   if (status === 401)
     return notice("session_ended", PACKAGE_PAYMENT_COPY.sessionEnded);
@@ -781,9 +861,41 @@ export function describeBackendFailure(
     case "PAYMENT_IN_PROGRESS":
       return notice("in_progress", PACKAGE_PAYMENT_COPY.inProgress);
     case "PAYMENT_RETRY":
+      return step === "subscription_intent"
+        ? notConfirmed()
+        : notice("retry_same_attempt", PACKAGE_PAYMENT_COPY.retrySameAttempt);
+    // B-342-2: backend #661 replay answers for a finished one-time key.
+    case "PAYMENT_ALREADY_COMPLETE":
+      return {
+        ...notice("already_complete", PACKAGE_PAYMENT_COPY.alreadyComplete),
+        openPlan: true,
+        completed: true,
+        retireKey: true,
+      };
+    case "PAYMENT_REFUNDED_OR_IN_REVIEW":
+      return {
+        ...supportNotice(
+          "refunded_or_in_review",
+          ref,
+          PACKAGE_PAYMENT_COPY.refundedOrInReview(ref),
+        ),
+        openPlan: true,
+      };
+    case "PAYMENT_CHECKOUT_CLOSED":
+      return {
+        ...notice("checkout_closed", PACKAGE_PAYMENT_COPY.checkoutClosed),
+        retireKey: true,
+      };
+    case "CHECKOUT_KEY_OTHER_PLAN":
+      return {
+        ...notice("key_other_plan", PACKAGE_PAYMENT_COPY.keyOtherPlan),
+        retireKey: true,
+      };
+    case "PLAN_CHANGE_UNCONFIRMED":
       return notice(
-        "retry_same_attempt",
-        PACKAGE_PAYMENT_COPY.retrySameAttempt,
+        "plan_change_unconfirmed",
+        PACKAGE_PAYMENT_COPY.planChangeUnconfirmed,
+        true,
       );
     case "RECURRING_REQUIRES_SUBSCRIPTION":
     case "ONE_TIME_REQUIRES_PAYMENT_INTENT":
@@ -815,13 +927,16 @@ export function describeBackendFailure(
       );
     }
     case "SUBSCRIPTION_ATTEMPT_EXPIRED":
-      return backendFieldOf(err, "reason") === "terms_changed"
-        ? notice(
-            "attempt_expired_terms_changed",
-            PACKAGE_PAYMENT_COPY.attemptExpiredTermsChanged,
-            true,
-          )
-        : notice("attempt_expired", PACKAGE_PAYMENT_COPY.attemptExpired);
+      return {
+        ...(backendFieldOf(err, "reason") === "terms_changed"
+          ? notice(
+              "attempt_expired_terms_changed",
+              PACKAGE_PAYMENT_COPY.attemptExpiredTermsChanged,
+              true,
+            )
+          : notice("attempt_expired", PACKAGE_PAYMENT_COPY.attemptExpired)),
+        retireKey: true,
+      };
     case "PACKAGE_COACH_NOT_CONNECTED":
       return notice(
         "package_coach_not_connected",
@@ -850,16 +965,11 @@ export function describeBackendFailure(
         PACKAGE_PAYMENT_COPY.planAlreadyEnded,
         true,
       );
-    case "SUBSCRIPTION_SETUP_UNAVAILABLE": {
-      const n = supportNotice(
-        "setup_unavailable",
-        ref,
-        PACKAGE_PAYMENT_COPY.setupUnavailable(ref),
-      );
-      reportPackagePaymentFailure(step, n, { status, code });
-      return n;
-    }
+    // B-342-1: on subscription-intent these two codes do not prove no charge.
+    case "SUBSCRIPTION_SETUP_UNAVAILABLE":
+      return notConfirmed();
     case "STRIPE_CHECKOUT_ERROR": {
+      if (step === "subscription_intent") return notConfirmed();
       const n = supportNotice(
         "stripe_unavailable",
         ref,
@@ -878,14 +988,17 @@ export function describeBackendFailure(
       return n;
     }
     default: {
-      const n = supportNotice(
-        code
-          ? `backend_${code.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`
-          : `http_${status}`,
-        ref,
-        PACKAGE_PAYMENT_COPY.unknown(ref),
-      );
-      reportPackagePaymentFailure(step, n, { status, code });
+      // B-342-1: an unmapped answer proves nothing: neutral copy, key kept.
+      const known = machineCode(code);
+      const n: PackagePaymentNotice = {
+        ...supportNotice(
+          known ? `backend_${known.toLowerCase()}` : `http_${status}`,
+          ref,
+          PACKAGE_PAYMENT_COPY.unknown(ref),
+        ),
+        openPlan: true,
+      };
+      reportPackagePaymentFailure(step, n, { status, code: known });
       return n;
     }
   }
@@ -978,11 +1091,14 @@ export function describeSheetFailure(
   if (error.type === "api_connection_error") {
     return notice("connection_dropped", PACKAGE_PAYMENT_COPY.connectionDropped);
   }
-  const n = supportNotice(
-    `stripe_${step}`,
-    attemptRef,
-    PACKAGE_PAYMENT_COPY.unknown(attemptRef),
-  );
+  const n: PackagePaymentNotice = {
+    ...supportNotice(
+      `stripe_${step}`,
+      attemptRef,
+      PACKAGE_PAYMENT_COPY.unknown(attemptRef),
+    ),
+    openPlan: true,
+  };
   reportPackagePaymentFailure(step, n, { stripe: error });
   return n;
 }
@@ -992,11 +1108,14 @@ export function describeSheetCrash(
   step: "sheet_init" | "sheet_present",
   attemptRef: string | null,
 ): PackagePaymentNotice {
-  const n = supportNotice(
-    `stripe_${step}_threw`,
-    attemptRef,
-    PACKAGE_PAYMENT_COPY.unknown(attemptRef),
-  );
+  const n: PackagePaymentNotice = {
+    ...supportNotice(
+      `stripe_${step}_threw`,
+      attemptRef,
+      PACKAGE_PAYMENT_COPY.unknown(attemptRef),
+    ),
+    openPlan: true,
+  };
   reportPackagePaymentFailure(step, n);
   return n;
 }
