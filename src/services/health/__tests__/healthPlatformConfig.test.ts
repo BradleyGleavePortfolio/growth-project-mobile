@@ -15,6 +15,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 import { HEALTH_CONNECT_RECORD_TYPES } from '../healthConnect/healthConnectClient';
+import { PRIVACY_POLICY_URL } from '../../../config/env';
 
 const ROOT = path.join(__dirname, '..', '..', '..', '..');
 const appJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8')) as {
@@ -193,6 +194,28 @@ describe('withHealthConnectPermissionDelegate', () => {
     expect(out).toMatch(
       /super\.onCreate\(null\)\n\s+HealthConnectPermissionDelegate\.setPermissionDelegate\(this\)/,
     );
+  });
+
+  // B-364-2 (Opus H6 probe, run 37220808402): Health Connect's privacy policy link (the
+  // rationale filter and the Android 14 alias both target MainActivity) opens the policy.
+  it('MainActivity opens the privacy policy for both Health Connect privacy intents', () => {
+    const out = plugin.addDelegateToMainActivity(APK_MAIN_ACTIVITY, 'kt');
+    expect(out).toMatch(
+      /setPermissionDelegate\(this\)\n\s+if \(showHealthConnectPrivacyPolicy\(intent\)\) finish\(\)\n\s+\}/,
+    );
+    expect(out).toMatch(
+      /override fun onNewIntent\(intent: android\.content\.Intent\) \{\n\s+super\.onNewIntent\(intent\)\n\s+showHealthConnectPrivacyPolicy\(intent\)/,
+    );
+    expect(out).toContain('"androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE"');
+    expect(out).toContain('"android.intent.action.VIEW_PERMISSION_USAGE"');
+    expect(out).toContain(`android.net.Uri.parse("${PRIVACY_POLICY_URL}")`);
+    expect(out).toMatch(/\n {2}\}\n\}\n$/);
+  });
+
+  it('fails loudly where the privacy policy handler cannot be added', () => {
+    const withIntent = APK_MAIN_ACTIVITY.replace(/\}\n$/, '  override fun onNewIntent(i: Intent) {}\n}\n');
+    expect(() => plugin.addDelegateToMainActivity(withIntent, 'kt')).toThrow(/onNewIntent/);
+    expect(() => plugin.addDelegateToMainActivity(APK_MAIN_ACTIVITY, 'java')).toThrow(/Kotlin/);
   });
 
   it('is idempotent across repeated prebuilds', () => {

@@ -17,18 +17,50 @@
  *    HEALTH_PERMISSIONS category. (Android 13 and below use the
  *    ACTION_SHOW_PERMISSIONS_RATIONALE filter the library plugin adds.)
  *
- * Both edits are idempotent so repeated prebuilds do not duplicate them.
+ * 3. B-364-2: both of those land on MainActivity, which must show the privacy
+ *    policy (the Play Console one, PRIVACY_POLICY_URL in src/config/env.ts).
+ *    MainActivity opens it for either intent: on a cold start it then
+ *    finishes, while the app is running it handles them in onNewIntent.
+ *
+ * All edits are idempotent so repeated prebuilds do not duplicate them.
  */
 const { withAndroidManifest, withMainActivity } = require('expo/config-plugins');
 
 const DELEGATE_IMPORT = 'dev.matinzd.healthconnect.permissions.HealthConnectPermissionDelegate';
 const DELEGATE_CALL = 'HealthConnectPermissionDelegate.setPermissionDelegate(this)';
 const ALIAS_NAME = 'ViewPermissionUsageActivity';
+const PRIVACY_POLICY_URL = 'https://app.trygrowthproject.com/privacy';
+const PRIVACY_CHECK = 'if (showHealthConnectPrivacyPolicy(intent)) finish()';
+const PRIVACY_MEMBERS = `
+  // B-364-2: Health Connect's privacy policy link (Android 13 rationale, Android 14+ usage).
+  override fun onNewIntent(intent: android.content.Intent) {
+    super.onNewIntent(intent)
+    showHealthConnectPrivacyPolicy(intent)
+  }
+
+  private fun showHealthConnectPrivacyPolicy(intent: android.content.Intent?): Boolean {
+    val action = intent?.action
+    if (action != "androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" &&
+      action != "android.intent.action.VIEW_PERMISSION_USAGE") return false
+    val policy = android.net.Uri.parse("${PRIVACY_POLICY_URL}")
+    return try {
+      startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, policy))
+      true
+    } catch (e: android.content.ActivityNotFoundException) {
+      false
+    }
+  }
+`;
 
 function addDelegateToMainActivity(contents, language) {
   if (contents.includes(DELEGATE_CALL)) return contents;
-  const kotlin = language !== 'java';
-  const importLine = kotlin ? `import ${DELEGATE_IMPORT}` : `import ${DELEGATE_IMPORT};`;
+  if (language === 'java') {
+    throw new Error('withHealthConnectPermissionDelegate: needs a Kotlin MainActivity.');
+  }
+  if (/fun onNewIntent\(/.test(contents)) {
+    throw new Error('withHealthConnectPermissionDelegate: MainActivity already has onNewIntent.');
+  }
+  const importLine = `import ${DELEGATE_IMPORT}`;
   let out = contents;
   if (!out.includes(importLine)) {
     out = out.replace(/^(package [^\n]+\n)/m, `$1\n${importLine}\n`);
@@ -39,8 +71,8 @@ function addDelegateToMainActivity(contents, language) {
       'withHealthConnectPermissionDelegate: MainActivity has no super.onCreate(...) call to anchor on.',
     );
   }
-  const call = kotlin ? DELEGATE_CALL : `${DELEGATE_CALL};`;
-  return out.replace(superCall, `$1\n    ${call}`);
+  out = out.replace(superCall, `$1\n    ${DELEGATE_CALL}\n    ${PRIVACY_CHECK}`);
+  return out.replace(/\}\s*$/, `${PRIVACY_MEMBERS}}\n`);
 }
 
 function addPermissionUsageAlias(manifest) {
