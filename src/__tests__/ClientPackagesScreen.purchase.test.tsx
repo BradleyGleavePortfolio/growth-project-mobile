@@ -130,7 +130,7 @@ it('Your plans: End my plan confirms, then cancels at period end through the #62
     expect(mockPost).toHaveBeenCalledWith('/v1/checkout/subscriptions/purchase-1/cancel', {}),
   );
   expect(alertSpy.mock.calls[0][1]).toBe(
-    'Your plan stays active until November 2, 2026, and nothing more is charged after that.',
+    'Your plan stays active until November 2, 2026, and nothing more is charged after that. If a payment is overdue, ending it ends access now instead and cancels the unpaid charge.',
   );
   alertSpy.mockRestore();
 });

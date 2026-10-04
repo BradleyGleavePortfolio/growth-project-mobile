@@ -155,3 +155,48 @@ describe('B-344-4/6 plan copy and a working support path', () => {
     await waitFor(() => expect(r.getByTestId('your-plans-support-fallback-address')).toBeTruthy());
   });
 });
+
+describe('B-SHEET5-119: receipt truth (B-344-7), no stale End (B-344-2), newer reads win (B-344-3)', () => {
+  const TRIAL = { ...PLAN, state: 'trialing', next_charge_at: null, trial_ends_at: '2026-11-02T12:00:00.000Z' };
+  it.each([
+    [TRIAL, '2026-11-02T12:00:00.000Z', 'Your free trial ends on November 2, 2026, and nothing is charged.'],
+    [TRIAL, '2026-12-02T12:00:00.000Z', 'Your plan will not renew. Access continues until December 2, 2026, and nothing more is charged.'],
+    [PLAN, '2026-11-02T12:00:00.000Z', 'Your plan will not renew. Access continues until November 2, 2026, and nothing more is charged.'],
+  ])('scheduled end %#: the line claims no payment that did not happen', async (plan, end, copy) => {
+    mockGet.mockResolvedValueOnce(ok(plan)).mockRejectedValue(http(503, { code: 'X_DOWN' }));
+    mockPost.mockResolvedValue(cancelResult({ outcome: 'scheduled', access_ends_at: end }));
+    autoConfirm();
+    const r = await render(<YourPlansPanel />);
+    await waitFor(() => expect(r.getByTestId(`your-plan-end-${ID}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`your-plan-end-${ID}`));
+    await waitFor(() => expect(r.getByTestId('your-plans-stale')).toBeTruthy());
+    expect(line(r)).toBe(copy);
+  });
+  it('End my plan on a card whose refresh failed sends nothing and offers a refresh', async () => {
+    mockGet.mockResolvedValueOnce(ok(PLAN)).mockRejectedValueOnce(http(503, { code: 'X_DOWN' })).mockResolvedValue(ok(PLAN));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const r = await render(<YourPlansPanel reloadKey={0} />);
+    await waitFor(() => expect(r.getByTestId(`your-plan-end-${ID}`)).toBeTruthy());
+    await r.rerender(<YourPlansPanel reloadKey={1} />);
+    await waitFor(() => expect(r.getByTestId('your-plans-stale')).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`your-plan-end-${ID}`));
+    expect(alert.mock.calls[0][0]).toBe('Refresh your plans first');
+    expect(alert.mock.calls[0][2]?.some((b) => b.style === 'destructive')).toBe(false);
+    await act(async () => { alert.mock.calls[0][2]?.[1]?.onPress?.(); });
+    await waitFor(() => expect(r.queryByTestId('your-plans-stale')).toBeNull());
+    await fireEvent.press(r.getByTestId(`your-plan-end-${ID}`));
+    expect(alert.mock.calls[1][1]).toMatch(/until November 2, 2026, .* If a payment is overdue, ending it ends access now instead/);
+    expect(mockPost).not.toHaveBeenCalled();
+  });
+  it('a newer read showing the plan renewing again replaces the old cancel receipt', async () => {
+    mockGet.mockResolvedValueOnce(ok(PLAN)).mockRejectedValueOnce(http(503, { code: 'X_DOWN' })).mockResolvedValue(ok(PLAN));
+    mockPost.mockResolvedValue(cancelResult({ outcome: 'scheduled', access_ends_at: '2026-11-02T12:00:00.000Z' }));
+    autoConfirm();
+    const r = await render(<YourPlansPanel />);
+    await waitFor(() => expect(r.getByTestId(`your-plan-end-${ID}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`your-plan-end-${ID}`));
+    await waitFor(() => expect(r.getByTestId('your-plans-stale')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('your-plans-retry'));
+    await waitFor(() => expect(line(r)).toBe('Next charge of $99.00 a month on November 2, 2026.'));
+  });
+});
