@@ -22,12 +22,13 @@ import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
 import { Platform } from 'react-native';
 import {
   getLocalAuthorization,
+  localAuthorizationSeq,
   retireOnDeviceSource,
-  retireOnDeviceState,
   type OnDeviceSource,
 } from '../services/health/onDeviceState';
 import {
   currentAuthGeneration,
+  OnDeviceSessionChangedError,
   readSignedInUserId,
   stopOnDeviceHealthWork,
 } from '../services/health/sessionFence';
@@ -129,18 +130,22 @@ function phoneSource(): OnDeviceSource | null {
  *
  * On-device sources (A-317-1 / B-317-1) also retire this phone's local
  * authorization and progress, so nothing is read again until Connect:
- * - Sol B-362-2: the person and auth generation are captured before the
- *   first await. Cleanup removes only that person's records, and only while
- *   the authorization seen at the start is still the stored one. A response
- *   that lands after a sign-out or account switch refetches and reports
- *   nothing for the next person.
+ * - Sol B-362-6: the auth generation is captured before the first await and
+ *   re-checked after each one; when it moved, nothing is sent (the error is
+ *   {@link OnDeviceSessionChangedError}). The provider API checks it again
+ *   after the token is attached, immediately before the request leaves.
+ * - Sol B-362-2: cleanup removes only the originating person's records, only
+ *   while the authorization seen at the start is still the stored one, and
+ *   never a grant written after the Disconnect started. A response that lands
+ *   after a sign-out or account switch retires the originating person's
+ *   records only, invalidates nothing and reports nothing for the next person.
  * - Sol B-362-3 / C-362-3: on a current success for this phone's source,
  *   every running on-device read stops synchronously, before any cleanup
  *   await: no further native page, ingest request or progress write.
  * - Sol B-362-1 / C-362-1: a failed cleanup logs a fixed class only.
  * - Sol H6 probe: when the person is unknown (no readable session cache), a
  *   current Disconnect retires the source for every account on this phone,
- *   so Disconnect still stops reading.
+ *   except a grant written after it started, so Disconnect still stops reading.
  */
 export function useDisconnectProvider() {
   const qc = useQueryClient();
@@ -148,15 +153,21 @@ export function useDisconnectProvider() {
     mutationFn: async (requested) => {
       const provider = connectionProviderFor(requested);
       const generation = currentAuthGeneration();
+      const since = localAuthorizationSeq();
+      const assertSession = () => {
+        if (currentAuthGeneration() !== generation) throw new OnDeviceSessionChangedError();
+      };
       const source: OnDeviceSource | null =
         provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT' ? provider : null;
       const userId = source != null ? await readSignedInUserId() : null;
+      assertSession();
       const grant =
         userId != null && source != null ? await getLocalAuthorization(userId, source) : null;
+      assertSession();
       const result = await wearablesConnectionsApi.disconnect(provider);
       const retireOwn = () =>
         userId != null && source != null
-          ? retireOnDeviceSource(userId, source, grant?.grantedAt ?? null)
+          ? retireOnDeviceSource(userId, source, grant?.grantedAt ?? null, since)
           : Promise.resolve();
       if (currentAuthGeneration() !== generation) {
         // Stale: only the originating person's own records are retired.
@@ -166,7 +177,9 @@ export function useDisconnectProvider() {
       if (source != null && source === phoneSource()) stopOnDeviceHealthWork();
       const live = currentAuthGeneration(); // the stop above moves it
       const retire = () =>
-        source != null && userId == null ? retireOnDeviceState(source) : retireOwn();
+        source != null && userId == null
+          ? retireOnDeviceSource(null, source, null, since)
+          : retireOwn();
       void retire()
         .catch((err: unknown) => {
           if (currentAuthGeneration() !== live) return;

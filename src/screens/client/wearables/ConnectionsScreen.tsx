@@ -55,6 +55,7 @@ import {
 import { notSyncingHereCopy } from './onDeviceCopy';
 import DisconnectConfirmDialog from './DisconnectConfirmDialog';
 import { disconnectFailureMessage } from './disconnectCopy';
+import { isOnDeviceStop } from '../../../services/health/sessionFence';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
 
@@ -354,6 +355,11 @@ export default function ConnectionsScreen() {
         setConfirmProvider(null);
       },
       onError: (err: unknown) => {
+        // Sol B-362-6: the account changed first and nothing was sent; nothing to report.
+        if (isOnDeviceStop(err)) {
+          setConfirmProvider(null);
+          return;
+        }
         const failure = disconnectFailureMessage(err, name);
         if (failure.kind === 'already') {
           setConfirmProvider(null);

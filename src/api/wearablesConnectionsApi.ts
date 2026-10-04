@@ -36,6 +36,7 @@
 
 import { z } from 'zod';
 import api from '../services/api';
+import { currentAuthGeneration, OnDeviceSessionChangedError } from '../services/health/sessionFence';
 
 // ─── Provider enum (mirror of backend `WearableProvider`) ────────────────────
 
@@ -369,10 +370,22 @@ export const wearablesConnectionsApi = {
    * Soft-disconnect the caller's connection for a provider. Idempotent from the
    * UI's perspective: a 404 (no connection) is surfaced as a thrown error so
    * the caller never mistakes a no-op for success.
+   *
+   * Sol B-362-6: the request leaves only for the session it started in. The
+   * fence runs after the auth interceptor attached the token, synchronously
+   * before dispatch (also on a 401 retry); after any auth event nothing is sent.
+   * @throws OnDeviceSessionChangedError when the session changed first.
    * @throws ZodError on a drifted response.
    */
   async disconnect(provider: WearableProvider): Promise<DisconnectResult> {
-    const res = await api.delete<unknown>(`${BASE}/${provider}`);
+    const generation = currentAuthGeneration();
+    const sameSession = (data: unknown) => {
+      if (currentAuthGeneration() !== generation) throw new OnDeviceSessionChangedError();
+      return data;
+    };
+    const res = await api.delete<unknown>(`${BASE}/${provider}`, {
+      transformRequest: [sameSession, ...[api.defaults.transformRequest ?? []].flat()],
+    });
     return disconnectResultSchema.parse(res.data);
   },
 };
