@@ -496,10 +496,13 @@ export const PACKAGE_PAYMENT_COPY = {
     "This plan no longer includes a free trial for you, so it starts with a charge today. Nothing was charged yet. Review the current terms, then confirm to continue.",
   termsReview:
     "The terms of this plan changed since it was shown. Nothing was charged yet. Review the current terms, then confirm to continue.",
-  packageUnavailable:
-    "This plan is no longer offered, so nothing was charged. Pull down to see your coach’s current plans, or message your coach.",
-  packageUnavailableShareLink:
-    "This plan cannot be bought from this account. It is either no longer offered or it belongs to a coach you are not connected with. Nothing was charged. Message the coach who shared the link.",
+  // B-342-1 (Sol, 119): the backend checks availability before the key, so
+  // this refusal says nothing about an earlier unclear attempt on the same
+  // key. Never a no-charge claim; the key is kept.
+  packageUnavailable: (ref: string | null) =>
+    `This plan is no longer offered, so it cannot be started from here. If an earlier payment for it did not show a clear result, open your plan in Membership to check it, or email support${ref ? ` and quote reference ${ref}` : ""}. Pull down to see your coach’s current plans, or message your coach.`,
+  packageUnavailableShareLink: (ref: string | null) =>
+    `This plan cannot be bought from this account. It is either no longer offered or it belongs to a coach you are not connected with. If an earlier payment for it did not show a clear result, open your plan in Membership to check it, or email support${ref ? ` and quote reference ${ref}` : ""}. Otherwise, message the coach who shared the link.`,
   accountMissing:
     "Your account could not be found, so nothing was charged. Sign out, sign back in, then choose your plan.",
   coachMissing: (ref: string | null) =>
@@ -835,17 +838,23 @@ export function describeBackendFailure(
       PACKAGE_PAYMENT_COPY.rateLimited(retryAfterMinutes(err)),
     );
   switch (code) {
-    case "PACKAGE_NOT_FOUND":
-      return ctx.surface === "share_link"
-        ? notice(
-            "package_unavailable",
-            PACKAGE_PAYMENT_COPY.packageUnavailableShareLink,
-          )
-        : notice(
-            "package_unavailable",
-            PACKAGE_PAYMENT_COPY.packageUnavailable,
-            true,
-          );
+    case "PACKAGE_NOT_FOUND": {
+      // B-342-1 (Sol, 119): the attempt's own reference (the one an unclear
+      // earlier result showed), so support can find that attempt.
+      const keyRef = attemptRef ?? ref;
+      const share = ctx.surface === "share_link";
+      return {
+        ...supportNotice(
+          "package_unavailable",
+          keyRef,
+          share
+            ? PACKAGE_PAYMENT_COPY.packageUnavailableShareLink(keyRef)
+            : PACKAGE_PAYMENT_COPY.packageUnavailable(keyRef),
+        ),
+        openPlan: true,
+        ...(share ? {} : { reload: true }),
+      };
+    }
     case "CLIENT_NOT_FOUND":
       return notice("account_missing", PACKAGE_PAYMENT_COPY.accountMissing);
     case "COACH_NOT_FOUND": {
