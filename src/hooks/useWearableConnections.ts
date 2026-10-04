@@ -19,12 +19,17 @@
  */
 
 import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
+import { Platform } from 'react-native';
 import {
   getLocalAuthorization,
-  retireOnDeviceState,
+  retireOnDeviceSource,
   type OnDeviceSource,
 } from '../services/health/onDeviceState';
-import { readSignedInUserId } from '../services/health/sessionFence';
+import {
+  currentAuthGeneration,
+  readSignedInUserId,
+  stopOnDeviceHealthWork,
+} from '../services/health/sessionFence';
 import { logger } from '../utils/logger';
 import {
   useMutation,
@@ -103,27 +108,73 @@ export function useStartOauth() {
 }
 
 /**
+ * B-364-1: Samsung Health shares its data through Health Connect and has no
+ * connection of its own, so its row disconnects Health Connect.
+ */
+function connectionProviderFor(provider: WearableProvider): WearableProvider {
+  return provider === 'SAMSUNG_HEALTH' ? 'HEALTH_CONNECT' : provider;
+}
+
+/** This phone's on-device source, or null (web). */
+function phoneSource(): OnDeviceSource | null {
+  if (Platform.OS === 'ios') return 'APPLE_HEALTHKIT';
+  if (Platform.OS === 'android') return 'HEALTH_CONNECT';
+  return null;
+}
+
+/**
  * Soft-disconnect a provider, then invalidate the connections cache so the row
  * re-renders with `status='disconnected'`.
+ *
+ * On-device sources (A-317-1 / B-317-1) also retire this phone's local
+ * authorization and progress, so nothing is read again until Connect:
+ * - Sol B-362-2: the person and auth generation are captured before the
+ *   first await. Cleanup removes only that person's records, and only while
+ *   the authorization seen at the start is still the stored one. A response
+ *   that lands after a sign-out or account switch refetches and reports
+ *   nothing for the next person.
+ * - Sol B-362-3 / C-362-3: on a current success for this phone's source,
+ *   every running on-device read stops synchronously, before any cleanup
+ *   await: no further native page, ingest request or progress write.
+ * - Sol B-362-1 / C-362-1: a failed cleanup logs a fixed class only.
  */
 export function useDisconnectProvider() {
   const qc = useQueryClient();
   return useMutation<DisconnectResult, Error, WearableProvider>({
-    mutationFn: (provider) => wearablesConnectionsApi.disconnect(provider),
-    onSuccess: (_result, provider) => {
-      // S14 (A-317-1 / B-317-1): disconnecting an on-device source retires
-      // this phone's local authorization and progress for it, so nothing is
-      // read again until the person taps Connect again.
-      if (provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT') {
-        retireOnDeviceState(provider)
-          .catch((err: unknown) => {
-            logger.warn('[wearables] retire on-device state failed', err);
-          })
-          .finally(() => {
-            void qc.invalidateQueries({ queryKey: ON_DEVICE_LOCAL_AUTH_QUERY_KEY });
-          });
+    mutationFn: async (requested) => {
+      const provider = connectionProviderFor(requested);
+      const generation = currentAuthGeneration();
+      const source: OnDeviceSource | null =
+        provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT' ? provider : null;
+      const userId = source != null ? await readSignedInUserId() : null;
+      const grant =
+        userId != null && source != null ? await getLocalAuthorization(userId, source) : null;
+      const result = await wearablesConnectionsApi.disconnect(provider);
+      const retire = () =>
+        userId != null && source != null
+          ? retireOnDeviceSource(userId, source, grant?.grantedAt ?? null)
+          : Promise.resolve();
+      if (currentAuthGeneration() !== generation) {
+        // Stale: only the originating person's own records are retired.
+        void retire().catch(() => undefined);
+        return result;
       }
-      qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+      if (source != null && source === phoneSource()) stopOnDeviceHealthWork();
+      const live = currentAuthGeneration(); // the stop above moves it
+      void retire()
+        .catch((err: unknown) => {
+          if (currentAuthGeneration() !== live) return;
+          logger.warn('[wearables] retire on-device state failed', {
+            error: err instanceof Error ? 'error' : 'other',
+          });
+        })
+        .finally(() => {
+          if (source != null && currentAuthGeneration() === live) {
+            void qc.invalidateQueries({ queryKey: ON_DEVICE_LOCAL_AUTH_QUERY_KEY });
+          }
+        });
+      void qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+      return result;
     },
   });
 }

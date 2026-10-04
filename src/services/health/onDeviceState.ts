@@ -148,6 +148,26 @@ export async function retireOnDeviceState(source?: OnDeviceSource): Promise<void
   if (doomed.length > 0) await AsyncStorage.removeMany(doomed);
 }
 
+/**
+ * Disconnect cleanup for ONE person and source (Sol B-362-2): removes that
+ * person's local authorization and progress for `source`, never another
+ * account's. `grantedAt` is the authorization seen when the disconnect
+ * started (null for none): when a different one is stored now (a newer
+ * Connect), nothing is removed.
+ */
+export async function retireOnDeviceSource(
+  userId: string,
+  source: OnDeviceSource,
+  grantedAt: string | null,
+): Promise<void> {
+  const current = await getLocalAuthorization(userId, source);
+  if ((current?.grantedAt ?? null) !== grantedAt) return;
+  const progressPrefix = `${ON_DEVICE_STATE_PREFIX}progress:${source}:${userId}:`;
+  const keys = await AsyncStorage.getAllKeys();
+  const doomed = keys.filter((k) => k === authKey(userId, source) || k.startsWith(progressPrefix));
+  if (doomed.length > 0) await AsyncStorage.removeMany(doomed);
+}
+
 /** Read the progress for a scope (empty when none or unreadable). */
 export async function getSyncProgress(scope: OnDeviceScope): Promise<SyncProgress> {
   const parsed = await readJson(progressKey(scope));
