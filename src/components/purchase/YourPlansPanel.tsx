@@ -52,10 +52,13 @@ export const YOUR_PLANS_COPY = {
   endPlan: "End my plan",
   keepPlan: "Keep my plan",
   endConfirmTitle: "End this plan?",
+  // B-344-2: the server ends now (2A) whenever it holds a payment as overdue.
   endConfirmBody: (date: string | null) =>
-    date
-      ? `Your plan stays active until ${date}, and nothing more is charged after that.`
-      : "Your plan stays active until the end of the period you paid for, and nothing more is charged after that.",
+    `${date ? `Your plan stays active until ${date}` : "Your plan stays active until the end of the current period"}, and nothing more is charged after that. If a payment is overdue, ending it ends access now instead and cancels the unpaid charge.`,
+  staleTitle: "Refresh your plans first",
+  staleBody:
+    "The latest details of this plan could not load, so it is not confirmed what ending it would do. Refresh your plans before choosing End my plan.",
+  staleRefresh: "Refresh plans",
   endConfirmAction: "End plan",
   endConfirmKeep: "Keep plan",
   // B-344-2/5: dunning (owner ruling 2A), with the paid-meanwhile race.
@@ -104,6 +107,22 @@ function afterCancel(p: ClientPlan, o: CancelOutcome): ClientPlan {
 }
 
 type ListState = { kind: "loading" | "ready" } | PlansListFailure;
+/** B-344-3: a cancel receipt and the generation it was answered at. */
+type Receipt = { result: CancelOutcome; trial: boolean; gen: number };
+
+// B-344-7: Stripe's period end during a trial is the trial end.
+const endsInTrial = (p: ClientPlan, o: CancelOutcome) =>
+  p.state === "trialing" &&
+  !!o.accessEndsAt &&
+  !!p.trialEndsAt &&
+  Date.parse(o.accessEndsAt) <= Date.parse(p.trialEndsAt);
+
+/** B-344-3: a receipt stands only while a newer read agrees with it. */
+const agrees = (r: Receipt, p: ClientPlan | undefined) =>
+  !!p &&
+  (r.result.outcome === "scheduled"
+    ? p.cancelAtPeriodEnd && p.state !== "ended"
+    : p.state === "ended");
 
 export default function YourPlansPanel({
   reloadKey = 0,
@@ -117,7 +136,7 @@ export default function YourPlansPanel({
   );
   const [plans, setPlans] = useState<ClientPlan[]>([]);
   const [list, setList] = useState<ListState>({ kind: "loading" });
-  const [outcomes, setOutcomes] = useState<Record<string, string>>({});
+  const [outcomes, setOutcomes] = useState<Record<string, Receipt>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{
     purchaseId: string;
@@ -146,6 +165,19 @@ export default function YourPlansPanel({
       if (!mounted.current || mine !== generation.current) return;
       setPlans(next);
       setList({ kind: "ready" });
+      setOutcomes((o) => {
+        const keep = Object.entries(o).filter(
+          ([id, r]) =>
+            r.gen >= mine ||
+            agrees(
+              r,
+              next.find((p) => p.purchaseId === id),
+            ),
+        );
+        return keep.length === Object.keys(o).length
+          ? o
+          : Object.fromEntries(keep);
+      });
     } catch (err) {
       if (!mounted.current || mine !== generation.current) return;
       setList(describePlansListFailure(err));
@@ -172,7 +204,7 @@ export default function YourPlansPanel({
         if (action === "cancel") {
           const outcome = await cancelPlan(id);
           if (!mounted.current) return;
-          generation.current += 1;
+          const gen = ++generation.current;
           if (outcome) {
             setPlans((ps) =>
               ps.map((p) =>
@@ -181,7 +213,7 @@ export default function YourPlansPanel({
             );
             setOutcomes((o) => ({
               ...o,
-              [id]: PLAN_ACTION_COPY.outcome(outcome),
+              [id]: { result: outcome, trial: endsInTrial(plan, outcome), gen },
             }));
           }
         } else {
@@ -215,8 +247,19 @@ export default function YourPlansPanel({
     [load],
   );
 
+  const stale = list.kind === "failed" || list.kind === "unavailable";
   const confirmEnd = useCallback(
     (plan: ClientPlan) => {
+      // B-344-2: no End my plan from a card no read has confirmed.
+      if (stale)
+        return Alert.alert(
+          YOUR_PLANS_COPY.staleTitle,
+          YOUR_PLANS_COPY.staleBody,
+          [
+            { text: YOUR_PLANS_COPY.endConfirmKeep, style: "cancel" },
+            { text: YOUR_PLANS_COPY.staleRefresh, onPress: () => void load() },
+          ],
+        );
       const now = plan.state === "past_due";
       Alert.alert(
         now ? YOUR_PLANS_COPY.endNowTitle : YOUR_PLANS_COPY.endConfirmTitle,
@@ -237,7 +280,7 @@ export default function YourPlansPanel({
         ],
       );
     },
-    [runAction],
+    [load, runAction, stale],
   );
 
   const support = (
@@ -301,7 +344,7 @@ export default function YourPlansPanel({
       <Text style={styles.title} accessibilityRole="header">
         {YOUR_PLANS_COPY.title}
       </Text>
-      {list.kind === "failed" || list.kind === "unavailable" ? (
+      {stale ? (
         <View testID="your-plans-stale">
           <Text style={styles.line} accessibilityLiveRegion="polite">
             {list.kind === "failed"
@@ -313,9 +356,10 @@ export default function YourPlansPanel({
       ) : null}
       {visible.map((plan) => {
         const amount = `${money(plan.amountCents, plan.currency)} ${cadenceCopy(plan.interval ?? "month", plan.intervalCount)}`;
-        const line =
-          outcomes[plan.purchaseId] ??
-          (plan.state === "ended"
+        const receipt = outcomes[plan.purchaseId];
+        const line = receipt
+          ? PLAN_ACTION_COPY.outcome(receipt.result, receipt.trial)
+          : plan.state === "ended"
             ? YOUR_PLANS_COPY.endedNow
             : plan.state === "confirming"
               ? YOUR_PLANS_COPY.confirming
@@ -330,7 +374,7 @@ export default function YourPlansPanel({
                       : YOUR_PLANS_COPY.renews(
                           amount,
                           dateOf(plan.nextChargeAt),
-                        ));
+                        );
         const isBusy = busyId === plan.purchaseId;
         const n = notice?.purchaseId === plan.purchaseId ? notice.notice : null;
         return (

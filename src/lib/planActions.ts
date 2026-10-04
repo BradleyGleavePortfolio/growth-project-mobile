@@ -82,7 +82,8 @@ const verb = (a: PlanAction) =>
   a === "cancel" ? "End my plan" : "Keep my plan";
 
 export const PLAN_ACTION_COPY = {
-  outcome: (o: CancelOutcome): string => {
+  /** B-344-7: trial = the scheduled end is the trial end, before any charge. */
+  outcome: (o: CancelOutcome, trial = false): string => {
     const date = planDate(o.accessEndsAt);
     if (o.outcome === "already_ended")
       return "This plan had already ended, so nothing changed and nothing more is charged.";
@@ -91,9 +92,11 @@ export const PLAN_ACTION_COPY = {
         ? `This plan has ended, and access ended today. The unpaid ${o.currency ? money(o.voidedAmountCents, o.currency) : "charge"} is canceled and is never collected. Nothing more is charged.`
         : "This plan has ended, and access ended today. Nothing more is charged.";
     const until = date ? `until ${date}` : "to the end of the period";
-    return o.paidPeriodKept
-      ? `The latest payment went through before the plan ended, so access continues ${until}, the period it paid for. Nothing more is charged after that.`
-      : `Your plan is ended. Access continues ${until}, the end of the period paid for, and nothing more is charged.`;
+    if (o.paidPeriodKept)
+      return `The latest payment went through before the plan ended, so access continues ${until}, the period it paid for. Nothing more is charged after that.`;
+    return trial && date
+      ? `Your free trial ends on ${date}, and nothing is charged.`
+      : `Your plan will not renew. Access continues ${until}, and nothing more is charged.`;
   },
   noAnswer: (a: PlanAction, ref: string | null) =>
     `The app could not reach the server, so it is not confirmed whether your plan changed. Check your connection, then pull down to refresh your plans before choosing ${verb(a)} again. If it is still unclear, email support${quote(ref)}.`,
