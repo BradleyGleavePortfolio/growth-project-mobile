@@ -23,6 +23,7 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { OnDeviceSessionChangedError } from './sessionFence';
 
 /** Every key this module writes starts with this prefix. */
 export const ON_DEVICE_STATE_PREFIX = 'wearables_on_device:';
@@ -115,6 +116,19 @@ function serialStorage<T>(op: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Sol B-362-7: moves when sign-out starts; a write queued before it never runs. */
+let signOutEpoch = 0;
+/** No grant written at or before this sequence is honoured after a sign-out. */
+let signedOutThroughSeq = 0;
+
+function serialWrite(op: () => Promise<void>): Promise<void> {
+  const epoch = signOutEpoch;
+  return serialStorage(() => {
+    if (epoch !== signOutEpoch) throw new OnDeviceSessionChangedError();
+    return op();
+  });
+}
+
 /** The local authorization write sequence now (capture it before any await). */
 export function localAuthorizationSeq(): number {
   return authWriteSeq;
@@ -134,8 +148,19 @@ export async function recordLocalAuthorization(
   };
   const key = authKey(scope.userId, scope.source);
   authWriteSeq += 1; // before the await: a retirement already running sees it (Sol B-362-2)
-  authWrittenAt.set(key, authWriteSeq);
-  await serialStorage(() => AsyncStorage.setItem(key, JSON.stringify(record)));
+  const seq = authWriteSeq;
+  const prior = authWrittenAt.get(key);
+  authWrittenAt.set(key, seq);
+  try {
+    await serialWrite(() => AsyncStorage.setItem(key, JSON.stringify(record)));
+  } catch (err) {
+    // Opus C-362-13: a grant that failed or was dropped never counts as newer.
+    if (authWrittenAt.get(key) === seq) {
+      if (prior === undefined) authWrittenAt.delete(key);
+      else authWrittenAt.set(key, prior);
+    }
+    throw err;
+  }
   return record;
 }
 
@@ -145,7 +170,9 @@ export async function getLocalAuthorization(
   source: OnDeviceSource,
 ): Promise<LocalAuthorization | null> {
   await storageTail; // every write already queued has settled
-  const parsed = await readJson(authKey(userId, source));
+  const key = authKey(userId, source);
+  if (signOutEpoch > 0 && (authWrittenAt.get(key) ?? 0) <= signedOutThroughSeq) return null;
+  const parsed = await readJson(key);
   if (!isRecord(parsed)) return null;
   if (
     parsed.v !== 1 ||
@@ -183,6 +210,22 @@ export async function retireOnDeviceState(source?: OnDeviceSource): Promise<void
     );
   });
   if (doomed.length > 0) await serialStorage(() => AsyncStorage.removeMany(doomed));
+}
+
+/**
+ * Sign-out (Sol B-362-7). Synchronously drops every queued write and voids
+ * every grant written so far (even if the removal below fails), then, in the
+ * same chain, waits for the native operation in flight and removes every key
+ * under the prefix. Never rejects: sign-out always completes.
+ */
+export function retireOnDeviceStateAtSignOut(): Promise<void> {
+  signOutEpoch += 1;
+  signedOutThroughSeq = authWriteSeq;
+  return serialStorage(async () => {
+    const keys = await AsyncStorage.getAllKeys();
+    const doomed = keys.filter((k) => k.startsWith(ON_DEVICE_STATE_PREFIX));
+    if (doomed.length > 0) await AsyncStorage.removeMany(doomed);
+  }).catch(() => undefined);
 }
 
 /**
@@ -256,5 +299,5 @@ export async function getSyncProgress(scope: OnDeviceScope): Promise<SyncProgres
 /** Persist the progress for a scope. */
 export async function setSyncProgress(scope: OnDeviceScope, progress: SyncProgress): Promise<void> {
   const value = JSON.stringify(progress);
-  await serialStorage(() => AsyncStorage.setItem(progressKey(scope), value));
+  await serialWrite(() => AsyncStorage.setItem(progressKey(scope), value));
 }
