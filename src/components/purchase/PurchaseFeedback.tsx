@@ -25,12 +25,15 @@ export interface PurchaseFeedbackProps {
   onContinue: () => void;
   /** Open the client's plan (already active, or to check where it stands). */
   onOpenPlan: (purchaseId: string | null) => void;
+  /** B-343-3: the action's label when it does not open the plan itself. */
+  openPlanLabel?: string;
 }
 
 export default function PurchaseFeedback({
   purchase,
   onContinue,
   onOpenPlan,
+  openPlanLabel = PACKAGE_PAYMENT_COPY.openPlan,
 }: PurchaseFeedbackProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -187,7 +190,7 @@ export default function PurchaseFeedback({
           ) : null}
           {state.alreadyActive || notice.openPlan ? (
             <Secondary
-              label={PACKAGE_PAYMENT_COPY.openPlan}
+              label={openPlanLabel}
               onPress={() =>
                 onOpenPlan(state.alreadyActive?.purchaseId ?? null)
               }

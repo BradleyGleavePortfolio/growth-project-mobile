@@ -302,15 +302,16 @@ describe('specific copy per cause', () => {
     return { r, text };
   }
 
-  it('offline (no response): connection copy, nothing charged, no Stripe call', async () => {
+  it('no answer (B-342-1): not confirmed, never a no-charge claim, no Stripe call', async () => {
     const { r, text } = await failWith(() =>
       mockPost.mockRejectedValueOnce(Object.assign(new Error('Network Error'), { config: {} })),
     );
+    const key = (paymentIntentCalls()[0][1] as { idempotency_key: string }).idempotency_key;
     expect(text).toBe(
-      'This phone is offline, so the payment did not start and nothing was charged. Check your connection, then start again.',
+      `The app could not reach the server, so this step is not confirmed. Check your connection, then open your plan in Membership to see where it stands before you start again. If it is still unclear, email support and quote reference ${key.slice(0, 8)}.`,
     );
     expect(mockInitPaymentSheet).not.toHaveBeenCalled();
-    expect(r.queryByTestId('payment-support')).toBeNull();
+    expect(r.getByTestId('payment-support')).toBeTruthy();
   });
 
   it('card declined (Stripe Failed + declineCode)', async () => {
@@ -401,6 +402,21 @@ describe('specific copy per cause', () => {
     const [err, ctx] = mockCapture.mock.calls[0];
     expect(err).toBeInstanceOf(Error);
     expect(ctx).toEqual(expect.objectContaining({ status: 500, code: 'INTERNAL', reference: 'f00dbabe' }));
+  });
+
+  it.each([
+    ['without a plan destination', undefined, 'Continue to the app'],
+    ['with a plan destination', jest.fn(), 'Open your plan'],
+  ])('B-343-3 the plan action %s is labelled for what it does, never payment success', async (_l, onOpenPlan, label) => {
+    mockPost.mockRejectedValueOnce(httpError(500, { error: 'INTERNAL', request_id: 'f00dbabe-1234' }));
+    const r = await mountAndSelect(PKG_A, { onOpenPlan });
+    await pressSelect(r);
+    await waitFor(() => expect(r.getByTestId('payment-open-plan')).toBeTruthy());
+    expect(r.getByText(label)).toBeTruthy();
+    await fireEvent.press(r.getByTestId('payment-open-plan'));
+    expect(r.onPaymentSuccess).not.toHaveBeenCalled();
+    if (onOpenPlan) expect(onOpenPlan).toHaveBeenCalledWith(null);
+    else expect(r.onDismiss).toHaveBeenCalledTimes(1);
   });
 
   it('an unknown PaymentSheet failure never sends the client secret or ephemeral key to Sentry', async () => {

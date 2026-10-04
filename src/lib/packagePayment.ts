@@ -453,8 +453,11 @@ export function loadPackageStripeSdk(): PackageStripeSdk | null {
 // alone. "Start again" means the plan's own pay button, which stays enabled.
 
 export const PACKAGE_PAYMENT_COPY = {
-  offline:
-    "This phone is offline, so the payment did not start and nothing was charged. Check your connection, then start again.",
+  // B-342-1 (Sol): no answer at all (offline, timeout, dropped). The request
+  // may have reached the server, and a replay may follow an unclear card
+  // step, so this never claims that nothing was charged. The key is kept.
+  noAnswer: (ref: string | null) =>
+    `The app could not reach the server, so this step is not confirmed. Check your connection, then open your plan in Membership to see where it stands before you start again. If it is still unclear, email support${ref ? ` and quote reference ${ref}` : ""}.`,
   connectionDropped:
     "The connection dropped during the payment. Check your connection, then start again. If the payment went through, your plan shows in Membership within a minute.",
   sessionEnded:
@@ -787,9 +790,14 @@ export function describeBackendFailure(
     return n;
   }
   const status = errorStatus(err) ?? null;
-  if (status === null) return notice("offline", PACKAGE_PAYMENT_COPY.offline);
   const code = backendCodeOf(err);
   const ref = shortReference(supportReferenceOf(err)) ?? attemptRef;
+  if (status === null) {
+    return {
+      ...supportNotice("no_answer", ref, PACKAGE_PAYMENT_COPY.noAnswer(ref)),
+      openPlan: true,
+    };
+  }
 
   // Today's production backend has no renewing-plan checkout: the route
   // itself is missing (a bare 404, no machine code), so nothing ran.

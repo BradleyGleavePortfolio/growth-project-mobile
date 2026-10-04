@@ -501,23 +501,31 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
     [],
   );
 
-  /** true = finished (success or notice); false = still confirming after the delays. */
+  /**
+   * "done" = success or notice shown; "pending" = still confirming after the
+   * delays (show the slow state); "stale" = the screen, the account or the
+   * attempt went away (B-343-1 Sol): no further read, callback or state.
+   */
   const pollPlan = useCallback(
-    async (delays: number[]): Promise<boolean> => {
+    async (delays: number[]): Promise<"done" | "pending" | "stale"> => {
       const c = confirmingRef.current;
-      if (!c) return true;
+      if (!c) return "stale";
+      // An account change clears confirmingRef, so identity covers the epoch.
+      const gone = () => !mountedRef.current || confirmingRef.current !== c;
       for (const delay of delays) {
         if (delay > 0) await wait(delay);
-        if (!mountedRef.current) return true;
+        if (gone()) return "stale";
         let plan: ClientPlan | null = null;
         try {
           plan = await getClientPlan(c.purchaseId);
         } catch {
           // Stripe or the network is slow; the card step already finished.
+          // Fenced like a fulfilled read before the next request.
+          if (gone()) return "stale";
           continue;
         }
         // C-334-3: unmounted or superseded while the read was in flight.
-        if (!mountedRef.current || confirmingRef.current !== c) return true;
+        if (gone()) return "stale";
         if (!plan) continue;
         if (
           plan.entitlementActive &&
@@ -526,12 +534,12 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
             plan.state === "past_due")
         ) {
           finishSuccess(successForPlan(plan, c.pkg, c.trial), c.pkg);
-          return true;
+          return "done";
         }
         if (plan.state === "payment_failed") {
           confirmingRef.current = null;
           showNotice(describePlanPaymentFailed());
-          return true;
+          return "done";
         }
         if (plan.state === "ended") {
           confirmingRef.current = null;
@@ -544,10 +552,10 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           };
           reportPackagePaymentFailure("plan_poll", n);
           showNotice(n);
-          return true;
+          return "done";
         }
       }
-      return false;
+      return gone() ? "stale" : "pending";
     },
     [finishSuccess, showNotice, successForPlan],
   );
@@ -603,6 +611,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         try {
           plan = await getClientPlan(c.purchaseId);
         } catch {
+          if (!mountedRef.current || confirmingRef.current !== c) return;
           continue;
         }
         if (!mountedRef.current || confirmingRef.current !== c) return;
@@ -622,14 +631,19 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           return;
         }
         if (plan.state === "ended" || plan.checkoutState === "ended") {
+          // B-343-6 (Sol): ended (canceled) is not proof that no payment of
+          // this plan ever succeeded: no no-charge claim, support + reference.
           confirmingRef.current = null;
           retireAttempt(c.pkg);
-          showNotice({
-            cause: "checkout_ended",
-            message: PACKAGE_PAYMENT_COPY.checkoutEnded,
-            support: false,
-            reference: null,
-          });
+          const ref = shortReference(c.purchaseId);
+          const n: PackagePaymentNotice = {
+            cause: "plan_ended_while_confirming",
+            message: PACKAGE_PAYMENT_COPY.endedWhileConfirming(ref),
+            support: true,
+            reference: ref,
+          };
+          reportPackagePaymentFailure("plan_poll", n);
+          showNotice(n);
           return;
         }
         if (
@@ -640,8 +654,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           // The card step did finish: the webhook is on its way.
           retireAttempt(c.pkg);
           confirmingRef.current = { ...c, uncertain: false };
-          const finished = await pollPlan(planPollDelaysMs);
-          if (!finished && mountedRef.current) showSlow();
+          if ((await pollPlan(planPollDelaysMs)) === "pending") showSlow();
           return;
         }
         if (
@@ -745,7 +758,9 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
   // ── The three sale kinds ──────────────────────────────────────────────────
   const claimFree = useCallback(
     async (pkg: PurchasablePackage, live: () => boolean) => {
-      set({ phase: "confirming" });
+      // B-343-6 (Opus): a reroute from a paid kind is a free claim now; the
+      // progress copy must never say "Payment received".
+      set({ phase: "confirming", saleKind: "free" });
       let active: boolean;
       try {
         active = await claimFreePackage(pkg.id);
@@ -1050,8 +1065,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         retireAttempt(pkg);
         confirmingRef.current = { ...confirming, noSheet: true };
         set({ phase: "confirming" });
-        const settled = await pollPlan(planPollDelaysMs);
-        if (!settled && mountedRef.current) showSlow();
+        if ((await pollPlan(planPollDelaysMs)) === "pending") showSlow();
         return;
       }
       set({ phase: "paying" });
@@ -1076,8 +1090,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       retireAttempt(pkg);
       confirmingRef.current = confirming;
       set({ phase: "confirming" });
-      const finished = await pollPlan(planPollDelaysMs);
-      if (!finished && mountedRef.current) showSlow();
+      if ((await pollPlan(planPollDelaysMs)) === "pending") showSlow();
     },
     [
       attemptKeyFor,
@@ -1160,8 +1173,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         await settleUncertain(null, "outcome_unknown_recheck");
       } else if (c) {
         set({ phase: "confirming", notice: null });
-        const finished = await pollPlan(recheckDelaysMs);
-        if (!finished && mountedRef.current) showSlow();
+        if ((await pollPlan(recheckDelaysMs)) === "pending") showSlow();
       } else {
         await settleOneTimeUnknown(null, "outcome_unknown_recheck");
       }
