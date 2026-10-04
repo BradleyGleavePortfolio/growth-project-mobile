@@ -343,7 +343,7 @@ describe('specific copy per cause', () => {
     const { text } = await failWith(() =>
       mockPost.mockRejectedValueOnce(httpError(404, { error: 'PACKAGE_NOT_FOUND', message: 'Package not available' })),
     );
-    expect(text).toBe('This plan is no longer offered, so nothing was charged. Pull down to see your coach’s current plans, or message your coach.');
+    expect(text).toMatch(/^This plan is no longer offered, so it cannot be started from here\. If an earlier payment .* quote reference [0-9a-f]{8}\./);
     expect(mockCapture).not.toHaveBeenCalled();
   });
 
