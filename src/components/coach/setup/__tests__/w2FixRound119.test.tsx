@@ -84,6 +84,8 @@ function holdRead(): () => Promise<void> {
     await act(async () => {
       mockRead.hold = null;
       release();
+      // B-WIZ3-122: let any queued submit run, so a dropped tap is proven.
+      for (let i = 0; i < 30; i += 1) await Promise.resolve();
     });
   };
 }
@@ -96,7 +98,7 @@ beforeEach(() => {
 });
 
 describe("B-346-3: nothing is sent from fields shown before hydration", () => {
-  it("a tap during hydration of a made one-time package publishes it as shown, never the monthly defaults", async () => {
+  it("B-WIZ3-122: a tap during hydration is dropped; a fresh tap publishes the made one-time package as shown", async () => {
     mockStore.set(
       KEY,
       JSON.stringify({ ...newIntent(savedOneTime), packageId: "pkg_saved" }),
@@ -104,9 +106,14 @@ describe("B-346-3: nothing is sent from fields shown before hydration", () => {
     const release = holdRead();
     const done = jest.fn();
     const s = await render(form(done));
-    await fireEvent.press(s.getByTestId("first-package-create"));
-    expect(mockPublish).not.toHaveBeenCalled();
+    const create = () => s.getByTestId("first-package-create");
+    expect(create().props.accessibilityState.disabled).toBe(true);
+    await fireEvent.press(create());
     await release();
+    expect(mockPublish).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    expect(create().props.accessibilityState.disabled).toBe(false);
+    await fireEvent.press(create());
     await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
     expect(mockCreate).not.toHaveBeenCalled();
     expect(mockUpdate).not.toHaveBeenCalled();
@@ -119,7 +126,7 @@ describe("B-346-3: nothing is sent from fields shown before hydration", () => {
     });
   });
 
-  it("a tap during hydration of an unsent free package re-sends that package with its own key", async () => {
+  it("B-WIZ3-122: a tap during hydration of an unsent free package is dropped; a fresh tap re-sends it with its own key", async () => {
     const free = newIntent({
       ...savedOneTime,
       title: "Saved free",
@@ -131,6 +138,10 @@ describe("B-346-3: nothing is sent from fields shown before hydration", () => {
     const s = await render(form(done));
     await fireEvent.press(s.getByTestId("first-package-create"));
     await release();
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(mockBind).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    await fireEvent.press(s.getByTestId("first-package-create"));
     await waitFor(() => expect(done).toHaveBeenCalledTimes(1));
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(mockCreate.mock.calls[0][1]).toBe(free.key);

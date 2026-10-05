@@ -139,9 +139,11 @@ export default function FirstPackageForm({
     if (next.monthly !== undefined) setMonthlyState(next.monthly);
   }, []);
   // B-346-3: false until this account's saved intent has been read and, if
-  // there is one, shown. Fields take no edits until then, and a tap made
-  // earlier waits for it, then uses what is shown.
+  // there is one, shown. Until then fields take no edits and Create is off;
+  // a tap that still arrives is dropped (B-WIZ3-122), so every publish is a
+  // fresh tap on the price and offer type the coach can see.
   const [ready, setReady] = useState(false);
+  const readyNow = useRef(false);
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [error, setError] = useState<FriendlyError | null>(null);
@@ -154,7 +156,6 @@ export default function FirstPackageForm({
   const user = useCurrentUser();
   const coachId = user?.id ?? null;
   const intent = useRef<PackageCreateIntent | null>(null);
-  const hydrated = useRef<Promise<void> | null>(null);
   const [resumed, setResumed] = useState(false);
   // A second tap before React re-renders the disabled button must not
   // start a second submit.
@@ -181,6 +182,7 @@ export default function FirstPackageForm({
 
   useEffect(() => {
     let live = true;
+    readyNow.current = false;
     setReady(false);
     if (shownFor.current !== coachId) {
       // A different account: nothing from the earlier one stays on screen
@@ -200,12 +202,15 @@ export default function FirstPackageForm({
         monthly: true,
       });
     }
-    hydrated.current = loadIntent(coachId).then((read) => {
+    void loadIntent(coachId).then((read) => {
       if (!live) return;
       // An unreadable read still ends hydration: submit reads storage again
       // and stops with specific copy if it is still unreadable.
-      setReady(true);
-      if (read.kind !== "found" || intent.current) return;
+      const done = () => {
+        readyNow.current = true;
+        setReady(true);
+      };
+      if (read.kind !== "found" || intent.current) return done();
       const stored = read.intent;
       intent.current = stored;
       // Show the coach the package that was on its way, as it was sent.
@@ -218,6 +223,7 @@ export default function FirstPackageForm({
           : {}),
       });
       setResumed(true);
+      done();
     });
     return () => {
       live = false;
@@ -225,8 +231,10 @@ export default function FirstPackageForm({
   }, [coachId, show]);
 
   const submit = async () => {
+    // B-WIZ3-122: a tap before the saved package is shown is dropped, never
+    // queued; the coach taps again on what hydration put on screen.
+    if (inFlight.current || !readyNow.current) return;
     setError(null);
-    if (inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
     const owner = coachRef.current;
@@ -236,16 +244,7 @@ export default function FirstPackageForm({
       coachRef.current === owner &&
       generation.current === myGeneration;
     try {
-      // B-346-3 (agent 119): wait until this account's saved intent is read
-      // and shown, then take the package exactly as the form shows it. A tap
-      // made before that never sends the earlier defaults.
-      let hydrating = hydrated.current;
-      while (hydrating) {
-        await hydrating;
-        if (!stillOwner()) return;
-        if (hydrated.current === hydrating) break;
-        hydrating = hydrated.current;
-      }
+      // B-346-3: the package exactly as the form shows it at this tap.
       const snap = { ...shown.current };
       const problem = validatePackage(snap);
       setInvalid(problem);
@@ -468,14 +467,14 @@ export default function FirstPackageForm({
         />
       ) : null}
       <TouchableOpacity
-        style={[styles.primary, busy && styles.disabled]}
+        style={[styles.primary, (busy || !ready) && styles.disabled]}
         onPress={() => {
           void submit();
         }}
-        disabled={busy}
+        disabled={busy || !ready}
         accessibilityRole="button"
         accessibilityLabel="Create package"
-        accessibilityState={{ busy, disabled: busy }}
+        accessibilityState={{ busy, disabled: busy || !ready }}
         testID={`${testID}-create`}
       >
         {busy ? (
