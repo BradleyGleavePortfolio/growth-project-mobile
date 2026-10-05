@@ -64,6 +64,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER: process.env.EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
+  EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
 } as const;
 
@@ -495,6 +496,19 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
    */
   iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', !isDev),
+
+  // ─── S14 — client AI wearable insight panel ──────────────────────────────
+  /**
+   * The client Health and Sleep views can show an AI-written insight panel
+   * (backend WearableInsightsService, drafted through the AI gateway). The
+   * panel has no per-client AI-processing consent check yet, and owner
+   * decision D2 makes AI processing opt-in (consent box 2). Until that check
+   * exists the panel stays OFF UNCONDITIONALLY (not `isDev`), and no EAS
+   * profile sets this. Off, the views show only the client's own data.
+   *
+   * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
+   */
+  wearableAiInsights: readFlag('EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

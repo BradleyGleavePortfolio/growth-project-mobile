@@ -29,7 +29,9 @@ import type { HealthConnectRecordType } from './healthConnectClient';
 const METRIC_BUCKET: Record<WearableMetricType, WearableMetricBucket> = {
   STEPS: 'HEALTH_FITNESS',
   ACTIVE_ENERGY_KCAL: 'HEALTH_FITNESS',
-  RESTING_HEART_RATE_BPM: 'HEALTH_FITNESS',
+  // S14: canonical home is Sleep & Recovery (backend METRIC_BUCKET and the
+  // seeded WearableMetricDef); the ingest schema rejects any other bucket.
+  RESTING_HEART_RATE_BPM: 'SLEEP_RECOVERY',
   HEART_RATE_BPM: 'HEALTH_FITNESS',
   VO2_MAX: 'HEALTH_FITNESS',
   WORKOUT_DURATION_MIN: 'HEALTH_FITNESS',
@@ -87,8 +89,7 @@ const METRIC_UNIT: Record<WearableMetricType, string> = {
 
 /** Context the normalizer needs to stamp ownership onto each sample. */
 export interface NormalizeContext {
-  /** Subject client User.id. */
-  userId: string;
+  // S14: no userId — the backend stamps the subject from the JWT.
   /** The Health Connect connection row id (server-assigned). */
   connectionId: string;
 }
@@ -155,7 +156,6 @@ function makeSample(
   sourceRecordId: string | null,
 ): NormalizedSample {
   return {
-    userId: ctx.userId,
     connectionId: ctx.connectionId,
     provider: HEALTH_CONNECT_PROVIDER,
     metric,

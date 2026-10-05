@@ -12,6 +12,7 @@ import type { ClientProfile } from '../../../types';
 import type { ClientDetailStyles } from './styles';
 import { MacroCard } from './MacroCard';
 import { ProfileRow } from './ProfileRow';
+import { ConsultationSummaryCard } from './ConsultationSummaryCard';
 
 export function SummaryTab({
   profile,
@@ -108,6 +109,9 @@ export function SummaryTab({
           }
         />
       </View>
+
+      {/* S-REACH: the client's consultation answers, one tap away. */}
+      <ConsultationSummaryCard clientId={clientId} clientName={clientName} colors={colors} />
 
       {/* Coach → Client actions */}
       <Text style={styles.sectionTitle}>Actions</Text>
