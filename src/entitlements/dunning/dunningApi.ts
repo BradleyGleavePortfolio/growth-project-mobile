@@ -12,8 +12,18 @@ export type DunningState = 'none' | 'past_due' | 'locked';
 export interface ClientDunningStatus {
   enabled: boolean;
   state: DunningState;
-  /** 'dispute' = the bank reversed a payment already made (no card update ends it). */
+  /**
+   * 'dispute' = the bank reversed a payment on a recurring plan. Under
+   * R-DISPUTE-PAUSE that plan's access has ended and its billing is paused
+   * until its coach restarts it; a card update never ends it.
+   */
   kind?: 'payment' | 'dispute' | null;
+  /**
+   * Backend D2c (#705): 'dispute_paused' for a dispute pause (no lock date,
+   * no card or cancel path, `restart_by: 'coach'`); 'payment_failed' for a
+   * failed renewal. Absent on older backends (null).
+   */
+  reason?: 'dispute_paused' | 'payment_failed' | null;
   /** The cycle is locked but another live plan keeps access (show the banner, not the lock). */
   lock_waived?: boolean;
   purchase_id: string | null;
@@ -67,16 +77,22 @@ export function normalizeDunningStatus(raw: unknown): ClientDunningStatus {
   }
   const state: DunningState = r.state;
   if (state !== 'none' && !str(r.purchase_id)) throw new DunningResponseShapeError(ROUTE_STATUS);
+  const reason = r.reason === 'dispute_paused' || r.reason === 'payment_failed' ? r.reason : null;
+  // R-DISPUTE-PAUSE: a dispute pause is a dispute whatever `kind` says, and a
+  // dispute never carries a lock date (an older backend's grace-period date
+  // is dropped here, so no surface can show one).
+  const kind = r.kind === 'dispute' || reason === 'dispute_paused' ? 'dispute' : r.kind === 'payment' ? 'payment' : null;
   return {
     enabled: r.enabled,
     state,
-    kind: r.kind === 'dispute' ? 'dispute' : r.kind === 'payment' ? 'payment' : null,
+    kind,
+    reason,
     lock_waived: r.lock_waived === true,
     purchase_id: str(r.purchase_id),
     amount_cents: cents(r.amount_cents),
     currency: str(r.currency),
     failed_at: str(r.failed_at),
-    lockout_at: str(r.lockout_at),
+    lockout_at: kind === 'dispute' ? null : str(r.lockout_at),
     locked_at: str(r.locked_at),
     day: num(r.day),
     coach_name: str(r.coach_name),
@@ -119,8 +135,9 @@ export interface QuoteLine {
 
 /**
  * A plan with a disputed payment open: the bank reversed a payment already
- * made. A card update never settles it (backend B-628-8); the amount is known
- * only on a dispute cycle.
+ * made. Its access has ended and its billing is paused until its coach
+ * restarts it (R-DISPUTE-PAUSE); a card update never ends it. The amount is
+ * known only on a dispute cycle.
  */
 export interface QuoteDispute {
   purchase_id: string;
