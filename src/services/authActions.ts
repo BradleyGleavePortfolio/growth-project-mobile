@@ -2,6 +2,7 @@
 // Kept deliberately tiny: the backend JWT is the source of truth, and these
 // helpers only touch AsyncStorage + the authEvents emitter.
 
+import type { SessionFencePass } from './sessionFence';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { authEvents } from '../utils/authEvents';
@@ -21,6 +22,8 @@ import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
+import { retireOnDeviceStateAtSignOut } from './health/onDeviceState';
+import { stopOnDeviceHealthWork } from './health/sessionFence';
 import { LEGACY_DRAFT_PREFIX, purgeConsultationDraft } from '../lib/consultation/storage';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
@@ -32,7 +35,15 @@ import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
-const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
+const SECURE_SIGN_OUT_KEYS = [
+  'supabase_token',
+  'supabase_refresh_token',
+  // S14 (B-317-1): legacy provider-global on-device health cursors (pre-S14,
+  // shared by every account on the phone). No longer read; removed here so
+  // nothing from a previous account lingers.
+  'healthkit_last_sync_at',
+  'health_connect_last_sync_at',
+];
 const ASYNC_SIGN_OUT_KEYS = [
   'user_data',
   'needs_role_selection',
@@ -42,6 +53,9 @@ const ASYNC_SIGN_OUT_KEYS = [
   'macro_targets',
   'pending_email',
   'day_one_completed',
+  // S14 (B-317-1): dormant Samsung Health cursor (provider-global, not read by
+  // any screen); removed so it can never carry over to another account.
+  'wearable:samsung-health:lastSyncAt',
   'lean_onboarding_done',
   'lean_onboarding_intent',
   'lean_onboarding_synced',
@@ -276,7 +290,41 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
   return null;
 }
 
-export async function signOut(userId?: string | null): Promise<void> {
+export interface SignOutOptions {
+  /**
+   * Mobile #331 B-331-8: set only by the API client's sign-out after a failed
+   * token refresh, which holds the session fence for the session that failed
+   * (services/sessionFence.ts). The session keys are removed with this pass,
+   * and the push-token clear is skipped: that session's access token was just
+   * rejected and could not be refreshed, so the request could not
+   * authenticate, and its 401 would wait on the very refresh that is signing
+   * out (a wait that never ends).
+   */
+  sessionFence?: SessionFencePass;
+}
+
+export async function signOut(userId?: string | null, opts: SignOutOptions = {}): Promise<void> {
+  // S-WEAR-3 (Sol B-317-7): the first statement, before any await. Every
+  // running Apple Health / Health Connect read for this person stops here:
+  // no new native page, record type, upload or progress write starts after
+  // the person taps Log out (the `logout` event below comes much later).
+  stopOnDeviceHealthWork();
+  // Sol B-362-7: health grants and progress leave through their own chain.
+  const healthStateRetired = retireOnDeviceStateAtSignOut();
+  try {
+    await signOutWhileHealthRetires(userId, healthStateRetired, opts);
+  } finally {
+    // Sol B-362-9: even when the rest of sign-out throws, it settles only after
+    // the health retirement (which never rejects) has finished.
+    await healthStateRetired;
+  }
+}
+
+async function signOutWhileHealthRetires(
+  userId: string | null | undefined,
+  healthStateRetired: Promise<void>,
+  opts: SignOutOptions,
+): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
@@ -289,7 +337,7 @@ export async function signOut(userId?: string | null): Promise<void> {
   // Best-effort: clear the push token on the backend before wiping local auth
   // state so the PATCH /users/me/push-token request can still attach a JWT.
   try {
-    await usersApi.updatePushToken(null);
+    if (!opts.sessionFence) await usersApi.updatePushToken(null);
   } catch {
     // Non-fatal: the token will remain on the backend but will be inert once
     // the Expo token expires or the device is re-registered on next login.
@@ -370,7 +418,9 @@ export async function signOut(userId?: string | null): Promise<void> {
       // `logout` is emitted below. clearAllStorage() also wipes the namespace;
       // this is the explicit, mirror-aware path.
       clearUserCache(),
-      ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
+      ...SECURE_SIGN_OUT_KEYS.map((k) =>
+        opts.sessionFence ? secureStorage.removeItem(k, opts.sessionFence) : secureStorage.removeItem(k),
+      ),
       AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage
       // wrappers so native MMKV is actually cleared and the AsyncStorage-shim's
@@ -385,6 +435,10 @@ export async function signOut(userId?: string | null): Promise<void> {
     ]);
   } catch (err) {
     logger.error('AuthActions', 'signOut: clear failed', err);
+  } finally {
+    // Sol B-362-9: a rejection above (clearUserCache, clearAllStorage, ...)
+    // never skips the health drain: `logout` is emitted only after it.
+    await healthStateRetired;
   }
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.

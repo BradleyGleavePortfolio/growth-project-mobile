@@ -135,7 +135,7 @@ describe('eas-update-guard', () => {
       expect(c.clinic.environment).toBe('production');
       expect(c.clinic.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
       expect(c.clinic.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES).toBe('true');
-      expect(c.clinic.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
+      expect(c.clinic.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
       expect(c.production.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBeUndefined();
     });
 
@@ -284,7 +284,7 @@ describe('eas-update-guard', () => {
       expect(pub.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
       expect(pub.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
       expect(pub.env.EXPO_PUBLIC_FF_COMMUNITY_DM).toBe('false');
-      expect(pub.env.TGP_ANDROID_HEALTH_CONNECT).toBe('0');
+      expect(pub.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
       expect(Object.prototype.hasOwnProperty.call(pub.env, 'EXPO_PUBLIC_API_URL')).toBe(false);
       expect(Object.prototype.hasOwnProperty.call(pub.env, F)).toBe(false);
     });

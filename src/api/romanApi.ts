@@ -86,7 +86,7 @@ export const ROMAN_MESSAGES_MAX_LIMIT = 100;
 /** Mirrors toSessionView (controller L186-202). */
 export const RomanSessionSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.string().min(1).max(64),
     surface: z.enum(ROMAN_SURFACES),
     messageCount: z.number().int().nonnegative(),
     startedAt: z.string().datetime({ offset: true }),
@@ -122,7 +122,7 @@ function toUiRole(wire: RomanWireMessageRole): RomanMessageRole {
 /** Mirrors toMessageView (controller L204-218) — wire shape, strict. */
 export const RomanWireMessageSchema = z
   .object({
-    id: z.string().uuid(),
+    id: z.string().min(1).max(64),
     role: z.enum(ROMAN_WIRE_MESSAGE_ROLES),
     content: z.string(),
     interrupted: z.boolean(),
@@ -171,7 +171,7 @@ export const RomanStreamChunkSchema = z
   .object({
     type: z.enum(['delta', 'done', 'error']),
     text: z.string().optional(),
-    messageId: z.string().uuid().optional(),
+    messageId: z.string().min(1).max(64).optional(),
     interrupted: z.boolean().optional(),
   })
   .strict();
@@ -356,7 +356,7 @@ export async function listMessages(
   }
 }
 
-/** DELETE /roman/sessions/:id — soft-delete (controller L162-169, 204 No Content). */
+/** DELETE /roman/sessions/:id: erases the chat (backend #635; 204, repeat is a quiet 204). */
 export async function deleteSession(sessionId: string): Promise<void> {
   try {
     await api.delete(`/roman/sessions/${encodeURIComponent(sessionId)}`);

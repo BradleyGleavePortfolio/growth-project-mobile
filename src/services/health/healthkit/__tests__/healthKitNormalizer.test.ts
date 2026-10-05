@@ -18,7 +18,6 @@ import {
 import type { HealthKitReadResult } from '../healthKitClient';
 
 const CTX: NormalizationContext = {
-  userId: 'user-1',
   connectionId: 'conn-1',
   sourceTz: 'America/Los_Angeles',
 };
@@ -44,7 +43,8 @@ describe('normalizeHealthKitResult — quantity metrics', () => {
     expect(s.unit).toBe('count');
     expect(s.bucket).toBe('HEALTH_FITNESS');
     expect(s.provider).toBe(APPLE_HEALTHKIT);
-    expect(s.userId).toBe('user-1');
+    // S14: the subject user is never on the sample (server takes it from the JWT).
+    expect(s).not.toHaveProperty('userId');
     expect(s.connectionId).toBe('conn-1');
     expect(s.sourceTz).toBe('America/Los_Angeles');
   });
@@ -222,6 +222,89 @@ describe('normalizeHealthKitResult — sleep stage bucketing', () => {
   });
 });
 
+describe('normalizeHealthKitResult — sleep sessions (S14 B-317-3)', () => {
+  const seg = (value: string, start: string, end: string) => ({ value, startDate: start, endDate: end });
+  // Night 1: 2026-05-29 23:00 -> 05-30 07:00 (480 min asleep, light).
+  // Night 2: 2026-05-30 23:00 -> 05-31 07:00 (480 min asleep, light).
+  const night1 = seg('CORE', '2026-05-29T23:00:00.000Z', '2026-05-30T07:00:00.000Z');
+  const night2 = seg('CORE', '2026-05-30T23:00:00.000Z', '2026-05-31T07:00:00.000Z');
+  const totals = (out: ReturnType<typeof normalizeHealthKitResult>) =>
+    out
+      .filter((s) => s.metric === 'SLEEP_TOTAL_MIN')
+      .map((s) => ({ value: s.value, startAt: s.startAt, endAt: s.endAt }));
+
+  it('emits one record set per night, never a multi-night total', () => {
+    const out = normalizeHealthKitResult({ sleep: [night1, night2] }, CTX);
+    expect(totals(out)).toEqual([
+      { value: 480, startAt: '2026-05-29T23:00:00.000Z', endAt: '2026-05-30T07:00:00.000Z' },
+      { value: 480, startAt: '2026-05-30T23:00:00.000Z', endAt: '2026-05-31T07:00:00.000Z' },
+    ]);
+  });
+
+  it('counts overlapping sources once (watch stages win over phone ASLEEP)', () => {
+    const phone = seg('ASLEEP', '2026-05-29T23:00:00.000Z', '2026-05-30T07:00:00.000Z');
+    const watch = [
+      seg('CORE', '2026-05-29T23:00:00.000Z', '2026-05-30T02:00:00.000Z'), // 180
+      seg('DEEP', '2026-05-30T02:00:00.000Z', '2026-05-30T03:00:00.000Z'), // 60
+      seg('REM', '2026-05-30T03:00:00.000Z', '2026-05-30T04:00:00.000Z'), // 60
+      seg('AWAKE', '2026-05-30T04:00:00.000Z', '2026-05-30T04:30:00.000Z'), // 30
+      seg('CORE', '2026-05-30T04:30:00.000Z', '2026-05-30T07:00:00.000Z'), // 150
+    ];
+    const out = normalizeHealthKitResult({ sleep: [phone, ...watch] }, CTX);
+    expect(one(out, 'SLEEP_LIGHT_MIN').value).toBe(330);
+    expect(one(out, 'SLEEP_DEEP_MIN').value).toBe(60);
+    expect(one(out, 'SLEEP_REM_MIN').value).toBe(60);
+    expect(one(out, 'SLEEP_AWAKE_MIN').value).toBe(30);
+    // 480 minutes in bed, 30 awake: 450 asleep, not 480 + 450.
+    expect(one(out, 'SLEEP_TOTAL_MIN').value).toBe(450);
+  });
+
+  it('a full-window read and an incremental read yield the same night records', () => {
+    const full = normalizeHealthKitResult(
+      {
+        sleep: [night1, night2],
+        sleepWindow: { start: '2026-05-01T00:00:00.000Z', end: '2026-06-01T12:00:00.000Z' },
+      },
+      CTX,
+    );
+    // Incremental: cursor at 05-31 08:00, read with the 36 h look-back.
+    const incremental = normalizeHealthKitResult(
+      {
+        sleep: [night1, night2],
+        sleepWindow: { start: '2026-05-29T20:00:00.000Z', end: '2026-05-31T12:00:00.000Z' },
+      },
+      CTX,
+    );
+    expect(totals(incremental)).toEqual(totals(full));
+  });
+
+  it('defers a night that may still be going on at the window end', () => {
+    const out = normalizeHealthKitResult(
+      {
+        sleep: [night1, seg('CORE', '2026-05-30T23:00:00.000Z', '2026-05-31T03:00:00.000Z')],
+        sleepWindow: { start: '2026-05-28T00:00:00.000Z', end: '2026-05-31T03:30:00.000Z' },
+      },
+      CTX,
+    );
+    expect(totals(out)).toEqual([
+      { value: 480, startAt: '2026-05-29T23:00:00.000Z', endAt: '2026-05-30T07:00:00.000Z' },
+    ]);
+  });
+
+  it('drops a session that may be cut by the window start', () => {
+    const out = normalizeHealthKitResult(
+      {
+        sleep: [seg('CORE', '2026-05-30T02:00:00.000Z', '2026-05-30T07:00:00.000Z'), night2],
+        sleepWindow: { start: '2026-05-30T01:00:00.000Z', end: '2026-06-01T00:00:00.000Z' },
+      },
+      CTX,
+    );
+    expect(totals(out)).toEqual([
+      { value: 480, startAt: '2026-05-30T23:00:00.000Z', endAt: '2026-05-31T07:00:00.000Z' },
+    ]);
+  });
+});
+
 describe('normalizeHealthKitResult — drop policy', () => {
   it('produces nothing for an empty read result', () => {
     expect(normalizeHealthKitResult({}, CTX)).toEqual([]);
@@ -248,7 +331,7 @@ describe('normalizeHealthKitResult — drop policy', () => {
   });
 
   it('stamps sourceTz null when omitted from context', () => {
-    const out = normalizeHealthKitResult({ steps: [q(5)] }, { userId: 'u', connectionId: 'c' });
+    const out = normalizeHealthKitResult({ steps: [q(5)] }, { connectionId: 'c' });
     expect(one(out, 'STEPS').sourceTz).toBeNull();
   });
 });
