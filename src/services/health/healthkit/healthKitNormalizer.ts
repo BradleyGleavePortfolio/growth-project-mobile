@@ -424,6 +424,14 @@ function resolveOverlaps(segments: SleepSegment[]): Record<SleepStageBucket | 'a
  *     have begun before the read; the client reads sleep with a look-back so
  *     a real night is read whole) or ending within the gap of the window end
  *     (it may still be going on). It is emitted, whole, by a later sync.
+ *  4. C-370-3: when `postEnds` is given, only sessions ending in
+ *     [from, to) are emitted. The sync service gives each import piece the
+ *     range [piece start - gap, piece end - gap), so a night is emitted only
+ *     from the piece in which it ends, whose sleep read starts more than a
+ *     day before that end and so holds the whole night. A later piece whose
+ *     sleep look-back starts inside the night (behind a long segment that
+ *     began before it) sees only the tail, which ends at the same time and is
+ *     not emitted (probe: 330 + 180 minutes for one night counts once).
  *
  * Each session yields SLEEP_<STAGE>_MIN per stage present plus
  * SLEEP_TOTAL_MIN (= deep + rem + light + coarse asleep), all with the
@@ -434,8 +442,11 @@ function mapSleep(
   ctx: NormalizationContext,
   samples: HealthKitSample[] | undefined,
   window?: { start: string; end: string },
+  postEnds?: { from: string; to: string },
 ): NormalizedSample[] {
   if (!samples?.length) return [];
+  const endsFrom = postEnds ? Date.parse(postEnds.from) : NaN;
+  const endsTo = postEnds ? Date.parse(postEnds.to) : NaN;
 
   const segments: SleepSegment[] = [];
   for (const s of samples) {
@@ -483,6 +494,8 @@ function mapSleep(
       continue;
     }
     if (Number.isFinite(windowEnd) && windowEnd - sessionEnd < SLEEP_SESSION_GAP_MS) continue;
+    if (Number.isFinite(endsFrom) && sessionEnd < endsFrom) continue;
+    if (Number.isFinite(endsTo) && sessionEnd >= endsTo) continue;
 
     const minutes = resolveOverlaps(session);
     const startAt = new Date(sessionStart).toISOString();
@@ -536,7 +549,7 @@ export function normalizeHealthKitResult(
     ...mapQuantityArray(ctx, DESCRIPTORS.BODY_WEIGHT_KG, result.weight),
     ...mapQuantityArray(ctx, DESCRIPTORS.BODY_FAT_PCT, result.bodyFat),
     ...mapBloodPressure(ctx, result.bloodPressure),
-    ...mapSleep(ctx, result.sleep, result.sleepWindow),
+    ...mapSleep(ctx, result.sleep, result.sleepWindow, result.sleepPostEnds),
     ...mapTransformedArray(ctx, DESCRIPTORS.HRV_MS, result.hrv, hrvToMs),
     ...mapTransformedArray(ctx, DESCRIPTORS.SPO2_PCT, result.spo2, spo2ToPercent),
     ...mapQuantityArray(ctx, DESCRIPTORS.RESPIRATORY_RATE_BRPM, result.respiratoryRate),

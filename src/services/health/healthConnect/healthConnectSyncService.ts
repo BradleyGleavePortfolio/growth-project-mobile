@@ -13,6 +13,10 @@
 // page is read, so an interrupted import resumes after the last saved page.
 // H8 (C-360-1): every read starts a day behind the saved progress, so data
 // written late is still read (`../syncWindows.ts`).
+// B-HC12-121 (C-370-2): of that day, only records written or changed since
+// the last completed read are posted, and every request goes through one
+// pacer under the backend's 60 per minute (`./lookBack.ts`,
+// `../ingestBatching.ts`). C-370-3: one sleep session per night.
 // Platform-guarded (Android only).
 
 import { Platform } from 'react-native';
@@ -25,6 +29,7 @@ import {
 } from '../onDeviceState';
 import { isOnDeviceStop, OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
 import { LATE_DATA_LOOKBACK_MINUTES } from '../syncWindows';
+import { createIngestPacer, type IngestPacer } from '../ingestBatching';
 import { logger } from '../../../utils/logger';
 import {
   HealthConnectPermissionDeniedError,
@@ -44,6 +49,7 @@ import {
 import {
   healthConnectIngestApi as defaultIngestApi,
 } from './healthConnectIngestApi';
+import { sleepSessionsToPost, wasPostedByLastRead, type LookBackBounds } from './lookBack';
 import type { NormalizedSample } from './types';
 
 /**
@@ -126,6 +132,11 @@ export interface HealthConnectSyncDeps {
    * behind every other type that pass one just read).
    */
   resumeOnly?: boolean;
+  /**
+   * C-370-2: the request pacer shared by every post of this run (the app
+   * passes the process-wide one); without it the run gets its own.
+   */
+  pacer?: IngestPacer;
 }
 
 /** Result of a sync run. */
@@ -193,7 +204,9 @@ function grantedReadRecordTypes(
  *   3. For every granted type: resume a truncated read, or read from its
  *      progress minus the late-data look-back (or the 30-day import start)
  *      to now, one page at a time, oldest first, up to MAX_READ_PAGES pages.
- *   4. After each page: normalize → POST in batches (the fence runs before
+ *   4. After each page: drop what the last completed read of the type
+ *      already posted (C-370-2) and keep one sleep session per night
+ *      (C-370-3) → normalize → POST in paced batches (the fence runs before
  *      every request) → save that type's progress: a resume token while
  *      pages remain, its window end once the last page is read.
  *   5. A failed read keeps the type's saved progress (a failed resume from
@@ -213,6 +226,7 @@ export async function syncHealthConnect(
   const ingestApi = deps.ingestApi ?? defaultIngestApi;
   const now = (deps.now ?? (() => new Date()))();
   const fence = deps.fence;
+  const pacer = deps.pacer ?? createIngestPacer();
   if (fence.userId !== scope.userId) throw new OnDeviceSessionChangedError();
   await fence.assertCurrent();
 
@@ -266,6 +280,15 @@ export async function syncHealthConnect(
       ? { startTime: stored.startTime, endTime: stored.endTime }
       : { startTime: typeWindowStart(progress, recordType, now).toISOString(), endTime: now.toISOString() };
     earliest = Math.min(earliest, Date.parse(range.startTime));
+    // C-370-2: a fresh read behind saved progress skips what the last
+    // completed read of this type posted; a resumed read posts every record.
+    const done = progress.completedThrough[recordType];
+    const lookBack: LookBackBounds | null =
+      !stored && done
+        ? { windowStart: Date.parse(range.startTime), completedThrough: Date.parse(done) }
+        : null;
+    const isPosted = (record: unknown): boolean =>
+      lookBack !== null && wasPostedByLastRead(record, lookBack);
     let pageToken = stored?.pageToken;
     for (let page = 0; ; page += 1) {
       let read: { records: unknown[]; nextPageToken?: string };
@@ -300,9 +323,14 @@ export async function syncHealthConnect(
         break;
       }
 
-      const samples: NormalizedSample[] = normalizeRecords(ctx, recordType, read.records);
+      const toPost =
+        recordType === 'SleepSession'
+          ? sleepSessionsToPost(read.records, isPosted)
+          : read.records.filter((record) => !isPosted(record));
+      const samples: NormalizedSample[] = normalizeRecords(ctx, recordType, toPost);
       const posted = await ingestApi.ingest(samples, {
         beforeEachRequest: () => fence.assertCurrent(),
+        pacer,
       });
       normalizedCount += samples.length;
       inserted += posted.inserted;
