@@ -7,6 +7,15 @@
       "com.growthproject.app"
     ],
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "enabled": true,
+      "url": "https://u.expo.dev/a12c3345-cc8c-4c2c-9c57-711c10a57c1c",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -34,7 +43,7 @@
         "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -88,9 +97,9 @@
         "android.permission.USE_FINGERPRINT",
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_RESTING_HEART_RATE",
         "android.permission.health.READ_SLEEP",
         "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
-        "android.permission.health.READ_TOTAL_CALORIES_BURNED",
         "android.permission.health.READ_DISTANCE",
         "android.permission.health.READ_EXERCISE",
         "android.permission.health.READ_OXYGEN_SATURATION",
@@ -100,11 +109,7 @@
         "android.permission.health.READ_WEIGHT",
         "android.permission.health.READ_BODY_FAT",
         "android.permission.health.READ_VO2_MAX",
-        "android.permission.health.READ_BASAL_BODY_TEMPERATURE",
-        "android.permission.health.READ_BLOOD_PRESSURE",
-        "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
-        "android.permission.ACTIVITY_RECOGNITION",
-        "com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA"
+        "android.permission.health.READ_BLOOD_PRESSURE"
       ],
       "googleServicesFile": "./google-services.json"
     },
@@ -121,6 +126,14 @@
         }
       ],
       "expo-sqlite",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "The Growth Project uses your microphone only while you record a voice note for your coaching community.",
+          "enableBackgroundPlayback": false,
+          "enableBackgroundRecording": false
+        }
+      ],
       "expo-apple-authentication",
       "expo-web-browser",
       "expo-font",
@@ -157,6 +170,7 @@
         }
       ],
       "react-native-health-connect",
+      "./plugins/withHealthConnectPermissionDelegate",
       [
         "./plugins/withAndroidMinSdk",
         {

@@ -20,7 +20,6 @@ const mockedPost = (api as unknown as { post: jest.Mock }).post;
 
 function sample(): NormalizedSample {
   return {
-    userId: 'u1',
     connectionId: 'c1',
     provider: 'HEALTH_CONNECT',
     metric: 'STEPS',
@@ -61,5 +60,16 @@ describe('ingest', () => {
       }),
     ]);
     expect(res).toEqual({ inserted: 1, skipped: 0 });
+  });
+
+  it('S14: never sends userId, even if a caller object carries one', async () => {
+    mockedPost.mockResolvedValue({ data: { inserted: 1, skipped: 0 } });
+    const withUser = { ...sample(), userId: 'someone-else' };
+    await healthConnectIngestApi.ingest([withUser]);
+    const body = mockedPost.mock.calls[0][1] as Record<string, unknown>[];
+    expect(body[0]).not.toHaveProperty('userId');
+    expect(Object.keys(body[0]).sort()).toEqual(
+      ['bucket', 'connectionId', 'endAt', 'metric', 'provider', 'startAt', 'unit', 'value'].sort(),
+    );
   });
 });

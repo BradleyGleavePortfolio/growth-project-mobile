@@ -45,6 +45,7 @@ import { featureFlags } from '../config/featureFlags';
 // bottom-tab ONLY when `featureFlags.coachCommunity` is true; when the flag is
 // OFF the tab does not render and none of the six routes register.
 import CoachCommunityNavigator from './CoachCommunityNavigator';
+import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
 // Stage 3 — cross-pillar federated coach surface. Mounted as a nested
 // navigator so the practice-selection picker, dashboard, roster, detail
 // view, messages, and assignments all live under one settings entry.
@@ -58,6 +59,8 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 // Sprint B-2 — coach surfaces. Macros review (PR #130), workout
 // builder + meal templates + bulk invite (this PR).
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
+// S-REACH: coach read of a client's consultation answers (backend #607).
+import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -118,6 +121,8 @@ import DataExportScreen from '../screens/settings/DataExportScreen';
 // lives in the Settings stack (reachable from coach Settings).
 import ContactView from '../screens/messaging/ContactView';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
+import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
 import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
@@ -147,6 +152,13 @@ export type ClientsStackParamList = {
   ClientsList: undefined;
   ClientDetail: { clientId: string; clientName: string };
   /**
+   * S14 round 3: the coach-only wearable coaching prompts for one client,
+   * opened from the client's Health tab. Registered only behind
+   * `featureFlags.communityWearablePrompts` (the screen also re-checks the
+   * server flag `coach_community_wearable_prompts` and the coach role).
+   */
+  ClientWearablePrompts: { clientId: string; clientName?: string };
+  /**
    * `initialDraft` is consumed by ClientMessagesScreen to prefill the
    * composer — used by Coach AI v1's "Send check-in" action on the
    * weekly insight screen. Optional and ignored on screens that don't
@@ -159,6 +171,8 @@ export type ClientsStackParamList = {
   BloodworkReviewQueue: undefined;
   // Sprint B-2 coach surfaces — closed by this PR.
   CoachMacrosReview:    { clientId: string; clientName: string };
+  /** S-REACH: consultation answers, from client detail > Summary. */
+  ClientConsultation:   { clientId: string; clientName?: string };
   CoachWorkoutBuilder:  { planId?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
@@ -232,6 +246,9 @@ export type SettingsStackParamList = {
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
   BlockedUsers: undefined;
+  /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
+  RomanConversations: undefined;
+  RomanConversation: RomanConversationParams;
   /** Stream 1 — AI credit-pack checkout. `preselect` lets callers route
    *  the coach into a pre-selected tier or the custom-amount flow. */
   CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
@@ -308,11 +325,22 @@ function ClientsStackNavigator() {
     >
       <ClientsStack.Screen name="ClientsList"       component={ClientsListScreen} />
       <ClientsStack.Screen name="ClientDetail"      component={ClientDetailScreen} />
+      {featureFlags.communityWearablePrompts ? (
+        <ClientsStack.Screen
+          name="ClientWearablePrompts"
+          component={CommunityWearablePromptsScreen}
+          options={{ headerShown: false }}
+        />
+      ) : null}
       <ClientsStack.Screen name="ClientMessages"    component={ClientMessagesScreen} />
       <ClientsStack.Screen name="InviteCodes"       component={InviteCodesScreen} />
       <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
-      <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      {/* Lab review: personal training only, no lab surfaces in v1.0. Registered
+          only behind featureFlags.bloodwork (OFF), like the client entry. */}
+      {featureFlags.bloodwork && (
+        <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      )}
       {/* Phase 8: legacy CoachHomeScreen demoted to sub-screen so existing
           navigate('Dashboard') deep links keep resolving. The home tab is
           now CommandCenter. */}
@@ -323,6 +351,12 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachMacrosReview"
         component={CoachMacrosReviewScreen}
+      />
+      {/* S-REACH: consultation answers (GET /coach/clients/:clientId/consultation). */}
+      <ClientsStack.Screen
+        name="ClientConsultation"
+        component={ClientConsultationScreen}
+        options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
       />
       <ClientsStack.Screen
         name="CoachWorkoutBuilder"
@@ -430,6 +464,10 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
       {/* Phase 10 — GDPR right to erasure. */}
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      {/* Roman chat history (backend #635): always registered, like the backend
+          routes, so finding and deleting chats never depends on the chat flag. */}
+      <SettingsStack.Screen name="RomanConversations" component={RomanConversationsScreen} />
+      <SettingsStack.Screen name="RomanConversation" component={RomanConversationScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
       {/* Importer v0.3 — coach-facing extension import entry. Registered ONLY

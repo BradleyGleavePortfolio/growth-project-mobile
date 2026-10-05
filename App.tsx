@@ -25,6 +25,7 @@ import {
   installForegroundHandler,
   installNotificationResponseHandler,
 } from './src/services/pushNotifications';
+import { installTimezoneResyncOnForeground, syncDeviceTimezone } from './src/services/timezoneSync';
 import { routePushTap } from './src/services/pushTapRouter';
 import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
@@ -32,6 +33,7 @@ import { secureStorage } from './src/services/secureStorage';
 import { initDatabase } from './src/db/database';
 import { queryClient } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap, captureError } from './src/services/sentry';
+import { reportOtaUpdateLaunch } from './src/services/otaUpdateTags';
 // Phase 11: typed analytics service replaces the raw lib/analytics track call
 // for app_opened so the typed AnalyticsEvents constant is used.
 import { track } from './src/lib/analytics';
@@ -52,6 +54,10 @@ import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser } from './src/s
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
 // line is safe to commit without secrets.
 initSentry();
+// Tag every event with the running over-the-air update (id, channel,
+// runtime) and report an update that failed to launch (read-only; never
+// checks for or applies an update).
+reportOtaUpdateLaunch();
 
 // Screenshot mode: replace the axios network adapter with a fixture-backed one
 // before any screen module imports `services/api`. No-op when the env flag is
@@ -140,6 +146,11 @@ function App() {
       try {
         const token = await secureStorage.getItem('supabase_token');
         if (!token) return; // not authenticated
+        // C05 item 7: workout reminders use the client's local timezone.
+        // Independent of push permission; best-effort.
+        syncDeviceTimezone(token).catch((e: unknown) => {
+          if (__DEV__) console.warn('Failed to sync timezone', e);
+        });
         const result = await registerForPushNotifications({ requestPermission: false });
         if (result.token) {
           await usersApi.updatePushToken(result.token);
@@ -156,6 +167,19 @@ function App() {
     const unsubscribe = authEvents.onAuthChange(tryRegisterPushToken);
     return unsubscribe;
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // C-312-3: resync the device timezone when the app returns to the
+  // foreground (a client may travel with the app open). Best-effort.
+  useEffect(() => {
+    if (isScreenshotMode()) return undefined;
+    return installTimezoneResyncOnForeground(
+      () => secureStorage.getItem('supabase_token'),
+      undefined,
+      (e: unknown) => {
+        if (__DEV__) console.warn('Failed to resync timezone', e);
+      },
+    );
   }, []);
 
   const initApp = async () => {

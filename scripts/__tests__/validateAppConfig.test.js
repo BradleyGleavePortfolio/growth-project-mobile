@@ -185,6 +185,8 @@ function makeWorkspace() {
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs', 'well-known'), { recursive: true });
   fs.copyFileSync(VALIDATOR, path.join(dir, 'scripts', 'validate-app-config.js'));
+  // The validator resolves eas.json `extends` through scripts/eas-profile.js.
+  fs.copyFileSync(path.join(REPO_ROOT, 'scripts', 'eas-profile.js'), path.join(dir, 'scripts', 'eas-profile.js'));
   fs.copyFileSync(
     path.join(REPO_ROOT, 'app.json'),
     path.join(dir, 'app.json'),
@@ -192,6 +194,12 @@ function makeWorkspace() {
   fs.copyFileSync(
     path.join(REPO_ROOT, '.env.example'),
     path.join(dir, '.env.example'),
+  );
+  // Re-audit #305 A1: app.json enables expo.updates, so the validator also
+  // requires the purchase gate in fingerprint.config.js.
+  fs.copyFileSync(
+    path.join(REPO_ROOT, 'fingerprint.config.js'),
+    path.join(dir, 'fingerprint.config.js'),
   );
   fs.copyFileSync(
     path.join(REPO_ROOT, 'docs', 'well-known', 'assetlinks.json'),

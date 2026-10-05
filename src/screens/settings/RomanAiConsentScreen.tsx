@@ -40,6 +40,7 @@ import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
 import { logger } from '../../utils/logger';
+import { ROMAN_CHATS_COPY } from './romanChatsCopy';
 
 export type RomanAiConsentApi = Pick<typeof defaultApi, 'getStatus' | 'grantRoman' | 'withdrawRoman'>;
 
@@ -158,15 +159,19 @@ export default function RomanAiConsentScreen({
     setView({ phase: 'loading' });
     setNotice(null);
     const uid = sessionUserId();
+    // Session fence (B-326-2 round 3): after every await, a result for an
+    // account that is no longer signed in is dropped (no state written).
+    const stale = () => !mounted.current || sessionUserId() !== uid;
     if (await readAiWithdrawalPending(uid)) {
       const drained = await drainAiWithdrawal(uid, api.withdrawRoman, () => sessionUserId() === uid);
-      if (!mounted.current) return;
+      if (stale()) return;
       setPendingWithdraw(drained === 'failed');
     } else {
+      if (stale()) return;
       setPendingWithdraw(false);
     }
     const out = await api.getStatus();
-    if (!mounted.current) return;
+    if (stale()) return;
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
       // C-9: the server copy for this version must be the text shown here.
@@ -199,11 +204,17 @@ export default function RomanAiConsentScreen({
           ? await grantAiChoiceAs(uid, sessionUserId, () => api.grantRoman(romanGrantBody()))
           : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;
-      setBusy(false);
       if (out === AI_LEDGER_NOT_SENT) {
+        setBusy(false);
         setNotice(ROMAN_AI_COPY.notSent);
         return;
       }
+      // Sent, but the account that chose is no longer signed in (sign-out
+      // empties the user cache while this screen is still mounted): show
+      // nothing for the old account, and never re-read under the new one.
+      const stale = () => !mounted.current || sessionUserId() !== uid;
+      if (stale()) return;
+      setBusy(false);
       if (kind === 'allow' || out.kind === 'ok') setPendingWithdraw(false);
       if (out.kind === 'ok') {
         if (out.status) setView({ phase: 'ready', status: out.status });
@@ -213,7 +224,7 @@ export default function RomanAiConsentScreen({
       if (out.kind === 'version_mismatch') {
         // #622: the 409 carries no version; re-read the current state, then explain.
         await load();
-        if (mounted.current) setNotice(ROMAN_AI_COPY.updateApp);
+        if (!stale()) setNotice(ROMAN_AI_COPY.updateApp);
         return;
       }
       if (out.kind === 'unavailable') {
@@ -223,7 +234,7 @@ export default function RomanAiConsentScreen({
       // Re-read, so the screen shows the choice that actually stands, then explain.
       const notice = actionNoticeOf(out, kind);
       await load();
-      if (mounted.current) setNotice(notice);
+      if (!stale()) setNotice(notice);
     },
     [api, busy, load, sessionUserId],
   );
@@ -325,6 +336,9 @@ export default function RomanAiConsentScreen({
         {notice ? (
           <Text style={styles.notice} accessibilityLiveRegion="polite" testID="roman-ai-notice">{notice}</Text>
         ) : null}
+        {/* Owner 10-01 20:32 + OR-110-1: chats are kept until the client deletes
+            them or their account, so they can be found and deleted here. */}
+        {button(ROMAN_CHATS_COPY.entryLabel, () => navigation.navigate('RomanConversations'), 'roman-ai-conversations', true)}
         <View style={styles.divider} />
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}

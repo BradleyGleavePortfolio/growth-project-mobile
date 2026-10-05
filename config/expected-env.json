@@ -221,6 +221,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (client wearable AI insight panel, #317). Keep off in every EAS profile until the panel honours the D2 AI consent (box 2)."
+    },
     "EXPO_PUBLIC_HELP_BASE_URL": {
       "kind": "optional",
       "default": "https://app.trygrowthproject.com/help",

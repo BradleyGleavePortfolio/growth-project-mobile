@@ -10,7 +10,10 @@
  *   - No playback adapter bundled (`isAvailable === false`): same disabled
  *     state with a "playback isn't available on this build" label.
  *   - A load/transport error during play surfaces a calm inline retry, never a
- *     thrown crash.
+ *     thrown crash. The failed clip is released so the retry reloads, and
+ *     `onPlaybackError` lets the parent fetch a fresh signed URL.
+ *   - The clip is keyed to its URL (B-314-5): a new URL releases the old clip
+ *     and the next Play loads the new one; late loads are released.
  *
  * Accessibility: the play/pause control is a real button with a status-aware
  * label ("Play voice note, 0:12" / "Pause"). The waveform is decorative and
@@ -31,6 +34,7 @@ import {
   type VoicePlaybackPort,
   type VoicePlaybackHandle,
 } from './voicePlaybackPort';
+import { reportVoiceAudioCleanup } from '../../services/voiceAudio';
 
 export interface VoiceNotePlayerProps {
   /** Signed download URL, or null when storage signing is unavailable. */
@@ -41,6 +45,11 @@ export interface VoiceNotePlayerProps {
   peaks?: number[];
   /** Inject a playback port for tests; defaults to the resolved adapter. */
   playback?: VoicePlaybackPort;
+  /**
+   * Called when loading or playing fails, so the parent can fetch a fresh
+   * signed URL (they expire). The new URL replaces the failed clip.
+   */
+  onPlaybackError?: () => void;
   testID?: string;
 }
 
@@ -51,6 +60,7 @@ export default function VoiceNotePlayer({
   durationMs,
   peaks = [],
   playback,
+  onPlaybackError,
   testID,
 }: VoiceNotePlayerProps): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -58,50 +68,111 @@ export default function VoiceNotePlayer({
 
   const [state, setState] = useState<PlayState>('idle');
   const [positionMs, setPositionMs] = useState(0);
-  const handleRef = useRef<VoicePlaybackHandle | null>(null);
+  // The loaded clip is keyed to the URL it was loaded from (B-314-5): a
+  // refreshed signed URL (queue refetch, expired link) must never keep
+  // playing, or retrying, the old one.
+  const loadedRef = useRef<{ url: string; handle: VoicePlaybackHandle } | null>(null);
+  // Bumped on every URL change, release and unmount; a load that resolves
+  // after its generation ended is released instead of adopted.
+  const generationRef = useRef(0);
+  // B-314-8: single flight. The generation of the load in progress, or null.
+  // Set synchronously on the first tap, so a second tap before React
+  // re-renders (or before the load resolves) never starts a second native
+  // player; a URL change or unmount ends that generation, so a tap for the
+  // new URL is not blocked by the stale load.
+  const loadingRef = useRef<number | null>(null);
+  const onPlaybackErrorRef = useRef(onPlaybackError);
+  onPlaybackErrorRef.current = onPlaybackError;
 
   const disabled = url === null || !port.isAvailable;
 
-  // Release the native resource on unmount so a scrolled-away note never leaks.
-  useEffect(() => {
-    return () => {
-      const handle = handleRef.current;
-      handleRef.current = null;
-      if (handle) void handle.unload();
-    };
+  const release = useCallback(() => {
+    generationRef.current += 1;
+    const loaded = loadedRef.current;
+    loadedRef.current = null;
+    if (loaded) void loaded.handle.unload().catch(reportVoiceAudioCleanup('player_unload'));
   }, []);
+
+  // A new URL releases the old clip and resets the control; the
+  // next Play loads the new URL. Unmount releases it too, so a scrolled-away
+  // note never leaks a native player.
+  useEffect(() => {
+    setState('idle');
+    setPositionMs(0);
+    return release;
+  }, [url, release]);
+
+  const fail = useCallback(
+    (generation: number) => {
+      if (generation !== generationRef.current) return;
+      // Drop the failed clip so Retry reloads (an expired signed URL is the
+      // usual cause; the parent can fetch a fresh one).
+      release();
+      setState('error');
+      onPlaybackErrorRef.current?.();
+    },
+    [release],
+  );
 
   const start = useCallback(async () => {
     if (disabled || url === null) return;
-    setState('loading');
+    if (loadingRef.current !== null && loadingRef.current === generationRef.current) return;
+    let generation = generationRef.current;
+    let loadingGeneration: number | null = null;
     try {
-      if (!handleRef.current) {
-        handleRef.current = await port.load(url, {
-          onProgress: (ms) => setPositionMs(ms),
+      let loaded = loadedRef.current;
+      if (!loaded || loaded.url !== url) {
+        if (loaded) release();
+        generation = generationRef.current;
+        loadingGeneration = generation;
+        loadingRef.current = generation;
+        setState('loading');
+        const handle = await port.load(url, {
+          onProgress: (ms) => {
+            if (generation === generationRef.current) setPositionMs(ms);
+          },
           onEnd: () => {
+            if (generation !== generationRef.current) return;
             setState('paused');
             setPositionMs(0);
           },
-          onError: () => setState('error'),
+          onError: () => fail(generation),
         });
+        if (generation !== generationRef.current) {
+          // The URL changed or the player unmounted while loading.
+          void handle.unload().catch(reportVoiceAudioCleanup('late_load_unload'));
+          return;
+        }
+        const previous = loadedRef.current;
+        loaded = { url, handle };
+        loadedRef.current = loaded;
+        // Never orphan a handle: anything adopted before this one is released.
+        if (previous && previous.handle !== handle) {
+          void previous.handle.unload().catch(reportVoiceAudioCleanup('player_replaced_unload'));
+        }
       }
-      await handleRef.current.play();
-      setState('playing');
+      await loaded.handle.play();
+      if (generation === generationRef.current) setState('playing');
     } catch {
-      setState('error');
+      fail(generation);
+    } finally {
+      if (loadingGeneration !== null && loadingRef.current === loadingGeneration) {
+        loadingRef.current = null;
+      }
     }
-  }, [disabled, port, url]);
+  }, [disabled, fail, port, release, url]);
 
   const pause = useCallback(async () => {
-    const handle = handleRef.current;
-    if (!handle) return;
+    const loaded = loadedRef.current;
+    if (!loaded) return;
+    const generation = generationRef.current;
     try {
-      await handle.pause();
-      setState('paused');
+      await loaded.handle.pause();
+      if (generation === generationRef.current) setState('paused');
     } catch {
-      setState('error');
+      fail(generation);
     }
-  }, []);
+  }, [fail]);
 
   const onPress = useCallback(() => {
     if (state === 'playing') void pause();
@@ -142,10 +213,10 @@ export default function VoiceNotePlayer({
       <HapticPressable
         intent="light"
         onPress={onPress}
-        disabled={disabled}
+        disabled={disabled || state === 'loading'}
         accessibilityRole="button"
         accessibilityLabel={controlLabel}
-        accessibilityState={{ disabled, busy: state === 'loading' }}
+        accessibilityState={{ disabled: disabled || state === 'loading', busy: state === 'loading' }}
         testID="voice-player-toggle"
         style={[styles.control, { backgroundColor: controlBg }]}
       >
@@ -170,7 +241,7 @@ export default function VoiceNotePlayer({
           accessibilityRole="text"
           testID="voice-player-error"
         >
-          Tap to retry
+          Could not play this voice note. Tap play to try again.
         </Text>
       ) : null}
     </View>
