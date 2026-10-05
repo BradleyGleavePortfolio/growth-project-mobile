@@ -55,9 +55,7 @@
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
         "EXPO_PUBLIC_FF_COACH_BRIEF": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
-        "EXPO_PUBLIC_FF_COMMUNITY_DM": "false",
-        "EXPO_PUBLIC_FF_MWB_PROGRAMS": "true",
-        "EXPO_PUBLIC_FF_MWB_AUTOSAVE": "true"
+        "EXPO_PUBLIC_FF_COMMUNITY_DM": "false"
       }
     }
   }
