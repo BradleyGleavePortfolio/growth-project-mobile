@@ -185,7 +185,10 @@ export default function ClientMessagesScreen() {
             loadSinceNewest,
             thread.enabled
               ? (ping) => {
-                  if (ping.threadClientId !== clientId) return;
+                  // The backend's public-channel ping carries no ids, so every
+                  // ping refreshes this thread; an older ID-bearing ping for a
+                  // different client is skipped.
+                  if (ping.threadClientId !== null && ping.threadClientId !== clientId) return;
                   void loadSinceNewest();
                   void thread.refresh();
                 }
