@@ -588,6 +588,17 @@ export const coachPackagesApi = {
     return { ...res, data: fromBackend(row) };
   },
 
+  /**
+   * B-347-3: make a draft live from the editor. Same route the setup wizard
+   * calls (coachSetupApi.publishPackage); answers the row as now stored.
+   */
+  publish: async (id: string) => {
+    const res = await api.post<BackendPackageRow>(
+      `/v1/coach/packages/${encodeURIComponent(id)}/publish`,
+    );
+    return { ...res, data: fromBackend(res.data) };
+  },
+
   // TODO(backend): `GET /v1/coach/packages/:id/subscribers` not yet deployed.
   // 404 is surfaced to the caller — we do NOT convert to an empty list so
   // a missing endpoint doesn't masquerade as "0 subscribers".
