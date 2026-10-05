@@ -69,7 +69,9 @@ interface Props {
 export function intervalCopy(p: PackageDetailViewModel): string {
   if (p.billingInterval === 'one_time') return 'one-time payment';
   const unit =
-    p.billingInterval === 'monthly'
+    p.billingInterval === 'weekly'
+      ? 'week'
+      : p.billingInterval === 'monthly'
       ? 'month'
       : p.billingInterval === 'quarterly'
       ? 'quarter'
