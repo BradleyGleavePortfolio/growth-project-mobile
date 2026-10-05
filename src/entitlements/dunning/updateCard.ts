@@ -116,6 +116,15 @@ export interface NativeCardUpdateOptions {
 const RETIRED = { kind: 'retired' } as const;
 const always = () => true;
 
+/**
+ * B-352-3: the native SDK owns ONE PaymentSheet for the whole app, not one
+ * per screen. Each card update takes the next session number before its
+ * first native step; only the newest session may initialize or present the
+ * sheet, so an older (retired or superseded) update that resumes late can
+ * never replace the customer, key or SetupIntent of the update on screen.
+ */
+let nativeSheetSession = 0;
+
 function fail(error: DunningErrorCopy, surface: string, err: unknown, extra: Record<string, unknown> = {}) {
   if (error.report) {
     captureError(err ?? new Error(error.code), {
@@ -177,12 +186,18 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
     return fail(localDunningError('PAYMENTS_NOT_CONFIGURED'), surface, null);
   }
 
+  nativeSheetSession += 1;
+  const session = nativeSheetSession;
+  const ownsSheet = () => isCurrent() && session === nativeSheetSession;
   const init = await guarded(async () => {
     await sdk.initStripe({
       publishableKey,
       urlScheme: STRIPE_URL_SCHEME,
       setReturnUrlSchemeOnAndroid: true,
     });
+    // B-352-3: re-checked between the two native calls; a retired or
+    // superseded update never initializes the shared sheet.
+    if (!ownsSheet()) return null;
     return sdk.initPaymentSheet({
       merchantDisplayName: setup.merchant_display_name,
       customerId: setup.customer_id,
@@ -195,7 +210,7 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
       appearance: buildPaymentSheetAppearance(),
     });
   });
-  if (!isCurrent()) return RETIRED;
+  if (!ownsSheet()) return RETIRED;
   if (!init.ok) {
     return fail(localDunningError('CARD_SHEET_FAILED'), surface, init.err, {
       step: 'sheet_init',
@@ -207,6 +222,7 @@ export async function runNativeCardUpdate(opts: NativeCardUpdateOptions): Promis
     });
   }
 
+  if (init.value === null) return RETIRED;
   const presented = await guarded(() => sdk.presentPaymentSheet());
   // The card form confirmed only the SetupIntent; nothing is charged until
   // the backend confirm below, which a retired screen never sends.

@@ -29,6 +29,16 @@ export type EndPlanResult =
    */
   | { ok: false; retired: true; error: null };
 
+/**
+ * B-353-2: who asked to end the plan, bound when the confirmation opened: the
+ * plan it showed and whether that screen and account are still current. A
+ * retired owner sends no cancel.
+ */
+export interface EndPlanOwner {
+  purchaseId: string | null;
+  isCurrent: () => boolean;
+}
+
 export interface DunningContextValue {
   status: ClientDunningStatus | null;
   locked: boolean;
@@ -37,7 +47,7 @@ export interface DunningContextValue {
   /** Open the native Update card screen and start the card form. */
   updateCard: (surface: string) => void;
   /** End the plan in dunning (2A): void the unpaid invoice, access ends now. */
-  endPlan: (surface: string) => Promise<EndPlanResult>;
+  endPlan: (surface: string, owner: EndPlanOwner) => Promise<EndPlanResult>;
   messageCoach: () => void;
 }
 
@@ -200,16 +210,21 @@ export function DunningLockoutProvider({
   );
 
   const endPlan = useCallback(
-    async (surface: string): Promise<EndPlanResult> => {
-      const purchaseId = status?.purchase_id;
-      if (!purchaseId) return { ok: false, error: localDunningError('PLAN_NOT_LOADED') };
+    async (surface: string, owner: EndPlanOwner): Promise<EndPlanResult> => {
       const generation = dunningLockoutStore.currentGeneration();
-      const owns = () => aliveRef.current && generation === dunningLockoutStore.currentGeneration();
+      const providerOwns = () => aliveRef.current && generation === dunningLockoutStore.currentGeneration();
+      const owns = () => owner.isCurrent() && providerOwns();
+      // B-353-2: a confirmation that outlived its screen, this provider or the
+      // account sends nothing; it never acquires a new owner here.
+      if (!owns()) return { ok: false, retired: true, error: null };
+      // The plan the client confirmed, never one that loaded since.
+      const purchaseId = owner.purchaseId;
+      if (!purchaseId) return { ok: false, error: localDunningError('PLAN_NOT_LOADED') };
       try {
         const response = await dunningApi.cancelPlan(purchaseId);
-        // B-353-1: a late answer for a retired provider or account is not shown.
-        if (!owns()) return { ok: false, retired: true, error: null };
-        await refresh();
+        // Once sent, the same account's provider re-reads the server truth even
+        // if the screen left; a retired screen or account is shown nothing.
+        if (providerOwns()) await refresh();
         if (!owns()) return { ok: false, retired: true, error: null };
         return { ok: true, response };
       } catch (err) {
@@ -217,14 +232,13 @@ export function DunningLockoutProvider({
         if (error.report) {
           captureError(err, { surface, dunning_error_code: error.code, request_id: error.reference });
         }
-        if (!owns()) return { ok: false, retired: true, error: null };
         // A lost answer may still have ended the plan: show the truth.
-        await refresh();
+        if (providerOwns()) await refresh();
         if (!owns()) return { ok: false, retired: true, error: null };
         return { ok: false, error };
       }
     },
-    [status?.purchase_id, refresh],
+    [refresh],
   );
 
   const value = useMemo<DunningContextValue>(

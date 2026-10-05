@@ -449,14 +449,49 @@ function disputedTotals(disputes: QuoteDispute[]): string | null {
 }
 
 /**
- * B-353-2 / C-352-5: the limitation the server states for a disputed
- * payment (backend B-628-8: a card update never settles it), with the
- * working next step.
+ * R-DISPUTE-PAUSE (owner 12:01 PDT 10-04, binding): a dispute on any charge
+ * of a recurring plan ends that plan's access at once and pauses all of its
+ * billing; nothing restarts it on its own (not the dispute closing, not a new
+ * card); the plan's coach decides whether to restart it. Backend D2c answers
+ * `reason: 'dispute_paused'`, `restart_by: 'coach'`. Every dispute surface in
+ * the app says these three facts with this one sentence (B-352-2 / B-352-7):
+ * no lock date, no support fix, no future-payment line.
+ *
+ * `scope`: 'account' when the whole app is locked by the dispute (the
+ * lockout), 'plan' when other plans may still be active (banner, outcomes).
+ */
+export function disputePauseFacts(
+  coachName: string | null | undefined,
+  scope: 'account' | 'plan' | 'plans' = 'plan',
+): string {
+  if (scope === 'plans') {
+    return `For those plans, access has ended and billing is paused. ${
+      coachName ? `Your coach, ${coachName}, decides` : 'Each coach decides'
+    } whether to restart them. They do not restart on their own or with a new card.`;
+  }
+  const lead =
+    scope === 'account'
+      ? 'Your access has ended and billing is paused.'
+      : 'For that plan, access has ended and billing is paused.';
+  const who = coachName ? `Your coach, ${coachName}, decides` : 'Your coach decides';
+  return `${lead} ${who} whether to restart it. It does not restart on its own or with a new card.`;
+}
+
+/**
+ * The dispute line kept in every card-update outcome (C-352-5: never
+ * dropped): what the bank did, then the R-DISPUTE-PAUSE facts for the
+ * disputed plan or plans. Null when no plan has a dispute open.
  */
 export function disputeNotSettledLine(disputes: QuoteDispute[]): string | null {
   if (disputes.length === 0) return null;
   const amount = disputedTotals(disputes);
-  return `Your bank reversed an earlier payment${amount ? ` of ${amount}` : ''}. Saving a card does not settle that. Email ${SUPPORT_EMAIL} to sort it out.`;
+  const plans = new Set(disputes.map((d) => d.purchase_id)).size;
+  const coaches = [...new Set(disputes.map((d) => d.coach_name).filter((c): c is string => Boolean(c)))];
+  const coach = coaches.length === 1 ? coaches[0] : null;
+  const what = `Your bank reversed ${plans > 1 ? 'payments' : 'a payment'}${amount ? ` of ${amount}` : ''}${
+    coach ? ` to ${coach}` : ''
+  }.`;
+  return `${what} ${disputePauseFacts(coach, plans > 1 ? 'plans' : 'plan')}`;
 }
 
 /**
@@ -480,11 +515,15 @@ export function cardUpdateOutcomeCopy(
   const paid = formatDunningTotals(r.paid_totals);
   const due = formatDunningTotals(r.due_totals);
   const restored = r.access_state === 'restored' && r.access_restored;
+  // B-352-2: with a disputed plan open, access news is scoped to the plan
+  // that was paid; the disputed plan stays paused until its coach restarts it.
+  const paidPlan = disputeLine ? 'The plan you paid for' : 'Your plan';
   const accessLine = restored
-    ? ' Your plan is active again.'
+    ? ` ${paidPlan} is active again.`
     : r.access_state === 'updating' || r.access_state === 'partial'
-      ? ' Your plan updates within a few minutes. Pull down to refresh.'
+      ? ` ${paidPlan} updates within a few minutes. Pull down to refresh.`
       : '';
+  const clears = disputeLine ? 'The plan it pays for updates' : 'Your plan updates';
   const local = (): string => {
     switch (r.outcome) {
       case 'paid':
@@ -500,8 +539,8 @@ export function cardUpdateOutcomeCopy(
         // C-322-2: money already collected is said first, then the payment
         // that is still processing.
         return paid
-          ? `Your card${ending} is saved and ${paid} went through. The payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`
-          : `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. Your plan updates as soon as it clears, usually within a few minutes.`;
+          ? `Your card${ending} is saved and ${paid} went through. The payment${due ? ` of ${due}` : ''} is processing. ${clears} as soon as it clears, usually within a few minutes.`
+          : `Your card${ending} is saved and your payment${due ? ` of ${due}` : ''} is processing. ${clears} as soon as it clears, usually within a few minutes.`;
       case 'in_progress':
         // B-322-7: one plan settled while another plan's change was still
         // being processed; the known payment is never hidden.
@@ -527,12 +566,12 @@ export function cardUpdateOutcomeCopy(
   };
   // Built from the structured fields so the copy always names buttons that
   // are on screen; the server's `message` is for logs and older clients. The
-  // dispute limitation is always kept (B-353-2).
+  // dispute facts are always kept (C-352-5, R-DISPUTE-PAUSE).
   const body = disputeLine ? `${local()} ${disputeLine}` : local();
   switch (r.outcome) {
     case 'paid':
       return {
-        title: restored ? 'Payment received' : 'Payment received, updating your plan',
+        title: restored || disputeLine ? 'Payment received' : 'Payment received, updating your plan',
         body,
         tone: 'done',
       };
@@ -574,8 +613,9 @@ export function cardUpdateOutcomeCopy(
 
 /**
  * Copy after ending a plan. 2A (ended now) vs option A (scheduled). With
- * `dispute` (the plan's cycle is a reversed payment), the server's
- * limitation is kept: ending the plan does not settle the reversal.
+ * `dispute` (the plan's payment was reversed), the R-DISPUTE-PAUSE facts are
+ * kept: access had already ended, billing was paused, only the coach
+ * restarts it (B-352-7: no support fix, nothing restores on its own).
  */
 export function cancelOutcomeCopy(
   r: CancelPlanResponse,
@@ -588,7 +628,7 @@ export function cancelOutcomeCopy(
   return opts.dispute
     ? {
         title: base.title,
-        body: `${base.body} Ending the plan does not settle the payment your bank reversed. Email ${SUPPORT_EMAIL} to sort it out.`,
+        body: `${base.body} Your bank had reversed a payment on this plan, so its access had already ended and its billing was paused. Only your coach can restart it.`,
       }
     : base;
 }

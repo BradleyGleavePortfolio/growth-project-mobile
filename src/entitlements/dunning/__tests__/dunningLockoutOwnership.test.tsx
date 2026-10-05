@@ -1,7 +1,8 @@
 /**
- * B-LOCK-118 (#353): the lockout belongs to the signed-in account and the
- * mounted screens (B-353-1, B-353-2), a reversed payment is described as one
- * (B-353-2 / B-353-3 Sol), no first person in client copy (B-353-3), the
+ * B-LOCK-118 / B-LOCK2-120 (#353): the lockout belongs to the signed-in
+ * account and the mounted screens (B-353-1, B-353-2, including an End my plan
+ * confirmation), a reversed payment says R-DISPUTE-PAUSE on every surface
+ * (B-353-3 / B-353-6 / B-353-7), no first person in client copy (B-353-3), the
  * overlay is modal for screen readers (B-353-4), and the screens stay
  * truthful against today's production backend (no dunning routes, flag off).
  */
@@ -9,6 +10,7 @@ import React from 'react';
 import { Alert, Text } from 'react-native';
 import { act, fireEvent, isHiddenFromAccessibility, render, waitFor } from '@testing-library/react-native';
 import { authEvents } from '../../../utils/authEvents';
+import { SUPPORT_EMAIL } from '../../../constants/support';
 import type { ClientDunningStatus } from '../dunningApi';
 import { dunningLockoutStore } from '../dunningLockoutStore';
 import { DunningLockoutProvider, useDunning } from '../DunningLockoutProvider';
@@ -387,23 +389,138 @@ describe('B-353-2: a retired Update card screen starts no further step', () => {
   });
 });
 
+describe('B-353-2: an End my plan confirmation belongs to the screen, account and plan that opened it', () => {
+  const ENDED = { outcome: 'ended', purchase_id: 'p1', voided_invoice_count: 1, voided_amount_cents: 15000, currency: 'usd' };
+  let alert: jest.SpyInstance;
+  beforeEach(() => {
+    alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+  afterEach(() => alert.mockRestore());
+  const confirmOf = (call = 0) =>
+    (alert.mock.calls[call][2] as Array<{ style?: string; onPress?: () => void }>).find((b) => b.style === 'destructive')
+      ?.onPress;
+  const cancels = () => mockPost.mock.calls.filter(([url]) => String(url).endsWith('/cancel'));
+
+  it('Update card: accepted after the screen left (provider still mounted), no cancel is sent', async () => {
+    route = 'UpdateCard';
+    mockGet.mockResolvedValue({ data: LOCKED });
+    const screen = await render(<Provider><UpdateCardScreen /></Provider>);
+    await fireEvent.press(await screen.findByTestId('update-card-end-plan'));
+    const confirm = confirmOf();
+    await screen.rerender(<Provider><Text>elsewhere</Text></Provider>);
+    await act(async () => confirm?.());
+    expect(cancels()).toEqual([]);
+  });
+
+  it('Update card and lockout: accepted after the account changed, no cancel for either account', async () => {
+    route = 'UpdateCard';
+    mockGet.mockResolvedValue({ data: LOCKED });
+    const card = await render(<Provider><UpdateCardScreen /></Provider>);
+    await fireEvent.press(await card.findByTestId('update-card-end-plan'));
+    const props = lockoutProps(LOCKED);
+    const lockout = await render(<DunningLockoutScreen {...props} />);
+    await fireEvent.press(lockout.getByTestId('dunning-lockout-end-plan'));
+    await act(async () => {
+      authEvents.emit('logout');
+    });
+    await act(async () => {
+      confirmOf(0)?.();
+      confirmOf(1)?.();
+    });
+    expect(cancels()).toEqual([]);
+    expect(props.onEndPlan).not.toHaveBeenCalled();
+  });
+
+  it('lockout: accepted after the lockout lifted, no cancel; the plan sent is the one the dialog showed', async () => {
+    mockGet.mockResolvedValue({ data: LOCKED });
+    mockPost.mockResolvedValue({ data: ENDED });
+    const screen = await render(<Provider><Reader /></Provider>);
+    await fireEvent.press(await screen.findByTestId('dunning-lockout-end-plan'));
+    const stale = confirmOf();
+    await act(async () => {
+      dunningLockoutStore.clear();
+    });
+    await act(async () => stale?.());
+    expect(cancels()).toEqual([]);
+    // Live: the status moves to another plan while the dialog is open; the confirmed plan is the one sent.
+    await act(async () => {
+      dunningLockoutStore.reportLocked({ requestId: 'req-2' });
+    });
+    await fireEvent.press(await screen.findByTestId('dunning-lockout-end-plan'));
+    mockGet.mockResolvedValue({ data: { ...LOCKED, purchase_id: 'p2' } });
+    await act(async () => {
+      await ctx?.refresh();
+    });
+    await act(async () => confirmOf(1)?.());
+    expect(cancels()).toEqual([['/v1/checkout/subscriptions/p1/cancel', {}]]);
+  });
+
+  it('a cancel already sent when the screen leaves: no late dialog, and the provider re-reads the server truth', async () => {
+    route = 'UpdateCard';
+    mockGet.mockResolvedValue({ data: LOCKED });
+    const sent = deferred<{ data: typeof ENDED }>();
+    mockPost.mockImplementation(() => sent.promise);
+    const screen = await render(<Provider><UpdateCardScreen /></Provider>);
+    await fireEvent.press(await screen.findByTestId('update-card-end-plan'));
+    await act(async () => confirmOf()?.());
+    expect(cancels()).toHaveLength(1);
+    await screen.rerender(<Provider><Text>elsewhere</Text></Provider>);
+    const reads = mockGet.mock.calls.length;
+    mockGet.mockResolvedValue({ data: CLEAR });
+    await act(async () => sent.resolve({ data: ENDED }));
+    expect(alert).toHaveBeenCalledTimes(1);
+    expect(mockGet.mock.calls.length).toBeGreaterThan(reads);
+  });
+
+  it('CONTROL: a live confirmation on Update card cancels the plan it showed and shows the outcome', async () => {
+    route = 'UpdateCard';
+    mockGet.mockResolvedValue({ data: LOCKED });
+    mockPost.mockResolvedValue({ data: ENDED });
+    const screen = await render(<Provider><UpdateCardScreen /></Provider>);
+    await fireEvent.press(await screen.findByTestId('update-card-end-plan'));
+    await act(async () => confirmOf()?.());
+    expect(cancels()).toEqual([['/v1/checkout/subscriptions/p1/cancel', {}]]);
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(2));
+  });
+});
+
 describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () => {
-  it('the dispute lockout names the reversal, does not promise a card fix, and leads with support', async () => {
+  it('the dispute lockout states R-DISPUTE-PAUSE, leads with Message coach, offers no card or cancel path', async () => {
     mockGet.mockResolvedValue({ data: DISPUTE_LOCKED });
     const screen = await render(<Provider><Reader /></Provider>);
     await screen.findByTestId('dunning-lockout-screen');
     const text = textOf(screen.toJSON());
-    expect(text).toContain('Your bank reversed an earlier payment of $150.00 to Avery');
+    expect(text).toContain('Your access has ended');
+    expect(text).toContain(
+      'Your bank reversed a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+    );
     expect(text).not.toMatch(/has not gone through|was declined|charged right away|add a card that works/i);
-    expect(screen.getByTestId('dunning-lockout-next-step').props.children).toContain('Saving a new card does not settle it');
-    expect(screen.getByTestId('dunning-lockout-support-primary')).toBeTruthy();
+    expect(text).not.toMatch(/sort it out|settle|Already paid|Access pauses on/i);
+    expect(screen.getByTestId('dunning-lockout-next-step').props.children).toBe(
+      `Message Avery to talk about restarting. For any other question, email ${SUPPORT_EMAIL}.`,
+    );
+    expect(screen.getByTestId('dunning-lockout-message-coach')).toBeTruthy();
+    expect(screen.queryByTestId('dunning-lockout-update-card')).toBeNull();
+    expect(screen.queryByTestId('dunning-lockout-end-plan')).toBeNull();
+    expect(screen.getByTestId('dunning-lockout-support')).toBeTruthy();
   });
 
-  it('End my plan for a reversed payment: access ends now and the reversal is not settled', () => {
+  it('D2c dispute pause (reason dispute_paused, no amount, no lock date): same facts; a payment lock keeps its card path', async () => {
+    const d2c = { ...DISPUTE_LOCKED, kind: null, reason: 'dispute_paused' as const, amount_cents: null, lockout_at: null };
+    const screen = await render(<DunningLockoutScreen {...lockoutProps(d2c)} />);
+    expect(textOf(screen.toJSON())).toMatch(/Your bank reversed a payment to Avery\. Your access has ended and billing is paused\./);
+    expect(screen.queryByTestId('dunning-lockout-update-card')).toBeNull();
+    const payment = await render(<DunningLockoutScreen {...lockoutProps(LOCKED)} />);
+    expect(payment.getByTestId('dunning-lockout-update-card')).toBeTruthy();
+    expect(payment.getByTestId('dunning-lockout-end-plan')).toBeTruthy();
+    expect(textOf(payment.toJSON())).toContain('Already paid? Pull down to check again.');
+  });
+
+  it('End my plan body for a reversed payment (no screen offers it): access already ended, the coach decides', () => {
     const body = endPlanAlertBody(DISPUTE_LOCKED);
-    expect(body).toContain('Your access ends now');
-    expect(body).toContain('does not settle the payment your bank reversed');
-    expect(body).not.toMatch(/end of the period you already paid for|unpaid \$150\.00 is canceled/);
+    expect(body).toContain('Access to this plan has already ended and its billing is paused. Your coach decides whether to restart it.');
+    expect(body).toContain('If you end it, the plan ends now instead.');
+    expect(body).not.toMatch(/sort it out|settle|Your access ends now|unpaid \$150\.00 is canceled/);
   });
 
   it('the lockout End my plan dialog keeps the paid-in-the-meantime caveat (one shared body)', async () => {
@@ -415,14 +532,40 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     alert.mockRestore();
   });
 
-  it('Update card intro and banner for a reversed payment promise no charge, comeback, or card fix', () => {
-    for (const s of [DISPUTE_LOCKED, DISPUTE_PAST_DUE]) {
-      expect(updateCardIntro(s)).not.toMatch(/charged to it right away|comes back|did not go through/);
-      expect(updateCardIntro(s)).toContain('A new card does not settle that');
+  it('Update card intro and banner for a reversed payment: the three facts, no date, no charge, no card or support fix', () => {
+    expect(updateCardIntro(DISPUTE_LOCKED)).toBe(
+      'Your bank took back a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+    );
+    for (const s of [DISPUTE_LOCKED, DISPUTE_PAST_DUE, { ...DISPUTE_LOCKED, lock_waived: true }]) {
+      const intro = updateCardIntro(s);
+      expect(intro).toMatch(/access has ended and billing is paused/i);
+      expect(intro).not.toMatch(/charged to it right away|comes back|did not go through|future payments|sort it out|settle/);
     }
+    // A dispute on one plan while another keeps access: the facts are scoped to that plan.
+    expect(updateCardIntro({ ...DISPUTE_LOCKED, lock_waived: true })).toContain('For that plan, access has ended');
     const banner = bannerCopy(DISPUTE_PAST_DUE, NOW);
-    expect(banner.body).toContain('Your bank reversed an earlier payment of $150.00.');
-    expect(banner.body).not.toMatch(/Update your card|did not go through/);
+    expect(banner.body).toBe(
+      'Your bank reversed a payment of $150.00 to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+    );
+    expect(banner.body).not.toMatch(/Update your card|did not go through|Access pauses on|unless|Oct/);
+  });
+
+  it('the dispute banner offers Message coach only; a dispute that closes stays paused (no automatic restore)', async () => {
+    mockGet.mockResolvedValue({ data: { ...DISPUTE_PAST_DUE, lock_waived: true } });
+    const screen = await render(
+      <Provider>
+        <Reader />
+        <DunningBanner surface="HomeScreen" />
+      </Provider>,
+    );
+    await screen.findByTestId('dunning-banner');
+    expect(screen.queryByTestId('dunning-banner-update-card')).toBeNull();
+    // The bank closes the dispute: D2c still reports the pause until the coach restarts the plan.
+    mockGet.mockResolvedValue({ data: { ...DISPUTE_PAST_DUE, lock_waived: true, reason: 'dispute_paused' } });
+    await act(async () => {
+      await ctx?.refresh();
+    });
+    expect(textOf(screen.getByTestId('dunning-banner'))).toContain('access has ended and billing is paused');
   });
 
   it('a dispute-only Save card shows what happened: nothing charged, the reversal still open', async () => {
@@ -452,8 +595,10 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     const result = await screen.findByTestId('update-card-result-saved');
     const body = textOf(result);
     expect(body).toContain('There was no open invoice to pay, so nothing was charged.');
-    expect(body).toContain('Saving a card does not settle that.');
-    expect(textOf(screen.toJSON())).not.toContain('was declined');
+    expect(body).toContain('For that plan, access has ended and billing is paused.');
+    expect(textOf(screen.toJSON())).not.toMatch(/was declined|sort it out|settle/);
+    expect(screen.queryByTestId('update-card-end-plan')).toBeNull();
+    expect(screen.getByTestId('update-card-message-coach')).toBeTruthy();
   });
 
   it('a payment plan whose quote also names a reversed payment says so before the card form', async () => {
@@ -466,7 +611,10 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     })(LOCKED);
     const screen = await render(<Provider><UpdateCardScreen /></Provider>);
     void fireEvent.press(screen.getByTestId('update-card-add'));
-    await screen.findByTestId('update-card-quote-dispute');
+    const note = await screen.findByTestId('update-card-quote-dispute');
+    expect(note.props.children).toBe(
+      'Your bank reversed a payment of $90.00 to Blake. For that plan, access has ended and billing is paused. Your coach, Blake, decides whether to restart it. It does not restart on its own or with a new card.',
+    );
     await act(async () => present.resolve({ error: { code: 'Canceled' } }));
   });
 });

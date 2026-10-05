@@ -27,6 +27,8 @@ import {
   cancelOutcomeCopy,
   cardUpdateOutcomeCopy,
   describeDunningError,
+  disputeNotSettledLine,
+  disputePauseFacts,
   type DunningErrorCopy,
 } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
@@ -36,6 +38,7 @@ import {
   DUNNING_SUPPORT_SUBJECT,
   dunningSupportBody,
   dunningSupportReferenceNote,
+  disputeScope,
   endPlanAlertBody,
   isDisputeCycle,
 } from './DunningLockoutScreen';
@@ -83,9 +86,12 @@ export function updateCardIntro(status: ClientDunningStatus | null | undefined):
   const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
   const coach = status?.coach_name ?? 'your coach';
   if (inDunning(status) && isDisputeCycle(status)) {
-    // B-353-2: a new card does not settle a payment the bank took back, so
-    // no charge and no comeback are promised (backend B-628-8).
-    return `Your bank took back an earlier payment${amount ? ` of ${amount}` : ''} to ${coach}${status?.state === 'locked' ? ', so your plan is paused' : ''}. A new card does not settle that; email support to sort it out. A card saved here is used for your future payments.`;
+    // R-DISPUTE-PAUSE (B-353-3 / B-353-7): the three facts; no charge, no
+    // comeback, no support fix and no future-payment line are promised.
+    return `Your bank took back a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(
+      status?.coach_name,
+      disputeScope(status),
+    )}`;
   }
   if (inDunning(status) && status?.state === 'locked') {
     return amount
@@ -289,17 +295,22 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
 
   const endPlan = useCallback(() => {
     if (!dunning || busy) return;
+    // B-353-2: owned from the moment the confirmation opens, by this screen,
+    // this account and the plan it shows. Accepted after the screen left or
+    // the account changed, it sends nothing.
+    const isCurrent = claimOwner();
+    const purchaseId = status?.purchase_id ?? null;
     Alert.alert(inDunning(status) ? 'End your plan now?' : 'End your plan?', endPlanAlertBody(status), [
       { text: 'Keep my plan', style: 'cancel' },
       {
         text: 'End my plan',
         style: 'destructive',
         onPress: () => {
-          const isCurrent = claimOwner();
+          if (!isCurrent()) return;
           setBusy('cancel');
           setError(null);
           void dunning
-            .endPlan('UpdateCardScreen')
+            .endPlan('UpdateCardScreen', { purchaseId, isCurrent })
             .then((out) => {
               // B-353-2: a retired screen shows no late answer and does not navigate.
               if (!isCurrent() || ('retired' in out && out.retired)) return;
@@ -330,13 +341,10 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
   }, [supportEmail]);
 
   // B-353-2: disputes the confirm reports (or the quote read before the card
-  // form named) stay in the outcome: saving a card does not settle them.
+  // form named) stay in the outcome with the R-DISPUTE-PAUSE facts.
   const outcome = result ? cardUpdateOutcomeCopy(result.response, quote?.disputes ?? []) : null;
   const dispute = isDisputeCycle(status);
-  const quoteDisputeNote =
-    !outcome && !dispute && quote && quote.disputes.length > 0
-      ? 'Another plan has a payment your bank reversed. Saving a card does not settle that; email support to sort it out.'
-      : null;
+  const quoteDisputeNote = !outcome && !dispute && quote ? disputeNotSettledLine(quote.disputes) : null;
   const settled = !pending && result && ['paid', 'saved', 'processing'].includes(result.response.outcome);
   const needsBank = pending?.kind === 'bank';
   const quoteTotal = formatDunningTotals(quote?.totals ?? []);
@@ -466,7 +474,21 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
           </TouchableOpacity>
         )}
 
-        {inDunning(status) && status?.purchase_id && !settled ? (
+        {dispute && inDunning(status) ? (
+          <TouchableOpacity
+            style={styles.secondary}
+            onPress={dunning?.messageCoach}
+            accessibilityRole="button"
+            testID="update-card-message-coach"
+          >
+            <Text style={styles.secondaryText}>
+              {status?.coach_name ? `Message ${status.coach_name}` : 'Message your coach'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {/* R-DISPUTE-PAUSE: no End my plan for a reversed payment (D2c has no cancel route). */}
+        {inDunning(status) && !dispute && status?.purchase_id && !settled ? (
           <TouchableOpacity
             style={styles.secondary}
             onPress={endPlan}
