@@ -108,6 +108,28 @@ Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple c
 
 **Tests:** `src/services/__tests__/accountBinding.transport.test.ts` (real axios client and interceptors, paused credential read, logout/login, 401 refresh and replay), `src/services/__tests__/sessionFence.refresh.test.ts` (real secureStorage over a pausable SecureStore: a sign-in or sign-out at each awaited refresh, receipt and sign-out boundary), `src/services/__tests__/authActions.signOut.fence.test.ts`, `src/api/__tests__/romanChatsApi.test.ts`, `src/screens/settings/__tests__/RomanConversationsScreen.test.tsx`, `src/screens/settings/__tests__/RomanConversationScreen.test.tsx`, `src/components/roman/__tests__/RomanConversationsButton.test.tsx`, `src/navigation/__tests__/romanConversationsReachable.test.ts`.
 
+## Notification categories (`NotificationPreferencesScreen.tsx`)
+
+Client Settings > Notifications shows per-category switches (coach messages,
+reminders, workout reminders, milestones, system). Each switch PATCHes
+`/notifications/preferences` with the mapped backend fields and rolls back on
+failure. A failed save shows an inline notice that names the setting and says
+what to do next, by status (`notificationPreferenceErrors.ts`): no response =
+check the connection; 401 = signed out, sign in again; 429 = wait a minute;
+anything else = try again, with the support address and a short reference, and
+a Sentry report (status, machine code, reference only).
+
+**Workout reminders** (C05 item 7) map to `workout_reminder_push` and
+`workout_reminder_inapp` (default on). The backend sends a short note from
+Roman at the client's preferred training time (consultation S2) on their first
+session day and every plan day, in the client's local timezone, at most once a
+day, and not when that day's session is already logged. The switch reads the
+server value on mount. The device timezone is synced to the backend by
+`src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
+time the app returns to the foreground, sent only when the zone or account
+changed). Workout reminders go to clients only, so the switch is hidden for
+coach and owner accounts.
+
 ### DataExportScreen
 
 `DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.

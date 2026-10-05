@@ -261,6 +261,12 @@ export interface HealthKitReadResult {
    * uses it to drop sessions that may be cut by the window edges (S14).
    */
   sleepWindow?: { start: string; end: string };
+  /**
+   * C-370-3 (set by the sync service, not the reader): post only the sleep
+   * sessions whose END lies in [from, to) (ISO). Consecutive pieces give
+   * back-to-back ranges, so each night is posted from exactly one piece.
+   */
+  sleepPostEnds?: { from: string; to: string };
   /** Metrics whose native read failed this pass (S14 B-317-2). */
   failed?: HealthKitMetricKey[];
 }
