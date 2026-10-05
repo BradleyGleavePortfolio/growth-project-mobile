@@ -1,7 +1,7 @@
 // PR-HK-2.b — Android Health Connect on-device connector: public barrel.
 //
 // The connector's public surface. Other modules (e.g. the
-// `useHealthConnectSync` hook, future Wearables connection screens) import
+// on-device sync lane in `../onDeviceSync.ts`, Wearables screens) import
 // from here, never from individual files, so the internal layout can evolve
 // without churning call sites.
 
@@ -34,9 +34,6 @@ export {
 export {
   syncHealthConnect,
   healthConnectSyncService,
-  getLastSyncAt,
-  setLastSyncAt,
-  clearLastSyncAt,
   LAST_SYNC_AT_KEY,
   DEFAULT_BACKFILL_DAYS,
   SYNC_OVERLAP_MINUTES,

@@ -217,15 +217,44 @@ export type UndoResponse = z.infer<typeof UndoResponseSchema>;
  * 409 conflict body (mirror AutosaveConflictDto). Both discriminated causes
  * share this shape; both carry the current head index + a freshly-derived
  * lock_token so the client can rebase and retry without a separate refetch.
+ *
+ * Not strict (B-355-1): the reply arrives through the backend error filter,
+ * which adds its envelope (statusCode, code, message, timestamp, path,
+ * request_id) next to the allow-listed `head_revision_index` and
+ * `lock_token`. Unknown keys are dropped from the parsed value. Parse it with
+ * {@link parseNamedConflict}, which reads the cause from `code` or `error`.
  */
-export const AutosaveConflictSchema = z
-  .object({
-    error: z.enum(['autosave_conflict_retry', 'autosave_lock_stale']),
-    head_revision_index: z.number().int().min(0),
-    lock_token: z.string().regex(LOCK_TOKEN_RE),
-  })
-  .strict();
+export const AutosaveConflictSchema = z.object({
+  error: z.enum(['autosave_conflict_retry', 'autosave_lock_stale']),
+  head_revision_index: z.number().int().min(0),
+  lock_token: z.string().regex(LOCK_TOKEN_RE),
+});
 export type AutosaveConflict = z.infer<typeof AutosaveConflictSchema>;
+
+/**
+ * The machine name a 409 reply carries: the error filter's `code` when set,
+ * else the service's `error`. Null when the body names neither.
+ */
+export function conflictNameOf(data: unknown): string | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as { code?: unknown; error?: unknown };
+  if (typeof d.code === 'string' && d.code !== '') return d.code;
+  if (typeof d.error === 'string' && d.error !== '') return d.error;
+  return null;
+}
+
+/** Parse a 409 body with `schema`, reading its cause through {@link conflictNameOf}. */
+function parseNamedConflict<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+): T | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const parsed = schema.safeParse({
+    ...(data as Record<string, unknown>),
+    error: conflictNameOf(data),
+  });
+  return parsed.success ? parsed.data : undefined;
+}
 
 /**
  * 409 body of a fenced undo whose `expected_head_index` no longer matches the
@@ -342,12 +371,11 @@ function fromAxios(err: unknown): WorkoutAutosaveApiError {
     const status = err.response?.status ?? 0;
     const kind = classify(status);
     if (kind === 'conflict') {
-      const parsed = AutosaveConflictSchema.safeParse(err.response?.data);
       return new WorkoutAutosaveApiError(
         'conflict',
         status,
         'autosave conflict — the plan moved ahead; rebase and retry',
-        parsed.success ? parsed.data : undefined,
+        parseNamedConflict(AutosaveConflictSchema, err.response?.data),
         err,
       );
     }
@@ -502,15 +530,29 @@ export const workoutAutosaveApi = {
     } catch (err) {
       const mapped = fromAxios(err);
       if (mapped.kind === 'conflict' && axios.isAxiosError(err)) {
-        const moved = UndoHeadMovedSchema.safeParse(err.response?.data);
-        if (moved.success) {
+        const data: unknown = err.response?.data;
+        const moved = parseNamedConflict(UndoHeadMovedSchema, data);
+        if (moved) {
           throw new WorkoutAutosaveApiError(
             'conflict',
             409,
             'undo refused: the plan head moved since the undo was requested',
             undefined,
             err,
-            moved.data,
+            moved,
+          );
+        }
+        if (conflictNameOf(data) === 'undo_head_moved') {
+          // B-356-1: the head moved (possibly because THIS undo landed on an
+          // earlier attempt) but the reply lacks the current head or lock
+          // token. That is not a definite refusal: report an unreadable
+          // answer so the screen keeps editing paused and re-checks.
+          throw new WorkoutAutosaveApiError(
+            'contract',
+            409,
+            'undo answered undo_head_moved without the current head and lock token',
+            undefined,
+            err,
           );
         }
       }

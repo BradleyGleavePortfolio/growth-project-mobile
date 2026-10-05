@@ -40,8 +40,17 @@ import { useClientDetailData } from './client-detail/useClientDetailData';
 import { SleepRecoveryTab } from './client-detail/SleepRecoveryTab';
 // Stream 2 — AskAi sheet for the four execution capabilities.
 import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActionSheet';
+import { featureFlags } from '../../config/featureFlags';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
+  // S14 round 3: the coach wearable-prompts screen is reachable from this
+  // client's Health tab only when the build flag AND the server flag are on.
+  const serverFlags = useFeatureFlags();
+  const wearablePromptsOn =
+    featureFlags.communityWearablePrompts &&
+    !serverFlags.isLoading &&
+    serverFlags.flags.coach_community_wearable_prompts === true;
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { clientId, clientName } = route.params;
@@ -491,7 +500,16 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         )}
 
         {activeTab === 'healthFitness' && (
-          <HealthFitnessTab clientId={clientId} colors={colors} styles={styles} />
+          <HealthFitnessTab
+            clientId={clientId}
+            colors={colors}
+            styles={styles}
+            onOpenWearablePrompts={
+              wearablePromptsOn
+                ? () => navigation.navigate('ClientWearablePrompts', { clientId, clientName })
+                : undefined
+            }
+          />
         )}
 
         {activeTab === 'timeline' && (
