@@ -131,19 +131,35 @@ export interface OnDeviceImportDeps {
     scope: OnDeviceScope,
     fence: SessionFence,
   ) => Promise<{ postedCount: number; complete: boolean }>;
+  /**
+   * `resumeOnly` (H8): a later pass reads only the types that stopped at the
+   * page bound. `hasMore` / `failed` (optional): whether any type stopped at
+   * the page bound / failed to read; when absent, an incomplete pass is
+   * treated as having more to read.
+   */
   syncHealthConnect?: (
     scope: OnDeviceScope,
     fence: SessionFence,
-  ) => Promise<{ normalizedCount: number; complete: boolean }>;
+    options?: { resumeOnly: boolean },
+  ) => Promise<{ normalizedCount: number; complete: boolean; hasMore?: boolean; failed?: boolean }>;
 }
 
 /**
  * Passes per Connect or refresh. A pass that stopped at the Health Connect
  * page bound resumes in the next pass, so a large history finishes in one
  * visit; a pass that posted nothing stops the loop (a failing read would only
- * fail again).
+ * fail again). H8: only a pass that left pages to read continues, and the
+ * later passes read only those types, so the day re-read behind every other
+ * type (late data, `syncWindows.ts`) happens once per visit.
  */
 export const MAX_IMPORT_PASSES = 3;
+
+/** One pass: its outcome, whether pages remain, whether a type failed. */
+interface SyncPass {
+  outcome: OnDeviceImportOutcome;
+  hasMore: boolean;
+  failed: boolean;
+}
 
 async function runSyncPasses(
   scope: OnDeviceScope,
@@ -151,28 +167,40 @@ async function runSyncPasses(
   deps: OnDeviceImportDeps,
 ): Promise<OnDeviceImportOutcome> {
   let total = 0;
-  let last: OnDeviceImportOutcome = {
-    kind: 'imported',
-    source: scope.source,
-    connectionId: scope.connectionId,
-    postedCount: 0,
-    complete: false,
+  let anyFailed = false;
+  let last: SyncPass = {
+    outcome: {
+      kind: 'imported',
+      source: scope.source,
+      connectionId: scope.connectionId,
+      postedCount: 0,
+      complete: false,
+    },
+    hasMore: false,
+    failed: false,
   };
   for (let pass = 0; pass < MAX_IMPORT_PASSES; pass += 1) {
-    last = await runSync(scope, fence, deps);
-    if (last.kind !== 'imported') return last;
-    total += last.postedCount;
-    if (last.complete || last.postedCount === 0) break;
+    last = await runSync(scope, fence, deps, pass > 0);
+    const { outcome } = last;
+    if (outcome.kind !== 'imported') return outcome;
+    total += outcome.postedCount;
+    anyFailed = anyFailed || last.failed;
+    if (outcome.complete || outcome.postedCount === 0 || !last.hasMore) break;
     await fence.assertCurrent();
   }
-  return last.kind === 'imported' ? { ...last, postedCount: total } : last;
+  const { outcome } = last;
+  if (outcome.kind !== 'imported') return outcome;
+  // A later resume-only pass reports only the types it read: a type that
+  // failed in an earlier pass still leaves the import incomplete.
+  return { ...outcome, postedCount: total, complete: outcome.complete && !anyFailed };
 }
 
 async function runSync(
   scope: OnDeviceScope,
   fence: SessionFence,
   deps: OnDeviceImportDeps,
-): Promise<OnDeviceImportOutcome> {
+  resumeOnly: boolean,
+): Promise<SyncPass> {
   const { source } = scope;
   try {
     if (source === 'APPLE_HEALTHKIT') {
@@ -185,21 +213,39 @@ async function runSync(
             sourceTz: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
           }));
       const { postedCount, complete } = await run(scope, fence);
-      return { kind: 'imported', source, connectionId: scope.connectionId, postedCount, complete };
+      // Apple Health reads the whole window in one pass (day pieces, H8);
+      // nothing is left at a page bound, so a second pass would only re-read.
+      return {
+        outcome: { kind: 'imported', source, connectionId: scope.connectionId, postedCount, complete },
+        hasMore: false,
+        failed: !complete,
+      };
     }
     const run =
       deps.syncHealthConnect ??
-      ((sc: OnDeviceScope, f: SessionFence) => syncHealthConnect(sc, { fence: f }));
-    const { normalizedCount, complete } = await run(scope, fence);
+      (async (sc: OnDeviceScope, f: SessionFence, options?: { resumeOnly: boolean }) => {
+        const res = await syncHealthConnect(sc, { fence: f, resumeOnly: options?.resumeOnly ?? false });
+        return {
+          normalizedCount: res.normalizedCount,
+          complete: res.complete,
+          hasMore: res.truncatedRecordTypes.length > 0,
+          failed: res.failedRecordTypes.length > 0,
+        };
+      });
+    const res = await run(scope, fence, { resumeOnly });
     return {
-      kind: 'imported',
-      source,
-      connectionId: scope.connectionId,
-      postedCount: normalizedCount,
-      complete,
+      outcome: {
+        kind: 'imported',
+        source,
+        connectionId: scope.connectionId,
+        postedCount: res.normalizedCount,
+        complete: res.complete,
+      },
+      hasMore: res.hasMore ?? !res.complete,
+      failed: res.failed ?? false,
     };
   } catch (err) {
-    if (isIngestDisabledError(err)) return { kind: 'disabled', source };
+    if (isIngestDisabledError(err)) return { outcome: { kind: 'disabled', source }, hasMore: false, failed: false };
     throw err;
   }
 }

@@ -9,6 +9,10 @@
 // read failed keeps its progress; a type whose read stopped at the page bound
 // keeps a resume token and is read on from there next time (B-317-2). The
 // run reports `complete` only when every granted type was read to the end.
+// H8 (C-360-2): each page is posted and its progress saved before the next
+// page is read, so an interrupted import resumes after the last saved page.
+// H8 (C-360-1): every read starts a day behind the saved progress, so data
+// written late is still read (`../syncWindows.ts`).
 // Platform-guarded (Android only).
 
 import { Platform } from 'react-native';
@@ -20,6 +24,7 @@ import {
   type SyncProgress,
 } from '../onDeviceState';
 import { isOnDeviceStop, OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
+import { LATE_DATA_LOOKBACK_MINUTES } from '../syncWindows';
 import { logger } from '../../../utils/logger';
 import {
   HealthConnectPermissionDeniedError,
@@ -27,12 +32,13 @@ import {
 } from './errors';
 import {
   HEALTH_CONNECT_RECORD_TYPES,
+  MAX_READ_PAGES,
   healthConnectClient as defaultClient,
   type HealthConnectClient,
   type HealthConnectRecordType,
 } from './healthConnectClient';
 import {
-  normalizeAll,
+  normalizeRecords,
   type NormalizeContext,
 } from './healthConnectNormalizer';
 import {
@@ -57,12 +63,12 @@ export const LAST_SYNC_AT_KEY = 'health_connect_last_sync_at';
 export const DEFAULT_BACKFILL_DAYS = 30;
 
 /**
- * Overlap re-read, in minutes. We rewind the read-window start by this much
- * past the persisted `lastSyncAt` so a sample written slightly late on the
- * device (or a clock skew) is not missed. Safe because ingestion is idempotent
- * (dedup_key), so the overlap never double-counts.
+ * Re-read behind each type's saved progress, in minutes. H8 (C-360-1): was 5
+ * minutes, so a record written later than that (a night's sleep written after
+ * waking, a watch that synced hours later) was never read. Now one day; see
+ * `../syncWindows.ts` for the bound and why re-reading never double-counts.
  */
-export const SYNC_OVERLAP_MINUTES = 5;
+export const SYNC_OVERLAP_MINUTES = LATE_DATA_LOOKBACK_MINUTES;
 
 /**
  * B-360-1: the closed set logged for a failed Health Connect read. A native
@@ -114,6 +120,12 @@ export interface HealthConnectSyncDeps {
    * Its user must be the scope's user.
    */
   fence: SessionFence;
+  /**
+   * H8: read only the types that hold a resume token (a later pass of the
+   * same visit continues a page-bounded import without re-reading the day
+   * behind every other type that pass one just read).
+   */
+  resumeOnly?: boolean;
 }
 
 /** Result of a sync run. */
@@ -179,13 +191,17 @@ function grantedReadRecordTypes(
  *      tap). If NONE of our read types is granted → throw
  *      HealthConnectPermissionDeniedError.
  *   3. For every granted type: resume a truncated read, or read from its
- *      progress (or the 30-day import start) to now.
- *   4. Normalize → POST in batches (the fence runs before every request).
- *   5. Save progress: completed types advance; truncated types keep a resume
- *      token; failed types keep their old progress.
+ *      progress minus the late-data look-back (or the 30-day import start)
+ *      to now, one page at a time, oldest first, up to MAX_READ_PAGES pages.
+ *   4. After each page: normalize → POST in batches (the fence runs before
+ *      every request) → save that type's progress: a resume token while
+ *      pages remain, its window end once the last page is read.
+ *   5. A failed read keeps the type's saved progress (a failed resume from
+ *      a previous run drops its token) and the run goes on to the next type.
  *
- * Nothing is saved if the POST fails or the session changed, so the next run
- * re-reads the same windows (ingest is idempotent).
+ * A failed POST or a session change ends the run: the page in hand is not
+ * saved, so the next run re-reads it (ingest is idempotent); every page
+ * saved before it stays saved (H8, C-360-2).
  */
 export async function syncHealthConnect(
   scope: OnDeviceScope,
@@ -230,68 +246,91 @@ export async function syncHealthConnect(
     completedThrough: { ...progress.completedThrough },
     resume: { ...progress.resume },
   };
-  const byType: Partial<Record<HealthConnectRecordType, unknown[]>> = {};
+  const ctx: NormalizeContext = { connectionId: scope.connectionId };
   const failedRecordTypes: HealthConnectRecordType[] = [];
   const truncatedRecordTypes: HealthConnectRecordType[] = [];
   let earliest = now.getTime();
+  let normalizedCount = 0;
+  let inserted = 0;
+  let skipped = 0;
 
-  for (const recordType of grantedRecordTypes) {
+  const readTypes = deps.resumeOnly
+    ? grantedRecordTypes.filter((rt) => Boolean(progress.resume[rt]))
+    : grantedRecordTypes;
+  for (const recordType of readTypes) {
     // S-WEAR-3 (Sol B-317-7): re-check before every record type, including
     // the first one after the awaited progress read.
     await fence.assertCurrent();
-    const resume = progress.resume[recordType];
-    const range = resume
-      ? { startTime: resume.startTime, endTime: resume.endTime }
+    const stored = progress.resume[recordType];
+    const range = stored
+      ? { startTime: stored.startTime, endTime: stored.endTime }
       : { startTime: typeWindowStart(progress, recordType, now).toISOString(), endTime: now.toISOString() };
     earliest = Math.min(earliest, Date.parse(range.startTime));
-    try {
-      const read = await client.readRecordsPaged(recordType, range, resume?.pageToken, fence);
-      // A page that was already in flight when the session stopped is dropped.
-      fence.throwIfStopped();
-      byType[recordType] = read.records;
+    let pageToken = stored?.pageToken;
+    for (let page = 0; ; page += 1) {
+      let read: { records: unknown[]; nextPageToken?: string };
+      try {
+        read = await client.readRecordsPaged(recordType, range, pageToken, fence, 1);
+        // A page that was already in flight when the session stopped is dropped.
+        fence.throwIfStopped();
+      } catch (err) {
+        // B-360-1: the fence first, synchronously. A page that rejects after
+        // sign-out, an account switch or a cancelled Connect ends the run here:
+        // nothing is classified, recorded or logged for it.
+        fence.throwIfStopped();
+        // A stop (sign-out, account switch, cancelled Connect) ends the whole
+        // run; it is never an ordinary per-type read failure (Sol B-317-7).
+        if (isOnDeviceStop(err)) throw err;
+        // Degrade per type (#50) but never count it as read: keep its saved
+        // progress. A failed RESUME of a token saved by an earlier run drops
+        // the token (it may have expired) so the next run re-reads that type's
+        // window from its saved progress; a token this run saved is kept.
+        const resumedFromStore = page === 0 && Boolean(stored);
+        failedRecordTypes.push(recordType);
+        if (resumedFromStore) {
+          delete next.resume[recordType];
+          await fence.assertCurrent();
+          await setSyncProgress(scope, next);
+        }
+        logger.error('healthConnectSync', 'readRecords failed', {
+          recordType,
+          resumed: Boolean(stored),
+          error: healthConnectReadErrorClass(err),
+        });
+        break;
+      }
+
+      const samples: NormalizedSample[] = normalizeRecords(ctx, recordType, read.records);
+      const posted = await ingestApi.ingest(samples, {
+        beforeEachRequest: () => fence.assertCurrent(),
+      });
+      normalizedCount += samples.length;
+      inserted += posted.inserted;
+      skipped += posted.skipped;
+
+      // H8 (C-360-2): save this page's progress before reading the next one.
       if (read.nextPageToken) {
         next.resume[recordType] = { ...range, pageToken: read.nextPageToken };
-        truncatedRecordTypes.push(recordType);
       } else {
         delete next.resume[recordType];
         next.completedThrough[recordType] = range.endTime;
       }
-    } catch (err) {
-      // B-360-1: the fence first, synchronously. A page that rejects after
-      // sign-out, an account switch or a cancelled Connect ends the run here:
-      // nothing is classified, recorded or logged for it.
-      fence.throwIfStopped();
-      // A stop (sign-out, account switch, cancelled Connect) ends the whole
-      // run; it is never an ordinary per-type read failure (Sol B-317-7).
-      if (isOnDeviceStop(err)) throw err;
-      // Degrade per type (#50) but never count it as read: keep its progress.
-      // A failed RESUME drops the token (it may have expired) so the next run
-      // re-reads that type's window from its saved progress.
-      byType[recordType] = [];
-      failedRecordTypes.push(recordType);
-      if (resume) delete next.resume[recordType];
-      logger.error('healthConnectSync', 'readRecords failed', {
-        recordType,
-        resumed: Boolean(resume),
-        error: healthConnectReadErrorClass(err),
-      });
+      await fence.assertCurrent();
+      await setSyncProgress(scope, next);
+
+      if (!read.nextPageToken) break;
+      pageToken = read.nextPageToken;
+      if (page + 1 >= MAX_READ_PAGES) {
+        truncatedRecordTypes.push(recordType);
+        break;
+      }
     }
   }
-
   fence.throwIfStopped();
-  const ctx: NormalizeContext = { connectionId: scope.connectionId };
-  const samples: NormalizedSample[] = normalizeAll(ctx, byType);
-
-  const { inserted, skipped } = await ingestApi.ingest(samples, {
-    beforeEachRequest: () => fence.assertCurrent(),
-  });
-
-  await fence.assertCurrent();
-  await setSyncProgress(scope, next);
 
   const complete = failedRecordTypes.length === 0 && truncatedRecordTypes.length === 0;
   logger.log('healthConnectSync', 'sync pass done', {
-    normalizedCount: samples.length,
+    normalizedCount,
     inserted,
     skipped,
     grantedRecordTypes: grantedRecordTypes.length,
@@ -301,7 +340,7 @@ export async function syncHealthConnect(
   });
 
   return {
-    normalizedCount: samples.length,
+    normalizedCount,
     inserted,
     skipped,
     grantedRecordTypes,

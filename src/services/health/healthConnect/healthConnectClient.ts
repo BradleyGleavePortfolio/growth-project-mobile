@@ -280,9 +280,10 @@ export interface PagedReadStop {
 
 /**
  * Read records of a single type within `[startTime, endTime)`, following
- * `pageToken` for up to {@link MAX_READ_PAGES} pages, optionally resuming
- * from a token a previous run returned. Uses the library's `'between'`
- * time-range filter.
+ * `pageToken` for up to `maxPages` pages (default {@link MAX_READ_PAGES}),
+ * optionally resuming from a token a previous run returned. Uses the
+ * library's `'between'` time-range filter. H8 (C-360-2): the sync service
+ * reads one page per call so it can post and save progress after each page.
  *
  * The records are typed `unknown[]` deliberately: only the normalizer
  * understands each record type's field shape, and it defends against missing
@@ -294,6 +295,7 @@ export async function readRecordsPaged(
   range: TimeRange,
   resumeFrom?: string,
   stop?: PagedReadStop,
+  maxPages: number = MAX_READ_PAGES,
 ): Promise<PagedReadResult> {
   assertSupported();
   // The library accepts a record-type string + options; result is
@@ -311,7 +313,8 @@ export async function readRecordsPaged(
   const out: unknown[] = [];
   let pageToken: string | undefined =
     typeof resumeFrom === 'string' && resumeFrom.length > 0 ? resumeFrom : undefined;
-  for (let page = 0; page < MAX_READ_PAGES; page += 1) {
+  const pageBound = Math.max(1, Math.min(MAX_READ_PAGES, Math.floor(maxPages) || 1));
+  for (let page = 0; page < pageBound; page += 1) {
     // S-WEAR-3 (Sol B-317-7): no new page starts after sign-out, an account
     // switch or a cancelled Connect. A request already handed to the native
     // module is not undone; its records are dropped by the caller.

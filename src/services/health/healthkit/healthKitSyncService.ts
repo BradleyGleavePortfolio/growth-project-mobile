@@ -22,10 +22,13 @@
  *    mark the backend endpoint as a STUB to be implemented in the integration
  *    PR (see {@link HEALTHKIT_INGEST_PATH} TODO below).
  *  - S14: progress is stored per account + connection + provider
- *    (`../onDeviceState.ts`), per metric, never provider-global. A metric's
- *    "completed through" instant is advanced to the sync's `until` boundary
- *    ONLY after every batch was posted, and NOT for a metric whose native
- *    read failed (B-317-2). The legacy provider-global
+ *    (`../onDeviceState.ts`), per metric, never provider-global. H8
+ *    (C-360-2): the window is read oldest first in day-sized pieces; after
+ *    each piece is posted, every metric read without failure this run is
+ *    saved as completed through that piece's end, so an interrupted import
+ *    resumes after the last saved piece. A metric whose native read failed
+ *    keeps its saved progress for the rest of the run (B-317-2). The legacy
+ *    provider-global
  *    {@link HEALTHKIT_LAST_SYNC_KEY} is no longer read (sign-out removes it). On any failure (auth, read, or POST) it is left
  *    untouched so the next run safely re-pulls the same window (fail-explicit,
  *    UNIFIED lock "Fail-explicit on errors, never silent"; 50-Failures #42).
@@ -42,12 +45,15 @@ import {
   type SyncProgress,
 } from '../onDeviceState';
 import { OnDeviceSessionChangedError, type SessionFence } from '../sessionFence';
+import { LATE_DATA_LOOKBACK_MINUTES } from '../syncWindows';
 import {
   HEALTHKIT_READ_PERMISSIONS,
   HealthKitReadPermission,
   healthKitClient,
   type HealthKitClient,
   type HealthKitMetricKey,
+  type HealthKitReadResult,
+  type HealthKitSample,
 } from './healthKitClient';
 import {
   normalizeHealthKitResult,
@@ -74,12 +80,32 @@ export const HEALTHKIT_INGEST_PATH = WEARABLES_INGEST_PATH;
 export const DEFAULT_BACKFILL_DAYS = 30;
 
 /**
- * Re-read overlap behind the stored progress. Apple Watch data often reaches
- * the phone's Health store minutes to an hour after it was recorded, with a
- * start time before our last sync; re-reading the last hour picks those
- * samples up. Safe because ingest is idempotent on the backend dedup key.
+ * Re-read behind the stored progress. Apple Watch data reaches the phone's
+ * Health store minutes to hours after it was recorded (a watch out of range,
+ * a partner app that syncs on its own schedule), with a start time before
+ * the last sync. H8 (C-360-1): was one hour; now one day, see
+ * `../syncWindows.ts` for the bound and why re-reading never double-counts.
  */
-export const SYNC_OVERLAP_MINUTES = 60;
+export const SYNC_OVERLAP_MINUTES = LATE_DATA_LOOKBACK_MINUTES;
+
+/**
+ * H8 (C-360-1): how long an hourly steps or active-energy sum waits after its
+ * hour ends before it is posted. The backend keeps the first value posted for
+ * an hour and never replaces it, so an hour posted before a watch or partner
+ * app wrote its share would stay short for good. Data reaching Apple Health
+ * within this long of the hour's end is counted; the hour shows up in the app
+ * this much later. Every other metric posts as soon as it is read.
+ */
+export const CUMULATIVE_SETTLE_MINUTES = 120;
+
+/** The hourly-sum metrics that wait {@link CUMULATIVE_SETTLE_MINUTES}. */
+export const CUMULATIVE_METRIC_KEYS: readonly HealthKitMetricKey[] = ['steps', 'activeEnergy'];
+
+/**
+ * H8 (C-360-2): length of one import piece. A 30-day import is read, posted
+ * and saved one day at a time, oldest first.
+ */
+export const IMPORT_PIECE_HOURS = 24;
 
 /** Every metric the HealthKit client reads (progress is tracked per metric). */
 export const HEALTHKIT_METRIC_KEYS: readonly HealthKitMetricKey[] = [
@@ -111,6 +137,28 @@ export function floorToLocalHour(d: Date): Date {
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
+ * End of the import piece starting at `start` (a local hour boundary): the
+ * local hour boundary one piece later, never past `until`. Hourly buckets are
+ * anchored at each piece's start, so every piece keeps local-hour buckets.
+ */
+function pieceEnd(start: Date, until: Date): Date {
+  const next = floorToLocalHour(new Date(start.getTime() + IMPORT_PIECE_HOURS * 60 * 60_000));
+  const end = next.getTime() > start.getTime() ? next : new Date(start.getTime() + IMPORT_PIECE_HOURS * 60 * 60_000);
+  return end.getTime() < until.getTime() ? end : until;
+}
+
+/** Keep only hourly sums whose hour ended at or before `settledThrough`. */
+function settledOnly(
+  buckets: HealthKitSample[] | undefined,
+  settledThrough: number,
+): HealthKitSample[] | undefined {
+  return buckets?.filter((b) => {
+    const end = Date.parse(b.endDate);
+    return Number.isFinite(end) && end <= settledThrough;
+  });
+}
 
 /** Inputs needed to attribute and route the sync. */
 export interface HealthKitSyncOptions {
@@ -146,11 +194,11 @@ export interface HealthKitSyncOptions {
 export interface HealthKitSyncResult {
   /** Number of normalized samples POSTed. */
   postedCount: number;
-  /** Inclusive lower bound of the window that was read. */
+  /** Inclusive lower bound of the window that was read (all pieces). */
   since: string;
-  /** Exclusive upper bound of the window that was read. */
+  /** Exclusive upper bound of the window that was read (all pieces). */
   until: string;
-  /** Whether progress was advanced (false when there was nothing to post). */
+  /** Whether progress was saved at least once (false when nothing was posted). */
   cursorAdvanced: boolean;
   /** True only when every metric read succeeded (B-317-2). */
   complete: boolean;
@@ -186,8 +234,9 @@ export class HealthKitSyncService {
    * Run one full HealthKit sync pass for a scope.
    *
    * Throws {@link HealthKitUnsupportedError} immediately on non-iOS platforms
-   * (surfaced from the client's platform guard). Any auth/POST failure, or a
-   * session change, propagates WITHOUT advancing progress.
+   * (surfaced from the client's platform guard). Any auth/read/POST failure,
+   * or a session change, propagates without saving the piece in hand; pieces
+   * saved before it stay saved (H8, C-360-2), so the next run resumes there.
    */
   async sync(options: HealthKitSyncOptions): Promise<HealthKitSyncResult> {
     const { scope, fence, sourceTz = null } = options;
@@ -204,68 +253,92 @@ export class HealthKitSyncService {
     fence.throwIfStopped();
     await this.client.requestAuth(permissions);
 
-    // 2) Read raw samples for the window, only if the same person is still
-    //    signed in after the (possible) permission sheet. The synchronous
-    //    check runs immediately before the native queries start (S-WEAR-3,
-    //    Sol B-317-7); every metric query starts in that same tick, so no
-    //    new read can start after sign-out begins. Results that arrive after
-    //    a stop are dropped, never normalized or sent.
-    await fence.assertCurrent();
-    fence.throwIfStopped();
-    const raw = await this.client.readSamples({ since, until });
-    fence.throwIfStopped();
-    const failedMetrics = [...(raw.failed ?? [])];
-
-    // 3) Normalize to the canonical wire contract.
     const ctx: NormalizationContext = { connectionId: scope.connectionId, sourceTz };
-    const samples: NormalizedSample[] = normalizeHealthKitResult(raw, ctx);
-
-    const sinceIso = since.toISOString();
-    const untilIso = until.toISOString();
-    const complete = failedMetrics.length === 0;
-
-    // Nothing to post: do NOT advance progress — the next run re-attempts the
-    // same (still-empty) window cheaply and picks up late samples.
-    if (samples.length === 0) {
-      return {
-        postedCount: 0,
-        since: sinceIso,
-        until: untilIso,
-        cursorAdvanced: false,
-        complete,
-        failedMetrics,
-      };
-    }
-
-    // 4) POST in request-sized batches. The fence runs before every request
-    //    so a sign-out or account switch stops the upload.
-    await postIngestBatches(samples, {
-      ...options.ingestDeps,
-      beforeEachRequest: async () => {
-        await fence.assertCurrent();
-        if (options.ingestDeps?.beforeEachRequest) await options.ingestDeps.beforeEachRequest();
-      },
-    });
-
-    // 5) Persist progress ONLY after every batch resolved, and only for the
-    //    metrics that were actually read.
-    await fence.assertCurrent();
+    // Hourly sums are posted only once settled (CUMULATIVE_SETTLE_MINUTES).
+    const settledThrough = floorToLocalHour(
+      new Date(until.getTime() - CUMULATIVE_SETTLE_MINUTES * 60_000),
+    ).getTime();
     const next: SyncProgress = {
       v: 1,
       completedThrough: { ...progress.completedThrough },
       resume: {},
     };
-    for (const key of HEALTHKIT_METRIC_KEYS) {
-      if (!failedMetrics.includes(key)) next.completedThrough[key] = untilIso;
-    }
-    await setSyncProgress(scope, next);
+    const failed = new Set<HealthKitMetricKey>();
+    let postedCount = 0;
+    let cursorAdvanced = false;
+    let savedThrough = since.getTime();
+    // 5) Save every metric read without failure this run as complete through
+    //    `through`, never moving one back; hourly sums only through the
+    //    settled hour. Only after the fence passed (same person signed in).
+    const save = async (through: number): Promise<void> => {
+      await fence.assertCurrent();
+      for (const key of HEALTHKIT_METRIC_KEYS) {
+        if (failed.has(key)) continue;
+        const t = CUMULATIVE_METRIC_KEYS.includes(key) ? Math.min(through, settledThrough) : through;
+        const saved = next.completedThrough[key] ? Date.parse(next.completedThrough[key]) : -Infinity;
+        if (t > saved) next.completedThrough[key] = new Date(t).toISOString();
+      }
+      await setSyncProgress(scope, next);
+      savedThrough = through;
+      cursorAdvanced = true;
+    };
 
+    // 2) Read the window oldest first, one piece at a time (H8, C-360-2).
+    //    Each piece is read only if the same person is still signed in
+    //    (after the possible permission sheet, then after every save). The
+    //    synchronous check runs immediately before the native queries start
+    //    (S-WEAR-3, Sol B-317-7); every metric query of a piece starts in
+    //    that same tick, so no new read can start after sign-out begins.
+    //    Results that arrive after a stop are dropped, never normalized or
+    //    sent.
+    for (let start = since; start.getTime() < until.getTime(); ) {
+      const end = pieceEnd(start, until);
+      await fence.assertCurrent();
+      fence.throwIfStopped();
+      const raw: HealthKitReadResult = await this.client.readSamples({ since: start, until: end });
+      fence.throwIfStopped();
+      for (const key of raw.failed ?? []) failed.add(key);
+
+      // 3) Normalize to the canonical wire contract (unsettled hours wait).
+      const samples: NormalizedSample[] = normalizeHealthKitResult(
+        {
+          ...raw,
+          steps: settledOnly(raw.steps, settledThrough),
+          activeEnergy: settledOnly(raw.activeEnergy, settledThrough),
+        },
+        ctx,
+      );
+
+      // A piece with nothing to post saves nothing by itself: the next piece
+      // that posts saves through its own end, the end of the run saves the
+      // empty pieces after the last one that posted, and a run that posts
+      // nothing re-reads the same (still empty) window next time.
+      if (samples.length > 0) {
+        // 4) POST in request-sized batches. The fence runs before every
+        //    request so a sign-out or account switch stops the upload.
+        await postIngestBatches(samples, {
+          ...options.ingestDeps,
+          beforeEachRequest: async () => {
+            await fence.assertCurrent();
+            if (options.ingestDeps?.beforeEachRequest) await options.ingestDeps.beforeEachRequest();
+          },
+        });
+
+        // Saved only after every batch of this piece resolved.
+        await save(end.getTime());
+        postedCount += samples.length;
+      }
+      start = end;
+    }
+    if (cursorAdvanced && savedThrough < until.getTime()) await save(until.getTime());
+
+    const failedMetrics = HEALTHKIT_METRIC_KEYS.filter((key) => failed.has(key));
     return {
-      postedCount: samples.length,
-      since: sinceIso,
-      until: untilIso,
-      cursorAdvanced: true,
-      complete,
+      postedCount,
+      since: since.toISOString(),
+      until: until.toISOString(),
+      cursorAdvanced,
+      complete: failedMetrics.length === 0,
       failedMetrics,
     };
   }
