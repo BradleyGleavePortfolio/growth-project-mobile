@@ -4,6 +4,14 @@ const app = require('./app.json').expo;
 
 const SAMSUNG_PERMISSION =
   'com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA';
+// S-WEAR-3 (Opus C-317-5): nothing in the app reads these (Samsung Health data
+// arrives through Health Connect; steps come from Health Connect / Apple
+// Health). They are blocked in EVERY build so a library manifest cannot merge
+// them back in, and the Play health declaration lists only what is read.
+const NEVER_DECLARED_PERMISSIONS = [
+  SAMSUNG_PERMISSION,
+  'android.permission.ACTIVITY_RECOGNITION',
+];
 const HEALTH_CONNECT_PLUGINS = new Set([
   'react-native-health-connect',
   // #317 registers this Android-only delegate. It must follow the same switch.
@@ -23,19 +31,32 @@ module.exports = ({ config = app } = {}) => {
   const permissions = config.android?.permissions ?? [];
   const disabledPermissions = permissions.filter(isHealthPermission);
 
+  const neverDeclared = (name) => NEVER_DECLARED_PERMISSIONS.includes(name);
+
   return {
     ...config,
     android: enabled
-      ? config.android
+      ? {
+          ...config.android,
+          permissions: permissions.filter((name) => !neverDeclared(name)),
+          blockedPermissions: [
+            ...new Set([
+              ...(config.android?.blockedPermissions ?? []),
+              ...NEVER_DECLARED_PERMISSIONS,
+            ]),
+          ],
+        }
       : {
           ...config.android,
-          permissions: permissions.filter((name) => !isHealthPermission(name)),
+          permissions: permissions.filter(
+            (name) => !isHealthPermission(name) && !neverDeclared(name),
+          ),
           // Manifest merger can restore library permissions unless blocked.
           blockedPermissions: [
             ...new Set([
               ...(config.android?.blockedPermissions ?? []),
               ...disabledPermissions,
-              SAMSUNG_PERMISSION,
+              ...NEVER_DECLARED_PERMISSIONS,
             ]),
           ],
         },
