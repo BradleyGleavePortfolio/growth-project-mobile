@@ -181,11 +181,21 @@ let signOutEpoch = 0;
 /** No grant written at or before this sequence is honoured after a sign-out. */
 let signedOutThroughSeq = 0;
 
-function serialWrite(op: () => Promise<void>): Promise<void> {
+/**
+ * Run `op` in the chain unless a sign-out started since the call. Sol B-369-2:
+ * `op` gets `current`, which throws once a sign-out has started; a write that
+ * awaits more than one native step calls it after every await and right
+ * before every write, so a write already running when sign-out starts never
+ * creates consent state after the immediate authority revocation.
+ */
+function serialWrite(op: (current: () => void) => Promise<void>): Promise<void> {
   const epoch = signOutEpoch;
-  return serialStorage(() => {
+  const current = (): void => {
     if (epoch !== signOutEpoch) throw new OnDeviceSessionChangedError();
-    return op();
+  };
+  return serialStorage(() => {
+    current();
+    return op(current);
   });
 }
 
@@ -211,21 +221,28 @@ export async function recordLocalAuthorization(
   const seq = authWriteSeq;
   authWrittenAt.set(key, seq);
   try {
-    await serialWrite(async () => {
+    await serialWrite(async (current) => {
       // Sol B-362-8: bind the grant to the current consent session (start one
       // when none is stored). A sign-out that starts meanwhile is queued
       // behind this write and replaces that session, so the grant stays void.
       let session = await readConsentSession();
+      current();
       if (session == null) {
         session = newConsentSession();
         await AsyncStorage.setItem(ON_DEVICE_CONSENT_SESSION_KEY, session);
+        current();
       }
       // Sol B-369-1: and to the SecureStore authority (same rule).
       let authority = await readConsentAuthority();
+      current();
       if (authority == null) {
         authority = newConsentSession();
         await SecureStore.setItemAsync(ON_DEVICE_CONSENT_AUTHORITY_KEY, authority);
+        // Sol B-369-2: an authority created while sign-out began binds no grant.
+        current();
       }
+      // Sol B-369-2: no await between this check and the grant write, so the
+      // grant is bound only to an authority sign-out has not yet revoked.
       await AsyncStorage.setItem(key, JSON.stringify({ ...record, session, authority }));
       authCommittedAt.set(key, seq);
     });
