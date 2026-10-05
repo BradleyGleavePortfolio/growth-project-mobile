@@ -13,6 +13,8 @@
  *     instead of a no-op button (audit req — denial needs real recovery).
  *   - idle        → the privacy disclosure + the record button.
  *   - recording   → the live record/stop button (elapsed + cap).
+ *   - error       → what failed (permission check / start / save), a Try again
+ *     that returns to idle, and a support path with the reported reference.
  *   - recorded    → a waveform preview + duration, a "Re-record" reset, and a
  *     "Send" that runs the publish pipeline. A publish failure preserves the
  *     recording so "Send" can be retried without re-recording.
@@ -38,6 +40,7 @@ import VoiceNoteRecordButton from './VoiceNoteRecordButton';
 import VoiceNoteWaveform from './VoiceNoteWaveform';
 import VoicePrivacyCopy, { type VoiceAudienceTarget } from './VoicePrivacyCopy';
 import { formatDuration } from './voiceFormat';
+import { COMMUNITY_SUPPORT_EMAIL } from '../../api/communityErrors';
 
 export interface VoiceNoteComposerProps {
   /** Workspace the note is published into (null disables Send). */
@@ -155,6 +158,42 @@ export default function VoiceNoteComposer({
             style={[styles.secondaryLabel, { color: semanticColors.accentText }]}
           >
             {rec.mustOpenSettings ? 'Open Settings' : 'Try again'}
+          </Text>
+        </HapticPressable>
+      </View>
+    );
+  }
+
+  // ── Recorder failure — what happened, what to do next, a reference ─────────
+  if (rec.status === 'error') {
+    const what =
+      rec.error?.kind === 'permission_check'
+        ? 'We could not check microphone access on this phone.'
+        : rec.error?.kind === 'stop'
+          ? 'The recording could not be finished and saved.'
+          : 'The microphone could not start recording.';
+    return (
+      <View
+        style={styles.notice}
+        accessibilityRole="text"
+        testID={testID ?? 'voice-composer-error'}
+      >
+        <Ionicons name="alert-circle-outline" size={22} color={semanticColors.accentText} />
+        <Text style={[styles.noticeText, { color: semanticColors.textPrimary }]}>
+          {what} Try again. If it keeps happening, close other apps that use the
+          microphone, or email {COMMUNITY_SUPPORT_EMAIL}
+          {rec.error ? ` and mention reference ${rec.error.reference}` : ''}.
+        </Text>
+        <HapticPressable
+          intent="medium"
+          onPress={() => rec.reset()}
+          accessibilityRole="button"
+          accessibilityLabel="Try recording again"
+          testID="voice-composer-error-retry"
+          style={[styles.secondaryAction, { borderColor: semanticColors.border }]}
+        >
+          <Text style={[styles.secondaryLabel, { color: semanticColors.accentText }]}>
+            Try again
           </Text>
         </HapticPressable>
       </View>

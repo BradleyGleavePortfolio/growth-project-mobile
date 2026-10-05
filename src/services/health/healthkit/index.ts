@@ -1,7 +1,7 @@
 /**
  * PR-HK-2.a — Apple HealthKit on-device connector public surface.
  *
- * Single import site for the Connections Hub and the `useHealthKitSync` hook.
+ * Single import site for the on-device sync lane (`../onDeviceSync.ts`).
  * Re-exports the typed client, the normalizer, and the sync orchestrator.
  */
 
@@ -40,6 +40,7 @@ export {
   healthKitSyncService,
   HEALTHKIT_LAST_SYNC_KEY,
   HEALTHKIT_INGEST_PATH,
+  HEALTHKIT_METRIC_KEYS,
   DEFAULT_BACKFILL_DAYS,
 } from './healthKitSyncService';
 export type {

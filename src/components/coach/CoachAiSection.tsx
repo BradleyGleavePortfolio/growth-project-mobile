@@ -34,6 +34,8 @@ import type { PendingDraftSummary } from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
+import AiRefusalNotice from '../ai/AiRefusalNotice';
+import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
 
 // How long the post-timeout poll runs (2 extra minutes) and the interval.
 const POLL_INTERVAL_MS = 10_000;
@@ -77,6 +79,9 @@ export default function CoachAiSection({
   const [mode, setMode] = useState<Mode>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // R2b: 403 ai_consent_required (this client has not allowed AI help) or 503
+  // ai_egress_blocked, shown as a specific notice instead of the raw message.
+  const [submitRefusal, setSubmitRefusal] = useState<AiRefusal | null>(null);
 
   // Post-timeout state: message shown while background poll is active,
   // and the draft that appeared (if any) so we can prompt the coach to review.
@@ -203,10 +208,12 @@ export default function CoachAiSection({
   const closeModal = () => {
     setMode(null);
     setSubmitError(null);
+    setSubmitRefusal(null);
   };
 
   const handleSubmitWorkout = async () => {
     setSubmitError(null);
+    setSubmitRefusal(null);
     setTimeoutMessage(null);
     setReadyDraft(null);
     setSubmitting(true);
@@ -222,7 +229,10 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('AIWorkoutDraft', { draftId, clientId, clientName });
     } catch (err) {
-      if (isTimeoutError(err)) {
+      const refusal = aiRefusalOf(err);
+      if (refusal) {
+        setSubmitRefusal(refusal);
+      } else if (isTimeoutError(err)) {
         // Backend may still be generating. Close the form and start polling.
         closeModal();
         startBackgroundPoll(clientId);
@@ -239,6 +249,7 @@ export default function CoachAiSection({
 
   const handleSubmitMealPlan = async () => {
     setSubmitError(null);
+    setSubmitRefusal(null);
     setTimeoutMessage(null);
     setReadyDraft(null);
     // B14: refuse to generate a meal plan when we have not been told what the
@@ -278,7 +289,10 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('AIMealPlanDraft', { draftId, clientId, clientName });
     } catch (err) {
-      if (isTimeoutError(err)) {
+      const refusal = aiRefusalOf(err);
+      if (refusal) {
+        setSubmitRefusal(refusal);
+      } else if (isTimeoutError(err)) {
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
@@ -294,6 +308,7 @@ export default function CoachAiSection({
 
   const handleSubmitInsight = async () => {
     setSubmitError(null);
+    setSubmitRefusal(null);
     setTimeoutMessage(null);
     setReadyDraft(null);
     setSubmitting(true);
@@ -303,7 +318,10 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('ClientInsight', { draftId, clientId, clientName });
     } catch (err) {
-      if (isTimeoutError(err)) {
+      const refusal = aiRefusalOf(err);
+      if (refusal) {
+        setSubmitRefusal(refusal);
+      } else if (isTimeoutError(err)) {
         closeModal();
         startBackgroundPoll(clientId);
       } else if (isAiDisabledError(err)) {
@@ -522,6 +540,16 @@ export default function CoachAiSection({
             />
 
             {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
+            {submitRefusal ? (
+              <AiRefusalNotice
+                refusal={submitRefusal}
+                audience="coach"
+                surface="draft"
+                onRetry={() => void handleSubmitWorkout()}
+                compact
+                testID="coach-ai-refusal"
+              />
+            ) : null}
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
@@ -569,6 +597,16 @@ export default function CoachAiSection({
             />
 
             {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
+            {submitRefusal ? (
+              <AiRefusalNotice
+                refusal={submitRefusal}
+                audience="coach"
+                surface="draft"
+                onRetry={() => void handleSubmitMealPlan()}
+                compact
+                testID="coach-ai-refusal"
+              />
+            ) : null}
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && { opacity: 0.6 }]}
@@ -609,6 +647,16 @@ export default function CoachAiSection({
             </View>
 
             {submitError ? <Text style={styles.formError}>{submitError}</Text> : null}
+            {submitRefusal ? (
+              <AiRefusalNotice
+                refusal={submitRefusal}
+                audience="coach"
+                surface="draft"
+                onRetry={() => void handleSubmitInsight()}
+                compact
+                testID="coach-ai-refusal"
+              />
+            ) : null}
 
             <TouchableOpacity
               style={[styles.submitBtn, submitting && { opacity: 0.6 }]}

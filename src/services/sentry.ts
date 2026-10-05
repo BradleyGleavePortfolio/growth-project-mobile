@@ -2,7 +2,37 @@ import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+import { scrubBreadcrumb, scrubEvent } from './sentryPrivacy';
+import { scrubEvent as scrubUrlCredentials } from './sentryScrub';
+
 let initialized = false;
+
+/**
+ * Options only the native SDKs read (not part of the JS option type). iOS:
+ * no NSURLSession breadcrumbs (full request URLs) and no native HTTP spans
+ * (JS owns tracing).
+ */
+export const NATIVE_PRIVACY_OPTIONS = {
+  enableNetworkBreadcrumbs: false,
+  enableNetworkTracking: false,
+} as const;
+
+/**
+ * Default SDK integrations the app removes (B-305-12). `ExpoContext` copies
+ * the native ExpoUpdates `emergencyLaunchReason` (an exception's free-form
+ * text) verbatim into `contexts.ota_updates` on every JS event, and into the
+ * native crash scope through NATIVE.setContext at init, where no JS
+ * beforeSend can reach it. The app publishes its own bounded `ota_updates`
+ * context instead (src/services/otaUpdateTags.ts). Filtering by name is
+ * pinned by src/services/__tests__/otaUpdateTags.canary.test.ts, which runs
+ * the real SDK: a rename in an SDK upgrade fails that canary.
+ */
+export const REMOVED_SDK_INTEGRATIONS: readonly string[] = ['ExpoContext'];
+
+/** The default integrations without the ones listed in REMOVED_SDK_INTEGRATIONS. */
+export function withoutRemovedIntegrations<T extends { name: string }>(defaults: T[]): T[] {
+  return defaults.filter((integration) => !REMOVED_SDK_INTEGRATIONS.includes(integration.name));
+}
 
 /**
  * Build the release identifier that the running app reports to Sentry. It
@@ -63,16 +93,41 @@ export function initSentry(): void {
     enableAutoSessionTracking: true,
     // Don't crash the app if Sentry itself blows up.
     enableNative: true,
-    // Strip sensitive headers before transmission.
-    beforeSend(event) {
-      if (event.request?.headers) {
-        delete event.request.headers.Authorization;
-        delete event.request.headers.authorization;
-        delete event.request.headers.Cookie;
-        delete event.request.headers.cookie;
-      }
-      return event;
+    // Native-only keys: the RN SDK forwards every non-function option to
+    // the native SDK it re-initializes (iOS reads them in
+    // SentryOptionsInternal initWithDict), so the pre-JS suppression in
+    // plugins/withSentryNativeInit.js survives JS startup. Android keeps it
+    // through the io.sentry.breadcrumbs.network-events manifest flag that
+    // the same plugin writes (B-330-3).
+    ...NATIVE_PRIVACY_OPTIONS,
+    // No PII (owner rule: no health data, no message content). These match
+    // the pre-JS native init in plugins/withSentryNativeInit.js, which this
+    // call re-initializes: no IP / default PII, no screenshots or view
+    // hierarchy (they can show health values and messages), no failed-request
+    // events (request URLs).
+    sendDefaultPii: false,
+    attachScreenshot: false,
+    attachViewHierarchy: false,
+    enableCaptureFailedRequests: false,
+    // Explicit content policy (src/services/sentryPrivacy.ts): sendDefaultPii
+    // does not redact console text or request URLs. beforeBreadcrumb runs
+    // before scope sync copies a breadcrumb to native; beforeSend also covers
+    // native breadcrumbs merged into JS events; transactions lose URL queries.
+    // Then the URL-credential pass (src/services/sentryScrub.ts, B-327-6): a
+    // data-export download link is a bearer credential for the whole archive,
+    // and a Linking rejection quotes it in the exception text, which the
+    // policy above keeps. That pass redacts token/signature query values,
+    // JWT-shaped strings, the download route's query and signed storage URLs
+    // anywhere in the event (message, exception values, extras, contexts,
+    // tags), returning a scrubbed copy.
+    beforeBreadcrumb: (breadcrumb) => {
+      const kept = scrubBreadcrumb(breadcrumb);
+      return kept ? scrubUrlCredentials(kept) : null;
     },
+    beforeSend: (event) => scrubUrlCredentials(scrubEvent(event)),
+    beforeSendTransaction: (event) => scrubUrlCredentials(scrubEvent(event)),
+    // B-305-12: no ExpoContext (raw native update text); see above.
+    integrations: (defaults) => withoutRemovedIntegrations(defaults),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
@@ -91,6 +146,10 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   if (context) {
     Sentry.withScope((scope) => {
       Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+      // The support reference a person quotes is searchable as a tag (B-326-4).
+      if (typeof context.reference === 'string' && context.reference) {
+        scope.setTag('reference', context.reference);
+      }
       Sentry.captureException(err);
     });
   } else {
@@ -98,11 +157,52 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   }
 }
 
-/** Tag the current user so events are attributable. Call after login. */
-export function setSentryUser(user: { id: string; email?: string } | null): void {
+/**
+ * Strip what can identify a person from one event: the signed-in user (the
+ * account id set app-wide by setSentryUser), request data and breadcrumbs
+ * (HTTP and navigation breadcrumbs can carry URLs).
+ */
+export function stripPersonalData<E extends { user?: unknown; request?: unknown; breadcrumbs?: unknown }>(
+  event: E,
+): E {
+  delete event.user;
+  delete event.request;
+  delete event.breadcrumbs;
+  return event;
+}
+
+/**
+ * Like captureError, but the event carries no personal data: stripPersonalData
+ * runs as a scope event processor, after the SDK's own processors (including
+ * the native device-context one that copies the native user), so the
+ * app-wide user tag is not attached. Context values must already be free of
+ * personal data. Used where the report must not identify the person (Trust &
+ * Privacy link failures, OR-112-15).
+ */
+export function captureErrorWithoutPii(err: unknown, context: Record<string, unknown>): void {
+  if (!initialized) return;
+  Sentry.withScope((scope) => {
+    Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+    // The support reference a person quotes is searchable as a tag (same rule
+    // as captureError, B-326-4); it is a generated id, never personal data.
+    if (typeof context.reference === 'string' && context.reference) {
+      scope.setTag('reference', context.reference);
+    }
+    scope.addEventProcessor((event) => stripPersonalData(event));
+    Sentry.captureException(err);
+  });
+}
+
+/**
+ * Tag the current user so events are attributable. Call after login.
+ * Only the opaque account id is sent: the email is personal data and is
+ * never attached (it would also reach native crash reports through scope
+ * sync).
+ */
+export function setSentryUser(user: { id: string } | null): void {
   if (!initialized) return;
   if (user) {
-    Sentry.setUser({ id: user.id, email: user.email });
+    Sentry.setUser({ id: user.id });
   } else {
     Sentry.setUser(null);
   }

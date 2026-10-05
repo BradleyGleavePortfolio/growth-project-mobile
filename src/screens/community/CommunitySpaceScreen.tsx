@@ -13,7 +13,7 @@
  * renders the SAME calm retryable error the route renders instead of collapsing
  * a null workspace id into an inert empty state.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -29,9 +29,13 @@ import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePosts } from '../../hooks/useCommunity';
 import { CommunityEmptyState, PostCard } from '../../components/community';
+import SafetyMenu from '../../components/community/SafetyMenu';
+import VoiceNotesSection from '../../components/community/VoiceNotesSection';
+import { featureFlags } from '../../config/featureFlags';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
+import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
 
 interface Props {
   embedded?: boolean;
@@ -87,6 +91,19 @@ export default function CommunitySpaceScreen({
 
   const compose = () => navigation.navigate('CommunityComposer', { mode: 'post' });
 
+  // Hall voice notes (behind featureFlags.communityVoiceNotes): Record entry
+  // point plus the feed, each note with Report / Block / author Delete.
+  const showVoice = space === 'hall' && featureFlags.communityVoiceNotes;
+  const voiceSection = showVoice ? (
+    <VoiceNotesSection
+      workspaceId={workspaceId ?? null}
+      viewerUserId={client?.id}
+      viewerCoachId={client?.coach_id}
+      onRecord={() => navigation.navigate('CommunityVoiceComposer', { target: 'hall' })}
+      testID="community-space-voice"
+    />
+  ) : null;
+
   const data = posts.data ?? [];
   // A post-feed LOAD FAILURE must render a calm retryable error, never the
   // "the Hall is quiet" / "no cohort posts" empty state — collapsing a failed
@@ -94,6 +111,11 @@ export default function CommunitySpaceScreen({
   // True-empty is only a successful query that returned zero posts.
   const isPostsError = !posts.isLoading && posts.isError;
   const isEmpty = !posts.isLoading && !posts.isError && data.length === 0;
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const postsFailure = useMemo(
+    () => (isPostsError ? describeCommunityFailure(posts.error, 'load_posts') : null),
+    [isPostsError, posts.error],
+  );
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -139,7 +161,7 @@ export default function CommunitySpaceScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load this space. Please try again.
+            {`We could not load this space. Check your connection, then tap Try again. If it keeps happening, email ${COMMUNITY_SUPPORT_EMAIL}.`}
           </Text>
           <HapticPressable
             intent="light"
@@ -170,7 +192,7 @@ export default function CommunitySpaceScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load these posts. Please try again.
+            {postsFailure?.message}
           </Text>
           <HapticPressable
             intent="light"
@@ -193,6 +215,7 @@ export default function CommunitySpaceScreen({
     <Container>
       {isEmpty ? (
         <View style={styles.center} testID="community-space-screen">
+          {voiceSection}
           <CommunityEmptyState
             stem={space === 'cohort' ? 'cohortEmpty' : 'hallEmpty'}
             firstName={client?.firstName ?? client?.name ?? null}
@@ -207,10 +230,21 @@ export default function CommunitySpaceScreen({
           testID="community-space-screen"
           data={data}
           keyExtractor={(p) => p.id}
+          ListHeaderComponent={voiceSection}
           renderItem={({ item }) => (
             <PostCard
               post={item}
               onPress={openThread}
+              accessory={
+                <SafetyMenu
+                  targetType="post"
+                  targetId={item.id}
+                  authorUserId={item.author_user_id}
+                  viewerUserId={client?.id}
+                  viewerCoachId={client?.coach_id}
+                  testID={`post-safety-${item.id}`}
+                />
+              }
               testID={`post-card-${item.id}`}
             />
           )}

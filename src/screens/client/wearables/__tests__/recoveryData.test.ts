@@ -135,6 +135,21 @@ describe('sleepDeficit', () => {
   it('returns null with no sleep data', () => {
     expect(sleepDeficit(resp([]))).toBeNull();
   });
+
+  it('S14: falls back to SLEEP_TOTAL_MIN from on-device sources without stages', () => {
+    const data = resp([
+      {
+        metric: 'SLEEP_TOTAL_MIN',
+        unit: 'min',
+        provider_used: 'APPLE_HEALTHKIT',
+        sample_count: 1,
+        samples: [sample(300)],
+      },
+    ]);
+    const view = sleepDeficit(data)!;
+    expect(view.asleepMinutes).toBe(300);
+    expect(view.deficitMinutes).toBe(180);
+  });
 });
 
 describe('respiration', () => {
