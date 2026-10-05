@@ -87,7 +87,8 @@ export default function ProgramPackagesScreen({
         `${pkg.title} now delivers ${program.data.name}. New clients get it from their join date. Clients already in the package do not get it automatically; send it to them from Settings, Packages, then this package's contents.`,
       );
     } catch (err) {
-      const f = describeProgramFailure(err, `add the program to ${pkg.title}`);
+      // Telemetry gets this action text: never a coach-entered title (B-358-3).
+      const f = describeProgramFailure(err, "add the program to this package");
       if (!f.reference) keys.current.delete(pkg.id);
       setFailure({
         f,
