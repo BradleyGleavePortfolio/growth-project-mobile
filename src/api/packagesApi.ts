@@ -9,8 +9,9 @@
 //     currency, billing_type ('one_time'|'recurring'), billing_interval
 //     ('week'|'month'|'year'), billing_interval_count, is_active. We map
 //     mobile UI values ('monthly','quarterly','yearly') to backend enums.
-//   • Backend `UpdatePackageDto` accepts only: name, description,
-//     amount_cents, currency, is_active. trial_days/features are TODO.
+//   • Backend `UpdatePackageDto` accepts name, description, amount_cents,
+//     currency, billing_type, billing_interval, billing_interval_count (null
+//     clears the cadence) and is_active. trial_days/features are TODO.
 //   • Backend checkout is `POST /v1/checkout/sessions` with `{ package_id,
 //     success_url, cancel_url }`. URLs must use growthproject://,
 //     com.growthproject.app://, or https:// prefixes.
@@ -336,6 +337,8 @@ interface BackendPackageRow {
   billing_type?: 'one_time' | 'recurring';
   billing_interval?: 'week' | 'month' | 'year' | PackageBillingInterval | 'quarter';
   billing_interval_count?: number;
+  /** Raw CoachPackage rows (create / PATCH answers) name the cadence `interval`. */
+  interval?: 'week' | 'month' | 'year' | null;
   interval_count?: number;
   trial_days?: number | null;
   features?: string[];
@@ -370,7 +373,11 @@ function fromBackendInterval(
 
 function fromBackend(row: BackendPackageRow): CoachPackage {
   const count = row.billing_interval_count ?? row.interval_count ?? 1;
-  const interval = fromBackendInterval(row.billing_interval, count, row.billing_type);
+  const interval = fromBackendInterval(
+    row.billing_interval ?? row.interval ?? undefined,
+    count,
+    row.billing_type,
+  );
   const status: PackageStatus =
     row.status ?? (row.is_active === false ? 'archived' : 'active');
   return {
@@ -431,19 +438,81 @@ interface BackendUpdateBody {
   description?: string | null;
   amount_cents?: number;
   currency?: string;
+  billing_type?: 'one_time' | 'recurring';
+  /** null clears the cadence (a one-time package has none). */
+  billing_interval?: 'week' | 'month' | 'year' | null;
+  /** null resets the count to 1. */
+  billing_interval_count?: number | null;
   is_active?: boolean;
-  // TODO(backend): UpdatePackageDto does not accept billing_type,
-  // billing_interval, billing_interval_count, trial_days, or features.
+  // TODO(backend): UpdatePackageDto does not accept trial_days or features.
 }
 
-function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
+/**
+ * B-345-1 / B-345-2 (agent 118): a cadence picked after the package was made
+ * reaches the server. The PATCH carries the same billing fields the create
+ * body does, and a one-time price sends explicit nulls so the stored cadence
+ * is cleared (backend B-629-4), which also lets a recurring package become
+ * free in one PATCH.
+ */
+export function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
   const out: BackendUpdateBody = {};
   if (input.title !== undefined) out.name = input.title;
   if (input.description !== undefined) out.description = input.description;
   if (input.priceCents !== undefined) out.amount_cents = input.priceCents;
   if (input.currency !== undefined) out.currency = input.currency;
+  if (input.billingInterval !== undefined) {
+    out.billing_type = BILLING_TYPE_FOR_INTERVAL[input.billingInterval];
+    if (input.billingInterval === 'one_time') {
+      out.billing_interval = null;
+      out.billing_interval_count = null;
+    } else {
+      const f = toBackendIntervalFields(input.billingInterval, input.intervalCount);
+      out.billing_interval = f.billing_interval ?? null;
+      out.billing_interval_count = f.billing_interval_count ?? null;
+    }
+  }
   if (input.status !== undefined) out.is_active = input.status === 'active';
   return out;
+}
+
+/** The server row did not take the price or billing the app sent. */
+export const PACKAGE_UPDATE_NOT_APPLIED = 'PACKAGE_UPDATE_NOT_APPLIED';
+
+/**
+ * B-345-2: the PATCH answer is the package as the server now stores it. When
+ * the app sent a billing choice, the row must carry exactly that price and
+ * billing type (and, for a recurring price, that cadence) before anything
+ * reports it as saved. A row that disagrees,
+ * or that does not say, fails closed with PACKAGE_UPDATE_NOT_APPLIED (an older
+ * server that ignores a field must never look like a saved change).
+ */
+export function pricingAppliedMismatch(
+  sent: BackendUpdateBody,
+  row: BackendPackageRow | null | undefined,
+): string | null {
+  if (sent.billing_type === undefined) return null;
+  if (!row || typeof row !== 'object') return 'row';
+  if (sent.amount_cents !== undefined && row.amount_cents !== sent.amount_cents) {
+    return 'amount_cents';
+  }
+  if (row.billing_type !== sent.billing_type) return 'billing_type';
+  // One-time: billing_type alone decides how a client pays; a leftover cadence
+  // on the row is never charged (the server also clears it, B-629-4).
+  if (sent.billing_type === 'one_time') return null;
+  if ((row.billing_interval ?? row.interval) !== sent.billing_interval) {
+    return 'billing_interval';
+  }
+  const count = row.billing_interval_count ?? row.interval_count;
+  return count === sent.billing_interval_count ? null : 'billing_interval_count';
+}
+
+function notAppliedError(field: string): Error {
+  return Object.assign(new Error('package update not applied'), {
+    response: {
+      status: 409,
+      data: { code: PACKAGE_UPDATE_NOT_APPLIED, field },
+    },
+  });
 }
 
 /**
@@ -495,11 +564,14 @@ export const coachPackagesApi = {
     input: PackageUpdateInput,
     idempotencyKey?: string,
   ) => {
+    const body = toBackendUpdate(input);
     const res = await api.patch<BackendPackageRow>(
       `/v1/coach/packages/${encodeURIComponent(id)}`,
-      toBackendUpdate(input),
+      body,
       idemHeaders(idempotencyKey),
     );
+    const mismatch = pricingAppliedMismatch(body, res?.data);
+    if (mismatch) throw notAppliedError(mismatch);
     return { ...res, data: fromBackend(res.data) };
   },
 

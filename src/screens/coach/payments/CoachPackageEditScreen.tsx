@@ -605,7 +605,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         {resumedCreate ? (
           <Text style={styles.resumedText} testID="package-edit-resumed">
             Your package from earlier is saved here. Tap Create package to
-            finish it. It will not be made twice.
+            finish that same package.
           </Text>
         ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
