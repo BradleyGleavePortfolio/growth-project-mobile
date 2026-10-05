@@ -1,12 +1,14 @@
 /**
  * S-COACH — cards at the top of the coach Home (Command Center Overview):
- * the setup checklist. Each item opens the matching wizard step, which stays
- * reachable after setup.
+ * the setup checklist (each item opens the matching wizard step, which stays
+ * reachable after setup) and the Money card, which expands into the Money
+ * page.
  */
 import React, { useCallback } from "react";
 import { View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import MoneyHomeCard from "../../../components/coach/money/MoneyHomeCard";
 import CoachSetupChecklist, {
   type ChecklistTarget,
 } from "../../../components/coach/setup/CoachSetupChecklist";
@@ -15,46 +17,56 @@ import type { CoachTabParamList } from "../../../navigation/CoachNavigator";
 export default function CoachHomeCards() {
   const navigation =
     useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
+  // B-332-7 (Opus): `initial: false` keeps the Settings root under these
+  // screens. Without it a Settings stack that was never opened is built with
+  // only the target screen, and the Settings tab can no longer reach sign
+  // out or account deletion. Money opened from Home goes back to Home.
+  const openMoney = useCallback(
+    () =>
+      navigation.navigate("SettingsStack", {
+        screen: "CoachMoney",
+        params: { from: "home" },
+        initial: false,
+      }),
+    [navigation],
+  );
   const open = useCallback(
-    (target: ChecklistTarget, done: boolean | null) => {
+    (target: ChecklistTarget) => {
       switch (target) {
         case "get_paid":
           navigation.navigate("SettingsStack", {
             screen: "CoachSetup",
             params: { section: "get_paid" },
+            initial: false,
           });
           return;
         case "invite":
           navigation.navigate("SettingsStack", {
             screen: "CoachSetup",
             params: { section: "invite" },
+            initial: false,
           });
           return;
         case "package":
-          navigation.navigate("SettingsStack", { screen: "CoachPackagesList" });
+          navigation.navigate("SettingsStack", {
+            screen: "CoachPackagesList",
+            initial: false,
+          });
           return;
         case "money":
-          // A first payment needs a client on a package: before it lands,
-          // open the invite step; after, the packages list shows who pays.
-          // (Never the retired Earnings screen.)
-          if (done === true) {
-            navigation.navigate("SettingsStack", {
-              screen: "CoachPackagesList",
-            });
-          } else {
-            navigation.navigate("SettingsStack", {
-              screen: "CoachSetup",
-              params: { section: "invite" },
-            });
-          }
+          openMoney();
           return;
       }
     },
-    [navigation],
+    [navigation, openMoney],
   );
   return (
     <View testID="coach-home-cards">
       <CoachSetupChecklist onOpen={open} />
+      <MoneyHomeCard
+        onOpenMoney={openMoney}
+        onSetUpStripe={() => open("get_paid")}
+      />
     </View>
   );
 }
