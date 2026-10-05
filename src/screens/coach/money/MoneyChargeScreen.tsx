@@ -15,7 +15,11 @@ import {
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useTheme } from "../../../theme/ThemeProvider";
-import { coachMoneyApi, type ChargeState } from "../../../api/coachMoneyApi";
+import {
+  coachMoneyApi,
+  type ChargeState,
+  type MoneyCharge,
+} from "../../../api/coachMoneyApi";
 import {
   breakdownRows,
   cadenceLabel,
@@ -49,6 +53,20 @@ export function noMoneyMovedCopy(state: ChargeState | null): string | null {
     default:
       return null;
   }
+}
+
+/**
+ * Opus B-349-1: the header is one payment. A plan's price carries its
+ * cadence ("$100.00 monthly"), because the breakdown below is the plan's
+ * totals so far (the backend sums every payment on the plan).
+ */
+export function chargeHeadline(c: MoneyCharge): string {
+  const price = money(c.amountCents, c.currency);
+  if (c.billingType !== "recurring") return price;
+  const cadence = cadenceLabel(c);
+  return cadence === "Recurring"
+    ? `${price} each payment`
+    : `${price} ${cadence.toLowerCase()}`;
 }
 
 export default function MoneyChargeScreen({ navigation, route }: Props) {
@@ -92,6 +110,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
   }
 
   const c = d.charge;
+  const plan = c.billingType === "recurring";
   const rows = breakdownRows({
     priceCents: d.priceCents,
     processingCents: d.processingCents,
@@ -100,13 +119,22 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
     refundedCents: d.refundedCents,
     netCents: d.netCents,
     processingPaidBy: d.processingPaidBy,
-  });
+  }).map((r) =>
+    // Opus B-349-1: on a plan the first row is every payment so far.
+    plan && r.key === "price" ? { ...r, label: "Clients paid so far" } : r,
+  );
   const tabNav =
     navigation.getParent<NativeStackNavigationProp<CoachTabParamList>>();
   // B-332-8 (Opus): a failed payment or an unfinished checkout moved no
   // money, so it never shows "Clients paid" or "check back once it clears".
-  const noMoney = noMoneyMovedCopy(c.state);
+  // Opus B-349-1: a failed renewal on a plan that has been paid before
+  // keeps the earlier payments; only the latest payment failed.
+  const latestFailed = plan && c.state === "failed" && d.settled;
+  const noMoney = latestFailed ? null : noMoneyMovedCopy(c.state);
+  // Sol B-349-1: pending means no payment has gone through yet (for example
+  // a free trial that has not billed), so there is no paid-money equation.
   const pending = c.state === "pending";
+  const scheduled = `Price, not paid yet: ${money(d.priceCents, c.currency)}`;
 
   return (
     <SafeAreaView ph-no-capture style={styles.page} edges={["top"]}>
@@ -117,7 +145,7 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
       >
         <MoneyBack />
         <Text style={styles.h1} accessibilityRole="header">
-          {money(c.amountCents, c.currency)}
+          {chargeHeadline(c)}
         </Text>
         <Text style={[styles.rowSub, chargeIsProblem(c) && styles.problem]}>
           {chargeStateLabel(c)}
@@ -136,20 +164,45 @@ export default function MoneyChargeScreen({ navigation, route }: Props) {
             <Text style={styles.body}>{noMoney}</Text>
           </View>
         ) : null}
-        {noMoney ? null : (
+        {latestFailed ? (
+          <View style={styles.card} testID="money-charge-latest-failed">
+            <Text style={styles.rowTitle}>Latest payment failed</Text>
+            <Text style={styles.body}>
+              The latest payment on this plan did not go through. Earlier
+              payments are counted below. Needs attention on Money shows whether
+              TGP tries the card again.
+            </Text>
+          </View>
+        ) : null}
+        {pending ? (
+          <View style={styles.card} testID="money-charge-breakdown">
+            <Text style={styles.body} testID="money-charge-unsettled">
+              No payment has gone through for this yet, so nothing has reached
+              your payouts. A free trial is billed when it ends. The fee
+              breakdown appears here after the first payment.
+            </Text>
+            <View style={styles.bRow} accessible accessibilityLabel={scheduled}>
+              <Text style={styles.bLabel}>Price, not paid yet</Text>
+              <Text style={styles.bLabel}>
+                {money(d.priceCents, c.currency)}
+              </Text>
+            </View>
+          </View>
+        ) : null}
+        {noMoney || pending ? null : (
           <Text style={styles.h2} accessibilityRole="header">
-            How this adds up to your net
+            {plan ? "This plan so far" : "How this adds up to your net"}
           </Text>
         )}
-        {noMoney ? null : (
+        {noMoney || pending ? null : (
           <View style={styles.card} testID="money-charge-breakdown">
-            {!d.settled && pending ? (
-              <Text style={styles.body} testID="money-charge-unsettled">
-                This charge has not settled yet, so the fees are not final.
-                Check back once the payment clears.
+            {plan ? (
+              <Text style={styles.body} testID="money-charge-plan-totals">
+                Totals for every payment on this plan so far, not only the one
+                above.
               </Text>
             ) : null}
-            {!d.settled && !pending ? (
+            {!d.settled ? (
               <Text style={styles.body} testID="money-charge-fees-pending">
                 Stripe has not posted the fees for this charge yet, so the
                 amounts below are not final.
