@@ -568,9 +568,28 @@ export default function WorkoutScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Workouts</Text>
-          <HapticPressable intent="light" onPress={() => navigation.navigate('CoachGuidelines')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
-          </HapticPressable>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+            {/* S-REACH: the exercise library (GET /exercise-catalog) had no entry. */}
+            <HapticPressable
+              intent="light"
+              onPress={() => navigation.navigate('ExerciseLibrary')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Exercise library"
+              testID="workout-exercise-library"
+            >
+              <Ionicons name="library-outline" size={22} color={colors.textSecondary} />
+            </HapticPressable>
+            <HapticPressable
+              intent="light"
+              onPress={() => navigation.navigate('CoachGuidelines')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Coach guidelines"
+            >
+              <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
+            </HapticPressable>
+          </View>
         </View>
 
         <PlanExplanationCard />

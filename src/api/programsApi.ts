@@ -316,32 +316,69 @@ export const programsApi = {
       )
     ).data,
 
-  /** Active clients the coach can assign to (the coach roster route). */
+  /**
+   * Every active client the coach can assign to (the coach roster route).
+   *
+   * B-355-3 / B-358-1: GET /coach/clients answers one page (`take` rows, 20
+   * by default, at most 50) ordered newest first, and pages by the last row's
+   * id. Read every page, so a coach with more than one page sees
+   * the whole roster. Any page that fails, or a reply that is not a list,
+   * fails the whole load: the picker never shows a partial list as if it
+   * were complete.
+   */
   assignableClients: async (): Promise<AssignableClient[]> => {
-    const res = await coachApi.getClients("active");
-    const rows: unknown = res.data;
-    if (!Array.isArray(rows)) return [];
-    const out: AssignableClient[] = [];
-    for (const row of rows) {
-      if (!row || typeof row !== "object") continue;
-      const r = row as {
-        id?: unknown;
-        name?: unknown;
-        email?: unknown;
-        archived_at?: unknown;
-      };
-      if (typeof r.id !== "string" || r.archived_at) continue;
-      const email = typeof r.email === "string" ? r.email : "";
-      const name =
-        typeof r.name === "string" && r.name.trim() !== ""
-          ? r.name.trim()
-          : email || "Unnamed client";
-      out.push({ id: r.id, name, email });
+    const byId = new Map<string, AssignableClient>();
+    let cursor: string | undefined;
+    for (let page = 0; ; page += 1) {
+      if (page >= ROSTER_MAX_PAGES) throw new RosterIncompleteError();
+      const res = await coachApi.getClients("active", cursor, ROSTER_PAGE_SIZE);
+      const rows: unknown = res.data;
+      if (!Array.isArray(rows)) throw new RosterIncompleteError();
+      for (const row of rows) {
+        if (!row || typeof row !== "object") continue;
+        const r = row as {
+          id?: unknown;
+          name?: unknown;
+          email?: unknown;
+          archived_at?: unknown;
+        };
+        if (typeof r.id !== "string" || r.archived_at) continue;
+        const email = typeof r.email === "string" ? r.email : "";
+        const name =
+          typeof r.name === "string" && r.name.trim() !== ""
+            ? r.name.trim()
+            : email || "Unnamed client";
+        byId.set(r.id, { id: r.id, name, email });
+      }
+      if (rows.length < ROSTER_PAGE_SIZE) break;
+      const last = rows[rows.length - 1] as { id?: unknown } | null;
+      if (!last || typeof last.id !== "string" || last.id === cursor)
+        throw new RosterIncompleteError();
+      cursor = last.id;
     }
+    const out = Array.from(byId.values());
     out.sort((a, b) => a.name.localeCompare(b.name));
     return out;
   },
 };
+
+/** Rows asked for per roster page (sent as `take`; the backend default). */
+export const ROSTER_PAGE_SIZE = 20;
+/** Pages read before the load stops (2,000 clients). */
+export const ROSTER_MAX_PAGES = 100;
+
+/**
+ * The full client roster could not be read (a reply that is not a list, or a
+ * roster past the page bound), so no partial list is shown. Carries the
+ * `client_roster_incomplete` code programErrors maps to specific copy.
+ */
+export class RosterIncompleteError extends Error {
+  readonly code = "client_roster_incomplete";
+  constructor() {
+    super("the client roster could not be read in full");
+    this.name = "RosterIncompleteError";
+  }
+}
 
 // ─── pure helpers (unit-tested) ────────────────────────────────────────────
 

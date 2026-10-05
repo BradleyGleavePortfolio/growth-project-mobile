@@ -26,8 +26,9 @@ type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
-  // Either a sibling tab (via getParent) or a nested screen inside the More stack.
-  target: { type: 'tab'; tab: string } | { type: 'stack'; screen: string; parentScreen?: string };
+  // Either a screen inside a sibling tab's stack (opened through the tab
+  // navigator) or a nested screen inside the More stack.
+  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string };
   a11yHint: string;
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
@@ -35,6 +36,57 @@ type MoreItem = {
   // Clinic tutorial spotlight id for this row (wearables step).
   tutorialTarget?: TutorialTargetId;
 };
+
+/**
+ * S-REACH: the client's own coaching surfaces. Each screen was registered but
+ * had no menu entry; each reads live production routes (docs/reachability.md).
+ * None is flag-gated because each works end to end today, with or without a
+ * coach (every screen has an honest empty state).
+ */
+export const PLAN_MORE_ITEMS: MoreItem[] = [
+  {
+    icon: 'calendar-outline',
+    label: 'Meal plan',
+    description: 'The meals planned for you this week',
+    target: { type: 'stack', screen: 'Plan' },
+    a11yHint: 'Opens your meal plan',
+  },
+  {
+    icon: 'nutrition-outline',
+    label: 'Macro targets',
+    description: 'Your daily calories, protein and more',
+    target: { type: 'stack', screen: 'ClientMacros' },
+    a11yHint: 'Opens your daily targets',
+  },
+  {
+    icon: 'trending-up-outline',
+    label: 'Progress',
+    description: 'Your weight trend and today\u2019s totals',
+    target: { type: 'stack', screen: 'Progress' },
+    a11yHint: 'Opens your progress',
+  },
+  {
+    icon: 'checkmark-circle-outline',
+    label: 'Habits and check-in',
+    description: 'Daily habits and how you feel today',
+    target: { type: 'tab', tab: 'Home', screen: 'Habits' },
+    a11yHint: 'Opens your habits and daily check-in',
+  },
+  {
+    icon: 'time-outline',
+    label: 'Timeline',
+    description: 'Your journey so far, week by week',
+    target: { type: 'stack', screen: 'Timeline' },
+    a11yHint: 'Opens your timeline',
+  },
+  {
+    icon: 'library-outline',
+    label: 'Exercise library',
+    description: 'How each exercise is done, with video',
+    target: { type: 'tab', tab: 'WorkoutTab', screen: 'ExerciseLibrary' },
+    a11yHint: 'Opens the exercise library',
+  },
+];
 
 const MORE_ITEMS: MoreItem[] = [
   {
@@ -180,7 +232,11 @@ export default function MoreScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const items = useMemo<MoreItem[]>(
     () => {
-      const base = featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS;
+      const base = [
+        ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
+        ...PLAN_MORE_ITEMS,
+        ...MORE_ITEMS,
+      ];
       return featureFlags.clientTutorial ? [...TUTORIAL_MORE_ITEMS, ...base] : base;
     },
     [],
@@ -189,7 +245,12 @@ export default function MoreScreen() {
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
       navigation.navigate(item.target.screen);
+      return;
     }
+    // A screen in another tab's stack: go through the tab navigator and keep
+    // that stack's first screen underneath (initial: false), so Back works.
+    const tabs = navigation.getParent() ?? navigation;
+    tabs.navigate(item.target.tab, { screen: item.target.screen, initial: false });
   };
 
   return (

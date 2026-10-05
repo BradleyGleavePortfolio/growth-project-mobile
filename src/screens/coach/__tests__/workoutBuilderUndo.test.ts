@@ -48,9 +48,34 @@ describe("isUnknownHistoryOutcome", () => {
   it("a non-HTTP error is unknown", () => {
     expect(isUnknownHistoryOutcome(new Error("boom"))).toBe(true);
   });
+
+  it("an undo_head_moved 409 without head and lock token is unknown (B-356-1)", () => {
+    const cause = {
+      isAxiosError: true,
+      response: {
+        status: 409,
+        data: { statusCode: 409, code: "undo_head_moved", error: "undo_head_moved" },
+      },
+    };
+    const bare = new WorkoutAutosaveApiError("conflict", 409, "x", undefined, cause);
+    expect(isUnknownHistoryOutcome(bare)).toBe(true);
+    const parsed = new WorkoutAutosaveApiError("conflict", 409, "x", undefined, cause, {
+      error: "undo_head_moved",
+      head_revision_index: 2,
+      lock_token: "abababababababab",
+    });
+    expect(isUnknownHistoryOutcome(parsed)).toBe(false);
+  });
 });
 
 describe("copy", () => {
+  it("unconfirmed after an ended session says to sign in, never nothing was undone (B-356-2)", () => {
+    const f = describeUnconfirmedHistory(err("unauthorized", 401), "undo");
+    expect(f.message).toBe(
+      "Your session has ended, so the app could not confirm whether the change was undone. Editing is paused so nothing is lost. Sign in again, then open this workout to see the latest saved version.",
+    );
+  });
+
   it("unconfirmed network copy names the connection and never says nothing was undone", () => {
     const f = describeUnconfirmedHistory(err("network", 0), "undo");
     expect(f.message).toMatch(

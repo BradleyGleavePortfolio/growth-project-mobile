@@ -734,6 +734,44 @@ describe("CoachWorkoutBuilderScreen — history barrier and unknown outcomes (S-
     ).toEqual(expect.objectContaining({ disabled: true }));
   });
 
+  it("B-356-2: a Check again refused with 401 keeps editing paused and never says nothing was undone", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(new ApiError("network", 0, "offline"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    mockUndoCall.mockRejectedValueOnce(new ApiError("unauthorized", 401, "expired"));
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Check again"));
+    });
+    expect(screen.queryByText(/nothing was undone/)).toBeNull();
+    expect(screen.getByText(/Your session has ended, so the app could not confirm/)).toBeTruthy();
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+    expect(screen.getByLabelText("Check again")).toBeTruthy();
+  });
+
+  it("B-356-1: an undo_head_moved 409 without head and lock token is unconfirmed, not a refusal", async () => {
+    const screen = await mountWithOneSave();
+    const ApiError = apiError();
+    mockUndoCall.mockRejectedValueOnce(
+      new ApiError("conflict", 409, "moved", undefined, {
+        isAxiosError: true,
+        response: {
+          status: 409,
+          data: { statusCode: 409, code: "undo_head_moved", error: "undo_head_moved" },
+        },
+      }),
+    );
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText("Undo last change"));
+    });
+    expect(screen.queryByText(/nothing was undone/)).toBeNull();
+    expect(screen.getByText(/could not confirm whether the change was undone/)).toBeTruthy();
+    expect(screen.getByLabelText("Plan name").props.editable).toBe(false);
+    expect(screen.getByLabelText("Check again")).toBeTruthy();
+  });
+
   it("a definite refusal (403) still says nothing was undone and reopens editing", async () => {
     const screen = await mountWithOneSave();
     const ApiError = apiError();
