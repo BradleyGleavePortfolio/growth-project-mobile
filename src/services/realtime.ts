@@ -54,32 +54,39 @@ function getClient(): SupabaseClient {
  * messages was acknowledged. Either way the right response is "refetch".
  *
  * `onThreadUpdated` (messaging v2) receives the distinct `thread-updated`
- * event the backend sends for read receipts, edits, deletes and pins. Its
- * payload is ID-only (`{ kind, thread_client_id, message_id }`, no text), so
- * the right response is again a REST refetch, never a banner or a sound. It
- * rides the same channel, so no second WebSocket subscription is opened.
+ * event the backend sends for read receipts, edits, deletes and pins. The
+ * channel is public, so the backend sends an empty payload `{}` (no ids, no
+ * text): every `thread-updated` event is a refetch signal, never a banner or
+ * a sound. Older ID-bearing payloads (`{ kind, thread_client_id, message_id }`)
+ * are still read when present. It rides the same channel, so no second
+ * WebSocket subscription is opened.
  */
 export type ThreadUpdateKind = 'read' | 'edited' | 'deleted' | 'pinned' | 'unpinned';
 
 export interface ThreadUpdatedPing {
-  kind: ThreadUpdateKind;
-  /** Thread key: the client id of the coach <-> client thread. */
-  threadClientId: string;
+  /** Null for the current empty payload; set only by older ID-bearing payloads. */
+  kind: ThreadUpdateKind | null;
+  /** Thread key (the client id of the coach <-> client thread), or null when the payload carries no ids. */
+  threadClientId: string | null;
   messageId: string | null;
 }
 
 const THREAD_UPDATE_KINDS: ReadonlySet<string> = new Set(['read', 'edited', 'deleted', 'pinned', 'unpinned']);
 
-/** Parse the broadcast envelope; anything malformed is dropped (null). */
+/**
+ * Parse the broadcast envelope. Any `thread-updated` envelope is a refresh
+ * signal, including the empty payload the backend sends today; ids are read
+ * only when present and well formed. Only a non-object message is dropped (null).
+ */
 export function parseThreadUpdated(message: unknown): ThreadUpdatedPing | null {
   const env = message && typeof message === 'object' ? (message as Record<string, unknown>) : null;
-  const p = env && env.payload && typeof env.payload === 'object' ? (env.payload as Record<string, unknown>) : null;
-  if (!p || typeof p.kind !== 'string' || !THREAD_UPDATE_KINDS.has(p.kind)) return null;
-  if (typeof p.thread_client_id !== 'string' || !p.thread_client_id) return null;
+  if (!env) return null;
+  const p = env.payload && typeof env.payload === 'object' ? (env.payload as Record<string, unknown>) : {};
+  const kind = typeof p.kind === 'string' && THREAD_UPDATE_KINDS.has(p.kind) ? (p.kind as ThreadUpdateKind) : null;
   return {
-    kind: p.kind as ThreadUpdateKind,
-    threadClientId: p.thread_client_id,
-    messageId: typeof p.message_id === 'string' ? p.message_id : null,
+    kind,
+    threadClientId: typeof p.thread_client_id === 'string' && p.thread_client_id ? p.thread_client_id : null,
+    messageId: typeof p.message_id === 'string' && p.message_id ? p.message_id : null,
   };
 }
 
