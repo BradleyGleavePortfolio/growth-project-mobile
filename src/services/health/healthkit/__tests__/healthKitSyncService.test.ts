@@ -242,13 +242,12 @@ describe('HealthKitSyncService.sync — read window', () => {
       startDate: new Date(Date.parse('2026-05-30T00:00:00.000Z') + i * 60_000).toISOString(),
       endDate: new Date(Date.parse('2026-05-30T00:00:00.000Z') + i * 60_000).toISOString(),
     }));
-    let checks = 0;
     const fence: SessionFence = {
       userId: SCOPE.userId,
-      // 1: before progress, 2: before the native read, 3: first request, 4: second request.
+      // The session changes once the first request went out (H8: the window
+      // is read in day pieces, each checked, so a check count no longer fits).
       assertCurrent: jest.fn(async () => {
-        checks += 1;
-        if (checks >= 4) throw new OnDeviceSessionChangedError();
+        if (mockPost.mock.calls.length >= 1) throw new OnDeviceSessionChangedError();
       }),
       throwIfStopped: jest.fn(),
       cancel: jest.fn(),
