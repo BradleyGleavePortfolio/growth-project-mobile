@@ -40,6 +40,17 @@ export interface ConnectView {
   disabledReason: string | null;
   /** True when the server re-read Stripe for this answer. */
   refreshed: boolean;
+  /**
+   * True when this server has no live re-read (no POST status/refresh), so the
+   * answer is the last update Stripe sent to TGP, not a failed Stripe call.
+   */
+  refreshUnavailable?: boolean;
+  /**
+   * True for the older status payload (no `state`, no `requirements`): its
+   * `requirements_due` mixes what Stripe needs now with what it may ask for
+   * later, so an account Stripe has fully switched on is not told to act.
+   */
+  legacy?: boolean;
 }
 
 interface RawRequirements {
@@ -85,8 +96,9 @@ export function toConnectView(
 ): ConnectView {
   const r = raw ?? {};
   const req = r.requirements ?? {};
+  const legacy = r.requirements === undefined && r.state === undefined;
   const legacyDue = strings(r.requirements_due);
-  const currentlyDue = r.requirements ? strings(req.currently_due) : legacyDue;
+  let currentlyDue = r.requirements ? strings(req.currently_due) : legacyDue;
   const pastDue = strings(req.past_due);
   const charges = r.charges_enabled === true;
   const payouts = r.payouts_enabled === true;
@@ -109,6 +121,11 @@ export function toConnectView(
   }
   const deadline =
     typeof req.current_deadline === "string" ? req.current_deadline : null;
+  // Production today (agent 118 capability check): the legacy payload cannot
+  // say which items are due now. Stripe has charges and payouts on, so keep
+  // the list as "may ask later" and claim nothing is due.
+  const legacyActive = legacy && state === "active";
+  if (legacyActive) currentlyDue = [];
   return {
     state,
     accountId,
@@ -123,12 +140,14 @@ export function toConnectView(
           state === "not_started",
     currentlyDue,
     pastDue,
-    eventuallyDue: strings(req.eventually_due),
+    eventuallyDue: legacyActive ? legacyDue : strings(req.eventually_due),
     pendingVerification: strings(req.pending_verification),
     deadline,
     disabledReason:
       typeof r.disabled_reason === "string" ? r.disabled_reason : null,
     refreshed: r.refreshed === true,
+    refreshUnavailable: false,
+    legacy,
   };
 }
 
@@ -176,8 +195,10 @@ export const coachSetupApi = {
       return toConnectView(res.data);
     } catch (err) {
       const status = errorStatus(err);
-      if (status === 404 || status === 405)
-        return coachSetupApi.connectStatus();
+      if (status === 404 || status === 405) {
+        const saved = await coachSetupApi.connectStatus();
+        return { ...saved, refreshed: false, refreshUnavailable: true };
+      }
       throw err;
     }
   },

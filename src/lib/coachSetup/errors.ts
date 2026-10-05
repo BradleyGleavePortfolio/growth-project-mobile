@@ -1,11 +1,24 @@
 /**
  * S-COACH — plain-words copy for every failure the coach setup and Money
  * screens can hit. Known status and machine codes map to specific copy; an
- * unknown failure shows the server's request reference and the support
- * address, and is reported to Sentry. No generic "something went wrong".
+ * unknown failure shows a reference and the support address, and is reported
+ * to Sentry. No generic "something went wrong".
+ *
+ * B-345-3 (agent 118): the report is content free. Sentry gets a fixed
+ * CoachSetupFailure error plus closed fields (area, action, status, a code
+ * only when it has the machine-code shape, kind, reference), never the thrown
+ * value, its message, request config or response body. Every reported
+ * failure has a reference: the server's request id, else the X-Request-Id
+ * this app sent, else a fresh client id. The same reference is the Sentry
+ * `reference` tag and the one the coach reads (short form for client ids).
  */
 import { captureError } from "../../services/sentry";
-import { extractRequestId } from "../../utils/correlation";
+import {
+  diagnosticReference,
+  extractRequestId,
+  shortReference,
+  supportReferenceOf,
+} from "../../utils/correlation";
 import { errorStatus } from "../../types/common";
 import { SUPPORT_EMAIL } from "../../constants/support";
 
@@ -17,7 +30,11 @@ export interface FriendlyError {
   title: string;
   /** One or two sentences: what happened and what to do next. */
   body: string;
-  /** Server request reference when it supplied one. */
+  /**
+   * Reference to quote to support: the server's request id when it supplied
+   * one; for a reported failure without one, the short form of the reference
+   * on the Sentry report.
+   */
   requestId: string | null;
   /** Machine code from the server, when present. */
   code: string | null;
@@ -62,6 +79,41 @@ function isNetworkError(err: unknown): boolean {
     e.code === "ECONNABORTED" ||
     (typeof e.message === "string" && /network/i.test(e.message))
   );
+}
+
+/** Machine codes only (e.g. PACKAGE_NOT_FOUND); anything else is dropped. */
+const MACHINE_CODE = /^[A-Z][A-Z0-9_]{1,63}$/;
+
+/** Fixed, content-free error sent to Sentry in place of the thrown value. */
+export class CoachSetupFailure extends Error {
+  constructor(kind: "server" | "unknown") {
+    super(`coach setup ${kind} failure`);
+    this.name = "CoachSetupFailure";
+  }
+}
+
+function report(
+  err: unknown,
+  kind: "server" | "unknown",
+  action: string,
+  status: number | undefined,
+  code: string | null,
+): string {
+  const reference = diagnosticReference(supportReferenceOf(err));
+  captureError(new CoachSetupFailure(kind), {
+    area: "coach_setup",
+    action,
+    kind,
+    status: typeof status === "number" ? status : null,
+    code: code && MACHINE_CODE.test(code) ? code : null,
+    transport: isNetworkError(err)
+      ? "network"
+      : err && typeof err === "object" && "response" in err
+        ? "http"
+        : "local",
+    reference,
+  });
+  return extractRequestId(err) ?? shortReference(reference) ?? reference;
 }
 
 // Server messages for these codes are written for people (backend #629
@@ -250,22 +302,30 @@ export function describeError(err: unknown, action: string): FriendlyError {
       retryable: false,
     };
   }
-  if (status !== undefined && status >= 500) {
-    captureError(err, { area: "coach_setup", action, status, code, requestId });
+  if (code === "PACKAGE_UPDATE_NOT_APPLIED") {
     return {
       ...base,
-      title: "TGP had a problem on its side",
-      body: `TGP could not ${action} just now. Try again in a few minutes.${referenceSentence(requestId)}`,
+      title: "The new price or billing did not save",
+      body: "TGP did not confirm the change, so clients still see the price and billing shown in Packages. Try again.",
       retryable: true,
     };
   }
-  captureError(err, { area: "coach_setup", action, status, code, requestId });
+  if (status !== undefined && status >= 500) {
+    const reference = report(err, "server", action, status, code);
+    return {
+      ...base,
+      requestId: reference,
+      title: "TGP had a problem on its side",
+      body: `TGP could not ${action} just now. Try again in a few minutes.${referenceSentence(reference)}`,
+      retryable: true,
+    };
+  }
+  const reference = report(err, "unknown", action, status, code);
   return {
     ...base,
+    requestId: reference,
     title: `TGP could not ${action}`,
-    body: `Try again. If it keeps happening, write to ${COACH_SUPPORT_EMAIL}${
-      requestId ? ` and mention reference ${requestId}` : ""
-    }.`,
+    body: `Try again. If it keeps happening, write to ${COACH_SUPPORT_EMAIL} and mention reference ${reference}.`,
     retryable: true,
   };
 }

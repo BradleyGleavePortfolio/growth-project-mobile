@@ -118,7 +118,7 @@ export function buildChecklist(s: ChecklistStatus): ChecklistItem[] {
           ? UNKNOWN
           : s.paid
             ? "You have been paid. See it in Money."
-            : "We will mark the moment with you when it lands.",
+            : "This ticks when your first client payment arrives.",
       done: s.paid,
     },
   ];
