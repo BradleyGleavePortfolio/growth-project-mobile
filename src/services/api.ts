@@ -286,7 +286,7 @@ api.interceptors.response.use(
     // calm lockout screen; individual screens never render their own error
     // for it. The store drops it when the request started under a retired
     // auth generation (B-352-1). The message is specific and true for both
-    // lock kinds (a failed payment, or a payment the bank reversed, where a
+    // lock kinds (a failed payment, or a bank dispute or inquiry, where a
     // new card does not help), so any screen that surfaces error.message
     // still says what happened and where the next step is (C-352-4).
     if (isLockedDunningResponse(error.response.status, error.response.data)) {

@@ -8,7 +8,7 @@ Client-side half of the backend's 10-day non-payment sequence (`FEATURE_DUNNING_
 | 10+ | `DunningLockoutGuard` answers non-allowed routes with `403 { code: 'LOCKED_DUNNING' }` | `DunningLockoutProvider` shows one full-screen `DunningLockoutScreen` |
 | Paid | Saving a card in the app pays the open invoice right away (owner 1A); `invoice.paid` also clears the lock | `UpdateCardScreen` shows "Payment received", the status refresh clears the store, paid queries refetch |
 | Cancel in dunning | Unpaid invoice voided, plan ends now (owner 2A) | "End my plan" on the lockout and Update card screens, with a confirm dialog |
-| Dispute on a recurring plan | R-DISPUTE-PAUSE (D2c `reason: 'dispute_paused'`): access ends at once, billing is paused, nothing restarts on its own, the coach decides on restarting | One sentence on every surface (`disputePauseFacts`): access has ended, billing is paused, the coach decides; no lock date, no card or cancel path, Message coach first |
+| Dispute on a recurring plan | R-DISPUTE-PAUSE (D2c `reason: 'dispute_paused'`): access ends at once, billing is paused, nothing restarts on its own, the coach decides on restarting | One sentence on every surface (`disputePauseFacts`): access has ended, billing is paused, the coach decides; no lock date, no card or cancel path, Message coach first. The backend reports an inquiry the same way and an inquiry moves no money, so copy says the bank opened a dispute or inquiry, never that a payment was reversed (B-352-9) |
 
 ## Files
 

@@ -39,8 +39,10 @@ export interface DunningLockoutScreenProps {
 }
 
 /**
- * True when the cycle is a payment the bank reversed (R-DISPUTE-PAUSE:
- * access has ended, billing is paused, the coach decides on restarting).
+ * True when the bank opened a dispute or an inquiry about a payment
+ * (R-DISPUTE-PAUSE: access has ended, billing is paused, the coach decides on
+ * restarting). The envelope does not say whether money was withdrawn (an
+ * inquiry moves none), so no surface claims a reversal (B-353-8).
  */
 export function isDisputeCycle(status: ClientDunningStatus | null | undefined): boolean {
   return status?.kind === 'dispute' || status?.reason === 'dispute_paused';
@@ -51,7 +53,7 @@ export function disputeScope(status: ClientDunningStatus | null | undefined): 'a
   return status?.state === 'locked' && !status.lock_waived ? 'account' : 'plan';
 }
 
-/** True while a payment is overdue or reversed and the plan is not ended. */
+/** True while a payment is overdue or disputed and the plan is not ended. */
 function inDunning(status: ClientDunningStatus | null | undefined): boolean {
   return Boolean(status?.enabled && (status.state === 'past_due' || status.state === 'locked'));
 }
@@ -68,7 +70,7 @@ export function lockoutSummary(status: ClientDunningStatus | null): string {
   const coach = status.coach_name ?? 'your coach';
   if (isDisputeCycle(status)) {
     // R-DISPUTE-PAUSE (B-353-3 / B-353-6): the three facts, no lock date, no card fix.
-    return `Your bank reversed a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(
+    return `Your bank opened a dispute or inquiry about a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(
       status.coach_name,
       disputeScope(status),
     )} ${safe}`;
@@ -82,7 +84,7 @@ export function lockoutSummary(status: ClientDunningStatus | null): string {
 /**
  * The next step, true for the lock kind. A failed payment: a working card is
  * charged right away and the plan comes back once it clears (ruling D12). A
- * reversed payment: only the coach restarts the plan, so the step is a
+ * dispute or inquiry: only the coach restarts the plan, so the step is a
  * message to the coach; support answers questions, it does not restore access.
  */
 export function lockoutNextStep(status: ClientDunningStatus | null): string {
@@ -97,7 +99,7 @@ export function lockoutNextStep(status: ClientDunningStatus | null): string {
 /**
  * The End my plan confirmation, shared by the lockout and the Update card
  * screen. In dunning (2A) access ends now; a payment that landed in the
- * meantime keeps the paid period (backend cancel rule). A reversed payment:
+ * meantime keeps the paid period (backend cancel rule). A dispute or inquiry:
  * access has already ended and billing is paused (R-DISPUTE-PAUSE); the
  * screens offer no End my plan for it (D2c has no cancel route), so this
  * body only keeps any older entry point truthful. Outside dunning (option A)
@@ -203,7 +205,7 @@ export function DunningLockoutScreen({
     void supportEmail.open();
   }, [supportEmail]);
 
-  // C-353-2: "declined" only for a failed payment, never for a reversal.
+  // C-353-2: "declined" only for a failed payment, never for a dispute.
   const card = status?.card_last4 && status && !dispute ? ` The card ending ${status.card_last4} was declined.` : '';
   const coachLabel = status?.coach_name ? `Message ${status.coach_name}` : 'Message your coach';
 
@@ -230,7 +232,7 @@ export function DunningLockoutScreen({
           </Text>
         ) : null}
 
-        {/* R-DISPUTE-PAUSE: for a reversed payment the coach is the only way
+        {/* R-DISPUTE-PAUSE: for a dispute or inquiry the coach is the only way
             back, so Message coach leads and there is no card or End my plan
             path (D2c sends neither route). */}
         {dispute ? null : (

@@ -24,11 +24,16 @@ export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()
   const lockOn = upcomingLockDate(status, now);
   if (isDisputeCycle(status)) {
     // R-DISPUTE-PAUSE (B-353-3 / B-353-6): access to the disputed plan has
-    // already ended, so no lock date, no condition and no card fix.
-    const what = `Your bank reversed a payment${amount ? ` of ${amount}` : ''}${
+    // already ended, so no lock date, no condition and no card fix. B-353-8:
+    // an inquiry arrives in the same envelope and moves no money, so the copy
+    // says the bank opened a dispute or inquiry, never that money went back.
+    const what = `Your bank opened a dispute or inquiry about a payment${amount ? ` of ${amount}` : ''}${
       status.coach_name ? ` to ${status.coach_name}` : ''
     }.`;
-    return { title: 'A payment was reversed', body: `${what} ${disputePauseFacts(status.coach_name, 'plan')}` };
+    return {
+      title: 'Your plan is paused after a payment dispute or inquiry',
+      body: `${what} ${disputePauseFacts(status.coach_name, 'plan')}`,
+    };
   }
   const failedOn = formatDunningDate(status.failed_at);
   const charge = amount ? `Your payment of ${amount} did not go through` : 'Your last payment did not go through';

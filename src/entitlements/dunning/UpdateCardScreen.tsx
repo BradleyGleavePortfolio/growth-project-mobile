@@ -88,7 +88,8 @@ export function updateCardIntro(status: ClientDunningStatus | null | undefined):
   if (inDunning(status) && isDisputeCycle(status)) {
     // R-DISPUTE-PAUSE (B-353-3 / B-353-7): the three facts; no charge, no
     // comeback, no support fix and no future-payment line are promised.
-    return `Your bank took back a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(
+    // B-353-8: a dispute or inquiry, never "took back" (an inquiry moves no money).
+    return `Your bank opened a dispute or inquiry about a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(
       status?.coach_name,
       disputeScope(status),
     )}`;
@@ -487,7 +488,7 @@ export function UpdateCardScreen({ route, navigation }: UpdateCardScreenProps) {
           </TouchableOpacity>
         ) : null}
 
-        {/* R-DISPUTE-PAUSE: no End my plan for a reversed payment (D2c has no cancel route). */}
+        {/* R-DISPUTE-PAUSE: no End my plan for a dispute or inquiry (D2c has no cancel route). */}
         {inDunning(status) && !dispute && status?.purchase_id && !settled ? (
           <TouchableOpacity
             style={styles.secondary}

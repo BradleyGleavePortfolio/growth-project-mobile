@@ -1,7 +1,7 @@
 /**
  * B-LOCK-118 / B-LOCK2-120 (#353): the lockout belongs to the signed-in
  * account and the mounted screens (B-353-1, B-353-2, including an End my plan
- * confirmation), a reversed payment says R-DISPUTE-PAUSE on every surface
+ * confirmation), a dispute or inquiry says R-DISPUTE-PAUSE on every surface
  * (B-353-3 / B-353-6 / B-353-7), no first person in client copy (B-353-3), the
  * overlay is modal for screen readers (B-353-4), and the screens stay
  * truthful against today's production backend (no dunning routes, flag off).
@@ -484,7 +484,7 @@ describe('B-353-2: an End my plan confirmation belongs to the screen, account an
   });
 });
 
-describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () => {
+describe('B-353-2 / B-353-3 / B-353-8 (Sol): a dispute or inquiry is described as one, never as a reversal', () => {
   it('the dispute lockout states R-DISPUTE-PAUSE, leads with Message coach, offers no card or cancel path', async () => {
     mockGet.mockResolvedValue({ data: DISPUTE_LOCKED });
     const screen = await render(<Provider><Reader /></Provider>);
@@ -492,7 +492,7 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     const text = textOf(screen.toJSON());
     expect(text).toContain('Your access has ended');
     expect(text).toContain(
-      'Your bank reversed a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+      'Your bank opened a dispute or inquiry about a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
     );
     expect(text).not.toMatch(/has not gone through|was declined|charged right away|add a card that works/i);
     expect(text).not.toMatch(/sort it out|settle|Already paid|Access pauses on/i);
@@ -508,7 +508,10 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
   it('D2c dispute pause (reason dispute_paused, no amount, no lock date): same facts; a payment lock keeps its card path', async () => {
     const d2c = { ...DISPUTE_LOCKED, kind: null, reason: 'dispute_paused' as const, amount_cents: null, lockout_at: null };
     const screen = await render(<DunningLockoutScreen {...lockoutProps(d2c)} />);
-    expect(textOf(screen.toJSON())).toMatch(/Your bank reversed a payment to Avery\. Your access has ended and billing is paused\./);
+    expect(textOf(screen.toJSON())).toMatch(
+      /Your bank opened a dispute or inquiry about a payment to Avery\. Your access has ended and billing is paused\./,
+    );
+    expect(textOf(screen.toJSON())).not.toMatch(/revers|took back|taken back|withdr/i);
     expect(screen.queryByTestId('dunning-lockout-update-card')).toBeNull();
     const payment = await render(<DunningLockoutScreen {...lockoutProps(LOCKED)} />);
     expect(payment.getByTestId('dunning-lockout-update-card')).toBeTruthy();
@@ -516,7 +519,7 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     expect(textOf(payment.toJSON())).toContain('Already paid? Pull down to check again.');
   });
 
-  it('End my plan body for a reversed payment (no screen offers it): access already ended, the coach decides', () => {
+  it('End my plan body for a dispute or inquiry (no screen offers it): access already ended, the coach decides', () => {
     const body = endPlanAlertBody(DISPUTE_LOCKED);
     expect(body).toContain('Access to this plan has already ended and its billing is paused. Your coach decides whether to restart it.');
     expect(body).toContain('If you end it, the plan ends now instead.');
@@ -532,9 +535,9 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     alert.mockRestore();
   });
 
-  it('Update card intro and banner for a reversed payment: the three facts, no date, no charge, no card or support fix', () => {
+  it('Update card intro and banner for a dispute or inquiry: the three facts, no date, no charge, no card or support fix', () => {
     expect(updateCardIntro(DISPUTE_LOCKED)).toBe(
-      'Your bank took back a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+      'Your bank opened a dispute or inquiry about a payment of $150.00 to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
     );
     for (const s of [DISPUTE_LOCKED, DISPUTE_PAST_DUE, { ...DISPUTE_LOCKED, lock_waived: true }]) {
       const intro = updateCardIntro(s);
@@ -544,8 +547,9 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     // A dispute on one plan while another keeps access: the facts are scoped to that plan.
     expect(updateCardIntro({ ...DISPUTE_LOCKED, lock_waived: true })).toContain('For that plan, access has ended');
     const banner = bannerCopy(DISPUTE_PAST_DUE, NOW);
+    expect(banner.title).toBe('Your plan is paused after a payment dispute or inquiry');
     expect(banner.body).toBe(
-      'Your bank reversed a payment of $150.00 to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+      'Your bank opened a dispute or inquiry about a payment of $150.00 to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
     );
     expect(banner.body).not.toMatch(/Update your card|did not go through|Access pauses on|unless|Oct/);
   });
@@ -568,7 +572,48 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     expect(textOf(screen.getByTestId('dunning-banner'))).toContain('access has ended and billing is paused');
   });
 
-  it('a dispute-only Save card shows what happened: nothing charged, the reversal still open', async () => {
+  it('B-353-8: an inquiry (D2c envelope, no amount) is a dispute or inquiry on every surface, never money taken back', async () => {
+    const MONEY = /revers|took back|taken back|withdr|refund/i;
+    const inquiry: ClientDunningStatus = {
+      ...DISPUTE_LOCKED,
+      reason: 'dispute_paused',
+      purchase_id: 'p_inquiry',
+      amount_cents: null,
+      currency: null,
+      lockout_at: null,
+      card_last4: null,
+      card_brand: null,
+    };
+    const waived: ClientDunningStatus = { ...inquiry, state: 'past_due', lock_waived: true };
+    expect(lockoutSummary(inquiry)).toBe(
+      'Your bank opened a dispute or inquiry about a payment to Avery. Your access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card. Your data is safe and nothing has been deleted.',
+    );
+    const banner = bannerCopy(waived, NOW);
+    for (const t of [updateCardIntro(inquiry), updateCardIntro(waived), banner.title, banner.body]) {
+      expect(t).not.toMatch(MONEY);
+      expect(t).toMatch(/dispute or inquiry/);
+    }
+    const lockout = await render(<DunningLockoutScreen {...lockoutProps(inquiry)} />);
+    expect(textOf(lockout.toJSON())).not.toMatch(MONEY);
+    expect(lockout.getByTestId('dunning-lockout-message-coach')).toBeTruthy();
+    expect(lockout.queryByTestId('dunning-lockout-update-card')).toBeNull();
+    mockGet.mockResolvedValue({ data: waived });
+    const shown = await render(<Provider><DunningBanner surface="HomeScreen" /></Provider>);
+    expect(textOf(await shown.findByTestId('dunning-banner'))).not.toMatch(MONEY);
+    expect(shown.getByTestId('dunning-banner-message-coach')).toBeTruthy();
+    await shown.unmount();
+    route = 'UpdateCard';
+    mockGet.mockResolvedValue({ data: inquiry });
+    const card = await render(<Provider><UpdateCardScreen /></Provider>);
+    await card.findByTestId('update-card-message-coach');
+    expect(textOf(card.toJSON())).not.toMatch(MONEY);
+    expect(card.queryByTestId('update-card-end-plan')).toBeNull();
+    // CONTROL: a failed payment keeps its own copy and card path.
+    expect(bannerCopy(PAST_DUE, NOW).body).toMatch(/Update your card/);
+    expect(bannerCopy(PAST_DUE, NOW).body).not.toMatch(/dispute|billing is paused/);
+  });
+
+  it('a dispute-only Save card shows what happened: nothing charged, the dispute still open', async () => {
     route = 'UpdateCard';
     cardRoutes(
       {
@@ -601,7 +646,7 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     expect(screen.getByTestId('update-card-message-coach')).toBeTruthy();
   });
 
-  it('a payment plan whose quote also names a reversed payment says so before the card form', async () => {
+  it('a payment plan whose quote also names a disputed payment says so before the card form', async () => {
     route = 'UpdateCard';
     const present = deferred<Record<string, unknown>>();
     mockSdk.presentPaymentSheet.mockImplementation(() => present.promise);
@@ -613,7 +658,7 @@ describe('B-353-2 / B-353-3 (Sol): a reversed payment is described as one', () =
     void fireEvent.press(screen.getByTestId('update-card-add'));
     const note = await screen.findByTestId('update-card-quote-dispute');
     expect(note.props.children).toBe(
-      'Your bank reversed a payment of $90.00 to Blake. For that plan, access has ended and billing is paused. Your coach, Blake, decides whether to restart it. It does not restart on its own or with a new card.',
+      'Your bank opened a dispute or inquiry about a payment of $90.00 to Blake. For that plan, access has ended and billing is paused. Your coach, Blake, decides whether to restart it. It does not restart on its own or with a new card.',
     );
     await act(async () => present.resolve({ error: { code: 'Canceled' } }));
   });
