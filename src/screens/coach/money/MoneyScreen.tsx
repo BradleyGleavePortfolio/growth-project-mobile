@@ -889,15 +889,18 @@ function NetBlock({
         </View>
       ) : null}
       {s.heldFromNextSaleCents !== null && s.heldFromNextSaleCents > 0 ? (
+        // Sol B-349-2: the hold is everything still owed back on refunds and
+        // chargebacks, not fees only.
         <View style={styles.held} testID="money-held">
           <Text style={styles.bLabel}>
-            Held from your next sale:{" "}
+            Held from your next sales:{" "}
             {money(s.heldFromNextSaleCents, s.currency)}
           </Text>
           <Text style={styles.bNote}>
-            After a refund or chargeback, TGP keeps its 2% and the Stripe fees
-            on that charge from your next sale, on top of that sale's usual
-            fees.
+            Still owed back on refunds and chargebacks. It can include money
+            from those sales that was already paid out to your bank, plus the
+            TGP 2% and Stripe fees on them. TGP takes it from your next sales,
+            on top of their usual fees.
           </Text>
         </View>
       ) : null}
