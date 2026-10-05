@@ -38,6 +38,10 @@ interface AlertRowProps {
   bucket?: RiskBucket;
   onPress: () => void;
   onDismiss?: () => void;
+  /** Lines of `message` before it truncates (default 3). */
+  messageLines?: number;
+  /** Visible label for what tapping the row does, e.g. "Message Sam". */
+  actionLabel?: string;
   testID?: string;
   style?: ViewStyle;
 }
@@ -48,6 +52,8 @@ export default function AlertRow({
   bucket,
   onPress,
   onDismiss,
+  messageLines = 3,
+  actionLabel,
   testID,
   style,
 }: AlertRowProps) {
@@ -59,7 +65,9 @@ export default function AlertRow({
       onPress={onPress}
       testID={testID ?? 'command-center-at-risk-row'}
       accessibilityRole="button"
-      accessibilityLabel={`${clientName}. ${bucketLabel ? `${bucketLabel}. ` : ''}${message}`}
+      accessibilityLabel={`${clientName}. ${bucketLabel ? `${bucketLabel}. ` : ''}${message}${
+        actionLabel ? ` ${actionLabel}.` : ''
+      }`}
       style={[styles.row, { borderLeftColor: accent }, style]}
       activeOpacity={0.75}
     >
@@ -77,9 +85,12 @@ export default function AlertRow({
             </Text>
           ) : null}
         </View>
-        <Text style={styles.message} numberOfLines={3}>
+        <Text style={styles.message} numberOfLines={messageLines}>
           {message}
         </Text>
+        {actionLabel ? (
+          <Text style={styles.actionLabel}>{actionLabel}</Text>
+        ) : null}
       </View>
       {onDismiss ? (
         <TouchableOpacity
@@ -131,6 +142,12 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.charcoal,
     lineHeight: 20,
+  },
+  actionLabel: {
+    ...typography.bodySmall,
+    color: colors.forest,
+    fontWeight: '600',
+    marginTop: spacing.xs,
   },
   dismissButton: {
     marginLeft: spacing.sm,

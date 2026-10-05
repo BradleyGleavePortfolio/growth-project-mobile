@@ -109,88 +109,6 @@ export interface PackageSubscribersResponse {
   monthlyRecurringRevenueCents: number;
 }
 
-// Backend `GET /v1/coach/payments/earnings` returns the raw split-ledger view:
-//   {
-//     summary: { posted_cents, pending_cents, reversed_cents },
-//     entries: SplitLedgerEntry[]
-//   }
-// The mobile screen consumes a normalised `CoachEarningsSummary` derived from
-// that shape — see `adaptEarnings()`. Fields the backend does not yet expose
-// (per-package breakdown, next-payout ETA, last-payout date/amount) are left
-// null so the UI degrades honestly instead of inventing numbers.
-export interface BackendEarningsResponse {
-  summary: {
-    posted_cents: number;
-    pending_cents: number;
-    reversed_cents: number;
-  };
-  entries: Array<{
-    id: string;
-    purchase_id: string;
-    kind: string;
-    payee_user_id: string | null;
-    amount_cents: number;
-    currency: string;
-    status: string;
-    reversed_cents: number;
-    created_at?: string | null;
-    posted_at?: string | null;
-  }>;
-}
-
-export interface CoachEarningsSummary {
-  currency: string;
-  pendingPayoutCents: number;
-  lifetimeNetCents: number;
-  monthToDateNetCents: number;
-  lastPayoutAt: string | null;
-  lastPayoutAmountCents: number | null;
-  nextPayoutEta: string | null;
-  perPackage: Array<{
-    packageId: string;
-    title: string;
-    monthToDateGrossCents: number;
-    activeSubscribers: number;
-  }>;
-}
-
-export function adaptEarnings(raw: BackendEarningsResponse): CoachEarningsSummary {
-  const currency =
-    (raw.entries.find((e) => e.currency)?.currency || 'usd').toLowerCase();
-
-  // Month-to-date net = posted (minus reversed) for entries whose posted_at
-  // (or created_at) falls in the current calendar month. Net for an entry
-  // is amount_cents - reversed_cents when status === 'posted'.
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  let monthToDateNet = 0;
-  for (const e of raw.entries) {
-    if (e.status !== 'posted') continue;
-    const ts = e.posted_at ?? e.created_at;
-    if (!ts) continue;
-    const t = new Date(ts).getTime();
-    if (isNaN(t) || t < monthStart) continue;
-    monthToDateNet += e.amount_cents - (e.reversed_cents ?? 0);
-  }
-
-  return {
-    currency,
-    pendingPayoutCents: raw.summary.pending_cents ?? 0,
-    // Lifetime net = posted - reversed. The summary already excludes
-    // reversed via posted_cents, but we subtract `reversed_cents` to keep
-    // the screen's "net" framing honest if backend semantics drift.
-    lifetimeNetCents:
-      (raw.summary.posted_cents ?? 0) - (raw.summary.reversed_cents ?? 0),
-    monthToDateNetCents: monthToDateNet,
-    // Backend does not (yet) return payout-cadence metadata. Null tells the
-    // UI to hide those rows rather than render fake values.
-    lastPayoutAt: null,
-    lastPayoutAmountCents: null,
-    nextPayoutEta: null,
-    perPackage: [],
-  };
-}
-
 export interface PublicPackageView {
   id: string;
   title: string;
@@ -607,16 +525,8 @@ export const coachPackagesApi = {
       `/v1/coach/packages/${encodeURIComponent(id)}/subscribers`,
     ),
 
-  // Backend route: `GET /v1/coach/payments/earnings`.
-  // Returns `{ summary: { posted_cents, pending_cents, reversed_cents },
-  // entries: SplitLedgerEntry[] }`. We adapt to the mobile `CoachEarningsSummary`
-  // shape here so the screen does not have to know about the raw ledger.
-  earnings: async () => {
-    const res = await api.get<BackendEarningsResponse>(
-      '/v1/coach/payments/earnings',
-    );
-    return { ...res, data: adaptEarnings(res.data) };
-  },
+  // C-332-2: the old split-ledger earnings client is gone; every coach
+  // money figure comes from TGP Money (src/api/coachMoneyApi.ts).
 };
 
 // ─── public / client-facing API ─────────────────────────────────────────────
