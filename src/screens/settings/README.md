@@ -74,6 +74,39 @@ Coverage:
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
 
+### RomanConversationsScreen and RomanConversationScreen
+
+`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).
+
+**Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
+
+**Flow**
+
+1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".
+2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
+3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
+4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
+5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id and the sign-in epoch).
+
+**Account binding (Sol A-331-4, B-331-6):** the list is loaded under an `AccountBinding` (`src/services/accountBinding.ts`: the token subject plus the auth epoch). Every Roman request, read or delete, carries it, and the API client (`services/api.ts`) sends it only with a credential of that same account and sign-in, checked after the SecureStore read, immediately before transport, and again before a 401 replay; otherwise the request is cancelled and never sent. Any `authEvents` emit (sign-out, sign-in, even the same account signing in again) bumps the epoch: reads in flight are aborted, every answer for the old sign-in is dropped (`account_changed`), the list and transcript clear at once, confirm sheets close (the typed DELETE resets; sheets are keyed by sign-in), and stale confirm or retry closures do nothing (`deleteOne(chat, binding)` / `deleteAll(binding)` run only for the list's current binding). The transcript checks the binding before every state change, list event, navigation and report after its delete settles. A refresh overtaken by a sign-out or sign-in never writes its tokens over the new session and never signs the new session out. This is ordered by one fence (`src/services/sessionFence.ts`, A-331-7 / B-331-8): every write of the session keys moves a session generation at call time; the refresh publishes its tokens, and a failed refresh signs out, only while holding the fence for the generation it started in, taken with no await after the check; a sign-in or sign-out that starts meanwhile waits and lands last. A request is replayed after a refresh only in the session it was first sent in; an unbound request whose session ended under it keeps its original 401 (C-331-8). Nothing is stored on the device; the server sends `no-store`. Both screens carry `ph-no-capture`.
+
+**Erased stays erased (Sol B-331-5):** chats the server confirmed erased (or already gone) are remembered for the binding and never re-added by an older page; Delete all fences every page read before it started or settled; reloads asked for during Delete all wait for it; and every list read first waits for this account's erases still in flight (`romanEraseTracker.ts`, also across a same-account sign-out and sign-in), so a read can never be answered from before an erase. An erase that may have left the phone is not aborted (that would not undo it, only hide when it finished).
+
+**Errors** (`romanChatsCopy.ts` `failureView`, from status and machine `code`): offline, 401 signed out, 403 not allowed (reference + support), 404 `ROMAN_SESSION_NOT_FOUND`, uncoded 404 (backend without #635, or Roman chat reading switched off for the transcript, where Delete is still offered), 400 `ROMAN_CURSOR_INVALID` (list re-read from the top), 400 `ROMAN_SESSIONS_QUERY_INVALID` (#635 fix round: an outdated app; update copy, reference, reported), 503 `ROMAN_ERASE_INCOMPLETE` (one / all copy; the one-chat copy never says "not changed", because #635's fix round also uses this code when an erase cannot be confirmed), 429, a changed account (`account_changed`, normally never shown because the screen clears itself), and anything else as a short reference + Contact support (`RomanChatsSupportAction`: the shared `useSupportEmail` + `SupportEmailFallback`, subject with the reference only, a visible fallback with the address when no email app opens) + a Sentry report with status, code and request id only. Delete copy never claims a result the server did not confirm.
+
+**Entry points:** Settings > Privacy > Roman and AI (`RomanAiConsentScreen`, row "Your conversations with Roman"), the Roman chat header (`RomanConversationsButton`), and coach Settings > Privacy (hidden for a sub-coach, C-331-3: the backend Roman routes allow student, coach and owner only). The routes `RomanConversations` / `RomanConversation` are registered in the client More stack and the coach Settings stack without the Roman chat flag, because the backend list and delete routes are outside the chat switch.
+
+**API surface** (`src/api/romanChatsApi.ts`, backend #635 `docs/roman-chat-deletion.md`)
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `GET` | `/roman/sessions?limit=&cursor=` | metadata only, newest first |
+| `DELETE` | `/roman/sessions/:id` | 204, idempotent |
+| `DELETE` | `/roman/sessions` | 204, every chat, both surfaces |
+| `GET` | `/roman/sessions/:id/messages?limit=&cursor=` | behind the Roman chat switch |
+
+**Tests:** `src/services/__tests__/accountBinding.transport.test.ts` (real axios client and interceptors, paused credential read, logout/login, 401 refresh and replay), `src/services/__tests__/sessionFence.refresh.test.ts` (real secureStorage over a pausable SecureStore: a sign-in or sign-out at each awaited refresh, receipt and sign-out boundary), `src/services/__tests__/authActions.signOut.fence.test.ts`, `src/api/__tests__/romanChatsApi.test.ts`, `src/screens/settings/__tests__/RomanConversationsScreen.test.tsx`, `src/screens/settings/__tests__/RomanConversationScreen.test.tsx`, `src/components/roman/__tests__/RomanConversationsButton.test.tsx`, `src/navigation/__tests__/romanConversationsReachable.test.ts`.
+
 ### DataExportScreen
 
 `DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.
