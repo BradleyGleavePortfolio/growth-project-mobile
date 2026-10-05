@@ -234,8 +234,18 @@ describe("B-329-1 — a fresh create is sent only after its identity is on disk"
     await new Promise((r) => setTimeout(r, 20));
     expect(onCreated).not.toHaveBeenCalled();
     expect(mockPublish).not.toHaveBeenCalled();
-    // The package id is kept, so reopening finishes it without a new create.
-    expect(JSON.parse(mockStore.get(KEY) as string).packageId).toBe("pkg_1");
+    // B-329-5 (agent 118): nothing is written after the form closed. The
+    // intent that was sent stays, so reopening re-sends the same key and the
+    // server answers with the same package: no second package.
+    const kept = JSON.parse(mockStore.get(KEY) as string);
+    expect(kept.packageId).toBeNull();
+    const again = await mount(onCreated);
+    await again.findByTestId("first-package-resumed");
+    await fireEvent.press(again.getByTestId("first-package-create"));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+    expect(onCreated.mock.calls[0][0].id).toBe("pkg_1");
+    expect(mockRows.size).toBe(1);
+    expect(mockCreate.mock.calls[1][1]).toBe(kept.key);
   });
 });
 

@@ -258,7 +258,7 @@ function CoachWizardStep1({ navigation }: Step1Props) {
       stepNumber={1}
       totalSteps={UI_STEPS}
       heading="Your practice"
-      body="Tell us what to call your coaching and what you focus on. We use this to set up your first package."
+      body="Name your coaching and pick what you focus on. This sets up your first package."
       ctaLabel="Continue"
       ctaDisabled={!valid || saving}
       onCta={() => {
@@ -340,7 +340,7 @@ function CoachWizardStep2({ navigation }: Step2Props) {
       stepNumber={2}
       totalSteps={UI_STEPS}
       heading="Get paid"
-      body="Clients pay you by card. Stripe, our payments partner, holds your bank and ID details so TGP never sees them."
+      body="Clients pay you by card. Stripe, the payments provider TGP uses, holds your bank and ID details so TGP never sees them."
       ctaLabel={ready ? "Continue" : "Continue without payouts for now"}
       ctaDisabled={saving}
       onCta={next}
@@ -443,7 +443,7 @@ function CoachWizardStep3({ navigation }: Step3Props) {
       stepNumber={3}
       totalSteps={UI_STEPS}
       heading="Your first package"
-      body="This is what a client signs up for. We filled in a starting point you can change any time."
+      body="This is what a client signs up for. The starting point below can be changed any time."
       ctaLabel={done ? "Continue" : "Skip for now"}
       ctaDisabled={saving}
       onCta={goNext}
@@ -637,8 +637,8 @@ function CoachWizardStep5({ navigation }: Step5Props) {
       stepNumber={5}
       totalSteps={UI_STEPS}
       heading="You are ready to coach"
-      body="Anything still open stays on your Home checklist, and we mark your first client payment with you when it lands."
-      ctaLabel="Go to my dashboard"
+      body="Anything still open stays on your Home checklist, which also shows your first client payment once it arrives."
+      ctaLabel="Go to your dashboard"
       ctaDisabled={submitting}
       onCta={finish}
       onBack={() => navigation.goBack()}
