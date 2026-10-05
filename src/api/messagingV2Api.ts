@@ -3,10 +3,6 @@
  * (one inbox, read-up-to, edit, delete for everyone, pins, mute, inbox pins,
  * idempotent send and server-side replies).
  *
- * This file carries the inbox, thread state (mute, inbox pin) and the shared
- * error mapping; the thread actions (send, read-up-to, edit, delete, pins)
- * extend it in the thread PR.
- *
  * Backend contract (do NOT drift): growth-project-backend #708-#711
  *   src/messaging/client-messaging.controller.ts   (/messages*)
  *   src/messaging/coach-messaging.controller.ts    (/coach/clients/:client_id/messages*,
@@ -19,7 +15,9 @@
  * flag FEATURE_MESSAGING_CORE_V2 is OFF; callers only reach this module when
  * the server flag `messaging_core_v2` is ON (useFeatureFlags) and fall back
  * to the legacy surface when a 503 feature_disabled arrives anyway (stale
- * flag cache).
+ * flag cache). The legacy send/read routes reject unknown body fields
+ * (ValidationPipe forbidNonWhitelisted), which is why `client_message_id`,
+ * `reply_to_id` and `up_to_message_id` are only ever sent from here.
  *
  * Responses are Zod-validated at the boundary. Objects are NOT `.strict()`:
  * additive backend fields are ignored instead of breaking the inbox; a
@@ -28,10 +26,14 @@
 import axios from 'axios';
 import { z } from 'zod';
 import api from '../services/api';
+import { emitTutorialSignal } from '../tutorial/tutorialEvents';
 
 export const MESSAGING_V2_TIMEOUT_MS = 15_000;
-/** Backend cap (message-actions.service.ts). */
+/** Backend caps (message-actions.service.ts). */
+export const MAX_THREAD_PINS = 10;
 export const MAX_INBOX_PINS = 5;
+export const EDIT_WINDOW_MS = 48 * 60 * 60 * 1000;
+export const MESSAGE_BODY_MAX = 4000;
 
 /** Coach side addresses one client thread; the client has exactly one. */
 export type ThreadScope = { role: 'coach'; clientId: string } | { role: 'client' };
@@ -86,6 +88,38 @@ export const ThreadStateSchema = z.object({
   pinned: z.boolean(),
 });
 export type ThreadState = z.infer<typeof ThreadStateSchema>;
+
+export const ReplyPreviewSchema = z.object({
+  id: z.string(),
+  sender_id: z.string().nullable(),
+  kind: z.enum(['text', 'voice', 'deleted', 'unavailable']),
+  preview: z.string(),
+});
+export type ReplyPreview = z.infer<typeof ReplyPreviewSchema>;
+
+/** One thread row as the v2 routes serialize it (CoachMessage + reply_to + deleted). */
+export const ThreadMessageSchema = z.object({
+  id: z.string(),
+  coach_id: z.string().nullable(),
+  client_id: z.string().nullable(),
+  sender_id: z.string().nullable(),
+  sender_role: z.enum(['coach', 'client']).optional(),
+  body: z.string().nullable(),
+  voice_url: z.string().nullable().optional(),
+  voice_duration_sec: z.number().nullable().optional(),
+  created_at: isoString,
+  read_at: isoString.nullable().optional(),
+  edited_at: isoString.nullable().optional(),
+  pinned_at: isoString.nullable().optional(),
+  client_message_id: z.string().nullable().optional(),
+  reply_to_id: z.string().nullable().optional(),
+  reply_to: ReplyPreviewSchema.nullable().optional(),
+  deleted: z.boolean().optional(),
+});
+export type ThreadMessage = z.infer<typeof ThreadMessageSchema>;
+
+export const PinsResponseSchema = z.object({ items: z.array(ThreadMessageSchema) });
+export type PinsResponse = z.infer<typeof PinsResponseSchema>;
 
 export const MUTE_DURATIONS = ['1h', '8h', '1d', '7d', 'forever', 'off'] as const;
 export type MuteDuration = (typeof MUTE_DURATIONS)[number];
@@ -204,6 +238,7 @@ async function call<T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }
 }
 
 const cfg = { timeout: MESSAGING_V2_TIMEOUT_MS };
+const msgUrl = (scope: ThreadScope, id: string, suffix = '') => `${threadBase(scope)}/${encodeURIComponent(id)}${suffix}`;
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
@@ -211,6 +246,13 @@ export interface CoachInboxParams {
   cursor?: string | null;
   limit?: number;
   filter?: 'all' | 'unread';
+}
+
+export interface SendV2Payload {
+  body: string;
+  /** Device-minted UUID; the same key on a retry replays the original row. */
+  clientMessageId: string;
+  replyToId?: string | null;
 }
 
 export const messagingV2Api = {
@@ -237,6 +279,52 @@ export const messagingV2Api = {
 
   setMute(scope: ThreadScope, duration: MuteDuration): Promise<ThreadState> {
     return call(ThreadStateSchema, () => api.put<unknown>(`${threadBase(scope)}/mute`, { duration }, cfg));
+  },
+
+  listPins(scope: ThreadScope): Promise<PinsResponse> {
+    return call(PinsResponseSchema, () => api.get<unknown>(`${threadBase(scope)}/pins`, cfg));
+  },
+
+  editMessage(scope: ThreadScope, messageId: string, body: string): Promise<ThreadMessage> {
+    return call(ThreadMessageSchema, () => api.patch<unknown>(msgUrl(scope, messageId), { body }, cfg));
+  },
+
+  /** Delete for everyone (author, 48 hours): returns the tombstone (body null, deleted true). */
+  deleteMessage(scope: ThreadScope, messageId: string): Promise<ThreadMessage> {
+    return call(ThreadMessageSchema, () => api.delete<unknown>(msgUrl(scope, messageId), cfg));
+  },
+
+  pinMessage(scope: ThreadScope, messageId: string): Promise<ThreadMessage> {
+    return call(ThreadMessageSchema, () => api.post<unknown>(msgUrl(scope, messageId, '/pin'), undefined, cfg));
+  },
+
+  unpinMessage(scope: ThreadScope, messageId: string): Promise<ThreadMessage> {
+    return call(ThreadMessageSchema, () => api.delete<unknown>(msgUrl(scope, messageId, '/pin'), cfg));
+  },
+
+  /** POST .../read { up_to_message_id }: marks the counterpart's messages read up to that id. */
+  async markReadUpTo(scope: ThreadScope, upToMessageId: string | null): Promise<void> {
+    try {
+      await api.post(`${threadBase(scope)}/read`, upToMessageId ? { up_to_message_id: upToMessageId } : {}, cfg);
+    } catch (err) {
+      throw toMessagingError(err);
+    }
+  },
+
+  /**
+   * Idempotent send: the key travels in the body AND the Idempotency-Key
+   * header (the server rejects a mismatch). A retry with the same key returns
+   * the original row with no second push or signal on the server.
+   */
+  async sendMessage(scope: ThreadScope, payload: SendV2Payload): Promise<ThreadMessage> {
+    const body: Record<string, string> = { body: payload.body, client_message_id: payload.clientMessageId };
+    if (payload.replyToId) body.reply_to_id = payload.replyToId;
+    const headers = { 'Idempotency-Key': payload.clientMessageId };
+    const row = await call(ThreadMessageSchema, () => api.post<unknown>(threadBase(scope), body, { ...cfg, headers }));
+    // Tutorial parity with messagesApi.send: a client send is the real
+    // "message your coach" action.
+    if (scope.role === 'client') emitTutorialSignal('message_sent');
+    return row;
   },
 };
 

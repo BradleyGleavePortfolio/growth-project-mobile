@@ -31,6 +31,16 @@ import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import { track } from '../../lib/analytics';
+import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
+import {
+  bubbleV2Fields,
+  newClientMessageId,
+  readThreadV2Fields,
+  resolveSenderRole,
+  type ThreadV2Fields,
+} from '../../components/messaging/threadV2';
+import { useThreadV2 } from '../../hooks/useThreadV2';
+import { messagingV2Api, toMessagingError, type ThreadScope } from '../../api/messagingV2Api';
 
 interface Message {
   id: string;
@@ -40,6 +50,8 @@ interface Message {
   created_at: string;
   read_at?: string | null;
   parent_message_id?: string | null;
+  /** messaging v2 (flag ON); absent on legacy rows. */
+  v2?: ThreadV2Fields;
 }
 
 // Realtime drives most refreshes; this is just a backstop. Was 15s.
@@ -67,6 +79,10 @@ export default function ClientMessagesScreen() {
   const [actionTarget, setActionTarget] = useState<Message | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<Message | null>(null);
+  const [muteMenu, setMuteMenu] = useState(false);
+  // v2 idempotent send: a failed send keeps its device key for the same text,
+  // so tapping Send again replays it and can never post a duplicate.
+  const unsentRef = useRef<{ text: string; key: string } | null>(null);
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
@@ -81,20 +97,24 @@ export default function ClientMessagesScreen() {
 
   const PAGE_LIMIT = 100;
 
-  const loadInitial = useCallback(async () => {
+  const loadInitial = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: PAGE_LIMIT });
-      const list: Message[] = normalizeList(res.data);
+      const list: Message[] = normalizeList(res.data, clientId);
       setMessages(list);
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
+      return list;
     } catch (err) {
       console.error('ClientMessagesScreen: load failed', err);
       setError('Could not load messages. Pull to retry.');
+      return [];
     } finally {
       setLoading(false);
     }
   }, [clientId]);
+
+  const scope: ThreadScope = useMemo(() => ({ role: 'coach', clientId }), [clientId]);
 
   const loadOlder = useCallback(async () => {
     if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
@@ -105,7 +125,7 @@ export default function ClientMessagesScreen() {
         before: oldest.created_at,
         limit: PAGE_LIMIT,
       });
-      const page: Message[] = normalizeList(res.data);
+      const page: Message[] = normalizeList(res.data, clientId);
       if (page.length === 0) {
         setHasMoreOlder(false);
       } else {
@@ -119,23 +139,38 @@ export default function ClientMessagesScreen() {
     }
   }, [clientId, loadingOlder, hasMoreOlder, messages]);
 
-  const loadSinceNewest = useCallback(async () => {
+  const loadSinceNewest = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: 100 });
-      const list: Message[] = normalizeList(res.data);
+      const list: Message[] = normalizeList(res.data, clientId);
       setMessages((prev) => mergeById(prev, list));
+      return list;
     } catch {
       /* silent — poll retries next tick */
+      return [];
     }
   }, [clientId]);
 
-  const markRead = useCallback(async () => {
+  const onThreadChanged = useCallback(() => {
+    void loadSinceNewest();
+  }, [loadSinceNewest]);
+  const thread = useThreadV2(scope, onThreadChanged);
+
+  // v2: read up to the newest client message in the page just fetched, so a
+  // message that lands after the fetch is never marked read unseen.
+  const markRead = useCallback(async (list?: Message[]) => {
     try {
-      await coachApi.markClientThreadRead(clientId);
+      if (thread.enabled) {
+        const lastIncoming = [...(list ?? [])].reverse().find((m) => m.sender_role === 'client');
+        if (!lastIncoming) return;
+        await messagingV2Api.markReadUpTo(scope, lastIncoming.id);
+      } else {
+        await coachApi.markClientThreadRead(clientId);
+      }
     } catch {
       /* no-op */
     }
-  }, [clientId]);
+  }, [clientId, scope, thread.enabled]);
 
   useFocusEffect(
     useCallback(() => {
@@ -145,7 +180,17 @@ export default function ClientMessagesScreen() {
         loadSinceNewest().then(markRead);
       });
       const unsubSelf = currentUser?.id
-        ? subscribeToMessages(currentUser.id, loadSinceNewest)
+        ? subscribeToMessages(
+            currentUser.id,
+            loadSinceNewest,
+            thread.enabled
+              ? (ping) => {
+                  if (ping.threadClientId !== clientId) return;
+                  void loadSinceNewest();
+                  void thread.refresh();
+                }
+              : undefined,
+          )
         : () => {};
 
       pollRef.current = setInterval(loadSinceNewest, FALLBACK_POLL_MS);
@@ -155,7 +200,8 @@ export default function ClientMessagesScreen() {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [loadInitial, loadSinceNewest, markRead, clientId, currentUser?.id]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loadInitial, loadSinceNewest, markRead, clientId, currentUser?.id, thread.enabled]),
   );
 
   const handleSend = async () => {
@@ -163,9 +209,36 @@ export default function ClientMessagesScreen() {
     if (!text || sending) return;
     setSending(true);
     Keyboard.dismiss();
+    if (thread.enabled) {
+      const key = unsentRef.current?.text === text ? unsentRef.current.key : newClientMessageId();
+      try {
+        const row = await messagingV2Api.sendMessage(scope, { body: text, clientMessageId: key, replyToId: replyTarget?.id ?? null });
+        unsentRef.current = null;
+        setInputText('');
+        setReplyTarget(null);
+        setMessages((prev) => mergeById(prev, [normalizeMessage(row, clientId)]));
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+      } catch (err) {
+        const e = toMessagingError(err);
+        if (e.kind === 'contract') {
+          // 2xx with a shape this build does not read: the server took the
+          // message, so never offer a resend; refetch the thread instead.
+          unsentRef.current = null;
+          setInputText('');
+          setReplyTarget(null);
+          void loadSinceNewest();
+        } else {
+          if (e.kind === 'network' || e.status >= 500 || e.status === 429) unsentRef.current = { text, key };
+          thread.report('Message not sent', err);
+        }
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
     try {
       const res = await coachApi.sendClientMessage(clientId, text);
-      const created: Message = normalizeMessage(res.data);
+      const created: Message = normalizeMessage(res.data, clientId);
       if (replyTarget) {
         // The legacy coach send endpoint doesn't carry parent_message_id yet,
         // so the parent is captured locally on the message until the backend
@@ -286,8 +359,12 @@ export default function ClientMessagesScreen() {
             <Text style={styles.chatHeaderStatus}>Client · Tap for details</Text>
           </View>
         </TouchableOpacity>
-        <View style={{ width: 24 }} />
+        {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>
+
+      {thread.enabled ? (
+        <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
+      ) : null}
 
       {error ? (
         <TouchableOpacity style={styles.errorBanner} onPress={loadInitial}>
@@ -302,6 +379,9 @@ export default function ClientMessagesScreen() {
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        onScrollToIndexFailed={({ averageItemLength, index }) =>
+          flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
+        }
         ListHeaderComponent={
           hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
@@ -344,9 +424,7 @@ export default function ClientMessagesScreen() {
             body: item.body,
             created_at: item.created_at,
             read_at: item.read_at,
-            parent: parent
-              ? { id: parent.id, body: parent.body, sender_role: parent.sender_role }
-              : null,
+            ...bubbleV2Fields(item.v2, clientId, parent),
           };
 
           return (
@@ -400,15 +478,30 @@ export default function ClientMessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      <MessageActionSheet
-        visible={!!actionTarget}
-        messagePreview={actionTarget?.body}
-        onReply={handleReply}
-        onCopy={handleCopy}
-        onReport={handleOpenReport}
-        onClose={() => setActionTarget(null)}
-        canReport={!!actionTarget && actionTarget.sender_role !== 'coach'}
-      />
+      {thread.enabled ? (
+        <ThreadV2Menus
+          thread={thread}
+          target={actionTarget}
+          isMine={!!currentUser?.id && actionTarget?.sender_id === currentUser.id}
+          onClose={() => setActionTarget(null)}
+          onReply={handleReply}
+          onCopy={() => void handleCopy()}
+          onReport={handleOpenReport}
+          muteOpen={muteMenu}
+          onMuteClose={() => setMuteMenu(false)}
+        />
+      ) : (
+        <MessageActionSheet
+          visible={!!actionTarget}
+          messagePreview={actionTarget?.body}
+          onReply={handleReply}
+          onCopy={handleCopy}
+          onReport={handleOpenReport}
+          onClose={() => setActionTarget(null)}
+          canReport={!!actionTarget && actionTarget.sender_role !== 'coach'}
+          canReply={false}
+        />
+      )}
 
       <ReportMessageSheet
         visible={!!reportTarget}
@@ -420,27 +513,30 @@ export default function ClientMessagesScreen() {
   );
 }
 
-function normalizeList(raw: unknown): Message[] {
+function normalizeList(raw: unknown, clientId: string): Message[] {
   const wrapper = (raw && typeof raw === 'object' && !Array.isArray(raw))
     ? (raw as { messages?: unknown[] })
     : null;
   const arr: unknown[] = Array.isArray(raw) ? raw : (wrapper?.messages ?? []);
   return arr
-    .map(normalizeMessage)
+    .map((r) => normalizeMessage(r, clientId))
     .filter((m: Message) => !!m.id)
     .sort(byCreatedAtAsc);
 }
 
-function normalizeMessage(raw: unknown): Message {
+export function normalizeMessage(raw: unknown, clientId: string): Message {
   const r = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
   return {
     id: String(r.id ?? ''),
-    sender_role: r.sender_role === 'coach' ? 'coach' : 'client',
+    // The thread routes carry sender_id, not sender_role: anything not sent
+    // by the client is the coach side (head coach or a teammate).
+    sender_role: resolveSenderRole(r, clientId, 'client'),
     sender_id: typeof r.sender_id === 'string' ? r.sender_id : undefined,
     body: String(r.body ?? ''),
     created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
     read_at: (r.read_at as string | null | undefined) ?? null,
     parent_message_id: typeof r.parent_message_id === 'string' ? r.parent_message_id : null,
+    v2: readThreadV2Fields(r),
   };
 }
 

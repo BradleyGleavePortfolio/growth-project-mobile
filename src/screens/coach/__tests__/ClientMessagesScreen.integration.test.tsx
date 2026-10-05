@@ -129,6 +129,10 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+// messaging_core_v2 OFF: the legacy thread (v2 coverage: ClientMessagesScreenV2.test.tsx).
+jest.mock('../../../hooks/useFeatureFlags', () => ({
+  useFeatureFlags: () => ({ flags: { messaging_core_v2: false } }),
+}));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(async () => undefined),
@@ -189,7 +193,7 @@ describe('ClientMessagesScreen — full-screen report integration (P1-B)', () =>
     postMock.mockResolvedValue({ data: { ok: true, report_id: 'rep-1' } });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
-    const { findByLabelText, getByLabelText, getByText } = await render(<ClientMessagesScreen />);
+    const { findByLabelText, getByLabelText, getByText, queryByLabelText } = await render(<ClientMessagesScreen />);
 
     // Long-press the bubble — MessageBubble exposes
     // accessibilityLabel="Message: <body>. Long press for actions."
@@ -198,6 +202,8 @@ describe('ClientMessagesScreen — full-screen report integration (P1-B)', () =>
 
     // Action sheet (Android Modal) appears; tap Report Message.
     const reportRow = await waitFor(() => getByLabelText('Report Message'));
+    // Flag OFF: no Reply (the legacy send route rejects a reply reference).
+    expect(queryByLabelText('Reply')).toBeNull();
     await fireEvent.press(reportRow);
 
     // Report sheet appears; pick the Spam reason.
