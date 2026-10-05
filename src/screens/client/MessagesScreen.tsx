@@ -789,6 +789,8 @@ export function reconcilePending(prev: Message[], serverList: Message[]): Messag
     : null;
   return prev.filter((m) => {
     if (!m.pending) return false;
+    const key = m.v2?.client_message_id; // v2 unsent row: leaves only when the server returns this key
+    if (key) return !serverList.some((s) => s.v2?.client_message_id === key);
     if (serverList.some((s) => s.body === m.body)) return false;
     if (oldestServerTs !== null) {
       const pendingTs = new Date(m.created_at).getTime();
