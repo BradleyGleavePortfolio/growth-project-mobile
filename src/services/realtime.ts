@@ -52,10 +52,41 @@ function getClient(): SupabaseClient {
  * The handler is called whenever the backend broadcasts on the user's channel
  * \u2014 either because they received a new message, or one of their own outbound
  * messages was acknowledged. Either way the right response is "refetch".
+ *
+ * `onThreadUpdated` (messaging v2) receives the distinct `thread-updated`
+ * event the backend sends for read receipts, edits, deletes and pins. Its
+ * payload is ID-only (`{ kind, thread_client_id, message_id }`, no text), so
+ * the right response is again a REST refetch, never a banner or a sound. It
+ * rides the same channel, so no second WebSocket subscription is opened.
  */
+export type ThreadUpdateKind = 'read' | 'edited' | 'deleted' | 'pinned' | 'unpinned';
+
+export interface ThreadUpdatedPing {
+  kind: ThreadUpdateKind;
+  /** Thread key: the client id of the coach <-> client thread. */
+  threadClientId: string;
+  messageId: string | null;
+}
+
+const THREAD_UPDATE_KINDS: ReadonlySet<string> = new Set(['read', 'edited', 'deleted', 'pinned', 'unpinned']);
+
+/** Parse the broadcast envelope; anything malformed is dropped (null). */
+export function parseThreadUpdated(message: unknown): ThreadUpdatedPing | null {
+  const env = message && typeof message === 'object' ? (message as Record<string, unknown>) : null;
+  const p = env && env.payload && typeof env.payload === 'object' ? (env.payload as Record<string, unknown>) : null;
+  if (!p || typeof p.kind !== 'string' || !THREAD_UPDATE_KINDS.has(p.kind)) return null;
+  if (typeof p.thread_client_id !== 'string' || !p.thread_client_id) return null;
+  return {
+    kind: p.kind as ThreadUpdateKind,
+    threadClientId: p.thread_client_id,
+    messageId: typeof p.message_id === 'string' ? p.message_id : null,
+  };
+}
+
 export function subscribeToMessages(
   userId: string,
   onPing: () => void,
+  onThreadUpdated?: (ping: ThreadUpdatedPing) => void,
 ): () => void {
   if (!userId) return () => {};
 
@@ -79,8 +110,18 @@ export function subscribeToMessages(
           // Handler failures must never propagate into the realtime client \u2014
           // they would tear down the entire WebSocket.
         }
-      })
-      .subscribe();
+      });
+    if (onThreadUpdated) {
+      channel = channel.on('broadcast', { event: 'thread-updated' }, (message: unknown) => {
+        try {
+          const ping = parseThreadUpdated(message);
+          if (ping) onThreadUpdated(ping);
+        } catch {
+          // Same isolation rule as the new-message handler.
+        }
+      });
+    }
+    channel = channel.subscribe();
   } catch {
     // If Realtime fails to initialise (no network, blocked WebSocket, etc.)
     // we silently fall back to the caller's polling loop. Returning a noop

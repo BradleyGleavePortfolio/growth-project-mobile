@@ -36,7 +36,8 @@ import { CommunityApiError } from './communityApi';
 export const FEATURE_FLAGS_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
- * The four community v3-4 flag names the mobile client reads from the server
+ * The server flag names the mobile client reads (the four community v3-4
+ * flags plus messaging_core_v2) from the server
  * map. These are the snake_case keys the backend returns (NOT the camelCase
  * local `featureFlags` keys). Other flags may appear in the map; the client
  * only types the ones it consumes and treats any absent key as OFF.
@@ -46,6 +47,10 @@ export const SERVER_FEATURE_FLAG_KEYS = [
   'coach_community_wearable_prompts',
   'community_classroom',
   'community_events',
+  // Coach <-> client thread v2 (backend FEATURE_MESSAGING_CORE_V2, #708-#711):
+  // one inbox, read-up-to, edit, delete, pins, mute. OFF keeps the legacy
+  // client list and thread exactly as before.
+  'messaging_core_v2',
 ] as const;
 export type ServerFeatureFlagKey = (typeof SERVER_FEATURE_FLAG_KEYS)[number];
 
