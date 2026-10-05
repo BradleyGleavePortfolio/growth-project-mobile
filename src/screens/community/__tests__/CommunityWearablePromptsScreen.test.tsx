@@ -27,8 +27,11 @@ jest.mock('../../../theme/useTheme', () => {
   };
 });
 
+const mockGoBack = jest.fn();
+let mockCanGoBack = false;
 jest.mock('@react-navigation/native', () => ({
-  useRoute: () => ({ params: { clientId: 'client-1' } }),
+  useRoute: () => ({ params: { clientId: 'client-1', clientName: 'Sam' } }),
+  useNavigation: () => ({ canGoBack: () => mockCanGoBack, goBack: mockGoBack }),
 }));
 
 // Static build-time flag ON (route registered); the runtime gate is the
@@ -107,6 +110,8 @@ function prompt(over: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
+  mockGoBack.mockReset();
+  mockCanGoBack = false;
   mockTrack.mockReset();
   mockGenerate.mutateAsync.mockReset();
   mockGenerate.isError = false;
@@ -126,6 +131,22 @@ beforeEach(() => {
   mockMeState.isLoading = false;
   mockMeState.isError = false;
   mockMeState.data = { workspace_id: 'ws-1', membership: { role: 'coach' } };
+});
+
+// S14 round 3: reachable from the coach's client Health tab (ClientsStack
+// hides the stack header), so the screen carries its own way back.
+describe('CommunityWearablePromptsScreen — back from the client Health tab', () => {
+  it('shows Back to <client> when there is a screen to go back to', async () => {
+    mockCanGoBack = true;
+    await render(<CommunityWearablePromptsScreen />);
+    await fireEvent.press(screen.getByLabelText('Back to Sam'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no Back control when it is the first screen', async () => {
+    await render(<CommunityWearablePromptsScreen />);
+    expect(screen.queryByTestId('wearable-prompts-back')).toBeNull();
+  });
 });
 
 describe('CommunityWearablePromptsScreen — F2 runtime flag gate', () => {
