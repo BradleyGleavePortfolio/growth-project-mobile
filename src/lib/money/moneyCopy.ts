@@ -117,7 +117,9 @@ export function chargeStateLabel(c: MoneyCharge): string {
         ? `Charged back (${money(c.chargedBackCents, c.currency)})`
         : "Charged back";
     case "pending":
-      return "Processing";
+      // B-348-1 (Sol): pending means no payment has gone through yet (for
+      // example a free trial that has not billed), never a payment in flight.
+      return "Not paid yet";
     case "canceled":
       return "Checkout not finished";
     default:
