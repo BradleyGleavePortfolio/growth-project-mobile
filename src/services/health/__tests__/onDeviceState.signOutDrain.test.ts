@@ -57,9 +57,9 @@ beforeEach(async () => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-it('a grant write in flight at sign-out is removed after it commits, and the sweep waits for it', async () => {
+it('a grant write in flight at sign-out stops after its native step commits, and the sweep waits for it', async () => {
   const held = holdNextSet();
-  const writing = recordLocalAuthorization(old, new Date(D3));
+  const writing = recordLocalAuthorization(old, new Date(D3)).then(() => null, (e: unknown) => e);
   await held.invoked;
   let retired = false;
   const sweeping = retireOnDeviceStateAtSignOut().then(() => {
@@ -68,7 +68,9 @@ it('a grant write in flight at sign-out is removed after it commits, and the swe
   for (let i = 0; i < 5; i += 1) await tick();
   expect(retired).toBe(false); // the sweep is behind the native write, not beside it
   held.commit();
-  await Promise.all([writing, sweeping]);
+  await sweeping;
+  // Sol B-369-2: the write creates nothing more once sign-out started.
+  expect(await writing).toBeInstanceOf(OnDeviceSessionChangedError);
   expect(await healthKeys()).toEqual([]);
   expect(await getLocalAuthorization(old.userId, source)).toBeNull();
 });
