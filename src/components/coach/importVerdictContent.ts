@@ -60,6 +60,9 @@ export const REASON_COPY: Record<RunReasonCode, string> = {
   unresolved_identities: 'Some people couldn’t be matched to TGP accounts yet.',
   relationship_unverified: 'Links between records couldn’t be checked.',
   coverage_basis_unknown: 'We can’t tell yet whether everything was found.',
+  // S15a: a server run with zero usable native/preserved results settles `failed` with this
+  // reason (the decoder rejects any other pairing). States the why without inventing a cause.
+  no_usable_result: 'Nothing usable was imported: nothing that was found could be turned into records you can use in TGP.',
 };
 
 export function formatTime(isoOrMs: string | number): string | null {

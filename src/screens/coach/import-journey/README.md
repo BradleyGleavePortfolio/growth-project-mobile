@@ -1,10 +1,20 @@
 > Importer north star: docs/importer/NORTH_STAR.md.
 
-# Roman importer — private P1 presentation
+# Roman importer — P1 presentation
 
-Controlled leaf views only. **Not registered, production-reachable, integrated,
-reviewed, or product-accepted.** This directory does not replace the live importer.
-The test host is confined to `__tests__/ImportJourney.navigation.test.tsx`.
+Controlled leaf views. **Registered behind `EXPO_PUBLIC_FF_EXTENSION_IMPORT`
+(build-time, default OFF in every build including `__DEV__`); not
+product-accepted.** When that flag is ON, `CoachNavigator` registers the
+`ImportData` route and `ImportDataScreen` mounts `ImportSetupView` directly, and
+`ExtensionPairingPanel` → `ImportRunStatusJourney` mounts the P2 bodies
+(`ImportProgressBody` / `ImportResultBody` in `ImportInlineStatusFrame`) over
+`GET /api/scout/import/status`. A build compiled with the flag ON is therefore
+production-reachable for any coach account that build signs in, subject to the
+backend's own feature flags and pilot allowlist; a build with the flag OFF has
+no route to these views. The historical "not registered, production-reachable"
+statement described the pre-integration P1 slice and no longer holds (doc drift
+D-05). `ImportOfferCard` is still not mounted by any host outside tests. The
+isolated test host remains `__tests__/ImportJourney.navigation.test.tsx`.
 
 ## Inputs and ownership
 
@@ -55,6 +65,8 @@ English lookup convention from `screens/day-one/i18n/strings.ts`.
 supersedes stale generic quota/review ceremony in mobile doctrine. The approved
 P1 mandate deliberately leaves these leaves unreachable and confines module
 documentation here; it does not authorize navigator or shared README changes.
+(Later slices did integrate them into the flag-gated host described at the top;
+that integration, not this P1 mandate, is what makes them reachable.)
 
 ## Verification
 
