@@ -14,8 +14,20 @@ export interface RomanChatGone {
   notice?: string;
 }
 
+/**
+ * Signal from the list to the live Roman chat: the server confirmed a chat
+ * erased (Delete on its row: `id`) or every chat erased (Delete all: `id`
+ * null). The live chat screen stays mounted under the history screens, so
+ * when it holds an erased chat it drops it and opens a fresh one (B-376-1).
+ */
+export interface RomanChatErased {
+  id: string | null;
+}
+
 type Listener = (e: RomanChatGone) => void;
 const listeners = new Set<Listener>();
+type ErasedListener = (e: RomanChatErased) => void;
+const erasedListeners = new Set<ErasedListener>();
 
 export const romanChatsEvents = {
   emitGone(e: RomanChatGone): void {
@@ -25,6 +37,15 @@ export const romanChatsEvents = {
     listeners.add(fn);
     return () => {
       listeners.delete(fn);
+    };
+  },
+  emitErased(e: RomanChatErased): void {
+    erasedListeners.forEach((fn) => fn(e));
+  },
+  onErased(fn: ErasedListener): () => void {
+    erasedListeners.add(fn);
+    return () => {
+      erasedListeners.delete(fn);
     };
   },
 };

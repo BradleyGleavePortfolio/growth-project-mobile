@@ -381,6 +381,8 @@ export function useRomanChats({
           erased.current.add(chat.id);
           setChats((prev) => prev.filter((c) => c.id !== chat.id));
           setNotice({ text: out.ok ? ROMAN_CHATS_COPY.deletedOne : ROMAN_CHATS_COPY.alreadyGone });
+          // The live Roman chat drops it if it holds this chat (B-376-1).
+          romanChatsEvents.emitErased({ id: chat.id });
           return;
         }
         // Roll back: the chat returns to its place.
@@ -435,6 +437,7 @@ export function useRomanChats({
           before.forEach((c) => erased.current.add(c.id));
           setPhase('ready');
           setNotice({ text: ROMAN_CHATS_COPY.deletedAll });
+          romanChatsEvents.emitErased({ id: null });
           if (again) void load({ keepNotice: true });
           return;
         }
