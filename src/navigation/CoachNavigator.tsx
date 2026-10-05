@@ -121,6 +121,8 @@ import DataExportScreen from '../screens/settings/DataExportScreen';
 // lives in the Settings stack (reachable from coach Settings).
 import ContactView from '../screens/messaging/ContactView';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
+import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
 import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
@@ -244,6 +246,9 @@ export type SettingsStackParamList = {
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
   BlockedUsers: undefined;
+  /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
+  RomanConversations: undefined;
+  RomanConversation: RomanConversationParams;
   /** Stream 1 — AI credit-pack checkout. `preselect` lets callers route
    *  the coach into a pre-selected tier or the custom-amount flow. */
   CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
@@ -459,6 +464,10 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
       {/* Phase 10 — GDPR right to erasure. */}
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      {/* Roman chat history (backend #635): always registered, like the backend
+          routes, so finding and deleting chats never depends on the chat flag. */}
+      <SettingsStack.Screen name="RomanConversations" component={RomanConversationsScreen} />
+      <SettingsStack.Screen name="RomanConversation" component={RomanConversationScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
       {/* Importer v0.3 — coach-facing extension import entry. Registered ONLY

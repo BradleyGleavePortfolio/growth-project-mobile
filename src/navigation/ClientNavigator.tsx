@@ -41,6 +41,8 @@ import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
+import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
+import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -244,6 +246,9 @@ export type MoreStackParamList = {
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
+  /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
+  RomanConversations: undefined;
+  RomanConversation: RomanConversationParams;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -449,6 +454,10 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
+      {/* Roman chat history (backend #635): always registered, like the backend
+          routes, so finding and deleting chats never depends on the chat flag. */}
+      <MoreStackNav.Screen name="RomanConversations" component={RomanConversationsScreen} />
+      <MoreStackNav.Screen name="RomanConversation" component={RomanConversationScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />

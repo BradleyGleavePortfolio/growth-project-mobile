@@ -2,6 +2,7 @@
 // Kept deliberately tiny: the backend JWT is the source of truth, and these
 // helpers only touch AsyncStorage + the authEvents emitter.
 
+import type { SessionFencePass } from './sessionFence';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { authEvents } from '../utils/authEvents';
@@ -289,7 +290,20 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
   return null;
 }
 
-export async function signOut(userId?: string | null): Promise<void> {
+export interface SignOutOptions {
+  /**
+   * Mobile #331 B-331-8: set only by the API client's sign-out after a failed
+   * token refresh, which holds the session fence for the session that failed
+   * (services/sessionFence.ts). The session keys are removed with this pass,
+   * and the push-token clear is skipped: that session's access token was just
+   * rejected and could not be refreshed, so the request could not
+   * authenticate, and its 401 would wait on the very refresh that is signing
+   * out (a wait that never ends).
+   */
+  sessionFence?: SessionFencePass;
+}
+
+export async function signOut(userId?: string | null, opts: SignOutOptions = {}): Promise<void> {
   // S-WEAR-3 (Sol B-317-7): the first statement, before any await. Every
   // running Apple Health / Health Connect read for this person stops here:
   // no new native page, record type, upload or progress write starts after
@@ -298,7 +312,7 @@ export async function signOut(userId?: string | null): Promise<void> {
   // Sol B-362-7: health grants and progress leave through their own chain.
   const healthStateRetired = retireOnDeviceStateAtSignOut();
   try {
-    await signOutWhileHealthRetires(userId, healthStateRetired);
+    await signOutWhileHealthRetires(userId, healthStateRetired, opts);
   } finally {
     // Sol B-362-9: even when the rest of sign-out throws, it settles only after
     // the health retirement (which never rejects) has finished.
@@ -309,6 +323,7 @@ export async function signOut(userId?: string | null): Promise<void> {
 async function signOutWhileHealthRetires(
   userId: string | null | undefined,
   healthStateRetired: Promise<void>,
+  opts: SignOutOptions,
 ): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
@@ -322,7 +337,7 @@ async function signOutWhileHealthRetires(
   // Best-effort: clear the push token on the backend before wiping local auth
   // state so the PATCH /users/me/push-token request can still attach a JWT.
   try {
-    await usersApi.updatePushToken(null);
+    if (!opts.sessionFence) await usersApi.updatePushToken(null);
   } catch {
     // Non-fatal: the token will remain on the backend but will be inert once
     // the Expo token expires or the device is re-registered on next login.
@@ -403,7 +418,9 @@ async function signOutWhileHealthRetires(
       // `logout` is emitted below. clearAllStorage() also wipes the namespace;
       // this is the explicit, mirror-aware path.
       clearUserCache(),
-      ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
+      ...SECURE_SIGN_OUT_KEYS.map((k) =>
+        opts.sessionFence ? secureStorage.removeItem(k, opts.sessionFence) : secureStorage.removeItem(k),
+      ),
       AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage
       // wrappers so native MMKV is actually cleared and the AsyncStorage-shim's
