@@ -2,8 +2,8 @@ import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
-import { SUPPORT_EMAIL } from '../../constants/support';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
+import { disputePauseFacts } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
 import { isDisputeCycle } from './DunningLockoutScreen';
 
@@ -23,13 +23,12 @@ export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()
   const amount = formatDunningAmount(status.amount_cents, status.currency);
   const lockOn = upcomingLockDate(status, now);
   if (isDisputeCycle(status)) {
-    // B-353-2: a reversed payment is not fixed by a new card (backend B-628-8).
-    const what = amount ? `Your bank reversed an earlier payment of ${amount}.` : 'Your bank reversed an earlier payment.';
-    const when = lockOn ? ` Access pauses on ${lockOn} unless it is sorted out by then.` : '';
-    return {
-      title: 'A payment was reversed',
-      body: `${what} Saving a new card does not settle it. Email ${SUPPORT_EMAIL} or message your coach to sort it out.${when}`,
-    };
+    // R-DISPUTE-PAUSE (B-353-3 / B-353-6): access to the disputed plan has
+    // already ended, so no lock date, no condition and no card fix.
+    const what = `Your bank reversed a payment${amount ? ` of ${amount}` : ''}${
+      status.coach_name ? ` to ${status.coach_name}` : ''
+    }.`;
+    return { title: 'A payment was reversed', body: `${what} ${disputePauseFacts(status.coach_name, 'plan')}` };
   }
   const failedOn = formatDunningDate(status.failed_at);
   const charge = amount ? `Your payment of ${amount} did not go through` : 'Your last payment did not go through';
