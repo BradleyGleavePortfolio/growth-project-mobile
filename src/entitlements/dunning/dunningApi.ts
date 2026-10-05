@@ -13,9 +13,11 @@ export interface ClientDunningStatus {
   enabled: boolean;
   state: DunningState;
   /**
-   * 'dispute' = the bank reversed a payment on a recurring plan. Under
-   * R-DISPUTE-PAUSE that plan's access has ended and its billing is paused
-   * until its coach restarts it; a card update never ends it.
+   * 'dispute' = the bank opened a dispute or an inquiry about a payment on a
+   * recurring plan (the backend reports both the same way, and an inquiry
+   * moves no money, so copy never says the payment was reversed, B-352-9).
+   * Under R-DISPUTE-PAUSE that plan's access has ended and its billing is
+   * paused until its coach restarts it; a card update never ends it.
    */
   kind?: 'payment' | 'dispute' | null;
   /**
@@ -134,10 +136,10 @@ export interface QuoteLine {
 }
 
 /**
- * A plan with a disputed payment open: the bank reversed a payment already
- * made. Its access has ended and its billing is paused until its coach
- * restarts it (R-DISPUTE-PAUSE); a card update never ends it. The amount is
- * known only on a dispute cycle.
+ * A plan with a payment under a bank dispute or inquiry (B-352-9: no field
+ * says whether money was withdrawn). Its access has ended and its billing is
+ * paused until its coach restarts it (R-DISPUTE-PAUSE); a card update never
+ * ends it. The amount is known only on a dispute cycle.
  */
 export interface QuoteDispute {
   purchase_id: string;
@@ -334,7 +336,7 @@ function normalizeDispute(d: unknown): QuoteDispute {
 
 /**
  * Open disputes after a confirm: every plan the server marks `dispute_open`,
- * plus the quote's disputes (which carry the reversed amount), one per plan.
+ * plus the quote's disputes (which carry the disputed amount), one per plan.
  * A dispute flag is never dropped, even when the plan entry is incomplete.
  */
 function confirmDisputes(plans: unknown, quote: PaymentQuote | null): QuoteDispute[] | null {

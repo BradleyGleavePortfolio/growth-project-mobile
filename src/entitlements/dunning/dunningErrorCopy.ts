@@ -436,7 +436,7 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
   return copy('UNKNOWN', unknown, reference, true);
 }
 
-/** "$150.00" / "$150.00 and 80.00 EUR" for the reversed amounts that are known. */
+/** "$150.00" / "$150.00 and 80.00 EUR" for the disputed amounts that are known. */
 function disputedTotals(disputes: QuoteDispute[]): string | null {
   const byCurrency = new Map<string, number>();
   for (const d of disputes) {
@@ -481,6 +481,11 @@ export function disputePauseFacts(
  * The dispute line kept in every card-update outcome (C-352-5: never
  * dropped): what the bank did, then the R-DISPUTE-PAUSE facts for the
  * disputed plan or plans. Null when no plan has a dispute open.
+ *
+ * B-352-9: the backend reports a dispute and an inquiry the same way, and an
+ * inquiry withdraws no money, so the line says the bank opened a dispute or
+ * inquiry (the backend's own wording), never that a payment was reversed or
+ * taken back.
  */
 export function disputeNotSettledLine(disputes: QuoteDispute[]): string | null {
   if (disputes.length === 0) return null;
@@ -488,9 +493,9 @@ export function disputeNotSettledLine(disputes: QuoteDispute[]): string | null {
   const plans = new Set(disputes.map((d) => d.purchase_id)).size;
   const coaches = [...new Set(disputes.map((d) => d.coach_name).filter((c): c is string => Boolean(c)))];
   const coach = coaches.length === 1 ? coaches[0] : null;
-  const what = `Your bank reversed ${plans > 1 ? 'payments' : 'a payment'}${amount ? ` of ${amount}` : ''}${
-    coach ? ` to ${coach}` : ''
-  }.`;
+  // C-352-11: the noun counts the disputed payments, the scope counts plans.
+  const opened = disputes.length > 1 ? 'disputes or inquiries about payments' : 'a dispute or inquiry about a payment';
+  const what = `Your bank opened ${opened}${amount ? ` of ${amount}` : ''}${coach ? ` to ${coach}` : ''}.`;
   return `${what} ${disputePauseFacts(coach, plans > 1 ? 'plans' : 'plan')}`;
 }
 
@@ -613,7 +618,7 @@ export function cardUpdateOutcomeCopy(
 
 /**
  * Copy after ending a plan. 2A (ended now) vs option A (scheduled). With
- * `dispute` (the plan's payment was reversed), the R-DISPUTE-PAUSE facts are
+ * `dispute` (a bank dispute or inquiry on the plan), the R-DISPUTE-PAUSE facts are
  * kept: access had already ended, billing was paused, only the coach
  * restarts it (B-352-7: no support fix, nothing restores on its own).
  */
@@ -628,7 +633,7 @@ export function cancelOutcomeCopy(
   return opts.dispute
     ? {
         title: base.title,
-        body: `${base.body} Your bank had reversed a payment on this plan, so its access had already ended and its billing was paused. Only your coach can restart it.`,
+        body: `${base.body} Your bank had opened a dispute or inquiry about a payment on this plan, so its access had already ended and its billing was paused. Only your coach can restart it.`,
       }
     : base;
 }
