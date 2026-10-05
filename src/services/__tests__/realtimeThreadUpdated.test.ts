@@ -1,7 +1,8 @@
 /**
  * messaging v2 realtime: `thread-updated` rides the same `messages:<userId>`
- * channel as `new-message` (one subscription), its ID-only payload is parsed
- * strictly, and a throwing handler never reaches the realtime client.
+ * channel as `new-message` (one subscription), every event (including the
+ * empty payload the backend sends on the public channel) is a refresh signal,
+ * and a throwing handler never reaches the realtime client.
  */
 const mockHandlers: Record<string, (msg: unknown) => void> = {};
 interface MockChannel {
@@ -30,7 +31,13 @@ beforeEach(() => {
 });
 
 describe('parseThreadUpdated', () => {
-  it('reads the backend envelope and drops malformed pings', () => {
+  it('treats the empty payload the backend sends as a refresh signal', () => {
+    const empty = { kind: null, threadClientId: null, messageId: null };
+    expect(parseThreadUpdated({ type: 'broadcast', event: 'thread-updated', payload: {} })).toEqual(empty);
+    expect(parseThreadUpdated({ type: 'broadcast', event: 'thread-updated' })).toEqual(empty);
+  });
+
+  it('reads older ID-bearing payloads and drops only non-object messages', () => {
     expect(
       parseThreadUpdated({ type: 'broadcast', event: 'thread-updated', payload: { kind: 'edited', thread_client_id: 'c1', message_id: 'm1' } }),
     ).toEqual({ kind: 'edited', threadClientId: 'c1', messageId: 'm1' });
@@ -39,9 +46,14 @@ describe('parseThreadUpdated', () => {
       threadClientId: 'c1',
       messageId: null,
     });
-    expect(parseThreadUpdated({ payload: { kind: 'typing', thread_client_id: 'c1' } })).toBeNull();
-    expect(parseThreadUpdated({ payload: { kind: 'read' } })).toBeNull();
+    expect(parseThreadUpdated({ payload: { kind: 'typing', thread_client_id: 'c1' } })).toEqual({
+      kind: null,
+      threadClientId: 'c1',
+      messageId: null,
+    });
+    expect(parseThreadUpdated({ payload: { kind: 'read' } })).toEqual({ kind: 'read', threadClientId: null, messageId: null });
     expect(parseThreadUpdated(null)).toBeNull();
+    expect(parseThreadUpdated('thread-updated')).toBeNull();
   });
 });
 
@@ -57,6 +69,10 @@ describe('subscribeToMessages with onThreadUpdated', () => {
     mockHandlers['thread-updated']({ payload: { kind: 'pinned', thread_client_id: 'c1', message_id: 'm2' } });
     expect(onUpdate).toHaveBeenCalledWith({ kind: 'pinned', threadClientId: 'c1', messageId: 'm2' });
     expect(onPing).not.toHaveBeenCalled();
+
+    mockHandlers['thread-updated']({ type: 'broadcast', event: 'thread-updated', payload: {} });
+    expect(onUpdate).toHaveBeenLastCalledWith({ kind: null, threadClientId: null, messageId: null });
+    expect(onUpdate).toHaveBeenCalledTimes(2);
 
     mockHandlers['new-message']({});
     expect(onPing).toHaveBeenCalledTimes(1);
