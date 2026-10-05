@@ -155,9 +155,11 @@ describe('api.ts — refresh-cycle race fix', () => {
 
     expect(result).toEqual({ status: 200, data: 'ok' });
     expect(refreshSessionMock).toHaveBeenCalledTimes(1);
+    // The commit writes under the session fence (#331 A-331-7): third arg is its pass.
     expect(secureStorageMock.secureStorage.setItem).toHaveBeenCalledWith(
       'supabase_token',
       'token-cycle-1',
+      expect.anything(),
     );
     expect(axiosMock.__instance.request).toHaveBeenCalledTimes(1);
     const retried = axiosMock.__instance.request.mock.calls[0][0];
