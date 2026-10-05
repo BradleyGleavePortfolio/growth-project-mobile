@@ -1372,7 +1372,10 @@ export default function CoachWorkoutBuilderScreen() {
           });
           return;
         }
-        if (isUnknownHistoryOutcome(err)) {
+        // B-356-2: on Check again the earlier request may have landed, so
+        // only a 200 or a parsed head-moved answer settles it. Any refusal of
+        // the retry keeps editing paused; it says nothing about the first.
+        if (isRetry || isUnknownHistoryOutcome(err)) {
           setHistoryGate({ phase: 'unconfirmed', direction, target, expectedHead });
           setHistoryNotice(describeUnconfirmedHistory(err, direction).message);
           return;

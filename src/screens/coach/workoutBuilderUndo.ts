@@ -72,12 +72,23 @@ export function isUnknownHistoryOutcome(err: unknown): boolean {
     case "unknown":
       return !(err.status >= 400 && err.status < 500);
     case "conflict":
-      // A 409 is a definite answer. A fenced undo's `undo_head_moved` is
-      // handled by the caller; an unparsed 409 is still a refusal.
-      return false;
+      // A 409 is a definite answer. A fenced undo's parsed `undo_head_moved`
+      // is handled by the caller; an unparsed 409 is still a refusal, EXCEPT
+      // an `undo_head_moved` that lacks its head or lock token (B-356-1): the
+      // head moved, maybe because this very undo landed, so it is unknown.
+      return !err.headMoved && namesUndoHeadMoved(err.cause);
     default:
       return false;
   }
+}
+
+/** True when an axios-shaped error's 409 body names `undo_head_moved`. */
+function namesUndoHeadMoved(cause: unknown): boolean {
+  if (!cause || typeof cause !== "object") return false;
+  const data = (cause as { response?: { data?: unknown } }).response?.data;
+  if (!data || typeof data !== "object") return false;
+  const d = data as { code?: unknown; error?: unknown };
+  return d.code === "undo_head_moved" || d.error === "undo_head_moved";
 }
 
 /** Copy for a DEFINITE refusal: the server answered and nothing changed. */
@@ -147,6 +158,13 @@ export function describeUnconfirmedHistory(
   if (kind === "network" || kind === "aborted") {
     return {
       message: `The app could not confirm whether the change was ${verb}. Editing is paused so nothing is lost. Check your connection, then tap Check again.`,
+      reference: null,
+      dropHistory: false,
+    };
+  }
+  if (kind === "unauthorized") {
+    return {
+      message: `Your session has ended, so the app could not confirm whether the change was ${verb}. Editing is paused so nothing is lost. Sign in again, then open this workout to see the latest saved version.`,
       reference: null,
       dropHistory: false,
     };
