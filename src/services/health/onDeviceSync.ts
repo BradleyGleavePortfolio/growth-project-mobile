@@ -33,6 +33,7 @@ import {
 } from '../../api/wearablesConnectionsApi';
 import { healthKitSyncService } from './healthkit';
 import { syncHealthConnect } from './healthConnect';
+import { sharedIngestPacer } from './ingestBatching';
 import {
   getLocalAuthorization,
   recordLocalAuthorization,
@@ -220,6 +221,8 @@ async function runSync(
             scope: sc,
             fence: f,
             sourceTz: Intl.DateTimeFormat().resolvedOptions().timeZone ?? null,
+            // C-370-2: every run in this process shares one pacer.
+            ingestDeps: { pacer: sharedIngestPacer },
           }));
       const { postedCount, complete } = await run(scope, fence);
       // Apple Health reads the whole window in one pass (day pieces, H8);
@@ -233,7 +236,11 @@ async function runSync(
     const run =
       deps.syncHealthConnect ??
       (async (sc: OnDeviceScope, f: SessionFence, options?: { resumeOnly: boolean }) => {
-        const res = await syncHealthConnect(sc, { fence: f, resumeOnly: options?.resumeOnly ?? false });
+        const res = await syncHealthConnect(sc, {
+          fence: f,
+          resumeOnly: options?.resumeOnly ?? false,
+          pacer: sharedIngestPacer,
+        });
         return {
           normalizedCount: res.normalizedCount,
           complete: res.complete,

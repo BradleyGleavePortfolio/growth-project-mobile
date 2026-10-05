@@ -20,7 +20,13 @@
  * hourly sums wait to settle before they are posted
  * (`healthkit/healthKitSyncService.ts` CUMULATIVE_SETTLE_MINUTES).
  *
- * Cost: one extra day of each type per refresh (refresh runs when Health
- * opens), at most a few dozen ingest requests for a watch wearer.
+ * Cost (B-HC12-121, C-370-2): each refresh reads one extra day of each
+ * type (refresh runs when Health opens). Health Connect then posts only the
+ * records written or changed since that type's last completed read
+ * (`healthConnect/lookBack.ts`); Apple Health, whose reader exposes no
+ * modification time, posts the day again (a few requests for a watch
+ * wearer). Every request goes through one pacer that stays under the
+ * backend's 60 per minute and holds back after a 429
+ * (`ingestBatching.ts`).
  */
 export const LATE_DATA_LOOKBACK_MINUTES = 24 * 60;
