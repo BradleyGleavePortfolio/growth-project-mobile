@@ -119,6 +119,8 @@ describe('SupportEmailFallback', () => {
       expect(text.length).toBeGreaterThan(20);
       expect(text).not.toMatch(/!/);
       expect(text).not.toMatch(/something went wrong/i);
+      // Quiet Luxury: no first person in client-facing error copy.
+      expect(text).not.toMatch(/\b(we|us|our|ours)\b/i);
     }
     expect(supportEmailStatusText('idle')).toBeNull();
   });
