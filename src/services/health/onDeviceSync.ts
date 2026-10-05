@@ -154,6 +154,15 @@ export interface OnDeviceImportDeps {
  */
 export const MAX_IMPORT_PASSES = 3;
 
+/**
+ * Whether a result list names a type. A result without the list (a stub of
+ * the service) reads as unknown: an incomplete pass then counts as having
+ * more to read, as before H8.
+ */
+function listed(list: readonly string[] | undefined): boolean | undefined {
+  return list === undefined ? undefined : list.length > 0;
+}
+
 /** One pass: its outcome, whether pages remain, whether a type failed. */
 interface SyncPass {
   outcome: OnDeviceImportOutcome;
@@ -228,8 +237,8 @@ async function runSync(
         return {
           normalizedCount: res.normalizedCount,
           complete: res.complete,
-          hasMore: res.truncatedRecordTypes.length > 0,
-          failed: res.failedRecordTypes.length > 0,
+          hasMore: listed(res.truncatedRecordTypes),
+          failed: listed(res.failedRecordTypes),
         };
       });
     const res = await run(scope, fence, { resumeOnly });
