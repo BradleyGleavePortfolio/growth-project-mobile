@@ -41,9 +41,9 @@ export default function CoachSetupScreen({ route, navigation }: Props) {
               Get paid
             </Text>
             <Text style={styles.body}>
-              Stripe, our payments partner, collects your bank account and ID on
-              a secure page and sends your earnings to your bank. TGP never sees
-              those details.
+              Stripe, the payments provider TGP uses, collects your bank account
+              and ID on a secure page and sends your earnings to your bank. TGP
+              never sees those details.
             </Text>
             <GetPaidPanel testID="setup-get-paid" />
           </>
