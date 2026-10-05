@@ -20,6 +20,7 @@ jest.mock("../../services/api", () => ({
   },
   coachApi: { getClients: (...a: unknown[]) => mockGetClients(...a) },
 }));
+jest.mock("../../services/sentry", () => ({ captureError: jest.fn() }));
 
 import {
   chunkClientIds,
@@ -27,8 +28,10 @@ import {
   isValidIsoDate,
   nextMonday,
   programsApi,
+  RosterIncompleteError,
   toIsoDate,
 } from "../programsApi";
+import { describeProgramFailure } from "../../utils/programErrors";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -147,11 +150,58 @@ describe("programsApi routes", () => {
       ],
     });
     const rows = await programsApi.assignableClients();
-    expect(mockGetClients).toHaveBeenCalledWith("active");
+    expect(mockGetClients).toHaveBeenCalledWith("active", undefined, 20);
     expect(rows).toEqual([
       { id: "c1", name: "a@x.test", email: "a@x.test" },
       { id: "c2", name: "Zed", email: "z@x.test" },
     ]);
+  });
+});
+
+describe("assignableClients reads the whole roster (B-355-3 / B-358-1)", () => {
+  const roster = (n: number, from = 0) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `client-${String(from + i).padStart(3, "0")}`,
+      name: `Client ${String(from + i).padStart(3, "0")}`,
+      email: `c${from + i}@example.invalid`,
+      archived_at: null,
+    }));
+
+  it("pages past the first 20 clients with the last row id as the cursor", async () => {
+    const all = roster(25);
+    mockGetClients.mockResolvedValueOnce({ data: all.slice(0, 20) });
+    mockGetClients.mockResolvedValueOnce({ data: all.slice(20) });
+    const rows = await programsApi.assignableClients();
+    expect(rows.map((r) => r.id)).toEqual(all.map((r) => r.id));
+    expect(mockGetClients).toHaveBeenNthCalledWith(2, "active", "client-019", 20);
+  });
+
+  it("an exact page boundary asks once more, and repeated rows appear once", async () => {
+    const all = roster(20);
+    mockGetClients.mockResolvedValueOnce({ data: all });
+    mockGetClients.mockResolvedValueOnce({ data: [all[19]] });
+    const rows = await programsApi.assignableClients();
+    expect(rows).toHaveLength(20);
+    expect(mockGetClients).toHaveBeenCalledTimes(2);
+  });
+
+  it("a failed later page fails the load instead of showing a partial list", async () => {
+    mockGetClients.mockResolvedValueOnce({ data: roster(20) });
+    mockGetClients.mockRejectedValueOnce({ response: { status: 503, data: {} } });
+    await expect(programsApi.assignableClients()).rejects.toMatchObject({
+      response: { status: 503 },
+    });
+  });
+
+  it("a reply that is not a list fails with the roster copy", async () => {
+    mockGetClients.mockResolvedValueOnce({ data: { items: [] } });
+    const err = await programsApi.assignableClients().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(RosterIncompleteError);
+    const f = describeProgramFailure(err, "load your clients");
+    expect(f.code).toBe("client_roster_incomplete");
+    expect(f.message).toBe(
+      "Your full client list did not load, so no clients are shown yet. Retry; if it keeps happening, contact support (Settings, Help).",
+    );
   });
 });
 

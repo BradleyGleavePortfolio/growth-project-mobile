@@ -581,8 +581,19 @@ export const habitsApi = {
 };
 
 export const coachApi = {
-  getClients: (status?: 'active' | 'archived' | 'all') =>
-    api.get('/coach/clients' + (status ? `?status=${status}` : '')),
+  /** One roster page; `cursor` is the last row id of the previous page. */
+  getClients: (
+    status?: 'active' | 'archived' | 'all',
+    cursor?: string,
+    take?: number,
+  ) => {
+    const query = new URLSearchParams();
+    if (status) query.set('status', status);
+    if (cursor) query.set('cursor', cursor);
+    if (take) query.set('take', String(take));
+    const qs = query.toString();
+    return api.get('/coach/clients' + (qs ? `?${qs}` : ''));
+  },
   archiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/archive`),
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
   getClientTimeline: (clientId: string, days?: number) =>

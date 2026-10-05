@@ -26,7 +26,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
@@ -99,8 +99,14 @@ function computeAnomalies(data: SamplesResponse | undefined): Anomaly[] {
 export function HealthFitnessTab({
   clientId,
   styles,
+  onOpenWearablePrompts,
 }: {
   clientId: string;
+  /**
+   * Opens the coach-only wearable coaching prompts for this client (S14
+   * round 3). Undefined when the feature is off, so no entry is shown.
+   */
+  onOpenWearablePrompts?: () => void;
   /** Coach theme palette (kept for prop-compat with the tab host). */
   colors?: ThemeColors;
   styles: ClientDetailStyles;
@@ -142,6 +148,20 @@ export function HealthFitnessTab({
       </WearableCard>
 
       <WearableInsightPanel side="coach" bucket="HEALTH_FITNESS" clientId={clientId} />
+
+      {onOpenWearablePrompts != null && (
+        <Pressable
+          style={bandStyles.promptsLink}
+          onPress={onOpenWearablePrompts}
+          accessibilityRole="button"
+          accessibilityLabel="Open wearable coaching prompts for this client"
+          testID="open-wearable-prompts"
+        >
+          <Ionicons name="bulb-outline" size={18} color={colors.forest} />
+          <Text style={bandStyles.promptsLinkText}>Wearable coaching prompts</Text>
+          <Ionicons name="chevron-forward" size={18} color={colors.charcoal} />
+        </Pressable>
+      )}
 
       <HealthFitnessScreen clientId={clientId} window={window} />
     </>
@@ -220,6 +240,21 @@ function renderBand({
 const bandStyles = StyleSheet.create({
   card: {
     marginBottom: spacing.lg,
+  },
+  promptsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    borderRadius: radius.lg,
+    backgroundColor: colors.cream,
+  },
+  promptsLinkText: {
+    ...typography.bodyMd,
+    color: colors.ink,
+    flex: 1,
   },
   skeleton: {
     height: 20,

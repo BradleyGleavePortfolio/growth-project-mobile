@@ -171,6 +171,11 @@ const KNOWN: Record<string, { message: string; reload?: boolean }> = {
     message: "That package was removed. Reload the package list.",
     reload: true,
   },
+  // Raised by programsApi.assignableClients (RosterIncompleteError).
+  client_roster_incomplete: {
+    message:
+      "Your full client list did not load, so no clients are shown yet. Retry; if it keeps happening, contact support (Settings, Help).",
+  },
 };
 
 interface ErrorEnvelope {
@@ -184,6 +189,13 @@ function readEnvelope(err: unknown): ErrorEnvelope {
     return { status: null, code: null, message: null };
   const response = (err as { response?: { status?: unknown; data?: unknown } })
     .response;
+  if (!response) {
+    // A failure the app raised itself (no HTTP answer) may carry its own
+    // known code, e.g. the incomplete client roster.
+    const own = (err as { code?: unknown }).code;
+    if (typeof own === "string" && Object.prototype.hasOwnProperty.call(KNOWN, own))
+      return { status: null, code: own, message: null };
+  }
   const status = typeof response?.status === "number" ? response.status : null;
   const data = response?.data;
   let code: string | null = null;
@@ -234,7 +246,8 @@ export function describeProgramFailure(
         env.code === "programs_unavailable" ||
         env.code === "idempotency_key_required" ||
         env.code === "program_in_clinic_set" ||
-        env.code === "program_in_clinic_set_needs_a_day",
+        env.code === "program_in_clinic_set_needs_a_day" ||
+        env.code === "client_roster_incomplete",
       reload: known.reload === true,
     };
   }

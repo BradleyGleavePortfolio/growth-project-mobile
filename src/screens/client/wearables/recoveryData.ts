@@ -134,11 +134,19 @@ export function sleepDeficit(
   let asleep: number | null = duration;
   if (asleep === null) {
     const stages = sleepStages(data);
-    if (!stages) return null;
-    // Exclude "Awake" from asleep total.
-    asleep = stages.slices
-      .filter((s) => s.key !== 'awake')
-      .reduce((sum, s) => sum + s.minutes, 0);
+    if (!stages) {
+      // S14: on-device sources without stage data (older Apple Watch or
+      // iPhone-only sleep, Health Connect sessions without stages) send only
+      // SLEEP_TOTAL_MIN. Use it so last night still shows.
+      const total = latestValue(data, 'SLEEP_TOTAL_MIN');
+      if (total === null) return null;
+      asleep = total;
+    } else {
+      // Exclude "Awake" from asleep total.
+      asleep = stages.slices
+        .filter((s) => s.key !== 'awake')
+        .reduce((sum, s) => sum + s.minutes, 0);
+    }
   }
   const asleepMinutes = Math.max(0, Math.round(asleep));
   const deficitMinutes = Math.max(0, needMinutes - asleepMinutes);
