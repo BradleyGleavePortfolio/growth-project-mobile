@@ -15,6 +15,7 @@ import SettingsScreen from '../screens/coach/SettingsScreen';
 import RomanChatScreen from '../screens/roman/RomanChatScreen';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
+import ProgramsStackNavigator from './ProgramsStackNavigator';
 import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
 import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
@@ -629,13 +630,22 @@ export default function CoachNavigator() {
           ),
         }}
       />
+      {/* S-MWB — EXPO_PUBLIC_FF_MWB_PROGRAMS: the Programs library (build once,
+          assign to many, add to packages) replaces the hard-coded Templates
+          tab. The route name stays "Templates" so existing links keep working;
+          flag off renders the legacy screen unchanged. */}
       <Tab.Screen
         name="Templates"
-        component={ProgramTemplatesScreen}
+        component={featureFlags.mwbPrograms ? ProgramsStackNavigator : ProgramTemplatesScreen}
         options={{
-          tabBarLabel: 'Templates',
+          tabBarLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
+          tabBarAccessibilityLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="document-text" size={size} color={color} />
+            <Ionicons
+              name={featureFlags.mwbPrograms ? 'barbell' : 'document-text'}
+              size={size}
+              color={color}
+            />
           ),
         }}
       />
