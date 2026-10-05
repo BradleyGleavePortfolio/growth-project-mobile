@@ -74,8 +74,8 @@ export type WearableMetricType =
  * the device does not hold a Prisma id, so the sync service threads it in.
  */
 export interface NormalizedSample {
-  /** Subject client User.id. */
-  userId: string;
+  // S14: no `userId`. The backend derives the subject from the JWT and
+  // rejects any body `userId` with WEARABLES_INGEST_USER_ID_FORBIDDEN.
   /** The connection this sample was ingested through. */
   connectionId: string;
   /** Source provider — always 'HEALTH_CONNECT' for this connector. */

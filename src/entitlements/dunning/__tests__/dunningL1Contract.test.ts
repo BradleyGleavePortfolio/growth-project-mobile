@@ -140,7 +140,7 @@ describe('B-352-2 / B-352-7 / C-352-5: dispute outcomes say R-DISPUTE-PAUSE', ()
     const c = cardUpdateOutcomeCopy(r);
     expect(c.body).toContain('There was no open invoice to pay, so nothing was charged.');
     expect(c.body).toContain(
-      'Your bank reversed a payment of $150.00 to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it.',
+      'Your bank opened a dispute or inquiry about a payment of $150.00 to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it.',
     );
     expectDisputePause(c.body);
     expect(c.body).not.toContain('Your next payment will use it');
@@ -194,7 +194,7 @@ describe('B-352-2 / B-352-7 / C-352-5: dispute outcomes say R-DISPUTE-PAUSE', ()
       { purchase_id: 'p2', coach_name: 'Blake', currency: 'eur', amount_cents: 8000 },
     ]);
     expect(line).toBe(
-      'Your bank reversed payments of $150.00 and 80.00 EUR. For those plans, access has ended and billing is paused. Each coach decides whether to restart them. They do not restart on their own or with a new card.',
+      'Your bank opened disputes or inquiries about payments of $150.00 and 80.00 EUR. For those plans, access has ended and billing is paused. Each coach decides whether to restart them. They do not restart on their own or with a new card.',
     );
     expect(disputePauseFacts(null, 'account')).toBe(
       'Your access has ended and billing is paused. Your coach decides whether to restart it. It does not restart on its own or with a new card.',
@@ -212,7 +212,7 @@ describe('B-352-2 / B-352-7 / C-352-5: dispute outcomes say R-DISPUTE-PAUSE', ()
       disputes: [{ purchase_id: 'p1', coach_name: null, currency: 'eur', amount_cents: 8000 }],
     });
     const body = cardUpdateOutcomeCopy(r, quote.disputes).body;
-    expect(body).toContain('Your bank reversed a payment of 80.00 EUR. For that plan, access has ended');
+    expect(body).toContain('Your bank opened a dispute or inquiry about a payment of 80.00 EUR. For that plan, access has ended');
     expectDisputePause(body);
     expect(cardUpdateOutcomeCopy(r).body).toContain('Your next payment will use it');
   });
@@ -233,6 +233,44 @@ describe('B-352-2 / B-352-7 / C-352-5: dispute outcomes say R-DISPUTE-PAUSE', ()
     expect(body).not.toMatch(/sort it out|settle|Email /i);
     expect(cancelOutcomeCopy(ended).body).not.toContain('reversed');
     expect(disputeNotSettledLine([])).toBeNull();
+  });
+
+  it('B-352-9: an inquiry (same envelope, no amount, no money moved) is never called a reversal', () => {
+    const quote = normalizePaymentQuote({
+      quote_id: 'q_inquiry',
+      complete: true,
+      lines: [],
+      totals: [],
+      disputes: [{ purchase_id: 'p_inquiry', coach_name: 'Avery', amount_cents: null, currency: null }],
+    });
+    const line = disputeNotSettledLine(quote.disputes) ?? '';
+    expect(line).toBe(
+      'Your bank opened a dispute or inquiry about a payment to Avery. For that plan, access has ended and billing is paused. Your coach, Avery, decides whether to restart it. It does not restart on its own or with a new card.',
+    );
+    const saved = cardUpdateOutcomeCopy(
+      normalizeCardUpdate({
+        ...PAID,
+        outcome: 'saved',
+        amount_paid_cents: 0,
+        paid_totals: [],
+        access_restored: false,
+        access_state: 'unchanged',
+        quote: { quote_id: 'q_inquiry', complete: true, lines: [], totals: [], disputes: quote.disputes },
+        plans: [{ purchase_id: 'p_inquiry', dispute_open: true }],
+      }),
+    ).body;
+    const mixed = cardUpdateOutcomeCopy(normalizeCardUpdate({ ...PAID, plans: [{ purchase_id: 'p1' }, { purchase_id: 'p2', dispute_open: true }] })).body;
+    const cancel = cancelOutcomeCopy(
+      { outcome: 'ended', purchase_id: 'p_inquiry', access_ends_at: null, voided_invoice_count: 0, voided_amount_cents: 0, currency: null, paid_period_kept: false, message: null },
+      { dispute: true },
+    ).body;
+    const twoOnOnePlan = disputeNotSettledLine([quote.disputes[0], { ...quote.disputes[0], amount_cents: 5000, currency: 'usd' }]);
+    expect(twoOnOnePlan).toMatch(/^Your bank opened disputes or inquiries about payments of \$50\.00 to Avery\. For that plan,/);
+    expect(saved).toContain('nothing was charged');
+    expect(mixed).toContain('$150.00 went through');
+    expect(cancel).toContain('Your bank had opened a dispute or inquiry about a payment on this plan');
+    for (const body of [line, saved, mixed]) expectDisputePause(body);
+    for (const body of [line, saved, mixed, cancel]) expect(body).not.toMatch(/revers|took back|taken back|withdr|refund/i);
   });
 });
 
