@@ -18,6 +18,7 @@ import {
   retireOnDeviceState,
   retireOnDeviceStateAtSignOut,
 } from "../onDeviceState";
+import { OnDeviceSessionChangedError } from "../sessionFence";
 
 const old = {
   userId: "authority-user",
@@ -136,35 +137,68 @@ it("the authority is revoked at once: an app exit while sign-out waits behind a 
   expect(afterExit).toBeNull();
 });
 
-it("a grant write in flight that starts a new authority after the first revocation is revoked again in the chain", async () => {
-  await recordLocalAuthorization(old, D1); // the session exists
-  const reading = deferred();
-  const release = deferred();
-  const get = AsyncStorage.getItem.bind(AsyncStorage);
-  jest.spyOn(AsyncStorage, "getItem").mockImplementationOnce(async (k) => {
-    reading.resolve();
-    await release.promise; // the session read of the next grant write is held
-    return get(k);
-  });
-  const writing = recordLocalAuthorization(fresh, D2);
-  await reading.promise;
-  // Only the grant write itself reaches disk; every sign-out mutation fails.
-  asyncStorageMutationOutage((k) => k === grantKey);
-  const signingOut = retireOnDeviceStateAtSignOut();
-  await new Promise<void>((r) => setTimeout(r, 0));
-  release.resolve();
-  await Promise.all([writing, signingOut]);
-  jest.restoreAllMocks();
-  expect(
-    JSON.parse((await AsyncStorage.getItem(grantKey)) ?? "null")?.connectionId,
-  ).toBe(fresh.connectionId);
-  expect(
-    await SecureStore.getItemAsync(ON_DEVICE_CONSENT_AUTHORITY_KEY),
-  ).toBeNull();
-  expect(
-    await restart().getLocalAuthorization(fresh.userId, fresh.source),
-  ).toBeNull();
-});
+/**
+ * Sol B-369-2 (probe AUD-SOL-H7-120, lanes 37341997614 and 37342514128): a
+ * Connect write already running when sign-out starts, held at its session
+ * read or at the authority it creates. It used to go on, create an authority
+ * after the immediate revocation and bind the new grant to it, so an app exit
+ * before the chain's second revocation kept consent. Now it stops at the next
+ * step: no grant is written after sign-out starts.
+ */
+it.each(["session read", "authority creation"] as const)(
+  "B-369-2: a Connect write held at its %s when sign-out starts leaves no consent, even at an exit before the chain's second revocation",
+  async (mode) => {
+    await recordLocalAuthorization(old, D1); // the session and the authority exist
+    const held = deferred();
+    const release = deferred();
+    if (mode === "session read") {
+      const get = AsyncStorage.getItem.bind(AsyncStorage);
+      jest.spyOn(AsyncStorage, "getItem").mockImplementationOnce(async (k) => {
+        const value = await get(k); // read before the sign-out, delivered after it
+        held.resolve();
+        await release.promise;
+        return value;
+      });
+    } else {
+      await SecureStore.deleteItemAsync(ON_DEVICE_CONSENT_AUTHORITY_KEY); // the write must create one
+      secure.setItemAsync.mockImplementationOnce(async (k, v) => {
+        held.resolve();
+        await release.promise; // lands after the immediate revocation
+        secureMap.set(k, v);
+      });
+    }
+    const chainRevoke = deferred();
+    const chainHeld = deferred();
+    let deletes = 0;
+    secure.deleteItemAsync.mockImplementation(async (k) => {
+      deletes += 1; // 1: the immediate revocation, 2: the chain's second one
+      if (deletes === 2) {
+        chainRevoke.resolve();
+        await chainHeld.promise;
+      }
+      secureMap.delete(k);
+    });
+    const writing = recordLocalAuthorization(fresh, D2).catch((e: unknown) => e);
+    await held.promise;
+    const signingOut = retireOnDeviceStateAtSignOut();
+    release.resolve();
+    await chainRevoke.promise; // the app exits here
+    let atExit: Awaited<ReturnType<typeof getLocalAuthorization>> | undefined;
+    try {
+      atExit = await restart().getLocalAuthorization(fresh.userId, fresh.source);
+    } finally {
+      chainHeld.resolve(); // always release, even when the invariant fails
+    }
+    await signingOut;
+    expect(await writing).toBeInstanceOf(OnDeviceSessionChangedError);
+    expect(atExit).toBeNull();
+    expect(JSON.parse((await AsyncStorage.getItem(grantKey)) ?? "null")?.connectionId).not.toBe(
+      fresh.connectionId,
+    );
+    expect(await SecureStore.getItemAsync(ON_DEVICE_CONSENT_AUTHORITY_KEY)).toBeNull();
+    expect(await restart().getLocalAuthorization(old.userId, old.source)).toBeNull();
+  },
+);
 
 it("a failed SecureStore delete at sign-out writes a new authority, so the grant stays void after a restart", async () => {
   await recordLocalAuthorization(old, D1);
