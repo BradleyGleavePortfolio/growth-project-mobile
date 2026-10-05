@@ -39,6 +39,7 @@ import {
 import {
   coachPackagesApi,
   CoachPackage,
+  isLivePackage,
   PackageBillingInterval,
   PackageCreateInput,
   PackageUpdateInput,
@@ -184,11 +185,17 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     if (cents == null) {
       return { payload: null, message: "Enter a valid price." };
     }
-    if (cents === 0) {
+    // B-347-1: the free one-time package from setup keeps its $0 price when
+    // the coach edits its name or details. A new $0 price is still refused.
+    const freeKept =
+      isEdit && original?.priceCents === 0 && billingInterval === "one_time";
+    if (cents === 0 && !freeKept) {
       return {
         payload: null,
         message:
-          "Price must be greater than zero. Use a free invite code for comps.",
+          original?.priceCents === 0
+            ? "Free packages are one-time. Choose One-time, or enter a price."
+            : "Price must be greater than zero. Use a free invite code for comps.",
       };
     }
     const features = featuresText
@@ -218,7 +225,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       },
       message: null,
     };
-  }, [title, description, priceText, billingInterval, trialText, featuresText]);
+  }, [title, description, priceText, billingInterval, trialText, featuresText,
+    isEdit, original]);
 
   // OR-112-16 + B-329-1: one create attempt = one Idempotency-Key and one
   // body, stored on the device before the request leaves (see
@@ -334,6 +342,34 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     }
   }, [validate, isEdit, original, navigation, coachId]);
 
+  // B-347-3: a draft made here (or skipped in setup) can go live from the
+  // editor with the wizard's publish call; the row the server answers decides
+  // what the screen shows next.
+  const [publishing, setPublishing] = useState(false);
+  const handlePublish = useCallback(async () => {
+    if (!original || publishing) return;
+    setPublishing(true);
+    try {
+      const res = await coachPackagesApi.publish(original.id);
+      setOriginal(res.data);
+      if (isLivePackage(res.data)) {
+        successTap();
+        track("coach_package_published", { package_id: original.id });
+        Alert.alert("Package is live", `${res.data.title} is live.`);
+      } else {
+        Alert.alert(
+          "Still a draft",
+          `TGP did not confirm ${res.data.title} as live, so clients cannot see it yet. Try again.`,
+        );
+      }
+    } catch (err) {
+      const f = describeError(err, "make your package live");
+      Alert.alert(f.title, f.body);
+    } finally {
+      setPublishing(false);
+    }
+  }, [original, publishing]);
+
   const handleArchive = useCallback(() => {
     if (!original) return;
     warningTap();
@@ -409,13 +445,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       .split("\n")
       .map((f) => f.trim())
       .filter(Boolean);
-    const trimmedTrial = trialText.trim();
+    // B-347-2: only a trial the server returned on the saved package; this
+    // build never sends trial_days, so a typed trial is never previewed.
+    const savedTrial = original?.trialDays ?? null;
     const trialDays =
-      billingInterval !== "one_time" &&
-      trimmedTrial &&
-      Number.isInteger(Number(trimmedTrial))
-        ? Number(trimmedTrial)
-        : null;
+      billingInterval !== "one_time" && savedTrial ? savedTrial : null;
     return {
       id: original?.id ?? "preview",
       title: title.trim() || "Untitled package",
@@ -431,7 +465,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   }, [
     priceText,
     featuresText,
-    trialText,
     billingInterval,
     title,
     description,
@@ -448,6 +481,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   }
 
   const archived = original?.status === "archived";
+  const draft = isEdit && !!original && !archived && !isLivePackage(original);
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
   const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
@@ -573,22 +607,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {billingInterval !== "one_time" ? (
-          <>
-            <Label semanticColors={semanticColors} tokens={tokens}>
-              Trial days (optional)
-            </Label>
-            <TextInput
-              value={trialText}
-              onChangeText={setTrialText}
-              placeholder="0"
-              style={styles.input}
-              placeholderTextColor={semanticColors.textMuted}
-              keyboardType="number-pad"
-              maxLength={3}
-            />
-          </>
-        ) : null}
+        {/* B-347-2: no trial input until trial_days reaches the server
+            (backend trials + m#338 bring it back together). */}
 
         <Label semanticColors={semanticColors} tokens={tokens}>
           Features (one per line)
@@ -628,6 +648,30 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {isEdit && original ? (
           <>
+            {draft ? (
+              <View testID="package-edit-draft">
+                <Text style={styles.resumedText}>
+                  {original.title} is saved as a draft. Clients cannot see it
+                  until it is live.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryBtn,
+                    publishing && styles.primaryBtnDisabled,
+                  ]}
+                  onPress={() => void handlePublish()}
+                  disabled={publishing}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Make ${original.title} live`}
+                  accessibilityState={{ busy: publishing, disabled: publishing }}
+                  testID="package-edit-publish"
+                >
+                  <Text style={styles.secondaryBtnText}>
+                    {publishing ? "Making it live" : `Make ${original.title} live`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
             <TouchableOpacity
               style={styles.secondaryBtn}
               onPress={() => {
