@@ -291,6 +291,68 @@ describe('connectOnDevice (explicit Connect tap)', () => {
   });
 });
 
+describe('import passes — H8 (late data, resumable import)', () => {
+  const hcPass = (normalizedCount: number, more: boolean, failed: boolean) => ({
+    normalizedCount,
+    complete: !more && !failed,
+    hasMore: more,
+    failed,
+  });
+
+  it('a later pass reads only the types left at the page bound', async () => {
+    const syncHealthConnect = jest
+      .fn()
+      .mockResolvedValueOnce(hcPass(40, true, false))
+      .mockResolvedValueOnce(hcPass(10, false, false));
+    const out = await connect('HEALTH_CONNECT', {
+      register: jest.fn().mockResolvedValue(connection('HEALTH_CONNECT')),
+      syncHealthConnect,
+      readUserId: user('user-a'),
+    });
+    expect(syncHealthConnect.mock.calls.map((c) => c[2])).toEqual([
+      { resumeOnly: false },
+      { resumeOnly: true },
+    ]);
+    expect(out).toMatchObject({ kind: 'imported', postedCount: 50, complete: true });
+  });
+
+  it('a pass that is incomplete only because a read failed is not repeated', async () => {
+    const syncHealthConnect = jest.fn().mockResolvedValue(hcPass(40, false, true));
+    const out = await connect('HEALTH_CONNECT', {
+      register: jest.fn().mockResolvedValue(connection('HEALTH_CONNECT')),
+      syncHealthConnect,
+      readUserId: user('user-a'),
+    });
+    expect(syncHealthConnect).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ kind: 'imported', postedCount: 40, complete: false });
+  });
+
+  it('a type that failed in pass 1 keeps the import incomplete after a resume-only pass completes', async () => {
+    const syncHealthConnect = jest
+      .fn()
+      .mockResolvedValueOnce(hcPass(40, true, true))
+      .mockResolvedValueOnce(hcPass(10, false, false));
+    const out = await connect('HEALTH_CONNECT', {
+      register: jest.fn().mockResolvedValue(connection('HEALTH_CONNECT')),
+      syncHealthConnect,
+      readUserId: user('user-a'),
+    });
+    expect(syncHealthConnect).toHaveBeenCalledTimes(2);
+    expect(out).toMatchObject({ kind: 'imported', postedCount: 50, complete: false });
+  });
+
+  it('Apple Health reads its whole window in one pass, even when a metric failed', async () => {
+    const syncHealthKit = jest.fn().mockResolvedValue({ postedCount: 12, complete: false });
+    const out = await connect('APPLE_HEALTHKIT', {
+      register: jest.fn().mockResolvedValue(connection('APPLE_HEALTHKIT')),
+      syncHealthKit,
+      readUserId: user('user-a'),
+    });
+    expect(syncHealthKit).toHaveBeenCalledTimes(1);
+    expect(out).toMatchObject({ kind: 'imported', postedCount: 12, complete: false });
+  });
+});
+
 describe('refreshOnDevice (Health screen open) — A-317-1', () => {
   const remote = [connection('APPLE_HEALTHKIT', 'conn-1')];
 

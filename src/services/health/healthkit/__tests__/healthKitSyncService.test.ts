@@ -29,6 +29,8 @@ import {
   SYNC_OVERLAP_MINUTES,
   floorToLocalHour,
   DEFAULT_BACKFILL_DAYS,
+  CUMULATIVE_METRIC_KEYS,
+  CUMULATIVE_SETTLE_MINUTES,
 } from '../healthKitSyncService';
 import {
   getSyncProgress,
@@ -48,15 +50,34 @@ async function seedAllThrough(iso: string, scope: OnDeviceScope = SCOPE) {
 
 const NOW = new Date('2026-05-31T12:00:00.000Z');
 
-/** A fake client whose auth/read are jest-controllable. */
+/**
+ * A fake client whose auth/read are jest-controllable. H8: the window is read
+ * in day-sized pieces, so each read returns only the samples that START in
+ * its window (HKQueryOptionStrictStartDate), as the native queries do.
+ */
 function makeClient(read: HealthKitReadResult) {
   return {
     requestAuth: jest.fn(async (_types?: unknown): Promise<void> => undefined),
-    readSamples: jest.fn(
-      async (_window: HealthKitQueryWindow): Promise<HealthKitReadResult> => read,
-    ),
+    readSamples: jest.fn(async (w: HealthKitQueryWindow): Promise<HealthKitReadResult> => {
+      const out: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(read)) {
+        out[key] =
+          key === 'failed' || !Array.isArray(value)
+            ? value
+            : value.filter((x: { startDate: string }) => {
+                const t = Date.parse(x.startDate);
+                return t >= w.since.getTime() && t < w.until.getTime();
+              });
+      }
+      return out as HealthKitReadResult;
+    }),
   };
 }
+
+/** H8: hourly sums are complete only through the settled hour. */
+const SETTLED = floorToLocalHour(new Date(NOW.getTime() - CUMULATIVE_SETTLE_MINUTES * 60_000)).toISOString();
+const doneThrough = (k: string): string =>
+  (CUMULATIVE_METRIC_KEYS as readonly string[]).includes(k) ? SETTLED : NOW.toISOString();
 
 const SAMPLE_READ: HealthKitReadResult = {
   steps: [{ value: 8000, startDate: '2026-05-30T00:00:00.000Z', endDate: '2026-05-31T00:00:00.000Z' }],
@@ -90,7 +111,7 @@ describe('HealthKitSyncService.sync — happy path', () => {
     const result = await svc.sync(OPTS);
 
     expect(client.requestAuth).toHaveBeenCalledTimes(1);
-    expect(client.readSamples).toHaveBeenCalledTimes(1);
+    expect(client.readSamples).toHaveBeenCalled();
     expect(mockPost).toHaveBeenCalledTimes(1);
 
     const [path, body] = mockPost.mock.calls[0];
@@ -118,7 +139,7 @@ describe('HealthKitSyncService.sync — happy path', () => {
     const svc = new HealthKitSyncService(makeClient(SAMPLE_READ) as never);
     const result = await svc.sync(OPTS);
     const progress = await getSyncProgress(SCOPE);
-    for (const k of HEALTHKIT_METRIC_KEYS) expect(progress.completedThrough[k]).toBe(NOW.toISOString());
+    for (const k of HEALTHKIT_METRIC_KEYS) expect(progress.completedThrough[k]).toBe(doneThrough(k));
     expect(result.complete).toBe(true);
     expect(result.failedMetrics).toEqual([]);
   });
@@ -128,7 +149,8 @@ describe('HealthKitSyncService.sync — read window', () => {
   it('backfills DEFAULT_BACKFILL_DAYS on the first run (no stored cursor)', async () => {
     const client = makeClient(SAMPLE_READ);
     await new HealthKitSyncService(client as never).sync(OPTS);
-    const [{ since, until }] = client.readSamples.mock.calls[0];
+    const [{ since }] = client.readSamples.mock.calls[0];
+    const [{ until }] = client.readSamples.mock.calls[client.readSamples.mock.calls.length - 1];
     const expectedSince = floorToLocalHour(
       new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 86400000),
     );
@@ -206,7 +228,7 @@ describe('HealthKitSyncService.sync — read window', () => {
     expect(result.failedMetrics).toEqual(['weight']);
     const progress = await getSyncProgress(SCOPE);
     expect(progress.completedThrough.weight).toBe(prior);
-    expect(progress.completedThrough.steps).toBe(NOW.toISOString());
+    expect(progress.completedThrough.steps).toBe(SETTLED);
     // The next run re-reads from the failed metric's progress.
     const again = makeClient(SAMPLE_READ);
     await new HealthKitSyncService(again as never).sync({ ...OPTS, now: new Date(NOW.getTime() + 3600_000) });

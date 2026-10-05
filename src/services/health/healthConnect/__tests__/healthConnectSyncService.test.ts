@@ -153,6 +153,7 @@ describe('permission-denied path', () => {
       expect.anything(),
       undefined,
       expect.objectContaining({ throwIfStopped: expect.any(Function) }),
+      1, // H8: one page per read, saved before the next
     );
     expect(res.normalizedCount).toBe(1);
     expect(res.complete).toBe(true);
@@ -222,6 +223,7 @@ describe('B-317-2 completeness', () => {
       { startTime: IMPORT_START, endTime: NOW.toISOString() },
       'tok-21',
       expect.anything(),
+      1,
     );
     expect(res2.complete).toBe(true);
     const after = await getSyncProgress(SCOPE);
