@@ -16,6 +16,13 @@
  * `{ date?: string } | undefined` — the screen was the one that needed
  * to honor it. Defaults to today when omitted (the legacy call site).
  *
+ * Route param `assignmentId` (B-DELIV-125, B4): the backend materialises a
+ * delivered meal_plan drop as a DailyMealPlanAssignment and stores its id in
+ * `materialised_ref`, not a date. Delivered assignments start on delivery
+ * day with no end, so the plan is among today's active assignments; the
+ * screen shows exactly that assignment instead of the newest one. If it is
+ * no longer active, an honest "ended" state replaces another plan.
+ *
  * When no assignment is active for the chosen day we render an honest
  * empty state — no fabricated suggestions, no "ask your coach" CTA
  * that cannot do anything from here. The client-side surface is
@@ -45,7 +52,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 // Route params: optional ISO date string (YYYY-MM-DD). Falls back to
 // today (useMealPlanToday's default) when omitted, matching the legacy
 // call site behaviour.
-type MealPlanRouteParams = { date?: string } | undefined;
+type MealPlanRouteParams = { date?: string; assignmentId?: string } | undefined;
 
 // Accept either YYYY-MM-DD or a full ISO timestamp; the hook + backend
 // query parameter expect YYYY-MM-DD so we trim accordingly.
@@ -64,6 +71,7 @@ export default function ClientDailyMealPlanScreen() {
 
   const route = useRoute<RouteProp<Record<string, MealPlanRouteParams>, string>>();
   const dateParam = normaliseDateParam(route.params?.date);
+  const assignmentId = route.params?.assignmentId || undefined;
 
   const { data, isLoading, isError, refetch, isRefetching } =
     useMealPlanToday(dateParam);
@@ -74,8 +82,11 @@ export default function ClientDailyMealPlanScreen() {
 
   const active: DailyMealPlanAssignmentWithPlan | null = useMemo(() => {
     if (!data || data.assignments.length === 0) return null;
+    if (assignmentId) {
+      return data.assignments.find((a) => a.id === assignmentId) ?? null;
+    }
     return data.assignments[0] ?? null;
-  }, [data]);
+  }, [data, assignmentId]);
 
   const groups = useMemo<Array<{ label: SlotLabel; slots: DailyMealPlanSlot[] }>>(() => {
     if (!active) return [];
@@ -105,7 +116,7 @@ export default function ClientDailyMealPlanScreen() {
       }
     >
       <Text style={[typography.h2, { color: sc.textPrimary }]}>
-        {dateParam ? 'Meal plan' : "Today's meals"}
+        {dateParam || assignmentId ? 'Meal plan' : "Today's meals"}
       </Text>
 
       {isLoading ? (
@@ -116,6 +127,8 @@ export default function ClientDailyMealPlanScreen() {
         <Text style={[typography.body, { color: sc.textMuted }]}>
           Could not load today's plan. Pull to retry.
         </Text>
+      ) : !active && assignmentId ? (
+        <EndedState styles={styles} sc={sc} />
       ) : !active ? (
         <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
       ) : (
@@ -164,6 +177,17 @@ function SlotGroup({
           ) : null}
         </View>
       ))}
+    </View>
+  );
+}
+
+function EndedState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
+  return (
+    <View style={styles.card} testID="meal-plan-ended">
+      <Text style={[typography.h3, { color: sc.textPrimary }]}>This plan has ended</Text>
+      <Text style={[typography.body, { color: sc.textMuted }]}>
+        {'This meal plan no longer covers today. Message your coach if it should still be running.'}
+      </Text>
     </View>
   );
 }

@@ -213,20 +213,17 @@ export type ScheduledDropStatus =
  *   workout_program / workout_plan → WorkoutAssignment id
  *                                    (route: WorkoutAssignmentDetail
  *                                    { assignmentId })
- *   meal_plan                      → date string YYYY-MM-DD (start date)
- *                                    (route: ClientDailyMealPlan { date })
- *   pdf                            → CoachMediaAsset id
- *                                    (no viewer registered yet — degrade
- *                                    gracefully: shown but not tappable)
- *   video                          → Mux playback id / CoachMediaAsset id
- *                                    (no viewer registered yet — degrade)
+ *   meal_plan                      → DailyMealPlanAssignment id
+ *                                    (route: ClientDailyMealPlan
+ *                                    { assignmentId }; older rows may
+ *                                    carry a YYYY-MM-DD date → { date })
+ *   pdf / video                    → ClientAssetGrant id (not used by the
+ *                                    UI). Tapping opens `asset_id` (the
+ *                                    CoachMediaAsset id) through
+ *                                    GET /v1/client/media/:id/signed-url
+ *                                    (deliverables/openPurchasedMedia.ts).
  *   auto_message                   → Conversation id (or null)
  *                                    (route: Messages — opens thread)
- *
- * The PDF / video viewers do not exist yet in mobile — listed in master
- * plan PR-12 (media upload) which is out of scope. Until they ship, those
- * delivered drops render as non-tappable rows with a "Saved to your
- * library" caption so the buyer is not left tapping a dead row.
  */
 export interface ScheduledDropView {
   id: string;
