@@ -18,10 +18,11 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { getTodayString } from '../../utils/date';
+import { addDays, getLocalWeekStart, getTodayString } from '../../utils/date';
 import { useTheme } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import {
@@ -37,7 +38,7 @@ import {
 } from '../../hooks/useApi';
 
 import { makeStyles } from './habits/styles';
-import { makeHABIT_COLORS, type HabitView, type TabMode } from './habits/constants';
+import { type HabitView, type TabMode } from './habits/constants';
 import { HabitCard } from './habits/HabitCard';
 import { MoodEnergyPicker } from './habits/MoodEnergyPicker';
 import { AddHabitSheet } from './habits/AddHabitSheet';
@@ -47,7 +48,6 @@ import { featureFlags } from '../../config/featureFlags';
 export default function HabitsScreen() {
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
-  const HABIT_COLORS = useMemo(() => makeHABIT_COLORS(colors), [colors]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -80,8 +80,6 @@ export default function HabitsScreen() {
 
   // Add-habit modal form
   const [newName, setNewName] = useState('');
-  const [newIcon, setNewIcon] = useState('checkmark-circle');
-  const [newColor, setNewColor] = useState(colors.primary);
   const [newTarget, setNewTarget] = useState('1');
   const [newUnit, setNewUnit] = useState('times');
 
@@ -134,15 +132,21 @@ export default function HabitsScreen() {
       const l = row as ApiHabitLog & Partial<{ habitId: string; count: number }>;
       return [
         l.habit_id || l.habitId || '',
-        { completed: l.completed ?? false, count: l.count || 0 },
+        { completed: l.completed ?? false, count: l.value ?? l.count ?? 0 },
       ] as [string, { completed: boolean; count: number }];
     }),
   );
-  const habits: HabitView[] = allHabits.map((h) => ({
+  const weekStart = getLocalWeekStart();
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const habits: HabitView[] = allHabits.map((h, index) => ({
     ...h,
     log: logsMap.get(h.id) || null,
     runDays: 0,
-    weekDots: [false, false, false, false, false, false, false],
+    weekDots: weekDates.map((date) =>
+      date === today
+        ? (logsMap.get(h.id)?.completed ?? false)
+        : (habitsQ.data?.[index].logs?.some((log) => log.completed && log.date.slice(0, 10) === date) ?? false),
+    ),
   }));
 
   const refreshing =
@@ -199,10 +203,7 @@ export default function HabitsScreen() {
     createHabit.mutate(
       {
         name: newName.trim(),
-        icon: newIcon,
-        color: newColor,
         category: 'custom',
-        frequency: 'daily',
         target_value: parseInt(newTarget) || 1,
         unit: newUnit || 'times',
       },
@@ -210,8 +211,6 @@ export default function HabitsScreen() {
         onSuccess: () => {
           setShowAddModal(false);
           setNewName('');
-          setNewIcon('checkmark-circle');
-          setNewColor(colors.primary);
           setNewTarget('1');
           setNewUnit('times');
         },
@@ -307,34 +306,53 @@ export default function HabitsScreen() {
       >
         {tab === 'habits' ? (
           <>
-            {/* Progress */}
-            <View style={styles.progressCard}>
-              <View style={styles.progressCircle}>
-                <Text style={styles.progressPct}>{completionPct}%</Text>
-                <Text style={styles.progressLabel}>Done</Text>
+            {habitsQ.isLoading || logsQ.isLoading ? (
+              <View style={styles.progressCard}>
+                <ActivityIndicator color={colors.primary} accessibilityLabel="Loading habits" />
+                <Text style={styles.progressStatLabel}>Loading habits</Text>
               </View>
-              <View style={styles.progressStats}>
-                <Text style={styles.progressStatValue}>
-                  {completedCount}/{habits.length}
-                </Text>
-                <Text style={styles.progressStatLabel}>habits completed</Text>
-                <View style={styles.progressBar}>
-                  <View style={[styles.progressBarFill, { width: `${completionPct}%` }]} />
+            ) : habitsQ.isError || logsQ.isError ? (
+              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
+                <Text style={styles.progressStatLabel}>Habits could not be loaded.</Text>
+                <TouchableOpacity onPress={onRefresh} accessibilityRole="button">
+                  <Text style={styles.addBtnText}>Retry habits</Text>
+                </TouchableOpacity>
+              </View>
+            ) : habits.length === 0 ? (
+              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start' }]}>
+                <Text style={styles.progressStatLabel}>No habits yet. Add a daily habit to start tracking.</Text>
+              </View>
+            ) : (
+              <>
+                {/* Progress */}
+                <View style={styles.progressCard}>
+                  <View style={styles.progressCircle}>
+                    <Text style={styles.progressPct}>{completionPct}%</Text>
+                    <Text style={styles.progressLabel}>Done</Text>
+                  </View>
+                  <View style={styles.progressStats}>
+                    <Text style={styles.progressStatValue}>
+                      {completedCount}/{habits.length}
+                    </Text>
+                    <Text style={styles.progressStatLabel}>habits completed</Text>
+                    <View style={styles.progressBar}>
+                      <View style={[styles.progressBarFill, { width: `${completionPct}%` }]} />
+                    </View>
+                  </View>
                 </View>
-              </View>
-            </View>
-
-            {/* Habit Cards */}
-            {habits.map((habit) => (
-              <HabitCard
-                key={habit.id}
-                habit={habit}
-                onToggle={handleToggle}
-                onLongPress={handleDelete}
-                colors={colors}
-                styles={styles}
-              />
-            ))}
+                {/* Habit Cards */}
+                {habits.map((habit) => (
+                  <HabitCard
+                    key={habit.id}
+                    habit={habit}
+                    onToggle={handleToggle}
+                    onLongPress={handleDelete}
+                    colors={colors}
+                    styles={styles}
+                  />
+                ))}
+              </>
+            )}
 
             <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
               <Ionicons name="add-circle" size={22} color={colors.primary} />
@@ -417,15 +435,10 @@ export default function HabitsScreen() {
         onClose={() => setShowAddModal(false)}
         newName={newName}
         setNewName={setNewName}
-        newIcon={newIcon}
-        setNewIcon={setNewIcon}
-        newColor={newColor}
-        setNewColor={setNewColor}
         newTarget={newTarget}
         setNewTarget={setNewTarget}
         newUnit={newUnit}
         setNewUnit={setNewUnit}
-        HABIT_COLORS={HABIT_COLORS}
         onAdd={handleAddHabit}
         colors={colors}
         styles={styles}
