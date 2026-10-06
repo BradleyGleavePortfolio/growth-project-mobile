@@ -923,7 +923,7 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(getByTestId(`coach-community-flagged-due-${id}`).props.children).toBe(
       'Review within 5h',
     );
-    expect(getByText('Spring block · voice note · spam')).toBeTruthy();
+    expect(getByText('Spring block · voice note · Spam or scams')).toBeTruthy();
     // Opening a decision names the voice note, not a raw enum.
     await fireEvent.press(getByTestId(`coach-community-flagged-hide-${id}`));
     expect(getByText(/Hide this voice note from Bob\?/)).toBeTruthy();
@@ -955,7 +955,7 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     const { getByTestId, getByText, queryByTestId } = await render(
       <CoachCommunityModerationScreen />,
     );
-    expect(getByText('Spring block · win · spam')).toBeTruthy();
+    expect(getByText('Spring block · win · Spam or scams')).toBeTruthy();
     expect(
       getByTestId('coach-community-flagged-due-cccccccc-cccc-cccc-cccc-ccccccccccc1').props
         .children,

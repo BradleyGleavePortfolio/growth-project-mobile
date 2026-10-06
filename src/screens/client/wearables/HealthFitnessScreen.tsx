@@ -159,6 +159,10 @@ export default function HealthFitnessScreen({
     navigation.navigate('Connections');
   }, [navigation]);
 
+  // AUDIT-11-125: the coach embed (clientId) is not in the client navigator, so
+  // it has no Connections or Metric Detail route; its cards are read-only.
+  const isCoachEmbed = clientId != null;
+
   const goToMetricDetail = useCallback(
     (metric: WearableMetricType) => {
       navigation.navigate('WearableMetricDetail', {
@@ -268,7 +272,7 @@ export default function HealthFitnessScreen({
         <HealthFitnessEmptyState
           tone={tone}
           reduceMotion={reduceMotion}
-          onConnect={goToConnections}
+          onConnect={isCoachEmbed ? undefined : goToConnections}
         />
         {aiPanelSlot}
       </ScrollView>
@@ -315,25 +319,25 @@ export default function HealthFitnessScreen({
           findSeries(data, 'RESTING_HEART_RATE_BPM')
         }
         tone={tone}
-        onPress={() => goToMetricDetail('RESTING_HEART_RATE_BPM')}
+        onPress={isCoachEmbed ? undefined : () => goToMetricDetail('RESTING_HEART_RATE_BPM')}
       />
       <WorkoutsCard
         workoutSeries={findSeries(data, 'WORKOUT_DURATION_MIN')}
         tone={tone}
-        onPress={() => goToMetricDetail('WORKOUT_DURATION_MIN')}
+        onPress={isCoachEmbed ? undefined : () => goToMetricDetail('WORKOUT_DURATION_MIN')}
       />
       <BodyCard
         weightSeries={findSeries(data, 'BODY_WEIGHT_KG')}
         bodyFatSeries={findSeries(data, 'BODY_FAT_PCT')}
         tone={tone}
-        onPress={() => goToMetricDetail('BODY_WEIGHT_KG')}
+        onPress={isCoachEmbed ? undefined : () => goToMetricDetail('BODY_WEIGHT_KG')}
       />
       <FitnessTrendCard
         series={findSeries(data, 'STEPS')}
         metric="STEPS"
         tone={tone}
         reduceMotion={reduceMotion}
-        onPress={() => goToMetricDetail('STEPS')}
+        onPress={isCoachEmbed ? undefined : () => goToMetricDetail('STEPS')}
       />
 
       {aiPanelSlot}

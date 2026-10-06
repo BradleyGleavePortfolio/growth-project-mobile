@@ -289,6 +289,20 @@ function stringParams(raw: unknown): Record<string, string> | undefined {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * AUDIT-09-125: only booking rows carry an actionScreen, so tapping a message,
+ * workout reminder, content or community row did nothing. Rows without one
+ * open the screen their kind belongs to (the push router keeps the role and
+ * flag checks); other kinds stay in the center.
+ */
+export function inboxScreenForKind(kind: string): string | undefined {
+  if (kind.startsWith('community_')) return 'Community';
+  if (kind.startsWith('message')) return 'Messages';
+  if (kind === 'workout_reminder') return 'WorkoutMain';
+  if (kind === 'drip_released') return 'Deliverables';
+  return undefined;
+}
+
 /** Backend row or AppNotification -> AppNotification; null when unusable. */
 export function normalizeNotification(raw: unknown): AppNotification | null {
   const r = asRecord(raw);
@@ -311,7 +325,9 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
       : new Date(0).toISOString();
   const screenRaw = typeof r.actionScreen === 'string' ? r.actionScreen : payload.actionScreen;
   const actionScreen =
-    typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw) ? screenRaw : undefined;
+    typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw)
+      ? screenRaw
+      : inboxScreenForKind(rawKind);
   const actionParams = stringParams(r.actionParams ?? payload.actionParams);
   return {
     id: r.id,

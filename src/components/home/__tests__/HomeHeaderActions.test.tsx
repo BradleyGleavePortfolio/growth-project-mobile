@@ -4,7 +4,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const mockNavigate = jest.fn();
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+  useFocusEffect: (cb: () => void) => {
+    const R = require('react');
+    R.useEffect(() => cb(), [cb]);
+  },
+}));
 const mockUser = jest.fn();
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser() }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 3 }));
@@ -53,6 +59,16 @@ describe('HomeHeaderActions', () => {
     expect(getByLabelText('Notifications, 3 unread')).toBeTruthy();
     await fireEvent.press(getByTestId('home-notification-bell'));
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('NotificationCenter'));
+  });
+
+  it('shows the unread coach-message count on the message entry (AUDIT-03-125 U2)', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    mockGet.mockImplementation(async (u: string) =>
+      u === '/messages/unread-count' ? { data: { total: 2 } } : { data: { name: 'Bradley Gleave' } },
+    );
+    const { findByLabelText } = await render(<HomeHeaderActions />);
+    expect(await findByLabelText('Message Bradley, 2 unread')).toBeTruthy();
+    expect(mockGet).toHaveBeenCalledWith('/messages/unread-count');
   });
 
   it('HomeScreen mounts the actions and the deferred push card; ClientNavigator has no dead headerRight bell', () => {

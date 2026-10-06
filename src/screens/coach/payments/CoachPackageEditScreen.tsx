@@ -44,6 +44,7 @@ import {
   PackageCreateInput,
   PackageUpdateInput,
   trialDaysChange,
+  preservePackageStats,
 } from "../../../api/packagesApi";
 import { errorCode, errorMessage } from "../../../types/common";
 import {
@@ -347,7 +348,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             ? { ...rest, billingInterval: nextInterval, intervalCount, trialDays }
             : { ...rest, trialDays };
         const res = await coachPackagesApi.update(original.id, updated);
-        setOriginal(res.data);
+        setOriginal(preservePackageStats(res.data, original));
         successTap();
         Alert.alert("Package updated", "Changes saved.");
       } else {
@@ -464,7 +465,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         mode === "publish"
           ? await coachPackagesApi.publish(original.id)
           : await coachPackagesApi.unpublish(original.id);
-      setOriginal(res.data);
+      setOriginal(preservePackageStats(res.data, original));
       if (mode === "unpublish") {
         successTap();
         track("coach_package_unpublished", { package_id: original.id });
@@ -498,7 +499,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     warningTap();
     Alert.alert(
       "Archive this package?",
-      "New clients will no longer be able to subscribe. Existing subscribers are unaffected — they keep access and continue to be billed until they cancel.",
+      "Archived packages cannot be sold again. TGP checks for clients with access before archiving. To stop new sales while keeping existing clients, use Take off sale instead.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -610,7 +611,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     : null;
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
-  const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
+  const pricingLocked = isEdit &&
+    (original?.pricingLocked ?? (original?.subscriberCount ?? 0) > 0);
 
   return (
     <KeyboardAvoidingView
@@ -679,7 +681,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         />
 
         <Label semanticColors={semanticColors} tokens={tokens}>
-          Price (USD)
+          Price ({(original?.currency ?? "usd").toUpperCase()})
         </Label>
         <TextInput
           value={priceText}
@@ -1000,7 +1002,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityLabel="View subscribers"
             >
               <Text style={styles.linkBtnText}>
-                View subscribers ({original.subscriberCount})
+                {original.statsAvailable === false
+                  ? "View subscribers"
+                  : `View subscribers (${original.subscriberCount})`}
               </Text>
               <Ionicons
                 name="chevron-forward"

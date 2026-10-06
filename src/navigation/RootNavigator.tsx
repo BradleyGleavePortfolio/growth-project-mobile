@@ -74,7 +74,7 @@ type AuthState =
 // `?`). `fragmentToQuery` hoists the fragment into the query string
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
-import { fragmentToQuery } from './deepLinkUtils';
+import { emailVerifiedPath, fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
@@ -87,6 +87,7 @@ import {
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 import { profileOnboardingCompleted } from '../lib/profileOnboarding';
+import { wasDay1WinSkipped } from '../lib/day1WinSkip';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -154,6 +155,10 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
         return undefined;
       }
     }
+    // HUNT-01-124: the confirmation email's `tgp://verified#<session>` is
+    // reduced to a token-free status before parsing (see deepLinkUtils).
+    const verified = emailVerifiedPath(path);
+    if (verified) return getStateFromPath(verified, options);
     return getStateFromPath(fragmentToQuery(path), options);
   },
   config: {
@@ -179,6 +184,15 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       // re-bootstraps (authenticated) or resets to Login (not). It is
       // mounted in AuthNavigator under this route name (clinic C10).
       AuthCallback: 'auth/callback',
+      // HUNT-01-124: sign-up confirmation return (backend emailRedirectTo
+      // default `tgp://verified`). Without this entry the link opened the
+      // app with no confirmation and no next step.
+      EmailVerified: {
+        path: 'verified',
+        parse: {
+          status: (v: string) => (v === 'link_problem' ? 'link_problem' : 'confirmed'),
+        },
+      },
       CreateAccount: {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },
@@ -808,11 +822,15 @@ export default function RootNavigator() {
           // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
           // error handling — if the API is unreachable, skip the win screen and
           // go straight to the client app. The screen can be shown on next boot.
+          // A client who tapped "Skip for now" is not shown it again on every
+          // open (lib/day1WinSkip); the server only records a tapped win.
           try {
-            const statusResponse = await firstWinApi.getStatus();
-            if (!statusResponse.data.completed) {
-              setAuthState('day1win');
-              return;
+            if (!(await wasDay1WinSkipped(user?.id))) {
+              const statusResponse = await firstWinApi.getStatus();
+              if (!statusResponse.data.completed) {
+                setAuthState('day1win');
+                return;
+              }
             }
           } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         }

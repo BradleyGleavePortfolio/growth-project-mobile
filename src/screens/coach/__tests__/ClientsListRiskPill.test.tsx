@@ -11,6 +11,7 @@ let mockUser: { id: string; role?: string } | null = { id: 'c1', role: 'coach' }
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../store/coachStore', () => ({
   useCoachStore: () => ({
+    clients: [],
     isLoading: false,
     loadError: null,
     searchQuery: '',
@@ -43,7 +44,7 @@ type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 const navigate = jest.fn();
 async function mount() {
   // Only navigate() is read by the header.
-  const navigation: Pick<Nav, 'navigate'> = { navigate };
+  const navigation: Pick<Nav, 'navigate' | 'addListener'> = { navigate, addListener: () => () => undefined };
   return await render(<ClientsListScreen navigation={navigation as Nav} />);
 }
 

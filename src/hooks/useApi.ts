@@ -51,6 +51,9 @@ export type ApiHabit = {
   emoji?: string | null;
   category?: string | null;
   target_per_week?: number | null;
+  target_value?: number | null;
+  unit?: string | null;
+  logs?: ApiHabitLog[];
   created_at: string;
 };
 
@@ -60,6 +63,7 @@ export type ApiHabitLog = {
   user_id: string;
   date: string;
   completed: boolean;
+  value?: number | null;
 };
 
 export function useHabits(opts?: UseQueryOptions<ApiHabit[]>) {
@@ -82,10 +86,9 @@ export function useHabitLogs(date: string, opts?: UseQueryOptions<ApiHabitLog[]>
 export function useCreateHabit() {
   const qc = useQueryClient();
   return useMutation({
-    // Backend tolerates extra fields (icon/color/unit/target_value/frequency) that
-    // the legacy HabitsScreen modal already collected. Accept Record so callers
-    // don't have to be artificially narrow.
-    mutationFn: (data: Record<string, unknown>) => habitsApi.create(data).then((r) => r.data),
+    // Match CreateHabitDto: the production API rejects unknown display fields.
+    mutationFn: (data: { name: string; category?: string; target_value?: number; unit?: string }) =>
+      habitsApi.create(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['habits'] });
     },
@@ -389,8 +392,6 @@ export function useSaveCheckIn() {
       mood?: number | null;
       energy?: number | null;
       sleep_hours?: number | null;
-      sleep_quality?: number | null;
-      stress?: number | null;
       weight_kg?: number | null;
       notes?: string | null;
     }) => checkInsApi.save(data).then((r) => r.data),

@@ -60,6 +60,26 @@ export function helpUrl(pathname?: string): string {
   return `${resolvedHelpBaseUrl}${suffix}`;
 }
 
+// The help pages the backend actually serves (growth-project-backend
+// src/public-pages/public-pages.controller.ts and the setGlobalPrefix exclude
+// list in src/main.ts). Any other /help/<x> path answers a raw JSON 404, so
+// every helpUrl() call in the app must use one of these (HUNT-09-124:
+// helpUrl('/coach') opened "Cannot GET /help/coach").
+export const HELP_PAGE_PATHS = [
+  '',
+  '/setup',
+  '/first-client',
+  '/tour',
+  '/faq',
+  '/support',
+  '/contact',
+  '/delete-account',
+] as const;
+
+// Contact support page (email support, what to include). The site root
+// (app.trygrowthproject.com/) is not a page: it answers "Page not available".
+export const HELP_CONTACT_URL = helpUrl('/contact');
+
 // Public policy pages, served by the backend at the site root
 // (growth-project-backend src/public-pages/trust-pages.html.ts: /privacy,
 // /consumer-health-privacy, /terms). They are NOT under the help centre, so

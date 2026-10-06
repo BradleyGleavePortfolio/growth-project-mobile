@@ -288,7 +288,9 @@ export default function SettingsScreen() {
 
   const handleOpenHelp = async () => {
     mediumTap();
-    const url = helpUrl('/coach');
+    // The help centre home lists the coach guides (setup, first client, tour,
+    // FAQ, support). There is no /help/coach page (HUNT-09-124).
+    const url = helpUrl();
     try {
       const supported = await Linking.canOpenURL(url);
       if (!supported) {

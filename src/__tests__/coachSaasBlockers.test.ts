@@ -257,9 +257,18 @@ describe('CoachTeamProfileScreen honesty', () => {
     expect(src).toMatch(/team\.ok/);
   });
 
-  it('surfaces the team code for sharing', () => {
-    expect(src).toContain('buildInviteUniversalLink');
-    expect(src).toContain('team_code');
+  // AUDIT-16-125: no sign-up or join path accepts the stored GP-TEAM code,
+  // so the screen shares the coach's permanent invite link instead.
+  it('shares the permanent invite link, never the team code', () => {
+    expect(src).toContain('<InviteShareCard');
+    expect(src).not.toContain('profile.team_code');
+    expect(src).not.toContain('buildInviteUniversalLink');
+    expect(src).not.toMatch(/sign up with this code/i);
+  });
+
+  it('shows no invented seat capacity and no unreachable sub-coach link', () => {
+    expect(src).not.toContain('client_capacity');
+    expect(src).not.toContain("navigate('TeamManagement')");
   });
 });
 

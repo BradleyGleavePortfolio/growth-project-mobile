@@ -252,20 +252,27 @@ export const invitesApi = {
    * request body — that is the contract documented on the backend
    * controller. Returns `{ supported: false }` on 404 so the UI can hide
    * the affordance when the backend hasn't rolled the route yet.
+   * `emailStatus` is the backend send outcome; a 200 can still be `skipped`
+   * or `failed` (AUDIT-17-125).
    */
   resendInvite: async (
     id: string,
     email: string,
     opts?: { name?: string; note?: string },
-  ): Promise<{ supported: true } | { supported: false }> => {
+  ): Promise<
+    { supported: true; emailStatus: ResendEmailStatus | null } | { supported: false }
+  > => {
     if (!email) throw new Error('email is required to resend an invite');
     try {
-      await api.post(`/coach/invite-codes/${id}/send`, {
-        email,
-        ...(opts?.name ? { name: opts.name } : {}),
-        ...(opts?.note ? { note: opts.note } : {}),
-      });
-      return { supported: true };
+      const res = await api.post<{ status?: unknown } | null>(
+        `/coach/invite-codes/${id}/send`,
+        {
+          email,
+          ...(opts?.name ? { name: opts.name } : {}),
+          ...(opts?.note ? { note: opts.note } : {}),
+        },
+      );
+      return { supported: true, emailStatus: readResendEmailStatus(res?.data) };
     } catch (err) {
       if (isNotFound(err)) return { supported: false };
       throw err;
@@ -309,6 +316,16 @@ export const invitesApi = {
     return body;
   },
 };
+
+export type ResendEmailStatus = 'sent' | 'logged' | 'skipped' | 'failed';
+
+function readResendEmailStatus(data: unknown): ResendEmailStatus | null {
+  if (!data || typeof data !== 'object') return null;
+  const status = (data as { status?: unknown }).status;
+  return status === 'sent' || status === 'logged' || status === 'skipped' || status === 'failed'
+    ? status
+    : null;
+}
 
 /** Axios 404 detector — kept private so the surface stays clean. */
 function isNotFound(err: unknown): boolean {

@@ -174,6 +174,19 @@ export const ROMAN_SEND_FAILED =
 export const ROMAN_STORED_NO_REPLY =
   'Your message is saved above, but I could not answer it. Tap Send again to ask once more.';
 
+/**
+ * The coach's monthly AI credit pool is used up (backend 402
+ * COACH_AI_BUDGET_EXHAUSTED, B-668-1). Sending again cannot help, so the copy
+ * names what still works and offers no retry. A client never sees the
+ * coach's credit figures; the coach copy names no purchase step, because
+ * digital credit packs are not sold in the store builds.
+ */
+export function romanPoolEmpty(audience: 'client' | 'coach'): string {
+  return audience === 'coach'
+    ? 'The AI credits on your coaching account are used up for this month, so Roman cannot answer right now. Your clients, messages and the rest of the app work as usual.'
+    : "Your coach's AI credits for this month are used up, so Roman cannot answer right now. Your coach is in Messages any time, and your plan and logs work as usual.";
+}
+
 /** After AI help is allowed for a message the server already stored (B-326-3). */
 export const ROMAN_AI_ON_ASK_AGAIN =
   'AI help is on now. Your message is saved above without an answer. Tap send to ask again.';

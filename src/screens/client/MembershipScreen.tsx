@@ -27,6 +27,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { aiApi, AIStructuredContext, usersApi } from '../../services/api';
 import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
+import { HELP_CONTACT_URL } from '../../config/env';
 
 import { colors as colorTokens, typography } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -165,8 +166,9 @@ export default function MembershipScreen() {
               <Text style={styles.explainBody}>
                 The Growth Project is a coach-managed platform. Your coach
                 invites you, sets your training and nutrition plan, and may
-                offer self-serve plans below. To pause, change tier, or
-                cancel, message your coach directly.
+                offer self-serve plans below. A plan paid in the app shows
+                under View coaching plans, where a renewing plan can be ended
+                at any time. To pause or change a plan, message your coach.
               </Text>
             </View>
 
@@ -205,7 +207,9 @@ export default function MembershipScreen() {
               <Text style={styles.primaryActionLabel}>MESSAGE YOUR COACH</Text>
             </HapticPressable>
 
-            {/* Secondary — open the public site for general inquiries.
+            {/* Secondary — the contact support page for general inquiries.
+                HUNT-09-124: the site root is not a page (it answers "Page
+                not available"), so this opens /help/contact.
                 Audit #304 C2: not rendered on hidden iOS builds. A website
                 link from the membership/billing context reads as steering to
                 an external purchase (Guideline 3.1.1). The permitted 1:1
@@ -216,15 +220,14 @@ export default function MembershipScreen() {
                 intent="light"
                 style={styles.secondaryAction}
                 onPress={() =>
-                  Linking.openURL('https://app.trygrowthproject.com').catch(
-                    () => undefined,
-                  )
+                  Linking.openURL(HELP_CONTACT_URL).catch(() => undefined)
                 }
                 accessibilityRole="link"
-                accessibilityLabel="Open trygrowthproject.com"
+                accessibilityLabel="Contact support"
+                accessibilityHint="Opens the contact support page in your browser"
               >
                 <Text style={styles.secondaryActionLabel}>
-                  Open trygrowthproject.com
+                  Contact support
                 </Text>
               </HapticPressable>
             )}

@@ -46,6 +46,7 @@ import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import {
+  romanPoolEmpty,
   romanRateLimited,
   ROMAN_LOADING_A11Y_LABEL,
   ROMAN_LOADING_OLDER,
@@ -197,11 +198,13 @@ export default function RomanChatScreen({
             const c = aiRefusalCopy(refusal, refusalAudience, 'roman');
             return `${c.title}. ${c.body}`;
           })()
-        : sendError.kind === 'rateLimited'
-          ? romanRateLimited(sendError.retryAfterSeconds)
-          : sendError.turnStored
-            ? ROMAN_STORED_NO_REPLY
-            : ROMAN_SEND_FAILED;
+        : sendError.kind === 'poolEmpty'
+          ? romanPoolEmpty(refusalAudience)
+          : sendError.kind === 'rateLimited'
+            ? romanRateLimited(sendError.retryAfterSeconds)
+            : sendError.turnStored
+              ? ROMAN_STORED_NO_REPLY
+              : ROMAN_SEND_FAILED;
 
   // Announce a send failure (and its remedy) to assistive tech the moment it
   // appears. The optimistic user turn was rolled back in useRomanChat, so the
@@ -389,7 +392,7 @@ export default function RomanChatScreen({
             <Text style={styles.sendErrorText} accessibilityRole="text">
               {sendErrorCopy}
             </Text>
-            {sendError?.kind !== 'rateLimited' ? (
+            {sendError?.kind !== 'rateLimited' && sendError?.kind !== 'poolEmpty' ? (
               <TouchableOpacity
                 style={styles.retryButton}
                 onPress={onRetrySend}

@@ -6,11 +6,12 @@
  *   hidden rows: iOS + flag true; iOS + flag false + native build >= 6 (an
  *                OTA bundle that flips the flag); iOS + flag false + native
  *                build unreadable
- *   shown rows:  iOS + flag false + native build 5 (pre-OTA binary);
- *                Android + flag true
+ *   shown rows:  iOS + flag false + native build 5 (pre-OTA binary).
+ * Android release hides digital AI/software purchases, independently of
+ * the existing iOS-only human-coaching purchase/feature-link posture.
  */
 import React from 'react';
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, Text } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 const mockState: { flag: boolean; build: string | null } = { flag: true, build: '6' };
@@ -63,7 +64,13 @@ let mockBudget: Record<string, unknown> | undefined;
 jest.mock('../hooks/useAIBudget', () => ({ useAIBudget: () => ({ data: mockBudget }) }));
 jest.mock('../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../theme/tokens');
-  return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
+  return {
+    useTheme: () => ({
+      colorScheme: 'light', semanticColors: lightTokens,
+      colors: { background: '#F5EFE4', textPrimary: '#1A1A18', textSecondary: '#6B6B6B' },
+      tokens: { typography: { h2: { fontSize: 24 }, body: { fontSize: 16 } } },
+    }),
+  };
 });
 jest.mock('react-native-safe-area-context', () => {
   const actual = jest.requireActual('react-native-safe-area-context');
@@ -87,18 +94,25 @@ import { AIBudgetTutorialModal } from '../components/coach/ai-budget/AIBudgetTut
 import { UpgradeGate } from '../screens/coach/TeamManagementScreen';
 import { seatLimitMessage } from '../screens/coach/SubCoachInviteModal';
 import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
-import { nonP2PPurchasesHidden, externalLinkAllowed, isPaymentUrl } from '../config/purchaseSurfaces';
+import { digitalPurchasesHidden, nonP2PPurchasesHidden, externalLinkAllowed, isPaymentUrl } from '../config/purchaseSurfaces';
+import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
+import { PackOptionsRow } from '../components/coach/ai-budget/PackOptionsRow';
+import { COACH_PUSH_ROUTES } from '../services/pushTapRouter';
 
 const BUY = /buy|top up|top-up|pack|upgrade|checkout|purchase/i;
 
-type Row = { name: string; os: 'ios' | 'android'; flag: boolean; build: string | null; hidden: boolean };
+type Row = {
+  name: string; os: 'ios' | 'android'; flag: boolean; build: string | null;
+  hidden: boolean; digitalHidden?: boolean;
+};
 const ROWS: Row[] = [
   { name: 'iOS, flag on, build 6', os: 'ios', flag: true, build: '6', hidden: true },
   { name: 'iOS, OTA flips flag off, build 6', os: 'ios', flag: false, build: '6', hidden: true },
   { name: 'iOS, OTA flips flag off, build 7', os: 'ios', flag: false, build: '7', hidden: true },
   { name: 'iOS, flag off, unreadable build', os: 'ios', flag: false, build: null, hidden: true },
   { name: 'iOS, flag off, pre-OTA build 5', os: 'ios', flag: false, build: '5', hidden: false },
-  { name: 'Android, flag on', os: 'android', flag: true, build: '5', hidden: false },
+  { name: 'Android release, flag on', os: 'android', flag: true, build: '5', hidden: false, digitalHidden: true },
+  { name: 'Android release, iOS flag off', os: 'android', flag: false, build: '5', hidden: false, digitalHidden: true },
 ];
 
 function budget(pct: number) {
@@ -128,6 +142,7 @@ const g = globalThis as { __DEV__?: boolean };
 const realDev = g.__DEV__;
 
 describe.each(ROWS)('$name', (row) => {
+  const digitalHidden = row.digitalHidden ?? row.hidden;
   beforeEach(async () => {
     mockState.flag = row.flag;
     mockState.build = row.build;
@@ -143,13 +158,38 @@ describe.each(ROWS)('$name', (row) => {
 
   it('gate decision', () => {
     expect(nonP2PPurchasesHidden()).toBe(row.hidden);
+    expect(digitalPurchasesHidden()).toBe(digitalHidden);
+  });
+
+  it('a budget notification routes to Settings rather than hidden checkout', () => {
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({
+      root: 'SettingsStack',
+      screen: digitalHidden ? 'SettingsHome' : 'CreditPackCheckout',
+    });
+  });
+
+  it('direct credit-pack navigation cannot mount checkout when digital purchases are hidden', async () => {
+    const checkoutMounted = jest.fn();
+    const Checkout = () => {
+      checkoutMounted();
+      return <Text>Digital checkout</Text>;
+    };
+    const Gated = withNonP2PPurchaseGate(Checkout);
+    const utils = await render(<Gated />);
+    expect(utils.queryByText('Digital checkout') === null).toBe(digitalHidden);
+    expect(checkoutMounted.mock.calls.length > 0).toBe(!digitalHidden);
+  });
+
+  it('standalone pack options are absent when digital purchases are hidden', async () => {
+    const utils = await render(<PackOptionsRow options={[1000]} onSelect={jest.fn()} />);
+    expect(utils.queryByTestId('ai-pack-option-1000') === null).toBe(digitalHidden);
   });
 
   it('meter chip: interactive buy affordance only when shown', async () => {
     mockBudget = budget(60);
     const { getByTestId } = await render(<AIBudgetMount />);
     const meter = getByTestId('ai-budget-mount-chip');
-    if (row.hidden) {
+    if (digitalHidden) {
       expect(meter.props.accessibilityRole).toBe('text');
       expect(meter.props.accessibilityLabel).not.toMatch(BUY);
       expect(meter.props.accessibilityHint).toBeUndefined();
@@ -162,14 +202,14 @@ describe.each(ROWS)('$name', (row) => {
   it('95% banner: Buy credits only when shown', async () => {
     mockBudget = budget(96);
     const { queryByText } = await render(<AIBudgetMount />);
-    expect(queryByText('Buy credits') === null).toBe(row.hidden);
+    expect(queryByText('Buy credits') === null).toBe(digitalHidden);
   });
 
   it('hard pause (mounted): neutral notice when hidden, packs when shown', async () => {
     mockBudget = budget(100);
     const utils = await render(<AIBudgetMount />);
     const text = allText(utils.toJSON());
-    if (row.hidden) {
+    if (digitalHidden) {
       expect(utils.getByTestId('ai-hard-pause-neutral')).toBeTruthy();
       expect(text).not.toMatch(/Top up|credit pack/);
       expect(utils.queryByTestId('ai-pack-option-1000')).toBeNull();
@@ -197,7 +237,7 @@ describe.each(ROWS)('$name', (row) => {
         });
       }
       const joined = seen.join('\n');
-      if (row.hidden) {
+      if (digitalHidden) {
         expect(joined).not.toMatch(/How packs work|Buy credits|Pick a pack|buy later|top up/i);
         expect(utils.queryByTestId('ai-tutorial-later')).toBeNull();
         await fireEvent.press(utils.getByTestId('ai-tutorial-done'));
@@ -216,13 +256,13 @@ describe.each(ROWS)('$name', (row) => {
 
   it('Team gate: no upgrade instruction when hidden', async () => {
     const { toJSON } = await render(<UpgradeGate />);
-    expect(/Upgrade/.test(allText(toJSON()))).toBe(!row.hidden);
+    expect(/Upgrade/.test(allText(toJSON()))).toBe(!digitalHidden);
   });
 
   it('exhausted / partial seat messages: no upgrade instruction when hidden', () => {
-    const hidden = nonP2PPurchasesHidden();
-    expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!row.hidden);
-    expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!row.hidden);
+    const hidden = digitalPurchasesHidden();
+    expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!digitalHidden);
+    expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!digitalHidden);
     expect(seatLimitMessage(0, hidden)).toMatch(/Revoke an existing sub-coach|revoke an existing sub-coach/);
   });
 

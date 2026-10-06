@@ -20,6 +20,8 @@
  */
 
 import api from '../services/api';
+import type { AxiosResponse } from 'axios';
+import { exerciseLibraryApi } from './exerciseLibraryApi';
 import type {
   ExerciseDetail,
   ExerciseListParams,
@@ -49,6 +51,33 @@ export const exerciseCatalogApi = {
     api.get<ExerciseDetail>(
       `/exercise-catalog/${encodeURIComponent(idOrSlug)}`,
     ),
+
+  // Existing assigned workouts use ExerciseDB/seed IDs, not catalog UUIDs.
+  // Fall back only on a missing catalog entry, never on an access error.
+  getDetail: async (idOrSlug: string): Promise<AxiosResponse<ExerciseDetail>> => {
+    try {
+      return await exerciseCatalogApi.getByIdOrSlug(idOrSlug);
+    } catch (error) {
+      const status = (error as { response?: { status?: number } }).response?.status;
+      if (status !== 404) throw error;
+      const response = await exerciseLibraryApi.getById(idOrSlug);
+      const exercise = response.data;
+      const data: ExerciseDetail = {
+        id: exercise.id,
+        slug: exercise.id,
+        name: exercise.name,
+        category: exercise.bodyPart,
+        primaryMuscle: exercise.target,
+        secondaryMuscles: exercise.secondaryMuscles ?? [],
+        equipment: exercise.equipment ? [exercise.equipment] : [],
+        difficulty: '',
+        instructions: exercise.instructions ?? [],
+        playbackUrl: exercise.video_url ?? null,
+        gifUrl: exercise.gifUrl || null,
+      };
+      return { ...response, data };
+    }
+  },
 };
 
 export type { ExerciseDetail, ExerciseListParams, ExerciseListResponse };

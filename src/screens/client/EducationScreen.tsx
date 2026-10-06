@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ScrollView,
   RefreshControl,
+  Linking,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -15,11 +17,10 @@ import { lessonsApi } from '../../services/api';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import type { IoniconName, JsonRecord } from '../../types/common';
 import {
-  Lesson,
-  LessonProgress,
   getUserProgress,
   markLessonComplete,
 } from '../../db/educationDb';
+import { lessonFromApi, type EducationLesson } from './educationLesson';
 
 type ScreenMode = 'list' | 'detail';
 
@@ -39,28 +40,28 @@ function makeCATEGORY_COLORS(colors: ThemeColors): Record<string, string> {
 };
 }
 
-interface LessonWithProgress extends Lesson {
-  completed: boolean;
-}
-
 export default function EducationScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const CATEGORY_COLORS = useMemo(() => makeCATEGORY_COLORS(colors), [colors]);
   const currentUser = useCurrentUser();
   const [mode, setMode] = useState<ScreenMode>('list');
-  const [lessons, setLessons] = useState<LessonWithProgress[]>([]);
-  const [_progress, setProgress] = useState<LessonProgress[]>([]);
-  const [selectedLesson, setSelectedLesson] = useState<LessonWithProgress | null>(null);
+  const [lessons, setLessons] = useState<EducationLesson[]>([]);
+  const [selectedLesson, setSelectedLesson] = useState<EducationLesson | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [completing, setCompleting] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!currentUser) return;
-    let serverLessons: Lesson[] = [];
     // Backend completions, derived from the same lessons payload we already
     // fetched — no second round-trip to /lessons. See audit P0-7.
     const backendCompletedIds = new Set<string>();
+    setLoading(true);
+    setLoadError(null);
     try {
       const res = await lessonsApi.getAll();
       const data = res.data as { lessons?: JsonRecord[] } | JsonRecord[] | undefined;
@@ -69,37 +70,26 @@ export default function EducationScreen() {
         : Array.isArray(data?.lessons)
           ? data.lessons
           : [];
-      serverLessons = raw.map((l) => {
-        if (l.completed || l.is_completed) backendCompletedIds.add(String(l.id));
-        return {
-          id: String(l.id),
-          title: (l.title as string) || 'Untitled',
-          subtitle: (l.subtitle as string) || '',
-          category: (l.category as string) || 'Nutrition Basics',
-          content: (l.content as string) || (l.body as string) || '',
-          durationMin: (l.duration_min as number) ?? (l.durationMin as number) ?? 5,
-          sortOrder: (l.sort_order as number) ?? (l.sortOrder as number) ?? 0,
-          createdAt: (l.created_at as string) ?? (l.createdAt as string) ?? new Date().toISOString(),
-        };
+      const serverLessons = raw.map((l) => {
+        const lesson = lessonFromApi(l);
+        if (lesson.completed) backendCompletedIds.add(String(l.id));
+        return lesson;
       });
       serverLessons.sort((a, b) => a.sortOrder - b.sortOrder);
-    } catch (err) {
-      // Read-only fetch. On failure leave whatever we had (first load = empty
-      // list with the honest empty state below).
-      console.error('EducationScreen: lessonsApi.getAll failed', err);
+      // Preserve cached progress while reading real backend completions.
+      const userProgress = await getUserProgress(currentUser.id).catch(() => []);
+      const localCompletedIds = new Set(
+        userProgress.filter((p) => p.completed).map((p) => p.lessonId),
+      );
+      const completedIds = new Set([...localCompletedIds, ...backendCompletedIds]);
+      setLessons(
+        serverLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) })),
+      );
+    } catch {
+      setLoadError('Lessons did not load. Check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
-    // Completion: backend is source of truth; local SQLite is used as a cache
-    // for offline reads. We merge both so lessons marked locally but not yet
-    // synced still show as complete.
-    const userProgress = await getUserProgress(currentUser.id);
-    setProgress(userProgress);
-    const localCompletedIds = new Set(
-      userProgress.filter((p) => p.completed).map((p) => p.lessonId),
-    );
-    const completedIds = new Set([...localCompletedIds, ...backendCompletedIds]);
-    setLessons(
-      serverLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) })),
-    );
   }, [currentUser]);
 
   useEffect(() => {
@@ -112,25 +102,40 @@ export default function EducationScreen() {
     setRefreshing(false);
   }, [loadData]);
 
-  const openLesson = (lesson: LessonWithProgress) => {
+  const openLesson = (lesson: EducationLesson) => {
+    setDetailError(null);
     setSelectedLesson(lesson);
     setMode('detail');
   };
 
   const handleComplete = async () => {
-    if (!currentUser || !selectedLesson) return;
-    // Optimistic update — local SQLite keeps offline cache in sync
-    await markLessonComplete(currentUser.id, selectedLesson.id);
-    setSelectedLesson({ ...selectedLesson, completed: true });
-    setLessons((prev) =>
-      prev.map((l) => (l.id === selectedLesson.id ? { ...l, completed: true } : l))
-    );
-    // Backend is source of truth — fire-and-forget; local state already updated
+    if (!currentUser || !selectedLesson || completing) return;
+    setCompleting(true);
+    setDetailError(null);
     try {
       await lessonsApi.complete(selectedLesson.id);
-    } catch (err) {
-      // Non-blocking: completion is cached locally; backend will sync on next load
-      console.warn('EducationScreen: lessonsApi.complete failed', err);
+      // Only claim completion after the server confirms the save.
+      setSelectedLesson({ ...selectedLesson, completed: true });
+      setLessons((prev) =>
+        prev.map((l) => (l.id === selectedLesson.id ? { ...l, completed: true } : l))
+      );
+      await markLessonComplete(currentUser.id, selectedLesson.id).catch((error: unknown) => {
+        console.warn('Education completion cache did not save', error);
+      });
+    } catch {
+      setDetailError('Lesson completion did not save. Check your connection and try again.');
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const openLessonLink = async (url: string | null, kind: 'video' | 'article') => {
+    setDetailError(null);
+    try {
+      if (!url || !/^https?:\/\//i.test(url)) throw new Error('Unavailable lesson URL');
+      await Linking.openURL(url);
+    } catch {
+      setDetailError(`The lesson ${kind} could not open. Ask your coach for a working link.`);
     }
   };
 
@@ -158,7 +163,9 @@ export default function EducationScreen() {
           </TouchableOpacity>
           <View style={styles.detailHeaderCenter}>
             <Text style={styles.detailCategory}>{selectedLesson.category}</Text>
-            <Text style={styles.detailDuration}>{selectedLesson.durationMin} min read</Text>
+            {selectedLesson.durationMin > 0 ? (
+              <Text style={styles.detailDuration}>{selectedLesson.durationMin} min read</Text>
+            ) : null}
           </View>
           {selectedLesson.completed ? (
             <View style={styles.completedBadge}>
@@ -178,6 +185,22 @@ export default function EducationScreen() {
           <Text style={styles.detailSubtitle}>{selectedLesson.subtitle}</Text>
 
           <View style={styles.detailDivider} />
+          {selectedLesson.videoUrl ? (
+            <TouchableOpacity style={styles.completeBtn} accessibilityRole="link"
+              onPress={() => void openLessonLink(selectedLesson.videoUrl, 'video')}>
+              <Text style={styles.completeBtnText}>Watch lesson</Text>
+            </TouchableOpacity>
+          ) : null}
+          {selectedLesson.articleUrl ? (
+            <TouchableOpacity style={styles.completeBtn} accessibilityRole="link"
+              onPress={() => void openLessonLink(selectedLesson.articleUrl, 'article')}>
+              <Text style={styles.completeBtnText}>Read article</Text>
+            </TouchableOpacity>
+          ) : null}
+          {!selectedLesson.content && !selectedLesson.videoUrl && !selectedLesson.articleUrl ? (
+            <Text style={styles.detailParagraph}>This lesson has no content yet. Ask your coach to add it.</Text>
+          ) : null}
+          {detailError ? <Text style={styles.detailParagraph}>{detailError}</Text> : null}
 
           {selectedLesson.content.split('\n').map((paragraph, idx) => {
             const trimmed = paragraph.trim();
@@ -225,9 +248,10 @@ export default function EducationScreen() {
           })}
 
           {!selectedLesson.completed && (
-            <TouchableOpacity style={styles.completeBtn} onPress={handleComplete}>
+            <TouchableOpacity style={styles.completeBtn} onPress={handleComplete} disabled={completing}
+              accessibilityRole="button" accessibilityState={{ disabled: completing }}>
               <Ionicons name="checkmark-circle" size={20} color={colors.textOnPrimary} />
-              <Text style={styles.completeBtnText}>Mark as Complete</Text>
+              <Text style={styles.completeBtnText}>{completing ? 'Saving completion…' : 'Mark as Complete'}</Text>
             </TouchableOpacity>
           )}
 
@@ -241,6 +265,7 @@ export default function EducationScreen() {
           <View style={{ height: 60 }} />
         </ScrollView>
       </View>
+
     );
   }
 
@@ -251,6 +276,15 @@ export default function EducationScreen() {
         <Text style={styles.title}>Learn</Text>
         <Text style={styles.subtitle}>Build your nutrition &amp; fitness knowledge</Text>
       </View>
+      {loading ? <ActivityIndicator color={colors.primary} accessibilityLabel="Loading lessons" /> : null}
+      {loadError ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>{loadError}</Text>
+          <TouchableOpacity onPress={() => void loadData()} accessibilityRole="button">
+            <Text style={styles.emptyTitle}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* Progress Card */}
       <View style={styles.progressCard}>
@@ -312,13 +346,13 @@ export default function EducationScreen() {
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
+          !loading && !loadError ? <View style={styles.emptyContainer}>
             <Ionicons name="book-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No lessons yet</Text>
             <Text style={styles.emptyText}>
               Your coach hasn't published any lessons. When they do, you'll see them here.
             </Text>
-          </View>
+          </View> : null
         }
         refreshControl={
           <RefreshControl
@@ -353,7 +387,7 @@ export default function EducationScreen() {
                   <View style={styles.featuredTag}>
                     <Text style={styles.featuredTagText}>Featured</Text>
                   </View>
-                  <Text style={styles.lessonDuration}>{item.durationMin} min</Text>
+                  {item.durationMin > 0 ? <Text style={styles.lessonDuration}>{item.durationMin} min</Text> : null}
                 </View>
               </View>
               {item.completed ? (

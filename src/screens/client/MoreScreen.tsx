@@ -9,6 +9,7 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +17,7 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { Spacing, Radius } from '../../theme/index';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
+import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 // FACE+VOICE contract (D-012): the Roman entry row is a Roman-branded surface,
 // so it carries Roman's actual face rather than a disembodied sparkles glyph.
 // Canonical avatar lives in the roman/ lane (D-013).
@@ -99,7 +101,7 @@ const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'ribbon-outline',
     label: 'Membership',
-    description: 'Your access and coaching tier',
+    description: 'Your plan, payments and access',
     target: { type: 'stack', screen: 'Membership' },
     a11yHint: 'Opens membership and access details',
   },
@@ -202,12 +204,25 @@ const ROMAN_MORE_ITEM: MoreItem = {
 };
 
 /**
- * Clinic tutorial rows (featureFlags.clientTutorial, default OFF): the
- * wearable Connections hub and the Health shell (Fitness + Recovery / sleep)
- * are registered in MoreStack but had no menu entry. The tutorial's wearable
- * step points at these two rows, so they ship behind the same flag.
+ * Wearables rows: the Connections hub and the Health shell (Fitness +
+ * Recovery / sleep). The clinic tutorial's wearable step spotlights them.
+ *
+ * AUDIT-11-125: they used to ship only with featureFlags.clientTutorial,
+ * which the iOS store (production) profile leaves off, so an iPhone client
+ * had no way to connect Apple Health and the binary carried HealthKit with no
+ * HealthKit screen (App Review 2.5.1). They now show wherever this build can
+ * read a phone health store: always on iPhone, and on Android only in a build
+ * with Health Connect (the clinic profile), or with the tutorial on as before.
  */
-const TUTORIAL_MORE_ITEMS: MoreItem[] = [
+function showsWearableRows(): boolean {
+  return (
+    featureFlags.clientTutorial ||
+    Platform.OS === 'ios' ||
+    isAndroidHealthConnectEnabled()
+  );
+}
+
+const WEARABLE_MORE_ITEMS: MoreItem[] = [
   {
     icon: 'heart-outline',
     label: 'Health and sleep',
@@ -232,12 +247,14 @@ export default function MoreScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const items = useMemo<MoreItem[]>(
     () => {
-      const base = [
-        ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
-        ...PLAN_MORE_ITEMS,
-        ...MORE_ITEMS,
-      ];
-      return featureFlags.clientTutorial ? [...TUTORIAL_MORE_ITEMS, ...base] : base;
+      const roman = featureFlags.romanChat ? [ROMAN_MORE_ITEM] : [];
+      // The clinic tutorial spotlights the wearables rows, so they stay at the
+      // top there (unchanged); elsewhere they follow the plan rows.
+      if (featureFlags.clientTutorial) {
+        return [...WEARABLE_MORE_ITEMS, ...roman, ...PLAN_MORE_ITEMS, ...MORE_ITEMS];
+      }
+      const wearables = showsWearableRows() ? WEARABLE_MORE_ITEMS : [];
+      return [...roman, ...PLAN_MORE_ITEMS, ...wearables, ...MORE_ITEMS];
     },
     [],
   );

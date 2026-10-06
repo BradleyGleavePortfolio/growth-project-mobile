@@ -15,6 +15,11 @@
  * The canonical signal lives in `/coach/team/members`. Each entry carries
  * `role: 'head_coach' | 'sub_coach'`, and we match the cached current user
  * id against the roster to decide.
+ *
+ * `useCoachTeamStatus` also reports whether the roster holds at least one
+ * sub-coach. The members route lists every coach as the head coach of their
+ * own (often empty) roster, so role alone cannot tell a coach who runs a
+ * team from one who does not.
  */
 
 import { useEffect, useState } from 'react';
@@ -24,8 +29,16 @@ import { authEvents } from '../utils/authEvents';
 
 export type CoachRoleType = 'head_coach' | 'sub_coach' | 'unknown';
 
-export function useCoachRoleType(): CoachRoleType {
-  const [role, setRole] = useState<CoachRoleType>('unknown');
+export interface CoachTeamStatus {
+  role: CoachRoleType;
+  /** True only once the roster shows at least one sub-coach. */
+  hasSubCoaches: boolean;
+}
+
+const UNKNOWN_STATUS: CoachTeamStatus = { role: 'unknown', hasSubCoaches: false };
+
+export function useCoachTeamStatus(): CoachTeamStatus {
+  const [status, setStatus] = useState<CoachTeamStatus>(UNKNOWN_STATUS);
 
   useEffect(() => {
     let mounted = true;
@@ -34,7 +47,7 @@ export function useCoachRoleType(): CoachRoleType {
       try {
         const user = await readUserCache();
         if (!user || user.role !== 'coach') {
-          if (mounted) setRole('unknown');
+          if (mounted) setStatus(UNKNOWN_STATUS);
           return;
         }
         const result = await coachTeamApi.getMembers();
@@ -45,27 +58,30 @@ export function useCoachRoleType(): CoachRoleType {
           // on a broken backend lose the tab until the next session — the
           // upgrade-gate alternative would falsely tell paying customers they
           // need to upgrade, which is worse.
-          setRole('unknown');
+          setStatus(UNKNOWN_STATUS);
           return;
         }
         const me = result.data.find((m) => m.id === user.id);
         if (!me) {
-          setRole('unknown');
+          setStatus(UNKNOWN_STATUS);
           return;
         }
-        setRole(me.role === 'head_coach' ? 'head_coach' : 'sub_coach');
+        setStatus({
+          role: me.role === 'head_coach' ? 'head_coach' : 'sub_coach',
+          hasSubCoaches: result.data.some((m) => m.role === 'sub_coach'),
+        });
       } catch {
-        if (mounted) setRole('unknown');
+        if (mounted) setStatus(UNKNOWN_STATUS);
       }
     };
 
     void resolve();
 
     const onLogin = () => {
-      setRole('unknown');
+      setStatus(UNKNOWN_STATUS);
       void resolve();
     };
-    const onLogout = () => setRole('unknown');
+    const onLogout = () => setStatus(UNKNOWN_STATUS);
     authEvents.on('login', onLogin);
     authEvents.on('logout', onLogout);
 
@@ -76,5 +92,9 @@ export function useCoachRoleType(): CoachRoleType {
     };
   }, []);
 
-  return role;
+  return status;
+}
+
+export function useCoachRoleType(): CoachRoleType {
+  return useCoachTeamStatus().role;
 }

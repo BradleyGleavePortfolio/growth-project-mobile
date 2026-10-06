@@ -27,6 +27,7 @@
  * attempt: never in React state, storage, logs, Sentry or analytics.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Linking } from "react-native";
 import { resolveStripePublishableKey } from "../config/stripe";
 import { resolveWalletConfig } from "../config/wallets";
 import { clientPaymentsApi } from "../api/clientPaymentsApi";
@@ -419,6 +420,30 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
         };
       }
       let presented: { error?: StripeSdkError } | undefined;
+      // Bank authentication can leave the app. Unlike Update card, these
+      // purchase surfaces had no listener to hand the bank's return to the
+      // native SDK, leaving PaymentSheet waiting after a successful return.
+      // Subscribe before presentation and only for this sheet's lifetime.
+      const bankReturn = Linking.addEventListener("url", ({ url }) => {
+        const normalized = url.toLowerCase();
+        if (
+          !live() ||
+          !(
+            normalized === STRIPE_RETURN_URL ||
+            normalized.startsWith(`${STRIPE_RETURN_URL}?`) ||
+            normalized.startsWith(`${STRIPE_RETURN_URL}#`)
+          )
+        ) return;
+        // The callback URL may contain payment details: never log it.
+        // A failed callback leaves the existing uncertain-result recovery
+        // in charge; it must never manufacture a paid result.
+        void Promise.resolve()
+          .then(() => {
+            if (live()) return sdk.handleURLCallback?.(url);
+            return false;
+          })
+          .catch(() => undefined);
+      });
       try {
         presented = await sdk.presentPaymentSheet();
       } catch {
@@ -430,6 +455,8 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           cause: "sheet_present_threw",
           stripe: null,
         };
+      } finally {
+        bankReturn.remove();
       }
       if (!live()) return STALE;
       if (presented?.error) {

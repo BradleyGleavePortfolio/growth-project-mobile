@@ -52,7 +52,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
-import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -135,7 +135,7 @@ export function AIBudgetTutorialModal({
   budget,
   onClose,
   onSelectPack,
-  purchasesHidden = nonP2PPurchasesHidden(),
+  purchasesHidden = digitalPurchasesHidden(),
   testID,
 }: AIBudgetTutorialModalProps): React.ReactElement {
   const { colors } = useTheme();

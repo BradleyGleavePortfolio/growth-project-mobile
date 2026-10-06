@@ -42,6 +42,7 @@ import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 // Clinic tutorial (C08): pinned plan explanation card; flag-gated, renders
 // nothing unless featureFlags.clientTutorial and a program exists.
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
+import WorkoutSyncCards from '../../components/workout/WorkoutSyncCards';
 import { featureFlags } from '../../config/featureFlags';
 // §2.8 Workout complete + §2.10 generic error — Roman speaks beside his face
 // (both components co-locate <RomanAvatar />). Gated behind
@@ -631,6 +632,8 @@ export default function WorkoutScreen() {
         </View>
 
         <PlanExplanationCard />
+
+        <WorkoutSyncCards userId={currentUser?.id} onSynced={loadData} />
 
         {pendingAssignments.length > 0 ? (
           <HapticPressable

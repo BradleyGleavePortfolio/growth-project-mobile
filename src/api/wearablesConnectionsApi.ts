@@ -312,6 +312,19 @@ export const disconnectResultSchema = z.object({
 
 export type DisconnectResult = z.infer<typeof disconnectResultSchema>;
 
+/**
+ * B-WEARLIST-125: `GET /v1/wearables/connections/providers` →
+ * `{ providers: WearableProvider[] }`, the cloud trackers the server can
+ * connect right now (switch on and that provider's keys set). Ids the app does
+ * not know, and on-device sources, are dropped rather than failing the list.
+ */
+const cloudProvidersSchema = z.object({ providers: z.array(z.string()) });
+
+function isKnownCloudProvider(id: string): id is WearableProvider {
+  const parsed = providerSchema.safeParse(id);
+  return parsed.success && !isOnDeviceProvider(parsed.data);
+}
+
 // ─── Client ──────────────────────────────────────────────────────────────────
 
 const BASE = '/v1/wearables/connections';
@@ -325,6 +338,16 @@ export const wearablesConnectionsApi = {
   async list(): Promise<WearableConnection[]> {
     const res = await api.get<unknown>(BASE);
     return connectionListSchema.parse(res.data);
+  },
+
+  /**
+   * B-WEARLIST-125: the cloud providers the server can connect right now.
+   * Older servers answer 404; callers treat any failure as "none listed".
+   * @throws on a transport error or a drifted response.
+   */
+  async cloudProviders(): Promise<WearableProvider[]> {
+    const res = await api.get<unknown>(`${BASE}/providers`);
+    return cloudProvidersSchema.parse(res.data).providers.filter(isKnownCloudProvider);
   },
 
   /**

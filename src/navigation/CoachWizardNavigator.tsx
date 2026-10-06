@@ -10,7 +10,7 @@
  *   5. Ready                checklist, then POST /coach/onboarding/complete
  * The backend keeps 6 sequential steps; advanceWizardTo walks it forward one
  * step at a time. Stripe, package and invite can each be done later from the
- * Home checklist, so the wizard never traps a coach.
+ * Overview checklist, so the wizard never traps a coach.
  */
 
 import React, {
@@ -351,7 +351,7 @@ function CoachWizardStep2({ navigation }: Step2Props) {
         testID="wizard-get-paid"
       />
       {!ready ? (
-        <SmallNote text="You can finish this later from the checklist on your Home screen. Free packages work without Stripe." />
+        <SmallNote text="You can finish this later from the checklist on the Overview tab. Free packages work without Stripe." />
       ) : null}
       {error ? (
         <SetupNotice error={error} testID="wizard-step-2-error" />
@@ -581,7 +581,7 @@ function CoachWizardStep5({ navigation }: Step5Props) {
   const [error, setError] = useState<FriendlyError | null>(null);
   // C-329-3: read the server on mount. When the wizard resumes on this
   // step, the in-memory state from earlier steps is empty, so the ticks
-  // must come from the same routes the Home checklist uses.
+  // must come from the same routes the Overview checklist uses.
   const [snap, setSnap] = useState<SetupSnapshot | null>(null);
   const [checking, setChecking] = useState(true);
   const check = useCallback(async () => {
@@ -637,7 +637,7 @@ function CoachWizardStep5({ navigation }: Step5Props) {
       stepNumber={5}
       totalSteps={UI_STEPS}
       heading="You are ready to coach"
-      body="Anything still open stays on your Home checklist. Your first client payment shows up in Money on your Home screen."
+      body="Anything still open stays on the checklist on the Overview tab. Your first client payment shows up in Money on the Overview tab."
       ctaLabel="Go to your dashboard"
       ctaDisabled={submitting}
       onCta={finish}

@@ -175,7 +175,7 @@ These rows belong in `docs/RELEASE_SMOKE.md`'s real-device-proof section; captur
 - For Play / App Store review, supply both a coach test account *and* a client test account so reviewers can exercise the full bidirectional flow (`PLAY_STORE_READINESS.md` §9).
 - The InviteCodes screen is the only place an invite URL is produced. If the universal-link host ever changes, that share string and `app.json → expo.android.intentFilters` must change together.
 - "Become a coach" is **not** a self-serve action. The role is granted server-side; there is no surface in the mobile app that flips a client into a coach.
-- Coach billing is in-app only as a status surface and a portal handoff. There is no in-app card capture, no in-app price list, no Stripe Elements. Coaches who churn do so through the same portal a coach who upgrades does. If a future iteration introduces in-app purchase, it must declare against Play Billing / StoreKit and add the corresponding Play data-safety entry.
+- Coach billing in store builds is a status surface, without software-subscription purchase, portal or payable-invoice links. Android development and web retain the existing portal handoff. Any future store purchase path needs the applicable store billing or enrolled alternative-billing integration.
 
 ## iOS: purchases that are not 1:1 services (clinic launch)
 
@@ -184,4 +184,16 @@ With `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` on (default in release builds; 
 - The "Buy credits" banner CTA, the meter chip tap, and `PackOptionsRow` in the tutorial and hard-pause modals.
 - The "Start subscription" / "Manage billing" button and invoice links in `CoachBillingScreen`. The status copy switches to a neutral note.
 
-Android and web are unchanged. See `src/config/purchaseSurfaces.ts`.
+Android release builds hide the same digital AI/software purchase surfaces through
+`digitalPurchasesHidden`; Android development and web remain unchanged. Direct navigation
+and budget notifications use the same decision as the visible buttons. Client real-time
+1:1 human-coaching purchases, including recurring packages, remain available and are
+not routed through this digital-only gate. See `src/config/purchaseSurfaces.ts`.
+
+Google Play generally requires Play Billing for in-app digital goods, cloud software
+and subscriptions unless an applicable enrolled alternative-billing program is
+correctly integrated; a Stripe webview alone is not that integration.
+[Google Play Payments](https://support.google.com/googleplay/android-developer/answer/9858738?hl=en).
+The exception for 1:1 online coaching requires two individuals and no replay of the
+paid session in a Play-distributed app.
+[Google Play's policy explanation](https://support.google.com/googleplay/android-developer/answer/10281818?hl=en).

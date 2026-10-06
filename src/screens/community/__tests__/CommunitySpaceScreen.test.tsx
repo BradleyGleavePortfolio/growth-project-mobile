@@ -218,6 +218,24 @@ describe.each(['hall', 'cohort'] as const)(
       expect(mockNavigate).not.toHaveBeenCalledWith('CommunityComposer', expect.anything());
     });
 
+    it('a feed with posts keeps a New post button that opens the composer (AUDIT-10-125 B-2)', async () => {
+      // Before this fix the only composer entry was the empty state's
+      // "Be the first to post": once one post existed nobody could post again.
+      mockPosts.data = [{ id: 'p-1' }, { id: 'p-2' }];
+      await render(
+        <CommunitySpaceScreen
+          embedded
+          space={space}
+          workspaceId="ws-resolved"
+          prerequisiteLoading={false}
+          prerequisiteError={false}
+        />,
+      );
+      expect(screen.getByTestId('post-card-p-1')).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('community-space-new-post'));
+      expect(mockNavigate).toHaveBeenCalledWith('CommunityComposer', { mode: 'post' });
+    });
+
     it('opened as a route, it reads the workspace from /community/me (B-E2E-1)', async () => {
       mockMe.data = { workspace_id: 'ws-me' };
       mockPosts.data = [{ id: 'p-route' }];

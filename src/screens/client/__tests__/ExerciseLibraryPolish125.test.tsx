@@ -36,14 +36,14 @@ describe('exercise library contrast', () => {
     const tokens = scheme === 'dark' ? darkTokens : lightTokens;
     const view = await renderLibrary();
     await waitFor(() => expect(view.getByText('No exercises match.')).toBeTruthy());
-    await fireEvent.press(view.getByRole('button', { name: 'strength' }));
-    expect(StyleSheet.flatten(view.getByText('strength').props.style).color).toBe(tokens.textOnAccent);
+    await fireEvent.press(view.getByRole('button', { name: 'cardio' }));
+    expect(StyleSheet.flatten(view.getByText('cardio').props.style).color).toBe(tokens.textOnAccent);
   });
 
   it('uses the readable accent foreground for a load error in dark appearance', async () => {
     list.mockRejectedValue(new Error('Cannot load exercises. Check the connection.'));
     const view = await renderLibrary();
-    const error = await view.findByText('Cannot load exercises. Check the connection.');
+    const error = await view.findByText('Exercises did not load. Check your connection and try again.');
     expect(StyleSheet.flatten(error.props.style).color).toBe(darkTokens.accentText);
   });
 });

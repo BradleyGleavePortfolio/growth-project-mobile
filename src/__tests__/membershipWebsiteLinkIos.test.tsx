@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import { Linking, Platform } from 'react-native';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockState: { flag: boolean; build: string | null } = { flag: true, build: '6' };
 jest.mock('../config/featureFlags', () => {
@@ -94,5 +94,15 @@ describe('MembershipScreen website link', () => {
     mockState.flag = true;
     const r = await render(<MembershipScreen />);
     await waitFor(() => expect(r.getByTestId('membership-website-link')).toBeTruthy());
+  });
+
+  it('on Android opens the contact support page, not the bare site root (HUNT-09-124)', async () => {
+    setOS('android');
+    mockState.flag = true;
+    const r = await render(<MembershipScreen />);
+    await waitFor(() => expect(r.getByTestId('membership-website-link')).toBeTruthy());
+    expect(r.getByText('Contact support')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('membership-website-link'));
+    expect(Linking.openURL).toHaveBeenCalledWith('https://app.trygrowthproject.com/help/contact');
   });
 });

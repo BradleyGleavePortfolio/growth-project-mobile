@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { ENERGY_LABELS, MOOD_EMOJIS, MOOD_LABELS, STRESS_LABELS } from './constants';
+import { ENERGY_LABELS, MOOD_EMOJIS, MOOD_LABELS } from './constants';
 import type { HabitsStyles } from './styles';
 
 export function MoodEnergyPicker({
@@ -12,10 +12,6 @@ export function MoodEnergyPicker({
   setEnergy,
   sleepHours,
   setSleepHours,
-  sleepQuality,
-  setSleepQuality,
-  stress,
-  setStress,
   notes,
   setNotes,
   colors,
@@ -27,10 +23,6 @@ export function MoodEnergyPicker({
   setEnergy: (n: number) => void;
   sleepHours: number;
   setSleepHours: React.Dispatch<React.SetStateAction<number>>;
-  sleepQuality: number;
-  setSleepQuality: (n: number) => void;
-  stress: number;
-  setStress: (n: number) => void;
   notes: string;
   setNotes: (s: string) => void;
   colors: ThemeColors;
@@ -102,48 +94,6 @@ export function MoodEnergyPicker({
               </TouchableOpacity>
             </View>
           </View>
-          <View style={styles.sleepControl}>
-            <Text style={styles.sleepLabel}>Quality</Text>
-            <View style={styles.qualityRow}>
-              {[1, 2, 3, 4, 5].map((val) => (
-                <TouchableOpacity key={val} onPress={() => setSleepQuality(val)}>
-                  <Ionicons
-                    name={val <= sleepQuality ? 'star' : 'star-outline'}
-                    size={22}
-                    color={val <= sleepQuality ? colors.warning : colors.textMuted}
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Stress */}
-      <View style={styles.checkInCard}>
-        <Text style={styles.checkInLabel}>Stress Level</Text>
-        <View style={styles.ratingRow}>
-          {[1, 2, 3, 4, 5].map((val) => (
-            <TouchableOpacity
-              key={val}
-              style={[styles.ratingBtn, stress === val && styles.ratingBtnActive]}
-              onPress={() => setStress(val)}
-            >
-              <View
-                style={[
-                  styles.stressDot,
-                  {
-                    backgroundColor:
-                      val <= 2 ? colors.primary : val === 3 ? colors.warning : colors.error,
-                    opacity: stress === val ? 1 : 0.4,
-                  },
-                ]}
-              />
-              <Text style={[styles.ratingLabel, stress === val && styles.ratingLabelActive]}>
-                {STRESS_LABELS[val]}
-              </Text>
-            </TouchableOpacity>
-          ))}
         </View>
       </View>
 

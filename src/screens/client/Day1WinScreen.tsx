@@ -32,6 +32,7 @@ import { shouldOfferPackagePrompt } from '../../lib/packagePromptGate';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { markDay1WinSkipped } from '../../lib/day1WinSkip';
 
 // ── Win card definitions ──────────────────────────────────────────────────────
 
@@ -172,9 +173,12 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
 
   // Continue without selecting a win — used by skip and by the persistent-
   // failure escape hatch. Routes straight into the main app (via package gate).
-  const handleSkip = useCallback(() => {
+  // A skip is remembered for this user (lib/day1WinSkip), so the Day One
+  // screen is not shown again on every app open.
+  const handleSkip = useCallback(async () => {
+    await markDay1WinSkipped(currentUser?.id);
     maybeShowPackageSheet(undefined);
-  }, [maybeShowPackageSheet]);
+  }, [maybeShowPackageSheet, currentUser?.id]);
 
   // Continue from the completion view — routes to the matching logger (via package gate).
   const handleContinue = useCallback(() => {

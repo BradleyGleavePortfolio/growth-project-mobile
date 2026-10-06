@@ -30,6 +30,14 @@ export interface CurrentUser {
     diet_restrictions?: string[] | string;
     workout_days_per_week?: number;
     gym_membership?: string;
+    /** Server column names, as sign-in and /auth/me return the profile row. */
+    date_of_birth?: string | null;
+    current_weight_lbs?: number | null;
+    target_weight_lbs?: number | null;
+    dietary_pattern?: string | null;
+    has_gym_membership?: boolean | null;
+    goal_type?: string | null;
+    dietary_restrictions?: string[] | null;
     /** Backend field name (UserProfile.onboardingCompleted). Read it with profileOnboardingCompleted(). */
     onboardingCompleted?: boolean | null;
     /** Older payloads and fixtures only; the server sends onboardingCompleted. */

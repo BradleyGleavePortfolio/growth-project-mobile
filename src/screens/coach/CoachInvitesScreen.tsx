@@ -189,28 +189,46 @@ export default function CoachInvitesScreen({
           invite.clientEmail,
         );
         if (!result.supported) {
-          setResendSupported(false);
+          // The send route is live; a 404 means this invite is no longer on
+          // the coach's account (AUDIT-17-125).
           Alert.alert(
-            'Not available',
-            'Resend isn\'t supported by the backend yet. Use "Copy link" to share the invite directly.',
+            'Invite not found',
+            'This invite is no longer on your account. Your list is refreshing.',
           );
+          void load();
           return;
         }
         setResendSupported(true);
+        // A 200 is not proof an email went out (AUDIT-17-125): only `sent`
+        // (or the dev `logged` transport) is a resend.
+        if (result.emailStatus === 'skipped') {
+          Alert.alert(
+            'No new email sent',
+            `An invite email already went to ${invite.clientEmail}, so no new email was sent. Use "Copy link" to send the invite yourself.`,
+          );
+          return;
+        }
+        if (result.emailStatus === 'failed') {
+          Alert.alert(
+            'Email not sent',
+            `The invite email to ${invite.clientEmail} did not send. Use "Copy link" to send the invite yourself, or try again in a few minutes.`,
+          );
+          return;
+        }
         successTap();
-        Alert.alert('Queued', `Invite re-sent to ${invite.clientEmail}.`);
+        Alert.alert('Invite re-sent', `Invite re-sent to ${invite.clientEmail}.`);
       } catch (err) {
         console.error(
           'CoachInvitesScreen: resend failed',
           errorMessage(err),
         );
         Alert.alert(
-          'Could not complete this action',
-          'Please try again.',
+          'Resend did not go through',
+          'The invite email was not sent. Check your connection and try again.',
         );
       }
     },
-    [],
+    [load],
   );
 
   const handleCopyLink = useCallback(async (invite: Invite) => {

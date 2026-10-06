@@ -262,10 +262,14 @@ function PackageRow({
       </Text>
       <View style={styles.cardMetaRow}>
         <Text style={styles.cardMeta}>
-          {pkg.subscriberCount} {pkg.subscriberCount === 1 ? 'client' : 'clients'}
+          {pkg.statsAvailable === false
+            ? 'Client count unavailable'
+            : `${pkg.subscriberCount} ${pkg.subscriberCount === 1 ? 'client' : 'clients'}`}
         </Text>
         <Text style={styles.cardMeta}>
-          {formatCurrencyCents(pkg.monthlyRevenueCents, pkg.currency)} / mo
+          {pkg.statsAvailable === false
+            ? 'Revenue unavailable'
+            : `${formatCurrencyCents(pkg.monthlyRevenueCents, pkg.currency)} / mo`}
         </Text>
       </View>
     </TouchableOpacity>

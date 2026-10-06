@@ -1,22 +1,15 @@
 /**
  * CoachConnectScreen — Stripe Connect onboarding + dashboard surface.
  *
- * Real-or-flagged contract (matches backend connect.controller.ts):
- *   • GET /v1/connect/accounts/me  → connected? + payout flags
- *   • POST .../create              → idempotent Express account creation
- *   • POST .../onboarding-link     → one-time hosted onboarding URL
- *   • POST .../dashboard-link      → one-time Stripe Express dashboard URL
- *
- * If the backend returns 503 CONNECT_NOT_CONFIGURED, we render an explicit
- * config-required state with the upstream message verbatim — never a
- * shrugging spinner and never fake success.
+ * Shares the wizard's live requirements, return/refresh handling and retry
+ * flow. Details submitted is not identity verified; bank payout timing comes
+ * from Stripe, never a promise based only on the enabled switches.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -27,8 +20,10 @@ import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
-import { connectApi, ConnectStatusResponse } from '../../../api/connectApi';
-import { errorCode, errorMessage, errorStatus } from '../../../types/common';
+import { connectApi } from '../../../api/connectApi';
+import { coachSetupApi, type ConnectView } from '../../../api/coachSetupApi';
+import GetPaidPanel from '../../../components/coach/setup/GetPaidPanel';
+import { describeError } from '../../../lib/coachSetup/errors';
 import { mediumTap, successTap } from '../../../utils/haptics';
 import { assertStripeUrl } from '../../../utils/stripeUrlValidator';
 import { track } from '../../../lib/analytics';
@@ -38,132 +33,16 @@ interface Props {
   navigation: NavigationProp<ParamListBase>;
 }
 
-interface ConfigError {
-  // `code` is kept for telemetry/logs only — it is never rendered.
-  code: string;
-  title: string;
-  body: string;
-}
-
-function configCopy(code: string): { title: string; body: string } {
-  switch (code) {
-    case 'CONNECT_NOT_CONFIGURED':
-      return {
-        title: 'Set up Stripe to get paid',
-        body: 'Set up Stripe to start getting paid.',
-      };
-    case 'CONNECT_NOT_DEPLOYED':
-      return {
-        title: 'Payouts coming soon',
-        body: 'Payments are being set up. Check back soon.',
-      };
-    case 'CONNECT_ONBOARDING_INCOMPLETE':
-      return {
-        title: 'Finish onboarding',
-        body: 'Finish setting up your Stripe account.',
-      };
-    default:
-      return {
-        title: 'Payouts unavailable',
-        body: 'Payouts are temporarily unavailable. Please try again later.',
-      };
-  }
-}
-
 export default function CoachConnectScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [status, setStatus] = useState<ConnectStatusResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [view, setView] = useState<ConnectView | null>(null);
+  const [panelVersion, setPanelVersion] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [configError, setConfigError] = useState<ConfigError | null>(null);
-
-  const load = useCallback(async () => {
-    setConfigError(null);
-    try {
-      const res = await connectApi.getStatus();
-      setStatus(res.data);
-    } catch (err) {
-      const code = errorCode(err);
-      const httpCode = errorStatus(err);
-      if (httpCode === 503 || code === 'CONNECT_NOT_CONFIGURED') {
-        const resolvedCode = code ?? 'CONNECT_NOT_CONFIGURED';
-        console.warn('[coach-connect] config blocker', resolvedCode);
-        setConfigError({ code: resolvedCode, ...configCopy(resolvedCode) });
-        setStatus({ connected: false });
-      } else if (httpCode === 404) {
-        console.warn('[coach-connect] config blocker CONNECT_NOT_DEPLOYED');
-        setConfigError({
-          code: 'CONNECT_NOT_DEPLOYED',
-          ...configCopy('CONNECT_NOT_DEPLOYED'),
-        });
-        setStatus({ connected: false });
-      } else {
-        Alert.alert('Could not load payouts', errorMessage(err, 'Please try again.'));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
 
   useEffect(() => {
     track('coach_connect_opened');
-    load();
-  }, [load]);
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await load();
-    setRefreshing(false);
-  }, [load]);
-
-  const handleStartOnboarding = useCallback(async () => {
-    mediumTap();
-    setBusy(true);
-    try {
-      // Create-account is idempotent; calling it before mint-link guarantees
-      // a row exists for this coach. Backend collapses replays at the Stripe
-      // edge via per-coach idempotency keys.
-      const connected = status?.connected === true;
-      if (!connected) {
-        await connectApi.createAccount({});
-      }
-      const link = await connectApi.createOnboardingLink();
-      track('coach_connect_onboarding_started');
-      try {
-        assertStripeUrl(link.data.url, 'CoachConnectScreen.onboarding');
-      } catch {
-        Alert.alert('Unable to open Stripe', 'Please try again.');
-        return;
-      }
-      const result = await WebBrowser.openBrowserAsync(link.data.url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-      });
-      // Refresh on close so the new charges_enabled / payouts_enabled state
-      // shows immediately instead of after a manual pull-to-refresh.
-      if (
-        result.type === 'cancel' ||
-        result.type === 'dismiss' ||
-        result.type === 'opened'
-      ) {
-        await load();
-      }
-    } catch (err) {
-      const code = errorCode(err);
-      if (code === 'CONNECT_NOT_CONFIGURED') {
-        console.warn('[coach-connect] config blocker CONNECT_NOT_CONFIGURED');
-        setConfigError({ code, ...configCopy(code) });
-      } else {
-        Alert.alert(
-          'Could not open onboarding',
-          errorMessage(err, 'Please try again in a moment.'),
-        );
-      }
-    } finally {
-      setBusy(false);
-    }
-  }, [status, load]);
+  }, []);
 
   const handleOpenDashboard = useCallback(async () => {
     mediumTap();
@@ -171,151 +50,20 @@ export default function CoachConnectScreen({ navigation }: Props) {
     try {
       const link = await connectApi.createDashboardLink();
       track('coach_connect_dashboard_opened');
-      try {
-        assertStripeUrl(link.data.url, 'CoachConnectScreen.dashboard');
-      } catch {
-        Alert.alert('Unable to open Stripe', 'Please try again.');
-        return;
-      }
+      assertStripeUrl(link.data.url, 'CoachConnectScreen.dashboard');
       await WebBrowser.openBrowserAsync(link.data.url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       });
       successTap();
-      await load();
+      setView(await coachSetupApi.refreshConnectStatus());
+      setPanelVersion((n) => n + 1);
     } catch (err) {
-      const code = errorCode(err);
-      if (code === 'CONNECT_ONBOARDING_INCOMPLETE') {
-        Alert.alert(
-          'Finish onboarding first',
-          'The Stripe dashboard is only available once your Connect onboarding is complete.',
-        );
-      } else {
-        Alert.alert(
-          'Could not open Stripe dashboard',
-          errorMessage(err, 'Please try again in a moment.'),
-        );
-      }
+      const failure = describeError(err, 'open your Stripe dashboard');
+      Alert.alert(failure.title, failure.body);
     } finally {
       setBusy(false);
     }
-  }, [load]);
-
-  const renderBody = () => {
-    if (loading) {
-      return (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      );
-    }
-
-    if (configError) {
-      return (
-        <View style={styles.errorCard}>
-          <Ionicons name="construct-outline" size={28} color={colors.warning} />
-          <Text style={styles.errorTitle}>{configError.title}</Text>
-          <Text style={styles.errorBody}>{configError.body}</Text>
-          <TouchableOpacity style={styles.secondaryBtn} onPress={load}>
-            <Text style={styles.secondaryBtnText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-
-    const connected = status?.connected === true;
-    const fullyOnboarded = connected && status.is_fully_onboarded;
-    const charges = connected && status.charges_enabled;
-    const payouts = connected && status.payouts_enabled;
-    const submitted = connected && status.details_submitted;
-    const disabled = connected && status.disabled_reason;
-
-    return (
-      <>
-        <View style={styles.heroCard}>
-          <View style={styles.heroIconWrap}>
-            <Ionicons
-              name={fullyOnboarded ? 'checkmark-circle' : 'wallet-outline'}
-              size={28}
-              color={fullyOnboarded ? colors.primary : colors.textSecondary}
-            />
-          </View>
-          <Text style={styles.heroTitle}>
-            {fullyOnboarded ? 'Payouts active' : 'Get paid for coaching'}
-          </Text>
-          <Text style={styles.heroBody}>
-            {fullyOnboarded
-              ? 'Your Stripe account is connected. Payments from your packages land in your bank automatically.'
-              : 'Connect your bank through Stripe Express to receive payments from clients who buy your packages. Stripe verifies your identity once — the app never sees your bank details.'}
-          </Text>
-        </View>
-
-        {connected ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Account status</Text>
-            <StatusRow
-              label="Identity verified"
-              value={submitted}
-              colors={colors}
-            />
-            <StatusRow label="Charges enabled" value={charges} colors={colors} />
-            <StatusRow label="Payouts enabled" value={payouts} colors={colors} />
-            {disabled ? (
-              <View style={styles.warningRow}>
-                <Ionicons name="alert-circle" size={16} color={colors.warning} />
-                <Text style={styles.warningText}>
-                  Stripe paused this account: {status.disabled_reason}. Re-run
-                  onboarding to fix the flagged item.
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {!fullyOnboarded ? (
-          <TouchableOpacity
-            style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
-            onPress={handleStartOnboarding}
-            disabled={busy}
-            accessibilityRole="button"
-            accessibilityLabel={
-              connected ? 'Continue Stripe onboarding' : 'Start Stripe onboarding'
-            }
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.textOnPrimary} />
-            ) : (
-              <>
-                <Ionicons name="open-outline" size={18} color={colors.textOnPrimary} />
-                <Text style={styles.primaryBtnText}>
-                  {connected ? 'Continue onboarding' : 'Start onboarding'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity
-            style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
-            onPress={handleOpenDashboard}
-            disabled={busy}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.textOnPrimary} />
-            ) : (
-              <>
-                <Ionicons name="open-outline" size={18} color={colors.textOnPrimary} />
-                <Text style={styles.primaryBtnText}>Open Stripe dashboard</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
-
-        <Text style={styles.fineprint}>
-          Stripe handles all payment data. The Growth Project never stores card or
-          bank account information.
-        </Text>
-      </>
-    );
-  };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -331,17 +79,29 @@ export default function CoachConnectScreen({ navigation }: Props) {
         <Text style={styles.topTitle}>Payouts</Text>
         <View style={styles.backBtn} />
       </View>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {renderBody()}
+      <ScrollView contentContainerStyle={styles.content}>
+        <GetPaidPanel key={panelVersion} onChange={setView} testID="payout-setup" />
+        {view?.accountId ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account status</Text>
+            <StatusRow label="Details submitted" value={view.detailsSubmitted} colors={colors} />
+            <StatusRow label="Charges enabled" value={view.chargesEnabled} colors={colors} />
+            <StatusRow label="Payouts enabled" value={view.payoutsEnabled} colors={colors} />
+          </View>
+        ) : null}
+        {view?.chargesEnabled ? (
+          <TouchableOpacity style={[styles.primaryBtn, busy && styles.primaryBtnDisabled]}
+            onPress={handleOpenDashboard} disabled={busy}
+            accessibilityRole="button" accessibilityLabel="Open Stripe dashboard">
+            {busy ? <ActivityIndicator color={colors.textOnPrimary} /> : (
+              <Text style={styles.primaryBtnText}>Open Stripe dashboard</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
+        <Text style={styles.fineprint}>
+          Stripe collects payment and bank details on its secure pages. Check the
+          Stripe dashboard for your payout schedule and bank arrival estimates.
+        </Text>
       </ScrollView>
     </View>
   );

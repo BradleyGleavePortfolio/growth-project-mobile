@@ -143,6 +143,22 @@ export type NotificationResponseCallback = (
   notificationId?: string,
 ) => void;
 
+/**
+ * AUDIT-09-125: where a push without `actionScreen` opens. Community, workout
+ * reminder, check-in nudge and content pushes from the current backend carry
+ * only `kind`, so a tap used to open the app with no navigation. A community
+ * push opens Community; a workout reminder opens Workouts; any other kind
+ * opens the notification center, where its inbox row is. The router keeps
+ * the role and flag checks (an unknown or unavailable screen lands on the
+ * role's notification center).
+ */
+export function fallbackScreenForKind(kind: unknown): string | undefined {
+  if (typeof kind !== 'string' || kind.length === 0) return undefined;
+  if (kind.startsWith('community_')) return 'Community';
+  if (kind === 'workout_reminder') return 'WorkoutMain';
+  return 'NotificationCenter';
+}
+
 function dispatchResponse(
   response: Notifications.NotificationResponse | null | undefined,
   onResponse: NotificationResponseCallback,
@@ -150,7 +166,8 @@ function dispatchResponse(
   if (!response) return;
   const request = response.notification?.request;
   const data = request?.content?.data;
-  const actionScreen = typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;
+  const actionScreen =
+    typeof data?.actionScreen === 'string' ? data.actionScreen : fallbackScreenForKind(data?.kind);
   // Untrusted payload: decode to a bounded string map (audit #304 Sol C2).
   const actionParams = decodePushParams(data?.actionParams);
   onResponse(actionScreen, actionParams, request?.identifier);

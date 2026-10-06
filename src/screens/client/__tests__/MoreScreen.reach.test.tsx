@@ -26,6 +26,10 @@ jest.mock("../../../config/featureFlags", () => ({
     { get: (_t, k: string) => mockFlags[k] ?? false },
   ),
 }));
+let mockHealthConnectBuild = false;
+jest.mock("../../../config/healthConnect", () => ({
+  isAndroidHealthConnectEnabled: () => mockHealthConnectBuild,
+}));
 jest.mock("../../../theme/ThemeProvider", () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => "#000000" }),
@@ -45,6 +49,7 @@ jest.mock("../../../components/HapticPressable", () => {
   return Pressable;
 });
 
+import { Platform } from "react-native";
 import MoreScreen, { PLAN_MORE_ITEMS } from "../MoreScreen";
 
 const NAV = fs.readFileSync(
@@ -125,5 +130,64 @@ describe("More: your plan rows (S-REACH)", () => {
     const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
     expect(labels[0]).toBe("Roman");
     expect(labels[1]).toBe("Meal plan");
+  });
+});
+
+// AUDIT-11-125: the wearables rows were tied to the clinic tutorial flag, which
+// the iOS store build leaves off, so an iPhone client had no way to reach Apple Health.
+describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
+  const originalOS = Platform.OS;
+  function setOS(os: string) {
+    Object.defineProperty(Platform, "OS", { configurable: true, value: os });
+  }
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFlags.romanChat = true;
+    mockFlags.clientTutorial = false;
+    mockHealthConnectBuild = false;
+  });
+  afterEach(() => {
+    setOS(originalOS);
+    mockFlags.romanChat = false;
+    mockFlags.clientTutorial = false;
+  });
+
+  function labels(): string[] {
+    return screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
+  }
+
+  it("iPhone store build (tutorial off): both rows show after the plan rows and open their screens", async () => {
+    setOS("ios");
+    await render(<MoreScreen />);
+    const l = labels();
+    expect(l[0]).toBe("Roman");
+    expect(l.indexOf("Health and sleep")).toBeGreaterThan(l.indexOf("Exercise library"));
+    expect(l.indexOf("Connected devices")).toBe(l.indexOf("Health and sleep") + 1);
+    await fireEvent.press(screen.getByLabelText("Connected devices"));
+    expect(mockNavigate).toHaveBeenCalledWith("Connections");
+    await fireEvent.press(screen.getByLabelText("Health and sleep"));
+    expect(mockNavigate).toHaveBeenCalledWith("Health");
+  });
+
+  it("Android build without Health Connect (tutorial off): no wearables rows", async () => {
+    setOS("android");
+    await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Connected devices")).toBeNull();
+    expect(screen.queryByLabelText("Health and sleep")).toBeNull();
+  });
+
+  it("Android build with Health Connect: both rows show", async () => {
+    setOS("android");
+    mockHealthConnectBuild = true;
+    await render(<MoreScreen />);
+    expect(screen.getByLabelText("Connected devices")).toBeTruthy();
+    expect(screen.getByLabelText("Health and sleep")).toBeTruthy();
+  });
+
+  it("clinic tutorial on: the rows stay first, as before", async () => {
+    setOS("android");
+    mockFlags.clientTutorial = true;
+    await render(<MoreScreen />);
+    expect(labels().slice(0, 3)).toEqual(["Health and sleep", "Connected devices", "Roman"]);
   });
 });

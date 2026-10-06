@@ -162,7 +162,7 @@ describe('restart', () => {
 
   it.each([
     [404, 'PURCHASE_NOT_FOUND', 'That plan is not on your roster, so nothing was changed. Pull down to refresh, then try again.', true],
-    [409, 'PLAN_NOT_DISPUTE_PAUSED', 'This plan is not paused by a payment dispute or inquiry, so there is nothing to restart. Pull down to refresh.', true],
+    [409, 'PLAN_NOT_DISPUTE_PAUSED', 'This plan is not paused by a refund, payment dispute or inquiry, so there is nothing to restart. Pull down to refresh.', true],
     [409, 'PLAN_ENDED', 'This plan has ended, so it cannot be restarted. The client can buy the package again.', true],
     [409, 'OTHER_LIVE_PLAN', 'The client already has another active plan for this package, so restarting this one would bill them twice. Nothing was changed.', true],
     [409, 'NEW_DISPUTE', 'The bank opened another payment dispute or inquiry on this plan, so it stays paused and nothing was charged.', false],

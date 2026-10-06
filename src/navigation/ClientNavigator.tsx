@@ -291,7 +291,8 @@ export type MoreStackParamList = {
   SupportInbox:      undefined;
   /** Sprint B-2 — client-facing read surfaces over Sprint B v2 backend. */
   ClientMacros:        undefined;
-  ClientDailyMealPlan: { date?: string } | undefined;
+  /** `assignmentId`: a delivered meal plan (Deliverables); `date`: a day. */
+  ClientDailyMealPlan: { date?: string; assignmentId?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
   WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */

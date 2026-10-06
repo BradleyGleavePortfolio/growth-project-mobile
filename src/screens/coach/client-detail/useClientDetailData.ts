@@ -17,6 +17,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  const [foodShared, setFoodShared] = useState(true);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -47,6 +48,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       const res = await coachApi.getClientSummary(clientId);
       const data = res.data;
       if (data.error) return;
+      setFoodShared(data.consent?.food_macros !== false);
       // Reflect archived status from summary (client.archived_at)
       if (data.client) setIsArchived(!!data.client.archived_at);
 
@@ -90,6 +92,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       const weights = ((data.weight_logs as WeightRow[] | undefined) || []).map((w) => ({
         id: w.id,
         weight: w.weight_lbs,
+        unit: 'lbs',
         date: typeof w.date === 'string' ? w.date.slice(0, 10) : bucketDateLocal(new Date(w.date)),
         notes: w.notes || '',
       }));
@@ -178,7 +181,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
         events.push({
           id: `workout_${s.id}`,
           type: 'workout',
-          title: s.name || 'Workout',
+          // WorkoutSession rows carry workout_name (no name / completed_at).
+          title: s.workout_name || s.name || 'Workout',
           subtitle: s.completed_at ? `Completed` : 'Logged',
           date: s.created_at || s.date,
           icon: 'barbell',
@@ -192,8 +196,11 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           id: `checkin_${c.id}`,
           type: 'checkin',
           title: 'Check-in',
-          subtitle: c.notes || `Mood: ${c.mood_rating}/5`,
-          date: c.date + 'T09:00:00',
+          // CheckIn rows carry `mood` (1-5, optional) and an ISO `date`
+          // ("YYYY-MM-DDT00:00:00.000Z"): `mood_rating` read undefined and
+          // appending a time to the ISO string made an Invalid Date.
+          subtitle: checkInSubtitle(c),
+          date: String(c.date || '').slice(0, 10) + 'T09:00:00',
           icon: 'chatbubble-ellipses',
           iconColor: colors.primary,
         });
@@ -324,6 +331,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     profile,
     foodLogs,
     totals,
+    foodShared,
     weightLogs,
     workoutSessions,
     timeline,
@@ -344,4 +352,19 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     loadTimeline,
     loadWeeklySummaries,
   };
+}
+
+/** Coach timeline line for one check-in: the client's note, else the scores. */
+export function checkInSubtitle(c: {
+  notes?: string | null;
+  mood?: number | null;
+  energy?: number | null;
+  sleep_hours?: number | null;
+}): string {
+  if (c.notes) return c.notes;
+  const parts: string[] = [];
+  if (typeof c.mood === 'number') parts.push(`Mood ${c.mood}/5`);
+  if (typeof c.energy === 'number') parts.push(`Energy ${c.energy}/5`);
+  if (typeof c.sleep_hours === 'number') parts.push(`Sleep ${c.sleep_hours} h`);
+  return parts.length > 0 ? parts.join(' · ') : 'Check-in submitted';
 }

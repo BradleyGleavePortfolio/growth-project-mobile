@@ -117,6 +117,33 @@ beforeEach(() => {
 });
 
 describe('ConnectProviderSheet — cloud OAuth provider', () => {
+  // B-WEARLIST-125: the server callback reports a failed connect in the return
+  // URL; the sheet stays open with a retry instead of closing as connected.
+  it('keeps the sheet open with a retry when the return URL says status=error', async () => {
+    mockStartOauthMutateAsync.mockResolvedValue({
+      authorizationUrl: 'https://provider.example/oauth',
+      state: 'csrf-1',
+    });
+    mockOpenAuthSessionAsync.mockResolvedValue({
+      type: 'success',
+      url: 'tgp://wearables/connected?status=error',
+    });
+    const onClose = jest.fn();
+    const onConnected = jest.fn();
+
+    await render(
+      <ConnectProviderSheet provider="OURA" visible onClose={onClose} onConnected={onConnected} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+
+    await waitFor(() =>
+      expect(screen.getByText(/The sign-in with Oura did not finish\. Tap Continue to try again\./)).toBeTruthy(),
+    );
+    expect(mockInvalidate).toHaveBeenCalled();
+    expect(onConnected).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('starts OAuth, opens the auth session, invalidates, and closes', async () => {
     mockStartOauthMutateAsync.mockResolvedValue({
       authorizationUrl: 'https://provider.example/oauth',

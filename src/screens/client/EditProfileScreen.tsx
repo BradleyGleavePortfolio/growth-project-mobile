@@ -38,6 +38,7 @@ import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import {
   getProfileCompletion,
   buildProfileUpdatePayload,
+  resolveProfileFields,
   ProfileField,
 } from '../../lib/profileCompletion';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../../utils/nutrition';
@@ -153,7 +154,8 @@ interface FormState {
 }
 
 function profileToForm(user: CurrentUser | null): FormState {
-  const p = user?.profile;
+  // Older names first, then the server columns (resolveProfileFields).
+  const p = user?.profile ? resolveProfileFields(user.profile) : undefined;
   const sexRaw = p?.sex;
   const dietRaw = p?.diet_type;
   const gymRaw = p?.gym_membership;
@@ -188,7 +190,7 @@ function profileToForm(user: CurrentUser | null): FormState {
 
   return {
     sex,
-    dob: p?.dob ?? '',
+    dob: typeof p?.dob === 'string' ? p.dob : '',
     targetWeight: typeof p?.target_weight === 'number' ? String(p.target_weight) : '',
     dietType,
     workoutDaysPerWeek:

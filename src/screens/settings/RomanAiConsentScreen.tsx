@@ -62,11 +62,11 @@ export const ROMAN_AI_COPY = {
   updateApp: 'This choice has been updated since this version of the app. Please update the app to change it.',
   notSent: 'You were signed out before this choice was saved, so nothing changed. Sign in and choose again.',
   unavailable: `The Roman and AI setting is switched off by The Growth Project at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
-  loadOffline: 'I could not reach the server to load your choice. Check your connection, then tap Try again.',
+  loadOffline: 'The app could not reach the server to load your choice. Check your connection, then tap Try again.',
   loadServer: (ref: string | null) =>
     `The server could not load your choice. Tap Try again. If it keeps happening, write to support at ${SUPPORT_EMAIL}${ref ? ` and mention reference ${ref}` : ''}.`,
   actionOffline:
-    'I could not reach the server, so your change is not confirmed. The choice shown above is the current one. Check your connection, then try again.',
+    'The app could not reach the server, so your change is not confirmed. The choice shown above is the current one. Check your connection, then try again.',
   actionBusy: 'Your choice was changed several times in a row, so this change was not saved. Wait a minute, then try again.',
   actionConflict: 'Your choice was being changed somewhere else at the same moment, so this change was not saved. The choice shown above is the current one. You can change it again.',
   actionServer: (ref: string | null) =>

@@ -89,14 +89,25 @@ export default function FastingScreen() {
     try {
       if (!currentUser) return;
       const histRes = await fastingApi.getHistory(50);
-      type SessionRow = { id: string; start_time?: string; end_time?: string | null; target_hours?: number; completed?: boolean; startTime?: string; endTime?: string | null; targetHours?: number };
-      const sessions: FastSession[] = ((histRes.data as SessionRow[] | undefined) || []).map((s) => ({
-        id: s.id,
-        startTime: s.start_time || s.startTime || '',
-        endTime: s.end_time || s.endTime || undefined,
-        targetHours: s.target_hours || s.targetHours || 16,
-        completed: s.completed ?? (s.end_time != null),
-      }));
+      type SessionRow = { id: string; start_time?: string; end_time?: string | null; protocol?: string | null; target_hours?: number; completed?: boolean; startTime?: string; endTime?: string | null; targetHours?: number };
+      const sessions: FastSession[] = ((histRes.data as SessionRow[] | undefined) || []).map((s) => {
+        const startTime = s.start_time || s.startTime || '';
+        const endTime = s.end_time || s.endTime || undefined;
+        // The production API persists the selected hours in `protocol`,
+        // not target_hours. Keep legacy numeric fields compatible.
+        const targetHours = s.target_hours || s.targetHours || Number(s.protocol?.split(':')[0]) || 16;
+        const elapsedHours = endTime
+          ? (new Date(endTime).getTime() - new Date(startTime).getTime()) / (1000 * 60 * 60)
+          : 0;
+        return {
+          id: s.id,
+          startTime,
+          endTime,
+          targetHours,
+          // Match the existing local fasting completion rule: 90% of target.
+          completed: s.completed ?? (!!endTime && elapsedHours >= targetHours * 0.9),
+        };
+      });
 
       // Find active fast (no end time)
       const active = sessions.find((s) => !s.endTime) || null;
@@ -124,7 +135,7 @@ export default function FastingScreen() {
       // tomorrow in UTC. Using toISOString() here was silently resetting the
       // streak for AU/HI users every night (P0-4).
       const completedDays = new Set(
-        completed.map((f) => bucketDateLocal(new Date(f.startTime))),
+        completed.filter((f) => f.completed).map((f) => bucketDateLocal(new Date(f.startTime))),
       );
       let s = 0;
       const now = new Date();
@@ -253,10 +264,10 @@ export default function FastingScreen() {
     if (!currentUser || !activeFast) return;
     const elapsedHours = elapsed / (1000 * 60 * 60);
     const pctDone = (elapsedHours / activeFast.targetHours) * 100;
-    if (pctDone < 50) {
+    if (pctDone < 90) {
       Alert.alert(
         'End fast early?',
-        `You're only ${Math.round(pctDone)}% through. This won't count as completed.`,
+        `${Math.round(pctDone)}% of the target reached. This fast will be saved in history, but will not count as completed.`,
         [
           { text: 'Keep going', style: 'cancel' },
           {
@@ -457,7 +468,7 @@ export default function FastingScreen() {
       <FadeInView delay={100}>
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{stats.totalCompleted}</Text>
+          <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
           <Text style={styles.statLabel}>Completed</Text>
         </View>
         <View style={styles.statCard}>

@@ -1,12 +1,12 @@
 /**
  * CreditPackCheckoutScreen — Stripe-webview entry point for AI credit packs.
  *
- * AI credit packs are NOT a 1:1 person-to-person service. On iOS this route
+ * AI credit packs are NOT a 1:1 person-to-person service. In store builds this route
  * is replaced by the neutral NonP2PPurchaseHidden state (withNonP2PPurchaseGate
- * in CoachNavigator, flag EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES plus the
- * native-build anchor in config/purchaseSurfaces). On other platforms packs
- * are billed through Stripe Checkout in a webview. The webview transport is
- * not an App Review basis for anything.
+ * in CoachNavigator). digitalPurchasesHidden preserves the iOS flag/native
+ * gate and hides Android release purchases pending store billing. Development
+ * Android and web retain Stripe Checkout; a webview is not a store-policy
+ * exception.
  *
  * Two-phase flow:
  *   1. Selection phase — render `<PackOptionsRow />` plus a custom-amount

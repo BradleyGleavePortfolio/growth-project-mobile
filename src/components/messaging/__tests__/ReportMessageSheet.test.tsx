@@ -58,6 +58,7 @@ describe('ReportMessageSheet', () => {
     ['Sexual content', 'sexual'],
     ['Hate speech', 'hate_speech'],
     ['Violence or threats', 'violence'],
+    ['Self-harm or suicide', 'self_harm'],
     ['Misinformation', 'misinformation'],
     ['Something else', 'other'],
   ])('maps UI label "%s" to backend reason "%s"', async (label, value) => {
@@ -74,6 +75,20 @@ describe('ReportMessageSheet', () => {
     await fireEvent.press(getByLabelText('Submit report'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ reason: value });
+  });
+
+  it.each([
+    ['Self-harm or suicide', true],
+    ['Violence or threats', true],
+    ['Spam', false],
+  ])('shows the 911 / 988 line for "%s": %s', async (label, shown) => {
+    const { getByLabelText, queryByTestId } = await render(
+      <ReportMessageSheet visible messagePreview="" onSubmit={jest.fn()} onClose={jest.fn()} />,
+    );
+    expect(queryByTestId('report-emergency-note')).toBeNull();
+    await fireEvent.press(getByLabelText(label));
+    if (shown) expect(queryByTestId('report-emergency-note')).not.toBeNull();
+    else expect(queryByTestId('report-emergency-note')).toBeNull();
   });
 
   it('passes trimmed free-text details to onSubmit when supplied', async () => {

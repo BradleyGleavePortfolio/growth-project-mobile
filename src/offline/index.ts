@@ -26,6 +26,17 @@ export {
   pullFromServer,
   conflictToastEvents,
   markSessionSyncedBySessionName,
+  queueWorkout,
+  settleQueuedWorkout,
+  releaseQueuedWorkout,
+  countQueuedWorkouts,
+  pushQueuedWorkouts,
+  workoutSyncEvents,
   __isSyncInProgress,
 } from './sync/sync-engine';
-export type { WriteWorkoutPayload } from './sync/sync-engine';
+export type {
+  WriteWorkoutPayload,
+  QueueWorkoutInput,
+  QueueWorkoutResult,
+  QueuedAssignmentCompletion,
+} from './sync/sync-engine';
