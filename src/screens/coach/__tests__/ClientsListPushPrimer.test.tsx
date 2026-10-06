@@ -72,7 +72,7 @@ it('a fresh coach install sees the notification ask; Turn on registers the push 
   mockRegister.mockResolvedValue({ token: 'coach-tok', granted: true });
   await mount();
   await screen.findByTestId('push-permission-card');
-  expect(screen.getByText('Turn on notifications so you see client messages and new client alerts.')).toBeTruthy();
+  expect(screen.getByText('Turn on notifications so you see client messages and bookings as they arrive.')).toBeTruthy();
   // The OS prompt only comes from the tap.
   expect(mockRegister).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByTestId('push-permission-enable'));
