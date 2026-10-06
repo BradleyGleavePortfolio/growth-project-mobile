@@ -138,9 +138,16 @@ jest.mock("../services/firstWinApi", () => ({
 jest.mock("../services/foodLogQueue", () => ({
   flush: jest.fn().mockResolvedValue(undefined),
 }));
+const mockNetwork = { isOnline: true, isInternetReachable: true };
 jest.mock("../hooks/useNetworkStatus", () => ({
-  useNetworkStatus: () => ({ isOnline: true, isInternetReachable: true }),
-  isEffectivelyOnline: () => true,
+  useNetworkStatus: () => mockNetwork,
+  isEffectivelyOnline: (status: typeof mockNetwork) => status.isOnline && status.isInternetReachable,
+}));
+jest.mock("../screens/day-one/api", () => ({
+  saveGoals: jest.fn(async () => undefined),
+  saveNotifPermission: jest.fn(async () => undefined),
+  saveCheckInTime: jest.fn(async () => undefined),
+  completeDayOne: jest.fn(async () => undefined),
 }));
 jest.mock("../utils/authEvents", () => ({
   authEvents: {
@@ -163,11 +170,14 @@ jest.mock("../config/purchaseSurfaces", () => ({
   nonP2PPurchasesHidden: () => mockHidden,
 }));
 import React from "react";
-import { render, cleanup } from "@testing-library/react-native";
+import { render, cleanup, act, waitFor } from "@testing-library/react-native";
+import { AppState } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClientProvider } from "@tanstack/react-query";
 import RootNavigator from "../navigation/RootNavigator";
 import { queryClient } from "../services/queryClient";
+import { enqueuePending, readResumeState, writeResumeState } from "../screens/day-one/resume";
+import { completeDayOne, saveCheckInTime, saveGoals } from "../screens/day-one/api";
 
 import {
   BACKEND_ONBOARDING_FIELD,
@@ -273,5 +283,82 @@ describe("owner account routing", () => {
     await r.findByTestId("nav-coach");
     expect(r.queryByTestId("nav-auth")).toBeNull();
     expect(apiGet.mock.calls.some(([url]) => url === "/coach/onboarding")).toBe(false);
+  });
+});
+
+describe("HUNT-08 B-08-4: completed offline onboarding rejoins server state", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockNetwork.isOnline = true;
+    mockNetwork.isInternetReachable = true;
+  });
+
+  afterEach(() => {
+    mockNetwork.isOnline = true;
+    mockNetwork.isInternetReachable = true;
+    jest.restoreAllMocks();
+  });
+
+  async function completedOffline() {
+    await freshInstall({ ...BACKEND_PROFILE, day_one_completed: false });
+    await AsyncStorage.setItem("day_one_completed", "true");
+    await writeResumeState({ step: "Ready", draft: { goals: ["fitness"] } });
+    await enqueuePending({ kind: "goals", goals: ["fitness"] });
+    await enqueuePending({ kind: "checkin", time: { hour: 8, minute: 0 }, timezone: "America/Los_Angeles" });
+    await enqueuePending({ kind: "complete" });
+  }
+
+  async function expectSaved() {
+    await waitFor(() => expect(completeDayOne).toHaveBeenCalledTimes(1));
+    expect(saveGoals).toHaveBeenCalledWith(["fitness"]);
+    expect(saveCheckInTime).toHaveBeenCalledWith({ hour: 8, minute: 0 }, "America/Los_Angeles");
+    expect(await readResumeState()).toBeNull();
+  }
+
+  it("saves queued goals and check-in after an online cold start, without reopening Ready", async () => {
+    await completedOffline();
+    const r = mount();
+    await r.findByTestId("nav-client");
+    await expectSaved();
+  });
+
+  it("keeps the queue offline and saves it when connectivity returns", async () => {
+    await completedOffline();
+    mockNetwork.isOnline = false;
+    mockNetwork.isInternetReachable = false;
+    const r = mount();
+    await r.findByTestId("nav-client");
+    expect(completeDayOne).not.toHaveBeenCalled();
+    expect((await readResumeState())?.pendingSync).toHaveLength(3);
+    mockNetwork.isOnline = true;
+    mockNetwork.isInternetReachable = true;
+    r.rerender(<QueryClientProvider client={queryClient}><RootNavigator /></QueryClientProvider>);
+    await expectSaved();
+  });
+
+  it("retries the saved queue when a backgrounded app becomes active", async () => {
+    await freshInstall({ ...BACKEND_PROFILE, day_one_completed: true });
+    const listeners: ((state: string) => void)[] = [];
+    jest.spyOn(AppState, "addEventListener").mockImplementation((_event, listener) => {
+      listeners.push(listener as (state: string) => void);
+      return { remove: jest.fn() };
+    });
+    const r = mount();
+    await r.findByTestId("nav-client");
+    await writeResumeState({ step: "Ready", pendingSync: [{ kind: "goals", goals: ["fitness"] }, { kind: "complete" }] });
+    await act(async () => listeners.forEach((listener) => listener("active")));
+    await waitFor(() => expect(completeDayOne).toHaveBeenCalledTimes(1));
+    expect(saveGoals).toHaveBeenCalledWith(["fitness"]);
+    expect(await readResumeState()).toBeNull();
+  });
+
+  it("never submits a saved queue while signed out", async () => {
+    await completedOffline();
+    delete mockSecure["supabase_token"];
+    const r = mount();
+    await r.findByTestId("nav-auth");
+    expect(completeDayOne).not.toHaveBeenCalled();
+    expect(saveGoals).not.toHaveBeenCalled();
+    expect((await readResumeState())?.pendingSync).toHaveLength(3);
   });
 });
