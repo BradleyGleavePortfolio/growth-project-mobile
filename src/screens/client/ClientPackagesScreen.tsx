@@ -97,6 +97,41 @@ function formatDate(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * MONEY-CLIENT-124: the one line under "Current plan". B-MC-2: a plan the
+ * client ended (cancel at period end) or a canceled plan that still has
+ * access says when it ends, never "Renews"; a one-time plan says when its
+ * access runs out; a past-due plan says the payment did not go through.
+ */
+export function currentPlanLine(d: ClientPaymentStatus): string {
+  if (d.state === 'past_due') return 'The last payment did not go through.';
+  if (d.state === 'canceled' || d.cancel_at_period_end) {
+    const ends = formatDate(d.access_expires_at ?? null) ?? formatDate(d.current_period_end);
+    return ends
+      ? `Ends ${ends}. Nothing more is charged.`
+      : 'Ends at the close of this period. Nothing more is charged.';
+  }
+  if (d.state === 'trialing' && d.trial_ends_at) {
+    return `Trial ends ${formatDate(d.trial_ends_at)}`;
+  }
+  if (d.current_period_end) {
+    const renews = formatDate(d.current_period_end);
+    if (renews) return `Renews ${renews}`;
+  }
+  const until = formatDate(d.access_expires_at ?? null);
+  return until ? `Access until ${until}` : '';
+}
+
+function isRenewing(pkg: ClientCoachPackage | undefined): boolean {
+  if (!pkg) return false;
+  return pkg.purchasable ? pkg.purchasable.renewing : pkg.type === 'recurring';
+}
+
+/** U-MC-3: buying another plan never replaces a renewing one. */
+export function secondPlanNotice(currentName: string): string {
+  return `${currentName} keeps renewing alongside this plan. To switch, end ${currentName} in Your plans first.`;
+}
+
 function DunningBanner({
   dunning,
   onUpdateCard,
@@ -282,21 +317,15 @@ export default function ClientPackagesScreen() {
       <SmartDunningBanner surface="ClientPackagesScreen" />
 
       {/* Renewing plans: next charge, End my plan / Keep my plan */}
-      <YourPlansPanel reloadKey={plansTick} />
+      <YourPlansPanel reloadKey={plansTick} onUpdateCard={handleUpdateCard} />
 
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
         <View style={styles.currentPlanCard}>
           <Text style={styles.currentPlanLabel}>Current plan</Text>
           <Text style={styles.currentPlanName}>{status.data.package_name}</Text>
-          <Text style={styles.currentPlanSub}>
-            {status.data.state === 'trialing' && status.data.trial_ends_at
-              ? `Trial ends ${formatDate(status.data.trial_ends_at)}`
-              : status.data.state === 'past_due'
-              ? 'Past due — see banner above'
-              : status.data.current_period_end
-              ? `Renews ${formatDate(status.data.current_period_end)}`
-              : ''}
+          <Text style={styles.currentPlanSub} testID="current-plan-line">
+            {currentPlanLine(status.data)}
           </Text>
           {/* PR-13 — buyer-facing Deliverables entry. Two gates:
               (1) feature flag `deliverables` — OFF in production until
@@ -384,6 +413,18 @@ export default function ClientPackagesScreen() {
             // (the backend CoachPackage schema has no such column —
             // backend prisma/schema.prisma:2942-3000).
             const current = status.ok && status.data.package_id === pkg.id;
+            // U-MC-3: a live renewing plan keeps charging when another plan
+            // is bought (each plan is its own subscription), so say so.
+            const st = status.ok ? status.data : null;
+            const renewingName =
+              st &&
+              !current &&
+              st.package_name &&
+              (st.state === 'active' || st.state === 'trialing' || st.state === 'past_due') &&
+              !st.cancel_at_period_end &&
+              isRenewing(packages.data.find((p) => p.id === st.package_id))
+                ? st.package_name
+                : null;
             return (
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>
@@ -411,6 +452,11 @@ export default function ClientPackagesScreen() {
                   </View>
                 ) : null}
                 {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
+                {sellable && renewingName ? (
+                  <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>
+                    {secondPlanNotice(renewingName)}
+                  </Text>
+                ) : null}
                 {active ? (
                   <PurchaseFeedback
                     purchase={purchase}

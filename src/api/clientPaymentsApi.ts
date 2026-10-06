@@ -133,12 +133,16 @@ export interface ClientPurchase {
     | 'pending'
     | 'paid'
     | 'active'
+    | 'trialing'
     | 'past_due'
+    | 'unpaid'
     | 'canceled'
     | 'payment_failed'
     | 'expired';
   entitlement_active: boolean;
   access_expires_at: string | null;
+  /** ClientPurchase.trial_ends_at (present on current backends). */
+  trial_ends_at?: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   canceled_at: string | null;
@@ -287,9 +291,10 @@ export interface CheckoutSession {
 export interface ClientPaymentStatus {
   /**
    * - 'active'    — subscription healthy
-   * - 'trialing'  — inside trial window (not exposed by backend yet)
+   * - 'trialing'  — inside trial window (purchase status trialing)
    * - 'past_due'  — last invoice failed, in retry window
-   * - 'canceled'  — subscription ended
+   * - 'canceled'  — canceled but access still runs (access_expires_at); a
+   *                 plan with no access left is not current (B-MC-1)
    * - 'none'      — no subscription yet (coach manages access externally)
    */
   state: 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
@@ -306,6 +311,10 @@ export interface ClientPaymentStatus {
   package_name: string | null;
   current_period_end: string | null;
   trial_ends_at: string | null;
+  /** The client ended this plan; it stops at the period end (B-MC-2). */
+  cancel_at_period_end?: boolean;
+  /** When access ends for a one-time or canceled plan, if the row says. */
+  access_expires_at?: string | null;
   /**
    * Set when state === 'past_due'. The backend renders a human summary
    * (e.g. "Your last payment failed on May 12. Update your card to keep access.")
@@ -563,22 +572,28 @@ export const clientPaymentsApi = {
         return Number.isNaN(ts) || ts > now;
       }) ?? null;
 
-    // Surface a past_due or canceled signal even when entitlement has
-    // already been turned off, so the screen can still show the user
-    // what happened. Picks the most recent matching row.
+    // Surface a past_due signal even when entitlement has already been
+    // turned off, so the screen can still show the user what happened
+    // (the fix is a card update, not a second plan). Picks the most
+    // recent matching row.
+    // MONEY-CLIENT-124 B-MC-1: a plan that has ENDED (canceled, no access)
+    // is no longer the client's current plan. Choosing it marked that plan
+    // "Current plan" with its buy button disabled and "Renews <past date>",
+    // so a client whose plan ended could never start it again.
     const pastDuePurchase = purchasesResult.data.find((p) => p.status === 'past_due') ?? null;
-    const canceledPurchase = purchasesResult.data.find((p) => p.status === 'canceled') ?? null;
 
-    const chosen = activePurchase ?? pastDuePurchase ?? canceledPurchase ?? null;
+    const chosen = activePurchase ?? pastDuePurchase ?? null;
     const state: ClientPaymentStatus['state'] = chosen
-      ? chosen.status === 'past_due'
+      ? chosen.status === 'past_due' || chosen.status === 'unpaid' // unpaid: still in grace
         ? 'past_due'
         : chosen.status === 'canceled'
           ? 'canceled'
-          : chosen.entitlement_active &&
-              (chosen.status === 'paid' || chosen.status === 'active')
-            ? 'active'
-            : 'none'
+          : chosen.status === 'trialing'
+            ? 'trialing'
+            : chosen.entitlement_active &&
+                (chosen.status === 'paid' || chosen.status === 'active')
+              ? 'active'
+              : 'none'
       : 'none';
 
     const packageId = chosen?.package_id ?? null;
@@ -594,9 +609,12 @@ export const clientPaymentsApi = {
         package_id: packageId,
         package_name: packageName,
         current_period_end: chosen?.current_period_end ?? null,
-        // Backend has no trial column today. Null tells the UI to omit
-        // the trial row instead of fabricating a date (rule 18).
-        trial_ends_at: null,
+        // The purchase row's trial end when it carries one; null tells the
+        // UI to omit the trial row instead of fabricating a date (rule 18).
+        trial_ends_at: chosen?.trial_ends_at ?? null,
+        // B-MC-2: an ended-at-period-end plan says when it ends, never "Renews".
+        cancel_at_period_end: chosen?.cancel_at_period_end === true,
+        access_expires_at: chosen?.access_expires_at ?? null,
         // No client-facing dunning route exists today — see file header
         // TODO. The past-due banner in `ClientPackagesScreen` is wired
         // and will render the moment this stops being null.

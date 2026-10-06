@@ -165,8 +165,9 @@ export default function MembershipScreen() {
               <Text style={styles.explainBody}>
                 The Growth Project is a coach-managed platform. Your coach
                 invites you, sets your training and nutrition plan, and may
-                offer self-serve plans below. To pause, change tier, or
-                cancel, message your coach directly.
+                offer self-serve plans below. A plan paid in the app shows
+                under View coaching plans, where a renewing plan can be ended
+                at any time. To pause or change a plan, message your coach.
               </Text>
             </View>
 
