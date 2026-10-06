@@ -64,7 +64,7 @@ jest.mock('../storage/activeWorkoutSession', () => ({
 }));
 
 jest.mock('../services/api', () => ({
-  workoutApi: { getRoutines: jest.fn(), getAll: jest.fn(), getVolume: jest.fn() },
+  workoutApi: { getRoutines: jest.fn(), getAll: jest.fn(async () => ({ data: [] })), getVolume: jest.fn() },
 }));
 
 jest.mock('../db/workoutDb', () => ({
