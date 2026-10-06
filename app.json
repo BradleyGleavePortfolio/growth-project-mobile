@@ -44,6 +44,10 @@
       },
       "package": "com.growthproject.app",
       "versionCode": 5,
+      "blockedPermissions": [
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -138,6 +142,15 @@
       "expo-web-browser",
       "expo-font",
       "expo-localization",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar. Calendar copies do not update automatically.",
+          "writeOnlyAccess": true,
+          "writeOnlyCalendarPermission": "The Growth Project lets you save the confirmed coaching sessions you choose to your device calendar.",
+          "remindersPermission": false
+        }
+      ],
       [
         "expo-local-authentication",
         {
