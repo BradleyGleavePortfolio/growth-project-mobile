@@ -51,7 +51,9 @@
  *     `content` and never read an idempotency header, so the client does not
  *     send one and never presents a retry as duplicate-safe.
  *   - Errors are mapped to a typed RomanApiError union: unavailable (404 /
- *     feature-off), rateLimited (429 + retryAfterSeconds), offline (no network),
+ *     feature-off), rateLimited (uncoded 429 + retryAfterSeconds), dailyCap
+ *     (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED, HTTP or in-stream:
+ *     the daily AI cap pop-up, src/lib/ai/aiDailyCap.ts), offline (no network),
  *     aiRefused (R2b 403 ai_consent_required / 503 ai_egress_blocked, over HTTP
  *     or in the stream's strict { code, message } error frame), and generic. Screens render calm Roman-voiced copy off these kinds; this
  *     layer never throws a raw axios error into the UI.
@@ -70,6 +72,12 @@ import {
   aiRefusalOf,
   type AiRefusal,
 } from '../lib/ai/aiRefusal';
+import {
+  aiDailyCapFromHttp,
+  aiDailyCapFromStreamCode,
+  aiDailyCapOf,
+  type AiDailyCap,
+} from '../lib/ai/aiDailyCap';
 
 // ─── Surfaces (mirror backend ROMAN_SURFACES, dto L18) ───────────────────────
 
@@ -190,7 +198,8 @@ export type RomanStreamError = z.infer<typeof RomanStreamErrorSchema>;
 
 export type RomanErrorKind =
   | 'unavailable' // 404 — feature flag off OR session not found / not owned
-  | 'rateLimited' // 429 — @Throttle / per-tier cap
+  | 'rateLimited' // uncoded 429 — burst throttle
+  | 'dailyCap' // 429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED — daily cap pop-up
   | 'offline' // no network reachability
   | 'aiRefused' // R2b: 403 ai_consent_required / 503 ai_egress_blocked (HTTP or in-stream)
   | 'generic'; // anything else (5xx, malformed, unknown)
@@ -208,6 +217,8 @@ export class RomanApiError extends Error {
    * keep it and must never append it again on its own.
    */
   readonly turnStored: boolean;
+  /** Present only for `dailyCap`: when AI help resets. */
+  readonly dailyCap?: AiDailyCap;
 
   constructor(
     kind: RomanErrorKind,
@@ -215,6 +226,7 @@ export class RomanApiError extends Error {
     retryAfterSeconds?: number,
     refusal?: AiRefusal,
     turnStored = false,
+    dailyCap?: AiDailyCap,
   ) {
     super(message);
     this.name = 'RomanApiError';
@@ -222,6 +234,7 @@ export class RomanApiError extends Error {
     this.retryAfterSeconds = retryAfterSeconds;
     this.refusal = refusal;
     this.turnStored = turnStored;
+    this.dailyCap = dailyCap;
   }
 }
 
@@ -259,12 +272,18 @@ function parseRetryAfter(value: unknown): number | undefined {
   return undefined;
 }
 
+const ROMAN_DAILY_CAP_MESSAGE = 'Daily AI limit reached.';
+
 /** Map any thrown error (axios or otherwise) to a typed RomanApiError. */
 function toRomanApiError(err: unknown): RomanApiError {
   if (err instanceof RomanApiError) return err;
   if (axios.isAxiosError(err)) {
     if (err.response) {
       const status = err.response.status;
+      const dailyCap = aiDailyCapOf(err);
+      if (dailyCap) {
+        return new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, false, dailyCap);
+      }
       if (status === 404) {
         return new RomanApiError(
           'unavailable',
@@ -482,6 +501,20 @@ export async function sendMessage(
       if (response.status === 404) {
         throw new RomanApiError('unavailable', 'Roman is not available right now.');
       }
+      const coded = response.status === 429 || response.status === 403 || response.status === 503;
+      const errorBody = coded ? await readErrorBody(response) : null;
+      if (response.status === 429 || response.status === 503) {
+        // Daily AI cap (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED),
+        // before the turn is stored: the pop-up, never a generic error.
+        const dailyCap = aiDailyCapFromHttp(
+          response.status,
+          errorBody,
+          parseRetryAfter(response.headers.get('retry-after')),
+        );
+        if (dailyCap) {
+          throw new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, false, dailyCap);
+        }
+      }
       if (response.status === 429) {
         const retry = parseRetryAfter(response.headers.get('retry-after'));
         throw new RomanApiError(
@@ -496,7 +529,7 @@ export async function sendMessage(
       if (response.status === 403 || response.status === 503) {
         const refusal = aiRefusalFromHttp(
           response.status,
-          await readErrorBody(response),
+          errorBody,
           responseRequestId(response),
         );
         if (refusal) {
@@ -528,6 +561,12 @@ export async function sendMessage(
         }
         throw new RomanApiError('aiRefused', streamError.message, undefined, refusal, true);
       }
+      // The spend cap reached after the turn was stored (reserveDailySpend):
+      // the turn stays, and the daily cap pop-up explains why no answer came.
+      const dailyCap = aiDailyCapFromStreamCode(streamError.code);
+      if (dailyCap) {
+        throw new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, true, dailyCap);
+      }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
       throw new RomanApiError(kind, streamError.message, undefined, undefined, true);
@@ -550,7 +589,14 @@ export async function sendMessage(
     const mapped = toRomanApiError(err);
     // A failure while reading an accepted (200) stream: the turn is stored.
     if (accepted) {
-      throw new RomanApiError(mapped.kind, mapped.message, mapped.retryAfterSeconds, mapped.refusal, true);
+      throw new RomanApiError(
+        mapped.kind,
+        mapped.message,
+        mapped.retryAfterSeconds,
+        mapped.refusal,
+        true,
+        mapped.dailyCap,
+      );
     }
     throw mapped;
   } finally {
