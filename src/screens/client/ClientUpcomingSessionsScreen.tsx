@@ -3,13 +3,9 @@
  * lockout-aware Cancel button (disabled when < 4h before start).
  *
  * Filters `useMyUpcomingSessions` to `status === 'scheduled'`.
- *
- * B-NOTIF-6: a booking push opens this screen with `params.sessionId`; that
- * session is outlined and scrolled into view. When it is no longer scheduled
- * (cancelled or declined), a short line says so above the list.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -52,27 +48,8 @@ export function isSessionLocked(
   return isWithinLockout(now, session.start_at);
 }
 
-/** The session a push tap asked for: in the list, missing, or none asked. */
-export function focusFor(
-  upcoming: ReadonlyArray<{ id: string }>,
-  requested: unknown,
-): { focusedId: string | null; missing: boolean } {
-  if (typeof requested !== 'string' || requested.length === 0) {
-    return { focusedId: null, missing: false };
-  }
-  return upcoming.some((s) => s.id === requested)
-    ? { focusedId: requested, missing: false }
-    : { focusedId: null, missing: true };
-}
-
-interface ClientUpcomingSessionsProps {
-  route?: { params?: { sessionId?: unknown } };
-}
-
-export default function ClientUpcomingSessionsScreen({ route }: ClientUpcomingSessionsProps = {}) {
+export default function ClientUpcomingSessionsScreen() {
   const { colors } = useTheme();
-  const scrollRef = useRef<ScrollView | null>(null);
-  const scrolledTo = useRef<string | null>(null);
   const oxblood = colors.error;
   const { data, isLoading, isError, refetch } = useMyUpcomingSessions(50);
   const cancel = useCancelSession();
@@ -90,8 +67,6 @@ export default function ClientUpcomingSessionsScreen({ route }: ClientUpcomingSe
         ),
     [data],
   );
-
-  const { focusedId, missing } = focusFor(upcoming, route?.params?.sessionId);
 
   const onCancel = useCallback(
     (session: CoachingSession) => {
@@ -140,22 +115,12 @@ export default function ClientUpcomingSessionsScreen({ route }: ClientUpcomingSe
 
   return (
     <ScrollView
-      ref={scrollRef}
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.container}
     >
       <Text style={[typography.h2, { color: colors.textPrimary }]}>
         Upcoming sessions
       </Text>
-
-      {missing ? (
-        <Text
-          testID="upcoming-session-missing"
-          style={[typography.bodySmall, { color: colors.textMuted, marginTop: spacing.sm }]}
-        >
-          That session is no longer scheduled. Your upcoming sessions are below.
-        </Text>
-      ) : null}
 
       {upcoming.length === 0 ? (
         <Text
@@ -175,29 +140,12 @@ export default function ClientUpcomingSessionsScreen({ route }: ClientUpcomingSe
       {upcoming.map((s) => {
         const locked = isSessionLocked(s);
         const busy = cancel.isPending && cancel.variables?.id === s.id;
-        const focused = s.id === focusedId;
         return (
           <View
             key={s.id}
-            testID={focused ? 'upcoming-session-focused' : undefined}
-            onLayout={
-              focused
-                ? (e) => {
-                    // Once per requested session, so a refetch does not
-                    // pull the list back while the client scrolls.
-                    if (scrolledTo.current === s.id) return;
-                    scrolledTo.current = s.id;
-                    scrollRef.current?.scrollTo({ y: e.nativeEvent.layout.y, animated: true });
-                  }
-                : undefined
-            }
             style={[
               styles.card,
-              {
-                backgroundColor: colors.surface,
-                borderColor: focused ? oxblood : colors.border,
-                borderWidth: focused ? 2 : 1,
-              },
+              { backgroundColor: colors.surface, borderColor: colors.border },
             ]}
           >
             <Text style={[typography.h3, { color: colors.textPrimary }]}>

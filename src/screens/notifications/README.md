@@ -71,9 +71,9 @@ idle
 
 | Control | What it does |
 | --- | --- |
-| Mute all | Suppresses all push and in-app notifications. Email continues unless also toggled off. |
+| Mute all | Turns off all push, in-app and email notifications, session reminders included (the backend `muted` gate blocks every channel). The channel switches wait while it is on. |
 | Quiet hours | Read-only (B-NOTIF-6): 9:00 PM to 8:00 AM in the user's own zone, the window the backend applies to everyone (OR-113-5). Overnight notifications wait until 8:00 AM; a reminder for a session starting within the hour still comes through. Nothing is sent for it. |
-| Per-kind × per-channel | The kinds with a backend switch (`KIND_PREFS_PREFIX`: messages, milestones, check-in reminders, build week) × 3 channels. Each has a 1-sentence description. A failed save puts the switch back and says the change did not save. |
+| Per-kind × per-channel | The kinds with a backend switch (`KIND_PREFS_PREFIX`: messages, milestones, check-in reminders, build week) × 3 channels. Each has a 1-sentence description. One save at a time: the switches wait while a save is in flight (B-341-1). A failed save puts the switch back and says what happened by status, with a reference and the support address for a server failure, and shows the server's row when the change may have reached it (B-341-2, `notificationPreferenceErrors.ts`). |
 
 ---
 

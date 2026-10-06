@@ -102,6 +102,12 @@ jest.mock('../services/notificationsApi', () => {
   };
 });
 
+// B-341-2: an unexpected save failure is reported (no Sentry in Jest).
+const mockReport = jest.fn();
+jest.mock('../lib/consultation/report', () => ({
+  reportUnexpected: (...a: unknown[]) => mockReport(...a),
+}));
+
 // ─── Navigation mock ──────────────────────────────────────────────────────────
 
 const mockNavigate = jest.fn();
@@ -376,17 +382,121 @@ describe('NotificationPreferencesScreen', () => {
     });
   });
 
-  it('a failed save puts the switch back and says the change did not save (B-NOTIF-6)', async () => {
-    (notificationsApi.saveNotificationPreferences as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+  const httpError = (status: number, code: string, requestId?: string) =>
+    Object.assign(new Error(`Request failed with status code ${status}`), {
+      isAxiosError: true,
+      response: { status, data: { code }, headers: requestId ? { 'x-request-id': requestId } : {} },
+    });
+
+  it('a save with no answer puts the switch back and says the server could not be reached (B-341-2)', async () => {
+    const offline = Object.assign(new Error('Network Error'), { isAxiosError: true });
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockRejectedValueOnce(offline);
     const { getByLabelText, getByText } = await render(<NotificationPreferencesScreen />);
     await waitFor(() => expect(getByLabelText('Direct messages via Push')).toBeTruthy());
     await act(async () => {
       await fireEvent(getByLabelText('Direct messages via Push'), 'valueChange', false);
     });
     await waitFor(() =>
-      expect(getByText('That change did not save. Check your connection and try again.')).toBeTruthy(),
+      expect(
+        getByText(
+          'Your direct messages push setting was not saved because the app could not reach the server, so it was left as it was. Check your connection, then try again.',
+        ),
+      ).toBeTruthy(),
     );
     expect(getByLabelText('Direct messages via Push').props.value).toBe(true);
+    expect(mockReport).not.toHaveBeenCalled();
+  });
+
+  it('a signed-out save says to sign in again, not to check the connection (B-341-2)', async () => {
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockRejectedValueOnce(
+      httpError(401, 'SESSION_EXPIRED'),
+    );
+    const { getByLabelText, getByText } = await render(<NotificationPreferencesScreen />);
+    await waitFor(() => expect(getByLabelText('Milestones via Push')).toBeTruthy());
+    await act(async () => {
+      await fireEvent(getByLabelText('Milestones via Push'), 'valueChange', false);
+    });
+    await waitFor(() =>
+      expect(
+        getByText('You were signed out, so your milestones push setting was not saved. Sign in again, then change it.'),
+      ).toBeTruthy(),
+    );
+    expect(getByLabelText('Milestones via Push').props.value).toBe(true);
+  });
+
+  it('a server failure gives a reference and the support address, reports it, and shows the server row (B-341-2)', async () => {
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockRejectedValueOnce(
+      httpError(500, 'UNRECOGNIZED', 'req-abcdef123456'),
+    );
+    const { getByLabelText, getByTestId } = await render(<NotificationPreferencesScreen />);
+    await waitFor(() => expect(getByLabelText('Direct messages via Push')).toBeTruthy());
+    // The write reached the server before the error: the reload shows it.
+    const stored = JSON.parse(JSON.stringify(FULL_PREFS));
+    stored.channels.message.push = false;
+    (notificationsApi.fetchNotificationPreferences as jest.Mock).mockResolvedValueOnce(stored);
+    await act(async () => {
+      await fireEvent(getByLabelText('Direct messages via Push'), 'valueChange', false);
+    });
+    await waitFor(() => expect(getByTestId('notification-prefs-save-failed')).toBeTruthy());
+    const notice = String(getByTestId('notification-prefs-save-failed').props.children);
+    expect(notice).toMatch(/^Your direct messages push setting could not be saved/);
+    expect(notice).toMatch(/write to support at \S+@\S+/);
+    expect(notice).toMatch(/reference \S+/);
+    expect(notice).not.toMatch(/Check your connection/);
+    expect(mockReport).toHaveBeenCalledWith('PATCH /notifications/preferences', expect.objectContaining({ status: 500 }));
+    await waitFor(() => expect(getByLabelText('Direct messages via Push').props.value).toBe(false));
+  });
+
+  it('one save at a time: a second switch waits, and the first reply never turns it back (B-341-1)', async () => {
+    let release: (v: unknown) => void = () => undefined;
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const { getByLabelText } = await render(<NotificationPreferencesScreen />);
+    await waitFor(() => expect(getByLabelText('Direct messages via Push')).toBeTruthy());
+    await act(async () => {
+      fireEvent(getByLabelText('Direct messages via Push'), 'valueChange', false);
+    });
+    // While the first save is in flight the switches wait.
+    expect(getByLabelText('Milestones via Push').props.disabled).toBe(true);
+    await act(async () => {
+      fireEvent(getByLabelText('Milestones via Push'), 'valueChange', false);
+    });
+    expect(notificationsApi.saveNotificationPreferences).toHaveBeenCalledTimes(1);
+    const afterFirst = JSON.parse(JSON.stringify(FULL_PREFS));
+    afterFirst.channels.message.push = false;
+    await act(async () => {
+      release(afterFirst);
+    });
+    await waitFor(() => expect(getByLabelText('Milestones via Push').props.disabled).toBe(false));
+    expect(getByLabelText('Direct messages via Push').props.value).toBe(false);
+    expect(getByLabelText('Milestones via Push').props.value).toBe(true);
+    // The next change is saved normally.
+    await act(async () => {
+      await fireEvent(getByLabelText('Milestones via Push'), 'valueChange', false);
+    });
+    await waitFor(() =>
+      expect(notificationsApi.saveNotificationPreferences).toHaveBeenLastCalledWith({
+        channels: { milestone: { push: false } },
+      }),
+    );
+    expect(notificationsApi.saveNotificationPreferences).toHaveBeenCalledTimes(2);
+  });
+
+  it('mute all says email stops too, and the channel switches wait while it is on (C-341-3)', async () => {
+    const { getByText, getByLabelText, getAllByRole } = await render(<NotificationPreferencesScreen />);
+    await waitFor(() =>
+      expect(
+        getByText('Turns off all push, in-app and email notifications, session reminders included.'),
+      ).toBeTruthy(),
+    );
+    await act(async () => {
+      await fireEvent(getAllByRole('switch')[0], 'valueChange', true);
+    });
+    await waitFor(() => expect(getByLabelText('Direct messages via Email').props.disabled).toBe(true));
   });
 
   it('shows per-kind descriptions for accessibility', async () => {

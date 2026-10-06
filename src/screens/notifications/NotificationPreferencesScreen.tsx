@@ -10,8 +10,13 @@
 //
 // All toggles have a label and a 1-sentence explanation of what they control.
 // Preferences are saved on change: each toggle PATCHes only what changed.
+// B-341-1: one save at a time; the switches wait while it is in flight, so a
+// reply or a rollback never overwrites a later change.
+// B-341-2: a failed save says what happened by status (offline, signed out,
+// busy, server with a reference and the support address), the same rules as
+// Settings > Notifications (notificationPreferenceErrors.ts).
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +38,7 @@ import {
   fetchNotificationPreferences,
   saveNotificationPreferences,
 } from '../../services/notificationsApi';
+import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
 import type { IoniconName } from '../../types/common';
 
 // ─── Copy table ───────────────────────────────────────────────────────────────
@@ -177,7 +183,8 @@ export const QUIET_HOURS_COPY = {
     'Your time. Notifications that arrive overnight wait until 8:00 AM. A reminder for a session that starts within the hour still comes through.',
 };
 
-export const SAVE_FAILED_COPY = 'That change did not save. Check your connection and try again.';
+export const MUTE_ALL_COPY =
+  'Turns off all push, in-app and email notifications, session reminders included.';
 
 const CHANNELS: NotificationChannel[] = ['push', 'in_app', 'email'];
 
@@ -189,7 +196,9 @@ export default function NotificationPreferencesScreen() {
   const [prefs, setPrefs] = useState<NotificationPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [saveFailed, setSaveFailed] = useState(false);
+  const [saveFailure, setSaveFailure] = useState<string | null>(null);
+  // B-341-1: set synchronously, so a second tap before the re-render is ignored.
+  const savingRef = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -206,21 +215,35 @@ export default function NotificationPreferencesScreen() {
     };
   }, []);
 
-  // `next` is shown at once; only `patch` (what changed) is sent.
+  // `next` is shown at once; only `patch` (what changed) is sent. One save at
+  // a time (B-341-1): `previous` is then the only other state there is.
   const save = useCallback(
-    async (next: NotificationPreferences, patch: Partial<NotificationPreferences>) => {
+    async (next: NotificationPreferences, patch: Partial<NotificationPreferences>, noun: string) => {
+      if (savingRef.current) return;
+      savingRef.current = true;
       const previous = prefs;
       setPrefs(next);
       setIsSaving(true);
-      setSaveFailed(false);
+      setSaveFailure(null);
       try {
         const saved = await saveNotificationPreferences(patch);
         setPrefs(saved);
-      } catch {
-        // Restore previous state on failure and say so.
+      } catch (err: unknown) {
+        // Put the switch back and say what happened and what to do next.
         setPrefs(previous);
-        setSaveFailed(true);
+        const failure = preferenceSaveFailureOf(err, noun);
+        setSaveFailure(failure.message);
+        // B-341-2: with no answer, or an unexpected one, the change may still
+        // have reached the server: show what the server has.
+        if (failure.kind === 'offline' || failure.kind === 'server') {
+          try {
+            setPrefs(await fetchNotificationPreferences());
+          } catch {
+            // Still unreachable: the restored switch and the notice stand.
+          }
+        }
       } finally {
+        savingRef.current = false;
         setIsSaving(false);
       }
     },
@@ -229,7 +252,7 @@ export default function NotificationPreferencesScreen() {
 
   const setMuteAll = useCallback((value: boolean) => {
     if (!prefs) return;
-    save({ ...prefs, muteAll: value }, { muteAll: value });
+    save({ ...prefs, muteAll: value }, { muteAll: value }, 'mute all');
   }, [prefs, save]);
 
   const setKindChannel = useCallback(
@@ -239,6 +262,7 @@ export default function NotificationPreferencesScreen() {
       save(
         { ...prefs, channels: { ...prefs.channels, [kind]: kindChannels } },
         { channels: { [kind]: { [channel]: value } } as NotificationPreferences['channels'] },
+        `${KIND_COPY[kind].label.toLowerCase()} ${CHANNEL_LABELS[channel].toLowerCase()}`,
       );
     },
     [prefs, save],
@@ -282,19 +306,21 @@ export default function NotificationPreferencesScreen() {
         <SectionHeader title="Global" />
         <ToggleRow
           label="Mute all notifications"
-          description="Suppresses all push and in-app notifications. Email notifications continue unless turned off individually."
+          description={MUTE_ALL_COPY}
           value={prefs.muteAll}
+          disabled={isSaving}
           onValueChange={setMuteAll}
           accessibilityLabel="Mute all notifications"
         />
 
-        {saveFailed ? (
+        {saveFailure ? (
           <Text
+            selectable
             testID="notification-prefs-save-failed"
             accessibilityLiveRegion="polite"
             style={[styles.notice, { color: colors.textSecondary }]}
           >
-            {SAVE_FAILED_COPY}
+            {saveFailure}
           </Text>
         ) : null}
 
@@ -340,7 +366,9 @@ export default function NotificationPreferencesScreen() {
                     <Switch
                       value={prefs.channels[kind][channel]}
                       onValueChange={(v) => setKindChannel(kind, channel, v)}
-                      disabled={prefs.muteAll && channel !== 'email'}
+                      // Mute all stops every channel, email too (backend
+                      // gate: muted blocks all of them).
+                      disabled={prefs.muteAll || isSaving}
                       accessibilityLabel={`${label} via ${CHANNEL_LABELS[channel]}`}
                       accessibilityRole="switch"
                       trackColor={{ false: colors.textMuted, true: colors.primary }}

@@ -2,6 +2,7 @@ const mockFlags = {
   communityTab: true,
   communityEvents: true,
   coachCommunity: true,
+  clientCalendar: true,
 };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
@@ -21,6 +22,7 @@ import {
   flushPendingPushTap,
   MAX_SEEN_IDS,
   pushSessionFor,
+  routeInAppNotification,
   routePushTap,
   setPushSession,
   PushNavigator,
@@ -53,6 +55,7 @@ describe('pushTapRouter', () => {
     mockFlags.communityTab = true;
     mockFlags.communityEvents = true;
     mockFlags.coachCommunity = true;
+    mockFlags.clientCalendar = true;
     mockHidden = false;
   });
 
@@ -100,6 +103,70 @@ describe('pushTapRouter', () => {
       routePushTap('SomethingNew');
       expect(nav.navigate).toHaveBeenCalledTimes(1);
       expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: undefined });
+    });
+  });
+
+  describe('S-SCHED booking pushes', () => {
+    it('client CalendarSession -> Calendar tab session view with the session id', () => {
+      const nav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb1');
+      expect(nav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-1' } });
+    });
+
+    it('client CalendarSession with the Calendar flag off -> notification center', () => {
+      mockFlags.clientCalendar = false;
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb2');
+      expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: { sessionId: 's-1' } });
+    });
+
+    it('client CalendarSession when the tab is not mounted -> notification center, not a dead route', () => {
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb3');
+      expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: { sessionId: 's-1' } });
+    });
+
+    it('in-app center rows use the same role-aware table (client and coach)', () => {
+      const clientNav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(clientNav);
+      setPushSession(STUDENT_A);
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(clientNav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-9' } });
+
+      const coachNav = makeNav(COACH_TABS);
+      attachPushNavigator(coachNav);
+      setPushSession(COACH_A);
+      expect(routeInAppNotification('CoachBookingInbox', { sessionId: 's-9' })).toBe(true);
+      expect(coachNav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBookingInbox', params: { sessionId: 's-9' } });
+    });
+
+    it('in-app routing refuses when not in the app or the name is not routable', () => {
+      const nav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(nav);
+      setPushSession({ kind: 'signedOut' });
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(false);
+      setPushSession(STUDENT_A);
+      expect(routeInAppNotification('not a screen', {})).toBe(false);
+      expect(routeInAppNotification(undefined, {})).toBe(false);
+      expect(nav.navigate).not.toHaveBeenCalled();
+      // Not dedupe-bound: the same row can be opened twice.
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(routeInAppNotification('CalendarSession', { sessionId: 's-9' })).toBe(true);
+      expect(nav.navigate).toHaveBeenCalledTimes(2);
+    });
+
+    it('coach CoachBookingInbox -> Clients stack booking inbox', () => {
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CoachBookingInbox', { sessionId: 's-1' }, 'nb4');
+      expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBookingInbox', params: { sessionId: 's-1' } });
     });
   });
 
@@ -311,41 +378,6 @@ describe('pushTapRouter', () => {
       setPushSession(STUDENT_A);
       routePushTap('Messages', { threadId: 't1', evil: { $where: 1 } });
       expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'Messages', params: { threadId: 't1' } });
-    });
-  });
-
-  describe('B-NOTIF-6: a booking push opens the session (backend #648 / #634 contract)', () => {
-    it('client CalendarSession opens upcoming sessions with the session id', () => {
-      const nav = makeNav(CLIENT_TABS);
-      attachPushNavigator(nav);
-      setPushSession(STUDENT_A);
-      routePushTap('CalendarSession', { sessionId: 'sess-7' }, 'b1');
-      expect(nav.navigate).toHaveBeenCalledWith('MoreTab', {
-        screen: 'ClientUpcomingSessions',
-        params: { sessionId: 'sess-7' },
-      });
-    });
-
-    it('coach CoachBookingInbox opens the booking inbox with the session id', () => {
-      const nav = makeNav(COACH_TABS);
-      attachPushNavigator(nav);
-      setPushSession(COACH_A);
-      routePushTap('CoachBookingInbox', { sessionId: 'sess-7' }, 'b2');
-      expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', {
-        screen: 'CoachBookingInbox',
-        params: { sessionId: 'sess-7' },
-      });
-    });
-
-    it('the other role never opens a screen it does not have: notification center', () => {
-      const nav = makeNav(CLIENT_TABS);
-      attachPushNavigator(nav);
-      setPushSession(STUDENT_A);
-      routePushTap('CoachBookingInbox', { sessionId: 'sess-7' }, 'b3');
-      expect(nav.navigate).toHaveBeenCalledWith('Home', {
-        screen: 'NotificationCenter',
-        params: { sessionId: 'sess-7' },
-      });
     });
   });
 });
