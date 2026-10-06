@@ -27,6 +27,8 @@ import {
   ParamListBase,
 } from '@react-navigation/native';
 import { useMyWorkoutAssignment } from '../../hooks/useWorkoutBuilder';
+import { useExerciseNames } from '../../hooks/useExerciseNames';
+import { formatPlanType } from '../../utils/workout/formatPlanType';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -53,9 +55,28 @@ export default function WorkoutAssignmentDetailScreen() {
     void refetch();
   }, [refetch]);
 
+  // The plan stores only catalog ids (e.g. "0025" or "seed:push-001"). The
+  // screen used to prettify the id, so a client saw "1. Exercise" or
+  // "1. Push 001" instead of "Barbell Bench Press". Resolve the real names
+  // from GET /exercises/:id; fall back to the prettified id while loading.
+  const exerciseIds = useMemo(
+    () => (data?.workout_plan?.exercises ?? []).map((e) => e.exercise_external_id),
+    [data],
+  );
+  const exerciseNames = useExerciseNames(exerciseIds);
+  const nameFor = useCallback(
+    (externalId: string) =>
+      exerciseNames[externalId] || prettifyExerciseName(externalId) || 'Exercise',
+    [exerciseNames],
+  );
+
   const handleStart = useCallback(() => {
     if (!data) return;
-    const exercises = buildActiveWorkoutExercises(data.workout_plan);
+    const exercises = buildActiveWorkoutExercises(data.workout_plan).map((e) => ({
+      ...e,
+      // Saved with the workout, shown in history and to the coach.
+      exerciseName: exerciseNames[e.exerciseId] || e.exerciseName,
+    }));
     const params = {
       routineId: data.workout_plan.id,
       routineName: data.workout_plan.name,
@@ -81,18 +102,30 @@ export default function WorkoutAssignmentDetailScreen() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ActiveWorkout', params);
-  }, [data, navigation]);
+  }, [data, navigation, exerciseNames]);
 
   if (isLoading) {
     return <SkeletonScreen count={5} />;
   }
 
   if (isError || !data) {
+    // The old copy said "Pull to retry" on a screen that cannot be pulled.
     return (
       <View style={styles.center}>
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Could not load this workout. Pull to retry.
+        <Text style={[typography.body, { color: sc.textMuted, textAlign: 'center' }]}>
+          This workout did not load. Check the connection, then try again.
         </Text>
+        <HapticPressable
+          intent="light"
+          style={styles.retryBtn}
+          onPress={onRefresh}
+          disabled={isRefetching}
+          accessibilityRole="button"
+          accessibilityLabel="Try loading the workout again"
+          testID="assignment-retry"
+        >
+          <Text style={styles.retryBtnText}>{isRefetching ? 'Loading' : 'Try again'}</Text>
+        </HapticPressable>
       </View>
     );
   }
@@ -117,7 +150,7 @@ export default function WorkoutAssignmentDetailScreen() {
         {plan.name}
       </Text>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-        {plan.type}
+        {formatPlanType(plan.type)}
         {plan.duration_estimate_minutes
           ? ` • about ${plan.duration_estimate_minutes} min`
           : ''}
@@ -129,7 +162,7 @@ export default function WorkoutAssignmentDetailScreen() {
         {sorted.map((ex) => (
           <View key={ex.id} style={styles.exerciseRow}>
             <Text style={[typography.h3, { color: sc.textPrimary }]}>
-              {ex.order}. {prettifyExerciseName(ex.exercise_external_id)}
+              {ex.order}. {nameFor(ex.exercise_external_id)}
             </Text>
             <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
               {ex.sets} sets × {ex.reps_or_duration_seconds} reps
@@ -178,6 +211,16 @@ function makeStyles(sc: SemanticTokens) {
       backgroundColor: sc.bgPrimary,
     },
     content: { padding: spacing.lg, gap: spacing.sm },
+    retryBtn: {
+      marginTop: spacing.md,
+      minHeight: 44,
+      paddingHorizontal: spacing.lg,
+      justifyContent: 'center',
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: sc.border,
+    },
+    retryBtnText: { color: sc.textPrimary, fontSize: 14, fontWeight: '600' },
     list: {
       marginTop: spacing.md,
       gap: spacing.sm,

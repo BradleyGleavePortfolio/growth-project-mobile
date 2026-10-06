@@ -28,6 +28,7 @@ import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
+import { formatPlanType } from '../../utils/workout/formatPlanType';
 
 export default function ClientWorkoutViewerScreen() {
   const { semanticColors: sc } = useTheme();
@@ -171,7 +172,7 @@ function AssignmentCard({
           {plan.name}
         </Text>
         <Text style={[typography.bodySmall, { color: sc.accent }]}>
-          {plan.type}
+          {formatPlanType(plan.type)}
         </Text>
       </View>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
