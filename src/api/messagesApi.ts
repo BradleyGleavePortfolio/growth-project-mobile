@@ -31,7 +31,7 @@ import { emitTutorialSignal } from '../tutorial/tutorialEvents';
  * spam | harassment | sexual | self_harm | other, so `report()` sends
  * REPORT_WIRE_REASON[reason] and keeps the finer category in `details`.
  * Sending a category verbatim (hate_speech, violence, misinformation) was a
- * 400 and the report was never filed (AUDIT-03-125 B1).
+ * 400 and no report was filed (AUDIT-03-125 B1).
  */
 export type ReportReason =
   | 'spam'
