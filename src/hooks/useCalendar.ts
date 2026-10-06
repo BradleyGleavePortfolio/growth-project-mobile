@@ -10,6 +10,7 @@
  *   ['scheduling', 'sessionTypes', coachId]            (bookable, active only)
  *   ['scheduling', 'sessionTypes', coachId, 'all']     (owning coach, with archived)
  *   ['scheduling', 'overrides']
+ *   ['scheduling', 'bookingOptions']                  (signed-in coach, S-AVAIL-122)
  */
 import {
   useInfiniteQuery,
@@ -23,10 +24,13 @@ import {
   type SchedulingSessionStatus,
   type AvailabilityOverride,
   type BookableCoach,
+  type BookingOptions,
+  type BookingOptionsView,
   type CoachingSession,
   type CreateAvailabilityOverrideInput,
   type OpenSlotsPayload,
   type SessionType,
+  schedulingErrorStatus,
 } from '../api/schedulingApi';
 
 const THIRTY_S_MS = 30 * 1000;
@@ -212,6 +216,38 @@ export function useDeleteAvailabilityOverride() {
     mutationFn: ({ id }) => schedulingApi.deleteAvailabilityOverride(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['scheduling', 'overrides'] });
+      qc.invalidateQueries({ queryKey: ['scheduling', 'openSlots'] });
+    },
+  });
+}
+
+/**
+ * True when the booking options endpoint is not offered to this account: a
+ * backend without the route (bare 404, feature not deployed) or a non-coach
+ * (403). The Settings entry is hidden in both cases.
+ */
+export function bookingOptionsUnavailable(err: unknown): boolean {
+  const status = schedulingErrorStatus(err);
+  return status === 404 || status === 403;
+}
+
+/** The signed-in coach's booking options (S-AVAIL-122). */
+export function useBookingOptions(enabled = true) {
+  return useQuery<BookingOptionsView>({
+    queryKey: ['scheduling', 'bookingOptions'],
+    queryFn: () => schedulingApi.getMyBookingOptions(),
+    enabled,
+    staleTime: FIVE_MIN_MS,
+    retry: (count, err) => !bookingOptionsUnavailable(err) && count < 2,
+  });
+}
+
+export function useUpdateBookingOptions() {
+  const qc = useQueryClient();
+  return useMutation<BookingOptionsView, Error, Partial<BookingOptions>>({
+    mutationFn: (input) => schedulingApi.updateMyBookingOptions(input),
+    onSuccess: (saved) => {
+      qc.setQueryData(['scheduling', 'bookingOptions'], saved);
       qc.invalidateQueries({ queryKey: ['scheduling', 'openSlots'] });
     },
   });

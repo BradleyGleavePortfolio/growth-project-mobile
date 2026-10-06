@@ -31,7 +31,7 @@ export const SCHEDULING_CODE_MESSAGES: Readonly<Record<string, string>> = {
   SLOT_TAKEN: 'Someone just booked that time. Refresh open times and pick another time.',
   SLOT_UNAVAILABLE: 'That time is no longer open. Refresh open times and pick another time.',
   SESSION_IN_PAST: 'That time is too close or has passed. Refresh open times and choose a later time.',
-  BEYOND_BOOKING_HORIZON: 'That time is too far ahead to book yet. Choose a time within the next four months.',
+  BEYOND_BOOKING_HORIZON: "That time is further ahead than your coach takes bookings. Refresh open times and pick a time from the list.",
   INVALID_TIME: 'That time could not be read. Refresh open times and pick a time from the list.',
   DURATION_MISMATCH: 'That time does not match the length of this appointment type. Refresh open times and pick a time from the list.',
   SESSION_TYPE_REQUIRED: 'Choose an appointment type first, then pick a time.',
@@ -69,6 +69,8 @@ export const COACH_CODE_MESSAGES: Readonly<Record<string, string>> = {
   SLOT_TAKEN: 'Another session already uses that time. Refresh and choose a different time.',
   CALENDAR_BUSY: 'Your calendar is busy saving other changes right now. Wait a few seconds, then try again.',
   INVALID_LIST_QUERY: 'The inbox could not load more sessions from where you were. Refresh the inbox to start the list again.',
+  BEYOND_BOOKING_HORIZON: 'That time is too far ahead to schedule. Pick an earlier date.',
+  INVALID_BOOKING_OPTIONS: 'One of the booking options is outside its allowed range. Check the values shown under each option, then save again.',
 };
 
 /**
