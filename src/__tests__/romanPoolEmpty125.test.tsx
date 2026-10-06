@@ -78,10 +78,11 @@ afterEach(() => {
 });
 
 function mockFetchOnce(init: { ok: boolean; status: number; text: string }) {
+  const headers: Record<string, string> = {};
   const response: Pick<Response, 'ok' | 'status' | 'headers' | 'text'> = {
     ok: init.ok,
     status: init.status,
-    headers: { get: () => null } as Headers,
+    headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } as Headers,
     text: async () => init.text,
   };
   global.fetch = jest.fn(async () => response as Response);
