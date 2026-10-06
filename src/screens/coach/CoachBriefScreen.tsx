@@ -89,6 +89,8 @@ type LoadState =
   | { kind: 'throttled' };
 
 type BriefNav = NavigationProp<CoachTabParamList>;
+/** actionTarget builds nested params per tab; navigate's tuple overloads cannot take a union. */
+type LooseNavigate = (name: keyof CoachTabParamList, params?: object) => void;
 
 /** Where an action item opens. null = informational row (no tap). */
 export function actionTarget(
@@ -426,7 +428,7 @@ function ActionRow({ item }: { item: CoachBriefActionItem }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}
-      onPress={() => navigation.navigate(target.tab as never, target.params as never)}
+      onPress={() => (navigation.navigate as LooseNavigate).call(navigation, target.tab, target.params)}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint="Opens the screen for this item"

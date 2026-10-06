@@ -38,17 +38,14 @@ jest.mock('@react-navigation/native', () => ({
 const mockToday = jest.fn();
 const mockRegenerate = jest.fn();
 const mockMarkRead = jest.fn();
-jest.mock('../../../api/coachBriefApi', () => {
-  const actual = jest.requireActual('../../../api/coachBriefApi');
-  return {
-    ...actual,
-    coachBriefApi: {
-      today: () => mockToday(),
-      regenerate: () => mockRegenerate(),
-      markRead: (id: string) => mockMarkRead(id),
-    },
-  };
-});
+jest.mock('../../../api/coachBriefApi', () => ({
+  coachBriefApi: {
+    today: () => mockToday(),
+    regenerate: () => mockRegenerate(),
+    markRead: (id: string) => mockMarkRead(id),
+  },
+  CoachBriefApiError: class CoachBriefApiError extends Error {},
+}));
 
 import CoachBriefScreen, { actionTarget } from '../CoachBriefScreen';
 
