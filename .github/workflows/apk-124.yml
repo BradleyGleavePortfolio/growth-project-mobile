@@ -1,0 +1,198 @@
+name: Owner Android APK (APK-124)
+
+# Throwaway workflow on ci/APK-124-1 (never merged). Builds an installable
+# Android release APK of growth-project-mobile main on a free GitHub-hosted
+# runner. No EAS, no expo.dev, no secrets: every EXPO_PUBLIC_* value below is
+# a public value that ships inside every app binary by design.
+
+on:
+  push:
+    branches: [ci/APK-124-1]
+
+permissions:
+  contents: read
+
+env:
+  APP_SHA: 42daf108364739287ba0445c8c1caae6d659d3e9
+  APP_SHORT: 42daf10
+  CI: "1"
+  EXPO_NO_DOTENV: "1"
+  EXPO_NO_TELEMETRY: "1"
+  SENTRY_DISABLE_AUTO_UPLOAD: "true"
+  SENTRY_ALLOW_FAILURE: "true"
+  EXPO_PUBLIC_API_URL: https://backend-spring-lake-3890.fly.dev/api
+  EXPO_PUBLIC_SUPABASE_URL: https://rpyfdsgxxltzutgqeouk.supabase.co
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0
+
+jobs:
+  apk:
+    name: android ${{ matrix.variant }} release APK
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: universal
+            archs: armeabi-v7a,arm64-v8a,x86,x86_64
+            workers: "4"
+            artifact: tgp-42daf10-clinic-apk
+            apk: tgp-42daf10-clinic.apk
+          - variant: arm64
+            archs: arm64-v8a
+            workers: "2"
+            artifact: tgp-42daf10-clinic-arm64-apk
+            apk: tgp-42daf10-clinic-arm64.apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.APP_SHA }}
+          persist-credentials: false
+
+      - name: Record exact application source
+        run: |
+          test "$(git rev-parse HEAD)" = "$APP_SHA"
+          git log -1 --format='%H %s'
+          echo "Application source: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Install exact lockfile
+        run: npm ci
+
+      - name: Load eas.json clinic profile env (production env, then clinic env)
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const builds = require('./eas.json').build;
+          function profile(name) {
+            const current = builds[name];
+            return { ...(current.extends ? profile(current.extends) : {}), ...(current.env || {}) };
+          }
+          const env = { ...profile('clinic'), EAS_BUILD_PROFILE: 'clinic', NODE_ENV: 'production' };
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
+          console.log(JSON.stringify(env, null, 2));
+          NODE
+          echo "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY set: ${EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY:+yes}"
+          echo "EXPO_PUBLIC_SENTRY_DSN set: ${EXPO_PUBLIC_SENTRY_DSN:+yes}"
+
+      - name: Release env check (informational; values are never printed)
+        continue-on-error: true
+        run: node scripts/check-expected-env.js --release-env --profile clinic
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Generate clean Android project
+        run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Run the embedded bundle only (no OTA swap in this sideload build)
+        shell: bash
+        run: |
+          m=android/app/src/main/AndroidManifest.xml
+          grep -n 'expo.modules.updates' "$m" || true
+          sed -i 's#\(android:name="expo.modules.updates.ENABLED" android:value="\)true"#\1false"#' "$m"
+          grep -n 'expo.modules.updates.ENABLED' "$m"
+          grep -n 'reactNativeArchitectures\|newArchEnabled\|hermesEnabled' android/gradle.properties
+
+      - name: Android release build (assembleRelease)
+        working-directory: android
+        env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx4g
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleRelease -PreactNativeArchitectures=${{ matrix.archs }} \
+            --no-daemon --max-workers=${{ matrix.workers }} --console=plain 2>&1 | tee ../android-build.log
+
+      - name: Collect APK
+        id: collect
+        run: |
+          mkdir -p out
+          cp android/app/build/outputs/apk/release/app-release.apk "out/${{ matrix.apk }}"
+          (cd out && sha256sum "${{ matrix.apk }}" > "${{ matrix.apk }}.sha256" && cat "${{ matrix.apk }}.sha256")
+
+      - name: Prove the APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK="out/${{ matrix.apk }}"
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          AA="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          P=out/apk-proof.txt
+          {
+            echo "APK-124 proof — app sha $APP_SHA — variant ${{ matrix.variant }} — run ${{ github.run_id }}"
+            echo "== sha256 / size"; sha256sum "$APK"; ls -l "$APK"
+            echo "== aapt2 dump badging"; "$BT/aapt2" dump badging "$APK" | grep -E "^(package|sdkVersion|targetSdkVersion|application-label|native-code|launchable-activity)"
+            echo "== apkanalyzer"
+            echo "application-id: $("$AA" manifest application-id "$APK" 2>/dev/null || echo n/a)"
+            echo "version-name:   $("$AA" manifest version-name "$APK" 2>/dev/null || echo n/a)"
+            echo "version-code:   $("$AA" manifest version-code "$APK" 2>/dev/null || echo n/a)"
+            echo "min-sdk:        $("$AA" manifest min-sdk "$APK" 2>/dev/null || echo n/a)"
+            echo "target-sdk:     $("$AA" manifest target-sdk "$APK" 2>/dev/null || echo n/a)"
+            echo "== OTA meta-data in the APK manifest"; ("$AA" manifest print "$APK" 2>/dev/null || true) | grep -E -A1 "expo.modules.updates" | sed 's/^/  /' || true
+            echo "== signing (apksigner verify --print-certs)"; "$BT/apksigner" verify --print-certs "$APK" | grep -v "^WARNING" | sed -n 1,8p
+            echo "== permissions"; "$BT/aapt2" dump permissions "$APK" | grep -i "permission" | sed 's/^/  /'
+            echo "== bundle"
+            unzip -l "$APK" | grep -E "index.android.bundle|lib/.*/libhermes|lib/.*/libreactnative" | sed -n 1,12p
+            unzip -p "$APK" assets/index.android.bundle > out/index.android.bundle
+            echo "bundle bytes: $(stat -c %s out/index.android.bundle); header: $(head -c 8 out/index.android.bundle | od -An -tx1)"
+            c() { printf '%-48s %s\n' "$1" "$( (grep -a -o -F -- "$2" out/index.android.bundle || true) | wc -l)"; }
+            echo "-- must be > 0"
+            c "production API URL"                 "https://backend-spring-lake-3890.fly.dev/api"
+            c "production Supabase URL"            "https://rpyfdsgxxltzutgqeouk.supabase.co"
+            c "public anon key (count only)"       "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
+            echo "-- must be 0"
+            c "proof/dummy host native-proof.invalid" "native-proof.invalid"
+            c "localhost"                          "localhost:"
+            c "emulator host 10.0.2.2"             "10.0.2.2"
+            c "screenshot fixture Alex Morgan"     "Alex Morgan"
+            c "screenshot fixture demo account"    "demo@trygrowthproject.com"
+            c "service_role"                       "service_role\""
+            c "sk_live_"                           "sk_live_"
+            c "sk_test_"                           "sk_test_"
+            echo "-- informational"
+            c "EXPO_PUBLIC_ names left un-inlined" "EXPO_PUBLIC_"
+            c "pk_live_ (Stripe env fallback)"     "pk_live_"
+            c "pk_test_ (Stripe env fallback)"     "pk_test_"
+            echo "== mock / flag env used for the bundle (eas.json clinic profile)"
+            env | grep -E "^(EXPO_PUBLIC_(USE_MOCK|NOTIFICATIONS_MOCK|WAVE11_MOCK|AI_EXECUTION_MOCK|SCREENSHOT_MODE|FF_)|TGP_ANDROID_HEALTH_CONNECT|NODE_ENV|EAS_BUILD_PROFILE)" | sort
+            echo "EXPO_PUBLIC_WAVE11_MOCK / AI_EXECUTION_MOCK / SCREENSHOT_MODE unset means off"
+          } | tee "$P"
+          rm out/index.android.bundle
+          { echo '```'; cat "$P"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          # hard gates
+          grep -a -q -F "https://backend-spring-lake-3890.fly.dev/api" <(unzip -p "$APK" assets/index.android.bundle)
+          if grep -a -q -F "Alex Morgan" <(unzip -p "$APK" assets/index.android.bundle); then echo "screenshot fixtures in bundle"; exit 1; fi
+          if grep -a -q -F "native-proof.invalid" <(unzip -p "$APK" assets/index.android.bundle); then echo "dummy host in bundle"; exit 1; fi
+
+      - name: Upload APK
+        if: always() && steps.collect.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          retention-days: 7
+          compression-level: 0
+          if-no-files-found: error
+          path: |
+            out/${{ matrix.apk }}
+            out/${{ matrix.apk }}.sha256
+            out/apk-proof.txt
+
+      - name: Upload build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk124-evidence-${{ matrix.variant }}-${{ github.run_id }}
+          retention-days: 7
+          path: |
+            android-build.log
+            android/gradle.properties
+            android/app/build.gradle
+            android/app/src/main/AndroidManifest.xml
