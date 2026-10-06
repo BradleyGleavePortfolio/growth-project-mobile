@@ -57,13 +57,18 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
   }),
 }));
 
+// B-WEARLIST-125: the server-listed cloud trackers (empty = older server / 404).
+const mockCloud = jest.fn((): ReadonlySet<string> => new Set<string>());
+jest.mock('../../../../hooks/useConnectableCloudProviders', () => ({
+  useConnectableCloudProviders: () => mockCloud(),
+}));
 const mockReportUnexpected = jest.fn();
 jest.mock('../../../../lib/consultation/report', () => ({
   reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
 }));
 
 import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
-import { configFor } from '../../../../api/wearablesConnectionsApi';
+import { configFor, type WearableProvider } from '../../../../api/wearablesConnectionsApi';
 import { disconnectConfirmCopy } from '../disconnectCopy';
 import { emptyImportMessage } from '../onDeviceCopy';
 import { OnDeviceSessionChangedError } from '../../../../services/health/sessionFence';
@@ -452,5 +457,41 @@ describe('ConnectionsScreen — sources offered on this phone (AUDIT-11-125)', (
       'OURA',
       'SAMSUNG_HEALTH',
     ]);
+  });
+});
+
+// B-WEARLIST-125: a cloud tracker appears the moment the server lists it as
+// connectable; with no list (older server, 404, error) nothing changes.
+describe('ConnectionsScreen — server-listed cloud trackers (B-WEARLIST-125)', () => {
+  afterEach(() => {
+    mockCloud.mockReturnValue(new Set<string>());
+  });
+
+  it('shows a listed tracker with its benefit and a working Connect', async () => {
+    mockCloud.mockReturnValue(new Set(['OURA']));
+    mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
+    await render(<ConnectionsScreen />);
+    expect(screen.getByText('Oura')).toBeTruthy();
+    expect(screen.getByText('Sleep, readiness and heart rate from your Oura ring')).toBeTruthy();
+    expect(screen.queryByText('WHOOP')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Connect Oura'));
+    expect(sheetProps.visible).toBe(true);
+    expect(sheetProps.provider).toBe('OURA');
+  });
+
+  it('shows no cloud tracker when the server lists none', async () => {
+    mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
+    await render(<ConnectionsScreen />);
+    for (const name of ['Oura', 'WHOOP', 'Garmin', 'Polar', 'Withings']) {
+      expect(screen.queryByText(name)).toBeNull();
+    }
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('buildRows adds only the listed cloud providers', () => {
+    const names = buildRows([], null, 'APPLE_HEALTHKIT', new Set<WearableProvider>(['OURA', 'POLAR']))
+      .map((r) => r.provider)
+      .sort();
+    expect(names).toEqual(['APPLE_HEALTHKIT', 'OURA', 'POLAR']);
   });
 });

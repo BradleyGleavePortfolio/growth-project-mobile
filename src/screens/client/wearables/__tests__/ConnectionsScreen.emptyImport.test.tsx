@@ -26,6 +26,9 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
   useInvalidateWearableConnections: () => mockInvalidate,
 }));
 jest.mock('expo-web-browser', () => ({ openAuthSessionAsync: jest.fn() }));
+jest.mock('../../../../hooks/useConnectableCloudProviders', () => ({
+  useConnectableCloudProviders: () => new Set(),
+}));
 jest.mock('../../../../config/healthConnect', () => ({
   HEALTH_CONNECT_DISABLED_MESSAGE: 'disabled',
   isHealthConnectProviderDisabled: () => false,

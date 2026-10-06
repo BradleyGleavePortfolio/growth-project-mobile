@@ -424,6 +424,22 @@ export function cloudConnectFailureMessage(err: unknown, name: string): OnDevice
 }
 
 /** Another in-app sign-in window is already open (auth session `locked`). */
+/**
+ * B-WEARLIST-125: the server callback sent the sign-in window back with
+ * `status=error` (consent declined, an expired link or a failed exchange).
+ */
+export function cloudReturnedErrorMessage(name: string): OnDeviceMessage {
+  return {
+    text: `${name} isn't connected. The sign-in with ${name} did not finish. Tap Continue to try again.`,
+    action: 'connect',
+  };
+}
+
+/** True when the auth-session return URL reports a failed connect. */
+export function cloudReturnFailed(url: string | null | undefined): boolean {
+  return typeof url === 'string' && /[?&]status=error(?:&|#|$)/.test(url);
+}
+
 export function cloudSessionLockedMessage(name: string): OnDeviceMessage {
   return {
     text: `Another sign-in window is already open. Finish or close it, then tap Continue to connect ${name}.`,
