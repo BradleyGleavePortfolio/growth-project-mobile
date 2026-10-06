@@ -889,7 +889,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         <View style={styles.verifyContent}>
           <Text style={styles.verifyTitle}>Check your inbox</Text>
           <Text style={styles.verifyBody}>
-            We sent a verification link to{'\n'}
+            A verification link was sent to{'\n'}
             <Text style={styles.emailHighlight}>{email}</Text>
           </Text>
           <Text style={styles.verifySubBody}>
@@ -899,8 +899,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           {inviteAttachError !== null ? (
             <View style={styles.noticeBox} testID="invite-attach-pending-notice">
               <Text style={styles.noticeText}>
-                Your account was created, but we could not connect you to your coach yet. After
-                you verify, we will ask for your invite code again.
+                Your account was created, but it is not connected to your coach yet. After
+                you verify, the app asks for your invite code again.
               </Text>
             </View>
           ) : null}

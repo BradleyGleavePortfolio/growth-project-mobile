@@ -212,7 +212,7 @@ export default function BrandedCheckoutWebViewScreen() {
       : {
           title: 'Checkout temporarily unavailable',
           body:
-            'We could not start a secure checkout session. Please go back and try again — if it keeps happening, message your coach.',
+            'A secure checkout session did not start. Go back and try again — if it keeps happening, message your coach.',
           code: 'TGPError: checkout_url_missing',
         },
   );
@@ -273,7 +273,7 @@ export default function BrandedCheckoutWebViewScreen() {
         setError({
           title: 'Checkout link not allowed',
           body:
-            'For your security, this checkout tried to send you to a site we do not recognise. We blocked it. Please go back and try again.',
+            'For your security, this checkout tried to send you to an unrecognised site, so it was blocked. Go back and try again.',
           code: `TGPError: blocked_origin (${safeHostFor(request.url)})`,
         });
         return false;
@@ -312,7 +312,7 @@ export default function BrandedCheckoutWebViewScreen() {
       setError({
         title: 'Checkout could not connect',
         body:
-          'We could not reach the secure checkout server. Check your internet connection and tap “Try again”.',
+          'The secure checkout server could not be reached. Check your internet connection and tap “Try again”.',
         code: `TGPError: net_${nativeEvent.code ?? 'unknown'}`,
       });
     },

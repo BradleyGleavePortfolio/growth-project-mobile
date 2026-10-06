@@ -37,7 +37,7 @@ describe('FirstPaymentWowScreen — ED.3', () => {
 
     // VOICE — exact §2.6 celebration string.
     expect(getByTestId('first-payment-message').props.children).toBe(
-      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations!',
+      'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations.',
     );
 
     // FACE — the milestone avatar is present in the same tree, announced in

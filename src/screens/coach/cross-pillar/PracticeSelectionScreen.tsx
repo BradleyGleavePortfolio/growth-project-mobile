@@ -127,7 +127,7 @@ export default function PracticeSelectionScreen() {
       <Text style={styles.eyebrow}>SET YOUR PRACTICE</Text>
       <Text style={styles.headline}>What does your work cover?</Text>
       <Text style={styles.lede}>
-        We use this to decide which surfaces appear. You can change it anytime
+        This decides which surfaces appear. You can change it anytime
         in Settings.
       </Text>
 
@@ -188,7 +188,7 @@ function toMessage(err: unknown): string {
   const code = (err as { response?: { data?: { code?: string } } } | undefined)?.response?.data
     ?.code;
   if (status === 503 || code === 'PRACTICE_FEDERATION_FAILED') {
-    return "We couldn't sync your practice across both products. Try again in a moment.";
+    return "Your practice did not sync across both products. Try again in a moment.";
   }
   if (!err) return "Couldn't save practice. Try again.";
   if (err && typeof err === 'object' && 'message' in err) {

@@ -599,7 +599,7 @@ function LtvContent({
               ? '1 month of zero churn'
               : `${metrics.zero_churn_streak_months} consecutive months of zero churn`}
             {metrics.zero_churn_streak_months >= 6
-              ? ' — exceptional retention!'
+              ? ' — exceptional retention.'
               : metrics.zero_churn_streak_months >= 3
               ? ' — keep it up'
               : ''}

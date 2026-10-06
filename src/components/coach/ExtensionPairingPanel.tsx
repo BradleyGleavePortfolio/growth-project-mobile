@@ -203,7 +203,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
         ) : null}
         <Text style={styles.body}>
           Open the Growth Project extension on the page you just logged into and enter this
-          code. It’s short-lived for your security, so enter it soon — we’ll let you know here
+          code. It’s short-lived for your security, so enter it soon — this screen confirms here
           if it expires.
         </Text>
         <TouchableOpacity
@@ -315,14 +315,14 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
       cta: 'Get a new code',
     },
     failed: {
-      title: "We couldn't reach the pairing service",
+      title: "The pairing service did not answer",
       message:
-        'We could not check the pairing status from this device. If you already entered a ' +
+        'The pairing status could not be checked from this device. If you already entered a ' +
         'code in the browser extension, check there. Otherwise check your connection and try again.',
       cta: 'Try again',
     },
     identityUnavailable: {
-      title: "We couldn't confirm your account",
+      title: "Your account could not be confirmed",
       message:
         'Your signed-in account did not load on this device, so no pairing code was created. ' +
         'Try again, or sign out and back in if this keeps happening.',

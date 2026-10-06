@@ -231,7 +231,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
         await finishAfterAttach(confirmed);
       } catch (err) {
         logRedacted('finish sign-up after attach failed', err);
-        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        const msg = 'You are connected to your coach. Sign-up did not finish saving on this device. Tap Finish sign-up to try again.';
         setError(msg);
         Alert.alert('Connected, finishing sign-up', msg);
       } finally {
@@ -279,7 +279,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     } catch (err) {
       if (stage === 'finish') {
         logRedacted('finish sign-up after attach failed', err);
-        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        const msg = 'You are connected to your coach. Sign-up did not finish saving on this device. Tap Finish sign-up to try again.';
         setError(msg);
         Alert.alert('Connected, finishing sign-up', msg);
         return;
@@ -301,7 +301,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
           r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
         );
       } else if (isNetworkFailure(err)) {
-        msg = 'We couldn’t reach the server. Check your connection, then tap Continue again.';
+        msg = 'The server could not be reached. Check your connection, then tap Continue again.';
       } else {
         msg = unknownAuthFailure(err, 'role_selection').message;
         unknownFailure = true;

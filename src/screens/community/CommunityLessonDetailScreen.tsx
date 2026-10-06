@@ -213,7 +213,7 @@ export default function CommunityLessonDetailScreen(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load this lesson. Please try again.
+            This lesson did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

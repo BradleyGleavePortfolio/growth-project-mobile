@@ -135,11 +135,11 @@ export const COACH_SIGNUP_UNAVAILABLE_MESSAGE =
  * account exists.
  */
 export const COACH_SIGNUP_UNCONFIRMED_MESSAGE =
-  'We could not confirm your coach account, so you are not signed in. An account may or may not have been created. Try again with the same sign-in; if the account exists, you will be signed in to it.';
+  'Your coach account could not be confirmed, so you are not signed in. An account may or may not have been created. Try again with the same sign-in; if the account exists, you will be signed in to it.';
 
 /**
  * Email retry after an unconfirmed coach attempt answered "this email is
  * already registered": the earlier attempt may have created that account.
  */
 export const COACH_SIGNUP_RETRY_EMAIL_EXISTS_MESSAGE =
-  'An account with this email already exists. Your earlier coach sign-up may have created it. Sign in with this email to continue. If it is a client account, contact support and we will set up coach access.';
+  'An account with this email already exists. Your earlier coach sign-up may have created it. Sign in with this email to continue. If it is a client account, contact support to set up coach access.';

@@ -436,7 +436,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
         </View>
         <Text style={styles.heroSubtitle}>
-          Your health data is sensitive. Here is exactly how we protect it.
+          Your health data is sensitive. Here is exactly how it is protected.
         </Text>
       </View>
 

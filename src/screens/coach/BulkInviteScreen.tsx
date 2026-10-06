@@ -136,7 +136,7 @@ export default function BulkInviteScreen() {
       console.error('BulkInviteScreen: CSV import failed', errorMessage(err));
       Alert.alert(
         'Could not read CSV',
-        'We could not read that file. Please pick a .csv file and try again.',
+        'That file could not be read. Pick a .csv file and try again.',
       );
     } finally {
       setPickingCsv(false);
@@ -218,7 +218,7 @@ export default function BulkInviteScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Invite clients by email</Text>
         <Text style={styles.lede}>
-          Paste a list of emails or upload a CSV. We email each invitee a
+          Paste a list of emails or upload a CSV. Each invitee gets an email with a
           unique link that opens this app and links them to you.
         </Text>
 

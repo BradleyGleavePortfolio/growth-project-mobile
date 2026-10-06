@@ -212,7 +212,7 @@ export function describeMutationError(err: unknown): MutationErrorInfo {
     switch (err.kind) {
       case 'conflict':
         return {
-          message: 'This event just changed. We refreshed it for you.',
+          message: 'This event just changed. It has been refreshed with the latest details.',
           conflict: true,
         };
       case 'unauthorized':
@@ -234,7 +234,9 @@ export function describeMutationError(err: unknown): MutationErrorInfo {
         };
       case 'server':
         return {
-          message: 'Something went wrong on our end. Please try again.',
+          // Sol B-339-1: a 5xx is not a rollback receipt, so the copy does not
+          // claim the change was or was not made.
+          message: 'The event service had a problem, so the change could not be confirmed. Check the event, then try again if needed.',
           conflict: false,
         };
       default:

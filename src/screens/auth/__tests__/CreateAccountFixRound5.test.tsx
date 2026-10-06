@@ -127,7 +127,7 @@ const PROVIDERS = ['email', 'apple', 'google'];
 const COACH_POLICY = { ...ROLE_CHOICE_POLICY, providers: PROVIDERS };
 const NO_ACCOUNT = /No account was created/;
 const MAYBE_CREATED = /An account may or may not have been created/;
-const UNCONFIRMED = /We could not confirm your coach account/;
+const UNCONFIRMED = /Your coach account could not be confirmed/;
 
 async function fillAndSubmit(utils: Awaited<ReturnType<typeof renderScreen>>, email = 'pat@example.com') {
   await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Example');
@@ -442,7 +442,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
       mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
       const utils = await renderScreen();
       await fillAndSubmit(utils);
-      expect(await utils.findByText(/reach the server/i)).toBeTruthy();
+      expect(await utils.findByText(/server could not be reached/i)).toBeTruthy();
       expect(mockCaptureError).not.toHaveBeenCalled();
     });
 

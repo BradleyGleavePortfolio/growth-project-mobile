@@ -159,6 +159,21 @@ describe('describeSignInFailure / describeSignupFailure', () => {
     const unknown = describeSignupFailure(httpError(500, { request_id: 'deadbeef-1' }));
     expect(unknown).toMatchObject({ kind: 'unknown', support: true, reference: 'DEADBEEF' });
   });
+
+  it('Sol B-339-1: an unknown signup outcome never claims the account was not created', () => {
+    const notCreated = /was not created|not been created|could not create/i;
+    const fromMapper = toFriendlySignupError(httpError(500, { message: 'Internal server error' }));
+    expect(fromMapper.kind).toBe('unknown');
+    expect(fromMapper.message).toMatch(/could not be confirmed/);
+    expect(fromMapper.message).not.toMatch(notCreated);
+    const withRef = unknownAuthFailure(httpError(503, { request_id: 'cafebabe-0000' }), 'sign_up');
+    expect(withRef.message).toMatch(/^Account creation could not be confirmed/);
+    expect(withRef.message).not.toMatch(notCreated);
+    // Known refusals keep their definite copy (positive control).
+    expect(toFriendlySignupError(httpError(409, { message: 'Email already registered' })).message).toBe(
+      SIGNUP_EMAIL_EXISTS_MESSAGE,
+    );
+  });
 });
 
 describe('isNetworkFailure', () => {

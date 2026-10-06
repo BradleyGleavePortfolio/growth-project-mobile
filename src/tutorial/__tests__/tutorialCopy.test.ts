@@ -140,7 +140,7 @@ describe('lighter start: the macro step in the simple view', () => {
 
   it('Roman keeps it to two numbers and explains why', () => {
     const line = step.gates[1].line(SIMPLE);
-    expect(line).toMatch(/^This first week, we keep it to two numbers: 1,789 calories and 150 grams of protein\./);
+    expect(line).toMatch(/^This first week keeps it to two numbers: 1,789 calories and 150 grams of protein\./);
     expect(line).toContain('Carbohydrate and fat are already worked out');
     expect(line).not.toMatch(/185|\b50 grams/);
     expect(line).toMatch(/Tap How to use these numbers\.$/);

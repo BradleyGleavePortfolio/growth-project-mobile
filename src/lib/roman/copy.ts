@@ -465,7 +465,7 @@ export interface RomanFirstPaymentArgs {
  *                   a living. Well earned."`
  *   - celebration: `"{coachName} — your first payment has arrived. {amount},
  *                   from {clientName}. I have seen a great many first payments,
- *                   and they never stop meaning something. Congratulations!"`
+ *                   and they never stop meaning something. Congratulations."`
  *                   (full warmth; carries the one permitted exclamation.)
  *   - error:       `"{coachName}, your first payment from {clientName} has
  *                   cleared — {amount}. My own records lagged a moment behind
@@ -480,7 +480,7 @@ export function romanFirstPayment(args: RomanFirstPaymentArgs): string {
   switch (mode) {
     case 'celebration':
       // identity spec §2.6 milestone-celebration (the one exclamation lives here).
-      return `${coachName} — your first payment has arrived. ${amount}, from ${clientName}. I have seen a great many first payments, and they never stop meaning something. Congratulations!`;
+      return `${coachName} — your first payment has arrived. ${amount}, from ${clientName}. I have seen a great many first payments, and they never stop meaning something. Congratulations.`;
     case 'error':
       // identity spec §2.6 error variant (processor cleared, ledger lagged).
       return `${coachName}, your first payment from ${clientName} has cleared — ${amount}. My own records lagged a moment behind the good news. It is reconciled now.`;

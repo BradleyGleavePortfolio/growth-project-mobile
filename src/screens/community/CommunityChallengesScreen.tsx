@@ -218,7 +218,7 @@ export default function CommunityChallengesScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load challenges. Please try again.
+            Challenges did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"
@@ -270,7 +270,7 @@ export default function CommunityChallengesScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load challenges. Please try again.
+            Challenges did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

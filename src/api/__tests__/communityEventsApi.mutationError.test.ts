@@ -39,7 +39,9 @@ describe('describeMutationError (F4)', () => {
       new CommunityApiError('server', 500, 'server'),
     );
     expect(info.conflict).toBe(false);
-    expect(info.message).toMatch(/our end|went wrong/i);
+    expect(info.message).toMatch(/event service had a problem, so the change could not be confirmed/);
+    // Sol B-339-1: a 500 never claims that nothing was changed.
+    expect(info.message).not.toMatch(/nothing was changed|not saved|not changed/i);
   });
 
   it('falls back to a calm generic message for an unknown error', () => {

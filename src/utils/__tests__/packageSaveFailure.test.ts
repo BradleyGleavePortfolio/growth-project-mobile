@@ -60,7 +60,7 @@ describe('describePackageSaveFailure', () => {
     expect(a.reference).toBe('SOL321RE');
     expect(a.support).toBe(true);
     expect(a.message).toBe(
-      'The package was not created. There was a problem on our side. Your changes are still here. Tap Try again, or contact support and quote reference SOL321RE.',
+      'The package was not created. There was a problem on the server. Your changes are still here. Tap Try again, or contact support and quote reference SOL321RE.',
     );
     expect(mockCaptureError).toHaveBeenLastCalledWith(expect.any(Error), {
       flow: 'package_save',
@@ -141,7 +141,7 @@ describe('describePackageSaveFailure', () => {
       [
         'currency must be a 3-letter ISO code',
         'create',
-        'This package uses a currency the app cannot sell in. The package was not created. Contact support and we will fix the package.',
+        'This package uses a currency the app cannot sell in. The package was not created. Contact support to have the package fixed.',
       ],
       [
         'interval_count must be an integer ≥ 1',

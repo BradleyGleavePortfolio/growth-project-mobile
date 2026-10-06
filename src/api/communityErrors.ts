@@ -189,7 +189,7 @@ const BY_CODE: Record<string, string> = {
   'community.voice.not_entitled':
     'Voice notes are not included in your current plan. You can post a text message instead, or ask your coach about your plan.',
   'community.voice.upload_missing':
-    'We could not find the uploaded recording. Check your connection, record the voice note again, then send it.',
+    'The uploaded recording could not be found. Check your connection, record the voice note again, then send it.',
   'community.voice.upload_mismatch':
     'The uploaded recording does not match what was recorded. Record the voice note again in the app, then send it.',
   'community.voice.already_posted':
@@ -326,7 +326,7 @@ export function describeCommunityFailure(
   });
   return {
     title,
-    message: `We could not ${VERBS[action]} because of a problem on our side. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
+    message: `The app could not ${VERBS[action]} because of a server problem. Try again in a few minutes. If it keeps happening, email ${supportEmail} and quote reference ${reference}.`,
     reference,
     code,
     status,

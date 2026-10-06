@@ -218,7 +218,7 @@ export default function CommunitySafetyScreen(): React.ReactElement {
         <Text style={heading}>Contact the team</Text>
         <View style={card}>
           <Text style={body}>
-            To report a safety concern, including about a coach, email us. If someone is in
+            To report a safety concern, including about a coach, email the safety team. If someone is in
             immediate danger, contact local emergency services.
           </Text>
           <HapticPressable

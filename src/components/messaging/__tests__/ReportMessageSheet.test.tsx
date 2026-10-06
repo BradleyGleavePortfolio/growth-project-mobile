@@ -112,7 +112,9 @@ describe('ReportMessageSheet', () => {
     await act(async () => {
       await fireEvent.press(getByLabelText('Submit report'));
     });
-    expect(await findByText(/couldn't submit that report/i)).toBeTruthy();
+    expect(await findByText(/Sending your report could not be confirmed/i)).toBeTruthy();
+    // Sol B-339-1: a failed submit never claims the report was not sent.
+    expect(queryByText(/was not sent/i)).toBeNull();
     // The raw backend error code must never reach the UI (R9 / R17).
     expect(queryByText(/MESSAGE_NOT_FOUND/)).toBeNull();
     // The sheet must stay open — closing would falsely imply success.

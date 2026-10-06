@@ -104,7 +104,7 @@ export default function AllergySafetyPrompt({
       <View style={styles.backdrop}>
         <View style={styles.sheet} accessibilityViewIsModal>
           <Text style={styles.eyebrow}>BEFORE WE BEGIN</Text>
-          <Text style={styles.headline}>Anything we should avoid?</Text>
+          <Text style={styles.headline}>Anything to avoid?</Text>
           <Text style={styles.lede}>
             Your recipe library will hide anything that conflicts. Choose
             None if you have no restrictions.

@@ -98,7 +98,7 @@ export function deletionErrorCopy(
 ): string {
   const res = responseOf(err);
   if (!res || res.status === undefined) {
-    return `We could not reach the server to ${WHAT[action]}. Check your connection, then try again.`;
+    return `The server could not be reached to ${WHAT[action]}. Check your connection, then try again.`;
   }
   if (res.status === 429)
     return "Too many attempts in a short time. Wait a minute, then try again.";
@@ -123,7 +123,7 @@ export function deletionErrorCopy(
     reference,
   });
   const ref = reference ? ` Reference: ${reference}.` : "";
-  return `We could not ${WHAT[action]} because of a problem on our side.${ref} Try again in a few minutes, or write to ${DELETION_SUPPORT_EMAIL}${reference ? " and mention the reference" : ""}.`;
+  return `The app could not ${WHAT[action]} because of a server problem.${ref} Try again in a few minutes, or write to ${DELETION_SUPPORT_EMAIL}${reference ? " and mention the reference" : ""}.`;
 }
 
-export const HELP_UNAVAILABLE_COPY = `The help centre did not open on this phone. Write to ${DELETION_SUPPORT_EMAIL} and we will help.`;
+export const HELP_UNAVAILABLE_COPY = `The help centre did not open on this phone. Write to ${DELETION_SUPPORT_EMAIL} and a person will help.`;

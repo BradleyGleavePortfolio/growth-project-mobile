@@ -96,10 +96,10 @@ export function reportAuthFailure(
 }
 
 const UNKNOWN_LEAD: Record<AuthFlow, string> = {
-  sign_in: 'Sign-in did not complete because of a problem on our side.',
-  sign_up: 'We could not create your account because of a problem on our side.',
-  verify: 'We could not sign you in after verification because of a problem on our side.',
-  role_selection: 'We could not finish setting up your account because of a problem on our side.',
+  sign_in: 'Sign-in did not complete because of a server problem.',
+  sign_up: 'Account creation could not be confirmed because of a server problem.',
+  verify: 'Sign-in after verification did not complete because of a server problem.',
+  role_selection: 'Account setup did not finish because of a server problem.',
 };
 
 /** Unknown failure: reference, support path, Sentry event (sanitised). */
@@ -159,7 +159,7 @@ export function describeSignInFailure(
   if (base.category === 'network' || (status === null && /cannot reach server/i.test(raw))) {
     return {
       kind: 'network',
-      message: 'We couldn’t reach the server. Check your connection, then sign in again.',
+      message: 'The server could not be reached. Check your connection, then sign in again.',
       support: false,
       reference: null,
       cancelled: false,
@@ -182,8 +182,8 @@ export function describeSignInFailure(
           : provider === 'apple'
             ? 'The email on your Apple Account is not verified. Verify it with Apple, or sign up with email.'
             : flow === 'verify'
-              ? 'Your email is not verified yet. Open the link we sent to this address, then tap I verified my email.'
-              : 'Your email is not confirmed yet. Open the link we sent, then sign in.',
+              ? 'Your email is not verified yet. Open the link sent to this address, then tap I verified my email.'
+              : 'Your email is not confirmed yet. Open the link in that email, then sign in.',
       support: false,
       reference: null,
       cancelled: false,

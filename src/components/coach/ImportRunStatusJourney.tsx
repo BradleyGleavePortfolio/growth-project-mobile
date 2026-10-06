@@ -182,7 +182,7 @@ export default function ImportRunStatusJourney({ importIntentId }: { importInten
     title = 'Checking import status…';
   } else if (run.view === 'error') {
     title = `Import status: ${NOT_KNOWN_YET.toLowerCase()}`;
-    body = 'We couldn’t reach the server to check this import. Check your connection and try again.';
+    body = 'The server could not be reached to check this import. Check your connection and try again.';
   } else if (run.view === 'notFound') {
     title = `Import status: ${NOT_KNOWN_YET.toLowerCase()}`;
     body = 'The server didn’t return a status for this import. Check again later.';

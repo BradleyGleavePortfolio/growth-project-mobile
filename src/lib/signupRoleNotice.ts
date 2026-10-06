@@ -48,11 +48,11 @@ export function signupRoleNoticeNeedsSupport(kind: SignupRoleNoticeKind): boolea
 export function signupRoleNoticeMessage(kind: SignupRoleNoticeKind): string {
   switch (kind) {
     case 'coach_request_not_applied':
-      return 'Coach sign-up was not applied to this account, so it was created as a client account. You can continue as a client. To run your practice here, contact support and we will set up coach access. Use Contact support below, or Support in Settings at any time.';
+      return 'Coach sign-up was not applied to this account, so it was created as a client account. You can continue as a client. To run your practice here, contact support to set up coach access. Use Contact support below, or Support in Settings at any time.';
     case 'existing_account':
       return 'This Apple Account or Google account already had an account, so you were signed in to it. The role choice applies only to new accounts.';
     case 'coach_retry_not_applied':
-      return 'Coach sign-up was not applied to this account, so you are signed in to a client account. Your earlier attempt may have created it. To run your practice here, contact support and we will set up coach access. Use Contact support below, or Support in Settings at any time.';
+      return 'Coach sign-up was not applied to this account, so you are signed in to a client account. Your earlier attempt may have created it. To run your practice here, contact support to set up coach access. Use Contact support below, or Support in Settings at any time.';
     case 'new_account_from_sign_in':
       return 'There was no account for this sign-in, so a new client account was created. If you meant to sign in to an existing account, sign out and use the email you registered with.';
   }

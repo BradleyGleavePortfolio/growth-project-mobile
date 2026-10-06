@@ -259,7 +259,7 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load prompts. Please try again.
+            Prompts did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"
@@ -355,7 +355,7 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load prompts. Please try again.
+            Prompts did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

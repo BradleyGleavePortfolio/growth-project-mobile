@@ -144,7 +144,7 @@ export default function CoachInvitesScreen({
       setLoadError(
         errorMessage(
           err,
-          'We couldn\'t load your invites. Check your connection and try again.',
+          'Your invites did not load. Check your connection and try again.',
         ),
       );
     } finally {

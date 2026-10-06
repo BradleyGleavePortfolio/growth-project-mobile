@@ -471,7 +471,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 "Could not archive",
                 errorMessage(
                   err,
-                  "We could not archive the package. Check your connection, then tap Archive again.",
+                  "The package could not be archived. Check your connection, then tap Archive again.",
                 ),
               );
             } finally {

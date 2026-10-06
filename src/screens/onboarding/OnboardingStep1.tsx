@@ -42,7 +42,7 @@ export default function OnboardingStep1({ navigation }: Props) {
       step={1}
       totalSteps={10}
       title="Let's get to know you"
-      subtitle="Tell us about yourself"
+      subtitle="A little about yourself"
       onContinue={handleContinue}
       continueEnabled={canContinue}
     >

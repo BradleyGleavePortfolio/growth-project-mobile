@@ -109,7 +109,7 @@ export default function ImportDataScreen(): React.ReactElement {
       setState({ phase: 'awaitingExtension', platformId });
     } catch {
       track(AnalyticsEvents.IMPORT_LOGIN_OPEN_FAILED, { platform: platformId, reason: 'open_failed' });
-      setState({ phase: 'failed', message: "We couldn't open that site in your browser. Please try again." });
+      setState({ phase: 'failed', message: "That site did not open in your browser. Check your connection, then try again." });
     }
   }, []);
 
@@ -214,7 +214,7 @@ export default function ImportDataScreen(): React.ReactElement {
       <Ionicons name="information-circle-outline" size={18} color={colors.info} />
       <Text style={styles.prereqText}>
         You'll log in with your own account. The Growth Project browser extension then
-        asks to start the import — we never see or store your other platform's password.
+        asks to start the import — The Growth Project never sees or stores your other platform's password.
       </Text>
     </View>
   );
@@ -275,7 +275,7 @@ export default function ImportDataScreen(): React.ReactElement {
         <Ionicons name="information-circle-outline" size={18} color={colors.info} />
         <Text style={styles.prereqText}>
           You'll log in with your own account. The Growth Project browser extension then
-          asks to start the import — we never see or store your other platform's password.
+          asks to start the import — The Growth Project never sees or stores your other platform's password.
         </Text>
       </View>
 

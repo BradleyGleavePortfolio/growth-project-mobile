@@ -193,7 +193,7 @@ export default function CommunityClassroomScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load the classroom. Please try again.
+            The classroom did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"
@@ -245,7 +245,7 @@ export default function CommunityClassroomScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load the classroom. Please try again.
+            The classroom did not load. Check your connection, then try again.
           </Text>
           <HapticPressable
             intent="light"

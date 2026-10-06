@@ -49,7 +49,7 @@ export default function BiometricUnlockSetting() {
         if (!result.success) {
           Alert.alert(
             'Biometric unlock',
-            'We couldn’t verify your biometrics. Try again.',
+            'Your biometrics could not be verified. Try again, or sign in with your password.',
           );
           return;
         }

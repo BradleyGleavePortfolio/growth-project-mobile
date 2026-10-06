@@ -256,7 +256,7 @@ describe('RoleSelection retry step', () => {
       );
       await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
       await fireEvent.press(await findByText('Continue'));
-      expect(await findByText(/couldn’t reach the server/)).toBeTruthy();
+      expect(await findByText(/server could not be reached/)).toBeTruthy();
       expect(queryByTestId('role-error-support')).toBeNull();
     });
   });

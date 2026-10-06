@@ -299,7 +299,7 @@ describe('ExtensionPairingPanel — contract-named reason copy (UX-03c)', () => 
   it('keeps the existing generic failed copy when reason is null', async () => {
     mockHookState = { status: 'failed', code: null, reason: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-reason-message')).toHaveTextContent(/could not check the pairing status/i);
+    expect(getByTestId('pairing-reason-message')).toHaveTextContent(/pairing status could not be checked/i);
     expect(getByTestId('pairing-failed')).toHaveTextContent(/Try again/);
   });
 
