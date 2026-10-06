@@ -81,6 +81,9 @@ interface Props {
   route: RouteProp<ParamList, "CoachPackageEdit">;
 }
 
+// B-347-4: the editable terms as one comparable value.
+const formKey = (...fields: string[]) => JSON.stringify(fields);
+
 const INTERVAL_OPTIONS: Array<{
   label: string;
   value: PackageBillingInterval;
@@ -116,6 +119,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  // B-347-4: "Make live" publishes the stored row, so it waits until the
+  // terms on screen are the terms last loaded or saved.
+  const [savedForm, setSavedForm] = useState<string | null>(null);
+  const formNow = formKey(title, description, priceText, billingInterval, featuresText);
+  const unsaved = savedForm !== null && formNow !== savedForm;
   // B-329-1 (B-COACH-5): a create from this editor is durable like the
   // wizard's. Its Idempotency-Key and body are on disk before the request
   // leaves; reopening the editor after a kill resumes that same create.
@@ -162,6 +170,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         initialPackage.trialDays ? String(initialPackage.trialDays) : "",
       );
       setFeaturesText((initialPackage.features ?? []).join("\n"));
+      setSavedForm(
+        formKey(
+          initialPackage.title ?? "",
+          initialPackage.description ?? "",
+          ((initialPackage.priceCents ?? 0) / 100).toFixed(2),
+          initialPackage.billingInterval,
+          (initialPackage.features ?? []).join("\n"),
+        ),
+      );
       setLoaded(true);
       return;
     }
@@ -251,6 +268,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         const updated: PackageUpdateInput = v.payload;
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
+        setSavedForm(formNow);
         successTap();
         Alert.alert("Package updated", "Changes saved.");
       } else {
@@ -340,7 +358,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [validate, isEdit, original, navigation, coachId]);
+  }, [validate, isEdit, original, navigation, coachId, formNow]);
 
   // B-347-3: a draft made here (or skipped in setup) can go live from the
   // editor with the wizard's publish call; the row the server answers decides
@@ -348,6 +366,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [publishing, setPublishing] = useState(false);
   const handlePublish = useCallback(async () => {
     if (!original || publishing) return;
+    if (unsaved) {
+      warningTap();
+      Alert.alert(
+        "Save your changes first",
+        "Save your changes before making this live.",
+      );
+      return;
+    }
     setPublishing(true);
     try {
       const res = await coachPackagesApi.publish(original.id);
@@ -368,7 +394,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     } finally {
       setPublishing(false);
     }
-  }, [original, publishing]);
+  }, [original, publishing, unsaved]);
 
   const handleArchive = useCallback(() => {
     if (!original) return;
@@ -657,7 +683,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 <TouchableOpacity
                   style={[
                     styles.secondaryBtn,
-                    publishing && styles.primaryBtnDisabled,
+                    (publishing || unsaved) && styles.primaryBtnDisabled,
                   ]}
                   onPress={() => void handlePublish()}
                   disabled={publishing}
@@ -670,6 +696,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                     {publishing ? "Making it live" : `Make ${original.title} live`}
                   </Text>
                 </TouchableOpacity>
+                {unsaved ? (
+                  <Text
+                    style={styles.resumedText}
+                    testID="package-edit-publish-unsaved"
+                  >
+                    Save your changes before making this live.
+                  </Text>
+                ) : null}
               </View>
             ) : null}
             <TouchableOpacity
