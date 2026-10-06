@@ -16,7 +16,8 @@ import RomanChatScreen from '../screens/roman/RomanChatScreen';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
 import ProgramsStackNavigator from './ProgramsStackNavigator';
-import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
+// Codes: the b#658 Codes screen when the server has code tools on, else the legacy InviteCodesScreen.
+import CoachCodesEntry from '../screens/coach/CoachCodesEntry';
 import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
 import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
@@ -354,7 +355,7 @@ function ClientsStackNavigator() {
         />
       ) : null}
       <ClientsStack.Screen name="ClientMessages"    component={ClientMessagesScreen} />
-      <ClientsStack.Screen name="InviteCodes"       component={InviteCodesScreen} />
+      <ClientsStack.Screen name="InviteCodes"       component={CoachCodesEntry} />
       <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
       {/* Lab review: personal training only, no lab surfaces in v1.0. Registered
