@@ -1,0 +1,10 @@
+src/lib/money/__tests__/csvFile.test.ts
+src/screens/coach/money/__tests__/money.test.tsx
+src/screens/coach/money/__tests__/moneyChargeTruth.test.tsx
+src/screens/coach/money/__tests__/moneyNavigation.test.tsx
+src/lib/money/__tests__/moneyCopyMon2.test.ts
+src/__tests__/repoHygiene.test.ts
+src/__tests__/coachSaasBlockers.test.ts
+src/__tests__/paymentsConnectPackages.test.ts
+src/components/roman/__tests__/romanP3HostWiring.test.tsx
+src/components/roman/__tests__/romanP3FlagOff.test.tsx
