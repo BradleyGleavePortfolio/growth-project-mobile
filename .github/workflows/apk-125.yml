@@ -1,26 +1,26 @@
-name: Owner Android APK (APK-124)
+name: Owner Android APK (APK-125)
 
-# Throwaway workflow on ci/APK-124-1 (never merged). Builds an installable
+# Throwaway workflow on ci/APK-125-1 (never merged). Builds an installable
 # Android release APK of growth-project-mobile main on a free GitHub-hosted
 # runner. No EAS, no expo.dev, no secrets: every EXPO_PUBLIC_* value below is
 # a public value that ships inside every app binary by design.
 
 on:
   push:
-    branches: [ci/APK-124-1]
+    branches: [ci/APK-125-1]
 
 permissions:
   contents: read
 
 env:
-  APP_SHA: 42daf108364739287ba0445c8c1caae6d659d3e9
-  APP_SHORT: 42daf10
+  APP_SHA: 950689af696f993d6bb2b361ca6b5d07bab1328e
+  APP_SHORT: 950689a
   CI: "1"
   EXPO_NO_DOTENV: "1"
   EXPO_NO_TELEMETRY: "1"
   SENTRY_DISABLE_AUTO_UPLOAD: "true"
   SENTRY_ALLOW_FAILURE: "true"
-  EXPO_PUBLIC_API_URL: https://backend-spring-lake-3890.fly.dev/api
+  EXPO_PUBLIC_API_URL: https://api.trygrowthproject.com/api
   EXPO_PUBLIC_SUPABASE_URL: https://rpyfdsgxxltzutgqeouk.supabase.co
   EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0
 
@@ -34,13 +34,13 @@ jobs:
           - variant: universal
             archs: armeabi-v7a,arm64-v8a,x86,x86_64
             workers: "4"
-            artifact: tgp-42daf10-clinic-apk
-            apk: tgp-42daf10-clinic.apk
+            artifact: tgp-950689a-clinic-apk
+            apk: tgp-950689a-clinic.apk
           - variant: arm64
             archs: arm64-v8a
             workers: "2"
-            artifact: tgp-42daf10-clinic-arm64-apk
-            apk: tgp-42daf10-clinic-arm64.apk
+            artifact: tgp-950689a-clinic-arm64-apk
+            apk: tgp-950689a-clinic-arm64.apk
     runs-on: ubuntu-latest
     timeout-minutes: 80
     steps:
