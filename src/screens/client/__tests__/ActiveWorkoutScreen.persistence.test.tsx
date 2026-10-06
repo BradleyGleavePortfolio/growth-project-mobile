@@ -390,7 +390,8 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     //   - await clearActiveWorkoutSession(userId)
     //   - navigation.goBack() last
     const cancelBlock = SCREEN_SRC.match(
-      /text: 'Cancel',\s*style: 'destructive',[\s\S]*?onPress: async \(\) => \{[\s\S]*?navigation\.goBack\(\);\s*\}/,
+      // UX-WORKOUT-124: the destructive button is labelled "Discard".
+      /text: 'Discard',\s*style: 'destructive',[\s\S]*?onPress: async \(\) => \{[\s\S]*?navigation\.goBack\(\);\s*\}/,
     );
     expect(cancelBlock).not.toBeNull();
     const body = cancelBlock![0];

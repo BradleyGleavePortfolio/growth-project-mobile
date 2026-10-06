@@ -30,8 +30,8 @@ const IS_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 // Backend growth-project-backend src/workout/workout.dto.ts
 // CreateRoutineExerciseDto (ValidationPipe whitelist + forbidNonWhitelisted).
 const ROUTINE_EXERCISE_DTO_FIELDS = [
-  'default_rest_seconds',
   'default_reps',
+  'default_rest_seconds',
   'default_sets',
   'exercise_name',
   'muscle_group',
@@ -66,11 +66,11 @@ describe('SetLogger weight cell keeps decimals (B: 17.5 lb used to save as 175 l
     const seen: number[] = [];
     const { getByTestId } = await render(<Harness onWeight={(w) => seen.push(w)} />);
     const cell = getByTestId('set-weight-0-0');
-    fireEvent.changeText(cell, '1');
-    fireEvent.changeText(cell, '17');
-    fireEvent.changeText(cell, '17.');
+    await fireEvent.changeText(cell, '1');
+    await fireEvent.changeText(cell, '17');
+    await fireEvent.changeText(cell, '17.');
     expect(getByTestId('set-weight-0-0').props.value).toBe('17.');
-    fireEvent.changeText(getByTestId('set-weight-0-0'), '17.5');
+    await fireEvent.changeText(getByTestId('set-weight-0-0'), '17.5');
     expect(getByTestId('set-weight-0-0').props.value).toBe('17.5');
     expect(seen[seen.length - 1]).toBe(17.5);
   });
@@ -85,9 +85,9 @@ describe('SetLogger weight cell keeps decimals (B: 17.5 lb used to save as 175 l
 
   it('lets the reps cell be cleared instead of snapping back to 0', async () => {
     const { getByTestId } = await render(<Harness onWeight={() => undefined} />);
-    fireEvent.changeText(getByTestId('set-reps-0-0'), '');
+    await fireEvent.changeText(getByTestId('set-reps-0-0'), '');
     expect(getByTestId('set-reps-0-0').props.value).toBe('');
-    fireEvent.changeText(getByTestId('set-reps-0-0'), '12');
+    await fireEvent.changeText(getByTestId('set-reps-0-0'), '12');
     expect(getByTestId('set-reps-0-0').props.value).toBe('12');
     expect(sanitizeRepsText('1.2')).toBe('12');
     expect(parseRepsText('')).toBe(0);
