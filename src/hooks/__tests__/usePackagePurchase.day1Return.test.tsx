@@ -64,7 +64,10 @@ type SheetResult = { error?: { code: string; declineCode?: string } };
 let returnListener: ((event: { url: string }) => void) | undefined;
 const mockRemove = jest.fn();
 let linkingSpy: jest.SpyInstance;
-const addReturnListener = Linking.addEventListener.bind(Linking);
+// The RN preset already makes this a jest.fn: capture its implementation,
+// not the mutable mock function that spyOn will replace.
+const addReturnListener = jest.mocked(Linking.addEventListener).getMockImplementation()
+  ?? Linking.addEventListener.bind(Linking);
 
 const mount = async () => {
   const onEntitled = jest.fn();
