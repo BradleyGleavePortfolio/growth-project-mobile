@@ -7,6 +7,7 @@
 // asserts each store has returned to its documented initial state.
 
 import { signOut, resetUserScopedStores } from '../authActions';
+import { dunningLockoutStore } from '../../entitlements/dunning/dunningLockoutStore';
 import { useCoachStore } from '../../store/coachStore';
 import { useClientStore } from '../../store/clientStore';
 import { useFastingStore } from '../../store/fastingStore';
@@ -157,6 +158,14 @@ describe('signOut → store resets (Hunter #2 P1-7)', () => {
     expect(useClientStore.getState().foodLogs).toEqual([]);
     expect(useFastingStore.getState().activeFast).toBeNull();
     expect(foregroundBannerStore.getState().banner).toBeNull();
+  });
+
+  it('B-352-1: retires the payment lockout of the signed-out account', () => {
+    dunningLockoutStore.__resetForTests();
+    dunningLockoutStore.reportLocked({ requestId: 'req-a' });
+    resetUserScopedStores();
+    expect(dunningLockoutStore.isLocked()).toBe(false);
+    expect(dunningLockoutStore.lastSignal()).toBeNull();
   });
 
   it('does not throw if a store reset throws — logout event must still proceed', async () => {

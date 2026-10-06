@@ -22,6 +22,10 @@
           {
             "/": "/p/*",
             "comment": "Universal link to a coach's package share/checkout"
+          },
+          {
+            "/": "/billing/update-card",
+            "comment": "Dunning emails: opens the native Update card screen"
           }
         ]
       }
