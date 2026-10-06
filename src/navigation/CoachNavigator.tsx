@@ -137,7 +137,7 @@ import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
-import { useCoachRoleType } from '../hooks/useCoachRoleType';
+import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
@@ -652,8 +652,12 @@ export default function CoachNavigator() {
   // closed (returns 'unknown' until a positive head-coach signal), so the
   // tab disappears for sub-coaches and during the initial resolution
   // window.
-  const coachRoleType = useCoachRoleType();
-  const showTeamTab = coachRoleType === 'head_coach';
+  // AUDIT-16-125: the members route lists every coach as the head coach of
+  // their own roster, so role alone put a Team tab in front of every coach,
+  // where it could only show the plan gate. The tab now mounts only for a
+  // head coach (useCoachRoleType contract) whose roster already has a sub-coach.
+  const teamStatus = useCoachTeamStatus();
+  const showTeamTab = teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
