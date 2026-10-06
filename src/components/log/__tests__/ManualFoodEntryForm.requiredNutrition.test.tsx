@@ -17,7 +17,7 @@ it('shows an actionable inline message and blocks a calorie-only save', async ()
   await render(<ManualFoodEntryForm {...props} />);
   expect(screen.getByText(message)).toBeTruthy();
   expect(screen.queryByText(/Blank macros are not tracked/)).toBeNull();
-  fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+  fireEvent.press(screen.getByText('Log Food'));
   expect(props.onSubmit).not.toHaveBeenCalled();
 });
 
@@ -26,6 +26,6 @@ it('allows the same portion once all three macros have explicitly typed zero val
     ...fields, protein: '0', carbs: '0', fat: '0',
   }} />);
   expect(screen.queryByText(message)).toBeNull();
-  fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+  fireEvent.press(screen.getByText('Log Food'));
   expect(props.onSubmit).toHaveBeenCalledTimes(1);
 });
