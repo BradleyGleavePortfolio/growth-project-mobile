@@ -36,11 +36,17 @@ jest.mock('../progress/ProgressChartCard', () => {
 });
 
 // ── Data + environment mocks (inert; just enough to mount). ─────────────────
-const mockGetHistory = jest.fn(async () => ({
-  data: [
-    { id: '1', date: '2026-06-01', weight_lbs: 185 },
-    { id: '2', date: '2026-06-08', weight_lbs: 183 },
-  ],
+// The real GET /weight/history body: `{ logs, height_cm }`, each row's date a
+// calendar day sent as an ISO midnight (AUDIT-06-125 B1: main read only a bare
+// array, so the chart never rendered for a real client).
+const mockGetHistory = jest.fn(async (): Promise<{ data: unknown }> => ({
+  data: {
+    logs: [
+      { id: '1', date: '2026-06-01T00:00:00.000Z', weight_lbs: 185 },
+      { id: '2', date: '2026-06-08T00:00:00.000Z', weight_lbs: 183 },
+    ],
+    height_cm: null,
+  },
 }));
 jest.mock('../../../services/api', () => ({
   weightApi: {

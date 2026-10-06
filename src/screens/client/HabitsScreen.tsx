@@ -41,6 +41,7 @@ import { makeStyles } from './habits/styles';
 import { type HabitView, type TabMode } from './habits/constants';
 import { HabitCard } from './habits/HabitCard';
 import { MoodEnergyPicker } from './habits/MoodEnergyPicker';
+import { buildCheckInPayload } from './habits/checkInPayload';
 import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
@@ -67,8 +68,6 @@ export default function HabitsScreen() {
   const [mood, setMood] = useState(3);
   const [energy, setEnergy] = useState(3);
   const [sleepHours, setSleepHours] = useState(7);
-  const [sleepQuality, setSleepQuality] = useState(3);
-  const [stress, setStress] = useState(3);
   const [notes, setNotes] = useState('');
   const [checkInToast, setCheckInToast] = useState(false);
   const [lastCheckInDate, setLastCheckInDate] = useState<string | null>(null);
@@ -90,8 +89,6 @@ export default function HabitsScreen() {
           mood?: number;
           energy?: number;
           sleep_hours?: number;
-          sleep_quality?: number;
-          stress?: number;
           notes?: string;
           date?: string;
           coach_reviewed_at?: string | null;
@@ -106,8 +103,6 @@ export default function HabitsScreen() {
     if (row.mood != null) setMood(Number(row.mood));
     if (row.energy != null) setEnergy(Number(row.energy));
     if (row.sleep_hours != null) setSleepHours(Number(row.sleep_hours));
-    if (row.sleep_quality != null) setSleepQuality(Number(row.sleep_quality));
-    if (row.stress != null) setStress(Number(row.stress));
     if (row.notes) setNotes(String(row.notes));
     if (row.date) setLastCheckInDate(String(row.date).slice(0, 10));
   }, [todayCheckInQ.data]);
@@ -222,19 +217,10 @@ export default function HabitsScreen() {
   };
 
   const handleSaveCheckIn = () => {
+    // Only fields POST /check-ins accepts: sending sleep_quality / stress
+    // made every save fail with a 400 and the coach never got a check-in.
     saveCheckIn.mutate(
-      {
-        date: today,
-        mood,
-        energy,
-        sleep_hours: sleepHours,
-        // B10: previously dropped on the floor; the form collected these
-        // values but the mutation payload omitted them, so the coach
-        // dashboard never saw stress/sleep_quality.
-        sleep_quality: sleepQuality,
-        stress,
-        notes: notes || null,
-      },
+      buildCheckInPayload({ date: today, mood, energy, sleepHours, notes }),
       {
         onSuccess: () => {
           setLastCheckInDate(today);
@@ -408,10 +394,6 @@ export default function HabitsScreen() {
               setEnergy={setEnergy}
               sleepHours={sleepHours}
               setSleepHours={setSleepHours}
-              sleepQuality={sleepQuality}
-              setSleepQuality={setSleepQuality}
-              stress={stress}
-              setStress={setStress}
               notes={notes}
               setNotes={setNotes}
               colors={colors}
