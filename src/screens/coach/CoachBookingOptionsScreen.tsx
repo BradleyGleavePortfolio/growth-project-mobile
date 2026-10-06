@@ -16,6 +16,7 @@ import type {
 } from '../../api/schedulingApi';
 import { schedulingErrorCode, schedulingErrorStatus } from '../../api/schedulingApi';
 import {
+  OPEN_SLOTS_RANGE_DAYS,
   bookingOptionsUnavailable,
   useBookingOptions,
   useUpdateBookingOptions,
@@ -45,6 +46,18 @@ export type NoticeUnit = 'minutes' | 'hours' | 'days';
 const UNIT_MINUTES: Record<NoticeUnit, number> = { minutes: 1, hours: 60, days: 1440 };
 const UNITS: NoticeUnit[] = ['minutes', 'hours', 'days'];
 const UNIT_LABELS: Record<NoticeUnit, string> = { minutes: 'Minutes', hours: 'Hours', days: 'Days' };
+
+/**
+ * Clients pick times from the next OPEN_SLOTS_RANGE_DAYS days only (useOpenSlots), so a notice of
+ * that length or more leaves every client with no open times. The editor keeps the notice under it.
+ */
+export const NOTICE_UNDER_MINUTES = OPEN_SLOTS_RANGE_DAYS * UNIT_MINUTES.days;
+export const NOTICE_TOO_LONG_MESSAGE = `Minimum notice must be under ${OPEN_SLOTS_RANGE_DAYS} days so clients can see open times.`;
+
+/** Largest whole notice under the client range in a unit: 13 days, 335 hours, 20159 minutes. */
+export function largestNoticeValue(unit: NoticeUnit): number {
+  return Math.floor((NOTICE_UNDER_MINUTES - 1) / UNIT_MINUTES[unit]);
+}
 
 export interface BookingDraft {
   noticeValue: string;
@@ -94,8 +107,13 @@ export function validateBookingDraft(
   const L = limits;
   const noticeCount = wholeNumber(d.noticeValue);
   const notice = noticeCount === null ? null : noticeCount * UNIT_MINUTES[d.noticeUnit];
-  if (notice === null || notice < L.min_notice_minutes.min || notice > L.min_notice_minutes.max) {
-    errors.min_notice_minutes = `Enter a whole number for a minimum notice from ${formatDuration(L.min_notice_minutes.min)} to ${formatDuration(L.min_notice_minutes.max)}.`;
+  const capped = L.min_notice_minutes.max >= NOTICE_UNDER_MINUTES;
+  if (notice === null || notice < L.min_notice_minutes.min || (!capped && notice > L.min_notice_minutes.max)) {
+    errors.min_notice_minutes = capped
+      ? `Enter a whole number for a minimum notice of at least ${formatDuration(L.min_notice_minutes.min)} and under ${OPEN_SLOTS_RANGE_DAYS} days.`
+      : `Enter a whole number for a minimum notice from ${formatDuration(L.min_notice_minutes.min)} to ${formatDuration(L.min_notice_minutes.max)}.`;
+  } else if (notice >= NOTICE_UNDER_MINUTES) {
+    errors.min_notice_minutes = NOTICE_TOO_LONG_MESSAGE;
   }
   const windowDays = wholeNumber(d.windowDays);
   if (windowDays === null || windowDays < L.booking_window_days.min || windowDays > L.booking_window_days.max) {
@@ -175,6 +193,18 @@ export default function CoachBookingOptionsScreen() {
     setFormError(null);
   };
 
+  /** The notice stops at the largest value under the client range; the sentence says why. */
+  const editNotice = (noticeValue: string, noticeUnit: NoticeUnit) => {
+    const n = wholeNumber(noticeValue);
+    const top = largestNoticeValue(noticeUnit);
+    if (n !== null && n > top) {
+      edit({ noticeValue: String(top), noticeUnit });
+      setErrors((current) => ({ ...current, min_notice_minutes: NOTICE_TOO_LONG_MESSAGE }));
+      return;
+    }
+    edit({ noticeValue, noticeUnit });
+  };
+
   const onSave = () => {
     if (!draft || saving.current) return;
     const result = validateBookingDraft(draft, limits);
@@ -247,13 +277,13 @@ export default function CoachBookingOptionsScreen() {
       {draft ? (
         <View>
           <Text style={[styles.label, muted]}>Minimum notice</Text>
-          <Text style={[typography.bodySmall, muted]}>Clients cannot book a time sooner than this from now.</Text>
+          <Text style={[typography.bodySmall, muted]}>Clients cannot book a time sooner than this from now. Keep it under {OPEN_SLOTS_RANGE_DAYS} days so clients can see open times.</Text>
           <View style={styles.row}>
-            <TextInput value={draft.noticeValue} onChangeText={(t) => edit({ noticeValue: t })} keyboardType="number-pad" maxLength={6} accessibilityLabel="Minimum notice" style={[inputStyle, styles.flex]} testID="booking-options-notice" />
+            <TextInput value={draft.noticeValue} onChangeText={(t) => editNotice(t, draft.noticeUnit)} keyboardType="number-pad" maxLength={6} accessibilityLabel="Minimum notice" style={[inputStyle, styles.flex]} testID="booking-options-notice" />
             {UNITS.map((unit) => {
               const selected = draft.noticeUnit === unit;
               return (
-                <Pressable key={unit} onPress={() => edit({ noticeUnit: unit })} accessibilityRole="button" accessibilityLabel={`Minimum notice in ${unit}`} accessibilityState={{ selected }} style={[styles.unit, { borderColor: selected ? colors.textPrimary : colors.border, backgroundColor: selected ? colors.textPrimary : 'transparent' }]} testID={`booking-options-unit-${unit}`}>
+                <Pressable key={unit} onPress={() => editNotice(draft.noticeValue, unit)} accessibilityRole="button" accessibilityLabel={`Minimum notice in ${unit}`} accessibilityState={{ selected }} style={[styles.unit, { borderColor: selected ? colors.textPrimary : colors.border, backgroundColor: selected ? colors.textPrimary : 'transparent' }]} testID={`booking-options-unit-${unit}`}>
                   <Text style={[typography.bodySmall, { color: selected ? colors.background : colors.textPrimary }]}>{UNIT_LABELS[unit]}</Text>
                 </Pressable>
               );
