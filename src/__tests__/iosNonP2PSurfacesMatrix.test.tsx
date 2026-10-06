@@ -64,7 +64,13 @@ let mockBudget: Record<string, unknown> | undefined;
 jest.mock('../hooks/useAIBudget', () => ({ useAIBudget: () => ({ data: mockBudget }) }));
 jest.mock('../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../theme/tokens');
-  return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
+  return {
+    useTheme: () => ({
+      colorScheme: 'light', semanticColors: lightTokens,
+      colors: { background: '#F5EFE4', textPrimary: '#1A1A18', textSecondary: '#6B6B6B' },
+      tokens: { typography: { h2: { fontSize: 24 }, body: { fontSize: 16 } } },
+    }),
+  };
 });
 jest.mock('react-native-safe-area-context', () => {
   const actual = jest.requireActual('react-native-safe-area-context');
@@ -88,9 +94,10 @@ import { AIBudgetTutorialModal } from '../components/coach/ai-budget/AIBudgetTut
 import { UpgradeGate } from '../screens/coach/TeamManagementScreen';
 import { seatLimitMessage } from '../screens/coach/SubCoachInviteModal';
 import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
-import { nonP2PPurchasesHidden, externalLinkAllowed, isPaymentUrl } from '../config/purchaseSurfaces';
+import { digitalPurchasesHidden, nonP2PPurchasesHidden, externalLinkAllowed, isPaymentUrl } from '../config/purchaseSurfaces';
 import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
 import { PackOptionsRow } from '../components/coach/ai-budget/PackOptionsRow';
+import { COACH_PUSH_ROUTES } from '../services/pushTapRouter';
 
 const BUY = /buy|top up|top-up|pack|upgrade|checkout|purchase/i;
 
@@ -151,6 +158,14 @@ describe.each(ROWS)('$name', (row) => {
 
   it('gate decision', () => {
     expect(nonP2PPurchasesHidden()).toBe(row.hidden);
+    expect(digitalPurchasesHidden()).toBe(digitalHidden);
+  });
+
+  it('a budget notification routes to Settings rather than hidden checkout', () => {
+    expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({
+      root: 'SettingsStack',
+      screen: digitalHidden ? 'SettingsHome' : 'CreditPackCheckout',
+    });
   });
 
   it('direct credit-pack navigation cannot mount checkout when digital purchases are hidden', async () => {
@@ -245,7 +260,7 @@ describe.each(ROWS)('$name', (row) => {
   });
 
   it('exhausted / partial seat messages: no upgrade instruction when hidden', () => {
-    const hidden = nonP2PPurchasesHidden();
+    const hidden = digitalPurchasesHidden();
     expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!row.hidden);
     expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!row.hidden);
     expect(seatLimitMessage(0, hidden)).toMatch(/Revoke an existing sub-coach|revoke an existing sub-coach/);

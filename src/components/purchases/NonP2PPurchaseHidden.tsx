@@ -1,6 +1,6 @@
 /**
  * Neutral state rendered in place of a purchase that is not a 1:1
- * person-to-person service when the iOS build hides those purchases
+ * person-to-person service when the store build hides those purchases
  * (see src/config/purchaseSurfaces.ts). No price, no link out, no call to
  * buy elsewhere.
  */

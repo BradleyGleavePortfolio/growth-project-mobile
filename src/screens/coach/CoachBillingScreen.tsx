@@ -20,7 +20,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
 import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -69,14 +69,14 @@ function formatDate(iso?: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// iOS builds hide subscription CTAs; the status copy must not ask the coach
+// Store builds hide digital subscription CTAs; the copy must not ask the coach
 // to subscribe or update a card either.
-const IOS_BILLING_NOTE = 'Your coach account status is shown here. Billing changes are not made in the iOS app.';
+const IOS_BILLING_NOTE = 'Your coach account status is shown here. Billing changes are not made in this app.';
 
 export default function CoachBillingScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const purchasesHidden = nonP2PPurchasesHidden();
+  const purchasesHidden = digitalPurchasesHidden();
   const [status, setStatus] = useState<CoachBillingStatus | null>(null);
   const [invoices, setInvoices] = useState<CoachInvoice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -290,7 +290,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
           )}
         </View>
 
-        {/* iOS: coach subscription / seat CTAs are not a 1:1 person-to-person
+        {/* Coach subscription / seat CTAs are not a 1:1 person-to-person
             service, so they are hidden (purchaseSurfaces.ts). */}
         {purchasesHidden ? null : (
           <>

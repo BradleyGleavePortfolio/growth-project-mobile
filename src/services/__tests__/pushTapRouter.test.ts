@@ -13,7 +13,7 @@ jest.mock('../../config/featureFlags', () => ({
 
 let mockHidden = false;
 jest.mock('../../config/purchaseSurfaces', () => ({
-  nonP2PPurchasesHidden: () => mockHidden,
+  digitalPurchasesHidden: () => mockHidden,
 }));
 
 import {
