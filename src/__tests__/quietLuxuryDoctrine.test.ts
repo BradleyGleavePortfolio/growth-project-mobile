@@ -37,6 +37,10 @@ const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
   path.join(ROOT, 'screens', 'client', 'LeaderboardSettingsScreen.tsx'),
   path.join(ROOT, 'screens', 'community', 'CommunityChallengeDetailScreen.tsx'),
   path.join(ROOT, 'screens', 'community', '__tests__', 'CommunityChallengeDetailScreen.test.tsx'),
+  // Owner 10-06: the opt-in roster leaderboard opens from the Community tab.
+  path.join(ROOT, 'screens', 'community', 'CommunityTabScreen.tsx'),
+  path.join(ROOT, 'screens', 'community', 'communityNavTypes.ts'),
+  path.join(ROOT, 'screens', 'community', '__tests__', 'communityLeaderboardEntry.test.tsx'),
 ]);
 
 function walk(dir: string): string[] {

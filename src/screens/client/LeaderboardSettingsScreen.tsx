@@ -25,6 +25,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavigationContext } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme/tokens';
 import { Colors } from '../../constants/colors';
 import {
@@ -42,14 +45,14 @@ function MeasuredExplainer() {
       <Text style={styles.explainerHeading}>What is measured</Text>
 
       <Text style={styles.explainerBody}>
-        Your combined score is calculated from four habit signals in the last 30 days,
+        Your combined score is calculated from five parts, all from the last 30 days,
         weighted as follows:
       </Text>
 
       {([
         ['Check-in consistency', '30%', 'Days you submitted a check-in in the last 30 days.'],
         ['Workouts logged',      '25%', 'Workouts recorded relative to a 3-per-week target.'],
-        ['Meals logged',         '20%', 'Meals recorded relative to a 3-per-day target.'],
+        ['Meals logged',         '20%', 'Food entries logged; 90 in 30 days is the full 20%.'],
         ['Coach engagement',     '15%', 'Messages sent to your coach in the last 30 days.'],
         ['Streak bonus',         '10%', 'Your current check-in streak (30 days = maximum).'],
       ] as const).map(([label, weight, desc]) => (
@@ -92,6 +95,10 @@ export default function LeaderboardSettingsScreen() {
   const [isOptedIn, setIsOptedIn]       = useState(false);
   const [displayName, setDisplayName]   = useState('');
   const [savedName, setSavedName]       = useState('');
+  // Both host stacks hide the native header.
+  const navigation = React.useContext(NavigationContext);
+  const insets = useSafeAreaInsets();
+  const canGoBack = navigation?.canGoBack() ?? false;
 
   const load = useCallback(async () => {
     setError(null);
@@ -119,6 +126,7 @@ export default function LeaderboardSettingsScreen() {
   }, [load]);
 
   const handleToggle = async (value: boolean) => {
+    setError(null);
     setIsOptedIn(value);
     setSaving(true);
     try {
@@ -137,6 +145,7 @@ export default function LeaderboardSettingsScreen() {
 
   const handleSaveName = async () => {
     if (!isOptedIn) return;
+    setError(null);
     setSaving(true);
     try {
       await setLeaderboardOptIn({
@@ -153,19 +162,33 @@ export default function LeaderboardSettingsScreen() {
 
   const nameChanged = displayName.trim() !== savedName.trim();
 
+  const backBar = canGoBack ? (
+    <Pressable
+      onPress={() => navigation?.goBack()}
+      style={styles.backButton}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      testID="leaderboard-settings-back"
+    >
+      <Ionicons name="chevron-back" size={22} color={OXBLOOD} />
+      <Text style={styles.backText}>Back</Text>
+    </Pressable>
+  ) : null;
+
   if (loading) {
     return (
       <View style={styles.centered} testID="leaderboard-settings-loading">
-        <ActivityIndicator color={colors.ink} size="large" />
+        <ActivityIndicator color={colors.ink} size="large" accessibilityLabel="Loading leaderboard settings" />
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {backBar}
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
         {/* Header */}
@@ -261,9 +284,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 48,
   },
+  backButton: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+  backText: { fontFamily: 'Inter-Medium', fontSize: 15, color: OXBLOOD },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 20,
+    paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
     borderBottomColor: colors.stone,

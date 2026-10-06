@@ -21,7 +21,7 @@
  *   4. Populated — ranked list of rows.
  *   5. Error — minimal error message, retry action.
  */
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -33,7 +33,11 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { NavigationContext } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import type { SemanticTokens } from '../../theme/tokens';
 import {
   getLeaderboard,
@@ -96,6 +100,12 @@ function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens })
     [sc],
   );
 
+  // One spoken sentence per row instead of five loose fragments.
+  const deltaSpoken = hasDelta
+    ? `, ${(entry.weekDelta ?? 0) > 0 ? 'up' : 'down'} ${Math.abs(entry.weekDelta ?? 0)} since the last update`
+    : '';
+  const rowLabel = `Rank ${entry.rank}, ${isMe ? 'you, ' : ''}${entry.displayName}, score ${entry.combinedScore} of 100${deltaSpoken}`;
+
   const inner = (
     <>
       <Text style={rowStyles.rankText}>{entry.rank}</Text>
@@ -121,7 +131,9 @@ function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens })
     return (
       <View
         style={[rowStyles.row, rowStyles.rowHighlighted]}
+        accessible
         accessibilityRole="text"
+        accessibilityLabel={rowLabel}
         testID="leaderboard-self-row"
       >
         {inner}
@@ -132,7 +144,9 @@ function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens })
   return (
     <View
       style={rowStyles.row}
+      accessible
       accessibilityRole="text"
+      accessibilityLabel={rowLabel}
       testID={`leaderboard-row-${entry.userId}`}
     >
       {inner}
@@ -207,15 +221,22 @@ export default function LeaderboardScreen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<LeaderboardResponse | null>(null);
+  // The board ranks one coach's clients: no coach, no board (never an error).
+  const client = useCurrentUser();
+  const insets = useSafeAreaInsets();
+  const hasCoach = Boolean(client?.coach_id);
+  // Both host stacks hide the native header; context works outside a navigator.
+  const navigation = React.useContext(NavigationContext);
+  const canGoBack = navigation?.canGoBack() ?? false;
 
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
   // Use the explicit backend field — never infer from entries list membership.
   const isOptedIn = data?.viewer.is_opted_in ?? false;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     setError(null);
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const result = await getLeaderboard();
       setData(result);
@@ -227,8 +248,24 @@ export default function LeaderboardScreen() {
   }, []);
 
   useEffect(() => {
+    if (!hasCoach) {
+      setLoading(false);
+      return;
+    }
     void load();
-  }, [load]);
+  }, [load, hasCoach]);
+
+  // Coming back from Settings (opt in, opt out, rename) shows the new state.
+  const leftScreen = useRef(false);
+  useEffect(() => {
+    if (!navigation || !hasCoach) return undefined;
+    const offBlur = navigation.addListener('blur', () => { leftScreen.current = true; });
+    const offFocus = navigation.addListener('focus', () => {
+      if (leftScreen.current) void load(true);
+      leftScreen.current = false;
+    });
+    return () => { offBlur(); offFocus(); };
+  }, [navigation, hasCoach, load]);
 
   const handleOptIn = async (displayName: string) => {
     setSaving(true);
@@ -245,23 +282,69 @@ export default function LeaderboardScreen() {
     }
   };
 
+  const topBar = (
+    <View style={styles.topBar}>
+      {canGoBack ? (
+        <Pressable
+          onPress={() => navigation?.goBack()}
+          style={styles.topBarButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="leaderboard-back"
+        >
+          <Ionicons name="chevron-back" size={22} color={sc.accent} />
+          <Text style={[styles.topBarText, { color: sc.accent }]}>Back</Text>
+        </Pressable>
+      ) : <View />}
+      {hasCoach ? (
+        <Pressable
+          onPress={() => navigation?.navigate('LeaderboardSettings')}
+          style={styles.topBarButton}
+          accessibilityRole="button"
+          accessibilityLabel="Leaderboard settings: opt in or out and set a display name"
+          testID="leaderboard-settings-link"
+        >
+          <Text style={[styles.topBarText, { color: sc.accent }]}>Settings</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+
+  // Loading, error and no-coach share one shell so Back is always reachable.
+  const shell = (testID: string, children: React.ReactNode) => (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {topBar}
+      <View style={styles.centered} testID={testID}>{children}</View>
+    </SafeAreaView>
+  );
+
+  if (!hasCoach) {
+    return shell('leaderboard-no-coach', (
+      <>
+        <Text style={styles.title}>Leaderboard</Text>
+        <Text style={[styles.emptyText, { marginTop: 12 }]}>
+          The leaderboard ranks clients of the same coach. It opens once a coach adds you to
+          their roster.
+        </Text>
+      </>
+    ));
+  }
+
   if (loading) {
-    return (
-      <View style={styles.centered} testID="leaderboard-loading">
-        <ActivityIndicator color={sc.textPrimary} size="large" />
-      </View>
-    );
+    return shell('leaderboard-loading', (
+      <ActivityIndicator color={sc.textPrimary} size="large" accessibilityLabel="Loading leaderboard" />
+    ));
   }
 
   if (error) {
-    return (
-      <View style={styles.centered} testID="leaderboard-error">
+    return shell('leaderboard-error', (
+      <>
         <Text style={styles.errorText}>{error}</Text>
-        <Pressable onPress={load} style={styles.retryButton} accessibilityRole="button" accessibilityLabel="Retry loading leaderboard">
+        <Pressable onPress={() => void load()} style={styles.retryButton} accessibilityRole="button" accessibilityLabel="Retry loading leaderboard">
           <Text style={styles.retryText}>Try again</Text>
         </Pressable>
-      </View>
-    );
+      </>
+    ));
   }
 
   const publicEntries = data?.entries.filter((e) => !e.isRequester || isOptedIn) ?? [];
@@ -269,9 +352,10 @@ export default function LeaderboardScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {topBar}
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Leaderboard</Text>
@@ -335,9 +419,12 @@ const makeStyles = (sc: SemanticTokens) =>
       backgroundColor: sc.bgPrimary,
       padding: 24,
     },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
+    topBarButton: { minHeight: 44, minWidth: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
+    topBarText: { fontFamily: 'Inter-Medium', fontSize: 15 },
     header: {
       paddingHorizontal: 20,
-      paddingTop: 20,
+      paddingTop: 8,
       paddingBottom: 12,
       borderBottomWidth: 0.5,
       borderBottomColor: sc.border,
