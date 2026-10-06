@@ -15,7 +15,8 @@
  * Real clientPaymentsApi and ClientPackagesScreen; only HTTP is mocked.
  */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
   const realTokens = jest.requireActual('../theme/tokens').default;
@@ -191,5 +192,74 @@ describe('U-MC-5: the plans screen has a back control', () => {
     const r = await render(<ClientPackagesScreen />);
     await waitFor(() => expect(r.getByTestId('client-packages-header')).toBeTruthy());
     expect(r.queryByTestId('client-packages-back')).toBeNull();
+  });
+});
+
+describe('AUD-SOL-MONEY-124: ordinary plan actions update the charge summary', () => {
+  const end = '2026-11-02T12:00:00.000Z';
+  const livePlan = (ending: boolean) => ({
+    purchase_id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching',
+    state: 'active', entitlement_active: true, amount_cents: 4900, currency: 'usd',
+    interval: 'month', interval_count: 1, next_charge_at: ending ? null : end,
+    cancel_at_period_end: ending, access_ends_at: ending ? end : null,
+    can_cancel: !ending, can_resume: ending,
+  });
+
+  it('after End my plan succeeds, Current plan no longer says Renews', async () => {
+    purchases = [purchase({})];
+    plans = [livePlan(false)];
+    mockPost.mockImplementation(async (url: string) => {
+      if (url === '/v1/checkout/subscriptions/purchase-1/cancel') {
+        purchases = [purchase({ cancel_at_period_end: true })];
+        plans = [livePlan(true)];
+        return { data: {
+          outcome: 'scheduled', access_ends_at: end, voided_amount_cents: 0,
+          currency: 'usd', paid_period_kept: false,
+        } };
+      }
+      throw new Error(`unexpected POST ${url}`);
+    });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    try {
+      const r = await render(<ClientPackagesScreen />);
+      await waitFor(() => expect(r.getByTestId('your-plan-end-purchase-1')).toBeTruthy());
+      await fireEvent.press(r.getByTestId('your-plan-end-purchase-1'));
+      const confirm = alert.mock.calls[0][2]?.find((b) => b.style === 'destructive');
+      expect(confirm?.onPress).toBeTruthy();
+      await act(async () => { confirm?.onPress?.(); });
+      await waitFor(() => expect(r.getByTestId('your-plan-line-purchase-1').props.children).toContain('will not renew'));
+      // A normal completed cancel; the server purchase now agrees too.
+      const actual = await clientPaymentsApi.getPaymentStatus();
+      expect(actual.ok && actual.data.cancel_at_period_end).toBe(true);
+      await waitFor(() => expect(r.getByTestId('current-plan-line').props.children).toBe(
+        'Ends Nov 2, 2026. Nothing more is charged.',
+      ));
+      expect(r.queryByTestId('plan-second-pkg-quarterly')).toBeNull();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+
+  it('after Keep my plan succeeds, Current plan no longer says Nothing more is charged', async () => {
+    purchases = [purchase({ cancel_at_period_end: true })];
+    plans = [livePlan(true)];
+    mockPost.mockImplementation(async (url: string) => {
+      if (url === '/v1/checkout/subscriptions/purchase-1/resume') {
+        purchases = [purchase({ cancel_at_period_end: false })];
+        plans = [livePlan(false)];
+        return { data: livePlan(false) };
+      }
+      throw new Error(`unexpected POST ${url}`);
+    });
+    const r = await render(<ClientPackagesScreen />);
+    await waitFor(() => expect(r.getByTestId('your-plan-keep-purchase-1')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('your-plan-keep-purchase-1'));
+    await waitFor(() => expect(r.getByTestId('your-plan-line-purchase-1').props.children).toBe(
+      'Next charge of $49 on Nov 2, 2026.',
+    ));
+    const actual = await clientPaymentsApi.getPaymentStatus();
+    expect(actual.ok && actual.data.cancel_at_period_end).toBe(false);
+    await waitFor(() => expect(r.getByTestId('current-plan-line').props.children).toBe('Renews Nov 2, 2026'));
+    expect(r.getByTestId('plan-second-pkg-quarterly')).toBeTruthy();
   });
 });
