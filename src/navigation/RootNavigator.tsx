@@ -74,7 +74,7 @@ type AuthState =
 // `?`). `fragmentToQuery` hoists the fragment into the query string
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
-import { fragmentToQuery } from './deepLinkUtils';
+import { emailVerifiedPath, fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
@@ -154,6 +154,10 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
         return undefined;
       }
     }
+    // HUNT-01-124: the confirmation email's `tgp://verified#<session>` is
+    // reduced to a token-free status before parsing (see deepLinkUtils).
+    const verified = emailVerifiedPath(path);
+    if (verified) return getStateFromPath(verified, options);
     return getStateFromPath(fragmentToQuery(path), options);
   },
   config: {
@@ -179,6 +183,15 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       // re-bootstraps (authenticated) or resets to Login (not). It is
       // mounted in AuthNavigator under this route name (clinic C10).
       AuthCallback: 'auth/callback',
+      // HUNT-01-124: sign-up confirmation return (backend emailRedirectTo
+      // default `tgp://verified`). Without this entry the link opened the
+      // app with no confirmation and no next step.
+      EmailVerified: {
+        path: 'verified',
+        parse: {
+          status: (v: string) => (v === 'link_problem' ? 'link_problem' : 'confirmed'),
+        },
+      },
       CreateAccount: {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },

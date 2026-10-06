@@ -9,6 +9,7 @@ import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 import type { SignupRoleNoticeKind } from '../lib/signupRoleNotice';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import AuthCallbackScreen from '../screens/auth/AuthCallbackScreen';
+import EmailVerifiedScreen from '../screens/auth/EmailVerifiedScreen';
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import { Colors } from '../constants/colors';
 
@@ -41,6 +42,9 @@ export type AuthStackParamList = {
   AcceptInvite: { token: string };
   // Idempotent landing for a stray `tgp://auth/callback` (OAuth redirect URI).
   AuthCallback: undefined;
+  // HUNT-01-124: landing for the sign-up confirmation link (`tgp://verified`).
+  // `status` is derived by the linking config; session tokens are dropped.
+  EmailVerified: { status?: 'confirmed' | 'link_problem' } | undefined;
   // In-app support (Crisp; initCrisp runs at app start regardless of auth).
   // Registered here so signup notices that say "contact support" can open
   // it before the user has reached Settings (#306 fix round 2). Opened in
@@ -72,6 +76,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
       <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
       <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
+      <Stack.Screen name="EmailVerified" component={EmailVerifiedScreen} />
       <Stack.Screen name="SupportInbox" component={PreSignInSupportInbox} />
     </Stack.Navigator>
   );
