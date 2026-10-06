@@ -312,14 +312,14 @@ export default function HabitsScreen() {
                 <Text style={styles.progressStatLabel}>Loading habits</Text>
               </View>
             ) : habitsQ.isError || logsQ.isError ? (
-              <View style={styles.progressCard}>
+              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
                 <Text style={styles.progressStatLabel}>Habits could not be loaded.</Text>
                 <TouchableOpacity onPress={onRefresh} accessibilityRole="button">
                   <Text style={styles.addBtnText}>Retry habits</Text>
                 </TouchableOpacity>
               </View>
             ) : habits.length === 0 ? (
-              <View style={styles.progressCard}>
+              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start' }]}>
                 <Text style={styles.progressStatLabel}>No habits yet. Add a daily habit to start tracking.</Text>
               </View>
             ) : (
