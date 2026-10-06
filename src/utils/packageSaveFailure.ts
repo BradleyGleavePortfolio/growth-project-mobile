@@ -134,7 +134,7 @@ export function plainPackageInvalidMessage(
     return `Choose how clients pay: One-time, Monthly, Quarterly or Yearly, ${then}.`;
   }
   if (/currency/i.test(m)) {
-    return `This package uses a currency the app cannot sell in. ${savedWhat(mode)} Contact support and we will fix the package.`;
+    return `This package uses a currency the app cannot sell in. ${savedWhat(mode)} Contact support to have the package fixed.`;
   }
   if (/description/i.test(m)) {
     return `Shorten the description, ${then}.`;
@@ -209,7 +209,7 @@ export function describePackageSaveFailure(
       return {
         kind: 'network',
         title: 'No connection',
-        message: `We could not reach the server. ${savedWhat(mode)} ${KEPT} Check your connection, then tap Try again.`,
+        message: `The server could not be reached. ${savedWhat(mode)} ${KEPT} Check your connection, then tap Try again.`,
         action: 'retry',
         support: false,
         reference: null,
@@ -279,7 +279,7 @@ export function describePackageSaveFailure(
     return {
       kind: 'not_configured',
       title: 'Packages are not available yet',
-      message: `Packages are not switched on for this server yet. ${savedWhat(mode)} Contact support and we will turn them on.`,
+      message: `Packages are not switched on for this server yet. ${savedWhat(mode)} Contact support to have them turned on.`,
       action: 'back_to_packages',
       support: true,
       reference: null,
@@ -347,12 +347,12 @@ export function describePackageSaveFailure(
     };
   }
 
-  // 5xx, an unexpected status, or a failure we cannot classify.
+  // 5xx, an unexpected status, or a failure that cannot be classified.
   const ref = reportPackageSaveFailure(err, mode);
   return {
     kind: 'server',
     title: failedTitle(mode),
-    message: `${savedWhat(mode)} There was a problem on our side. ${KEPT} Tap Try again, or contact support and quote reference ${ref.short}.`,
+    message: `${savedWhat(mode)} There was a problem on the server. ${KEPT} Tap Try again, or contact support and quote reference ${ref.short}.`,
     action: 'retry',
     support: true,
     reference: ref.short,

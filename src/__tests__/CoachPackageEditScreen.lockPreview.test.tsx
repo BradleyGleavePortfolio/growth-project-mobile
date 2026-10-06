@@ -313,7 +313,7 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     const a = lastAlert();
     expect(a.title).toBe('Could not save the package');
     expect(a.message).toBe(
-      'Your changes were not saved. There was a problem on our side. Your changes are still here. Tap Try again, or contact support and quote reference SOL321RE.',
+      'Your changes were not saved. There was a problem on the server. Your changes are still here. Tap Try again, or contact support and quote reference SOL321RE.',
     );
     expect(a.buttons.map((b) => b.text)).toEqual(['Try again', 'Contact support', 'Close']);
     // the reference stays on screen after the dialog closes
@@ -344,7 +344,7 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     const a = lastAlert();
     expect(a.title).toBe('No connection');
     expect(a.message).toBe(
-      'We could not reach the server. Your changes were not saved. Your changes are still here. Check your connection, then tap Try again.',
+      'The server could not be reached. Your changes were not saved. Your changes are still here. Check your connection, then tap Try again.',
     );
     expect(a.buttons.map((b) => b.text)).toEqual(['Try again', 'Close']);
     expect(mockCaptureError).not.toHaveBeenCalled();
