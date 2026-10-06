@@ -189,6 +189,7 @@ export default function LogScreen() {
       setSearching(false);
       return;
     }
+    setSearching(true);
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
@@ -559,7 +560,7 @@ export default function LogScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.editModalBackdrop}
         >
-          <View style={styles.editModalCard}>
+          <ScrollView style={styles.editModalCard} contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
             <Text style={styles.editModalTitle} numberOfLines={1}>
               {editLog?.foodName || 'Edit entry'}
             </Text>
@@ -644,7 +645,7 @@ export default function LogScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -695,10 +696,11 @@ const makeStyles = (colors: ThemeColors) =>
   editModalCard: {
     width: '100%',
     maxWidth: 420,
+    maxHeight: '100%',
     backgroundColor: colors.surface,
     borderRadius: 12,
-    padding: Spacing.lg,
   },
+  editModalContent: { padding: Spacing.lg },
   editModalTitle: {
     fontSize: 18,
     fontWeight: '600',

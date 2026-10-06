@@ -4,6 +4,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-
 import type { FoodLog } from '../../../types';
 import LogScreen from '../LogScreen';
 import { logApi } from '../../../services/api';
+import { AxiosHeaders, type AxiosResponse } from 'axios';
 
 const mockLog: FoodLog = {
   id: 'entry', userId: 'user', coachId: '', date: '2026-10-06', mealType: 'lunch',
@@ -40,8 +41,9 @@ jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: (
 
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(logApi.updateEntry).mockResolvedValue({ data: {} });
-  jest.mocked(logApi.deleteEntry).mockResolvedValue({ data: {} });
+  const response: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() } };
+  jest.mocked(logApi.updateEntry).mockResolvedValue(response);
+  jest.mocked(logApi.deleteEntry).mockResolvedValue(response);
 });
 
 async function openEdit() {

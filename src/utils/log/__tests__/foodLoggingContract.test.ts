@@ -7,6 +7,7 @@ import { submitManualLogOnline, submitManualLogOffline, submitSearchLogOnline } 
 import { useClientStore } from '../../../store/clientStore';
 import { foodApi, logApi, waterApi } from '../../../services/api';
 import { enqueue } from '../../../services/foodLogQueue';
+import { AxiosHeaders, type AxiosResponse } from 'axios';
 
 jest.mock('../../../services/api', () => ({
   foodApi: { create: jest.fn() },
@@ -32,11 +33,15 @@ const manual = {
   quantity: '2', unit: 'serving', date: '2026-10-06', mealType: 'lunch' as const,
 };
 
+function response<T>(data: T): AxiosResponse<T> {
+  return { data, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() } };
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
-  jest.mocked(foodApi.create).mockResolvedValue({ data: { id: 'created-food' } });
-  jest.mocked(logApi.logFood).mockResolvedValue({ data: {} });
-  jest.mocked(waterApi.getDaily).mockResolvedValue({ data: { total_ml: 0 } });
+  jest.mocked(foodApi.create).mockResolvedValue(response({ id: 'created-food' }));
+  jest.mocked(logApi.logFood).mockResolvedValue(response({}));
+  jest.mocked(waterApi.getDaily).mockResolvedValue(response({ total_ml: 0 }));
   useClientStore.getState().reset();
 });
 
@@ -90,7 +95,11 @@ describe('manual and packaged save payloads', () => {
   it('keeps weighed manual portions correctly convertible when reused', async () => {
     await submitManualLogOnline({ ...manual, quantity: '200', unit: 'g' });
     const payload = jest.mocked(foodApi.create).mock.calls[0][0];
-    const food = mapFoodItem(payload);
+    const food = mapFoodItem({
+      nutrient_basis: 'PER_SERVING',
+      serving_size_grams: Number(payload.serving_size_grams),
+      calories: Number(payload.calories),
+    });
     expect(quantityMultiplier(food, 100, 'g')).toBe(0.5);
   });
 
@@ -119,14 +128,14 @@ describe('manual and packaged save payloads', () => {
 });
 
 it('retains daily API food metadata and the exact multiplier for the actual edit screen', async () => {
-  jest.mocked(logApi.getDaily).mockResolvedValue({ data: {
+  jest.mocked(logApi.getDaily).mockResolvedValue(response({
     entries: [{
       id: 'entry', food_item_id: 'almonds', user_id: 'user', meal_type: 'lunch',
       quantity_multiplier: 0.28, original_quantity: 1, original_unit: 'serving',
       food_item: { ...almonds, protein_g: 21, carbs_g: 22, fat_g: 50 },
     }],
     total_calories: 162, total_protein_g: 6, total_carbs_g: 6, total_fat_g: 14,
-  } });
+  }));
   await useClientStore.getState().loadDayData('user', '2026-10-06');
   const stored = useClientStore.getState().foodLogs[0];
   expect(stored.foodItem?.serving_size_grams).toBe(28);

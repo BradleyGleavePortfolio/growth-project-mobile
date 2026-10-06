@@ -126,10 +126,9 @@ export async function submitSearchLogOnline({
 }
 
 // Convert a manual qty + unit pair into grams, so we can store a real
-// serving_size_grams instead of the legacy hardcoded 100. Returns null if
-// the unit is not mass / volume-resolvable — in that case we keep the
-// PER_SERVING basis but use a serving_size_grams of `null` (server stores
-// as nullable so coaches see "unknown" rather than a wrong 100g).
+// serving_size_grams instead of the legacy hardcoded 100. Returns null for
+// an unweighed portion; the payload stores 0 with PER_SERVING so the app
+// does not invent a weight or offer unresolvable conversions.
 function manualServingGrams(qty: number, unit: string): number | null {
   const u = (unit || '').trim().toLowerCase();
   if (!Number.isFinite(qty) || qty <= 0) return null;
@@ -137,8 +136,8 @@ function manualServingGrams(qty: number, unit: string): number | null {
   if (u === 'oz') return qty * OZ_TO_GRAMS;
   if (u === 'cup' || u === 'tbsp' || u === 'tsp') {
     // Manual entry doesn't know the food category, so we have no density
-    // table to resolve against — explicitly defer to the backend (null).
-    const grams = densityGramsFor({} as never, u);
+    // table to resolve against — the portion remains unweighed.
+    const grams = densityGramsFor({}, u);
     return grams != null ? qty * grams : null;
   }
   // "serving" or unrecognised: gram weight unknown.

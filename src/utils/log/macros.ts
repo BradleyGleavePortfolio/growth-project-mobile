@@ -16,9 +16,9 @@
 // category-keyed density table — graceful degradation rather than the
 // previous silent `multiplier = qty` fall-through that produced 2-4× errors.
 //
-// Legacy rows that still report `nutrient_basis: 'PER_SERVING'` are handled
-// by treating their macros as belonging to one serving and scaling by qty
-// directly. New code should not produce PER_SERVING rows.
+// PER_SERVING rows (including custom foods) belong to one described portion.
+// Serving counts scale directly; mass and volume use that portion's gram
+// weight when it is known.
 
 import type { SearchResult } from './types';
 

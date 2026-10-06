@@ -1,16 +1,14 @@
 import { MealType } from '../../types';
 import { densityGramsFor } from './macros';
 
-// Canonical assumption after the quality-floor fix: every FoodItem returned by
-// the backend stores its macros on a per-100g basis. The old per-serving math
-// path is gone — see src/utils/log/macros.ts for the conversion logic and
-// README.md for the architectural note.
+// Imported foods use per-100g nutrition. Custom foods may instead describe
+// one whole portion, so their declared PER_SERVING basis must be preserved.
 export type NutrientBasis = 'PER_100G' | 'PER_SERVING';
 
 export interface SearchResult {
   id?: string;
   name: string;
-  // Per-100g macros.
+  // Macros on the declared nutrient_basis.
   calories: number;
   protein: number;
   carbs: number;

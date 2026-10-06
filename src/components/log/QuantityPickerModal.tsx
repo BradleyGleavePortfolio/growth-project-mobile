@@ -51,7 +51,7 @@ export default function QuantityPickerModal({
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onCancel}
+      onRequestClose={() => { if (!saving) onCancel(); }}
     >
       <KeyboardAvoidingView
         style={styles.quantityModalContainer}
@@ -150,6 +150,7 @@ export default function QuantityPickerModal({
           <TouchableOpacity
             style={styles.quantityCancelLink}
             onPress={onCancel}
+            disabled={saving}
           >
             <Text style={styles.quantityCancelText}>Cancel</Text>
           </TouchableOpacity>
