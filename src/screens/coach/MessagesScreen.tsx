@@ -19,6 +19,7 @@ import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states'
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachInboxV2 from './CoachInboxV2';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
+import { CommunityReportsEntry } from './CommunityReportsEntry';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -124,7 +125,10 @@ function LegacyCoachMessages() {
             </Text>
           )}
         </View>
-        <BroadcastsEntry />
+        <View style={styles.headerEntries}>
+          <CommunityReportsEntry />
+          <BroadcastsEntry />
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -220,10 +224,14 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
+    flexWrap: 'wrap',
+    gap: 8,
     paddingHorizontal: 24,
     paddingTop: 60,
     marginBottom: 8,
   },
+  headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
   unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },

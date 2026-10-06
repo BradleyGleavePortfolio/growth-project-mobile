@@ -45,6 +45,11 @@ import { featureFlags } from '../config/featureFlags';
 // bottom-tab ONLY when `featureFlags.coachCommunity` is true; when the flag is
 // OFF the tab does not render and none of the six routes register.
 import CoachCommunityNavigator from './CoachCommunityNavigator';
+// AUDIT-10-125 B-1: the community report queue is reachable from the coach
+// Messages header (CommunityReportsEntry) even while the coach Community tab
+// is off, so member reports always have a moderator screen (Apple 1.2).
+import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
+import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
 // Stage 3 — cross-pillar federated coach surface. Mounted as a nested
 // navigator so the practice-selection picker, dashboard, roster, detail
@@ -205,6 +210,9 @@ export type ClientsStackParamList = {
   /** M-BCAST-123 — coach broadcasts list and composer (server flag FEATURE_COACH_BROADCASTS). */
   CoachBroadcasts:          undefined;
   CoachBroadcastComposer:   undefined;
+  /** AUDIT-10-125 B-1 — community report queue and the reported post. */
+  CoachCommunityModeration: undefined;
+  CoachCommunityPostDetail: { postId: string; flagged?: boolean };
   /** M-FEATURED-123 — owner-only featured coach editor. */
   FeaturedCoachEditor:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
@@ -447,6 +455,17 @@ function ClientsStackNavigator() {
         name="CoachBroadcastComposer"
         component={BroadcastComposerScreen}
         options={{ headerShown: true, title: 'New broadcast', headerBackTitle: 'Back' }}
+      />
+      {/* AUDIT-10-125 B-1 — opened from CommunityReportsEntry (coach Messages header). */}
+      <ClientsStack.Screen
+        name="CoachCommunityModeration"
+        component={CoachCommunityModerationScreen}
+        options={{ headerShown: true, title: 'Community reports', headerBackTitle: 'Back' }}
+      />
+      <ClientsStack.Screen
+        name="CoachCommunityPostDetail"
+        component={CoachCommunityPostDetailScreen}
+        options={{ headerShown: true, title: 'Reported post', headerBackTitle: 'Back' }}
       />
       {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
       <ClientsStack.Screen
