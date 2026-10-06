@@ -252,6 +252,8 @@ describe('rollback flag', () => {
 
   it('RootNavigator mounts the consultation instead of the lean flow when on', () => {
     const src = fs.readFileSync(path.join(root, 'src/navigation/RootNavigator.tsx'), 'utf8');
-    expect(src).toMatch(/featureFlags\.consultationOnboarding \? \(\s*<ConsultationOnboardingNavigator \/>\s*\) : \(\s*<LeanOnboardingNavigator \/>/);
+    // B-REV-1: the per-client decision starts from the flag; the server can turn it off for one client.
+    expect(src).toMatch(/useState<boolean>\(featureFlags\.consultationOnboarding\)/);
+    expect(src).toMatch(/consultationMode \? \(\s*<ConsultationOnboardingNavigator \/>\s*\) : \(\s*<LeanOnboardingNavigator \/>/);
   });
 });

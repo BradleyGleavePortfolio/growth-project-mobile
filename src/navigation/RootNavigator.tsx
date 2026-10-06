@@ -35,6 +35,7 @@ import { isScreenshotMode } from '../screenshots';
 // contributes nothing, so no `tgp://community*` route exists in the parser.
 import { featureFlags } from '../config/featureFlags';
 import { firstWinApi, WinType } from '../services/firstWinApi';
+import { consultationApi } from '../api/consultationApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
 import { prefsStorage } from '../storage/mmkv';
@@ -315,6 +316,29 @@ function openUpdateCard(params: { autostart: boolean; surface: string }): void {
   }
 }
 
+/** B-REV-1: per-user marker that this client was sent to the standard onboarding. */
+const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
+
+/**
+ * S-REVENUE-124 (B-REV-1): with the consultation flag on, the consultation
+ * runs only for a client the server can finish it for. GET /me/onboarding
+ * `consultation_available: false` (no coach yet, or a coach without a clinic
+ * program set: POST /complete would answer not_attached or
+ * clinic_not_configured forever) means the standard onboarding and the Day-1
+ * flow, exactly as with the flag off. A missing field (older server), a 404 or
+ * a failed read keeps the consultation, as before.
+ */
+async function consultationApplies(): Promise<boolean> {
+  if (!featureFlags.consultationOnboarding) return false;
+  try {
+    const state = await consultationApi.getState();
+    return state?.consultation_available !== false;
+  } catch (err) {
+    logger.warn('RootNavigator', 'consultation availability not read', err);
+    return true;
+  }
+}
+
 function signOutFromLockout(): void {
   signOut().catch((err: unknown) => {
     logger.warn('RootNavigator', 'sign out from payment lockout failed', err);
@@ -338,6 +362,8 @@ export function extractAcceptInviteToken(url: string): string | null {
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+  // B-REV-1: consultation or the standard onboarding, decided per client at boot.
+  const [consultationMode, setConsultationMode] = useState<boolean>(featureFlags.consultationOnboarding);
 
   // Push-tap routing: hand the container ref to pushTapRouter once. The
   // session effect below (after sessionUserId is declared) tells the router
@@ -718,11 +744,21 @@ export default function RootNavigator() {
         // Check if onboarding quiz has been completed
         const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
         const profileDone = profileOnboardingCompleted(user?.profile);
+        const standardKey =
+          typeof user?.id === 'string' && user.id ? `${STANDARD_ONBOARDING_KEY}:${user.id}` : null;
 
         if (onboardingDone !== 'true' && !profileDone) {
           // Psych Report #1: route new users to 3-question lean flow.
           // Existing users who already have the old 10-step onboarding_complete
           // flag bypass this entirely — the check above handles them.
+          // B-REV-1: the consultation only where the server can finish it.
+          const useConsultation = await consultationApplies();
+          setConsultationMode(useConsultation);
+          if (!useConsultation && featureFlags.consultationOnboarding && standardKey) {
+            await AsyncStorage.setItem(standardKey, 'true').catch((err: unknown) =>
+              logger.warn('RootNavigator', 'standard onboarding marker not saved', err),
+            );
+          }
           setAuthState('onboarding');
           return;
         }
@@ -735,7 +771,15 @@ export default function RootNavigator() {
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
         // plan reveal and Roman's tutorial replace the Day-1 flow and the
         // Day-1 win, so a client who finished it goes straight to the app.
-        if (!featureFlags.consultationOnboarding) {
+        // B-REV-1: a client sent to the standard onboarding (consultation not
+        // available) also gets the Day-1 flow, exactly as with the flag off.
+        let standardPath = !featureFlags.consultationOnboarding;
+        if (!standardPath && standardKey) {
+          try {
+            standardPath = (await AsyncStorage.getItem(standardKey)) === 'true';
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        }
+        if (standardPath) {
           // Day-1 final onboarding gate. Decacorn-quality flow shown to every
           // student who has not yet completed it. Backend source of truth is
           // `profile.day_one_completed`; we also accept the legacy
@@ -924,7 +968,7 @@ export default function RootNavigator() {
       ) : authState === 'onboarding' ? (
         // Consultation onboarding (consult-v1) when the flag is on; it has no
         // skip-to-finish path. Flag off: the lean flow, unchanged.
-        featureFlags.consultationOnboarding ? (
+        consultationMode ? (
           <ConsultationOnboardingNavigator />
         ) : (
           <LeanOnboardingNavigator />

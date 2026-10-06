@@ -94,6 +94,12 @@ export interface OnboardingStateResponse {
   consent_recorded?: boolean;
   /** Present after completion: the same payload as POST /complete. */
   result?: CompleteOnboardingResponse | null;
+  /**
+   * S-REVENUE-124 (B-REV-1): false when POST /complete cannot finish for this
+   * client (no coach, or a coach without a clinic program set); the app then
+   * runs the standard onboarding. Absent on older servers (treated as true).
+   */
+  consultation_available?: boolean;
 }
 
 export const COMPLETE_CONFLICT_CODES = [
