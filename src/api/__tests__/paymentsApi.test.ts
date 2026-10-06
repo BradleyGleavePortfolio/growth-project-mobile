@@ -361,7 +361,7 @@ describe('publicPackagesApi.createCheckoutSession', () => {
     });
   });
 
-  it('getByShareToken maps quarterly billing_cycle to intervalCount 3 and defaults missing fields', async () => {
+  it('getByShareToken maps quarterly billing_cycle to one quarter and defaults missing fields', async () => {
     apiMock.get.mockResolvedValueOnce({
       data: {
         package_id: 'pkg-2',
@@ -374,7 +374,8 @@ describe('publicPackagesApi.createCheckoutSession', () => {
     });
     const res = await publicPackagesApi.getByShareToken('tok_2');
     expect(res.data.billingInterval).toBe('quarterly');
-    expect(res.data.intervalCount).toBe(3);
+    // MONEY-CONNECT-124 B-PACKAGE-3: one quarter, never three quarters.
+    expect(res.data.intervalCount).toBe(1);
     expect(res.data.features).toEqual([]);
     expect(res.data.coach.displayName).toBe('Your Coach');
     expect(res.data.coach.verified).toBe(false);

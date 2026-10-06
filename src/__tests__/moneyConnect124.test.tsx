@@ -47,7 +47,7 @@ const RAW_STATUS = {
   requirements: { currently_due: ['external_account'], past_due: [],
     eventually_due: [], pending_verification: [], current_deadline: null },
 };
-const RAW_PACKAGE = {
+const RAW_PACKAGE: Parameters<typeof fromBackend>[0] = {
   id: 'pkg-49', coach_id: 'coach-1', name: 'Coaching', description: 'Weekly check-in',
   amount_cents: 4900, currency: 'gbp', billing_type: 'recurring', interval: 'month',
   interval_count: 1, is_active: true, published_at: '2026-10-01T12:00:00Z',
