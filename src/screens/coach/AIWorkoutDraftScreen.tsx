@@ -201,7 +201,7 @@ export default function AIWorkoutDraftScreen() {
     if (!draft) return false;
     setSaving(true);
     try {
-      await coachAiApi.editDraft<WorkoutPayload>(draft.draftId, payload);
+      await coachAiApi.editDraft<WorkoutPayload>(draftId, payload);
       setDirty(false);
       Alert.alert('Saved', 'Edits saved to the draft.');
       return true;
@@ -246,7 +246,7 @@ export default function AIWorkoutDraftScreen() {
     if (!draft) return;
     setApproving(true);
     try {
-      const res = await coachAiApi.approveDraft(draft.draftId);
+      const res = await coachAiApi.approveDraft(draftId);
       const copy = aiWorkoutApproveCopy(clientName, res?.data);
       Alert.alert(
         copy.title,
@@ -275,7 +275,7 @@ export default function AIWorkoutDraftScreen() {
     }
     setRejecting(true);
     try {
-      await coachAiApi.rejectDraft(draft.draftId, reason);
+      await coachAiApi.rejectDraft(draftId, reason);
       setShowRejectModal(false);
       Alert.alert('Rejected', 'Draft rejected.', [
         { text: 'OK', onPress: () => navigation.goBack() },

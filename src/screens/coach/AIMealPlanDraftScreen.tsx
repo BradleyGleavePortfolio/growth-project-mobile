@@ -10,6 +10,13 @@
  *   4. "Approve & assign" → POST /coach/ai/drafts/:draftId/approve →
  *      navigate back to ClientDetail (meal-plan tab).
  *   5. "Reject" → reason modal → POST /coach/ai/drafts/:draftId/reject.
+ *
+ * Field names follow the backend payload (meal-plan.prompt.ts): meal
+ * `slot`, item `serving`, day `daily_totals` and plan `coach_notes`. The
+ * approve step copies exactly those fields into the plan the client sees,
+ * so the coach reviews and edits the same text the client will read.
+ * Every call uses the route `draftId`: GET /coach/ai/drafts/:id returns the
+ * stored row (`id`), not a `draftId` field.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -33,6 +40,7 @@ import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import type {
   AiMeal,
   AiMealDay,
+  AiMealDayTotals,
   AiMealItem,
   Draft,
   MealPlanPayload,
@@ -44,6 +52,28 @@ type R = RouteProp<ClientsStackParamList, 'AIMealPlanDraft'>;
 
 function emptyPayload(): MealPlanPayload {
   return { title: null, summary: null, days: [] };
+}
+
+/** Day totals = the sum of the day's items, so edits keep them true. */
+function sumDay(meals: AiMeal[]): AiMealDayTotals {
+  const totals = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
+  for (const meal of meals) {
+    for (const it of meal.items || []) {
+      totals.calories += Number(it.calories) || 0;
+      totals.protein_g += Number(it.protein_g) || 0;
+      totals.carbs_g += Number(it.carbs_g) || 0;
+      totals.fat_g += Number(it.fat_g) || 0;
+    }
+  }
+  return totals;
+}
+
+function dayCalories(day: AiMealDay): number | null | undefined {
+  return day.daily_totals?.calories ?? day.total_calories;
+}
+
+function dayProtein(day: AiMealDay): number | null | undefined {
+  return day.daily_totals?.protein_g ?? day.total_protein_g;
 }
 
 export default function AIMealPlanDraftScreen() {
@@ -83,11 +113,8 @@ export default function AIMealPlanDraftScreen() {
     load();
   }, [load]);
 
-  const updateDay = (dIdx: number, patch: Partial<AiMealDay>) => {
-    setPayload((prev) => ({
-      ...prev,
-      days: prev.days.map((d, i) => (i === dIdx ? { ...d, ...patch } : d)),
-    }));
+  const updateCoachNotes = (text: string) => {
+    setPayload((prev) => ({ ...prev, coach_notes: text }));
     setDirty(true);
   };
   const updateMeal = (dIdx: number, mIdx: number, patch: Partial<AiMeal>) => {
@@ -110,25 +137,29 @@ export default function AIMealPlanDraftScreen() {
     iIdx: number,
     patch: Partial<AiMealItem>,
   ) => {
+    const macroEdit =
+      'calories' in patch ||
+      'protein_g' in patch ||
+      'carbs_g' in patch ||
+      'fat_g' in patch;
     setPayload((prev) => ({
       ...prev,
-      days: prev.days.map((d, i) =>
-        i === dIdx
-          ? {
-              ...d,
-              meals: d.meals.map((m, j) =>
-                j === mIdx
-                  ? {
-                      ...m,
-                      items: m.items.map((it, k) =>
-                        k === iIdx ? { ...it, ...patch } : it,
-                      ),
-                    }
-                  : m,
-              ),
-            }
-          : d,
-      ),
+      days: prev.days.map((d, i) => {
+        if (i !== dIdx) return d;
+        const meals = d.meals.map((m, j) =>
+          j === mIdx
+            ? {
+                ...m,
+                items: m.items.map((it, k) =>
+                  k === iIdx ? { ...it, ...patch } : it,
+                ),
+              }
+            : m,
+        );
+        return macroEdit
+          ? { ...d, meals, daily_totals: sumDay(meals) }
+          : { ...d, meals };
+      }),
     }));
     setDirty(true);
   };
@@ -141,7 +172,7 @@ export default function AIMealPlanDraftScreen() {
     if (!draft) return false;
     setSaving(true);
     try {
-      await coachAiApi.editDraft<MealPlanPayload>(draft.draftId, payload);
+      await coachAiApi.editDraft<MealPlanPayload>(draftId, payload);
       setDirty(false);
       Alert.alert('Saved', 'Edits saved to the draft.');
       return true;
@@ -183,7 +214,7 @@ export default function AIMealPlanDraftScreen() {
     if (!draft) return;
     setApproving(true);
     try {
-      await coachAiApi.approveDraft(draft.draftId);
+      await coachAiApi.approveDraft(draftId);
       Alert.alert(
         'Approved',
         `Meal plan assigned to ${clientName}.`,
@@ -211,7 +242,7 @@ export default function AIMealPlanDraftScreen() {
     }
     setRejecting(true);
     try {
-      await coachAiApi.rejectDraft(draft.draftId, reason);
+      await coachAiApi.rejectDraft(draftId, reason);
       setShowRejectModal(false);
       Alert.alert('Rejected', 'Draft rejected.', [
         { text: 'OK', onPress: () => navigation.goBack() },
@@ -270,6 +301,20 @@ export default function AIMealPlanDraftScreen() {
           </View>
         ) : null}
 
+        <View style={styles.summaryCard}>
+          <Text style={styles.notesLabel}>Notes {clientName} sees</Text>
+          <TextInput
+            style={styles.dayNotesInput}
+            placeholder="Notes shown with the plan (optional)"
+            placeholderTextColor={colors.textMuted}
+            value={payload.coach_notes || ''}
+            onChangeText={updateCoachNotes}
+            multiline
+            accessibilityLabel={`Notes ${clientName} sees`}
+            testID="mealplan-coach-notes"
+          />
+        </View>
+
         {days.length === 0 ? (
           <View style={styles.emptyCard}>
             <Ionicons name="restaurant-outline" size={32} color={colors.textMuted} />
@@ -281,48 +326,30 @@ export default function AIMealPlanDraftScreen() {
           days.map((day, dIdx) => (
             <View key={`day-${dIdx}`} style={styles.dayCard}>
               <Text style={styles.dayTitle}>Day {day.day ?? dIdx + 1}</Text>
-              {day.total_calories != null || day.total_protein_g != null ? (
-                <Text style={styles.dayTotals}>
-                  {day.total_calories != null
-                    ? `${Math.round(day.total_calories)} kcal`
+              {dayCalories(day) != null || dayProtein(day) != null ? (
+                <Text style={styles.dayTotals} testID={`mealplan-day-totals-${dIdx}`}>
+                  {dayCalories(day) != null
+                    ? `${Math.round(Number(dayCalories(day)))} kcal`
                     : ''}
-                  {day.total_calories != null && day.total_protein_g != null
+                  {dayCalories(day) != null && dayProtein(day) != null
                     ? ' · '
                     : ''}
-                  {day.total_protein_g != null
-                    ? `P ${Math.round(day.total_protein_g)}g`
+                  {dayProtein(day) != null
+                    ? `P ${Math.round(Number(dayProtein(day)))}g`
                     : ''}
                 </Text>
               ) : null}
-              <TextInput
-                style={styles.dayNotesInput}
-                placeholder="Day notes (optional)"
-                placeholderTextColor={colors.textMuted}
-                value={day.notes || ''}
-                onChangeText={(t) => updateDay(dIdx, { notes: t })}
-                multiline
-                accessibilityLabel={`Day ${dIdx + 1} notes`}
-              />
               {(day.meals || []).map((meal, mIdx) => (
                 <View key={`meal-${mIdx}`} style={styles.mealCard}>
                   <View style={styles.mealHeader}>
                     <TextInput
-                      style={styles.mealTodInput}
-                      value={meal.time_of_day || ''}
-                      onChangeText={(t) =>
-                        updateMeal(dIdx, mIdx, { time_of_day: t })
-                      }
-                      placeholder="Time (breakfast/lunch/…)"
-                      placeholderTextColor={colors.textMuted}
-                      accessibilityLabel={`Meal ${mIdx + 1} time of day`}
-                    />
-                    <TextInput
                       style={styles.mealNameInput}
-                      value={meal.name || ''}
-                      onChangeText={(t) => updateMeal(dIdx, mIdx, { name: t })}
-                      placeholder="Meal name"
+                      value={meal.slot ?? meal.time_of_day ?? ''}
+                      onChangeText={(t) => updateMeal(dIdx, mIdx, { slot: t })}
+                      placeholder="Meal (breakfast, lunch, dinner, snack)"
                       placeholderTextColor={colors.textMuted}
-                      accessibilityLabel={`Meal ${mIdx + 1} name`}
+                      accessibilityLabel={`Day ${dIdx + 1} meal ${mIdx + 1}`}
+                      testID={`mealplan-slot-${dIdx}-${mIdx}`}
                     />
                   </View>
                   {(meal.items || []).map((item, iIdx) => (
@@ -340,10 +367,11 @@ export default function AIMealPlanDraftScreen() {
                       <View style={styles.itemRowGroup}>
                         <TextInput
                           style={styles.itemPortionInput}
-                          value={item.portion || ''}
+                          value={item.serving ?? item.portion ?? ''}
                           onChangeText={(t) =>
-                            updateItem(dIdx, mIdx, iIdx, { portion: t })
+                            updateItem(dIdx, mIdx, iIdx, { serving: t })
                           }
+                          testID={`mealplan-serving-${dIdx}-${mIdx}-${iIdx}`}
                           placeholder="Portion"
                           placeholderTextColor={colors.textMuted}
                           accessibilityLabel="Portion"
@@ -602,6 +630,12 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textSecondary,
       marginBottom: 8,
     },
+    notesLabel: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 6,
+    },
     dayNotesInput: {
       backgroundColor: colors.background,
       borderWidth: 1,
@@ -625,17 +659,6 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       gap: 8,
       marginBottom: 8,
-    },
-    mealTodInput: {
-      flex: 1,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 4,
-      paddingVertical: 6,
-      paddingHorizontal: 8,
-      fontSize: 12,
-      color: colors.textSecondary,
     },
     mealNameInput: {
       flex: 2,
