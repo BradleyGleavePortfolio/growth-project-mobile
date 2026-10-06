@@ -23,7 +23,7 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SkeletonList } from '../../ui/skeletons/Skeleton';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import NotificationRow from '../../components/NotificationRow';
@@ -35,20 +35,27 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from '../../services/notificationsApi';
+import { routeInAppNotification } from '../../services/pushTapRouter';
 import type { IoniconName } from '../../types/common';
 
 // ─── Deep-link routing table ──────────────────────────────────────────────────
 // Maps notification.actionScreen to a navigate() call. Keep in sync with
 // README.md#deep-link-routing-table.
+//
+// S-SCHED-2: rows route through the push router's role-aware, allow-listed
+// table first (a client booking row opens Calendar > session, a coach row
+// opens the booking inbox, flag-off destinations land here). Only when the
+// app navigator is not ready does the screen fall back to a direct navigate.
 
-type NavWithNavigate = { navigate: (screen: string, params?: Record<string, string>) => void };
+type NavWithNavigate = Pick<NavigationProp<ParamListBase>, 'navigate'>;
 
-function routeNotification(
+export function routeNotification(
   notification: AppNotification,
   nav: NavWithNavigate,
 ): void {
   const screen = notification.actionScreen;
   if (!screen) return;
+  if (routeInAppNotification(screen, notification.actionParams)) return;
   // Param types are enforced by the navigator param lists. actionScreen values
   // come from a constrained server enum, not user input.
   nav.navigate(screen, notification.actionParams);
@@ -144,7 +151,7 @@ const INITIAL_STATE: State = {
 export default function NotificationCenterScreen() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [state, dispatch] = useReducer(reducer, INITIAL_STATE);
   const loadingMoreRef = useRef(false);
 
@@ -206,12 +213,9 @@ export default function NotificationCenterScreen() {
           // Revert is omitted — the optimistic update is acceptable here.
         }
       }
-      routeNotification(
-        notification,
-        navigation as unknown as NavWithNavigate,
-      );
+      routeNotification(notification, navigation);
     },
-    [navigation.navigate],
+    [navigation],
   );
 
   // Mark all read

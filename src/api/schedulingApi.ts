@@ -39,8 +39,10 @@ import api from '../services/api';
 // ─── Shared enums (mirror backend) ────────────────────────────────────────────
 
 /**
- * Status the backend persists on a CoachingSession. 7 values; matches
- * `SessionStatus` Prisma enum in growth-project-backend.
+ * Status the backend persists on a CoachingSession. 8 values; matches
+ * `SessionStatus` Prisma enum in growth-project-backend. `expired` is a
+ * request the coach did not answer before its clear time (S-SCHED-5); the
+ * server also reads a lapsed request as `expired` before the sweep writes it.
  *
  * The mobile shell's `SessionStatus` in `src/types/sessions.ts` uses a
  * different, 9-value union from the pre-backend scaffold. The mapper
@@ -54,7 +56,8 @@ export type SchedulingSessionStatus =
   | 'canceled'
   | 'no_show'
   | 'completed'
-  | 'pending_provider';
+  | 'pending_provider'
+  | 'expired';
 
 /**
  * Video provider as the backend models it. The mobile shell uses

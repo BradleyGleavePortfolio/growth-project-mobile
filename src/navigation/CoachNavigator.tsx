@@ -73,6 +73,9 @@ import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
 import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEditorScreen';
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
+// S-SCHED — appointment types manager + time off, next to Availability.
+import CoachAppointmentTypesScreen from '../screens/coach/CoachAppointmentTypesScreen';
+import CoachTimeOffScreen from '../screens/coach/CoachTimeOffScreen';
 // Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
 import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
@@ -183,6 +186,9 @@ export type ClientsStackParamList = {
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
+  /** S-SCHED — appointment types (create / edit / archive) and time off. */
+  CoachAppointmentTypes:    { coachId?: string } | undefined;
+  CoachTimeOff:             undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
@@ -387,6 +393,14 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachAppointmentTypes"
+        component={CoachAppointmentTypesScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachTimeOff"
+        component={CoachTimeOffScreen}
       />
       {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
       <ClientsStack.Screen
