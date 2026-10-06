@@ -11,15 +11,17 @@ import { notificationsApi } from '../api';
 
 // C05 item 7 — workout reminders use the client's local timezone, so the
 // device IANA zone is synced to the backend once per change and per account.
-// Backend contract (#609): PATCH /notifications/preferences { timezone }
-// (string, max 64); the backend falls back to its default zone when the
-// value is not a valid IANA zone.
+// Backend contract (#647): PUT /notifications/timezone { timezone, source:
+// 'device' } (string, max 64) stores the zone with provenance; 400
+// TIMEZONE_INVALID for an unknown name. B-NOTIF-6: a backend without that
+// route (404/405) gets PATCH /notifications/preferences { timezone } (#609).
 
 jest.mock('../api', () => ({
-  notificationsApi: { updatePreferences: jest.fn() },
+  notificationsApi: { updatePreferences: jest.fn(), setTimezone: jest.fn() },
 }));
 
-const mockUpdate = notificationsApi.updatePreferences as jest.Mock;
+const mockSend = notificationsApi.setTimezone as jest.Mock;
+const mockPatch = notificationsApi.updatePreferences as jest.Mock;
 
 function token(sub: string): string {
   const b64url = (o: object) =>
@@ -30,7 +32,8 @@ function token(sub: string): string {
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
-  mockUpdate.mockResolvedValue({ data: {} });
+  mockSend.mockResolvedValue({ data: { stored: true } });
+  mockPatch.mockResolvedValue({ data: {} });
 });
 
 describe('timezoneSync', () => {
@@ -51,31 +54,31 @@ describe('timezoneSync', () => {
   it('sends the zone once per account, then only when it changes', async () => {
     const tz = deviceTimezone();
     expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledWith({ timezone: tz });
+    expect(mockSend).toHaveBeenCalledWith(tz);
     expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(`user-a|${tz}`);
     expect(await syncDeviceTimezone(token('user-a'))).toBe(false);
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledTimes(1);
     await AsyncStorage.setItem(TIMEZONE_SYNC_KEY, 'user-a|Pacific/Chatham');
     expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenCalledTimes(2);
   });
 
   it('a second account signing in on the same device syncs its own row', async () => {
     expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
     expect(await syncDeviceTimezone(token('user-b'))).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenCalledTimes(2);
     expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(`user-b|${deviceTimezone()}`);
   });
 
   it('without a readable account it always sends and caches nothing', async () => {
     expect(await syncDeviceTimezone(null)).toBe(true);
     expect(await syncDeviceTimezone('opaque')).toBe(true);
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenCalledTimes(2);
     expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
   });
 
   it('does not cache a failed sync, so it retries next time', async () => {
-    mockUpdate.mockRejectedValueOnce(new Error('offline'));
+    mockSend.mockRejectedValueOnce(new Error('offline'));
     await expect(syncDeviceTimezone(token('user-a'))).rejects.toThrow('offline');
     expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
     expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
@@ -108,13 +111,13 @@ describe('C-312-3: resync when the app returns to the foreground', () => {
     const { appState, emit } = fakeAppState('active');
     installTimezoneResyncOnForeground(async () => token('user-a'), appState);
     await emit('background');
-    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
     await emit('active');
-    expect(mockUpdate).toHaveBeenCalledWith({ timezone: deviceTimezone() });
+    expect(mockSend).toHaveBeenCalledWith(deviceTimezone());
     // A second resume in the same zone sends nothing (stamp matches).
     await emit('inactive');
     await emit('active');
-    expect(mockUpdate).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
   it('active to active is not a resume; signed out sends nothing; unsubscribe stops it', async () => {
@@ -127,24 +130,79 @@ describe('C-312-3: resync when the app returns to the foreground', () => {
     await emit('active');
     await emit('background');
     await emit('active');
-    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
     signedIn = true;
     stop();
     expect(listeners.size).toBe(0);
     await emit('background');
     await emit('active');
-    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 
   it('a failed resync is handed to onError and retried on the next resume', async () => {
     const onError = jest.fn();
-    mockUpdate.mockRejectedValueOnce(new Error('offline'));
+    mockSend.mockRejectedValueOnce(new Error('offline'));
     const { appState, emit } = fakeAppState('background');
     installTimezoneResyncOnForeground(async () => token('user-c'), appState, onError);
     await emit('active');
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     await emit('background');
     await emit('active');
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('B-NOTIF-6: the device zone is stored with provenance', () => {
+  function httpError(status: number) {
+    return Object.assign(new Error(`HTTP ${status}`), { response: { status } });
+  }
+
+  it('sign-in sends PUT /notifications/timezone (source device), not the preferences PATCH', async () => {
+    expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
+    expect(mockSend).toHaveBeenCalledTimes(1);
+    expect(mockSend).toHaveBeenCalledWith(deviceTimezone());
+    expect(mockPatch).not.toHaveBeenCalled();
+  });
+
+  it('a backend without the route (404 or 405) gets the preferences PATCH, and the zone is cached', async () => {
+    for (const status of [404, 405]) {
+      await AsyncStorage.clear();
+      mockSend.mockRejectedValueOnce(httpError(status));
+      expect(await syncDeviceTimezone(token('user-a'))).toBe(true);
+      expect(mockPatch).toHaveBeenLastCalledWith({ timezone: deviceTimezone() });
+      expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBe(`user-a|${deviceTimezone()}`);
+    }
+    expect(mockPatch).toHaveBeenCalledTimes(2);
+  });
+
+  it('a zone the backend rejects (400) is not cached and does not fall back', async () => {
+    mockSend.mockRejectedValueOnce(httpError(400));
+    await expect(syncDeviceTimezone(token('user-a'))).rejects.toThrow('HTTP 400');
+    expect(mockPatch).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
+  });
+
+  it('a failed fallback is not cached either', async () => {
+    mockSend.mockRejectedValueOnce(httpError(404));
+    mockPatch.mockRejectedValueOnce(new Error('offline'));
+    await expect(syncDeviceTimezone(token('user-a'))).rejects.toThrow('offline');
+    expect(await AsyncStorage.getItem(TIMEZONE_SYNC_KEY)).toBeNull();
+  });
+
+  it('a foreground resume uses the same route', async () => {
+    await AsyncStorage.setItem(TIMEZONE_SYNC_KEY, 'user-a|Pacific/Chatham');
+    let listener: ((s: AppStateStatus) => void) | null = null;
+    installTimezoneResyncOnForeground(async () => token('user-a'), {
+      currentState: 'background',
+      addEventListener: (_t, fn) => {
+        listener = fn;
+        return { remove: () => undefined };
+      },
+    });
+    (listener as unknown as (s: AppStateStatus) => void)('active');
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(mockSend).toHaveBeenCalledWith(deviceTimezone());
+    expect(mockPatch).not.toHaveBeenCalled();
   });
 });

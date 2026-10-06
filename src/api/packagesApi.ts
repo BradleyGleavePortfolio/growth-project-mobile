@@ -9,8 +9,9 @@
 //     currency, billing_type ('one_time'|'recurring'), billing_interval
 //     ('week'|'month'|'year'), billing_interval_count, is_active. We map
 //     mobile UI values ('monthly','quarterly','yearly') to backend enums.
-//   • Backend `UpdatePackageDto` accepts only: name, description,
-//     amount_cents, currency, is_active. trial_days/features are TODO.
+//   • Backend `UpdatePackageDto` accepts name, description, amount_cents,
+//     currency, billing_type, billing_interval, billing_interval_count (null
+//     clears the cadence) and is_active. trial_days/features are TODO.
 //   • Backend checkout is `POST /v1/checkout/sessions` with `{ package_id,
 //     success_url, cancel_url }`. URLs must use growthproject://,
 //     com.growthproject.app://, or https:// prefixes.
@@ -70,6 +71,11 @@ export interface CoachPackage {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  /**
+   * When the package went live (backend PR-6 draft/publish lifecycle).
+   * null = draft; undefined = the payload did not carry the field.
+   */
+  publishedAt?: string | null;
 }
 
 export interface PackageCreateInput {
@@ -103,88 +109,6 @@ export interface PackageSubscribersResponse {
   subscribers: PackageSubscriber[];
   totalActive: number;
   monthlyRecurringRevenueCents: number;
-}
-
-// Backend `GET /v1/coach/payments/earnings` returns the raw split-ledger view:
-//   {
-//     summary: { posted_cents, pending_cents, reversed_cents },
-//     entries: SplitLedgerEntry[]
-//   }
-// The mobile screen consumes a normalised `CoachEarningsSummary` derived from
-// that shape — see `adaptEarnings()`. Fields the backend does not yet expose
-// (per-package breakdown, next-payout ETA, last-payout date/amount) are left
-// null so the UI degrades honestly instead of inventing numbers.
-export interface BackendEarningsResponse {
-  summary: {
-    posted_cents: number;
-    pending_cents: number;
-    reversed_cents: number;
-  };
-  entries: Array<{
-    id: string;
-    purchase_id: string;
-    kind: string;
-    payee_user_id: string | null;
-    amount_cents: number;
-    currency: string;
-    status: string;
-    reversed_cents: number;
-    created_at?: string | null;
-    posted_at?: string | null;
-  }>;
-}
-
-export interface CoachEarningsSummary {
-  currency: string;
-  pendingPayoutCents: number;
-  lifetimeNetCents: number;
-  monthToDateNetCents: number;
-  lastPayoutAt: string | null;
-  lastPayoutAmountCents: number | null;
-  nextPayoutEta: string | null;
-  perPackage: Array<{
-    packageId: string;
-    title: string;
-    monthToDateGrossCents: number;
-    activeSubscribers: number;
-  }>;
-}
-
-export function adaptEarnings(raw: BackendEarningsResponse): CoachEarningsSummary {
-  const currency =
-    (raw.entries.find((e) => e.currency)?.currency || 'usd').toLowerCase();
-
-  // Month-to-date net = posted (minus reversed) for entries whose posted_at
-  // (or created_at) falls in the current calendar month. Net for an entry
-  // is amount_cents - reversed_cents when status === 'posted'.
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-  let monthToDateNet = 0;
-  for (const e of raw.entries) {
-    if (e.status !== 'posted') continue;
-    const ts = e.posted_at ?? e.created_at;
-    if (!ts) continue;
-    const t = new Date(ts).getTime();
-    if (isNaN(t) || t < monthStart) continue;
-    monthToDateNet += e.amount_cents - (e.reversed_cents ?? 0);
-  }
-
-  return {
-    currency,
-    pendingPayoutCents: raw.summary.pending_cents ?? 0,
-    // Lifetime net = posted - reversed. The summary already excludes
-    // reversed via posted_cents, but we subtract `reversed_cents` to keep
-    // the screen's "net" framing honest if backend semantics drift.
-    lifetimeNetCents:
-      (raw.summary.posted_cents ?? 0) - (raw.summary.reversed_cents ?? 0),
-    monthToDateNetCents: monthToDateNet,
-    // Backend does not (yet) return payout-cadence metadata. Null tells the
-    // UI to hide those rows rather than render fake values.
-    lastPayoutAt: null,
-    lastPayoutAmountCents: null,
-    nextPayoutEta: null,
-    perPackage: [],
-  };
 }
 
 export interface PublicPackageView {
@@ -411,6 +335,7 @@ export function fromBackend(row: BackendPackageRow): CoachPackage {
     createdAt: row.created_at ?? '',
     updatedAt: row.updated_at ?? '',
     archivedAt: row.archived_at ?? null,
+    ...(row.published_at !== undefined ? { publishedAt: row.published_at } : {}),
   };
 }
 
@@ -453,35 +378,95 @@ interface BackendUpdateBody {
   amount_cents?: number;
   currency?: string;
   billing_type?: 'one_time' | 'recurring';
-  // null clears the cadence (one-time); backend #629 round 4.
+  /** null clears the cadence (a one-time package has none). */
   billing_interval?: 'week' | 'month' | 'year' | null;
-  billing_interval_count?: number;
+  /** null resets the count to 1. */
+  billing_interval_count?: number | null;
   is_active?: boolean;
   // TODO(backend): UpdatePackageDto does not accept trial_days or features.
 }
 
+/**
+ * B-345-1 / B-345-2 (agent 118): a cadence picked after the package was made
+ * reaches the server. The PATCH carries the same billing fields the create
+ * body does, and a one-time price sends explicit nulls so the stored cadence
+ * is cleared (backend B-629-4), which also lets a recurring package become
+ * free in one PATCH.
+ */
 export function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
   const out: BackendUpdateBody = {};
   if (input.title !== undefined) out.name = input.title;
   if (input.description !== undefined) out.description = input.description;
   if (input.priceCents !== undefined) out.amount_cents = input.priceCents;
+  // #321 (B-321-2): the currency is sent lower-case, like the create body.
   if (input.currency !== undefined) out.currency = input.currency.toLowerCase();
-  // #321 (B-321-3): a billing change reaches the backend. Callers pass
-  // billingInterval only when the coach changed it (see the edit screen).
+  // #321 (B-321-3): a billing change reaches the backend. The edit screen
+  // passes billingInterval only when the coach changed it; the setup wizard
+  // always passes the billing the coach picked.
   if (input.billingInterval !== undefined) {
     out.billing_type = BILLING_TYPE_FOR_INTERVAL[input.billingInterval];
     if (input.billingInterval === 'one_time') {
       out.billing_interval = null;
+      out.billing_interval_count = null;
     } else {
-      const fields = toBackendIntervalFields(input.billingInterval, input.intervalCount);
-      if (fields.billing_interval) out.billing_interval = fields.billing_interval;
-      if (fields.billing_interval_count != null) {
-        out.billing_interval_count = fields.billing_interval_count;
-      }
+      const f = toBackendIntervalFields(input.billingInterval, input.intervalCount);
+      out.billing_interval = f.billing_interval ?? null;
+      out.billing_interval_count = f.billing_interval_count ?? null;
     }
   }
   if (input.status !== undefined) out.is_active = input.status === 'active';
   return out;
+}
+
+/** The server row did not take the price or billing the app sent. */
+export const PACKAGE_UPDATE_NOT_APPLIED = 'PACKAGE_UPDATE_NOT_APPLIED';
+
+/**
+ * B-345-2: the PATCH answer is the package as the server now stores it. When
+ * the app sent a billing choice, the row must carry exactly that price and
+ * billing type (and, for a recurring price, that cadence) before anything
+ * reports it as saved. A row that disagrees,
+ * or that does not say, fails closed with PACKAGE_UPDATE_NOT_APPLIED (an older
+ * server that ignores a field must never look like a saved change).
+ */
+export function pricingAppliedMismatch(
+  sent: BackendUpdateBody,
+  row: BackendPackageRow | null | undefined,
+): string | null {
+  if (sent.billing_type === undefined) return null;
+  if (!row || typeof row !== 'object') return 'row';
+  if (sent.amount_cents !== undefined && row.amount_cents !== sent.amount_cents) {
+    return 'amount_cents';
+  }
+  if (row.billing_type !== sent.billing_type) return 'billing_type';
+  // One-time: billing_type alone decides how a client pays; a leftover cadence
+  // on the row is never charged (the server also clears it, B-629-4).
+  if (sent.billing_type === 'one_time') return null;
+  if ((row.billing_interval ?? row.interval) !== sent.billing_interval) {
+    return 'billing_interval';
+  }
+  const count = row.billing_interval_count ?? row.interval_count;
+  return count === sent.billing_interval_count ? null : 'billing_interval_count';
+}
+
+function notAppliedError(field: string): Error {
+  return Object.assign(new Error('package update not applied'), {
+    response: {
+      status: 409,
+      data: { code: PACKAGE_UPDATE_NOT_APPLIED, field },
+    },
+  });
+}
+
+/**
+ * True only for a package a client can actually buy or join: active, not
+ * archived and published. A draft (published_at null) or archived package is
+ * not live. Rows from a payload without `published_at` fall back to status.
+ */
+export function isLivePackage(p: CoachPackage): boolean {
+  if (p.status !== 'active' || p.archivedAt) return false;
+  if (p.publishedAt === undefined) return true;
+  return typeof p.publishedAt === 'string' && p.publishedAt.length > 0;
 }
 
 // ─── coach API ──────────────────────────────────────────────────────────────
@@ -522,17 +507,22 @@ export const coachPackagesApi = {
     input: PackageUpdateInput,
     idempotencyKey?: string,
   ) => {
+    const body = toBackendUpdate(input);
     const res = await api.patch<BackendPackageRow>(
       `/v1/coach/packages/${encodeURIComponent(id)}`,
-      toBackendUpdate(input),
+      body,
       idemHeaders(idempotencyKey),
     );
+    const mismatch = pricingAppliedMismatch(body, res?.data);
+    if (mismatch) throw notAppliedError(mismatch);
     return { ...res, data: fromBackend(res.data) };
   },
 
-  // Put a draft on sale (`POST /v1/coach/packages/:id/publish`). The backend
-  // applies the $19.99 floor to a package that was never on sale and answers
-  // PACKAGE_PRICE_BELOW_MINIMUM / PACKAGE_ARCHIVED with a code. Idempotent.
+  // Put a draft on sale (`POST /v1/coach/packages/:id/publish`), the same
+  // route the setup wizard calls (coachSetupApi.publishPackage; B-347-3 "Make
+  // <name> live" in the editor). The backend applies the $19.99 floor to a
+  // package that was never on sale and answers PACKAGE_PRICE_BELOW_MINIMUM /
+  // PACKAGE_ARCHIVED with a code. Idempotent.
   publish: async (id: string, idempotencyKey?: string) => {
     const res = await api.post<BackendPackageRow>(
       `/v1/coach/packages/${encodeURIComponent(id)}/publish`,
@@ -574,16 +564,8 @@ export const coachPackagesApi = {
       `/v1/coach/packages/${encodeURIComponent(id)}/subscribers`,
     ),
 
-  // Backend route: `GET /v1/coach/payments/earnings`.
-  // Returns `{ summary: { posted_cents, pending_cents, reversed_cents },
-  // entries: SplitLedgerEntry[] }`. We adapt to the mobile `CoachEarningsSummary`
-  // shape here so the screen does not have to know about the raw ledger.
-  earnings: async () => {
-    const res = await api.get<BackendEarningsResponse>(
-      '/v1/coach/payments/earnings',
-    );
-    return { ...res, data: adaptEarnings(res.data) };
-  },
+  // C-332-2: the old split-ledger earnings client is gone; every coach
+  // money figure comes from TGP Money (src/api/coachMoneyApi.ts).
 };
 
 // ─── public / client-facing API ─────────────────────────────────────────────

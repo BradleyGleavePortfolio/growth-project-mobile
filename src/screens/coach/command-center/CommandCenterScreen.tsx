@@ -23,6 +23,7 @@ import AtRiskScreen from './AtRiskScreen';
 import WinStreaksScreen from './WinStreaksScreen';
 import InboxScreen from './InboxScreen';
 import ActionQueueScreen from './ActionQueueScreen';
+import CoachHomeCards from './CoachHomeCards';
 
 export type CommandCenterTab =
   | 'overview'
@@ -64,6 +65,7 @@ export default function CommandCenterScreen({
             onNavigateToWinStreaks={() => setActiveTab('win-streaks')}
             onNavigateToInbox={() => setActiveTab('inbox')}
             onNavigateToActionQueue={() => setActiveTab('action-queue')}
+            header={<CoachHomeCards />}
           />
         );
       case 'at-risk':

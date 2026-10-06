@@ -75,7 +75,13 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
-import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
+import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
+import {
+  dunningGenerationOf,
+  dunningLockoutStore,
+  isLockedDunningResponse,
+  stampDunningGeneration,
+} from '../entitlements/dunning/dunningLockoutStore';
 import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
@@ -108,6 +114,10 @@ const API_BASE = env.API_URL;
 const SUPABASE_URL = env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
 
+/** error.message for a 403 LOCKED_DUNNING (payment lockout); exported for tests. */
+export const LOCKED_DUNNING_MESSAGE =
+  'Your plan is paused because of a payment problem, so this is not available right now. The payment screen shows what happened and what to do next.';
+
 const api = axios.create({
   baseURL: API_BASE,
   timeout: 30000, // 30sec — Fly.io free tier cold start can take up to 25sec
@@ -118,6 +128,10 @@ const api = axios.create({
 // Security: token now comes from SecureStore (iOS Keychain / Android Keystore)
 // via the secureStorage adapter, not plain AsyncStorage.
 api.interceptors.request.use(async (config) => {
+  // B-352-1: the auth generation this request starts under, read before the
+  // token await, so a payment-lockout 403 answered after a sign-out or an
+  // account switch is dropped instead of locking the next account.
+  stampDunningGeneration(config);
   const token = await readTokenForRequest(config as RetryableConfig);
   // Mobile #331 Sol A-331-4: a request bound to an account (destructive
   // Roman chat deletes, and the reads that offer them) goes out only with a
@@ -365,6 +379,24 @@ api.interceptors.response.use(
     // Do NOT log the user out; just surface a friendly message.
     if (!error.response) {
       error.message = 'Cannot reach server. Please check your connection and try again.';
+      return Promise.reject(error);
+    }
+
+    // 403 LOCKED_DUNNING — Smart Dunning v2 Day-10 payment lockout. Report
+    // it once to the app-wide store so DunningLockoutProvider shows the single
+    // calm lockout screen; individual screens never render their own error
+    // for it. The store drops it when the request started under a retired
+    // auth generation (B-352-1). The message is specific and true for both
+    // lock kinds (a failed payment, or a bank dispute or inquiry, where a
+    // new card does not help), so any screen that surfaces error.message
+    // still says what happened and where the next step is (C-352-4).
+    if (isLockedDunningResponse(error.response.status, error.response.data)) {
+      dunningLockoutStore.reportLocked({
+        requestId: extractRequestId(error),
+        requestUrl: (error.config as { url?: string } | undefined)?.url,
+        generation: dunningGenerationOf(error.config),
+      });
+      error.message = LOCKED_DUNNING_MESSAGE;
       return Promise.reject(error);
     }
 
@@ -920,6 +952,13 @@ export const notificationsApi = {
   getPreferences: () => api.get('/notifications/preferences'),
   updatePreferences: (data: Record<string, unknown>) =>
     api.patch('/notifications/preferences', data),
+  // B-NOTIF-6: the device zone with provenance (backend #647). Quiet hours
+  // (21:00-08:00) and booking times in notifications use it.
+  setTimezone: (timezone: string) =>
+    api.put<{ timezone: string | null; stored: boolean }>('/notifications/timezone', {
+      timezone,
+      source: 'device',
+    }),
 };
 
 export const communityApi = {

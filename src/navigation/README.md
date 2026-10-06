@@ -122,7 +122,7 @@ New screen names added to `HomeStackParamList`:
 | Name | Screen | Purpose |
 | --- | --- | --- |
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
-| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 
 The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
 
@@ -135,7 +135,7 @@ New screen names added to `ClientsStackParamList`:
 | Name | Screen | Purpose |
 | --- | --- | --- |
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
-| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 
 ### Unread count polling
 
@@ -222,3 +222,7 @@ the client falls back to the local AsyncStorage flag (fail-open).
 ### Roman chat history routes (backend #635)
 
 `RomanConversations` (no params) and `RomanConversation` (`{ id, ownerId, startedAt, surface, messageCount }`) are registered in the client More stack (`ClientNavigator.tsx`) and the coach Settings stack (`CoachNavigator.tsx`), next to `RomanChat`, but NOT behind `featureFlags.romanChat`: finding and deleting Roman chats must never depend on the chat flag. See `src/screens/settings/README.md`. Pinned by `src/navigation/__tests__/romanConversationsReachable.test.ts`.
+
+## Payment lockout (S-DUNNING)
+
+Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockoutProvider` (see `src/entitlements/dunning/README.md`). The provider uses the module-level `navigationRef` to read the focused route and to open `MoreTab > DataExport`, `MoreTab > DeleteAccount` and `Home > Messages` from the lockout screen.

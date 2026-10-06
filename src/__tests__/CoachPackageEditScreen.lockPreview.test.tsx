@@ -494,17 +494,19 @@ describe('CoachPackageEditScreen — billing edits and publishing', () => {
     expect(input.intervalCount).toBeUndefined();
   });
 
-  it('a draft shows Publish; publishing calls the API and says it is on sale', async () => {
+  // Main refresh (B-WIZ6-122): the one publish path is the wizard train's
+  // "Make <name> live" (B-347-3/4); S-FEE keeps publish/unpublish behind it.
+  it('a draft shows Make live; publishing calls the API and says it is live', async () => {
     mockPublish.mockResolvedValue({ data: pkg({ status: 'active' }) });
     const props = makeProps(pkg({ status: 'draft' }));
-    const { getByLabelText, getByTestId } = await render(
+    const { getByLabelText, getByText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    expect(getByTestId('package-publish-state').props.children).toMatch(/^Draft\./);
-    await fireEvent.press(getByLabelText('Publish package'));
+    expect(getByText(/^Strength Builder is saved as a draft\./)).toBeTruthy();
+    await fireEvent.press(getByLabelText('Make Strength Builder live'));
     await waitFor(() => expect(mockPublish).toHaveBeenCalledWith('pkg_1'));
     await waitFor(() =>
-      expect((Alert.alert as jest.Mock).mock.calls.some((c) => c[0] === 'Package published')).toBe(true),
+      expect((Alert.alert as jest.Mock).mock.calls.some((c) => c[0] === 'Package is live')).toBe(true),
     );
     expect(getByLabelText('Unpublish package')).toBeTruthy();
   });
@@ -517,7 +519,7 @@ describe('CoachPackageEditScreen — billing edits and publishing', () => {
     const { getByLabelText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    await fireEvent.press(getByLabelText('Publish package'));
+    await fireEvent.press(getByLabelText('Make Strength Builder live'));
     await waitFor(() => {
       const c = (Alert.alert as jest.Mock).mock.calls.find((x) => x[0] === 'Check the price');
       // C-321-7: the draft is monthly, so the copy does not offer $0.
@@ -533,7 +535,7 @@ describe('CoachPackageEditScreen — billing edits and publishing', () => {
     );
     await fireEvent.press(getByLabelText('Unpublish package'));
     await waitFor(() => expect(mockUnpublish).toHaveBeenCalledWith('pkg_1'));
-    expect(getByLabelText('Publish package')).toBeTruthy();
+    expect(getByLabelText('Make Strength Builder live')).toBeTruthy();
   });
 });
 
@@ -584,8 +586,8 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
     await fireEvent.changeText(screen.getByDisplayValue('19.99'), '50.00');
-    expect(screen.getByTestId('package-publish-state').props.children).toBe(SAVE_BEFORE_PUBLISH);
-    const publish = screen.getByLabelText('Publish package');
+    expect(screen.getByTestId('package-edit-publish-unsaved').props.children).toBe(SAVE_BEFORE_PUBLISH);
+    const publish = screen.getByLabelText('Make Strength Builder live');
     expect(publish.props.accessibilityState).toMatchObject({ disabled: true });
     await fireEvent.press(publish);
     expect(mockPublish).not.toHaveBeenCalled();
@@ -593,11 +595,11 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     await fireEvent.press(screen.getByLabelText('Save changes'));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
     await waitFor(() =>
-      expect(screen.getByLabelText('Publish package').props.accessibilityState).toMatchObject({
+      expect(screen.getByLabelText('Make Strength Builder live').props.accessibilityState).toMatchObject({
         disabled: false,
       }),
     );
-    await fireEvent.press(screen.getByLabelText('Publish package'));
+    await fireEvent.press(screen.getByLabelText('Make Strength Builder live'));
     await waitFor(() => expect(mockPublish).toHaveBeenCalledWith('pkg_1'));
   });
 
@@ -612,7 +614,7 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     const { getByLabelText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    await fireEvent.press(getByLabelText('Publish package'));
+    await fireEvent.press(getByLabelText('Make Strength Builder live'));
     await waitFor(() => {
       const c = (Alert.alert as jest.Mock).mock.calls.find((x) => x[0] === 'Check the package details');
       expect(c?.[1]).toBe(
@@ -627,7 +629,7 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     const { getByLabelText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    await fireEvent.press(getByLabelText('Publish package'));
+    await fireEvent.press(getByLabelText('Make Strength Builder live'));
     await waitFor(() =>
       expect(
         (Alert.alert as jest.Mock).mock.calls.some((c) => c[0] === 'Could not publish the package'),

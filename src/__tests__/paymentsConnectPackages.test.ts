@@ -31,7 +31,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
-import { coachEarningsApi } from '../api/coachEarningsApi';
 import { coachPackagesApi } from '../api/packagesApi';
 import api from '../services/api';
 
@@ -503,92 +502,36 @@ describe('coachPackagesApi (package CRUD)', () => {
   });
 });
 
-// ── 2b) coachEarningsApi — earnings/payout/Stripe-dashboard rehomed ────────
-// PR-5 supersede: these methods previously lived on `coachPaymentsApi`
-// alongside package CRUD; they are now on their own client. Losing any of
-// them would be a P0 (the CoachEarningsScreen depends on every one).
-describe('coachEarningsApi', () => {
-  it('getPayoutReadiness GETs /v1/coach/payouts/readiness', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        onboarded: true,
-        charges_enabled: true,
-        payouts_enabled: false,
-        requirements_due: ['external_account'],
-        next_payout_eta: null,
-        dashboard_available: true,
-      },
+// ── 2b) retired coachEarningsApi ───────────────────────────────────────────
+// S-COACH-MOB-2: coachEarningsApi called six routes that never shipped
+// (/v1/coach/earnings, /payouts/readiness, /payouts, /reconciliation,
+// /refunds, /dashboard-link). It is deleted; TGP Money (coachMoneyApi) reads
+// the live Money and Connect routes instead.
+describe('retired earnings client', () => {
+  it('no source file calls the six routes that never shipped', () => {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    const root = path.join(__dirname, '..');
+    const dead = [
+      "'/v1/coach/earnings'",
+      "'/v1/coach/payouts/readiness'",
+      '/v1/coach/payouts?limit',
+      "'/v1/coach/reconciliation'",
+      "'/v1/coach/refunds'",
+      "'/v1/coach/dashboard-link'",
+    ];
+    const walk = (dir: string): string[] =>
+      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+        const p = path.join(dir, e.name);
+        if (e.isDirectory()) return e.name === '__tests__' ? [] : walk(p);
+        return /\.(ts|tsx)$/.test(e.name) ? [p] : [];
+      });
+    const hits = walk(root).filter((f) => {
+      const src = fs.readFileSync(f, 'utf8');
+      return dead.some((d) => src.includes(d));
     });
-    const res = await coachEarningsApi.getPayoutReadiness();
-    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/payouts/readiness');
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.requirements_due).toContain('external_account');
-    }
-  });
-
-  it('getRecentPayouts GETs /v1/coach/payouts with a limit', async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: [] });
-    await coachEarningsApi.getRecentPayouts(10);
-    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/payouts?limit=10');
-  });
-
-  it('getRefunds GETs /v1/coach/refunds', async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: [] });
-    await coachEarningsApi.getRefunds();
-    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/refunds');
-  });
-
-  it('earnings response carries 2% platform + 5% head-coach fee fields', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        currency: 'USD',
-        gross_mtd: 5000,
-        net_mtd: 4650,
-        stripe_fees_mtd: 200,
-        platform_fees_mtd: 100, // 2% of 5000
-        head_coach_fees_mtd: 50, // 5% override
-        gross_lifetime: 50000,
-        net_lifetime: 46500,
-        sub_coach_breakdown: [],
-        generated_at: '2026-05-15T00:00:00Z',
-      },
-    });
-    const res = await coachEarningsApi.getEarnings();
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      // 2% of gross.
-      expect(res.data.platform_fees_mtd).toBeCloseTo(res.data.gross_mtd * 0.02);
-      // Head coach override is non-negative.
-      expect(res.data.head_coach_fees_mtd).toBeGreaterThanOrEqual(0);
-    }
-  });
-
-  it('reconciliation surfaces drift state + summary verbatim', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'drift',
-        drift_amount: 12.34,
-        currency: 'USD',
-        window_start: '2026-05-01T00:00:00Z',
-        window_end: '2026-05-15T00:00:00Z',
-        summary: 'Ledger drift detected — contact support.',
-      },
-    });
-    const res = await coachEarningsApi.getReconciliation();
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.state).toBe('drift');
-      expect(res.data.summary).toMatch(/contact support/);
-    }
-  });
-
-  it('createDashboardLink POSTs /v1/coach/dashboard-link', async () => {
-    mockedApi.post.mockResolvedValueOnce({
-      data: { url: 'https://connect.stripe.com/express/abc', expires_at: '...' },
-    });
-    await coachEarningsApi.createDashboardLink();
-    expect(mockedApi.post).toHaveBeenCalledWith('/v1/coach/dashboard-link', {});
+    expect(hits).toEqual([]);
+    expect(fs.existsSync(path.join(root, 'api', 'coachEarningsApi.ts'))).toBe(false);
   });
 });
 
@@ -603,14 +546,16 @@ describe('navigation wiring', () => {
     expect(clientNav).toMatch(/name="CheckoutReturn"\s+component=\{CheckoutReturnScreen\}/);
   });
 
-  it('CoachNavigator registers CoachPackagesList + CoachEarnings', () => {
+  it('CoachNavigator registers CoachPackagesList + Money, and the old Earnings route redirects to Money', () => {
     // PR-5 supersede: the live coach package surface is the sectioned editor
     // (CoachPackagesListScreen → CoachPackageEditScreen → CoachPackageSubscribersScreen).
     // The legacy single-screen `CoachPackages` route was removed.
     expect(coachNav).toMatch(/name="CoachPackagesList"/);
-    expect(coachNav).toMatch(/name="CoachEarnings"/);
     expect(coachNav).toMatch(/component=\{CoachPackagesListScreen\}/);
-    expect(coachNav).toMatch(/component=\{CoachEarningsScreen\}/);
+    expect(coachNav).toMatch(/name="CoachMoney" component=\{MoneyScreen\}/);
+    expect(coachNav).toMatch(/name="CoachEarnings"\s+component=\{MoneyRedirect\}/);
+    expect(coachNav).toMatch(/name="CoachBusinessMetrics"\s+component=\{MoneyRedirect\}/);
+    expect(coachNav).not.toMatch(/CoachEarningsScreen\b(?!\s*exists)/);
   });
 
   it('CoachNavigator no longer registers the deleted CoachPackages route', () => {
@@ -630,11 +575,12 @@ describe('navigation wiring', () => {
     expect(membership).toMatch(/VIEW COACHING PLANS/i);
   });
 
-  it('Coach Settings exposes Packages (Surface B) + Earnings entry points', () => {
+  it('Coach Settings exposes Packages (Surface B) + Money entry points', () => {
     const settings = readSrc('screens/coach/SettingsScreen.tsx');
     // PR-5: the single coach packages entry now lands on Surface B's list screen.
     expect(settings).toMatch(/navigation\.navigate\('CoachPackagesList'\)/);
-    expect(settings).toMatch(/navigation\.navigate\('CoachEarnings'\)/);
+    expect(settings).toMatch(/navigation\.navigate\('CoachMoney'\)/);
+    expect(settings).not.toMatch(/navigation\.navigate\('CoachEarnings'\)/);
   });
 
   it('Coach Settings has exactly one entry to a coach packages surface', () => {
@@ -651,23 +597,21 @@ describe('navigation wiring', () => {
 });
 
 // ── 4) Fee transparency copy ───────────────────────────────────────────────
-// PR-5 supersede: the legacy CoachPackagesScreen carried an inline 2% fee
-// hint. The surviving Surface B editor delegates fee transparency to the
-// dedicated Earnings + Business Metrics screens (single source of truth),
-// so the per-screen fee-copy assertions live there now.
+// S-COACH-MOB-2: fee transparency lives in TGP Money's breakdown
+// (price - card processing - TGP 2% (- head coach share) = net).
 describe('fee split copy', () => {
-  const earnings = readSrc('screens/coach/CoachEarningsScreen.tsx');
-  const metrics = readSrc('screens/coach/CoachBusinessMetricsScreen.tsx');
+  const copy = readSrc('lib/money/moneyCopy.ts');
 
-  it('Earnings screen shows the documented 2% platform fee row', () => {
-    expect(earnings).toMatch(/Growth Project[^\n]*2%/);
+  it('Money breakdown shows the documented 2% TGP fee row', () => {
+    expect(copy).toMatch(/TGP fee \(2%\)/);
   });
 
-  it('Earnings screen shows the 5% head coach / gym override row', () => {
-    expect(earnings).toMatch(/Head coach[^\n]*5%|5%[^\n]*head coach/i);
+  it('Money breakdown shows the head coach share row', () => {
+    expect(copy).toMatch(/Head coach share/);
   });
 
-  it('Business metrics screen clarifies fees are deducted on the Earnings screen', () => {
-    expect(metrics).toMatch(/2%[^\n]*TGP|5%[^\n]*head coach|Earnings screen/i);
+  it('Money breakdown names card processing and the net result', () => {
+    expect(copy).toMatch(/Card processing \(Stripe\)/);
+    expect(copy).toMatch(/Net to you/);
   });
 });
