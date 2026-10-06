@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { AxiosResponse } from 'axios';
@@ -50,9 +50,16 @@ jest.mock('expo-video', () => {
   const ReactLib = require('react');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { View } = require('react-native');
+  const player = {
+    loop: false,
+    addListener: jest.fn((_event: string, listener: (event: { status: string }) => void) => {
+      mockVideoStatusListener = listener;
+      return { remove: jest.fn() };
+    }),
+  };
   return {
     __esModule: true,
-    useVideoPlayer: () => ({ loop: false }),
+    useVideoPlayer: () => player,
     VideoView: (props: { testID?: string }) =>
       ReactLib.createElement(View, { testID: props.testID ?? 'video-view' }),
   };
@@ -102,6 +109,7 @@ import type {
 } from '../types/exerciseCatalog';
 
 const mockedGet = api.get as jest.Mock;
+let mockVideoStatusListener: (event: { status: string }) => void;
 
 function ok<T>(data: T): AxiosResponse<T> {
   return {
@@ -138,6 +146,28 @@ beforeEach(() => {
 });
 
 describe('exerciseCatalogApi', () => {
+  test('resolves a seed workout id through the existing exercise route on catalog 404', async () => {
+    mockedGet.mockRejectedValueOnce({ response: { status: 404 } });
+    mockedGet.mockResolvedValueOnce(ok({
+      id: 'seed:push-001', name: 'Barbell Bench Press', bodyPart: 'chest',
+      target: 'pectorals', equipment: 'barbell', secondaryMuscles: ['triceps'],
+      instructions: ['Lower under control.'], gifUrl: '', video_url: null,
+    }));
+    const response = await exerciseCatalogApi.getDetail('seed:push-001');
+    expect(mockedGet).toHaveBeenLastCalledWith('/exercises/seed%3Apush-001');
+    expect(response.data).toMatchObject({
+      name: 'Barbell Bench Press', equipment: ['barbell'],
+      instructions: ['Lower under control.'], playbackUrl: null,
+    });
+  });
+
+  test('never falls back around a catalog access denial', async () => {
+    mockedGet.mockRejectedValueOnce({ response: { status: 403 } });
+    await expect(exerciseCatalogApi.getDetail('private-1')).rejects.toMatchObject({
+      response: { status: 403 },
+    });
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+  });
   test('list() builds the query string with every supplied filter', async () => {
     mockedGet.mockResolvedValueOnce(ok(SAMPLE_LIST));
     await exerciseCatalogApi.list({
@@ -206,9 +236,40 @@ describe('ExerciseLibraryScreen', () => {
     // A list row from the mocked response.
     await findByText('Barbell Bench Press');
   });
+
+  test('uses the production-safe default page size and the seeded filter values', async () => {
+    mockedGet.mockResolvedValue(ok(SAMPLE_LIST));
+    const screen = await renderInNav(ExerciseLibraryScreen);
+    await screen.findByText('Barbell Bench Press');
+    expect(mockedGet.mock.calls[0][0]).toBe('/exercise-catalog');
+    await fireEvent.press(screen.getByText('pectorals'));
+    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercise-catalog?primaryMuscle=pectorals'));
+    await screen.findByText('Barbell Bench Press');
+    await fireEvent.press(screen.getByText('body weight'));
+    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercise-catalog?primaryMuscle=pectorals&equipment=body%20weight'));
+  });
+
+  test('shows a specific retry when the catalog cannot load', async () => {
+    mockedGet.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(ok(SAMPLE_LIST));
+    const screen = await renderInNav(ExerciseLibraryScreen);
+    await screen.findByText('Exercises did not load. Check your connection and try again.');
+    await fireEvent.press(screen.getByText('Retry'));
+    expect(await screen.findByText('Barbell Bench Press')).toBeTruthy();
+  });
 });
 
 describe('ExerciseDetailScreen', () => {
+  test('keeps instructions visible when a real video fails to load', async () => {
+    mockedGet.mockResolvedValueOnce(ok({
+      ...SAMPLE_EX, playbackUrl: 'https://stream.mux.com/missing.m3u8',
+    }));
+    const screen = await renderInNav(ExerciseDetailScreen, { idOrSlug: 'ex-1' });
+    await screen.findByTestId('exercise-detail-player');
+    await act(async () => mockVideoStatusListener({ status: 'error' }));
+    expect(screen.queryByTestId('exercise-detail-player')).toBeNull();
+    expect(screen.getByText('The demonstration did not load. Follow the instructions below.')).toBeTruthy();
+    expect(screen.getByText('Lie on the bench.')).toBeTruthy();
+  });
   test('shows the "video not yet available" caption when playbackUrl is null', async () => {
     const detail: ExerciseDetail = { ...SAMPLE_EX, playbackUrl: null };
     mockedGet.mockResolvedValueOnce(ok(detail));
