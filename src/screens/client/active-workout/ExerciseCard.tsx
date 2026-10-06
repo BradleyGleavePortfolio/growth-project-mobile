@@ -46,7 +46,14 @@ export function ExerciseCard({
           >
             <Ionicons name="play-circle-outline" size={22} color={colors.textMuted} />
           </HapticPressable>
-          <HapticPressable intent="warning" onPress={() => onRemoveExercise(exIdx)}>
+          <HapticPressable
+            intent="warning"
+            onPress={() => onRemoveExercise(exIdx)}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${exercise.exerciseName}`}
+            testID={`remove-exercise-${exIdx}`}
+          >
             <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>

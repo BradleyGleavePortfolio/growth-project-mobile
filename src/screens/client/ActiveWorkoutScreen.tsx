@@ -10,10 +10,12 @@ import {
   FlatList,
   AppState,
   AppStateStatus,
+  ActivityIndicator,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
@@ -31,6 +33,9 @@ import {
 } from '../../storage/activeWorkoutSession';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { errorMessage } from '../../types/common';
+import { randomUuid } from '../../utils/idempotency';
+import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
+import { assignmentIdempotencyKey, localCalendarDate } from '../../utils/workout/workoutLogging';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -83,6 +88,17 @@ import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback'
 // ~500ms of state if the process is killed mid-set.
 const PERSIST_DEBOUNCE_MS = 500;
 
+// The app always mounts a QueryClientProvider; a few host-wiring tests
+// render this screen without one. useContext runs on every render either
+// way, so hook order is stable.
+function useOptionalQueryClient() {
+  try {
+    return useQueryClient();
+  } catch {
+    return null;
+  }
+}
+
 // R11 D-002: the completion-path logger requires a structured error
 // (name/message/stack). `normalizeError` now lives in ./_completionLogging so
 // the producer and the WorkoutScreen consumer share one normaliser and log an
@@ -124,9 +140,7 @@ export default function ActiveWorkoutScreen() {
   const sessionStartTimeRef = useRef<Date>(new Date());
   // Stable idempotency key generated once at session start. Held in a
   // ref so it can be swapped on resume without re-rendering.
-  const idempotencyKeyRef = useRef<string>(
-    assignmentId ? `${assignmentId}:${Date.now()}` : ''
-  );
+  const idempotencyKeyRef = useRef<string>(assignmentId ? randomUuid() : '');
   // Gates the persistence effect until we've decided whether we are
   // creating a fresh session or restoring a stored one. Without this
   // gate the initial empty `sessionExercises` value would overwrite a
@@ -153,6 +167,9 @@ export default function ActiveWorkoutScreen() {
   const [restActive, setRestActive] = useState(false);
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  // True from the Finish confirmation until the server answers. Blocks a
+  // second Finish (which logged the workout twice) and shows progress.
+  const [saving, setSaving] = useState(false);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
@@ -160,6 +177,7 @@ export default function ActiveWorkoutScreen() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const createWorkout = useCreateWorkout();
+  const queryClient = useOptionalQueryClient();
 
   // Default (fresh) session exercises derived from the routine param.
   // Pulled out so the restore effect can fall back to it cleanly when
@@ -170,9 +188,16 @@ export default function ActiveWorkoutScreen() {
       return routineExs.map((re) => ({
         exerciseId: re.exerciseId,
         exerciseName: re.exerciseName,
-        sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
+        sets: Array.from({ length: re.sets }, () => ({
+          reps: re.reps,
+          // Coach-assigned workouts carry the coach's target weight; start
+          // each set at it so the client only edits what changed.
+          weight: re.weightLbs && re.weightLbs > 0 ? re.weightLbs : 0,
+          completed: false,
+        })),
         restSec: re.restSec,
         workoutPlanExerciseId: re.workoutPlanExerciseId,
+        muscleGroup: re.muscleGroup,
       }));
     } catch (err) {
       // Best-effort parse of the routine JSON on screen mount. An empty
@@ -485,7 +510,23 @@ export default function ActiveWorkoutScreen() {
   };
 
   const removeExercise = (exIdx: number) => {
-    setSessionExercises((prev) => prev.filter((_, i) => i !== exIdx));
+    const target = sessionExercises[exIdx];
+    if (!target) return;
+    const drop = () => setSessionExercises((prev) => prev.filter((_, i) => i !== exIdx));
+    // A mis-tap on the trash icon used to delete an exercise and every set
+    // already logged for it, with no undo. Ask first when there is logged work.
+    if (!target.sets.some((s) => s.completed)) {
+      drop();
+      return;
+    }
+    Alert.alert(
+      `Remove ${target.exerciseName}?`,
+      'The sets logged for this exercise will be removed from this workout.',
+      [
+        { text: 'Keep', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: drop },
+      ],
+    );
   };
 
   const openExerciseDetail = (exercise: SessionExercise) => {
@@ -567,6 +608,7 @@ export default function ActiveWorkoutScreen() {
       {
         exerciseId: data.exerciseId,
         exerciseName: data.exerciseName,
+        muscleGroup: toServerMuscleGroup(data.muscle),
         sets: data.sets.map((s) => ({
           reps: s.reps,
           weight: s.weight,
@@ -587,6 +629,7 @@ export default function ActiveWorkoutScreen() {
   };
 
   const finishWorkout = () => {
+    if (saving) return;
     const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
     if (completedSets === 0) {
       Alert.alert('No sets completed', 'Complete at least one set before finishing.');
@@ -615,6 +658,7 @@ export default function ActiveWorkoutScreen() {
           // background-flush path can't write between this tap and the
           // clear completing.
           finishingRef.current = true;
+          setSaving(true);
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
             persistDebounceRef.current = null;
@@ -726,14 +770,17 @@ export default function ActiveWorkoutScreen() {
           // pushed by the sync engine on the next network-available event.
           createWorkout.mutate(
             {
-              date: new Date().toISOString(),
+              // The server keeps a calendar date (@db.Date). Sending the
+              // client's own calendar day keeps the history card on the day
+              // the client trained instead of the UTC day.
+              date: localCalendarDate(new Date()),
               workout_name: routineName || 'Workout',
               workout_type: 'strength',
               duration_minutes: durationMinutes,
               notes: routineName,
               exercises: completedExercises.map((e) => ({
                 exercise_name: e.exerciseName,
-                muscle_group: 'full_body',
+                muscle_group: toServerMuscleGroup(e.muscleGroup),
                 sets_completed: e.sets.filter((s) => s.completed).length,
                 weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
                 reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
@@ -830,10 +877,15 @@ export default function ActiveWorkoutScreen() {
                       })),
                     })),
                   };
+                  idempotencyKeyRef.current = assignmentIdempotencyKey(idempotencyKeyRef.current);
                   workoutBuilderApi.completeMyAssignment(assignmentId, {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
+                  }).then(() => {
+                    // Refresh the "From your coach" card and the assignment
+                    // detail so a finished workout stops being offered again.
+                    queryClient?.invalidateQueries({ queryKey: ['assignments'] }).catch(() => undefined);
                   }).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
@@ -875,6 +927,7 @@ export default function ActiveWorkoutScreen() {
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
                 HapticService.error();
+                setSaving(false);
                 // The Finish path cleared the persisted session and disabled
                 // future writes by setting finishingRef. If the server save
                 // fails the user is told to retry, but without resetting
@@ -911,9 +964,12 @@ export default function ActiveWorkoutScreen() {
                 // 'pending' and will sync on reconnect. Stay on this screen and
                 // surface a 'Save failed' alert so the user can retry the finish;
                 // we do NOT navigate away here.
+                const reason = (err as { response?: unknown } | null)?.response
+                  ? errorMessage(err, 'The server did not accept the workout.')
+                  : 'No connection.';
                 Alert.alert(
-                  'Save failed',
-                  errorMessage(err) || 'Please try again.',
+                  'Workout not saved yet',
+                  `${reason.replace(/\.?$/, '.')} The sets stay on this screen. Check the connection, then tap Finish again.`,
                 );
               },
             },
@@ -924,10 +980,10 @@ export default function ActiveWorkoutScreen() {
   };
 
   const cancelWorkout = () => {
-    Alert.alert('Cancel Workout?', 'Progress will not be saved.', [
-      { text: 'Keep Going', style: 'cancel' },
+    Alert.alert('Discard this workout?', 'The sets logged in this session will not be saved.', [
+      { text: 'Keep going', style: 'cancel' },
       {
-        text: 'Cancel',
+        text: 'Discard',
         style: 'destructive',
         onPress: async () => {
           // User explicitly abandoned the session — drop the persisted
@@ -990,15 +1046,35 @@ export default function ActiveWorkoutScreen() {
     <View style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <HapticPressable intent="warning" onPress={cancelWorkout}>
+        <HapticPressable
+          intent="warning"
+          onPress={cancelWorkout}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="Discard workout"
+        >
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <View style={styles.topCenter}>
           <Text style={styles.topTitle}>{routineName}</Text>
           <Text style={styles.timerText}>{formatTime(timer)}</Text>
         </View>
-        <HapticPressable intent="success" onPress={finishWorkout} style={styles.finishBtn}>
-          <Text style={styles.finishBtnText}>Finish</Text>
+        <HapticPressable
+          intent="success"
+          onPress={finishWorkout}
+          disabled={saving}
+          style={[styles.finishBtn, saving && { opacity: 0.6 }]}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+          accessibilityLabel={saving ? 'Saving workout' : 'Finish workout'}
+          accessibilityState={{ disabled: saving, busy: saving }}
+          testID="finish-workout"
+        >
+          {saving ? (
+            <ActivityIndicator size="small" color={colors.textOnPrimary} />
+          ) : (
+            <Text style={styles.finishBtnText}>Finish</Text>
+          )}
         </HapticPressable>
       </View>
 

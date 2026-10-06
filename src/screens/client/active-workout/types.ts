@@ -4,6 +4,8 @@ export interface SessionExercise {
   sets: SessionSet[];
   restSec?: number;
   workoutPlanExerciseId?: string;
+  /** Server MuscleGroup value saved with the workout (defaults to full_body). */
+  muscleGroup?: string;
 }
 
 export interface SessionSet {
@@ -19,6 +21,10 @@ export interface RoutineExercise {
   reps: number;
   restSec: number;
   workoutPlanExerciseId?: string;
+  /** Coach target weight (lb) for coach-assigned workouts. */
+  weightLbs?: number;
+  /** Server MuscleGroup value for routine exercises. */
+  muscleGroup?: string;
 }
 
 export interface Exercise {

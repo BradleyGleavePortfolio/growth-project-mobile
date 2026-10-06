@@ -719,6 +719,8 @@ export const workoutApi = {
     api.get(`/workouts?limit=${limit}`),
   getVolume: (period: 'week' | 'month') =>
     api.get(`/workouts/volume?period=${period}`),
+  deleteWorkout: (id: string) =>
+    api.delete(`/workouts/${encodeURIComponent(id)}`),
   getRoutines: () =>
     api.get('/routines'),
   createRoutine: (data: Record<string, unknown>) =>
