@@ -31,8 +31,11 @@
     "deepLinkBanner": "Pairing with the invite from your link…",
     "errors": {
       "notRecognized": "Invite code not recognized. Double-check with your coach.",
+      "revoked": "This code was turned off by your coach. Ask your coach for their current code.",
       "expired": "This invite code has expired. Ask your coach to send a fresh one.",
-      "maxUses": "This invite code has already been used to the maximum number of times.",
+      "maxUses": "This code has been used up. Ask your coach for a new one.",
+      "coachUnavailable": "Your coach is not taking new clients in the app right now. Let them know, then try the code again.",
+      "alreadyPaired": "Your account is already connected to a different coach. Contact support to switch coaches.",
       "network": "Couldn't reach our servers. Check your connection and try again.",
       "tooShort": "Codes are at least 4 characters."
     },

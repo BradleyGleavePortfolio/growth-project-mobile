@@ -13,8 +13,11 @@ import { profileApi, authApi, preferencesApi, notificationsApi } from '../../ser
 
 export type DayOneErrorKind =
   | 'invite_invalid'
+  | 'invite_revoked'
   | 'invite_expired'
   | 'invite_max_uses'
+  | 'coach_unavailable'
+  | 'already_paired'
   | 'network'
   | 'server';
 
@@ -42,15 +45,32 @@ export interface CheckInTime {
 // ─── Retry helper ────────────────────────────────────────────────────────────
 
 interface AxiosLikeError {
-  response?: { status?: number; data?: { reason?: string; message?: string } };
+  response?: { status?: number; data?: { reason?: string; code?: string; message?: string } };
   message?: string;
 }
+
+/**
+ * Attach refusals keyed by the envelope `code` (backend INVITE_ATTACH_ERROR).
+ * A code that exists but cannot take a signup says why (turned off, expired,
+ * signup limit), so the client is never told a real code is "not recognized".
+ */
+const ATTACH_CODE_KINDS: Readonly<Record<string, DayOneErrorKind>> = {
+  code_revoked: 'invite_revoked',
+  code_expired: 'invite_expired',
+  code_exhausted: 'invite_max_uses',
+  coach_not_accepting_clients: 'coach_unavailable',
+  already_attached_to_different_coach: 'already_paired',
+};
 
 function classify(err: unknown): DayOneError {
   const e = err as AxiosLikeError;
   const status = e?.response?.status ?? 0;
   const reason = e?.response?.data?.reason;
+  const code = e?.response?.data?.code;
   const serverMessage = e?.response?.data?.message;
+  if (status >= 400 && status < 500 && typeof code === 'string' && ATTACH_CODE_KINDS[code]) {
+    return { kind: ATTACH_CODE_KINDS[code], serverMessage };
+  }
   if (status === 400 || status === 404 || status === 409 || status === 422) {
     if (reason === 'expired') return { kind: 'invite_expired', serverMessage };
     if (reason === 'max_uses_reached') return { kind: 'invite_max_uses', serverMessage };

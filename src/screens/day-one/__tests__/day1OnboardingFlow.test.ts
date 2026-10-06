@@ -121,6 +121,7 @@ describe('Day-1 i18n bundle', () => {
     expect(STRINGS.coachPairing.errors.notRecognized).toMatch(/[Dd]ouble-check/);
     expect(STRINGS.coachPairing.errors.expired).toMatch(/expired/);
     expect(STRINGS.coachPairing.errors.maxUses).toMatch(/used/);
+    expect(STRINGS.coachPairing.errors.revoked).toMatch(/turned off by your coach/);
     expect(STRINGS.coachPairing.errors.network).toMatch(/connection/);
   });
 

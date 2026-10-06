@@ -42,7 +42,13 @@ export function inviteAttachFailed(data: unknown): boolean {
 
 const MESSAGES: Array<{ test: RegExp; message: string }> = [
   {
-    test: /expired|revoked|inactive_code|code_inactive|disabled/i,
+    // code_revoked: the coach turned the code off (revoke, or a rotation with no grace period).
+    test: /revoked|turned_off/i,
+    message:
+      'That invite code was turned off by your coach. Ask your coach for their current code and enter it below.',
+  },
+  {
+    test: /expired|inactive_code|code_inactive|disabled/i,
     message: 'That invite code has expired. Ask your coach for a new one and enter it below.',
   },
   {
