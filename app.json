@@ -28,7 +28,10 @@
         "NSFaceIDUsageDescription": "Unlock the app and confirm sensitive actions with Face ID",
         "NSHealthShareUsageDescription": "The Growth Project uses your Apple Health data so your coach can personalize training, recovery, and check-ins around real signals (sleep, heart rate, workouts).",
         "NSHealthUpdateUsageDescription": "The Growth Project may write workouts you log to Apple Health so all your activity stays in one place.",
-        "NSMotionUsageDescription": "The Growth Project reads motion and step activity so your coach can track daily movement and progress."
+        "NSMotionUsageDescription": "The Growth Project reads motion and step activity so your coach can track daily movement and progress.",
+        "NSCameraUsageDescription": "The Growth Project uses the camera only when you choose to take a photo to send in a support chat.",
+        "NSPhotoLibraryUsageDescription": "The Growth Project opens your photo library only when you choose a photo to send in a support chat.",
+        "NSPhotoLibraryAddUsageDescription": "The Growth Project saves an image to your photo library only when you choose Save Image, for example a progress card or an invite QR code."
       },
       "associatedDomains": [
         "applinks:app.trygrowthproject.com"
@@ -46,7 +49,8 @@
       "versionCode": 5,
       "blockedPermissions": [
         "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -143,6 +147,7 @@
         "expo-audio",
         {
           "microphonePermission": "The Growth Project uses your microphone only while you record a voice note for your coaching community.",
+          "recordAudioAndroid": false,
           "enableBackgroundPlayback": false,
           "enableBackgroundRecording": false
         }
