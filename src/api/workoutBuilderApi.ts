@@ -101,6 +101,11 @@ export interface ClientWorkoutAssignment {
 
 export interface ClientWorkoutAssignmentWithPlan extends ClientWorkoutAssignment {
   workout_plan: WorkoutPlan;
+  /**
+   * Set counts the coach approved from Roman's Action Queue, by exercise
+   * `order` (B-ROMANADJ-125). Absent on servers without that change.
+   */
+  roman_adjusted_sets?: Array<{ order: number; sets: number }>;
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
