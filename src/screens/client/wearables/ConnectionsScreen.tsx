@@ -16,9 +16,10 @@
  *   • a primary action — Connect / Reconnect / Disconnect.
  *
  * Data comes from `useWearableConnections` (cache key ['wearable-connections']).
- * The list is the join of the user's existing connections with the full
- * provider catalog so providers the user has not connected yet still appear
- * with a Connect button. Tapping Connect / Reconnect opens
+ * The list is the join of the user's existing connections with the sources
+ * this phone can connect (AUDIT-11-125: Apple Health on iPhone, Health Connect
+ * and Samsung Health on Android), so those appear with a Connect button even
+ * before a first connect. Tapping Connect / Reconnect opens
  * `ConnectProviderSheet`; Disconnect asks first (DisconnectConfirmDialog, S14 round 4b) and then calls the soft-disconnect mutation.
  *
  * States: loading skeleton, error-with-retry, and a per-row pending state on
@@ -144,14 +145,30 @@ interface ProviderRow {
 }
 
 /**
- * Build the flat row list: every provider in the catalog, enriched with the
- * user's connection status when one exists. Connected/expired/error rows sort
- * first (they need attention or are active); not-connected rows follow. Within
- * a tier, alphabetical by display name for stable ordering.
+ * AUDIT-11-125: true when this phone can connect the provider itself: Apple
+ * Health on an iPhone, Health Connect (and Samsung Health, which shares
+ * through it) on Android. The cloud services in the catalog (Garmin, Oura,
+ * WHOOP, ...) are not switched on for launch, so offering Connect for them, or
+ * for the other platform's store, only ever ended in "isn't switched on yet".
+ */
+function connectableHere(provider: WearableProvider, here: WearableProvider | null): boolean {
+  if (here == null) return false;
+  if (provider === here) return true;
+  return here === 'HEALTH_CONNECT' && provider === 'SAMSUNG_HEALTH';
+}
+
+/**
+ * Build the flat row list: the sources this phone can connect, plus any other
+ * provider the person already has a connection for (so it can still be
+ * reconnected or disconnected), enriched with the connection status.
+ * Connected/expired/error rows sort first (they need attention or are
+ * active); not-connected rows follow. Within a tier, alphabetical by display
+ * name for stable ordering.
  */
 export function buildRows(
   connections: WearableConnection[],
   local?: { provider: WearableProvider; connectionId: string | null } | null,
+  here: WearableProvider | null = deviceSourceForPlatform(),
 ): ProviderRow[] {
   const byProvider = new Map<WearableProvider, WearableConnection>();
   for (const c of connections) {
@@ -186,7 +203,7 @@ export function buildRows(
   // as an active source.
   const rows: ProviderRow[] = WEARABLE_PROVIDERS.map((provider) =>
     provider === 'SAMSUNG_HEALTH' ? { ...rowFor('HEALTH_CONNECT'), provider } : rowFor(provider),
-  );
+  ).filter((row) => row.status !== 'disconnected' || connectableHere(row.provider, here));
 
   const tier = (s: BadgeTone): number =>
     s === 'connected' ? 0 : s === 'error' || s === 'expired' || s === 'notSyncing' ? 1 : 2;
