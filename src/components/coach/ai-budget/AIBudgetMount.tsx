@@ -37,7 +37,7 @@ import { AIBudgetBanner } from './AIBudgetBanner';
 import { AIBudgetTutorialModal, tutorialSeenKey } from './AIBudgetTutorialModal';
 import { AIBudgetHardPauseModal } from './AIBudgetHardPauseModal';
 import { surfaceFor, type CoachAIBudgetResponse } from '../../../api/types/coachAIBudget';
-import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
 
 export interface AIBudgetMountProps {
   /**
@@ -71,8 +71,8 @@ export function AIBudgetMount({
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const surface = useMemo(() => surfaceFor(budget), [budget]);
-  // iOS: AI credit packs are not a 1:1 service, so no buy entry points.
-  const purchasesHidden = nonP2PPurchasesHidden();
+  // Store builds: AI credit packs are digital services, not human coaching.
+  const purchasesHidden = digitalPurchasesHidden();
 
   // Tutorial-seen state. Resolved per period_start: a new period (after
   // monthly rollover) resets the "seen" flag automatically because the key

@@ -73,6 +73,27 @@ export function nonP2PPurchasesHidden(
   return nativeBuild >= IOS_P2P_ONLY_MIN_NATIVE_BUILD;
 }
 
+/**
+ * Digital AI packs and coach software subscriptions need store billing (or
+ * an enrolled, correctly integrated alternative-billing program). Neither
+ * purchase route is integrated here, so Android release builds expose usage
+ * and existing account status, not Stripe checkout or upgrade instructions.
+ * Development builds retain the checkout path for engineering.
+ *
+ * Keep this separate from nonP2PPurchasesHidden: that existing iOS posture
+ * also governs feature paywalls and attendance links. Client purchases of
+ * real-time 1:1 human coaching, including recurring packages, are unchanged.
+ */
+export function digitalPurchasesHidden(
+  platform: string = Platform.OS,
+  flag: boolean = featureFlags.iosHideNonP2PPurchases,
+  nativeBuild: number | null = nativeBuildNumber(),
+  dev: boolean = __DEV__,
+): boolean {
+  if (platform === 'android') return !dev;
+  return nonP2PPurchasesHidden(platform, flag, nativeBuild, dev);
+}
+
 /** Value for the X-Client-Purchase-Policy request header. */
 export function purchasePolicyHeader(): 'p2p-only' | 'all' {
   return nonP2PPurchasesHidden() ? 'p2p-only' : 'all';
@@ -82,7 +103,7 @@ export function purchasePolicyHeader(): 'p2p-only' | 'all' {
 // the web", with no link, URL or instruction to buy elsewhere (3.1.1 / 3.1.3).
 export const NON_P2P_HIDDEN_TITLE = 'Managed on the web';
 export const NON_P2P_HIDDEN_BODY =
-  'This is not available in the iOS app. Your account and anything you already have are unchanged.';
+  'This is not available in this app. Your account and anything you already have are unchanged.';
 
 /** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
 export function oneToOneCoachingLabel(coachName?: string | null): string {
