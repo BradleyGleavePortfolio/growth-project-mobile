@@ -12,6 +12,12 @@
  * `/community/me` truth (loading / error / retry) through props so a load error
  * renders the SAME calm retryable error the route renders instead of collapsing
  * a null workspace id into an inert empty state.
+ *
+ * B-E2E-1: a SUCCESSFUL `/community/me` with workspace_id null means the
+ * member's coach has no community space yet. That renders the Today-style
+ * "No cohort yet / Send your coach a message" state, never "Be the first to
+ * post" (the composer has no workspace to post to). Opened as a route (no
+ * props), the screen resolves the workspace from `/community/me` itself.
  */
 import React, { useMemo } from 'react';
 import {
@@ -23,11 +29,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { usePosts } from '../../hooks/useCommunity';
+import { useCommunityMe, usePosts } from '../../hooks/useCommunity';
 import { CommunityEmptyState, PostCard } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import VoiceNotesSection from '../../components/community/VoiceNotesSection';
@@ -64,14 +71,20 @@ interface Props {
 export default function CommunitySpaceScreen({
   embedded,
   space = 'hall',
-  workspaceId,
+  workspaceId: workspaceIdProp,
   prerequisiteLoading: prerequisiteLoadingProp,
   prerequisiteError: prerequisiteErrorProp,
   onRetryPrerequisite,
 }: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
+  const rootNavigation = useNavigation<NavigationProp<ParamListBase>>();
   const client = useCurrentUser();
+  // Opened as a route (no workspace prop): resolve from `/community/me` here.
+  // The query is shared with the tab, so this adds no request.
+  const me = useCommunityMe();
+  const threaded = workspaceIdProp !== undefined;
+  const workspaceId = threaded ? workspaceIdProp : (me.data?.workspace_id ?? null);
   const posts = usePosts(workspaceId);
 
   // The workspace prerequisite must SUCCEED before we can decide "no posts".
@@ -82,9 +95,15 @@ export default function CommunitySpaceScreen({
   // distinguished from failure: it falls through to the calm empty/onboarding
   // state, never the error state. Uses `isLoading` (not `isFetching`) so a
   // background refetch with existing data does not flash the loading branch.
-  const prerequisiteLoading = prerequisiteLoadingProp ?? workspaceId === null;
-  const prerequisiteError = prerequisiteErrorProp ?? false;
-  const retryPrerequisite = onRetryPrerequisite ?? (() => {});
+  const prerequisiteLoading =
+    prerequisiteLoadingProp ?? (threaded ? workspaceId === null : me.isLoading);
+  const prerequisiteError = prerequisiteErrorProp ?? (threaded ? false : me.isError);
+  const retryPrerequisite = onRetryPrerequisite ?? (() => void me.refetch());
+  // The prerequisite resolved and the member has no community space (B-E2E-1).
+  const noWorkspace = !prerequisiteLoading && !prerequisiteError && !workspaceId;
+
+  // Coach messages live in the Home stack; jump there from the Community tab.
+  const messageCoach = () => rootNavigation.navigate('Home', { screen: 'Messages' });
 
   const openThread = (post: CommunityPost) =>
     navigation.navigate('CommunityThread', { postId: post.id });
@@ -175,6 +194,25 @@ export default function CommunitySpaceScreen({
               Try again
             </Text>
           </HapticPressable>
+        </View>
+      </Container>
+    );
+  }
+
+  // No space yet: point the member to their coach and offer no composer, so
+  // nothing can post to an empty workspace id (B-E2E-1).
+  if (noWorkspace) {
+    return (
+      <Container>
+        <View style={styles.center} testID="community-space-screen">
+          <CommunityEmptyState
+            stem="noCohorts"
+            firstName={client?.firstName ?? client?.name ?? null}
+            title="No cohort yet"
+            actionLabel="Send your coach a message"
+            onAction={messageCoach}
+            testID="community-space-no-workspace"
+          />
         </View>
       </Container>
     );

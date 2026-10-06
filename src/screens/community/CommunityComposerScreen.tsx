@@ -50,6 +50,10 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const client = useCurrentUser();
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? '';
+  // B-E2E-1: never send to `workspaces//...`. A member with no community space
+  // yet sees a pointer to their coach instead of a Post button that fails.
+  const hasWorkspace = workspaceId.length > 0;
+  const noWorkspace = !me.isLoading && !me.isError && !hasWorkspace;
   const firstName = client?.firstName ?? client?.name ?? null;
 
   const [title, setTitle] = useState('');
@@ -64,6 +68,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
   const trimmedBody = body.trim();
   const sending = createPost.isPending || sendDm.isPending;
   const canSubmit =
+    hasWorkspace &&
     !sending &&
     trimmedBody.length > 0 &&
     (mode === 'dm' ? true : trimmedTitle.length > 0);
@@ -153,6 +158,16 @@ export default function CommunityComposerScreen(): React.ReactElement {
               },
             ]}
           />
+
+          {noWorkspace ? (
+            <Text
+              style={[styles.confirmation, { color: semanticColors.textMuted }]}
+              testID="community-composer-no-workspace"
+            >
+              Your coach has not opened a community space yet, so this cannot be shared. Message
+              your coach from Home instead.
+            </Text>
+          ) : null}
 
           {confirmation ? (
             <Text

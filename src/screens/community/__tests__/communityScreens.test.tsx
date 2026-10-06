@@ -58,7 +58,12 @@ jest.mock('../../../config/featureFlags', () => ({
 
 // ── Community data hooks ─────────────────────────────────────────────────────
 const hooks = {
-  me: { data: { workspace_id: 'ws-1', unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 } } },
+  me: {
+    data: {
+      workspace_id: 'ws-1' as string | null,
+      unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 },
+    },
+  },
   today: { data: null, isLoading: false, isError: false },
   posts: { data: [], isLoading: false, isError: false },
   comments: { data: [], isLoading: false, isError: false },
@@ -212,6 +217,24 @@ describe('Composer — submit wiring', () => {
       { title: 'My title', body: 'My body' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+
+  it('never posts to an empty workspace id when /community/me has no space (B-E2E-1)', async () => {
+    const saved = hooks.me;
+    hooks.me = {
+      data: { workspace_id: null, unread: { cohort_messages: 0, dm_messages: 0, mentions: 0 } },
+    };
+    try {
+      mockRouteParams.current = { mode: 'post' };
+      const { getByTestId } = await render(<CommunityComposerScreen />);
+      await fireEvent.changeText(getByTestId('community-composer-title'), 'My title');
+      await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
+      await fireEvent.press(getByTestId('community-composer-submit'));
+      expect(mockMutate).not.toHaveBeenCalled();
+      expect(getByTestId('community-composer-no-workspace')).toBeTruthy();
+    } finally {
+      hooks.me = saved;
+    }
   });
 
   it('sends a DM via the send-dm mutation', async () => {
