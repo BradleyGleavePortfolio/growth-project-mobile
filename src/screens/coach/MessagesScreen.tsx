@@ -18,6 +18,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachInboxV2 from './CoachInboxV2';
+import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -123,6 +124,7 @@ function LegacyCoachMessages() {
             </Text>
           )}
         </View>
+        <BroadcastsEntry />
       </View>
 
       <View style={styles.searchContainer}>

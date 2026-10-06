@@ -47,6 +47,7 @@ import {
   type InboxThread,
   type MuteDuration,
 } from '../../api/messagingV2Api';
+import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
 
 const FALLBACK_POLL_MS = 60000;
 const PAGE_LIMIT = 50;
@@ -311,7 +312,10 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Messages</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Messages</Text>
+          <BroadcastsEntry />
+        </View>
         {totalUnread > 0 ? (
           <Text style={styles.unreadSummary}>
             {totalUnread} unread message{totalUnread !== 1 ? 's' : ''}
@@ -393,6 +397,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
     unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
     searchContainer: { paddingHorizontal: 24, marginBottom: 8, gap: 10 },
