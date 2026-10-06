@@ -87,6 +87,7 @@ import {
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 import { profileOnboardingCompleted } from '../lib/profileOnboarding';
+import { wasDay1WinSkipped } from '../lib/day1WinSkip';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -821,11 +822,15 @@ export default function RootNavigator() {
           // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
           // error handling — if the API is unreachable, skip the win screen and
           // go straight to the client app. The screen can be shown on next boot.
+          // A client who tapped "Skip for now" is not shown it again on every
+          // open (lib/day1WinSkip); the server only records a tapped win.
           try {
-            const statusResponse = await firstWinApi.getStatus();
-            if (!statusResponse.data.completed) {
-              setAuthState('day1win');
-              return;
+            if (!(await wasDay1WinSkipped(user?.id))) {
+              const statusResponse = await firstWinApi.getStatus();
+              if (!statusResponse.data.completed) {
+                setAuthState('day1win');
+                return;
+              }
             }
           } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         }

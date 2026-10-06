@@ -96,7 +96,11 @@ const mockGetEntitlement = jest.fn();
 jest.mock('../api/clientPaymentsApi', () => ({
   clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
 }));
-jest.mock('../screens/client/Day1WinScreen', () => () => null);
+jest.mock('../screens/client/Day1WinScreen', () => {
+  const React = jest.requireActual('react');
+  const { Text } = jest.requireActual('react-native');
+  return () => React.createElement(Text, { testID: 'day1win' }, 'day1win');
+});
 jest.mock('../services/support/crisp.service', () => ({ initCrisp: jest.fn(), syncCrispIdentity: jest.fn() }));
 jest.mock('../hooks/useLeanOnboardingReconcile', () => ({ useLeanOnboardingReconcile: jest.fn() }));
 jest.mock('../services/firstWinApi', () => ({
@@ -198,5 +202,35 @@ describe('RootNavigator 24h package prompt is fail closed', () => {
     await r.findByTestId('nav-client');
     expect(r.queryByTestId('package-prompt')).toBeNull();
     expect(mockGetEntitlement).not.toHaveBeenCalled();
+  });
+});
+
+// AUDIT-01-125: "Skip for now" on the Day One screen holds for that user.
+describe('RootNavigator Day 1 Win skip is remembered per user', () => {
+  const { firstWinApi } = jest.requireMock('../services/firstWinApi');
+  beforeEach(() => {
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true, entitlement_active: true } });
+    firstWinApi.getStatus.mockResolvedValue({ data: { completed: false } });
+  });
+  afterEach(() => {
+    firstWinApi.getStatus.mockResolvedValue({ data: { completed: true } });
+  });
+
+  it('no win and no skip yet: the Day One screen shows', async () => {
+    const r = await mount();
+    await r.findByTestId('day1win');
+  });
+
+  it('this user skipped it: the app opens straight to Home', async () => {
+    await AsyncStorage.setItem('prefs:onboarding.day1win_skipped_at:client-S', '2026-10-06T21:00:00.000Z');
+    const r = await mount();
+    await r.findByTestId('nav-client');
+    expect(r.queryByTestId('day1win')).toBeNull();
+  });
+
+  it('a skip by another account on this phone does not apply', async () => {
+    await AsyncStorage.setItem('prefs:onboarding.day1win_skipped_at:client-OTHER', '2026-10-06T21:00:00.000Z');
+    const r = await mount();
+    await r.findByTestId('day1win');
   });
 });
