@@ -363,23 +363,11 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <BiometricUnlockSetting />
         </View>
 
-        {/* Personalization — Psych #4 */}
-        <Text style={styles.sectionLabel}>Personalization</Text>
+        {/* AUDIT-12-125: the Personalization row is not offered. Nothing in the
+            app or on the server reads those choices (home modules, cadence
+            incl. "Off", tone, units, week start), so they had no effect. */}
+        <Text style={styles.sectionLabel}>Notification settings</Text>
         <View style={styles.card}>
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('Preferences')}
-            accessibilityRole="button"
-            accessibilityLabel="Personalization"
-            accessibilityHint="Opens preference controls for home modules, notifications, tone, and units"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="options-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Personalization</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
           {/* Audit P1: surface the canonical NotificationPreferences screen
               from Settings. The local Notifications switches above only
               control the legacy useSettings flags; full channel + quiet-hour
