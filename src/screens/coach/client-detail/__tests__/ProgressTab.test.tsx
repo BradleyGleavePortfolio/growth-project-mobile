@@ -17,13 +17,13 @@ function log(id: string, date: string, weight: number): WeightLog {
 }
 
 describe('Coach ProgressTab', () => {
-  it('reads First, Latest and Change in date order from a newest-first list', () => {
+  it('reads First, Latest and Change in date order from a newest-first list', async () => {
     const newestFirst = [
       log('w3', '2026-10-06', 190),
       log('w2', '2026-09-26', 195),
       log('w1', '2026-09-16', 200),
     ];
-    const { getByText, queryByText, getAllByText } = render(
+    const { getByText, queryByText, getAllByText } = await render(
       <ProgressTab weightLogs={newestFirst} colors={testColors} styles={styles} />,
     );
     expect(getByText('200')).toBeTruthy();
@@ -39,8 +39,8 @@ describe('Coach ProgressTab', () => {
     ]);
   });
 
-  it('labels every entry with its unit', () => {
-    const { getAllByText } = render(
+  it('labels every entry with its unit', async () => {
+    const { getAllByText } = await render(
       <ProgressTab weightLogs={[log('w1', '2026-10-06', 182.4)]} colors={testColors} styles={styles} />,
     );
     expect(getAllByText('182.4 lbs').length).toBe(1);
