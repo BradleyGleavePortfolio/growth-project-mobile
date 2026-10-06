@@ -9,6 +9,13 @@
 // The cache stamp is "<account>|<zone>", so a second account signing in on
 // the same device always syncs its own row. When the account cannot be read
 // from the session token, the zone is sent every time and nothing is cached.
+//
+// B-NOTIF-6: the zone goes to PUT /notifications/timezone with source
+// 'device' (backend #647), which records when and where it came from; the
+// quiet hours (21:00-08:00) and the booking times in notifications trust only
+// a zone stamped that way. A backend without that route (404/405) gets the
+// older PATCH /notifications/preferences { timezone } instead. A zone the
+// backend rejects (400) is not cached, so it is offered again next time.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -47,7 +54,23 @@ export function sessionSubject(token: string | null | undefined): string | null 
   }
 }
 
-/** Returns true when a PATCH was sent and accepted. */
+function statusOf(err: unknown): number | null {
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  return typeof status === 'number' ? status : null;
+}
+
+/** Sends the zone; resolves when the backend accepted it. */
+async function sendTimezone(tz: string): Promise<void> {
+  try {
+    await notificationsApi.setTimezone(tz);
+  } catch (err) {
+    const status = statusOf(err);
+    if (status !== 404 && status !== 405) throw err;
+    await notificationsApi.updatePreferences({ timezone: tz });
+  }
+}
+
+/** Returns true when the zone was sent and accepted. */
 export async function syncDeviceTimezone(sessionToken?: string | null): Promise<boolean> {
   const tz = deviceTimezone();
   if (!tz) return false;
@@ -62,7 +85,7 @@ export async function syncDeviceTimezone(sessionToken?: string | null): Promise<
     }
     if (last === stamp) return false;
   }
-  await notificationsApi.updatePreferences({ timezone: tz });
+  await sendTimezone(tz);
   if (stamp) {
     try {
       await AsyncStorage.setItem(TIMEZONE_SYNC_KEY, stamp);

@@ -122,7 +122,7 @@ New screen names added to `HomeStackParamList`:
 | Name | Screen | Purpose |
 | --- | --- | --- |
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
-| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 
 The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
 
@@ -135,7 +135,7 @@ New screen names added to `ClientsStackParamList`:
 | Name | Screen | Purpose |
 | --- | --- | --- |
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
-| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
 
 ### Unread count polling
 
