@@ -88,6 +88,7 @@ function envOf(s: TutorialStoreState): MachineEnv {
     hasProgram: !!s.payload?.program?.name,
     hasMacros: !!resolveMacros(s),
     communityAvailable: featureFlags.communityTab,
+    calendarAvailable: featureFlags.clientCalendar,
     currentPath: s.currentPath,
     now: new Date().toISOString(),
   };

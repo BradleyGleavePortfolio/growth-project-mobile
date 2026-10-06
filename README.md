@@ -250,6 +250,18 @@ The `organization`, `project`, and `url` values that the upload step
 needs live in `app.json` under the plugin's options. Edit them there
 if the Sentry account moves.
 
+### Over-the-air updates
+
+An EAS update ships new JavaScript with new Debug IDs, so its source maps
+must be uploaded too. `npm run update:publish` (scripts/eas-update-guard.js)
+does that after a successful publish, and refuses to publish when it has no
+token to do it with. A `secret` EAS variable is readable only on EAS
+builders, so for updates keep `SENTRY_AUTH_TOKEN` with `sensitive`
+visibility (`eas env:create --environment production --name SENTRY_AUTH_TOKEN
+--value <token> --visibility sensitive`) or export it in the publishing
+shell. Errors from an update are found by the `expo.updates.update_id` tag
+(src/services/otaUpdateTags.ts), not by release. See docs/OTA_UPDATES.md.
+
 ## Release readiness
 
 Every PR runs `npm run validate:release` as the first CI step. The command

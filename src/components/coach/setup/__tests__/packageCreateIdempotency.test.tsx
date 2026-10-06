@@ -53,7 +53,6 @@ jest.mock("../../../../hooks/useCurrentUser", () => ({
 
 import FirstPackageForm from "../FirstPackageForm";
 import {
-  INTENT_TTL_MS,
   intentStorageKey,
   newIntent,
   parseIntent,
@@ -171,20 +170,22 @@ describe("OR-112-16 durable package-create intent", () => {
 });
 
 describe("parseIntent", () => {
-  it("drops malformed, foreign-version and expired intents", () => {
+  it("drops malformed and foreign-version intents, never an old one (B-329-1)", () => {
     const now = 1_800_000_000_000;
     const it0 = newIntent(
       { title: "A", priceCents: 0, billingInterval: "one_time" },
       now,
     );
-    expect(parseIntent(JSON.stringify(it0), now)?.key).toBe(it0.key);
-    expect(parseIntent("not json", now)).toBeNull();
-    expect(parseIntent(JSON.stringify({ ...it0, v: 2 }), now)).toBeNull();
+    expect(parseIntent(JSON.stringify(it0))?.key).toBe(it0.key);
+    expect(parseIntent("not json")).toBeNull();
+    expect(parseIntent(JSON.stringify({ ...it0, v: 2 }))).toBeNull();
     expect(
-      parseIntent(JSON.stringify({ ...it0, input: { title: 1 } }), now),
+      parseIntent(JSON.stringify({ ...it0, input: { title: 1 } })),
     ).toBeNull();
+    // The backend keeps the key forever, so a week-old intent still replays.
     expect(
-      parseIntent(JSON.stringify(it0), now + INTENT_TTL_MS + 1),
-    ).toBeNull();
+      parseIntent(JSON.stringify({ ...it0, createdAt: now - 7 * 86_400_000 }))
+        ?.key,
+    ).toBe(it0.key);
   });
 });

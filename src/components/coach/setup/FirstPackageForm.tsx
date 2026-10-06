@@ -4,7 +4,13 @@
  * it live, and for a free package attaches it to the coach's invite link so
  * a client who joins with the link gets it straight away.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   StyleSheet,
@@ -26,14 +32,16 @@ import {
 } from "../../../lib/coachSetup/errors";
 import {
   clearIntent,
+  createErrorCode,
+  createPackageOnce,
+  intentStorageCopy,
+  IntentStorageError,
+  isDefinitiveRejection,
   loadIntent,
-  newIntent,
-  sameCreateInput,
-  saveIntent,
+  PackageCreateStoppedError,
   type PackageCreateIntent,
 } from "../../../lib/coachSetup/packageCreateIntent";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
-import { errorStatus } from "../../../types/common";
 import SetupNotice from "./SetupNotice";
 
 export const PAID_PACKAGE_MIN_CENTS = 1999;
@@ -70,35 +78,28 @@ export function validatePackage(input: {
   return null;
 }
 
-/** A 4xx (other than 408 / 409 / 422 reuse / 429) means nothing was created. */
-export function isDefinitiveRejection(err: unknown): boolean {
-  const status = errorStatus(err);
-  if (status === undefined || status < 400 || status >= 500) return false;
-  if (status === 408 || status === 409 || status === 429) return false;
-  return errorCode(err) !== "IDEMPOTENCY_KEY_REUSED";
-}
+// Shared with the package editor (B-329-1); re-exported for existing callers.
+export { isDefinitiveRejection };
 
-function errorCode(err: unknown): string | null {
-  const data = (err as { response?: { data?: unknown } } | null)?.response
-    ?.data;
-  if (!data || typeof data !== "object") return null;
-  const d = data as Record<string, unknown>;
-  if (typeof d.code === "string") return d.code;
-  return typeof d.error === "string" ? d.error : null;
+/** Specific copy when device storage could not hold the create's identity. */
+export function storageFailure(err: IntentStorageError): FriendlyError {
+  const copy = intentStorageCopy(err);
+  return {
+    ...copy,
+    requestId: null,
+    code: `PACKAGE_INTENT_${err.reason.toUpperCase()}`,
+    retryable: true,
+  };
 }
 
 /**
- * The server says this key already made a package from other details (it
- * never happens while the app re-sends the stored body, but a server-side
- * normalisation change could cause it). The answer names that package, so
- * the app adopts it instead of creating another one.
+ * C-346-2 (agent 118): the server says the remembered package was archived or
+ * removed since it was made. It can never go live, so the form forgets it and
+ * makes a fresh package in the same tap (machine codes only, never a bare 404).
  */
-function reusedPackageId(err: unknown): string | null {
-  if (errorCode(err) !== "IDEMPOTENCY_KEY_REUSED") return null;
-  const d = (err as { response?: { data?: Record<string, unknown> } }).response
-    ?.data;
-  return typeof d?.package_id === "string" ? d.package_id : null;
-}
+const GONE_PACKAGE_CODES = new Set(["PACKAGE_ARCHIVED", "PACKAGE_NOT_FOUND"]);
+
+const DEFAULT_PRICE_TEXT = "49.00";
 
 interface Props {
   defaultTitle: string;
@@ -117,10 +118,32 @@ export default function FirstPackageForm({
 }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [title, setTitle] = useState(defaultTitle);
-  const [free, setFree] = useState(false);
-  const [priceText, setPriceText] = useState("49.00");
-  const [monthly, setMonthly] = useState(true);
+  const [title, setTitleState] = useState(defaultTitle);
+  const [free, setFreeState] = useState(false);
+  const [priceText, setPriceTextState] = useState(DEFAULT_PRICE_TEXT);
+  const [monthly, setMonthlyState] = useState(true);
+  // B-346-3 (agent 119): what the form shows right now. Every field write
+  // goes through show(), so a submit that waited for hydration reads the
+  // package the coach sees, not the values of the render it started in.
+  const shown = useRef({
+    title: defaultTitle,
+    free: false,
+    priceText: DEFAULT_PRICE_TEXT,
+    monthly: true,
+  });
+  const show = useCallback((next: Partial<typeof shown.current>) => {
+    Object.assign(shown.current, next);
+    if (next.title !== undefined) setTitleState(next.title);
+    if (next.free !== undefined) setFreeState(next.free);
+    if (next.priceText !== undefined) setPriceTextState(next.priceText);
+    if (next.monthly !== undefined) setMonthlyState(next.monthly);
+  }, []);
+  // B-346-3: false until this account's saved intent has been read and, if
+  // there is one, shown. Until then fields take no edits and Create is off;
+  // a tap that still arrives is dropped (B-WIZ3-122), so every publish is a
+  // fresh tap on the price and offer type the coach can see.
+  const [ready, setReady] = useState(false);
+  const readyNow = useRef(false);
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [error, setError] = useState<FriendlyError | null>(null);
@@ -133,113 +156,169 @@ export default function FirstPackageForm({
   const user = useCurrentUser();
   const coachId = user?.id ?? null;
   const intent = useRef<PackageCreateIntent | null>(null);
-  const hydrated = useRef<Promise<void> | null>(null);
   const [resumed, setResumed] = useState(false);
   // A second tap before React re-renders the disabled button must not
   // start a second submit.
   const inFlight = useRef(false);
 
+  // The account this form belongs to, for re-checks after every await: a
+  // sign-out or account switch mid-create must not write into the next
+  // account's form or storage.
+  const coachRef = useRef(coachId);
+  coachRef.current = coachId;
+  const mounted = useRef(true);
+  // B-329-5 (agent 118): bumped on every account change, so a create started
+  // for an earlier account (even one that signs back in) is retired.
+  const generation = useRef(0);
+  const shownFor = useRef(coachId);
+  const resetTitle = useRef(defaultTitle);
+  resetTitle.current = defaultTitle;
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   useEffect(() => {
     let live = true;
-    hydrated.current = loadIntent(coachId).then((stored) => {
-      if (!live || !stored || intent.current) return;
+    readyNow.current = false;
+    setReady(false);
+    if (shownFor.current !== coachId) {
+      // A different account: nothing from the earlier one stays on screen
+      // or in memory, and its running create can no longer write here.
+      shownFor.current = coachId;
+      generation.current += 1;
+      intent.current = null;
+      inFlight.current = false;
+      setBusy(false);
+      setError(null);
+      setInvalid(null);
+      setResumed(false);
+      show({
+        title: resetTitle.current,
+        free: false,
+        priceText: DEFAULT_PRICE_TEXT,
+        monthly: true,
+      });
+    }
+    void loadIntent(coachId).then((read) => {
+      if (!live) return;
+      // An unreadable read still ends hydration: submit reads storage again
+      // and stops with specific copy if it is still unreadable.
+      const done = () => {
+        readyNow.current = true;
+        setReady(true);
+      };
+      if (read.kind !== "found" || intent.current) return done();
+      const stored = read.intent;
       intent.current = stored;
       // Show the coach the package that was on its way, as it was sent.
-      setTitle(stored.input.title);
-      setFree(stored.input.priceCents === 0);
-      if (stored.input.priceCents > 0)
-        setPriceText((stored.input.priceCents / 100).toFixed(2));
-      setMonthly(stored.input.billingInterval !== "one_time");
+      show({
+        title: stored.input.title,
+        free: stored.input.priceCents === 0,
+        monthly: stored.input.billingInterval !== "one_time",
+        ...(stored.input.priceCents > 0
+          ? { priceText: (stored.input.priceCents / 100).toFixed(2) }
+          : {}),
+      });
       setResumed(true);
+      done();
     });
     return () => {
       live = false;
     };
-  }, [coachId]);
-
-  const remember = async (next: PackageCreateIntent | null) => {
-    intent.current = next;
-    if (next) await saveIntent(coachId, next);
-    else await clearIntent(coachId);
-  };
-
-  /** Send (or re-send) the intent's create; returns the package id. */
-  const sendCreate = async (it: PackageCreateIntent): Promise<string> => {
-    try {
-      const res = await coachPackagesApi.create(it.input, it.key);
-      await remember({ ...it, packageId: res.data.id });
-      return res.data.id;
-    } catch (err) {
-      const adopt = reusedPackageId(err);
-      if (adopt) {
-        await remember({ ...it, packageId: adopt });
-        return adopt;
-      }
-      if (isDefinitiveRejection(err)) await remember(null);
-      throw err;
-    }
-  };
+  }, [coachId, show]);
 
   const submit = async () => {
-    const problem = validatePackage({ title, free, priceText });
-    setInvalid(problem);
+    // B-WIZ3-122: a tap before the saved package is shown is dropped, never
+    // queued; the coach taps again on what hydration put on screen.
+    if (inFlight.current || !readyNow.current) return;
     setError(null);
-    if (problem || inFlight.current) return;
     inFlight.current = true;
     setBusy(true);
-    const priceCents = free ? 0 : (parsePriceCents(priceText) ?? 0);
-    const billingInterval: PackageBillingInterval =
-      free || !monthly ? "one_time" : "monthly";
-    const input: PackageCreateInput = {
-      title: title.trim(),
-      description: defaultDescription ?? null,
-      priceCents,
-      currency: "usd",
-      billingInterval,
-      intervalCount: 1,
-      trialDays: 0,
-      features: [],
-    };
+    const owner = coachRef.current;
+    const myGeneration = generation.current;
+    const stillOwner = () =>
+      mounted.current &&
+      coachRef.current === owner &&
+      generation.current === myGeneration;
     try {
-      if (hydrated.current) await hydrated.current;
-      let packageId: string | null = intent.current?.packageId ?? null;
-      const earlier = intent.current;
-      if (!packageId && earlier) {
-        // An earlier try got no definitive answer: re-send exactly that
-        // create with its key. The server returns the package it made, or
-        // makes it now, never a second one.
-        try {
-          packageId = await sendCreate(earlier);
-        } catch (err) {
-          // Refused outright, so nothing exists. If the coach has since
-          // changed the details, send the new details as a fresh create.
-          if (
-            !isDefinitiveRejection(err) ||
-            sameCreateInput(earlier.input, input)
-          )
-            throw err;
-        }
+      // B-346-3: the package exactly as the form shows it at this tap.
+      const snap = { ...shown.current };
+      const problem = validatePackage(snap);
+      setInvalid(problem);
+      if (problem) return;
+      const priceCents = snap.free ? 0 : (parsePriceCents(snap.priceText) ?? 0);
+      const billingInterval: PackageBillingInterval =
+        snap.free || !snap.monthly ? "one_time" : "monthly";
+      const input: PackageCreateInput = {
+        title: snap.title.trim(),
+        description: defaultDescription ?? null,
+        priceCents,
+        currency: "usd",
+        billingInterval,
+        intervalCount: 1,
+        trialDays: 0,
+        features: [],
+      };
+      let earlier = intent.current;
+      if (!earlier) {
+        // B-329-1: read storage again before any fresh create. A failed read
+        // is not "nothing was sent": stop with specific copy instead.
+        const read = await loadIntent(owner);
+        if (read.kind === "unreadable")
+          throw new IntentStorageError("unreadable");
+        if (read.kind === "no_account")
+          throw new IntentStorageError("no_account");
+        if (read.kind === "found") earlier = read.intent;
       }
-      if (!packageId) {
-        const fresh = newIntent(input);
-        await remember(fresh); // write-ahead, before the request leaves
-        packageId = await sendCreate(fresh);
+      if (!stillOwner()) return;
+      const makeLive = async (
+        from: PackageCreateIntent | null,
+      ): Promise<string> => {
+        const made = await createPackageOnce({
+          coachId: owner,
+          scope: "wizard",
+          input,
+          earlier: from,
+          deps: {
+            create: (body, key) => coachPackagesApi.create(body, key),
+            update: (id, body) => coachPackagesApi.update(id, body),
+          },
+          onIntent: (next) => {
+            if (stillOwner()) intent.current = next;
+          },
+          isLive: stillOwner,
+        });
+        if (!stillOwner()) throw new PackageCreateStoppedError();
+        await coachSetupApi.publishPackage(made.packageId);
+        if (!stillOwner()) throw new PackageCreateStoppedError();
+        return made.packageId;
+      };
+      let packageId: string;
+      try {
+        packageId = await makeLive(earlier);
+      } catch (err) {
+        const code = createErrorCode(err);
+        if (!earlier || !code || !GONE_PACKAGE_CODES.has(code)) throw err;
+        if (!stillOwner()) return;
+        intent.current = null;
+        await clearIntent(owner);
+        if (!stillOwner()) return;
+        packageId = await makeLive(null);
       }
-      const current = intent.current;
-      if (current && !sameCreateInput(current.input, input)) {
-        // The details changed after the package was made: update that
-        // package rather than making another one.
-        await coachPackagesApi.update(packageId, input);
-        await remember({ ...current, input });
-      }
-      await coachSetupApi.publishPackage(packageId);
       let freeOnJoin = false;
       if (priceCents === 0) {
         const invite = await coachSetupApi.inviteLink();
+        if (!stillOwner()) return;
         await coachSetupApi.bindFreePackage(invite.code, packageId);
+        if (!stillOwner()) return;
         freeOnJoin = true;
       }
-      await remember(null);
+      intent.current = null;
+      await clearIntent(owner);
+      if (!stillOwner()) return;
       setResumed(false);
       onCreated({
         id: packageId,
@@ -249,10 +328,18 @@ export default function FirstPackageForm({
         freeOnJoin,
       });
     } catch (err) {
-      setError(describeError(err, "create your package"));
+      if (err instanceof PackageCreateStoppedError || !stillOwner()) return;
+      setError(
+        err instanceof IntentStorageError
+          ? storageFailure(err)
+          : describeError(err, "create your package"),
+      );
     } finally {
-      inFlight.current = false;
-      setBusy(false);
+      // An account change already reset the form for the new account.
+      if (generation.current === myGeneration) {
+        inFlight.current = false;
+        if (mounted.current) setBusy(false);
+      }
     }
   };
 
@@ -260,16 +347,22 @@ export default function FirstPackageForm({
     <View testID={testID}>
       {resumed ? (
         <Text style={styles.help} testID={`${testID}-resumed`}>
-          Your package from earlier is saved here. Tap Create package to finish
-          it. It will not be made twice.
+          Your package from earlier is saved on this device. Tap Create package
+          to finish that same package.
         </Text>
       ) : null}
+      {ready ? null : (
+        <Text style={styles.help} testID={`${testID}-hydrating`}>
+          Checking this device for a package saved earlier.
+        </Text>
+      )}
       <Text style={styles.label} nativeID={`${testID}-name-label`}>
         Package name
       </Text>
       <TextInput
         value={title}
-        onChangeText={setTitle}
+        onChangeText={(v) => show({ title: v })}
+        editable={ready}
         style={styles.input}
         accessibilityLabel="Package name"
         accessibilityLabelledBy={`${testID}-name-label`}
@@ -287,10 +380,11 @@ export default function FirstPackageForm({
         ].map((o) => (
           <TouchableOpacity
             key={o.key}
-            onPress={() => setFree(o.key === "free")}
+            onPress={() => show({ free: o.key === "free" })}
+            disabled={!ready}
             style={[styles.segmentItem, o.on && styles.segmentOn]}
             accessibilityRole="radio"
-            accessibilityState={{ checked: o.on }}
+            accessibilityState={{ checked: o.on, disabled: !ready }}
             accessibilityLabel={o.label}
             testID={`${testID}-${o.key}`}
           >
@@ -312,7 +406,8 @@ export default function FirstPackageForm({
           </Text>
           <TextInput
             value={priceText}
-            onChangeText={setPriceText}
+            onChangeText={(v) => show({ priceText: v })}
+            editable={ready}
             style={styles.input}
             keyboardType="decimal-pad"
             accessibilityLabel="Price in US dollars"
@@ -330,10 +425,11 @@ export default function FirstPackageForm({
             ].map((o) => (
               <TouchableOpacity
                 key={o.key}
-                onPress={() => setMonthly(o.key === "monthly")}
+                onPress={() => show({ monthly: o.key === "monthly" })}
+                disabled={!ready}
                 style={[styles.segmentItem, o.on && styles.segmentOn]}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: o.on }}
+                accessibilityState={{ checked: o.on, disabled: !ready }}
                 accessibilityLabel={o.label}
                 testID={`${testID}-${o.key}`}
               >
@@ -371,14 +467,14 @@ export default function FirstPackageForm({
         />
       ) : null}
       <TouchableOpacity
-        style={[styles.primary, busy && styles.disabled]}
+        style={[styles.primary, (busy || !ready) && styles.disabled]}
         onPress={() => {
           void submit();
         }}
-        disabled={busy}
+        disabled={busy || !ready}
         accessibilityRole="button"
         accessibilityLabel="Create package"
-        accessibilityState={{ busy, disabled: busy }}
+        accessibilityState={{ busy, disabled: busy || !ready }}
         testID={`${testID}-create`}
       >
         {busy ? (

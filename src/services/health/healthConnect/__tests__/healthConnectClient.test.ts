@@ -31,6 +31,8 @@ import {
   isHealthConnectSupported,
   readAllSupportedRecords,
   readRecords,
+  readRecordsPaged,
+  MAX_READ_PAGES,
   requestPermission,
 } from '../healthConnectClient';
 
@@ -141,7 +143,7 @@ describe('readRecords', () => {
       startTime: '2026-05-01T00:00:00.000Z',
       endTime: '2026-05-02T00:00:00.000Z',
     });
-    expect(out).toBe(records);
+    expect(out).toEqual(records);
     expect(mockRead).toHaveBeenCalledWith('Steps', {
       timeRangeFilter: {
         operator: 'between',
@@ -151,11 +153,63 @@ describe('readRecords', () => {
     });
   });
 
+  it('S14: follows pageToken until the last page', async () => {
+    mockRead
+      .mockResolvedValueOnce({ records: [{ count: 1 }], pageToken: 'p2' })
+      .mockResolvedValueOnce({ records: [{ count: 2 }], pageToken: 'p3' })
+      .mockResolvedValueOnce({ records: [{ count: 3 }] });
+    const out = await readRecords('Steps', { startTime: 'a', endTime: 'b' });
+    expect(out).toEqual([{ count: 1 }, { count: 2 }, { count: 3 }]);
+    expect(mockRead).toHaveBeenCalledTimes(3);
+    expect(mockRead.mock.calls[1][1]).toMatchObject({ pageToken: 'p2' });
+    expect(mockRead.mock.calls[2][1]).toMatchObject({ pageToken: 'p3' });
+    expect(mockRead.mock.calls[0][1]).not.toHaveProperty('pageToken');
+  });
+
+  it('S14: stops after MAX_READ_PAGES even if pages keep coming', async () => {
+    mockRead.mockResolvedValue({ records: [{ count: 1 }], pageToken: 'again' });
+    const out = await readRecords('Steps', { startTime: 'a', endTime: 'b' });
+    expect(mockRead).toHaveBeenCalledTimes(MAX_READ_PAGES);
+    expect(out).toHaveLength(MAX_READ_PAGES);
+  });
+
   it('coerces a missing records field to []', async () => {
     mockRead.mockResolvedValue({});
     await expect(
       readRecords('Steps', { startTime: 'a', endTime: 'b' }),
     ).resolves.toEqual([]);
+  });
+});
+
+describe('readRecordsPaged (S14 B-317-2)', () => {
+  it('returns no resume token when the last page was reached', async () => {
+    mockRead
+      .mockResolvedValueOnce({ records: [{ count: 1 }], pageToken: 'p2' })
+      .mockResolvedValueOnce({ records: [{ count: 2 }] });
+    const out = await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' });
+    expect(out).toEqual({ records: [{ count: 1 }, { count: 2 }] });
+  });
+
+  it('returns the resume token when it stops at MAX_READ_PAGES', async () => {
+    mockRead.mockResolvedValue({ records: [{ count: 1 }], pageToken: 'more' });
+    const out = await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' });
+    expect(out.records).toHaveLength(MAX_READ_PAGES);
+    expect(out.nextPageToken).toBe('more');
+  });
+
+  it('resumes from a saved token on the first request', async () => {
+    mockRead.mockResolvedValue({ records: [{ count: 9 }] });
+    await readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' }, 'saved');
+    expect(mockRead.mock.calls[0][1]).toMatchObject({ pageToken: 'saved' });
+  });
+
+  it('propagates a native read failure so the caller keeps its progress', async () => {
+    mockRead
+      .mockResolvedValueOnce({ records: [{ count: 1 }], pageToken: 'p2' })
+      .mockRejectedValueOnce(new Error('native'));
+    await expect(readRecordsPaged('Steps', { startTime: 'a', endTime: 'b' })).rejects.toThrow(
+      'native',
+    );
   });
 });
 

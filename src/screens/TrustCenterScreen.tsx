@@ -5,7 +5,11 @@
  *
  * Section 1: security metadata fetched from GET /api/system/trust-meta
  * Section 2: User actions — data export + account deletion
- * Section 3: Bullet list — who has access, what's encrypted, where data lives
+ * Section 3: Bullet list — who has access, what's encrypted
+ * Footer: Privacy Policy, Consumer Health Data Privacy Policy, help centre.
+ *   A link that does not open shows, under it, what happened and what to do
+ *   next for that cause (offline / cannot open links / anything else), see
+ *   trustCenterLinkFailure.ts (OR-112-15).
  *
  * Analytics events (PII-safe):
  *   trust_center_opened
@@ -13,7 +17,7 @@
  *   account_deletion_requested
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -21,8 +25,11 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Linking,
+  AccessibilityInfo,
+  Platform,
+  Pressable,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import HapticPressable from '../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -31,11 +38,20 @@ import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
-import { helpUrl } from '../config/env';
+import { trustCenterLinks } from './trustCenterLinks';
+import type { TrustCenterLink } from './trustCenterLinks';
+import {
+  LINK_FAILURE_ACTIONS,
+  linkFailureEmailSubject,
+  linkFailureMessage,
+  openTrustCenterLink,
+} from './trustCenterLinkFailure';
+import type { LinkFailure } from './trustCenterLinkFailure';
+import { SupportEmailFallback, useSupportEmail } from '../components/support/SupportEmailFallback';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from './settings/deletionErrors';
+import { deletionErrorCopy } from './settings/deletionErrors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -155,6 +171,139 @@ const makeBulletStyles = (colors: ThemeColors) =>
 
   });
 
+// ─── Link failure notice ─────────────────────────────────────────────────────
+
+type CopyState = 'idle' | 'copied' | 'copy_failed';
+
+/**
+ * Shown under a footer link that did not open (OR-112-15). Offline: what
+ * happened and to tap again once connected. Cannot open links: the exact web
+ * address, selectable, with Copy web address. Anything else: the address, the
+ * support email with a reference, Email support, and the shared support email
+ * fallback if no email app opens.
+ */
+function LinkFailureNotice({ link, failure }: { link: TrustCenterLink; failure: LinkFailure }) {
+  const { colors } = useTheme();
+  const noticeStyles = useMemo(() => makeNoticeStyles(colors), [colors]);
+  const [copyState, setCopyState] = useState<CopyState>('idle');
+  // Checklist (b): a copy result that lands after the notice is gone writes nothing.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+  const unexpected = failure.cause === 'unexpected';
+  const supportEmail = useSupportEmail(unexpected ? linkFailureEmailSubject(link, failure) : undefined);
+  const showAddress = failure.cause !== 'offline';
+
+  const copyAddress = useCallback(async () => {
+    try {
+      const ok = await Clipboard.setStringAsync(link.url);
+      if (alive.current) setCopyState(ok === false ? 'copy_failed' : 'copied');
+    } catch {
+      if (alive.current) setCopyState('copy_failed');
+    }
+  }, [link.url]);
+
+  return (
+    <View style={noticeStyles.wrap} testID="trust-link-failure" accessibilityLiveRegion="polite">
+      <Text style={noticeStyles.text} accessibilityRole="alert" testID="trust-link-failure-message">
+        {linkFailureMessage(link, failure)}
+      </Text>
+      {showAddress ? (
+        <>
+          <Text selectable style={[noticeStyles.text, noticeStyles.address]} testID="trust-link-failure-address">
+            {link.url}
+          </Text>
+          <View style={noticeStyles.actions}>
+            <Pressable
+              onPress={() => void copyAddress()}
+              accessibilityRole="button"
+              accessibilityLabel={`Copy the web address of the ${link.pageName}`}
+              hitSlop={8}
+              style={noticeStyles.action}
+              testID="trust-link-failure-copy"
+            >
+              <Text style={noticeStyles.actionText}>{LINK_FAILURE_ACTIONS.copy}</Text>
+            </Pressable>
+            {unexpected ? (
+              <Pressable
+                onPress={() => void supportEmail.open()}
+                accessibilityRole="button"
+                accessibilityLabel="Email support"
+                hitSlop={8}
+                style={noticeStyles.action}
+                testID="trust-link-failure-email"
+              >
+                <Text style={noticeStyles.actionText}>{LINK_FAILURE_ACTIONS.email}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {copyState !== 'idle' ? (
+            <Text
+              style={noticeStyles.text}
+              accessibilityLiveRegion="polite"
+              testID="trust-link-failure-copy-status"
+            >
+              {copyState === 'copied' ? LINK_FAILURE_ACTIONS.copied : LINK_FAILURE_ACTIONS.copyFailed}
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+      {unexpected ? (
+        <SupportEmailFallback
+          handle={supportEmail}
+          textStyle={noticeStyles.text}
+          linkColor={colors.primary}
+          testID="trust-link-failure-support"
+          centered
+        />
+      ) : null}
+    </View>
+  );
+}
+
+const makeNoticeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  wrap: {
+    alignSelf: 'stretch',
+    marginTop: 8,
+    marginBottom: 4,
+    padding: Spacing.md,
+    borderRadius: Radius.lg,
+    backgroundColor: colors.surface,
+    gap: 8,
+  },
+  text: {
+    fontSize: typography.bodySmall.fontSize,
+    lineHeight: typography.body.lineHeight,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  address: {
+    color: colors.textPrimary,
+    fontWeight: '600',
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  action: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  actionText: {
+    color: colors.primary,
+    fontWeight: '600',
+    fontSize: typography.bodySmall.fontSize,
+    textDecorationLine: 'underline',
+  },
+
+  });
+
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function TrustCenterScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -163,6 +312,22 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const [meta, setMeta] = useState<TrustMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
+  // The footer link that last failed to open, and why. `attempt` remounts the
+  // notice on every new failure so its copy/email state starts fresh.
+  const [linkFailure, setLinkFailure] = useState<
+    { link: TrustCenterLink; failure: LinkFailure; attempt: number } | null
+  >(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const mounted = useRef(true);
+  const opening = useRef(false);
+  const attempts = useRef(0);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   // Fire trust_center_opened once on mount
   useEffect(() => {
@@ -205,6 +370,36 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     }
   }, []);
 
+  // openTrustCenterLink never rejects; one open at a time (a second tap while
+  // the first is still checking is ignored).
+  const handleOpenLink = useCallback(async (link: TrustCenterLink) => {
+    if (opening.current) return;
+    opening.current = true;
+    setLinkFailure(null);
+    try {
+      const failure = await openTrustCenterLink(link);
+      if (mounted.current && failure) {
+        attempts.current += 1;
+        setLinkFailure({ link, failure, attempt: attempts.current });
+      }
+    } finally {
+      opening.current = false;
+    }
+  }, []);
+
+  // The notice sits at the foot of a scrolling screen: bring it into view, and
+  // read it out on iOS (Android reads the polite live region).
+  useEffect(() => {
+    if (!linkFailure) return;
+    if (Platform.OS === 'ios') {
+      AccessibilityInfo.announceForAccessibility(
+        linkFailureMessage(linkFailure.link, linkFailure.failure),
+      );
+    }
+    const id = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 0);
+    return () => clearTimeout(id);
+  }, [linkFailure]);
+
   // Deletion needs re-authentication and shows the scheduled date + cancel,
   // so it lives on the shared Delete account screen (registered in both the
   // client and coach navigators), not in an inline alert.
@@ -215,6 +410,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
@@ -263,11 +459,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
                 value="TLS 1.3 + AES-256 at rest"
               />
               <MetaRow
-                icon="location-outline"
-                label="Data residency"
-                value="US East"
-              />
-              <MetaRow
                 icon="document-text-outline"
                 label="Audit policy"
                 value={`Version ${meta.auditPolicyVersion}`}
@@ -287,7 +478,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
               <Ionicons name="people-outline" size={18} color={colors.primary} />
             </View>
             <Text style={styles.actionInfoText}>
-              Workouts and meals stay private to you and your assigned coach
+              Your answers and logs are shared with your coach. Your Roman conversations stay private from your coach.
             </Text>
           </View>
 
@@ -324,13 +515,13 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             style={styles.actionBtn}
             onPress={handleDeleteAccount}
             accessibilityRole="button"
-            accessibilityLabel="Delete my account"
+            accessibilityLabel="Delete account"
           >
             <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
               <Ionicons name="trash-outline" size={18} color={colors.error} />
             </View>
             <View style={styles.actionBtnText}>
-              <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
+              <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete account</Text>
               <Text style={styles.actionBtnSub}>A grace period to change your mind before permanent deletion</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -344,35 +535,40 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         <View style={styles.card}>
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
-          <BulletItem text="Your assigned coach — only what you log (meals + workouts)" />
-          <BulletItem text="No one else — we do not sell, share, or license your data" />
+          <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
+          <BulletItem text="Not your coach — your Roman conversations, which are kept until you delete them or your account" />
+          <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
+          <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>What is encrypted</Text>
           <BulletItem text="All data in transit uses TLS 1.3 (the strongest available)" />
           <BulletItem text="All stored data is encrypted with AES-256 at rest" />
           <BulletItem text="Authentication tokens are stored in your device's secure enclave (Keychain / Keystore)" />
-
-          <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>Where your data lives</Text>
-          <BulletItem text="Servers located in US East data centres" />
-          <BulletItem text="We do not transfer data outside the US without your consent" />
-          <BulletItem text="Backups are encrypted and stored in the same region" />
         </View>
       </View>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Questions or concerns?</Text>
-        <Text
-          style={styles.footerLink}
-          accessibilityRole="link"
-          accessibilityLabel="Open the help centre"
-          onPress={() => {
-            Linking.openURL(helpUrl('/privacy')).catch(() => {
-              Alert.alert('Help unavailable', HELP_UNAVAILABLE_COPY);
-            });
-          }}
-        >
-          Visit the help centre
-        </Text>
+        {trustCenterLinks().map((link) => (
+          <React.Fragment key={link.testID}>
+            <Text
+              testID={link.testID}
+              style={styles.footerLink}
+              accessibilityRole="link"
+              accessibilityLabel={link.accessibilityLabel}
+              onPress={() => void handleOpenLink(link)}
+            >
+              {link.label}
+            </Text>
+            {linkFailure?.link.id === link.id ? (
+              <LinkFailureNotice
+                key={linkFailure.attempt}
+                link={linkFailure.link}
+                failure={linkFailure.failure}
+              />
+            ) : null}
+          </React.Fragment>
+        ))}
       </View>
     </ScrollView>
   );

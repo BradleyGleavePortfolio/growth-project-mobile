@@ -13,6 +13,12 @@
  * in-flight send is guarded by `sendingRef` so a double-tap cannot fire two
  * turns. Failed sends DO NOT clear the draft — the screen preserves it for
  * retry (brief §3).
+ *
+ * Erased chats (B-376-1): this screen stays mounted under the history screens
+ * its header opens. When the person erases the chat it holds there (Delete on
+ * its row or in its transcript, or Delete all), it drops that chat at once (no
+ * erased text stays on screen) and opens a fresh one; a send made before the
+ * fresh chat is open waits for it, so nothing is ever sent to the erased chat.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -20,6 +26,7 @@ import {
   listMessages,
   openOrResumeSession,
   RomanApiError,
+  RomanWireError,
   sendMessage,
   type RomanAssistantReply,
   type RomanMessage,
@@ -27,6 +34,9 @@ import {
   type RomanSurface,
 } from '../../api/romanApi';
 import { logger } from '../../utils/logger';
+import type { AiRefusal } from '../../lib/ai/aiRefusal';
+import type { AiDailyCap } from '../../lib/ai/aiDailyCap';
+import { romanChatsEvents } from '../settings/romanChatsEvents';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
 const PAGE_LIMIT = 30;
@@ -42,6 +52,16 @@ export interface RomanSendError {
   kind: RomanApiError['kind'];
   message: string;
   retryAfterSeconds?: number;
+  /** R2b refusal (kind `aiRefused`): consent required or egress blocked. */
+  refusal?: AiRefusal;
+  /** Kind `dailyCap`: when AI help resets (shown in the daily cap pop-up). */
+  dailyCap?: AiDailyCap;
+  /**
+   * The server had already stored the user turn when this failed (an
+   * in-stream error after HTTP 200). The turn stays in the thread; nothing
+   * may append it again automatically (Sol B-326-3, Opus C-326-1).
+   */
+  turnStored?: boolean;
 }
 
 /**
@@ -49,9 +69,12 @@ export interface RomanSendError {
  * modes the R1 code audit (F5) requires us to keep separate:
  *   - 'sent'        — the turn persisted; clear the composer.
  *   - 'send-failed' — the turn did NOT persist; keep the draft for retry.
+ *   - 'stored-no-reply' — the server stored the turn, then failed before
+ *                     answering (in-stream refusal or error). The turn stays;
+ *                     the thread is re-read from the server (B-326-3).
  *   - 'noop'        — nothing was sent (empty/duplicate guard).
  */
-export type RomanSendOutcome = 'sent' | 'send-failed' | 'noop';
+export type RomanSendOutcome = 'sent' | 'send-failed' | 'stored-no-reply' | 'noop';
 
 export interface UseRomanChatResult {
   phase: RomanChatPhase;
@@ -97,6 +120,8 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
   const active = useRef(true);
   const sendingRef = useRef(false);
   const sessionRef = useRef<RomanSession | null>(null);
+  /** The open in flight, if any (never rejects). */
+  const openingRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     active.current = true;
@@ -105,7 +130,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
     };
   }, []);
 
-  const open = useCallback(async () => {
+  const runOpen = useCallback(async () => {
     if (active.current) setPhase('loading');
     try {
       const s = await openOrResumeSession(surface);
@@ -128,6 +153,36 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
       setPhase(phaseFromError(err));
     }
   }, [surface]);
+
+  const open = useCallback((): Promise<void> => {
+    const run = runOpen();
+    openingRef.current = run;
+    void run.finally(() => {
+      if (openingRef.current === run) openingRef.current = null;
+    });
+    return run;
+  }, [runOpen]);
+
+  // The chat this screen holds was erased from the history screens: drop it
+  // (transcript and session id) and open a fresh one (B-376-1).
+  useEffect(() => {
+    const drop = (id: string | null) => {
+      if (!active.current) return;
+      if (id !== null && id !== sessionRef.current?.id) return;
+      sessionRef.current = null;
+      setSession(null);
+      setMessages([]);
+      setNextCursor(null);
+      setSendError(null);
+      void open();
+    };
+    const offGone = romanChatsEvents.onGone((e) => drop(e.id));
+    const offErased = romanChatsEvents.onErased((e) => drop(e.id));
+    return () => {
+      offGone();
+      offErased();
+    };
+  }, [open]);
 
   useEffect(() => {
     open();
@@ -157,8 +212,18 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
 
   const send = useCallback(async (content: string): Promise<RomanSendOutcome> => {
     const trimmed = content.trim();
-    const s = sessionRef.current;
-    if (trimmed === '' || !s || sendingRef.current) return 'noop';
+    if (trimmed === '' || sendingRef.current) return 'noop';
+    let s = sessionRef.current;
+    if (!s && openingRef.current) {
+      // A fresh chat is opening (the held one was just erased): send there.
+      sendingRef.current = true;
+      setSending(true);
+      await openingRef.current;
+      sendingRef.current = false;
+      s = sessionRef.current;
+      if (!s && active.current) setSending(false);
+    }
+    if (!s) return 'noop';
     sendingRef.current = true;
     setSending(true);
     setSendError(null);
@@ -180,10 +245,41 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
     try {
       reply = await sendMessage(s.id, trimmed);
     } catch (err) {
+      logger.warn('useRomanChat.send', err);
+      // After an HTTP 200 the backend has stored the user turn before the
+      // stream failed (in-stream refusal, ROMAN_UNAVAILABLE, a cut stream).
+      // Keep the turn and re-read the thread from the server; never roll it
+      // back, or a retry would store it twice (Sol B-326-3, Opus C-326-1).
+      const stored =
+        (err instanceof RomanApiError && err.turnStored) || err instanceof RomanWireError;
+      if (stored) {
+        if (active.current) {
+          const e = err instanceof RomanApiError ? err : null;
+          setSendError({
+            kind: e?.kind ?? 'generic',
+            message: e?.message ?? 'Roman could not finish this answer.',
+            ...(e?.refusal ? { refusal: e.refusal } : {}),
+            ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
+            turnStored: true,
+          });
+        }
+        try {
+          const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+          if (active.current) {
+            setMessages([...page.messages].reverse());
+            setNextCursor(page.nextCursor);
+          }
+        } catch (refreshErr) {
+          // The optimistic turn stays visible; the next reload reconciles it.
+          logger.warn('useRomanChat.send.storedRefresh', refreshErr);
+        }
+        sendingRef.current = false;
+        if (active.current) setSending(false);
+        return 'stored-no-reply';
+      }
       // The SEND failed: the backend did not persist the turn. Roll the
       // optimistic user turn back and surface a retryable send error. The
       // screen preserves the draft so the user can send it again.
-      logger.warn('useRomanChat.send', err);
       if (active.current) {
         setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         const e = err instanceof RomanApiError ? err : null;
@@ -191,6 +287,8 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
           kind: e?.kind ?? 'generic',
           message: e?.message ?? 'That request did not complete.',
           retryAfterSeconds: e?.retryAfterSeconds,
+          ...(e?.refusal ? { refusal: e.refusal } : {}),
+          ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
         });
       }
       sendingRef.current = false;

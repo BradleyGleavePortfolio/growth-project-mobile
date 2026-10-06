@@ -38,6 +38,9 @@ jest.mock('../../../services/api', () => ({
   profileApi: { get: jest.fn(async () => ({ data: {} })) },
 }));
 jest.mock('../../../services/realtime', () => ({ subscribeToMessages: () => () => undefined }));
+jest.mock('../../../hooks/useFeatureFlags', () => ({
+  useFeatureFlags: () => ({ flags: { messaging_core_v2: false } }),
+}));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client-1' }) }));
 jest.mock('../../../hooks/useBlockedUsersHydration', () => ({
   useBlockedUsersHydration: () => ({ serverHydrationComplete: true }),

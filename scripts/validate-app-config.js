@@ -41,6 +41,8 @@
 
 const fs = require('fs');
 const path = require('path');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const { resolveProfile } = require('./eas-profile');
 
 const ROOT = path.resolve(__dirname, '..');
 const APP_JSON = path.join(ROOT, 'app.json');
@@ -687,12 +689,197 @@ function writeReleaseBlockerMd() {
   fs.writeFileSync(RELEASE_BLOCKER_MD, lines.join('\n'), 'utf8');
 }
 
+// Clinic C11: expo-updates (EAS Update). The binary must carry a runtime
+// version and an updates URL pinned to this project's EAS projectId, with a
+// non-blocking launch (fallbackToCacheTimeout 0). Each store/preview build
+// profile in eas.json must name its update channel so `eas update --channel`
+// reaches exactly the builds it is meant for. eas.json / package.json are
+// optional here (the mutation tests run on a partial copy of the repo).
+const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER'];
+// profile -> the channel its binaries read and the EAS environment an update
+// for that channel is exported with (resolved through `extends`). The clinic
+// binary has its own channel: it is built with clinic-only EXPO_PUBLIC_FF_*
+// values in eas.json, and an update exported for `production` would turn
+// those features off on clinic devices.
+// S-RELEASE-3 (owner: an update must never interrupt a session or
+// onboarding, and must never brick a build): runtime code never drives
+// expo-updates. A downloaded update then applies only on the next cold start
+// (checkAutomatically ON_LOAD, fallbackToCacheTimeout 0), never through a
+// JS reloadAsync / fetchUpdateAsync in the middle of a flow. Update identity
+// for Sentry is read without importing the module (src/services/otaUpdateTags.ts).
+const EXPO_UPDATES_IMPORT = /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s+)['"`]expo-updates(?:\/[^'"`]*)?['"`]/;
+
+function runtimeSourceFiles(root) {
+  const out = [];
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (e.name === 'node_modules' || e.name.startsWith('.')) continue;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) {
+        if (e.name !== '__tests__' && e.name !== '__mocks__') walk(p);
+      } else if (/\.(?:ts|tsx|js|jsx|mjs|cjs)$/.test(e.name) && !/\.(?:test|spec)\.[jt]sx?$/.test(e.name) && !/\.d\.ts$/.test(e.name)) {
+        out.push(path.relative(root, p).split(path.sep).join('/'));
+      }
+    }
+  };
+  walk(path.join(root, 'src'));
+  for (const f of ['App.tsx', 'App.js', 'index.ts', 'index.js']) if (fs.existsSync(path.join(root, f))) out.push(f);
+  return out.sort();
+}
+
+const EXPECTED_CHANNELS = {
+  preview: { channel: 'preview', environment: 'preview' },
+  production: { channel: 'production', environment: 'production' },
+  clinic: { channel: 'clinic', environment: 'production' },
+};
+
+function validateUpdates(app) {
+  const expo = (app && app.expo) || {};
+  const pkgPath = path.join(ROOT, 'package.json');
+  let hasDep = false;
+  if (fs.existsSync(pkgPath)) {
+    const pkg = readJson(pkgPath);
+    hasDep = !!(pkg && (pkg.dependencies || {})['expo-updates']);
+  }
+  if (!hasDep && !expo.updates && !expo.runtimeVersion) return;
+
+  // Audit #305 C1: pin the fingerprint policy. appVersion / sdkVersion / a
+  // fixed string would let a JS update reach a binary with different native
+  // code, because this app keeps version 1.0.0.
+  const rv = expo.runtimeVersion;
+  if (rv == null) {
+    fail('app.json: expo.runtimeVersion is required when expo-updates is installed (use { "policy": "fingerprint" })');
+  } else if (typeof rv !== 'object' || rv.policy !== 'fingerprint') {
+    fail(`app.json: expo.runtimeVersion must be { "policy": "fingerprint" }, got ${JSON.stringify(rv)}`);
+  }
+  for (const platform of ['ios', 'android']) {
+    const prv = expo[platform] && expo[platform].runtimeVersion;
+    if (prv != null && !(typeof prv === 'object' && prv.policy === 'fingerprint')) {
+      fail(`app.json: expo.${platform}.runtimeVersion override must be { "policy": "fingerprint" } or absent, got ${JSON.stringify(prv)}`);
+    }
+  }
+
+  // Re-audit #305 A1 / #304 B3: the iOS purchase gate must be a fingerprint
+  // input, so a JS-only edit to it (e.g. the native-build threshold) yields a
+  // new runtime that installed binaries never download.
+  const fpPath = path.join(ROOT, 'fingerprint.config.js');
+  let fpSources = [];
+  if (fs.existsSync(fpPath)) {
+    try {
+      delete require.cache[require.resolve(fpPath)];
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const cfg = require(fpPath);
+      fpSources = Array.isArray(cfg && cfg.extraSources) ? cfg.extraSources : [];
+    } catch (e) {
+      fail(`fingerprint.config.js: could not be loaded (${e.message})`);
+    }
+  }
+  if (!fpSources.some((s) => s && s.type === 'file' && s.filePath === 'src/config/purchaseSurfaces.ts')) {
+    fail('fingerprint.config.js: extraSources must include { type: "file", filePath: "src/config/purchaseSurfaces.ts" } (purchase gate must change the runtime)');
+  }
+
+  const updates = expo.updates;
+  if (!updates || typeof updates !== 'object') {
+    fail('app.json: expo.updates is required when expo-updates is installed');
+    return;
+  }
+  const projectId = expo.extra && expo.extra.eas && expo.extra.eas.projectId;
+  const expectedUrl = projectId ? `https://u.expo.dev/${projectId}` : null;
+  if (!expectedUrl) {
+    fail('app.json: expo.extra.eas.projectId is required for EAS Update');
+  } else if (updates.url !== expectedUrl) {
+    fail(`app.json: expo.updates.url must be ${expectedUrl} (EAS Update for this project), got ${JSON.stringify(updates.url)}`);
+  }
+  // Audit #305 C4: enforce the accepted production behaviour, not only a
+  // "valid" configuration: OTA on, a background check on every cold start.
+  if (updates.enabled !== true) {
+    fail(`app.json: expo.updates.enabled must be true (over-the-air fixes must reach this binary), got ${JSON.stringify(updates.enabled)}`);
+  }
+  if (updates.checkAutomatically !== 'ON_LOAD') {
+    const known = CHECK_AUTOMATICALLY.includes(updates.checkAutomatically) ? '' : ` (valid values: ${CHECK_AUTOMATICALLY.join(', ')})`;
+    fail(`app.json: expo.updates.checkAutomatically must be "ON_LOAD" (check in the background on every cold start)${known}, got ${JSON.stringify(updates.checkAutomatically)}`);
+  }
+  if (updates.disableAntiBrickingMeasures === true) {
+    fail('app.json: expo.updates.disableAntiBrickingMeasures must not be true (keeps the embedded-update rollback path)');
+  }
+  if (updates.useEmbeddedUpdate === false) {
+    fail('app.json: expo.updates.useEmbeddedUpdate must not be false (the binary must boot offline on its embedded bundle)');
+  }
+  if (updates.fallbackToCacheTimeout !== 0) {
+    fail(`app.json: expo.updates.fallbackToCacheTimeout must be 0 (never block launch on the network), got ${JSON.stringify(updates.fallbackToCacheTimeout)}`);
+  }
+  for (const rel of runtimeSourceFiles(ROOT)) {
+    if (EXPO_UPDATES_IMPORT.test(fs.readFileSync(path.join(ROOT, rel), 'utf8'))) {
+      fail(
+        `${rel}: imports expo-updates. Runtime code must not check for, fetch or reload updates: a downloaded update applies only on the next cold start, so it never interrupts a session or onboarding (owner rule, docs/OTA_UPDATES.md). Fix: remove the import (src/services/otaUpdateTags.ts reads the update identity without it), or get an owner decision and change this rule.`,
+      );
+    }
+  }
+
+  const easPath = path.join(ROOT, 'eas.json');
+  if (fs.existsSync(easPath)) {
+    const eas = readJson(easPath);
+    const build = (eas && eas.build) || {};
+    for (const [profile, want] of Object.entries(EXPECTED_CHANNELS)) {
+      if (!build[profile]) {
+        // Re-audit #305 C1: a deleted OTA profile must not pass silently.
+        fail(`eas.json: build.${profile} is required (OTA channel "${want.channel}")`);
+        continue;
+      }
+      let eff;
+      try {
+        eff = resolveProfile(eas, profile);
+      } catch (e) {
+        fail(`eas.json: build.${profile} cannot be resolved (${e.message})`);
+        continue;
+      }
+      if (eff.environment !== want.environment) {
+        fail(`eas.json: build.${profile}.environment must be "${want.environment}" (the --environment its updates are exported with), got ${JSON.stringify(eff.environment)}`);
+      }
+      if (eff.channel !== want.channel) {
+        fail(`eas.json: build.${profile}.channel must be "${want.channel}" for EAS Update, got ${JSON.stringify(eff.channel)}`);
+      }
+      // Audit #305 A1/B1: the iOS non-P2P purchase hide flag must be on in
+      // every OTA-capable store/internal profile (after `extends`).
+      const flag = (eff.env || {}).EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES;
+      if (flag !== 'true') {
+        fail(`eas.json: build.${profile}.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true", got ${JSON.stringify(flag)}`);
+      }
+    }
+    // One binary population per channel: two profiles on the same channel
+    // would receive each other's updates (built with different env).
+    const owners = {};
+    for (const name of Object.keys(build)) {
+      let eff;
+      try {
+        eff = resolveProfile(eas, name);
+      } catch (e) {
+        fail(`eas.json: build.${name} cannot be resolved (${e.message})`);
+        continue;
+      }
+      if (typeof eff.channel === 'string' && eff.channel) (owners[eff.channel] = owners[eff.channel] || []).push(name);
+    }
+    for (const [channel, names] of Object.entries(owners)) {
+      if (names.length > 1) {
+        fail(`eas.json: channel "${channel}" is used by ${names.join(', ')}; each update channel must belong to exactly one build profile`);
+      }
+    }
+  }
+}
+
 function main() {
   const app = readJson(APP_JSON);
   validateAppJson(app);
   validateStoreListings(app);
   validateEnvExample();
   validateLinkingTemplates();
+  validateUpdates(app);
 
   // Write (or clean up) RELEASE_BLOCKER.md before deciding the exit code.
   writeReleaseBlockerMd();

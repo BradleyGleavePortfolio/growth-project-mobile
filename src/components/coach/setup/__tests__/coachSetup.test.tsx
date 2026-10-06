@@ -9,6 +9,11 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 const mockGet = jest.fn();
 const mockPost = jest.fn();
 const mockPut = jest.fn();
+// B-329-1: the first-package create is durable per signed-in coach, so the
+// form needs an account to write its intent before it sends.
+jest.mock("../../../../hooks/useCurrentUser", () => ({
+  useCurrentUser: () => ({ id: "coach_1", email: "coach@example.test" }),
+}));
 jest.mock("../../../../services/api", () => ({
   __esModule: true,
   default: {

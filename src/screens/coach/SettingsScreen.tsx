@@ -548,6 +548,40 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* S-SCHED — appointment types clients book from, and time off. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', {
+              screen: 'CoachAppointmentTypes',
+              params: currentUser?.id ? { coachId: currentUser.id } : undefined,
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open appointment types"
+          testID="settings-appointment-types"
+        >
+          <Ionicons name="list-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Appointment Types</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachTimeOff' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open time off"
+          testID="settings-time-off"
+        >
+          <Ionicons name="airplane-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Time Off</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
         {/* Legacy single-invite generator. The new email-pipeline Bulk
             invite + Invites & email rows live under Client Management. */}
         <TouchableOpacity
@@ -643,6 +677,28 @@ export default function SettingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        {/* Roman chat history (backend #635): a coach's own Roman chats are
+            kept until they delete them or their account. Shown in builds
+            where Roman exists, like the client Roman and AI row. Hidden for
+            a sub-coach (C-331-3): the backend Roman routes allow student,
+            coach and owner only, so a sub-coach would reach a 403. */}
+        {(featureFlags.consultationOnboarding || featureFlags.romanChat) && currentUser?.role !== 'sub_coach' ? (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('RomanConversations')}
+            accessibilityRole="button"
+            accessibilityLabel="Your conversations with Roman"
+            accessibilityHint="See, open and delete your past conversations with Roman"
+            testID="coach-settings-roman-conversations"
+          >
+            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Your conversations with Roman</Text>
+              <Text style={styles.rowSubLabel}>Kept until you delete them or your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Stage 3 — cross-pillar federated coach surface. Settings row
