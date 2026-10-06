@@ -26,6 +26,7 @@ jest.mock('../../../store/clientStore', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
+  useFocusEffect: () => undefined,
 }));
 jest.mock('../../../services/api', () => ({
   workoutApi: { getAll: () => Promise.resolve({ data: [] }) },

@@ -39,7 +39,13 @@ jest.mock('../../../services/api', () => ({
     sendClientMessage: (...a: unknown[]) => mockLegacySend(...(a as [string, string])),
   },
 }));
-jest.mock('../../../services/realtime', () => ({ subscribeToMessages: () => () => undefined }));
+const mockSubs: Array<{ userId: string; onPing: () => void }> = [];
+jest.mock('../../../services/realtime', () => ({
+  subscribeToMessages: (userId: string, onPing: () => void) => {
+    mockSubs.push({ userId, onPing });
+    return () => undefined;
+  },
+}));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach-1' }) }));
 jest.mock('../../../hooks/useBlockedUsersHydration', () => ({
   useBlockedUsersHydration: () => ({ serverHydrationComplete: true }),
@@ -92,6 +98,17 @@ const sentRow = (body: Record<string, unknown>) => ({
 });
 
 describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
+  it('a client message that arrives while the thread is open is marked read (AUDIT-03-125 U1)', async () => {
+    mockSubs.length = 0;
+    await render(<ClientMessagesScreen />);
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(`${BASE}/read`, { up_to_message_id: 'm3' }, expect.anything()));
+    mockRows.push(row({ id: 'm4', sender_id: 'client-1', body: 'are you there', created_at: new Date().toISOString() }));
+    const self = mockSubs.filter((x) => x.userId === 'coach-1').pop();
+    expect(self).toBeTruthy();
+    self?.onPing();
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith(`${BASE}/read`, { up_to_message_id: 'm4' }, expect.anything()));
+  });
+
   it('sides from sender_id: client message offers report, own message edit and delete; tombstone, Edited, read-up-to', async () => {
     const { findByLabelText, getByLabelText, queryByLabelText, getByText } = await render(<ClientMessagesScreen />);
     expect(getByText('Message deleted')).toBeTruthy();

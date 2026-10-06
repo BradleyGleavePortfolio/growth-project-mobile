@@ -11,7 +11,13 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { REPORT_REASON_OPTIONS, ReportReason, DETAILS_MAX } from '../../api/messagesApi';
+import {
+  REPORT_REASON_OPTIONS,
+  REPORT_EMERGENCY_NOTE,
+  ReportReason,
+  DETAILS_MAX,
+  reportNeedsEmergencyNote,
+} from '../../api/messagesApi';
 
 export interface ReportMessageSheetProps {
   visible: boolean;
@@ -128,6 +134,12 @@ export function ReportMessageSheet({
             );
           })}
 
+          {reportNeedsEmergencyNote(reason) ? (
+            <Text style={styles.emergency} accessibilityRole="alert" testID="report-emergency-note">
+              {REPORT_EMERGENCY_NOTE}
+            </Text>
+          ) : null}
+
           <Text style={styles.sectionLabel}>More details (optional)</Text>
           <TextInput
             style={styles.detailsInput}
@@ -186,6 +198,7 @@ const makeStyles = (colors: ThemeColors) =>
     title: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
     content: { padding: 20, gap: 12 },
     lede: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+    emergency: { fontSize: 13, color: colors.textPrimary, lineHeight: 18, fontWeight: '600' },
 
     previewWrap: {
       backgroundColor: colors.surface,

@@ -11,16 +11,17 @@
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
  */
-import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientUnreadCount } from '../../hooks/useClientUnreadCount';
 import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
+import { logger } from '../../utils/logger';
 
 export function messageCoachLabel(coachName?: string | null): string {
   const first = typeof coachName === 'string' ? coachName.trim().split(/\s+/)[0] : '';
@@ -52,7 +53,38 @@ export default function HomeHeaderActions() {
     };
   }, [coachId]);
 
+  // Unread coach messages on the message entry (AUDIT-03-125 U2): without it a
+  // client on Home had no sign the coach replied. GET /messages/unread-count
+  // is live in production; refreshed on Home focus, foreground and every 30 s.
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const refreshUnreadMessages = useCallback(() => {
+    if (!coachId) {
+      setUnreadMessages(0);
+      return;
+    }
+    api
+      .get<{ total?: number }>('/messages/unread-count')
+      .then((res) => {
+        const n = Number(res?.data?.total ?? 0);
+        setUnreadMessages(Number.isFinite(n) && n > 0 ? n : 0);
+      })
+      .catch((error: unknown) => logger.warn('homeHeader.unread-messages', { error: String(error) }));
+  }, [coachId]);
+  useFocusEffect(refreshUnreadMessages);
+  useEffect(() => {
+    const id = setInterval(refreshUnreadMessages, 30000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshUnreadMessages();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [refreshUnreadMessages]);
+
   const label = messageCoachLabel(coachName);
+  const messageLabel =
+    unreadMessages > 0 ? `${label}, ${unreadMessages > 99 ? '99+' : unreadMessages} unread` : label;
   const bellLabel =
     unreadCount > 0
       ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
@@ -63,7 +95,7 @@ export default function HomeHeaderActions() {
       <Pressable
         onPress={() => navigation.navigate('Messages')}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={messageLabel}
         testID="home-message-coach"
         style={({ pressed }) => [
           styles.message,
@@ -74,6 +106,7 @@ export default function HomeHeaderActions() {
         <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]} numberOfLines={1}>
           {label}
         </Text>
+        <NotificationBadge count={unreadMessages} />
       </Pressable>
       <Pressable
         onPress={() => navigation.navigate('NotificationCenter')}
@@ -101,6 +134,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 1,
     marginRight: 12,
+    position: 'relative',
   },
   messageText: { marginLeft: 8, flexShrink: 1 },
   bell: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', position: 'relative' },
