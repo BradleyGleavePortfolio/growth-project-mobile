@@ -48,6 +48,8 @@ import {
 } from '../../../../api/packageContentsApi';
 import { useTheme, ThemeColors } from '../../../../theme/ThemeProvider';
 import { mediumTap, warningTap } from '../../../../utils/haptics';
+import { featureFlags } from '../../../../config/featureFlags';
+import ProgramAssetPicker from '../../programs/ProgramAssetPicker';
 
 // ─── option tables (mirror the M1 ContentAssetType / CadenceKind unions) ──────
 
@@ -357,7 +359,28 @@ export default function ContentAttachForm({
 
           {!isEdit ? (
             <>
-              <Label colors={colors}>Asset reference</Label>
+              {featureFlags.mwbPrograms &&
+              (assetType === 'workout_program' || assetType === 'workout_plan') ? (
+                <>
+                  <Label colors={colors}>
+                    {assetType === 'workout_program' ? 'Program' : 'Saved workout'}
+                  </Label>
+                  <ProgramAssetPicker
+                    assetType={assetType}
+                    selectedId={assetId.trim()}
+                    onSelect={(id, name) => {
+                      setAssetId(id);
+                      if (title.trim() === '') setTitle(name);
+                    }}
+                  />
+                </>
+              ) : null}
+              <Label colors={colors}>
+                {featureFlags.mwbPrograms &&
+                (assetType === 'workout_program' || assetType === 'workout_plan')
+                  ? 'Or paste an asset reference'
+                  : 'Asset reference'}
+              </Label>
               <TextInput
                 value={assetId}
                 onChangeText={setAssetId}

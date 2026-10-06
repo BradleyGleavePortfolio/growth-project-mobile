@@ -26,12 +26,13 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
@@ -62,8 +63,13 @@ interface RouteParams {
 export default function CommunityWearablePromptsScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const route = useRoute();
+  const navigation = useNavigation();
   const params = (route.params ?? {}) as Partial<RouteParams>;
   const clientId = params.clientId;
+  // S14 round 3: opened from a client's Health tab (ClientsStack hides the
+  // stack header), so the screen offers its own way back.
+  const canGoBack = navigation.canGoBack();
+  const backLabel = params.clientName ? `Back to ${params.clientName}` : 'Back';
 
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? undefined;
@@ -187,6 +193,19 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       edges={['top']}
     >
+      {canGoBack ? (
+        <Pressable
+          style={styles.back}
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel={backLabel}
+          testID="wearable-prompts-back"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="chevron-back" size={20} color={semanticColors.textPrimary} />
+          <Text style={[styles.backText, { color: semanticColors.textPrimary }]}>{backLabel}</Text>
+        </Pressable>
+      ) : null}
       <ThreadHeader
         title="Wearable prompts"
         testID="wearable-prompts-header"
@@ -440,6 +459,14 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+  },
+  backText: { fontSize: 15, fontWeight: '500' },
   center: {
     flex: 1,
     alignItems: 'center',

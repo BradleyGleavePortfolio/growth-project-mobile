@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signOut, SIGN_OUT_KEYS, clearUserScopedKeys } from '../authActions';
 import { authEvents } from '../../utils/authEvents';
+import { createSessionFence, OnDeviceSessionChangedError } from '../health/sessionFence';
 import { prefsStorage, cacheStorage } from '../../storage/mmkv';
 import {
   AUTOSAVE_MIRROR_KEY_PREFIX,
@@ -140,6 +141,37 @@ describe('signOut', () => {
     expect(handler).toHaveBeenCalledTimes(1);
 
     authEvents.off('logout', handler);
+  });
+
+  // S14 (A-317-1 / B-317-1) — on-device health Connect authorizations and
+  // per-account progress never survive sign-out (also the account-deletion
+  // path, which ends in signOut()).
+  it('sweeps every on-device health authorization and progress key', async () => {
+    const keys = [
+      'wearables_on_device:auth:APPLE_HEALTHKIT:user-A',
+      'wearables_on_device:auth:HEALTH_CONNECT:user-B',
+      'wearables_on_device:progress:APPLE_HEALTHKIT:user-A:conn-1',
+    ];
+    for (const k of keys) await AsyncStorage.setItem(k, '{}');
+    await AsyncStorage.setItem('wearables_other', 'stays');
+    await signOut();
+    for (const k of keys) expect(await AsyncStorage.getItem(k)).toBeNull();
+    expect(await AsyncStorage.getItem('wearables_other')).toBe('stays');
+  });
+
+  // S-WEAR-3 (Sol B-317-7): reads stop the instant the person logs out, not
+  // when the final `logout` event fires after the network and storage work.
+  it('stops every on-device health run synchronously, before its first await', async () => {
+    const fence = createSessionFence('user-A', async () => 'user-A');
+    const logout = jest.fn();
+    authEvents.on('logout', logout);
+    const pending = signOut();
+    // No await yet: the fence already refuses, and logout has not fired.
+    expect(() => fence.throwIfStopped()).toThrow(OnDeviceSessionChangedError);
+    expect(logout).not.toHaveBeenCalled();
+    await pending;
+    expect(logout).toHaveBeenCalledTimes(1);
+    authEvents.off('logout', logout);
   });
 
   // R15 — Every variant of pending_invite_code is user-scoped (or

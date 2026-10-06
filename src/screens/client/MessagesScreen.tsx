@@ -32,6 +32,16 @@ import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
 import { track } from '../../lib/analytics';
+import { MuteBell, PinnedBar, ThreadV2Menus, jumpToMessage } from '../../components/messaging/ThreadV2Parts';
+import {
+  bubbleV2Fields,
+  newClientMessageId,
+  readThreadV2Fields,
+  resolveSenderRole,
+  type ThreadV2Fields,
+} from '../../components/messaging/threadV2';
+import { useThreadV2 } from '../../hooks/useThreadV2';
+import { messagingV2Api, toMessagingError, type ThreadScope } from '../../api/messagingV2Api';
 
 interface Message {
   id: string;
@@ -42,7 +52,11 @@ interface Message {
   read_at?: string | null;
   pending?: boolean;
   parent_message_id?: string | null;
+  /** messaging v2 (flag ON); absent on legacy rows. */
+  v2?: ThreadV2Fields;
 }
+
+const CLIENT_SCOPE: ThreadScope = { role: 'client' };
 
 // Realtime now drives most refreshes. Keep a 60s safety poll as a backstop in
 // case the WebSocket is dropped (background → foreground transitions, mobile
@@ -84,6 +98,7 @@ export default function MessagesScreen() {
   const [actionTarget, setActionTarget] = useState<Message | null>(null);
   const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<Message | null>(null);
+  const [muteMenu, setMuteMenu] = useState(false);
 
   const blockStore = useBlockedUsersStore();
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
@@ -139,10 +154,10 @@ export default function MessagesScreen() {
     }
   }, []);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (): Promise<Message[]> => {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
-      const list = normalizeList(res.data);
+      const list = normalizeList(res.data, currentUser?.id);
       setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
@@ -155,6 +170,7 @@ export default function MessagesScreen() {
           return current;
         });
       }
+      return list;
     } catch (err) {
       const code = errorCode(err);
       if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
@@ -164,10 +180,16 @@ export default function MessagesScreen() {
         console.error('client MessagesScreen: load failed', err);
         setError('Could not load messages. Pull to retry.');
       }
+      return [];
     } finally {
       setLoading(false);
     }
   }, [currentUser?.id, loadCoachReview]);
+
+  const onThreadChanged = useCallback(() => {
+    void load();
+  }, [load]);
+  const thread = useThreadV2(noCoach ? null : CLIENT_SCOPE, onThreadChanged);
 
   const loadOlder = useCallback(async () => {
     if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
@@ -175,7 +197,7 @@ export default function MessagesScreen() {
     try {
       const oldest = messages[0];
       const res = await messagesApi.list({ before: oldest.created_at, limit: PAGE_LIMIT });
-      const page = normalizeList(res.data);
+      const page = normalizeList(res.data, currentUser?.id);
       if (page.length === 0) {
         setHasMoreOlder(false);
       } else {
@@ -187,25 +209,42 @@ export default function MessagesScreen() {
     } finally {
       setLoadingOlder(false);
     }
-  }, [loadingOlder, hasMoreOlder, messages]);
+  }, [loadingOlder, hasMoreOlder, messages, currentUser?.id]);
 
-  const markRead = useCallback(async () => {
+  // v2: read up to the newest coach message actually loaded, so a message
+  // that lands after this fetch is never marked read unseen.
+  const markRead = useCallback(async (list?: Message[]) => {
     try {
-      await messagesApi.markRead();
+      if (thread.enabled) {
+        const lastIncoming = [...(list ?? [])].reverse().find((m) => m.sender_role === 'coach' && !m.pending);
+        if (list && !lastIncoming) return;
+        await messagingV2Api.markReadUpTo(CLIENT_SCOPE, lastIncoming?.id ?? null);
+      } else {
+        await messagesApi.markRead();
+      }
     } catch {
       /* no-op */
     }
-  }, []);
+  }, [thread.enabled]);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      load().then(() => markRead());
+      load().then((list) => markRead(list));
 
       const unsubscribe = currentUser?.id
-        ? subscribeToMessages(currentUser.id, () => {
-            load().then(() => markRead());
-          })
+        ? subscribeToMessages(
+            currentUser.id,
+            () => {
+              load().then((list) => markRead(list));
+            },
+            thread.enabled
+              ? () => {
+                  void load();
+                  void thread.refresh();
+                }
+              : undefined,
+          )
         : () => {};
 
       pollRef.current = setInterval(() => {
@@ -217,7 +256,8 @@ export default function MessagesScreen() {
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [load, markRead, currentUser?.id]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [load, markRead, currentUser?.id, thread.enabled]),
   );
 
   const handleSend = async () => {
@@ -226,6 +266,11 @@ export default function MessagesScreen() {
     setSending(true);
     Keyboard.dismiss();
     const reply = replyTarget;
+    if (thread.enabled) {
+      await sendV2(text, newClientMessageId(), reply?.id ?? null);
+      setSending(false);
+      return;
+    }
     try {
       let created: Message;
       if (reply) {
@@ -247,7 +292,7 @@ export default function MessagesScreen() {
         };
       } else {
         const res = await messagesApi.send(text);
-        created = normalizeMessage(res.data);
+        created = normalizeMessage(res.data, currentUser?.id);
       }
       setInputText('');
       setReplyTarget(null);
@@ -284,6 +329,51 @@ export default function MessagesScreen() {
       }
     } finally {
       setSending(false);
+    }
+  };
+
+  // v2 idempotent send: the device key is kept on a failed (pending) bubble,
+  // so "Send again" replays the same key and can never post a duplicate.
+  const sendV2 = async (text: string, key: string, replyToId: string | null, pendingId?: string) => {
+    const uid = currentUser?.id;
+    const persist = (next: Message[]) => {
+      if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
+      return next;
+    };
+    try {
+      const row = await messagingV2Api.sendMessage(CLIENT_SCOPE, { body: text, clientMessageId: key, replyToId });
+      const created = normalizeMessage(row, uid);
+      setInputText((t) => (pendingId ? t : ''));
+      if (!pendingId) setReplyTarget(null);
+      setMessages((prev) => persist(mergeById(prev.filter((m) => m.id !== pendingId), [created])));
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    } catch (err) {
+      const e = toMessagingError(err);
+      if (e.code === 'NO_COACH_ASSIGNED') {
+        setNoCoach(true);
+      } else if (e.kind === 'contract') {
+        // 2xx with a shape this build does not read: the server took the
+        // message, so never offer a resend; refetch the thread instead.
+        if (pendingId) setMessages((prev) => persist(prev.filter((m) => m.id !== pendingId)));
+        else {
+          setInputText('');
+          setReplyTarget(null);
+        }
+        void load();
+      } else if (e.kind === 'network' || e.status >= 500 || e.status === 429) {
+        if (pendingId) {
+          Alert.alert('Message not sent', e.userMessage);
+          return;
+        }
+        const pendingMsg = normalizeMessage({ id: `pending_${key}`, sender_id: uid, sender_role: 'client', body: text, client_message_id: key }, uid);
+        setMessages((prev) => persist([...prev, { ...pendingMsg, pending: true, parent_message_id: replyToId }]));
+        setInputText('');
+        setReplyTarget(null);
+      } else {
+        // Refused for a reason the user can act on (blocked, quote gone, ...):
+        // keep the typed text so nothing is lost.
+        thread.report('Message not sent', err);
+      }
     }
   };
 
@@ -460,8 +550,12 @@ export default function MessagesScreen() {
           <Text style={styles.chatHeaderName}>{coachName || 'Your Coach'}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={{ width: 24 }} />
+        {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>
+
+      {thread.enabled ? (
+        <PinnedBar pins={thread.pins} onOpen={(id) => jumpToMessage(flatListRef.current, visibleMessages, id)} />
+      ) : null}
 
       {error ? (
         <TouchableOpacity style={styles.errorBanner} onPress={load}>
@@ -489,6 +583,9 @@ export default function MessagesScreen() {
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        onScrollToIndexFailed={({ averageItemLength, index }) =>
+          flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true })
+        }
         ListHeaderComponent={
           hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
@@ -523,7 +620,16 @@ export default function MessagesScreen() {
 
           let receiptNode: React.ReactNode = null;
           if (isMe) {
-            if (item.pending) {
+            if (item.pending && item.v2?.client_message_id) {
+              // v2: a pending bubble is a send that failed; it waits for the
+              // user (long press, Send again with the same key).
+              receiptNode = (
+                <View style={styles.receiptRow}>
+                  <Ionicons name="alert-circle-outline" size={11} color={textOnPrimaryDim} />
+                  <Text style={styles.receiptText}>Not sent. Long press to send again</Text>
+                </View>
+              );
+            } else if (item.pending) {
               receiptNode = (
                 <View style={styles.receiptRow}>
                   <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
@@ -556,9 +662,7 @@ export default function MessagesScreen() {
             created_at: item.created_at,
             pending: item.pending,
             read_at: item.read_at,
-            parent: parent
-              ? { id: parent.id, body: parent.body, sender_role: parent.sender_role }
-              : null,
+            ...bubbleV2Fields(item.v2, currentUser?.id, parent),
           };
 
           return (
@@ -613,15 +717,34 @@ export default function MessagesScreen() {
         </TouchableOpacity>
       </View>
 
-      <MessageActionSheet
-        visible={!!actionTarget}
-        messagePreview={actionTarget?.body}
-        onReply={handleReply}
-        onCopy={handleCopy}
-        onReport={handleOpenReport}
-        onClose={() => setActionTarget(null)}
-        canReport={!!actionTarget && actionTarget.sender_role !== 'client'}
-      />
+      {thread.enabled ? (
+        <ThreadV2Menus
+          thread={thread}
+          target={actionTarget}
+          isMine={actionTarget?.sender_role === 'client'}
+          onClose={() => setActionTarget(null)}
+          onReply={handleReply}
+          onCopy={() => void handleCopy()}
+          onReport={handleOpenReport}
+          onRetry={(m) => {
+            const key = m.v2?.client_message_id;
+            if (key) void sendV2(m.body, key, actionTarget?.parent_message_id ?? null, m.id);
+          }}
+          muteOpen={muteMenu}
+          onMuteClose={() => setMuteMenu(false)}
+        />
+      ) : (
+        <MessageActionSheet
+          visible={!!actionTarget}
+          messagePreview={actionTarget?.body}
+          onReply={handleReply}
+          onCopy={handleCopy}
+          onReport={handleOpenReport}
+          onClose={() => setActionTarget(null)}
+          canReport={!!actionTarget && actionTarget.sender_role !== 'client'}
+          canReply={false}
+        />
+      )}
 
       <ReportMessageSheet
         visible={!!reportTarget}
@@ -633,27 +756,30 @@ export default function MessagesScreen() {
   );
 }
 
-function normalizeList(raw: unknown): Message[] {
+function normalizeList(raw: unknown, selfId?: string): Message[] {
   const wrapper = (raw && typeof raw === 'object' && !Array.isArray(raw))
     ? (raw as { messages?: unknown[] })
     : null;
   const arr: unknown[] = Array.isArray(raw) ? raw : (wrapper?.messages ?? []);
   return arr
-    .map(normalizeMessage)
+    .map((r) => normalizeMessage(r, selfId))
     .filter((m: Message) => !!m.id)
     .sort((a: Message, b: Message) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
-function normalizeMessage(raw: unknown): Message {
+export function normalizeMessage(raw: unknown, selfId?: string): Message {
   const r = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
   return {
     id: String(r.id ?? ''),
-    sender_role: r.sender_role === 'coach' ? 'coach' : 'client',
+    // The thread routes carry sender_id, not sender_role: the side comes from
+    // sender_id against the signed-in client.
+    sender_role: resolveSenderRole(r, selfId, 'client'),
     sender_id: typeof r.sender_id === 'string' ? r.sender_id : undefined,
     body: String(r.body ?? ''),
     created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
     read_at: (r.read_at as string | null | undefined) ?? null,
     parent_message_id: typeof r.parent_message_id === 'string' ? r.parent_message_id : null,
+    v2: readThreadV2Fields(r),
   };
 }
 
@@ -663,6 +789,8 @@ export function reconcilePending(prev: Message[], serverList: Message[]): Messag
     : null;
   return prev.filter((m) => {
     if (!m.pending) return false;
+    const key = m.v2?.client_message_id; // v2 unsent row: leaves only when the server returns this key
+    if (key) return !serverList.some((s) => s.v2?.client_message_id === key);
     if (serverList.some((s) => s.body === m.body)) return false;
     if (oldestServerTs !== null) {
       const pendingTs = new Date(m.created_at).getTime();

@@ -180,7 +180,7 @@ export function describeSignInFailure(
         provider === 'google'
           ? 'Your Google account’s email is not verified. Verify it with Google, or sign up with email.'
           : provider === 'apple'
-            ? 'Your Apple ID’s email is not verified. Verify it with Apple, or sign up with email.'
+            ? 'The email on your Apple Account is not verified. Verify it with Apple, or sign up with email.'
             : flow === 'verify'
               ? 'Your email is not verified yet. Open the link sent to this address, then tap I verified my email.'
               : 'Your email is not confirmed yet. Open the link in that email, then sign in.',

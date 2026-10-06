@@ -5,55 +5,45 @@
 // token-refresh concurrency contract is reused — never a second http client
 // (50-Failures #40/#41).
 //
-// ── CONTRACT STUB (integration PR) ───────────────────────────────────────
-// The backend `POST /v1/wearables/samples/ingest` HTTP endpoint does not yet
-// exist at the time this connector lands. The backend foundation (PR-HK-0,
-// merged d09aa799) ships `IngestionService.ingest(NormalizedSample[])` and
-// `connections.controller.ts` documents the route as PR-HK-2.a's
-// responsibility, but no controller currently binds the path. This client is
-// therefore the agreed CONTRACT STUB for the integration PR — exactly the same
-// posture as the Apple HealthKit connector (PR-HK-2.a): the device-side
-// normalizer + sync are built and tested now; wiring the authenticated POST
-// route on the backend is the integration step. The wire shape below
-// (camelCase NormalizedSample[] with ISO time strings) is the binding contract
-// the backend endpoint must accept.
+// S14: the backend route exists (`POST /v1/wearables/samples/ingest`, gated
+// by FEATURE_WEARABLES_INGEST_POST). The wire shape and batching are shared
+// with the Apple Health connector in `../ingestBatching.ts`; the body never
+// carries `userId` (the server derives the subject from the JWT).
 
-import api from '../../api';
+import {
+  WEARABLES_INGEST_PATH as SHARED_INGEST_PATH,
+  postIngestBatches,
+  toIngestWire,
+  type IngestResult as SharedIngestResult,
+  type PostIngestDeps,
+} from '../ingestBatching';
 import type { NormalizedSample, NormalizedSampleWire } from './types';
 
 /** Endpoint the device posts normalized samples to (client-authenticated). */
-export const WEARABLES_INGEST_PATH = '/v1/wearables/samples/ingest';
+export const WEARABLES_INGEST_PATH = SHARED_INGEST_PATH;
 
 /** Backend response — counts of newly inserted vs deduped-skipped rows. */
-export interface IngestResult {
-  inserted: number;
-  skipped: number;
-}
+export type IngestResult = SharedIngestResult;
 
 /** Serialize a NormalizedSample to its over-the-wire (ISO time) shape. */
 export function toWire(sample: NormalizedSample): NormalizedSampleWire {
-  return {
-    ...sample,
-    startAt: sample.startAt.toISOString(),
-    endAt: sample.endAt.toISOString(),
-  };
+  return toIngestWire(sample) as NormalizedSampleWire;
 }
 
 /**
- * POST a batch of normalized samples to the backend ingestion lane.
+ * POST normalized samples to the backend ingestion lane in request-sized
+ * batches (see `../ingestBatching.ts`).
  *
  * Idempotent by construction: the backend computes a deterministic `dedup_key`
- * and upserts (`skipDuplicates`), so re-posting an overlapping window — the
- * normal case when `lastSyncAt` is rewound for safety — never double-counts
- * (Agent 2 §2.5 dedup contract). An empty batch is a no-op (no request).
+ * and inserts with `skipDuplicates`, so re-posting an overlapping window never
+ * double-counts. An empty batch is a no-op (no request).
  */
 export const healthConnectIngestApi = {
-  ingest: async (samples: NormalizedSample[]): Promise<IngestResult> => {
+  ingest: async (samples: NormalizedSample[], deps?: PostIngestDeps): Promise<IngestResult> => {
     if (!Array.isArray(samples) || samples.length === 0) {
       return { inserted: 0, skipped: 0 };
     }
-    const body = samples.map(toWire);
-    const res = await api.post<IngestResult>(WEARABLES_INGEST_PATH, body);
-    return res.data;
+    const { inserted, skipped } = await postIngestBatches(samples, deps);
+    return { inserted, skipped };
   },
 };

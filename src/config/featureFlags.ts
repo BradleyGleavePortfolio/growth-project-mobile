@@ -53,6 +53,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
+  EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
   EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH,
   EXPO_PUBLIC_FF_ROMAN_CHAT: process.env.EXPO_PUBLIC_FF_ROMAN_CHAT,
@@ -63,6 +64,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE: process.env.EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE,
   EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER: process.env.EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER,
   EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF: process.env.EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF,
+  EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS: process.env.EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS,
   EXPO_PUBLIC_NOTIFICATIONS_MOCK: process.env.EXPO_PUBLIC_NOTIFICATIONS_MOCK,
 } as const;
 
@@ -349,6 +351,17 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
   mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
+  // ─── S-MWB — coach Programs library (master workout builder) ────────────
+  // ON: the coach "Programs" tab (library, week x day grid that opens the
+  // workout builder for each day, saved workouts, bulk assign, add to package,
+  // history, promote to regime) replaces the hard-coded Templates tab, and the
+  // package content form offers a program picker. Needs the backend
+  // FEATURE_MWB_TEMPLATES (the API answers 404 programs_unavailable while off;
+  // the screens show that state with a support path). OFF (default): the legacy
+  // Templates tab, unchanged.
+  //
+  // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
+  mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
@@ -479,6 +492,19 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
    */
   iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', !isDev),
+
+  // ─── S14 — client AI wearable insight panel ──────────────────────────────
+  /**
+   * The client Health and Sleep views can show an AI-written insight panel
+   * (backend WearableInsightsService, drafted through the AI gateway). The
+   * panel has no per-client AI-processing consent check yet, and owner
+   * decision D2 makes AI processing opt-in (consent box 2). Until that check
+   * exists the panel stays OFF UNCONDITIONALLY (not `isDev`), and no EAS
+   * profile sets this. Off, the views show only the client's own data.
+   *
+   * env: EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS
+   */
+  wearableAiInsights: readFlag('EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

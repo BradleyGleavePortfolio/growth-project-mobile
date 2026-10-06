@@ -93,6 +93,12 @@ export default function ClientsListScreen({ navigation }: Props) {
   // the path exists from both the empty roster and the populated
   // roster.
   const goToInviteCodes = () => navigation.navigate('InviteCodes');
+  // S-REACH: the risk board (GET /coach/clients/risk-board, nightly PTM
+  // scores) had its only entry on the retired Dashboard screen. Head coaches
+  // and the owner read it; the route answers 403 to every other role, so the
+  // pill is not shown to them (no dead end).
+  const canSeeRiskBoard = currentUser?.role === 'coach' || currentUser?.role === 'owner';
+  const goToRiskBoard = () => navigation.navigate('RiskBoard');
 
   return (
     <View style={styles.container}>
@@ -102,6 +108,20 @@ export default function ClientsListScreen({ navigation }: Props) {
             <Text style={styles.title}>Clients</Text>
             <Text style={styles.subtitle}>{filteredClients.length} total</Text>
           </View>
+          {canSeeRiskBoard ? (
+            <HapticPressable
+              intent="light"
+              onPress={goToRiskBoard}
+              style={[styles.invitePill, styles.riskPill]}
+              accessibilityRole="button"
+              accessibilityLabel="Clients at risk"
+              accessibilityHint="Opens the clients who may need a check-in, sorted by risk"
+              testID="clients-risk-pill"
+            >
+              <Ionicons name="pulse-outline" size={16} color={colors.primary} />
+              <Text style={styles.invitePillText}>At risk</Text>
+            </HapticPressable>
+          ) : null}
           <HapticPressable
             intent="light"
             onPress={goToInviteCodes}
@@ -239,6 +259,9 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 8,
     borderRadius: 999,
     backgroundColor: colors.primaryPale,
+  },
+  riskPill: {
+    marginRight: 8,
   },
   invitePillText: {
     fontSize: 13,

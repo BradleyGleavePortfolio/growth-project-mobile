@@ -140,6 +140,19 @@ export default function HealthFitnessScreen({
     clientId,
   });
 
+  // S14: resting heart rate's canonical home on the server is the Sleep &
+  // Recovery bucket (backend METRIC_BUCKET), so a HEALTH_FITNESS read never
+  // returns it and the Heart card stayed empty. Read it by metric from its own
+  // bucket; fall back to the main response for older fixtures.
+  const rhrQuery = useWearableSamples({
+    bucket: 'SLEEP_RECOVERY',
+    metric: 'RESTING_HEART_RATE_BPM',
+    from: window.from,
+    to: window.to,
+    granularity: 'day',
+    clientId,
+  });
+
   const { data, isLoading, isError, refetch, isRefetching } = query;
 
   const goToConnections = useCallback(() => {
@@ -150,7 +163,8 @@ export default function HealthFitnessScreen({
     (metric: WearableMetricType) => {
       navigation.navigate('WearableMetricDetail', {
         metric,
-        bucket: 'HEALTH_FITNESS',
+        // S14: the server rejects a metric read outside its canonical bucket.
+        bucket: metric === 'RESTING_HEART_RATE_BPM' ? 'SLEEP_RECOVERY' : 'HEALTH_FITNESS',
         clientId,
       });
     },
@@ -296,7 +310,10 @@ export default function HealthFitnessScreen({
       </View>
 
       <HeartCard
-        rhrSeries={findSeries(data, 'RESTING_HEART_RATE_BPM')}
+        rhrSeries={
+          findSeries(rhrQuery.data, 'RESTING_HEART_RATE_BPM') ??
+          findSeries(data, 'RESTING_HEART_RATE_BPM')
+        }
         tone={tone}
         onPress={() => goToMetricDetail('RESTING_HEART_RATE_BPM')}
       />
