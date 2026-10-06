@@ -36,9 +36,10 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
-// ── Current user ─────────────────────────────────────────────────────────────
+// ── Current user (a client with a coach; the coachless case is in
+// communityMessageCoach.test.tsx) ──────────────────────────────────────────
 jest.mock('../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', name: 'Dana' }),
+  useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', name: 'Dana', coach_id: 'coach-1' }),
 }));
 
 // ── Safe-area stub ───────────────────────────────────────────────────────────

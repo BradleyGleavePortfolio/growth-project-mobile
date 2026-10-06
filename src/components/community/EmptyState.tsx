@@ -27,10 +27,14 @@ export interface CommunityEmptyStateProps {
   firstName?: string | null;
   /** Short title above the Roman copy (e.g. "The Hall is quiet"). */
   title: string;
-  /** Primary action label — REQUIRED (no spinner-only / placeholder states). */
-  actionLabel: string;
-  /** Primary action handler — REQUIRED. */
-  onAction: () => void;
+  /**
+   * Primary action label (no spinner-only / placeholder states). Omit the
+   * label and handler together only when no action can work for this member
+   * (C-F6-1: a client with no coach gets no "Send your coach a message").
+   */
+  actionLabel?: string;
+  /** Primary action handler; rendered only together with actionLabel. */
+  onAction?: () => void;
   /** Optional seed override for the deterministic dry-quip selector. */
   quipSeed?: string;
   testID?: string;
@@ -57,18 +61,20 @@ export default function CommunityEmptyState({
       <Text style={[styles.body, { color: semanticColors.textMuted }]}>
         {body}
       </Text>
-      <HapticPressable
-        intent="medium"
-        onPress={onAction}
-        accessibilityRole="button"
-        accessibilityLabel={actionLabel}
-        testID={`${testID ?? 'community-empty'}-action`}
-        style={[styles.cta, { backgroundColor: semanticColors.accent }]}
-      >
-        <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
-          {actionLabel}
-        </Text>
-      </HapticPressable>
+      {actionLabel && onAction ? (
+        <HapticPressable
+          intent="medium"
+          onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          testID={`${testID ?? 'community-empty'}-action`}
+          style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+        >
+          <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+            {actionLabel}
+          </Text>
+        </HapticPressable>
+      ) : null}
     </View>
   );
 }

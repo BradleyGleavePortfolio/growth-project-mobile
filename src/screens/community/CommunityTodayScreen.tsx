@@ -10,6 +10,7 @@
 import React from 'react';
 import { Text, View, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
@@ -28,7 +29,10 @@ interface Props {
 export default function CommunityTodayScreen(_props: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
+  const rootNavigation = useNavigation<NavigationProp<ParamListBase>>();
   const client = useCurrentUser();
+  // C-F6-1: "Send your coach a message" only renders for a client with a coach.
+  const hasCoach = Boolean(client?.coach_id);
   const today = useCommunityToday();
 
   const data = today.data;
@@ -41,8 +45,14 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
     !data.pinned_post &&
     !data.challenge;
 
+  // C-F6-1: with community DMs off the button opened nothing. It now opens the
+  // 1:1 coach Messages screen in the Home stack (the m#389 no-workspace path).
   const goToMessages = () => {
-    if (featureFlags.communityDm) navigation.navigate('CommunityDmList');
+    if (featureFlags.communityDm) {
+      navigation.navigate('CommunityDmList');
+    } else {
+      rootNavigation.navigate('Home', { screen: 'Messages' });
+    }
   };
   const goToHall = () => {
     if (featureFlags.communityHall) {
@@ -125,9 +135,13 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
           firstName={client?.firstName ?? client?.name ?? null}
           title={noMembership ? 'No cohort yet' : 'Nothing waiting today'}
           actionLabel={
-            noMembership ? 'Send your coach a message' : 'Visit the Hall'
+            noMembership
+              ? hasCoach
+                ? 'Send your coach a message'
+                : undefined
+              : 'Visit the Hall'
           }
-          onAction={noMembership ? goToMessages : goToHall}
+          onAction={noMembership ? (hasCoach ? goToMessages : undefined) : goToHall}
           testID="community-today-empty"
         />
       </ScrollView>
