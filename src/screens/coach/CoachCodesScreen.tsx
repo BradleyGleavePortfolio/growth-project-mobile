@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { captureRef } from 'react-native-view-shot';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import CodeQr from '../../components/coach/CodeQr';
@@ -58,7 +59,13 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-export default function CoachCodesScreen({ initial }: { initial: CoachCodeList }) {
+export default function CoachCodesScreen({
+  initial,
+  navigation,
+}: {
+  initial: CoachCodeList;
+  navigation: NavigationProp<ParamListBase>;
+}) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [codes, setCodes] = useState<CoachCode[]>(initial.codes);
@@ -179,6 +186,14 @@ export default function CoachCodesScreen({ initial }: { initial: CoachCodeList }
           Share a code, its link or its QR. Clients who join with it are connected to you.
         </Text>
         <CreateCode styles={styles} onCreated={(c) => applyChange(c)} />
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => navigation.navigate('CoachBulkInvite')}
+          accessibilityRole="button"
+          testID="coach-codes-bulk-invite"
+        >
+          <Text style={styles.actionText}>Bulk invite from a list</Text>
+        </TouchableOpacity>
         {banner ? (
           <Text style={styles.banner} accessibilityRole="alert" testID="coach-codes-banner">{banner}</Text>
         ) : null}
@@ -186,6 +201,7 @@ export default function CoachCodesScreen({ initial }: { initial: CoachCodeList }
           const live = c.status === 'active' || c.status === 'retiring';
           // A retiring code is already replaced: it can only be turned off early.
           const shareable = c.status === 'active';
+          const joined = c.kind === 'invite_code' && c.signups_total > 0;
           const t = today.get(c.code);
           const until = c.status === 'retiring' ? shortDate(c.expires_at) : null;
           return (
@@ -213,7 +229,7 @@ export default function CoachCodesScreen({ initial }: { initial: CoachCodeList }
                   Many more signups today than usual. If this code was posted somewhere public, rotate it.
                 </Text>
               ) : null}
-              {live ? (
+              {live || joined ? (
                 <View style={styles.actions}>
                   {busyId === c.id ? <ActivityIndicator /> : null}
                   {shareable ? (
@@ -229,7 +245,15 @@ export default function CoachCodesScreen({ initial }: { initial: CoachCodeList }
                       />
                     </>
                   ) : null}
-                  {c.kind === 'invite_code' ? (
+                  {joined ? (
+                    <Action
+                      styles={styles}
+                      label="Who joined"
+                      onPress={() => navigation.navigate('InviteCodeRedeemers', { inviteCodeId: c.id, code: c.code })}
+                      id={`joined-${c.code}`}
+                    />
+                  ) : null}
+                  {live && c.kind === 'invite_code' ? (
                     <Action
                       styles={styles}
                       label="Turn off"

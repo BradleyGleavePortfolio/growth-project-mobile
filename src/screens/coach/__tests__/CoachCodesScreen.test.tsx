@@ -118,6 +118,15 @@ describe('CoachCodesScreen', () => {
     expect(queryByTestId('coach-code-revoke-GP-LINK22')).toBeNull();
   });
 
+  it('keeps the legacy screen\'s bulk invite and who-joined links', async () => {
+    const { getByTestId, queryByTestId } = await renderEntry();
+    await fireEvent.press(getByTestId('coach-codes-bulk-invite'));
+    expect(nav.navigate).toHaveBeenCalledWith('CoachBulkInvite');
+    await fireEvent.press(getByTestId('coach-code-joined-GP-ROW234'));
+    expect(nav.navigate).toHaveBeenCalledWith('InviteCodeRedeemers', { inviteCodeId: 'row-1', code: 'GP-ROW234' });
+    expect(queryByTestId('coach-code-joined-GP-LINK22')).toBeNull();
+  });
+
   it('turns a leaked code off after confirmation', async () => {
     api.revoke.mockResolvedValue({ code: { ...ROW, status: 'revoked', revoked_at: '2026-10-05T20:00:00Z' }, replayed: false });
     const alert = jest.spyOn(Alert, 'alert');

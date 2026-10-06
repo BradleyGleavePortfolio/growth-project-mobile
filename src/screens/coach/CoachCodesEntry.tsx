@@ -48,7 +48,7 @@ export default function CoachCodesEntry({ navigation }: { navigation: Navigation
   }, [load]);
 
   if (state.kind === 'legacy') return <InviteCodesScreen navigation={navigation} />;
-  if (state.kind === 'tools') return <CoachCodesScreen initial={state.list} />;
+  if (state.kind === 'tools') return <CoachCodesScreen initial={state.list} navigation={navigation} />;
   return (
     <View style={styles.center} testID="coach-codes-entry">
       {state.kind === 'loading' ? (
