@@ -272,7 +272,11 @@ export default function CoachWorkoutBuilderScreen() {
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
   const qc = useQueryClient();
-  const { data: existingPlan, refetch: refetchPlan } = useWorkoutPlan(planId);
+  const {
+    data: existingPlan,
+    refetch: refetchPlan,
+    isError: planLoadFailed,
+  } = useWorkoutPlan(planId);
   const createMut = useCreateWorkoutPlan();
   const updateMut = useUpdateWorkoutPlan();
   const setExercisesMut = useSetWorkoutExercises();
@@ -286,6 +290,26 @@ export default function CoachWorkoutBuilderScreen() {
       ? String(existingPlan.duration_estimate_minutes)
       : '',
   );
+  // AUDIT-07-125: a plan opened from the Programs library (a program day or a
+  // saved workout) is usually not in the query cache yet, so the initialisers
+  // above ran with no plan and the editor showed a blank name, the wrong type
+  // and a disabled Save. Fill the plan details in once, the first time the
+  // plan arrives, unless the coach already typed into one of them.
+  const metaHydratedRef = useRef(Boolean(existingPlan));
+  const metaTouchedRef = useRef(false);
+  useEffect(() => {
+    if (metaHydratedRef.current || !existingPlan) return;
+    metaHydratedRef.current = true;
+    if (metaTouchedRef.current) return;
+    setName(existingPlan.name ?? '');
+    setType(existingPlan.type ?? 'strength');
+    setDuration(
+      existingPlan.duration_estimate_minutes != null
+        ? String(existingPlan.duration_estimate_minutes)
+        : '',
+    );
+  }, [existingPlan]);
+  const planLoading = isEditing && !existingPlan;
   // Map a server exercise row into a local DraftExerciseRow, reusing the stable
   // clientId we already minted for that server row_id when one exists so the
   // identity survives a refetch/adoption (and the deletedKeysRef bookkeeping
@@ -1157,8 +1181,11 @@ export default function CoachWorkoutBuilderScreen() {
   //     mirror. The Refresh affordance guarantees Save is never locked forever.
   // Together they span: replay detection -> terminal outcome -> adoption ->
   // baseline reanchor, exactly the window in which a full-replace Save is unsafe.
+  // AUDIT-07-125: never send a full-replace Save for a plan that has not
+  // loaded yet; its exercise list would be empty and erase the saved one.
   const canSave =
     name.trim().length > 0 &&
+    !planLoading &&
     !editorLocked &&
     !autosave.replayInFlight &&
     !replayAdoptionPending &&
@@ -1571,13 +1598,38 @@ export default function CoachWorkoutBuilderScreen() {
           </Pressable>
         ) : null}
 
+        {planLoading ? (
+          <View testID="mwb-plan-loading" accessibilityLiveRegion="polite">
+            <Text style={[typography.body, { color: sc.textMuted }]}>
+              {planLoadFailed
+                ? 'This workout plan could not be loaded. Check your connection and try again.'
+                : 'Loading workout plan'}
+            </Text>
+            {planLoadFailed ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Try loading the workout plan again"
+                onPress={() => void refetchPlan()}
+                style={styles.historyButton}
+              >
+                <Text style={[typography.caption, { color: sc.textPrimary }]}>
+                  Try again
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
         </Text>
         <TextInput
           accessibilityLabel="Plan name"
           value={name}
-          onChangeText={setName}
+          onChangeText={(next) => {
+            metaTouchedRef.current = true;
+            setName(next);
+          }}
           editable={!editorLocked}
           placeholder="e.g. Push day A"
           placeholderTextColor={sc.textMuted}
@@ -1595,7 +1647,10 @@ export default function CoachWorkoutBuilderScreen() {
               accessibilityRole="button"
               accessibilityState={{ disabled: editorLocked, selected: type === t }}
               disabled={editorLocked}
-              onPress={() => setType(t)}
+              onPress={() => {
+                metaTouchedRef.current = true;
+                setType(t);
+              }}
               style={[
                 styles.typeChip,
                 { borderColor: sc.textMuted },
@@ -1620,7 +1675,10 @@ export default function CoachWorkoutBuilderScreen() {
         <TextInput
           accessibilityLabel="Estimated duration in minutes"
           value={duration}
-          onChangeText={setDuration}
+          onChangeText={(next) => {
+            metaTouchedRef.current = true;
+            setDuration(next);
+          }}
           editable={!editorLocked}
           keyboardType="number-pad"
           placeholder="45"
