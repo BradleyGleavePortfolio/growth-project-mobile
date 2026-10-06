@@ -99,7 +99,7 @@ const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'ribbon-outline',
     label: 'Membership',
-    description: 'Your access and coaching tier',
+    description: 'Your plan, payments and access',
     target: { type: 'stack', screen: 'Membership' },
     a11yHint: 'Opens membership and access details',
   },
