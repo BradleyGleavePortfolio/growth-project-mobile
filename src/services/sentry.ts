@@ -18,6 +18,23 @@ export const NATIVE_PRIVACY_OPTIONS = {
 } as const;
 
 /**
+ * Default SDK integrations the app removes (B-305-12). `ExpoContext` copies
+ * the native ExpoUpdates `emergencyLaunchReason` (an exception's free-form
+ * text) verbatim into `contexts.ota_updates` on every JS event, and into the
+ * native crash scope through NATIVE.setContext at init, where no JS
+ * beforeSend can reach it. The app publishes its own bounded `ota_updates`
+ * context instead (src/services/otaUpdateTags.ts). Filtering by name is
+ * pinned by src/services/__tests__/otaUpdateTags.canary.test.ts, which runs
+ * the real SDK: a rename in an SDK upgrade fails that canary.
+ */
+export const REMOVED_SDK_INTEGRATIONS: readonly string[] = ['ExpoContext'];
+
+/** The default integrations without the ones listed in REMOVED_SDK_INTEGRATIONS. */
+export function withoutRemovedIntegrations<T extends { name: string }>(defaults: T[]): T[] {
+  return defaults.filter((integration) => !REMOVED_SDK_INTEGRATIONS.includes(integration.name));
+}
+
+/**
  * Build the release identifier that the running app reports to Sentry. It
  * must match the release name the EAS build uploaded source maps under,
  * otherwise Sentry cannot symbolicate the stack and the issue page reads
@@ -109,6 +126,8 @@ export function initSentry(): void {
     },
     beforeSend: (event) => scrubUrlCredentials(scrubEvent(event)),
     beforeSendTransaction: (event) => scrubUrlCredentials(scrubEvent(event)),
+    // B-305-12: no ExpoContext (raw native update text); see above.
+    integrations: (defaults) => withoutRemovedIntegrations(defaults),
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
     release: buildReleaseId(),
   });
@@ -127,11 +146,51 @@ export function captureError(err: unknown, context?: Record<string, unknown>): v
   if (context) {
     Sentry.withScope((scope) => {
       Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+      // The support reference a person quotes is searchable as a tag (B-326-4).
+      if (typeof context.reference === 'string' && context.reference) {
+        scope.setTag('reference', context.reference);
+      }
       Sentry.captureException(err);
     });
   } else {
     Sentry.captureException(err);
   }
+}
+
+/**
+ * Strip what can identify a person from one event: the signed-in user (the
+ * account id set app-wide by setSentryUser), request data and breadcrumbs
+ * (HTTP and navigation breadcrumbs can carry URLs).
+ */
+export function stripPersonalData<E extends { user?: unknown; request?: unknown; breadcrumbs?: unknown }>(
+  event: E,
+): E {
+  delete event.user;
+  delete event.request;
+  delete event.breadcrumbs;
+  return event;
+}
+
+/**
+ * Like captureError, but the event carries no personal data: stripPersonalData
+ * runs as a scope event processor, after the SDK's own processors (including
+ * the native device-context one that copies the native user), so the
+ * app-wide user tag is not attached. Context values must already be free of
+ * personal data. Used where the report must not identify the person (Trust &
+ * Privacy link failures, OR-112-15).
+ */
+export function captureErrorWithoutPii(err: unknown, context: Record<string, unknown>): void {
+  if (!initialized) return;
+  Sentry.withScope((scope) => {
+    Object.entries(context).forEach(([k, v]) => scope.setExtra(k, v));
+    // The support reference a person quotes is searchable as a tag (same rule
+    // as captureError, B-326-4); it is a generated id, never personal data.
+    if (typeof context.reference === 'string' && context.reference) {
+      scope.setTag('reference', context.reference);
+    }
+    scope.addEventProcessor((event) => stripPersonalData(event));
+    Sentry.captureException(err);
+  });
 }
 
 /**

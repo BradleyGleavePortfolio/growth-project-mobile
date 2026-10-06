@@ -245,6 +245,86 @@ const MOCK_STORE: {
   preferences: defaultPreferences(),
 };
 
+// ─── Live row normalizer ──────────────────────────────────────────────────────
+//
+// S-SCHED-2: the live GET /notifications returns backend rows
+//   { id, kind, body, payload: { title, actionScreen, actionParams, ... },
+//     deep_link, read_at, created_at }
+// while this module's callers read AppNotification. Normalise every item so
+// the center shows the real title and routes a tap (booking rows carry
+// actionScreen CalendarSession / CoachBookingInbox + { sessionId }). Items
+// already in AppNotification shape pass through unchanged.
+
+const SCREEN_NAME = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? { ...v } : null;
+}
+
+function appKindFor(kind: string): NotificationKind {
+  const known = ALL_KINDS.find((k) => k === kind);
+  if (known) return known;
+  if (kind.startsWith('booking_reminder')) return 'reminder';
+  if (kind.startsWith('booking_')) return 'coach';
+  if (kind.includes('message')) return 'message';
+  return 'system';
+}
+
+function defaultTitleFor(kind: string): string {
+  if (kind.startsWith('booking_reminder')) return 'Session reminder';
+  if (kind.startsWith('booking_')) return 'Calendar update';
+  return 'Update';
+}
+
+function stringParams(raw: unknown): Record<string, string> | undefined {
+  const rec = asRecord(raw);
+  if (!rec) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rec).slice(0, 8)) {
+    if (!PARAM_KEY.test(k)) continue;
+    if (typeof v === 'string' && v.length <= 200) out[k] = v;
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = String(v);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Backend row or AppNotification -> AppNotification; null when unusable. */
+export function normalizeNotification(raw: unknown): AppNotification | null {
+  const r = asRecord(raw);
+  if (!r || typeof r.id !== 'string' || r.id.length === 0) return null;
+  const rawKind = typeof r.kind === 'string' ? r.kind : 'system';
+  const payload = asRecord(r.payload) ?? {};
+  const title =
+    typeof r.title === 'string' && r.title.trim()
+      ? r.title
+      : typeof payload.title === 'string' && payload.title.trim()
+        ? payload.title
+        : defaultTitleFor(rawKind);
+  const body = typeof r.body === 'string' ? r.body : '';
+  const read =
+    typeof r.read === 'boolean' ? r.read : r.read_at !== null && r.read_at !== undefined;
+  const createdRaw = typeof r.createdAt === 'string' ? r.createdAt : r.created_at;
+  const createdAt =
+    typeof createdRaw === 'string' && !Number.isNaN(Date.parse(createdRaw))
+      ? createdRaw
+      : new Date(0).toISOString();
+  const screenRaw = typeof r.actionScreen === 'string' ? r.actionScreen : payload.actionScreen;
+  const actionScreen =
+    typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw) ? screenRaw : undefined;
+  const actionParams = stringParams(r.actionParams ?? payload.actionParams);
+  return {
+    id: r.id,
+    kind: appKindFor(rawKind),
+    title,
+    body,
+    read,
+    createdAt,
+    ...(actionScreen ? { actionScreen } : {}),
+    ...(actionParams ? { actionParams } : {}),
+  };
+}
+
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 
 function simulateLatency(): Promise<void> {
@@ -266,10 +346,16 @@ export async function fetchNotifications(
     if (cursor) q.set('cursor', cursor);
     if (limit) q.set('limit', String(limit));
     const qs = q.toString();
-    const res = await api.get<NotificationPage>(
+    const res = await api.get<{ items?: unknown; nextCursor?: unknown }>(
       `/notifications${qs ? `?${qs}` : ''}`,
     );
-    return res.data;
+    const items = Array.isArray(res.data?.items) ? res.data.items : [];
+    return {
+      items: items
+        .map(normalizeNotification)
+        .filter((n): n is AppNotification => n !== null),
+      nextCursor: typeof res.data?.nextCursor === 'string' ? res.data.nextCursor : null,
+    };
   }
 
   await simulateLatency();

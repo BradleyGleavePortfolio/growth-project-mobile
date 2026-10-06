@@ -18,6 +18,21 @@
  * Disconnect is a single mutation that invalidates on success.
  */
 
+import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
+import { Platform } from 'react-native';
+import {
+  getLocalAuthorization,
+  localAuthorizationSeq,
+  retireOnDeviceSource,
+  type OnDeviceSource,
+} from '../services/health/onDeviceState';
+import {
+  currentAuthGeneration,
+  OnDeviceSessionChangedError,
+  readSignedInUserId,
+  stopOnDeviceHealthWork,
+} from '../services/health/sessionFence';
+import { logger } from '../utils/logger';
 import {
   useMutation,
   useQuery,
@@ -34,6 +49,38 @@ import {
 
 /** Canonical cache key for the user's wearable connection list. */
 export const WEARABLE_CONNECTIONS_QUERY_KEY = ['wearable-connections'] as const;
+
+/** Cache key for this phone's local Connect authorization (S14 B-317-5). */
+export const ON_DEVICE_LOCAL_AUTH_QUERY_KEY = ['wearable-on-device-local-auth'] as const;
+
+/** This phone's local Connect authorization for the signed-in person. */
+export interface LocalOnDeviceAuthView {
+  userId: string | null;
+  source: OnDeviceSource;
+  /** The connection this phone syncs for that person, or null when none. */
+  connectionId: string | null;
+}
+
+/**
+ * Read (never the phone's health store, only app storage) whether the
+ * signed-in person tapped Connect for `source` on this phone, and for which
+ * connection. Lets Connections offer Reconnect when the server row is
+ * connected but this phone does not sync it (Opus B-317-5).
+ */
+export function useLocalOnDeviceAuthorization(
+  source: OnDeviceSource | null,
+): UseQueryResult<LocalOnDeviceAuthView | null, Error> {
+  return useQuery<LocalOnDeviceAuthView | null, Error>({
+    queryKey: [...ON_DEVICE_LOCAL_AUTH_QUERY_KEY, source],
+    enabled: source != null,
+    queryFn: async () => {
+      if (source == null) return null;
+      const userId = await readSignedInUserId();
+      const auth = userId ? await getLocalAuthorization(userId, source) : null;
+      return { userId, source, connectionId: auth?.connectionId ?? null };
+    },
+  });
+}
 
 /**
  * Read the caller's wearable connections. The list is the single source of
@@ -63,15 +110,90 @@ export function useStartOauth() {
 }
 
 /**
+ * B-364-1: Samsung Health shares its data through Health Connect and has no
+ * connection of its own, so its row disconnects Health Connect.
+ */
+function connectionProviderFor(provider: WearableProvider): WearableProvider {
+  return provider === 'SAMSUNG_HEALTH' ? 'HEALTH_CONNECT' : provider;
+}
+
+/** This phone's on-device source, or null (web). */
+function phoneSource(): OnDeviceSource | null {
+  if (Platform.OS === 'ios') return 'APPLE_HEALTHKIT';
+  if (Platform.OS === 'android') return 'HEALTH_CONNECT';
+  return null;
+}
+
+/**
  * Soft-disconnect a provider, then invalidate the connections cache so the row
  * re-renders with `status='disconnected'`.
+ *
+ * On-device sources (A-317-1 / B-317-1) also retire this phone's local
+ * authorization and progress, so nothing is read again until Connect:
+ * - Sol B-362-6: the auth generation is captured before the first await and
+ *   re-checked after each one; when it moved, nothing is sent (the error is
+ *   {@link OnDeviceSessionChangedError}). The provider API checks it again
+ *   after the token is attached, immediately before the request leaves.
+ * - Sol B-362-2: cleanup removes only the originating person's records, only
+ *   while the authorization seen at the start is still the stored one, and
+ *   never a grant written after the Disconnect started. A response that lands
+ *   after a sign-out or account switch retires the originating person's
+ *   records only, invalidates nothing and reports nothing for the next person.
+ * - Sol B-362-3 / C-362-3: on a current success for this phone's source,
+ *   every running on-device read stops synchronously, before any cleanup
+ *   await: no further native page, ingest request or progress write.
+ * - Sol B-362-1 / C-362-1: a failed cleanup logs a fixed class only.
+ * - Sol H6 probe: when the person is unknown (no readable session cache), a
+ *   current Disconnect retires the source for every account on this phone,
+ *   except a grant written after it started, so Disconnect still stops reading.
  */
 export function useDisconnectProvider() {
   const qc = useQueryClient();
   return useMutation<DisconnectResult, Error, WearableProvider>({
-    mutationFn: (provider) => wearablesConnectionsApi.disconnect(provider),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+    mutationFn: async (requested) => {
+      const provider = connectionProviderFor(requested);
+      const generation = currentAuthGeneration();
+      const since = localAuthorizationSeq();
+      const assertSession = () => {
+        if (currentAuthGeneration() !== generation) throw new OnDeviceSessionChangedError();
+      };
+      const source: OnDeviceSource | null =
+        provider === 'APPLE_HEALTHKIT' || provider === 'HEALTH_CONNECT' ? provider : null;
+      const userId = source != null ? await readSignedInUserId() : null;
+      assertSession();
+      const grant =
+        userId != null && source != null ? await getLocalAuthorization(userId, source) : null;
+      assertSession();
+      const result = await wearablesConnectionsApi.disconnect(provider);
+      const retireOwn = () =>
+        userId != null && source != null
+          ? retireOnDeviceSource(userId, source, grant?.grantedAt ?? null, since)
+          : Promise.resolve();
+      if (currentAuthGeneration() !== generation) {
+        // Stale: only the originating person's own records are retired.
+        void retireOwn().catch(() => undefined);
+        return result;
+      }
+      if (source != null && source === phoneSource()) stopOnDeviceHealthWork();
+      const live = currentAuthGeneration(); // the stop above moves it
+      const retire = () =>
+        source != null && userId == null
+          ? retireOnDeviceSource(null, source, null, since)
+          : retireOwn();
+      void retire()
+        .catch((err: unknown) => {
+          if (currentAuthGeneration() !== live) return;
+          logger.warn('[wearables] retire on-device state failed', {
+            error: err instanceof Error ? 'error' : 'other',
+          });
+        })
+        .finally(() => {
+          if (source != null && currentAuthGeneration() === live) {
+            void qc.invalidateQueries({ queryKey: ON_DEVICE_LOCAL_AUTH_QUERY_KEY });
+          }
+        });
+      void qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+      return result;
     },
   });
 }
@@ -80,9 +202,16 @@ export function useDisconnectProvider() {
  * Imperative invalidation of the connections cache. Used by the connect flow
  * after an OAuth auth session returns (the result lands server-side, so the
  * client must re-fetch to observe it).
+ *
+ * S14: also invalidates the wearable samples cache. A connect or on-device
+ * history import changes which samples exist, so the Health and Sleep views
+ * must refetch rather than keep showing an empty window.
  */
 export function useInvalidateWearableConnections(): () => void {
   const qc = useQueryClient();
-  return () =>
+  return () => {
     void qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+    void qc.invalidateQueries({ queryKey: WEARABLE_SAMPLES_ROOT_KEY });
+    void qc.invalidateQueries({ queryKey: ON_DEVICE_LOCAL_AUTH_QUERY_KEY });
+  };
 }

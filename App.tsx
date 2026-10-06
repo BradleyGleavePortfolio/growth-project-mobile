@@ -33,6 +33,7 @@ import { secureStorage } from './src/services/secureStorage';
 import { initDatabase } from './src/db/database';
 import { queryClient } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap, captureError } from './src/services/sentry';
+import { reportOtaUpdateLaunch } from './src/services/otaUpdateTags';
 // Phase 11: typed analytics service replaces the raw lib/analytics track call
 // for app_opened so the typed AnalyticsEvents constant is used.
 import { track } from './src/lib/analytics';
@@ -53,6 +54,10 @@ import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser } from './src/s
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
 // line is safe to commit without secrets.
 initSentry();
+// Tag every event with the running over-the-air update (id, channel,
+// runtime) and report an update that failed to launch (read-only; never
+// checks for or applies an update).
+reportOtaUpdateLaunch();
 
 // Screenshot mode: replace the axios network adapter with a fixture-backed one
 // before any screen module imports `services/api`. No-op when the env flag is

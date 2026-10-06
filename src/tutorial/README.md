@@ -10,6 +10,7 @@ The approach is Duolingo mechanics inside Quiet Luxury visuals: a progress indic
 |---|---|---|---|---|
 | `clientTutorial` | `EXPO_PUBLIC_FF_CLIENT_TUTORIAL` | OFF | **ON** | This tour, the pinned macro and plan cards, the Home "Message your coach" row, the "Health and sleep" and "Connected devices" rows in Profile and more, and Settings > Tutorial. Turning it OFF rolls all of it back. |
 | `communityTab` | `EXPO_PUBLIC_FF_COMMUNITY_TAB` | OFF | **ON (required)** | The community step needs the Community tab. If it is OFF, that step is recorded as `unavailable` and the tour skips it. |
+| `clientCalendar` | `EXPO_PUBLIC_FF_CLIENT_CALENDAR` | OFF | **ON (after S-SCHED audits)** | The client Calendar tab. Adds two steps: the Calendar intro (after coach_messages) and the closing welcome call (before complete). OFF removes both from the step list entirely, so the tour, its "Step N of 8" count and persisted step indexes are exactly as before. |
 | `communityHall` | `EXPO_PUBLIC_FF_COMMUNITY_HALL` | OFF | **ON (required)** | The space for every clinic client lives here. |
 | `communityCohorts` | `EXPO_PUBLIC_FF_COMMUNITY_COHORTS` | OFF | **ON (required)** | The three per-plan spaces are cohort spaces. |
 | `communityDm` | `EXPO_PUBLIC_FF_COMMUNITY_DM` | OFF | OFF (not required) | Messaging the coach uses the existing coach thread (`POST /messages`, HomeStack `Messages`), not community DMs. Leave it OFF unless the owner wants client-to-client DMs. |
@@ -48,6 +49,15 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 8 | first_message (teach-back) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
 | 9 | complete | Done | button |
 
+With `clientCalendar` ON (S-SCHED, owner decisions 2026-10-01):
+
+| After | Step | Gates | Detected by |
+|---|---|---|---|
+| coach_messages | calendar | focus Calendar, then Continue | route `CalendarHome` |
+| first_message | welcome_call | "Book your welcome call with {coach}" opens booking, preselecting the day-1 seeded Quick initialization offering; renamed offerings can be selected explicitly; book, **or tap Later** | `welcome_call_booked` from `CalendarBookScreen` on a successful booking, or DEFER |
+
+The welcome call never blocks finishing. With no preselected welcome type the client can choose an active appointment type; with no open times the screen offers refresh, Calendar and "Message your coach". Phone calendar exports are user-controlled copies and do not auto-sync.
+
 The two teach-back steps have no button and no "Later". The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).
 
 ## Files
@@ -57,7 +67,7 @@ The two teach-back steps have no button and no "Later". The client can skip the 
 - `tutorialMachine.ts`: the pure reducer (gating, pending/unavailable, defer, pause/resume, persistence parsing).
 - `tutorialStore.ts`: a zustand store. Holds `startClientTutorial()`, hydration, haptics, done lines and spotlight targets.
 - `tutorialStorage.ts`: AsyncStorage key `tgp.clientTutorial.v1:<userId>`, one per user (owner decision T-2: no server persistence in v1).
-- `tutorialEvents.ts`: a dependency-free signal bus. Emit points: `services/api.ts` (`logApi.logFood`, `messagesApi.send`), `api/messagesApi.ts` (`sendReply`), `services/foodLogQueue.ts` (`enqueue`), `screens/client/wearables/ConnectProviderSheet.tsx`, and the two explanation cards.
+- `tutorialEvents.ts`: a dependency-free signal bus. Emit points: `services/api.ts` (`logApi.logFood`, `messagesApi.send`), `api/messagesApi.ts` (`sendReply`), `services/foodLogQueue.ts` (`enqueue`), `screens/client/wearables/ConnectProviderSheet.tsx`, the two explanation cards, and `screens/client/calendar/CalendarBookScreen.tsx` (`welcome_call_booked`).
 - `navigationFocus.ts`: the focused route path from the tab navigator's `state` event.
 - `onboardingPayload.ts`: defensive parsing of the complete payload and `/me/macros/current`.
 

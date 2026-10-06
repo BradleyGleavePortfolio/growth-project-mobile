@@ -95,4 +95,10 @@ describe('sentry init composes the content policy and the URL-credential scrub',
     };
     expect(JSON.stringify(options.beforeSendTransaction(tx, {}))).not.toContain(JWT);
   });
+  it('B-305-12: init removes the SDK ExpoContext integration and keeps every other default', () => {
+    const options = initOptions();
+    const defaults = [{ name: 'InboundFilters' }, { name: 'ExpoContext' }, { name: 'DeviceContext' }, { name: 'Release' }];
+    const kept = options.integrations(defaults) as Array<{ name: string }>;
+    expect(kept.map((i) => i.name)).toEqual(['InboundFilters', 'DeviceContext', 'Release']);
+  });
 });

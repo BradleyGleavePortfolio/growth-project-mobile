@@ -167,6 +167,18 @@ export const ROMAN_SEND_FAILED =
   'That request did not complete. Send it once more, and I will try again.';
 
 /**
+ * The server stored the message, then could not answer it (an in-stream
+ * failure after the send was accepted). The message stays in the thread and
+ * is never re-sent on its own (B-326-3); sending again is the person's call.
+ */
+export const ROMAN_STORED_NO_REPLY =
+  'Your message is saved above, but I could not answer it. Tap Send again to ask once more.';
+
+/** After AI help is allowed for a message the server already stored (B-326-3). */
+export const ROMAN_AI_ON_ASK_AGAIN =
+  'AI help is on now. Your message is saved above without an answer. Tap send to ask again.';
+
+/**
  * "Loading earlier messages" footer prose (R1 UX finding P2 — generic copy on
  * a Roman surface). Roman-voiced and rendered beside his face so the line is
  * not disembodied. Derived from the §2.9 readback register ("I am gathering

@@ -28,6 +28,10 @@ export interface BubbleMessage {
     body: string;
     sender_role: 'coach' | 'client';
   } | null;
+  /** messaging v2: tombstone (delete for everyone erased the content), edited, pinned in this thread. */
+  deleted?: boolean;
+  edited?: boolean;
+  pinned?: boolean;
 }
 
 export interface MessageBubbleProps {
@@ -71,7 +75,11 @@ export function MessageBubble({
         onLongPress={handleLongPress}
         delayLongPress={350}
         accessibilityRole="button"
-        accessibilityLabel={`Message: ${message.body}. Long press for actions.`}
+        accessibilityLabel={
+          message.deleted
+            ? 'Message deleted.'
+            : `Message: ${message.body}.${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`
+        }
         accessibilityHint="Long press to reply, copy, or report this message."
         style={({ pressed }) => [
           styles.bubble,
@@ -79,7 +87,7 @@ export function MessageBubble({
           pressed && styles.bubblePressed,
         ]}
       >
-        {message.parent ? (
+        {message.parent && !message.deleted ? (
           <Pressable
             onPress={
               onPressParent && message.parent
@@ -106,8 +114,13 @@ export function MessageBubble({
           </Pressable>
         ) : null}
 
-        <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
+        {message.deleted ? (
+          <Text style={[styles.body, styles.bodyDeleted, isMe && styles.timeMe]}>Message deleted</Text>
+        ) : (
+          <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
+        )}
         <Text style={[styles.time, isMe && styles.timeMe]}>
+          {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
           {formatTime(message.created_at)}
           {message.pending ? '  ' : ''}
           {message.pending ? (
@@ -145,6 +158,7 @@ const makeStyles = (colors: ThemeColors) =>
 
     body: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
     bodyMe: { color: colors.textOnPrimary },
+    bodyDeleted: { fontStyle: 'italic', color: colors.textMuted },
 
     time: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
     timeMe: { color: colors.textOnPrimary + 'B3' },

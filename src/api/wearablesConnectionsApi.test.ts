@@ -30,6 +30,7 @@ jest.mock('../services/api', () => ({
     get: jest.fn(),
     post: jest.fn(),
     delete: jest.fn(),
+    defaults: { transformRequest: [] },
   },
 }));
 
@@ -163,7 +164,10 @@ describe('wearablesConnectionsApi.disconnect', () => {
     const res = await wearablesConnectionsApi.disconnect('OURA');
 
     expect(api.delete).toHaveBeenCalledTimes(1);
-    expect(api.delete).toHaveBeenCalledWith('/v1/wearables/connections/OURA');
+    // Sol B-362-6: the session fence rides on the request (B-HC5-119 tests in H5 cover it).
+    expect(api.delete).toHaveBeenCalledWith('/v1/wearables/connections/OURA', {
+      transformRequest: [expect.any(Function)],
+    });
     expect(res).toEqual({ success: true, provider: 'OURA' });
   });
 

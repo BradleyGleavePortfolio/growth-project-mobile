@@ -16,13 +16,15 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 | File | What it does |
 | --- | --- |
 | `api.ts` | Axios instance, auth interceptor, single-flight refresh, all typed API surfaces (`authApi`, `profileApi`, `foodApi`, `logApi`, `aiApi`, `workoutApi`, `coachApi`, `messagesApi`, `nudgesApi`, `recipesApi`, `listsApi`, …). |
+| `accountBinding.ts` | Binds a request to one account and sign-in (`AccountBinding`: token subject + auth epoch). The request interceptor sends a bound request only with that account's credential and sign-in, every `authEvents` emit bumps the epoch and aborts bound reads in flight. Used by the Roman chat history and delete calls (mobile #331). |
+| `sessionFence.ts` | One ordering rule for every write of the session credential pair (`supabase_token` / `supabase_refresh_token`): sign-in and sign-out writes, the token refresh commit, the refresh-failure sign-out and the one-time legacy AsyncStorage copy each hold the fence for their whole native write; a session generation moves on every sign-in / sign-out write, so a refresh or copy started under an older session publishes nothing (mobile #331). |
 | `authActions.ts` | `signOut()` and `refreshProfile()` — the only callers that touch `SIGN_OUT_KEYS` directly. Emits `authEvents`. |
 | `secureStorage.ts` | `getItem` / `setItem` / `removeItem` shim that uses `expo-secure-store` on native and `AsyncStorage` on web. Migrates legacy AsyncStorage tokens on first read. |
 | `realtime.ts` | Subscribes to Supabase Realtime broadcast channels. Used only for "ping → go fetch" — never for row delivery. |
 | `queryClient.ts` | The shared `QueryClient` plus an AsyncStorage-backed cache persister. Defaults: 30 s stale, 10 min gc, no focus refetch, 2 retries on read, 0 on mutate. |
 | `foodLogQueue.ts` | Offline queue for `POST /log/food`. Stored as a JSON array under `pending_food_logs`. Flushed by `RootNavigator` on offline → online. |
 | `refreshQueue.ts` | Single-flight refresh coordinator (currently unwired; `api.ts` has its own equivalent). Kept as a tested helper for a follow-up consolidation. |
-| `sentry.ts` | `initSentry`, `wrap`, `captureError`, `setSentryUser`. No-ops when `EXPO_PUBLIC_SENTRY_DSN` is missing. |
+| `sentry.ts` | `initSentry`, `wrap`, `captureError`, `captureErrorWithoutPii` (same, but the event drops the signed-in user, request data and breadcrumbs via `stripPersonalData`), `setSentryUser`. No-ops when `EXPO_PUBLIC_SENTRY_DSN` is missing. |
 
 ## Data flow
 

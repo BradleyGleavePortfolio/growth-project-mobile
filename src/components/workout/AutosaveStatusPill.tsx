@@ -75,6 +75,13 @@ export interface AutosaveStatusPillProps {
    */
   mirrorDegraded?: boolean;
   /**
+   * S-MWB-4 (OR-112-18): the server refused the save for access (403). The
+   * edit is queued but will not sync on its own, so the offline "will sync"
+   * copy would be false: the pill says it is not saved and the screen shows
+   * the reason and the next step. Ignored outside the 'offline' state.
+   */
+  refused?: boolean;
+  /**
    * Optional tap handler for the recoverable states (offline/conflict) — e.g.
    * "retry now" / "refresh". When omitted the pill is non-interactive.
    */
@@ -112,7 +119,7 @@ interface PillVisual {
 }
 
 export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
-  const { status, lastSavedAt, mirrorDegraded = false, onPress, testID } = props;
+  const { status, lastSavedAt, mirrorDegraded = false, refused = false, onPress, testID } = props;
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReduceMotion();
 
@@ -187,6 +194,17 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
           interactive: false,
         };
       case 'offline':
+        if (refused) {
+          return {
+            label: 'Not saved — no edit access',
+            icon: 'lock-closed-outline',
+            fg: semantic.warning.fg,
+            bg: semantic.warning.bg,
+            border: semantic.warning.border,
+            interactive: true,
+            hint: 'Tap to try saving again',
+          };
+        }
         // CALM: warm gold-brown (the OfflineBanner hue), never danger red. When
         // the on-device mirror write held, the copy reassures that the edit is
         // preserved on-device and will sync. When the mirror write FAILED
@@ -220,7 +238,7 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
       default:
         return null;
     }
-  }, [status, lastSavedAt, mirrorDegraded, now, sc]);
+  }, [status, lastSavedAt, mirrorDegraded, refused, now, sc]);
 
   if (!visual) return null;
 

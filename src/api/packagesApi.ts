@@ -26,7 +26,9 @@ import api from '../services/api';
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { generateIdempotencyKey } from '../utils/idempotency';
 
-export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yearly';
+// 'weekly' is read-only in the app (C-321-5): a package created weekly on the
+// web keeps its weekly billing; the editor does not offer it as a new choice.
+export type PackageBillingInterval = 'one_time' | 'weekly' | 'monthly' | 'quarterly' | 'yearly';
 
 export type PackageStatus = 'draft' | 'active' | 'archived';
 
@@ -293,6 +295,7 @@ export function idemHeaders(key?: string): { headers: { 'Idempotency-Key': strin
 
 const BILLING_TYPE_FOR_INTERVAL: Record<PackageBillingInterval, 'one_time' | 'recurring'> = {
   one_time: 'one_time',
+  weekly: 'recurring',
   monthly: 'recurring',
   quarterly: 'recurring',
   yearly: 'recurring',
@@ -306,6 +309,9 @@ function toBackendIntervalFields(
 ): { billing_interval?: 'week' | 'month' | 'year'; billing_interval_count?: number } {
   if (interval === 'one_time') {
     return {};
+  }
+  if (interval === 'weekly') {
+    return { billing_interval: 'week', billing_interval_count: intervalCountInput ?? 1 };
   }
   if (interval === 'monthly') {
     return { billing_interval: 'month', billing_interval_count: intervalCountInput ?? 1 };
@@ -322,6 +328,11 @@ function toBackendIntervalFields(
 interface BackendPackageRow {
   id?: string;
   coach_user_id?: string;
+  // The backend CoachPackage row names these coach_id / interval /
+  // interval_count; published_at null = a draft clients cannot buy.
+  coach_id?: string;
+  interval?: 'week' | 'month' | 'year' | null;
+  published_at?: string | null;
   name?: string;
   title?: string;
   description?: string | null;
@@ -350,7 +361,7 @@ function fromBackendInterval(
   billingType: BackendPackageRow['billing_type'],
 ): PackageBillingInterval {
   if (billingType === 'one_time') return 'one_time';
-  if (raw === 'week') return 'monthly';
+  if (raw === 'week') return 'weekly';
   if (raw === 'month') {
     if (count >= 3 && count < 12) return 'quarterly';
     return 'monthly';
@@ -362,14 +373,29 @@ function fromBackendInterval(
   return 'monthly';
 }
 
-function fromBackend(row: BackendPackageRow): CoachPackage {
+// S-FEE round 4: a row the backend never published is a draft. Rows without
+// published_at (older payloads) keep the previous active default.
+function statusOf(row: BackendPackageRow): PackageStatus {
+  if (row.status) return row.status;
+  if (row.archived_at || row.is_active === false) return 'archived';
+  if (row.published_at === null) return 'draft';
+  return 'active';
+}
+
+/** Exported for tests (C-321-5 weekly mapping). */
+export function fromBackend(row: BackendPackageRow): CoachPackage {
   const count = row.billing_interval_count ?? row.interval_count ?? 1;
-  const interval = fromBackendInterval(row.billing_interval, count, row.billing_type);
-  const status: PackageStatus =
-    row.status ?? (row.is_active === false ? 'archived' : 'active');
+  // S-FEE round 4: the backend row carries `interval`; reading only
+  // `billing_interval` showed every yearly package as monthly.
+  const interval = fromBackendInterval(
+    row.billing_interval ?? row.interval ?? undefined,
+    count,
+    row.billing_type,
+  );
+  const status = statusOf(row);
   return {
     id: row.id ?? '',
-    coachUserId: row.coach_user_id ?? '',
+    coachUserId: row.coach_user_id ?? row.coach_id ?? '',
     title: row.name ?? row.title ?? '',
     description: row.description ?? null,
     priceCents: row.amount_cents ?? row.price_cents ?? 0,
@@ -402,15 +428,17 @@ interface BackendCreateBody {
   // fields in `PackageCreateInput` so we don't lose them.
 }
 
-function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
+export function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
   const intervalFields = toBackendIntervalFields(input.billingInterval, input.intervalCount);
+  // #321 (B-321-2): currency is always sent (lower-case ISO code). The
+  // backend whitelist DTO required it, so a create without it was a 400.
   const body: BackendCreateBody = {
     name: input.title,
     description: input.description ?? null,
     amount_cents: input.priceCents,
+    currency: (input.currency ?? 'usd').toLowerCase(),
     billing_type: BILLING_TYPE_FOR_INTERVAL[input.billingInterval],
   };
-  if (input.currency !== undefined) body.currency = input.currency;
   if (intervalFields.billing_interval) body.billing_interval = intervalFields.billing_interval;
   if (intervalFields.billing_interval_count != null) {
     body.billing_interval_count = intervalFields.billing_interval_count;
@@ -424,17 +452,34 @@ interface BackendUpdateBody {
   description?: string | null;
   amount_cents?: number;
   currency?: string;
+  billing_type?: 'one_time' | 'recurring';
+  // null clears the cadence (one-time); backend #629 round 4.
+  billing_interval?: 'week' | 'month' | 'year' | null;
+  billing_interval_count?: number;
   is_active?: boolean;
-  // TODO(backend): UpdatePackageDto does not accept billing_type,
-  // billing_interval, billing_interval_count, trial_days, or features.
+  // TODO(backend): UpdatePackageDto does not accept trial_days or features.
 }
 
-function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
+export function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
   const out: BackendUpdateBody = {};
   if (input.title !== undefined) out.name = input.title;
   if (input.description !== undefined) out.description = input.description;
   if (input.priceCents !== undefined) out.amount_cents = input.priceCents;
-  if (input.currency !== undefined) out.currency = input.currency;
+  if (input.currency !== undefined) out.currency = input.currency.toLowerCase();
+  // #321 (B-321-3): a billing change reaches the backend. Callers pass
+  // billingInterval only when the coach changed it (see the edit screen).
+  if (input.billingInterval !== undefined) {
+    out.billing_type = BILLING_TYPE_FOR_INTERVAL[input.billingInterval];
+    if (input.billingInterval === 'one_time') {
+      out.billing_interval = null;
+    } else {
+      const fields = toBackendIntervalFields(input.billingInterval, input.intervalCount);
+      if (fields.billing_interval) out.billing_interval = fields.billing_interval;
+      if (fields.billing_interval_count != null) {
+        out.billing_interval_count = fields.billing_interval_count;
+      }
+    }
+  }
   if (input.status !== undefined) out.is_active = input.status === 'active';
   return out;
 }
@@ -480,6 +525,29 @@ export const coachPackagesApi = {
     const res = await api.patch<BackendPackageRow>(
       `/v1/coach/packages/${encodeURIComponent(id)}`,
       toBackendUpdate(input),
+      idemHeaders(idempotencyKey),
+    );
+    return { ...res, data: fromBackend(res.data) };
+  },
+
+  // Put a draft on sale (`POST /v1/coach/packages/:id/publish`). The backend
+  // applies the $19.99 floor to a package that was never on sale and answers
+  // PACKAGE_PRICE_BELOW_MINIMUM / PACKAGE_ARCHIVED with a code. Idempotent.
+  publish: async (id: string, idempotencyKey?: string) => {
+    const res = await api.post<BackendPackageRow>(
+      `/v1/coach/packages/${encodeURIComponent(id)}/publish`,
+      {},
+      idemHeaders(idempotencyKey),
+    );
+    return { ...res, data: fromBackend(res.data) };
+  },
+
+  // Take a package off sale (`POST /v1/coach/packages/:id/unpublish`).
+  // Existing buyers keep access; the package can be republished later.
+  unpublish: async (id: string, idempotencyKey?: string) => {
+    const res = await api.post<BackendPackageRow>(
+      `/v1/coach/packages/${encodeURIComponent(id)}/unpublish`,
+      {},
       idemHeaders(idempotencyKey),
     );
     return { ...res, data: fromBackend(res.data) };

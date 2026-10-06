@@ -19,8 +19,9 @@ In-app account deletion for both roles (Apple App Review 5.1.1(v); GDPR Art. 17;
 3. The user types `DELETE` (case-insensitive) or their account email, then **re-authenticates**:
    - password, or
    - on iOS when available, the native Sign in with Apple sheet (`reauthenticateWithApple()` in `src/utils/appleAuth.ts`; requests no scopes and does NOT create a new session).
-4. `POST /auth/recent-auth-token` (`{ password }` or `{ provider: 'apple', provider_token }`) returns a short-lived single-use token; `POST /me/delete-account` with header `X-Recent-Auth-Token` schedules the deletion **in the same request** (the 14-day grace period starts now). Apple users also send `apple_authorization_code` so the server revokes their Sign in with Apple tokens. The request is idempotent on the server.
+4. `POST /auth/recent-auth-token` (`{ password }` or `{ provider: 'apple', provider_token }`) returns a short-lived single-use token; `POST /me/delete-account` with header `X-Recent-Auth-Token` schedules the deletion **in the same request** (the 14-day grace period starts now). Apple users also send `apple_authorization_code` so the server can revoke their Sign in with Apple tokens; the response's `apple_revocation` says whether it did. The request is idempotent on the server.
 5. **Status view:** the exact permanent-deletion date (`purge_after`), the deleted-data list, **Keep my account** (`POST /me/delete-account/cancel`, after a confirm alert) while `cancellable`, and Sign out. The user is not signed out automatically; the account stays usable during the grace period.
+   - Apple copy: the view says Apple removed the app's access to the Apple Account only when `apple_revocation` is `revoked`. Otherwise anyone who may have signed in with Apple (the account lists Apple, they confirmed with Apple, the server tried to revoke, or the provider lookup could not tell) sees a fallback from `appleFallbackCopy` (B-368-1). Right after confirming it starts "Apple has not confirmed that this app’s access was removed." (`APPLE_FALLBACK`; conditional "If you signed in with Apple, ..." when the lookup could not tell); on a later visit, which has no outcome, it says "If Apple did not confirm ..." (`APPLE_FALLBACK_LATER`). Every fallback ends with `APPLE_REMOVAL_STEPS`: Apple's own steps (Apple Support 102571), Settings > your name > Sign in with Apple on iOS 18 or later, and account.apple.com > Sign-In & Security on earlier iOS versions (the app supports iOS 16.4 and later) or any other device. It matches the backend's `SIGN_IN_WITH_APPLE_DELETION_TEXT`. Apple's current name is "Apple Account", not "Apple ID".
 
 Errors: 401 on re-auth shows "That password is not correct" / "Apple could not confirm it is you"; 429 shows a wait-a-minute message; other failures show the server message. The re-auth request is sent with `skipAuthRefresh` so a wrong password is not replayed by the 401 refresh interceptor against the 5/min throttle.
 
@@ -66,11 +67,46 @@ The screen is scanned by `src/__tests__/quietLuxuryDoctrine.test.ts`. It contain
 Coverage:
 - Request form: lists and grace copy, no email/support promises, doctrine tokens, DELETE/email gate plus password requirement, Apple option hidden when unavailable
 - Password re-auth: token minted then deletion scheduled with it, date shown, no auto sign-out; 401 wrong password, 429, scheduling failure stays on form
-- Apple re-auth: identity token proof, authorization code forwarded, silent cancel
+- Apple re-auth: identity token proof, authorization code forwarded, silent cancel; "Apple Account" on every view, no first person in the form's Apple note
+- `APPLE_FALLBACK`: pinned word for word, iOS 18 qualifier before the iPhone steps, web steps for earlier versions
 - Status view: scheduled date, cancel returns to the form, cancel hidden when not cancellable, sign out
 - Navigation: back and "Cancel — keep my account"
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
+
+### RomanConversationsScreen and RomanConversationScreen
+
+`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).
+
+**Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
+
+**Flow**
+
+1. The list (`useRomanChats.ts`) loads `GET /roman/sessions` (30 per page, newest first, keyset `cursor`), shows each chat's local start date and time and message count (coach-tool chats are labelled). Two chats can start on the same local date (the backend keeps one chat per UTC day), so the start time is on every row, the transcript title and the permanent-delete confirm (B-331-1); the confirm also names the message count and, for coach tools, where it happened (`chatIdentity`), and pages with "Show older conversations".
+2. Open: `RomanConversationScreen` reads `GET /roman/sessions/:id/messages` (oldest first on screen, "Show earlier messages" pages back). Read only.
+3. Delete one: confirm sheet ("permanently deletes ... cannot be undone"), the row leaves at once, comes back in place if the server does not confirm. A 404 `ROMAN_SESSION_NOT_FOUND` on delete is the requested outcome (already gone). A repeat delete is a quiet 204 on the server.
+4. Delete all: confirm sheet plus typing `DELETE` (case-insensitive). The list empties at once; on failure the previous list comes back, and after a partial or unknown failure the list is re-read to show what is left.
+5. The transcript screen tells the list a chat is gone through `romanChatsEvents.ts` (in memory, carries the owner id and the sign-in epoch).
+6. The live Roman chat (`useRomanChat`) stays mounted under these screens when its header opens them. A confirmed Delete (row or transcript) of the chat it holds, or Delete all, reaches it through `romanChatsEvents.ts` (`onGone`, `onErased`): it drops that chat (no erased text stays on screen) and opens a fresh one, and a send waits for the fresh chat, so nothing is sent to an erased chat (B-376-1).
+
+**Account binding (Sol A-331-4, B-331-6):** the list is loaded under an `AccountBinding` (`src/services/accountBinding.ts`: the token subject plus the auth epoch). Every Roman request, read or delete, carries it, and the API client (`services/api.ts`) sends it only with a credential of that same account and sign-in, checked after the SecureStore read, immediately before transport, and again before a 401 replay; otherwise the request is cancelled and never sent. Any `authEvents` emit (sign-out, sign-in, even the same account signing in again) bumps the epoch: reads in flight are aborted, every answer for the old sign-in is dropped (`account_changed`), the list and transcript clear at once, confirm sheets close (the typed DELETE resets; sheets are keyed by sign-in), and stale confirm or retry closures do nothing (`deleteOne(chat, binding)` / `deleteAll(binding)` run only for the list's current binding). The transcript checks the binding before every state change, list event, navigation and report after its delete settles. A refresh overtaken by a sign-out or sign-in never writes its tokens over the new session and never signs the new session out. This is ordered by one fence (`src/services/sessionFence.ts`, A-331-7 / B-331-8): every write of the session keys moves a session generation at call time; the refresh publishes its tokens, and a failed refresh signs out, only while holding the fence for the generation it started in, taken with no await after the check; a sign-in or sign-out that starts meanwhile waits and lands last. A request is replayed after a refresh only in the session it was first sent in; an unbound request whose session ended under it keeps its original 401 (C-331-8). Nothing is stored on the device; the server sends `no-store`. Both screens carry `ph-no-capture`.
+
+**Erased stays erased (Sol B-331-5):** chats the server confirmed erased (or already gone) are remembered for the binding and never re-added by an older page; Delete all fences every page read before it started or settled; reloads asked for during Delete all wait for it; and every list read first waits for this account's erases still in flight (`romanEraseTracker.ts`, also across a same-account sign-out and sign-in), so a read can never be answered from before an erase. An erase that may have left the phone is not aborted (that would not undo it, only hide when it finished).
+
+**Errors** (`romanChatsCopy.ts` `failureView`, from status and machine `code`): offline, 401 signed out, 403 not allowed (reference + support), 404 `ROMAN_SESSION_NOT_FOUND`, uncoded 404 (backend without #635, or Roman chat reading switched off for the transcript, where Delete is still offered), 400 `ROMAN_CURSOR_INVALID` (list re-read from the top), 400 `ROMAN_SESSIONS_QUERY_INVALID` (#635 fix round: an outdated app; update copy, reference, reported), 503 `ROMAN_ERASE_INCOMPLETE` (one / all copy; the one-chat copy never says "not changed", because #635's fix round also uses this code when an erase cannot be confirmed), 429, a changed account (`account_changed`, normally never shown because the screen clears itself), and anything else as a short reference + Contact support (`RomanChatsSupportAction`: the shared `useSupportEmail` + `SupportEmailFallback`, subject with the reference only, a visible fallback with the address when no email app opens) + a Sentry report with status, code and request id only. Delete copy never claims a result the server did not confirm.
+
+**Entry points:** Settings > Privacy > Roman and AI (`RomanAiConsentScreen`, row "Your conversations with Roman"), the Roman chat header (`RomanConversationsButton`), and coach Settings > Privacy (hidden for a sub-coach, C-331-3: the backend Roman routes allow student, coach and owner only). The routes `RomanConversations` / `RomanConversation` are registered in the client More stack and the coach Settings stack without the Roman chat flag, because the backend list and delete routes are outside the chat switch.
+
+**API surface** (`src/api/romanChatsApi.ts`, backend #635 `docs/roman-chat-deletion.md`)
+
+| Method | Endpoint | Notes |
+|--------|----------|-------|
+| `GET` | `/roman/sessions?limit=&cursor=` | metadata only, newest first |
+| `DELETE` | `/roman/sessions/:id` | 204, idempotent |
+| `DELETE` | `/roman/sessions` | 204, every chat, both surfaces |
+| `GET` | `/roman/sessions/:id/messages?limit=&cursor=` | behind the Roman chat switch |
+
+**Tests:** `src/services/__tests__/accountBinding.transport.test.ts` (real axios client and interceptors, paused credential read, logout/login, 401 refresh and replay), `src/services/__tests__/sessionFence.refresh.test.ts` (real secureStorage over a pausable SecureStore: a sign-in or sign-out at each awaited refresh, receipt and sign-out boundary), `src/services/__tests__/authActions.signOut.fence.test.ts`, `src/api/__tests__/romanChatsApi.test.ts`, `src/screens/settings/__tests__/RomanConversationsScreen.test.tsx`, `src/screens/settings/__tests__/RomanConversationScreen.test.tsx`, `src/components/roman/__tests__/RomanConversationsButton.test.tsx`, `src/navigation/__tests__/romanConversationsReachable.test.ts`.
 
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
