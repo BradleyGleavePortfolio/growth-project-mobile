@@ -106,7 +106,20 @@ export function actionTarget(
             params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
           }
         : null;
+    // An older server may still send a workout item. Nothing in the app
+    // approves a workout, so it opens the client's workout history
+    // (S-BRIEF-124 B-398-1) and never says approve.
     case 'workout_approval':
+      return clientId
+        ? {
+            tab: 'ClientsStack',
+            params: {
+              screen: 'ClientDetail',
+              params: { clientId, clientName, initialTab: 'workouts' },
+              initial: false,
+            },
+          }
+        : null;
     case 'weight_flag':
     case 'checkin_missing':
       return clientId
@@ -403,7 +416,8 @@ export function CoachBriefHeaderFallback({
 function ActionRow({ item }: { item: CoachBriefActionItem }) {
   const navigation = useNavigation<BriefNav>();
   const target = actionTarget(item);
-  const label = item.client_name ? `${item.client_name}: ${item.detail}` : item.detail;
+  const detail = item.type === 'workout_approval' ? 'Completed a workout' : item.detail;
+  const label = item.client_name ? `${item.client_name}: ${detail}` : detail;
   const body = (
     <>
       <Ionicons
@@ -413,7 +427,7 @@ function ActionRow({ item }: { item: CoachBriefActionItem }) {
       />
       <View style={styles.actionText}>
         {item.client_name ? <Text style={styles.actionName}>{item.client_name}</Text> : null}
-        <Text style={styles.actionDetail}>{item.detail}</Text>
+        <Text style={styles.actionDetail}>{detail}</Text>
       </View>
       {target ? <Ionicons name="chevron-forward" size={16} color={tokens.charcoal} /> : null}
     </>

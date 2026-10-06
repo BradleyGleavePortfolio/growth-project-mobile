@@ -23,6 +23,10 @@ mount
   └─ pull-to-refresh → GET again (cheap; the brief is prepared once a day)
 ```
 
+Action rows: unread message opens the client thread; weight or check-in opens Client Detail; a workout item (older servers only; the
+backend no longer sends one) opens Client Detail on Workouts and reads "Completed a workout", never an approval; dunning and revenue
+open Money; team items open Team.
+
 ## API
 
 | Endpoint | Notes |

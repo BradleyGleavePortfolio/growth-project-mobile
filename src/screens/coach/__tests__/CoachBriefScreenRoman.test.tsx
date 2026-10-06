@@ -50,7 +50,7 @@ jest.mock('../../../api/coachBriefApi', () => ({
 import CoachBriefScreen, { actionTarget } from '../CoachBriefScreen';
 
 const NARRATIVE =
-  'Good morning, Marcus. $147.50 came in from 3 payments since midnight. Dana is waiting for a reply, and one workout needs approval.';
+  'Good morning, Marcus. $147.50 came in from 3 payments since midnight. One client is waiting for a reply, and one workout was completed.';
 
 function brief(over: Partial<CoachBrief> = {}): CoachBrief {
   return {
@@ -112,6 +112,24 @@ describe('CoachBriefScreen — live brief', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
       screen: 'ClientMessages',
       params: { clientId: 'cl-1', clientName: 'Dana' },
+      initial: false,
+    });
+  });
+
+  // S-BRIEF-124 B-398-1: an older server may still send a workout item.
+  it('a workout item opens the client workout history and never says approve', async () => {
+    mockToday.mockResolvedValue(brief());
+    const { getByTestId, getByText, queryByText } = await render(<CoachBriefScreen />);
+    await waitFor(() => expect(getByTestId('brief-action-workout_approval')).toBeTruthy());
+    expect(getByText('Completed a workout')).toBeTruthy();
+    expect(queryByText(/approv/i)).toBeNull();
+    expect(getByTestId('brief-action-workout_approval').props.accessibilityLabel).toBe(
+      'Lee: Completed a workout',
+    );
+    fireEvent.press(getByTestId('brief-action-workout_approval'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', {
+      screen: 'ClientDetail',
+      params: { clientId: 'cl-2', clientName: 'Lee', initialTab: 'workouts' },
       initial: false,
     });
   });

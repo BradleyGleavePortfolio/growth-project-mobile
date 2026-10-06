@@ -82,7 +82,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     loadWeeklySummaries,
   } = useClientDetailData(clientId, colors);
 
-  const [activeTab, setActiveTab] = useState<TabKey>('summary');
+  const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? 'summary');
   const [selectedDays, setSelectedDays] = useState<7 | 30 | 90>(90);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [showNudgeModal, setShowNudgeModal] = useState(false);
