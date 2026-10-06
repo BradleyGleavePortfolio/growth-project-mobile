@@ -66,6 +66,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_CALENDAR": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Native client Calendar tab and Roman booking tutorial; on in clinic and production profiles."
+    },
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
       "default": "off",
