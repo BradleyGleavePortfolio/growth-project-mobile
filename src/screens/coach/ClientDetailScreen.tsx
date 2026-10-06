@@ -59,7 +59,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   const {
     profile,
-    foodLogs,
     totals,
     weightLogs,
     workoutSessions,
@@ -481,7 +480,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         {activeTab === 'logs' && (
           <FoodLogReviewSection
             clientId={clientId}
-            todayLogs={foodLogs}
+            profile={profile}
+            onOpenMessages={() => navigation.navigate('ClientMessages', { clientId, clientName })}
+            onOpenMealPlans={() => setActiveTab('mealplan')}
             colors={colors}
             styles={styles}
           />

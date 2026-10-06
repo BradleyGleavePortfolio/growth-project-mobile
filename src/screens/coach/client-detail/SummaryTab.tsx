@@ -13,6 +13,8 @@ import type { ClientDetailStyles } from './styles';
 import { MacroCard } from './MacroCard';
 import { ProfileRow } from './ProfileRow';
 import { ConsultationSummaryCard } from './ConsultationSummaryCard';
+import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
+import { resolveCoachTargets } from '../../../utils/coach/foodReview';
 
 export function SummaryTab({
   profile,
@@ -47,8 +49,12 @@ export function SummaryTab({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
-  const calTarget = profile?.calorieTarget || 0;
-  const calPct = calTarget > 0 ? Math.min(100, Math.round((totals.calories / calTarget) * 100)) : 0;
+  const currentTarget = useCurrentMacrosForClient(clientId);
+  const targets = !currentTarget.isLoading && !currentTarget.isError
+    ? resolveCoachTargets(currentTarget.data, profile)
+    : null;
+  const calTarget = targets?.calories ?? 0;
+  const calPct = calTarget > 0 ? Math.round((totals.calories / calTarget) * 100) : 0;
   const allergies = extractClientAllergies(profile as unknown as LooseProfileRecord | null);
   const restrictions = extractClientDietaryRestrictions(profile as unknown as LooseProfileRecord | null);
 
@@ -61,16 +67,25 @@ export function SummaryTab({
           <Text style={styles.calorieTarget}>/ {calTarget || '—'} kcal</Text>
         </View>
         <View style={styles.caloriePctBg}>
-          <View style={[styles.caloriePctFill, { width: `${calPct}%` }]} />
+          <View style={[styles.caloriePctFill, { width: `${Math.min(100, calPct)}%` }]} />
         </View>
-        <Text style={styles.caloriePctText}>{calPct}% of daily target</Text>
+        <Text style={styles.caloriePctText}>
+          {currentTarget.isLoading ? 'Loading daily target…'
+            : currentTarget.isError ? 'Daily target unavailable'
+            : calTarget > 0 ? `${calPct}% of daily target` : 'No daily target available'}
+        </Text>
+        {currentTarget.isError ? (
+          <TouchableOpacity onPress={() => void currentTarget.refetch()} accessibilityRole="button">
+            <Text style={styles.actionPillText}>Retry target</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Macro Cards */}
       <View style={styles.macroGrid}>
-        <MacroCard label="Protein" value={totals.protein} target={profile?.proteinTarget} unit="g" color={colors.protein} />
-        <MacroCard label="Carbs" value={totals.carbs} target={profile?.carbTarget} unit="g" color={colors.carbs} />
-        <MacroCard label="Fat" value={totals.fat} target={profile?.fatTarget} unit="g" color={colors.fat} />
+        <MacroCard label="Protein" value={totals.protein} target={targets?.protein ?? undefined} unit="g" color={colors.protein} />
+        <MacroCard label="Carbs" value={totals.carbs} target={targets?.carbs ?? undefined} unit="g" color={colors.carbs} />
+        <MacroCard label="Fat" value={totals.fat} target={targets?.fat ?? undefined} unit="g" color={colors.fat} />
       </View>
 
       {/* Profile Info */}
