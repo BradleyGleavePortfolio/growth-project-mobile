@@ -343,7 +343,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         // Fallback to static values if network fails
         setMeta({
           lastSecurityUpdate: '2026-04-25T20:00:00Z',
-          encryptionLevel: 'TLS 1.3 + AES-256',
+          encryptionLevel: 'Encrypted in transit; secure token storage',
           dataResidency: 'US East',
           auditPolicyVersion: 'v1.0',
           dataExportSupported: true,
@@ -456,7 +456,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
               <MetaRow
                 icon="lock-closed-outline"
                 label="Encryption"
-                value="TLS 1.3 + AES-256 at rest"
+                value="Encrypted in transit; secure token storage"
               />
               <MetaRow
                 icon="document-text-outline"
@@ -540,10 +540,10 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 
-          <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>What is encrypted</Text>
-          <BulletItem text="All data in transit uses TLS 1.3 (the strongest available)" />
-          <BulletItem text="All stored data is encrypted with AES-256 at rest" />
-          <BulletItem text="Authentication tokens are stored in your device's secure enclave (Keychain / Keystore)" />
+          <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>Security and storage</Text>
+          <BulletItem text="Data sent to The Growth Project's servers is encrypted in transit." />
+          <BulletItem text="Authentication tokens use iOS Keychain or Android Keystore-backed secure storage." />
+          <BulletItem text="Some app data is cached on this device. The Privacy Policy describes server storage and access." />
         </View>
       </View>
 
