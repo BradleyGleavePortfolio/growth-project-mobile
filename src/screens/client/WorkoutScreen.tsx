@@ -8,6 +8,7 @@ import {
   Dimensions,
   ActivityIndicator,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,7 +24,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
-import { routineExerciseId } from '../../utils/workout/exerciseId';
+import {
+  formatLoggedSets,
+  routineToSessionExercises,
+  type ApiRoutine,
+} from '../../utils/workout/workoutLogging';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
@@ -142,19 +147,12 @@ function MuscleBreakdown({ data }: { data: MuscleVolume[] }) {
   );
 }
 
-interface ApiRoutine {
-  id: string;
-  name: string;
-  exercises: Array<{ exercise_name: string; muscle_group: string; sets_target: number; reps_target: number }>;
-  is_template?: boolean;
-}
-
 interface ApiSession {
   id: string;
   date: string;
+  workout_name?: string;
   duration_minutes: number;
   notes: string;
-  completed?: boolean;
   exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
 }
 
@@ -418,6 +416,23 @@ export default function WorkoutScreen() {
     loadData();
   }, [loadData]);
 
+  // Refresh when the client comes back to this tab (after finishing a
+  // workout or saving a routine). Without it the workout just logged and
+  // the routine just saved did not appear until a manual pull-to-refresh,
+  // which reads as "it did not save". The first focus is covered by the
+  // mount load above.
+  const hasFocusedOnceRef = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasFocusedOnceRef.current) {
+        hasFocusedOnceRef.current = true;
+        return undefined;
+      }
+      loadData();
+      return undefined;
+    }, [loadData]),
+  );
+
   // §2.8 one-shot "just completed" signal. Set ONLY when ActiveWorkoutScreen
   // returns here with route param `justCompletedId` (the durable server id of
   // the workout just saved) after a real finish-workout save. Consumed for
@@ -467,14 +482,37 @@ export default function WorkoutScreen() {
     // Convert API routine exercises to the format ActiveWorkoutScreen expects.
     // The API routine does not carry catalog ids — synthesize a deterministic
     // fallback so downstream writes never persist an empty exerciseId (B2).
-    const exercisesForSession = routine.exercises.map((e) => ({
-      exerciseId: routineExerciseId(routine.id, e.exercise_name),
-      exerciseName: e.exercise_name,
-      sets: e.sets_target || 3,
-      reps: e.reps_target || 10,
-      restSec: 60,
-    }));
+    const exercisesForSession = routineToSessionExercises(routine);
     navigation.navigate('ActiveWorkout', { routineId: routine.id, routineName: routine.name, exercises: JSON.stringify(exercisesForSession) });
+  };
+
+  // QA P0-W1 shipped DELETE /workouts/:id but no screen called it, so a
+  // workout logged twice or by mistake could never be removed.
+  const confirmDeleteSession = (session: ApiSession) => {
+    Alert.alert(
+      'Delete this workout?',
+      `${session.workout_name || session.notes || 'This workout'} will be removed from your history and from what your coach sees.`,
+      [
+        { text: 'Keep', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await workoutApi.deleteWorkout(session.id);
+              setRecentSessions((prev) => prev.filter((s) => s.id !== session.id));
+              loadData();
+            } catch (err) {
+              logger.error('WorkoutScreen', 'deleteWorkout failed', err);
+              Alert.alert(
+                'Workout not deleted',
+                'Check the connection, then try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
   };
 
   const startQuickWorkout = () => {
@@ -645,8 +683,8 @@ export default function WorkoutScreen() {
               <Text style={styles.statLabel}>Routines</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statValue}>{recentSessions.filter(s => s.completed).length}</Text>
-              <Text style={styles.statLabel}>Completed</Text>
+              <Text style={styles.statValue}>{pendingAssignments.length}</Text>
+              <Text style={styles.statLabel}>From coach</Text>
             </View>
           </View>
         </FadeInView>
@@ -727,13 +765,20 @@ export default function WorkoutScreen() {
               >
                 <View style={styles.routineTop}>
                   <Text style={styles.routineName}>{routine.name}</Text>
-                  <HapticPressable
-                    intent="light"
-                    onPress={() => navigation.navigate('RoutineBuilder', { routineId: routine.id })}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="create-outline" size={18} color={colors.textMuted} />
-                  </HapticPressable>
+                  {/* Shared template routines belong to no client; the server
+                      answers 404 to an edit, so only the client's own
+                      routines get the pencil. */}
+                  {routine.is_template ? null : (
+                    <HapticPressable
+                      intent="light"
+                      onPress={() => navigation.navigate('RoutineBuilder', { routineId: routine.id })}
+                      hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit routine ${routine.name}`}
+                    >
+                      <Ionicons name="create-outline" size={18} color={colors.textMuted} />
+                    </HapticPressable>
+                  )}
                 </View>
                 <Text style={styles.routineExCount}>{exList.length} exercises</Text>
                 <Text style={styles.routineExList} numberOfLines={1}>
@@ -755,10 +800,22 @@ export default function WorkoutScreen() {
           recentSessions.map((session) => (
             <View key={session.id} style={styles.historyCard}>
               <View style={styles.historyHeader}>
-                <Text style={styles.historyTitle}>{session.notes || 'Workout'}</Text>
-                <Text style={styles.historyDate}>
-                  {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </Text>
+                <Text style={styles.historyTitle}>{session.workout_name || session.notes || 'Workout'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <Text style={styles.historyDate}>
+                    {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
+                  </Text>
+                  <HapticPressable
+                    intent="warning"
+                    onPress={() => confirmDeleteSession(session)}
+                    hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Delete workout ${session.workout_name || session.notes || ''}`.trim()}
+                    testID={`delete-workout-${session.id}`}
+                  >
+                    <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+                  </HapticPressable>
+                </View>
               </View>
               {session.duration_minutes ? (
                 <Text style={styles.historyMeta}>{formatDuration(session.duration_minutes)}</Text>
@@ -766,9 +823,7 @@ export default function WorkoutScreen() {
               {(session.exercises || []).map((ex, i) => (
                 <View key={i} style={styles.historyExercise}>
                   <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
-                  <Text style={styles.exerciseSets}>
-                    {ex.sets_completed} sets{ex.weight_per_set?.length ? ` · ${ex.weight_per_set.map((w) => `${w} lbs`).join(', ')}` : ''}
-                  </Text>
+                  <Text style={styles.exerciseSets}>{formatLoggedSets(ex)}</Text>
                 </View>
               ))}
             </View>

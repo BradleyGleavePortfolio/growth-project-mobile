@@ -11,6 +11,7 @@ import {
   type WeekSummary,
   type WorkoutSession,
 } from './types';
+import { mapCoachWorkoutSessions } from '../../../utils/workout/workoutLogging';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
@@ -94,31 +95,14 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       }));
       setWeightLogs(weights as unknown as WeightLog[]);
 
-      // Workout sessions
-      type SessionEx = { id?: string; exercise_name?: string; name?: string; sets_data?: unknown[] };
-      type SessionRow = { id: string; name?: string; created_at: string; completed_at: string; exercises?: SessionEx[] };
-      const sessions = ((data.recent_workouts as SessionRow[] | undefined) || []).map((s) => ({
-        id: s.id,
-        routineName: s.name || 'Workout',
-        startTime: s.created_at,
-        endTime: s.completed_at,
-        completed: true,
-        exercises: JSON.stringify((s.exercises || []).map((ex) => {
-          const name = ex.exercise_name || ex.name || 'Exercise';
-          return {
-            // Always emit a real id — empty string used to flow through and
-            // corrupt downstream aggregations. Prefer the catalog id, fall
-            // back to a stable session-scoped slug so the row is at least
-            // distinguishable from siblings.
-            exerciseId:
-              ex.id ||
-              `session:${s.id}/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
-            exerciseName: name,
-            sets: ex.sets_data || [],
-          };
-        })),
-      }));
-      setWorkoutSessions(sessions as unknown as WorkoutSession[]);
+      // Workout sessions. The server sends WorkoutSession rows
+      // (workout_name, created_at, duration_minutes, exercises[] with
+      // weight_per_set / reps_per_set). The mapping used to read name /
+      // completed_at / sets_data, which do not exist, so the coach saw every
+      // client workout as "Workout", "In progress", 0/0 sets and 0 lbs.
+      setWorkoutSessions(
+        mapCoachWorkoutSessions(data.recent_workouts) as unknown as WorkoutSession[],
+      );
 
     } catch (err) {
       // If we have no profile yet, expose the failure so the screen can render

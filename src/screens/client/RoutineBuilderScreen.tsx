@@ -16,6 +16,12 @@ import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } fro
 import { getAllExercises } from '../../db/workoutDb';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
+import {
+  buildRoutinePayload,
+  routineToBuilderExercises,
+  type RoutineBuilderExercise,
+} from '../../utils/workout/workoutLogging';
 import {
   useRoutines,
   useCreateRoutine,
@@ -23,13 +29,7 @@ import {
   useDeleteRoutine,
 } from '../../hooks/useApi';
 
-interface RoutineExercise {
-  exerciseId: string;
-  exerciseName: string;
-  sets: number;
-  reps: number;
-  restSec: number;
-}
+type RoutineExercise = RoutineBuilderExercise;
 
 interface Exercise {
   id: string;
@@ -72,14 +72,9 @@ export default function RoutineBuilderScreen() {
     const routine = routinesQ.data.find((r) => r.id === routineId);
     if (!routine) return;
     setName(routine.name);
-    type Ex = { exercise_id?: string; exerciseId?: string; exercise_name?: string; exerciseName?: string; sets?: number; reps?: number; rest_sec?: number; restSec?: number };
-    const exs = ((routine.exercises as Ex[] | undefined) || []).map((e) => ({
-      exerciseId: e.exercise_id || e.exerciseId || '',
-      exerciseName: e.exercise_name || e.exerciseName || '',
-      sets: e.sets || 3,
-      reps: e.reps || 10,
-      restSec: e.rest_sec || e.restSec || 60,
-    }));
+    // GET /routines returns RoutineExercise rows (default_sets /
+    // default_reps / default_rest_seconds / muscle_group).
+    const exs = routineToBuilderExercises(routine as unknown as Parameters<typeof routineToBuilderExercises>[0]);
     setExercises(exs);
   }, [routineId, routinesQ.data]);
 
@@ -121,6 +116,7 @@ export default function RoutineBuilderScreen() {
         sets: 3,
         reps: 10,
         restSec: 60,
+        muscleGroup: toServerMuscleGroup(exercise.muscle),
       },
     ]);
     setShowAddModal(false);
@@ -158,15 +154,7 @@ export default function RoutineBuilderScreen() {
       Alert.alert('No Exercises', 'Add at least one exercise.');
       return;
     }
-    const payload = {
-      name: name.trim(),
-      exercises: exercises.map((e) => ({
-        exercise_name: e.exerciseName,
-        sets: e.sets,
-        reps: e.reps,
-        rest_sec: e.restSec,
-      })),
-    };
+    const payload = buildRoutinePayload(name, exercises);
     const onSuccess = () => navigation.goBack();
     const onError = (err: unknown) => {
       Alert.alert("Couldn't save routine", errorMessage(err, 'Please try again.'));
