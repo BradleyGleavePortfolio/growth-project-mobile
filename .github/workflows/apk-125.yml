@@ -145,7 +145,7 @@ jobs:
             echo "bundle bytes: $(stat -c %s out/index.android.bundle); header: $(head -c 8 out/index.android.bundle | od -An -tx1)"
             c() { printf '%-48s %s\n' "$1" "$( (grep -a -o -F -- "$2" out/index.android.bundle || true) | wc -l)"; }
             echo "-- must be > 0"
-            c "production API URL"                 "https://backend-spring-lake-3890.fly.dev/api"
+            c "production API URL"                 "https://api.trygrowthproject.com/api"
             c "production Supabase URL"            "https://rpyfdsgxxltzutgqeouk.supabase.co"
             c "public anon key (count only)"       "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
             echo "-- must be 0"
@@ -168,7 +168,7 @@ jobs:
           rm out/index.android.bundle
           { echo '```'; cat "$P"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           # hard gates
-          grep -a -q -F "https://backend-spring-lake-3890.fly.dev/api" <(unzip -p "$APK" assets/index.android.bundle)
+          grep -a -q -F "https://api.trygrowthproject.com/api" <(unzip -p "$APK" assets/index.android.bundle)
           if grep -a -q -F "Alex Morgan" <(unzip -p "$APK" assets/index.android.bundle); then echo "screenshot fixtures in bundle"; exit 1; fi
           if grep -a -q -F "native-proof.invalid" <(unzip -p "$APK" assets/index.android.bundle); then echo "dummy host in bundle"; exit 1; fi
 
