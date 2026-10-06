@@ -117,7 +117,7 @@ jest.mock('../utils/authEvents', () => ({
 // Pull the screens / hook AFTER the mocks above are registered.
 import SubCoachInviteModal from '../screens/coach/SubCoachInviteModal';
 import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
-import { useCoachRoleType } from '../hooks/useCoachRoleType';
+import { useCoachRoleType, useCoachTeamStatus } from '../hooks/useCoachRoleType';
 
 beforeEach(() => {
   mockSubCoachInvite.mockReset();
@@ -217,7 +217,40 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
     );
     expect(src).toMatch(/showTeamTab && \(/);
     expect(src).toContain('useCoachRoleType');
-    expect(src).toContain("coachRoleType === 'head_coach'");
+    expect(src).toContain(
+      "teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches",
+    );
+  });
+
+  // AUDIT-16-125: every coach is the head coach of their own roster, so the
+  // Team tab (which can only show the plan gate) needs a real sub-coach.
+  it('useCoachTeamStatus reports no team for a head coach with an empty roster', async () => {
+    mockReadUserCache.mockResolvedValue({ id: 'u-head', email: 'h@ex.com', role: 'coach' });
+    mockGetMembers.mockResolvedValue({
+      ok: true,
+      data: [
+        { id: 'u-head', name: 'Head', email: 'h@ex.com', role: 'head_coach', assigned_clients: 3, max_clients: 30, created_at: '' },
+      ],
+    });
+
+    const { result } = await renderHook(() => useCoachTeamStatus());
+    await waitFor(() => expect(result.current.role).toBe('head_coach'));
+    expect(result.current.hasSubCoaches).toBe(false);
+  });
+
+  it('useCoachTeamStatus reports a team once the roster has a sub-coach', async () => {
+    mockReadUserCache.mockResolvedValue({ id: 'u-head', email: 'h@ex.com', role: 'coach' });
+    mockGetMembers.mockResolvedValue({
+      ok: true,
+      data: [
+        { id: 'u-head', name: 'Head', email: 'h@ex.com', role: 'head_coach', assigned_clients: 3, max_clients: 30, created_at: '' },
+        { id: 'u-sub', name: 'Sub', email: 's@ex.com', role: 'sub_coach', assigned_clients: 1, max_clients: 30, created_at: '' },
+      ],
+    });
+
+    const { result } = await renderHook(() => useCoachTeamStatus());
+    await waitFor(() => expect(result.current.hasSubCoaches).toBe(true));
+    expect(result.current.role).toBe('head_coach');
   });
 });
 
