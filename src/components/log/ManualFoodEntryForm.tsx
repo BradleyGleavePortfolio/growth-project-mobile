@@ -29,6 +29,11 @@ interface Props {
 }
 
 export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onSubmit, saving = false }: Props) {
+  const missingMacros = !fields.protein.trim() || !fields.carbs.trim() || !fields.fat.trim();
+  const missingCalories = !fields.calories.trim();
+  const nutritionMessage = missingMacros
+    ? 'Enter protein, carbs and fat. Use 0 if there is none.'
+    : missingCalories ? 'Enter calories. Use 0 if there is none.' : null;
   return (
     <ScrollView
       style={styles.modalBody}
@@ -39,7 +44,7 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
         <Ionicons name="arrow-back" size={18} color={Colors.primary} />
         <Text style={styles.backToSearchText}>Back to Search</Text>
       </HapticPressable>
-      <Text style={styles.portionHelp}>Enter nutrition for the whole portion below, not per serving. Blank macros are not tracked.</Text>
+      <Text style={styles.portionHelp}>Enter nutrition for the whole portion below, not per serving.</Text>
 
       <TextInput
         style={styles.input}
@@ -123,7 +128,8 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
         </View>
       </View>
 
-      <HapticPressable intent="success" style={styles.logButton} onPress={onSubmit} disabled={saving} accessibilityRole="button">
+      {nutritionMessage && <Text style={styles.portionHelp} accessibilityRole="alert">{nutritionMessage}</Text>}
+      <HapticPressable intent="success" style={styles.logButton} onPress={onSubmit} disabled={saving || missingMacros || missingCalories} accessibilityRole="button">
         <Ionicons name="add-circle" size={22} color={Colors.white} />
         <Text style={styles.logButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
       </HapticPressable>
