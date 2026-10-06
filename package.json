@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
+    "postinstall": "node scripts/patch-react-native-health.js",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
