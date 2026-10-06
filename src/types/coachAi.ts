@@ -77,7 +77,12 @@ export interface WorkoutPayload {
 
 export interface AiMealItem {
   name: string;
-  /** Free-form portion description ("1 cup", "150g"). */
+  /**
+   * Portion as the backend sends it ("6 oz", "1 cup"). This is the field the
+   * approve step copies into the client's plan (meal-plan.prompt.ts).
+   */
+  serving?: string | null;
+  /** Older mobile name for the portion; read only as a fallback. */
   portion?: string | null;
   calories?: number | null;
   protein_g?: number | null;
@@ -87,16 +92,27 @@ export interface AiMealItem {
 }
 
 export interface AiMeal {
-  /** breakfast / lunch / dinner / snack / etc — free text. */
+  /** breakfast / lunch / dinner / snack — the backend field the client sees. */
+  slot?: string | null;
+  /** Older mobile name for the slot; read only as a fallback. */
   time_of_day?: string | null;
   name?: string | null;
   items: AiMealItem[];
 }
 
+export interface AiMealDayTotals {
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+
 export interface AiMealDay {
   day: number;
   notes?: string | null;
-  /** Daily totals when the model returns them. */
+  /** Daily totals as the backend sends them (meal-plan.prompt.ts). */
+  daily_totals?: AiMealDayTotals | null;
+  /** Older mobile names for the totals; read only as a fallback. */
   total_calories?: number | null;
   total_protein_g?: number | null;
   total_carbs_g?: number | null;
@@ -107,6 +123,8 @@ export interface AiMealDay {
 export interface MealPlanPayload {
   title?: string | null;
   summary?: string | null;
+  /** Notes the approve step copies onto the plan the client sees. */
+  coach_notes?: string | null;
   days: AiMealDay[];
 }
 
