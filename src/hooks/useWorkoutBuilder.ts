@@ -121,8 +121,7 @@ export function useAssignWorkoutPlan() {
 export function useMyWorkoutAssignments() {
   return useQuery<ClientWorkoutAssignmentWithPlan[]>({
     queryKey: ['assignments', 'me'],
-    queryFn: () =>
-      workoutBuilderApi.listMyAssignments().then((r) => r.data),
+    queryFn: () => workoutBuilderApi.listMyAssignments(),
     staleTime: FIVE_MIN_MS,
   });
 }

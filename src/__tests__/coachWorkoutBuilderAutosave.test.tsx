@@ -969,3 +969,46 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
     );
   });
 });
+
+// ─── AUDIT-07-125: cold open from the Programs library ───────────────────────
+
+describe('CoachWorkoutBuilderScreen — plan not cached when the screen opens (AUDIT-07-125)', () => {
+  it('fills in the saved name, type and duration once the plan loads, and holds Save until then', async () => {
+    setFlag(true);
+    const CARDIO_PLAN: typeof EXISTING_PLAN = {
+      ...EXISTING_PLAN,
+      name: 'Week 1 Mon',
+      type: 'cardio' as typeof EXISTING_PLAN['type'],
+      duration_estimate_minutes: 30,
+    };
+    mockCurrentPlan = undefined;
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId, queryByTestId, rerender } = await render(<Screen />);
+
+    expect(getByTestId('mwb-plan-loading')).toBeTruthy();
+    expect(getByLabelText('Save changes').props.accessibilityState?.disabled).toBe(true);
+
+    mockCurrentPlan = CARDIO_PLAN;
+    await act(async () => {
+      await rerender(<Screen />);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(getByLabelText('Plan name').props.value).toBe('Week 1 Mon'));
+    expect(getByLabelText('Estimated duration in minutes').props.value).toBe('30');
+    expect(queryByTestId('mwb-plan-loading')).toBeNull();
+    expect(getByLabelText('Save changes').props.accessibilityState?.disabled).toBe(false);
+
+    await act(async () => {
+      await fireEvent.press(getByLabelText('Save changes'));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+    const args = mockUpdateMutateAsync.mock.calls[0]?.[0] as {
+      input: { name: string; type: string; duration_estimate_minutes?: number };
+    };
+    expect(args.input).toEqual({ name: 'Week 1 Mon', type: 'cardio', duration_estimate_minutes: 30 });
+    const rowsArg = mockSetExercisesMutateAsync.mock.calls[0]?.[0] as { rows: unknown[] };
+    expect(rowsArg.rows).toHaveLength(1);
+  });
+});

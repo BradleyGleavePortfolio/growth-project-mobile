@@ -105,6 +105,9 @@ export interface ClientWorkoutAssignmentWithPlan extends ClientWorkoutAssignment
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
+/** Pages of 50 read for GET /assignments/me (1,000 assignments). */
+export const MY_ASSIGNMENTS_MAX_PAGES = 20;
+
 export const workoutBuilderApi = {
   // ---- Coach surfaces ------------------------------------------------------
   listPlans: () => api.get<WorkoutPlan[]>('/workout-plans'),
@@ -135,8 +138,38 @@ export const workoutBuilderApi = {
     api.get<ClientWorkoutAssignment[]>(`/workout-plans/${planId}/assignments`),
 
   // ---- Client surfaces -----------------------------------------------------
-  listMyAssignments: () =>
-    api.get<ClientWorkoutAssignmentWithPlan[]>('/assignments/me'),
+  /**
+   * Every assignment the signed-in client has, oldest first.
+   *
+   * AUDIT-07-125: GET /assignments/me answers one page,
+   * `{ items, nextCursor }` (at most 50 rows, ordered by scheduled_for), not a
+   * bare list. Reading the reply as a list left the Workouts tab with no
+   * assigned workouts and broke the Your workouts list. Read every page; a bare
+   * list is still accepted. A failed page fails the whole load so the list is
+   * never shown as complete when it is not.
+   */
+  listMyAssignments: async (): Promise<ClientWorkoutAssignmentWithPlan[]> => {
+    const out: ClientWorkoutAssignmentWithPlan[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < MY_ASSIGNMENTS_MAX_PAGES; page += 1) {
+      const res = await api.get<unknown>('/assignments/me', {
+        params: cursor ? { cursor } : undefined,
+      });
+      const body: unknown = res.data;
+      if (Array.isArray(body)) {
+        return body as ClientWorkoutAssignmentWithPlan[];
+      }
+      const pageBody = (body ?? {}) as { items?: unknown; nextCursor?: unknown };
+      if (!Array.isArray(pageBody.items)) {
+        throw new Error('Your workouts could not be read. Pull to try again.');
+      }
+      out.push(...(pageBody.items as ClientWorkoutAssignmentWithPlan[]));
+      const next = pageBody.nextCursor;
+      if (typeof next !== 'string' || next === '' || next === cursor) break;
+      cursor = next;
+    }
+    return out;
+  },
 
   getMyAssignment: (assignmentId: string) =>
     api.get<ClientWorkoutAssignmentWithPlan>(`/assignments/${assignmentId}`),
