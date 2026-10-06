@@ -44,9 +44,10 @@ import { assignmentIdempotencyKey, localCalendarDate } from '../../utils/workout
 // sync_status='pending'. The sync engine pushes it to the server when
 // connectivity allows.
 import {
-  writeWorkoutLog,
+  queueWorkout,
+  settleQueuedWorkout,
+  releaseQueuedWorkout,
   triggerSync,
-  markSessionSyncedBySessionName,
 } from '../../offline';
 
 // NB: the local exercise_logs SQLite table (logExerciseWithVolume) is
@@ -113,6 +114,9 @@ export default function ActiveWorkoutScreen() {
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { routineName, exercises: exercisesJson, assignmentId } = route.params;
+  // Set by the Workouts tab "Resume workout" card: adopt the saved session
+  // without asking again.
+  const resumeRequested = (route.params as { resume?: boolean }).resume === true;
   // Per-R15 the persisted session key is scoped to the current user
   // (`active_workout_session:<userId>`). The user id resolves
   // asynchronously on cold start (useCurrentUser reads from MMKV/Async),
@@ -147,6 +151,9 @@ export default function ActiveWorkoutScreen() {
   // Stable idempotency key generated once at session start. Held in a
   // ref so it can be swapped on resume without re-rendering.
   const idempotencyKeyRef = useRef<string>(assignmentId ? randomUuid() : '');
+  // Offline queue key for this workout session. Fixed at the first Finish so
+  // tapping Finish again updates the one queued copy instead of adding one.
+  const queueKeyRef = useRef<string>('');
   // Gates the persistence effect until we've decided whether we are
   // creating a fresh session or restoring a stored one. Without this
   // gate the initial empty `sessionExercises` value would overwrite a
@@ -288,6 +295,11 @@ export default function ActiveWorkoutScreen() {
         return;
       }
       const { session, isStale } = result;
+      if (resumeRequested) {
+        adoptPersistedSession(session);
+        setHydrated(true);
+        return;
+      }
       const promptTitle = isStale ? 'Resume earlier workout?' : 'Resume workout?';
       const promptBody = isStale
         ? `Found an unfinished workout from over 12 hours ago${
@@ -665,14 +677,14 @@ export default function ActiveWorkoutScreen() {
         // describing the deleted WatermelonDB stack — current
         // implementation is built on expo-sqlite via src/offline,
         // see docs/offline-architecture.md):
-        //   1. Write each exercise group as a row in the local
-        //      expo-sqlite store with sync_status='pending'.
+        //   1. Queue the whole workout (the exact POST body) as one
+        //      row in the local expo-sqlite store, keyed by session.
         //   2. Attempt the server POST via createWorkout.mutate
         //      (network-optional).
-        //   3. If the network call succeeds the sync engine marks
-        //      the row 'synced'.
-        //   4. If offline the rows stay 'pending' and triggerSync()
-        //      fires on reconnect via NetInfo.
+        //   3. If the network call succeeds the row is marked 'synced'.
+        //   4. With no answer the row stays 'pending', the client is
+        //      told it is saved, and the sync engine sends it (and any
+        //      coach assignment completion) on reconnect / foreground.
         onPress: async () => {
           // Suppress the debounced persistence write that would
           // otherwise race the post-durable-write clear() and re-create
@@ -728,32 +740,70 @@ export default function ActiveWorkoutScreen() {
             completedSetCount: completedSets,
           };
 
-          // Write each exercise as a separate row in the local
-          // expo-sqlite store (one row per exercise group). A
-          // workout session that spans multiple exercises produces N
-          // rows — the sync engine batches them together via
-          // session_name when pushing to the server. Schema stays
-          // flat; no nested JSON blob in a single row.
+          // The exact POST /workouts body. Queued on the phone first (one row
+          // for the whole workout) and sent as-is, now or by the background
+          // sync once there is signal.
+          const workoutPayload = {
+            // The server keeps a calendar date (@db.Date). Sending the
+            // client's own calendar day keeps the history card on the day
+            // the client trained instead of the UTC day.
+            date: localCalendarDate(new Date()),
+            workout_name: routineName || 'Workout',
+            workout_type: 'strength',
+            duration_minutes: durationMinutes,
+            notes: workoutNotes,
+            exercises: completedExercises.map(completedExercisePayload),
+          };
+          // Coach assignment completion (full exercise/set detail).
+          const completionPayload = {
+            exercises: sessionExercises.map((ex) => ({
+              exerciseName: ex.exerciseName,
+              workoutPlanExerciseId: ex.workoutPlanExerciseId ?? null,
+              sets: ex.sets.map((s, i) => ({
+                set_index: i + 1,
+                status: s.completed ? 'completed' : 'skipped',
+                actual_reps: s.reps,
+                actual_weight_lbs: s.weight,
+              })),
+            })),
+          };
+          if (assignmentId) {
+            idempotencyKeyRef.current = assignmentIdempotencyKey(idempotencyKeyRef.current);
+          }
+          if (!queueKeyRef.current) {
+            queueKeyRef.current = `${userId || 'local'}:${sessionStartMsRef.current}`;
+          }
+          const queueKey = queueKeyRef.current;
+          let queued = false;
+
           try {
-            for (const ex of completedExercises) {
-              // B2: never write an empty exerciseId — fall back to a stable
-              // session-scoped slug derived from the exercise name. The
-              // server route will still receive the human-readable name via
-              // the createWorkout payload below.
-              const slug = (ex.exerciseName || 'exercise')
-                .toLowerCase()
-                .replace(/[^a-z0-9]+/g, '-')
-                .replace(/^-+|-+$/g, '') || 'exercise';
-              const exerciseId =
-                (ex.exerciseId && ex.exerciseId.trim()) ||
-                `session:${routineName || 'workout'}/${slug}`;
-              await writeWorkoutLog({
-                exerciseId,
-                setsData: JSON.stringify(ex.sets),
-                sessionName: routineName,
-                durationMinutes,
-              });
+            const result = await queueWorkout({
+              clientKey: queueKey,
+              payload: workoutPayload,
+              userId: userId || null,
+              sessionName: routineName,
+              durationMinutes,
+              assignment: assignmentId
+                ? {
+                    assignmentId,
+                    input: {
+                      completion_payload: completionPayload,
+                      idempotency_key: idempotencyKeyRef.current,
+                      started_at: sessionStartTimeRef.current.toISOString(),
+                    },
+                  }
+                : null,
+            });
+            if (result.alreadySynced) {
+              // This session already reached the server (saved earlier, then
+              // the app was closed before the screen cleared). Never send it
+              // a second time.
+              if (userId) await clearActiveWorkoutSession(userId);
+              setSaving(false);
+              navigation.goBack();
+              return;
             }
+            queued = true;
             localWriteSucceeded = true;
             // R18: local SQLite write is the first durable checkpoint.
             // Now that at least one durable replacement save has
@@ -788,20 +838,10 @@ export default function ActiveWorkoutScreen() {
             exercise_count: completedExercises.length,
           });
 
-          // Attempt server sync. If offline, the pending WDB records will be
-          // pushed by the sync engine on the next network-available event.
+          // Attempt the server save now. Without signal the queued row is
+          // sent by the sync engine on the next reconnect / foreground.
           createWorkout.mutate(
-            {
-              // The server keeps a calendar date (@db.Date). Sending the
-              // client's own calendar day keeps the history card on the day
-              // the client trained instead of the UTC day.
-              date: localCalendarDate(new Date()),
-              workout_name: routineName || 'Workout',
-              workout_type: 'strength',
-              duration_minutes: durationMinutes,
-              notes: workoutNotes,
-              exercises: completedExercises.map(completedExercisePayload),
-            },
+            workoutPayload,
             {
               onSuccess: (data: unknown) => {
                 if (timerRef.current) clearInterval(timerRef.current);
@@ -843,24 +883,20 @@ export default function ActiveWorkoutScreen() {
                   sets_completed: completedSets,
                   exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
                 });
-                // W-1 fix: the parent mutate just succeeded, so the N
-                // pending local rows we wrote in the loop above must be
-                // marked synced — otherwise the next `triggerSync()` cycle
-                // re-POSTs each of them as an additional single-exercise
-                // workout on the server.
-                if (serverId && routineName) {
-                  markSessionSyncedBySessionName(routineName, serverId).catch((error: unknown) => {
-                    // Best-effort; pending rows will reconcile on the next pull.
-                    // Surfaced (not swallowed) so a persistent mismatch is
-                    // diagnosable rather than silent.
-                    logger.warn('mwb.completion.mark-session-synced', {
-                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
-                      ...completionLogExtra,
-                      checkpoint: 'mark-session-synced',
-                      serverId: serverId || undefined,
-                      error: normalizeError(error),
+                // The queued copy of this workout is now on the server: mark it
+                // sent so the background sync never posts it a second time.
+                if (queued) {
+                  Promise.resolve()
+                    .then(() => settleQueuedWorkout(queueKey, serverId))
+                    .catch((error: unknown) => {
+                      logger.warn('mwb.completion.mark-session-synced', {
+                        ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                        ...completionLogExtra,
+                        checkpoint: 'mark-session-synced',
+                        serverId: serverId || undefined,
+                        error: normalizeError(error),
+                      });
                     });
-                  });
                 }
                 // Trigger sync so the newly created server record is
                 // pulled back. Pending rows have been marked above so this
@@ -881,19 +917,6 @@ export default function ActiveWorkoutScreen() {
                 // assignment completion endpoint with the full exercise/set
                 // payload. Non-fatal — the generic workout is already saved.
                 if (assignmentId) {
-                  const completionPayload = {
-                    exercises: sessionExercises.map((ex) => ({
-                      exerciseName: ex.exerciseName,
-                      workoutPlanExerciseId: ex.workoutPlanExerciseId ?? null,
-                      sets: ex.sets.map((s, i) => ({
-                        set_index: i + 1,
-                        status: s.completed ? 'completed' : 'skipped',
-                        actual_reps: s.reps,
-                        actual_weight_lbs: s.weight,
-                      })),
-                    })),
-                  };
-                  idempotencyKeyRef.current = assignmentIdempotencyKey(idempotencyKeyRef.current);
                   workoutBuilderApi.completeMyAssignment(assignmentId, {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
@@ -941,9 +964,34 @@ export default function ActiveWorkoutScreen() {
                 }
               },
               onError: (err) => {
+                setSaving(false);
+                const status = (err as { response?: { status?: number } } | null)?.response?.status;
+                const noAnswer = typeof status !== 'number' || status >= 500;
+                if (queued && noAnswer) {
+                  // No signal (or the server did not answer): the whole
+                  // workout is already stored on the phone and the sync
+                  // engine sends it, with the coach assignment, once the
+                  // phone is back online. Nothing for the client to redo.
+                  Promise.resolve()
+                    .then(() => releaseQueuedWorkout(queueKey))
+                    .catch(() => undefined);
+                  HapticService.heavyImpact();
+                  navigation.goBack();
+                  Alert.alert(
+                    'Saved on this phone',
+                    'No connection right now. The workout will be sent to your coach automatically once the phone is back online.',
+                  );
+                  return;
+                }
+                if (queued) {
+                  // The server refused this body; park the queued copy so it is
+                  // not retried. Tapping Finish again re-queues the same row.
+                  Promise.resolve()
+                    .then(() => releaseQueuedWorkout(queueKey, { rejected: true }))
+                    .catch(() => undefined);
+                }
                 // Phase 11 / Track 3: error haptic on failed API action
                 HapticService.error();
-                setSaving(false);
                 // The Finish path cleared the persisted session and disabled
                 // future writes by setting finishingRef. If the server save
                 // fails the user is told to retry, but without resetting

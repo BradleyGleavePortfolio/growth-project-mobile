@@ -105,6 +105,12 @@ jest.mock('../../../offline', () => ({
   writeWorkoutLog: jest.fn(async () => undefined),
   triggerSync: jest.fn(async () => undefined),
   markSessionSyncedBySessionName: jest.fn(async () => undefined),
+  queueWorkout: jest.fn(async () => ({ id: 'q1', alreadySynced: false, serverId: null })),
+  settleQueuedWorkout: jest.fn(async () => undefined),
+  releaseQueuedWorkout: jest.fn(async () => undefined),
+  countQueuedWorkouts: jest.fn(async () => 0),
+  pushQueuedWorkouts: jest.fn(async () => undefined),
+  workoutSyncEvents: { on: jest.fn(), off: jest.fn() },
 }));
 
 // ── WorkoutScreen dependency mocks (landing data sources) ────────────────────

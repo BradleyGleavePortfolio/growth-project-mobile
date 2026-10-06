@@ -38,8 +38,10 @@ import {
   toServerPayload,
 } from '../models/WorkoutLog';
 import { workoutApi } from '../../services/api';
+import { workoutBuilderApi } from '../../api/workoutBuilderApi';
+import type { CompleteAssignmentInput } from '../../api/workoutBuilderApi';
 import { generateId } from '../../utils/date';
-import { readUserCacheSync } from '../../lib/userCache';
+import { readUserCache, readUserCacheSync } from '../../lib/userCache';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -59,10 +61,18 @@ export const conflictToastEvents = new EventEmitter();
 // visible via Sentry breadcrumbs (logged in pushPending below).
 export const deadLetterEvents = new EventEmitter();
 
+// Emitted after queued workouts reach the server so open screens (the
+// Workouts tab, the "From your coach" card) can refresh.
+export const workoutSyncEvents = new EventEmitter();
+
 // ---------------------------------------------------------------------------
 // Internal state
 // ---------------------------------------------------------------------------
 let syncInProgress = false;
+
+// Client keys whose POST is in flight right now (from the Finish screen or
+// from this engine). A held row is never sent a second time in parallel.
+const heldKeys = new Set<string>();
 
 // ---------------------------------------------------------------------------
 // Write path
@@ -128,6 +138,157 @@ export async function writeWorkoutLog(
     durationMinutes: payload.durationMinutes ?? null,
     userId,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Whole-workout queue (WORKOUT-SYNC-124)
+// ---------------------------------------------------------------------------
+//
+// A finished workout is stored as ONE row holding the exact POST /workouts
+// body. The old path stored one row per exercise and rebuilt a body from it
+// (no workout_name / workout_type / muscle_group, plus an unknown local_id),
+// so the server's strict validation rejected every workout saved without
+// signal and the row was dead-lettered: the workout never reached the coach.
+
+export interface QueuedAssignmentCompletion {
+  assignmentId: string;
+  input: CompleteAssignmentInput;
+}
+
+export interface QueueWorkoutInput {
+  /** Stable per workout session; the same key never queues a second row. */
+  clientKey: string;
+  /** Exact POST /workouts body. */
+  payload: Record<string, unknown>;
+  userId?: string | null;
+  sessionName?: string | null;
+  durationMinutes?: number | null;
+  /** Coach assignment to mark complete once the workout is on the server. */
+  assignment?: QueuedAssignmentCompletion | null;
+}
+
+export interface QueueWorkoutResult {
+  id: string;
+  /** True when this session already reached the server (nothing to send). */
+  alreadySynced: boolean;
+  serverId: string | null;
+}
+
+/**
+ * Store a finished workout durably before any network call. Calling it again
+ * for the same `clientKey` (Finish tapped again after a failed save) updates
+ * the one queued row instead of adding a copy. The row is held until the
+ * caller reports the outcome with `settleQueuedWorkout` or
+ * `releaseQueuedWorkout`, so the background sync never sends it in parallel.
+ */
+export async function queueWorkout(
+  input: QueueWorkoutInput,
+): Promise<QueueWorkoutResult> {
+  const clientKey = (input.clientKey ?? '').trim();
+  if (!clientKey) {
+    throw new Error('queueWorkout: clientKey is required');
+  }
+  const db = await getDatabase();
+  const userId = input.userId || readUserCacheSync()?.id || null;
+  const payloadJson = JSON.stringify(input.payload);
+  const assignmentJson = input.assignment ? JSON.stringify(input.assignment) : null;
+
+  const existing = await db.getFirstAsync<{
+    id: string;
+    sync_status: string;
+    server_id: string | null;
+  }>(
+    `SELECT id, sync_status, server_id FROM workout_logs WHERE client_key = ? LIMIT 1`,
+    [clientKey],
+  );
+  if (existing && existing.sync_status === 'synced') {
+    return { id: existing.id, alreadySynced: true, serverId: existing.server_id };
+  }
+
+  heldKeys.add(clientKey);
+  if (existing) {
+    await db.runAsync(
+      `UPDATE workout_logs
+          SET payload = ?, assignment_json = ?, sync_status = 'pending',
+              duration_minutes = ?, user_id = ?
+        WHERE id = ?`,
+      [payloadJson, assignmentJson, input.durationMinutes ?? null, userId, existing.id],
+    );
+    return { id: existing.id, alreadySynced: false, serverId: null };
+  }
+
+  const id = generateId();
+  await db.runAsync(
+    `INSERT INTO workout_logs
+       (id, exercise_id, sets_data, sync_status, logged_at, server_id,
+        session_name, duration_minutes, user_id, payload, client_key, assignment_json)
+     VALUES (?, 'session', '[]', 'pending', ?, NULL, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      Date.now(),
+      input.sessionName ?? null,
+      input.durationMinutes ?? null,
+      userId,
+      payloadJson,
+      clientKey,
+      assignmentJson,
+    ],
+  );
+  return { id, alreadySynced: false, serverId: null };
+}
+
+/**
+ * The Finish screen's own POST succeeded: mark the queued row sent so the
+ * background sync never posts it again. The screen sends the assignment
+ * completion itself on this path, so the stored copy is dropped.
+ */
+export async function settleQueuedWorkout(
+  clientKey: string,
+  serverId: string,
+): Promise<void> {
+  try {
+    const db = await getDatabase();
+    await db.runAsync(
+      `UPDATE workout_logs SET sync_status = 'synced', server_id = ?, assignment_json = NULL WHERE client_key = ?`,
+      [serverId, clientKey],
+    );
+  } finally {
+    heldKeys.delete(clientKey);
+  }
+}
+
+/**
+ * The Finish screen's POST failed. With no answer from the server (no signal,
+ * timeout, 5xx) the row stays queued for the background sync. When the server
+ * refused the body (`rejected`), the row is parked so it is not retried; a
+ * later Finish for the same session re-queues it.
+ */
+export async function releaseQueuedWorkout(
+  clientKey: string,
+  opts: { rejected?: boolean } = {},
+): Promise<void> {
+  try {
+    if (opts.rejected) {
+      const db = await getDatabase();
+      await db.runAsync(
+        `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE client_key = ? AND sync_status = 'pending'`,
+        [clientKey],
+      );
+    }
+  } finally {
+    heldKeys.delete(clientKey);
+  }
+}
+
+/** Number of finished workouts on this phone still waiting to be sent. */
+export async function countQueuedWorkouts(userId: string): Promise<number> {
+  if (!userId) return 0;
+  const db = await getDatabase();
+  const row = await db.getFirstAsync<{ n: number }>(
+    `SELECT COUNT(*) AS n FROM workout_logs WHERE payload IS NOT NULL AND sync_status = 'pending' AND user_id = ?`,
+    [userId],
+  );
+  return Number(row?.n ?? 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -247,25 +408,33 @@ async function pushPending(): Promise<void> {
   // with a foreign user_id stay in the DB (we want account switching to
   // resume gracefully), but they must never be POSTed under another user's
   // JWT.
-  const currentUserId = readUserCacheSync()?.id;
+  const currentUserId = await currentUserIdForPush();
   if (!currentUserId) {
     // No signed-in user → nothing to push. Don't even read the table.
     return;
   }
 
-  const rows = await db.getAllAsync<Parameters<typeof rowToWorkoutLog>[0]>(
+  const rows = await db.getAllAsync<QueuedRow>(
     `SELECT id, exercise_id, sets_data, sync_status, logged_at,
-            server_id, session_name, duration_minutes, user_id
+            server_id, session_name, duration_minutes, user_id,
+            payload, client_key, assignment_json
        FROM workout_logs
       WHERE sync_status = 'pending'
         AND user_id = ?`,
     [currentUserId],
   );
-  const pending: WorkoutLog[] = rows.map(rowToWorkoutLog);
 
   let deadLettered = 0;
+  let sent = 0;
 
-  for (const log of pending) {
+  for (const row of rows) {
+    if (typeof row.payload === 'string' && row.payload) {
+      const outcome = await pushQueuedRow(row);
+      if (outcome === 'sent') sent++;
+      if (outcome === 'dead_letter') deadLettered++;
+      continue;
+    }
+    const log: WorkoutLog = rowToWorkoutLog(row);
     try {
       const serverPayload = toServerPayload(log);
       const response = await workoutApi.create(
@@ -301,8 +470,137 @@ async function pushPending(): Promise<void> {
     }
   }
 
+  sent += await retryAssignmentCompletions(currentUserId);
+
   if (deadLettered > 0) {
     deadLetterEvents.emit('dead_letter', { count: deadLettered });
+  }
+  if (sent > 0) {
+    workoutSyncEvents.emit('synced', { count: sent });
+  }
+}
+
+type QueuedRow = Parameters<typeof rowToWorkoutLog>[0] & {
+  payload?: string | null;
+  client_key?: string | null;
+  assignment_json?: string | null;
+};
+
+async function currentUserIdForPush(): Promise<string | undefined> {
+  const cached = readUserCacheSync()?.id;
+  if (cached) return cached;
+  // Cold start: the synchronous mirror may not be hydrated yet.
+  try {
+    return (await readUserCache())?.id ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** POST one queued whole workout, then its coach-assignment completion. */
+async function pushQueuedRow(
+  row: QueuedRow,
+): Promise<'sent' | 'dead_letter' | 'kept'> {
+  const key = row.client_key ?? '';
+  if (key && heldKeys.has(key)) return 'kept';
+  if (key) heldKeys.add(key);
+  try {
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(row.payload as string) as Record<string, unknown>;
+    } catch {
+      await markDeadLetter(row.id);
+      return 'dead_letter';
+    }
+    try {
+      const response = await workoutApi.create(body);
+      const data = response.data as { id?: string; workout?: { id?: string } };
+      await markSynced(row.id, data?.id ?? data?.workout?.id ?? '');
+    } catch (err: unknown) {
+      const errorClass = classifyPushError(err);
+      if (errorClass === 'transient') return 'kept';
+      // A queued workout is created fresh, so a 409 is a refusal too.
+      await markDeadLetter(row.id);
+      if (__DEV__) {
+        console.warn('[SyncEngine] queued workout refused', row.id, err);
+      }
+      return 'dead_letter';
+    }
+    if (row.assignment_json) {
+      await sendAssignmentCompletion(row.id, row.assignment_json);
+    }
+    return 'sent';
+  } finally {
+    if (key) heldKeys.delete(key);
+  }
+}
+
+/**
+ * Mark the coach's assignment complete for a workout that is already on the
+ * server. Clears the stored request on success or on a refusal; keeps it for
+ * the next cycle when there was no answer.
+ */
+async function sendAssignmentCompletion(
+  rowId: string,
+  assignmentJson: string,
+): Promise<boolean> {
+  const db = await getDatabase();
+  let parsed: QueuedAssignmentCompletion | null = null;
+  try {
+    parsed = JSON.parse(assignmentJson) as QueuedAssignmentCompletion;
+  } catch {
+    parsed = null;
+  }
+  if (parsed?.assignmentId) {
+    try {
+      await workoutBuilderApi.completeMyAssignment(parsed.assignmentId, parsed.input);
+    } catch (err: unknown) {
+      if (classifyPushError(err) === 'transient') return false;
+      if (__DEV__) {
+        console.warn('[SyncEngine] assignment completion refused', rowId, err);
+      }
+    }
+  }
+  await db.runAsync(
+    `UPDATE workout_logs SET assignment_json = NULL WHERE id = ?`,
+    [rowId],
+  );
+  return true;
+}
+
+/** Retry assignment completions whose workout reached the server earlier. */
+async function retryAssignmentCompletions(userId: string): Promise<number> {
+  let sent = 0;
+  try {
+    const db = await getDatabase();
+    const rows = await db.getAllAsync<{ id: string; assignment_json: string; client_key: string | null }>(
+      `SELECT id, assignment_json, client_key FROM workout_logs
+        WHERE assignment_json IS NOT NULL AND sync_status = 'synced' AND user_id = ?`,
+      [userId],
+    );
+    for (const row of rows) {
+      if (row.client_key && heldKeys.has(row.client_key)) continue;
+      if (await sendAssignmentCompletion(row.id, row.assignment_json)) sent++;
+    }
+  } catch (err) {
+    if (__DEV__) {
+      console.warn('[SyncEngine] assignment retry failed', err);
+    }
+  }
+  return sent;
+}
+
+/**
+ * Send queued workouts without the pull step. Safe to call on every screen
+ * focus: it shares the in-progress guard with `triggerSync`.
+ */
+export async function pushQueuedWorkouts(): Promise<void> {
+  if (syncInProgress) return;
+  syncInProgress = true;
+  try {
+    await pushPending();
+  } finally {
+    syncInProgress = false;
   }
 }
 
