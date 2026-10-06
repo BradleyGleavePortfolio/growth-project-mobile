@@ -22,6 +22,12 @@ export interface RomanBriefCardProps {
   clientCount: number;
   /** default | celebration (record morning) | error (brief not assembled). */
   mode: RomanVoiceMode;
+  /**
+   * Today's brief text from GET /coach/brief/today. When present it is the
+   * card's line (it already opens with the greeting); otherwise the §2.3
+   * status line is shown.
+   */
+  narrative?: string;
   testID?: string;
 }
 
@@ -29,6 +35,7 @@ export default function RomanBriefCard({
   coachName,
   clientCount,
   mode,
+  narrative,
   testID,
 }: RomanBriefCardProps): React.ReactElement {
   // §3.8: the slight smile is reserved for celebration (record-morning) here.
@@ -36,7 +43,7 @@ export default function RomanBriefCard({
   // Deferred (roman-quip-budget): §2.3 permits a sparing self-deprecating quip
   // on this daily surface; gate it on the ~1-in-8 ceiling (spec §1.5) before
   // shipping a quip variant. P3 ships the quip-free line only.
-  const line = romanCoachBrief({ coachName, clientCount, mode });
+  const line = narrative?.trim() || romanCoachBrief({ coachName, clientCount, mode });
   return (
     <View style={styles.card} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.3 brief copy. */}

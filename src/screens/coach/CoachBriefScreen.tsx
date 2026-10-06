@@ -1,15 +1,17 @@
 /**
- * CoachBriefScreen — Wave 11.
+ * CoachBriefScreen — the coach's daily brief, read from the live backend
+ * route GET /coach/brief/today (src/api/coachBriefApi.ts).
  *
- * Daily morning brief for coaches. Shows AI-drafted summary, signoff queue,
- * and a per-client cards strip. STUB: backend not live yet; the adapter
- * returns an empty, stale payload.
+ * One read each morning: Roman's highlights paragraph (money, replies,
+ * check-ins, approvals), then the items that need the coach, each opening the
+ * screen that resolves it. The brief is prepared once a day server-side; the
+ * daily push opens this screen (pushTapRouter `CoachBrief`).
  *
- * Doctrine: every AI block requires the coach to approve before posting
- * (e.g. as an announcement). The `approveDraft` toggle below is local-state
- * only until the live endpoint exists.
+ * States: preparing (the first open of the day can take a few seconds; a
+ * concurrent open polls), ready, could not load (retry), could not be prepared
+ * (prepare again, server-throttled), flag off (preview lock).
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ScrollView,
   View,
@@ -20,36 +22,37 @@ import {
   Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, type NavigationProp } from '@react-navigation/native';
 import { colors as tokens, typography, spacing } from '../../theme/tokens';
-import { fetchCoachBrief } from '../../services/wave11Adapters';
-import type { CoachBriefPayload, CoachBriefClientCard } from '../../types/wave11';
-import AINote from '../../components/trust/AINote';
-import VerifiedProgressRow from '../../components/trust/VerifiedProgressRow';
+import type { CoachBriefClientCard } from '../../types/wave11';
 import EmptyState from '../../components/EmptyState';
 import { featureFlags } from '../../config/featureFlags';
-// §2.3 Coach Brief — Roman delivers the morning brief in his voice, beside his
-// face. FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the §2.3
-// copy module (src/lib/roman/copy.ts) in one tree.
+import {
+  coachBriefApi,
+  CoachBriefApiError,
+  type CoachBrief,
+  type CoachBriefActionItem,
+} from '../../api/coachBriefApi';
+import type { CoachTabParamList } from '../../navigation/CoachNavigator';
+// §2.3 Coach Brief — Roman delivers the morning brief beside his face.
+// FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the brief text.
 import RomanBriefCard from '../../components/roman/RomanBriefCard';
-// §2.4 check-in received + §2.5 new client onboarded — both Roman coach
-// surfaces (each co-locates <RomanAvatar /> for FACE+VOICE). Gated behind
-// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+// §2.4 check-in received + §2.5 new client onboarded — Roman coach surfaces
+// gated behind featureFlags.romanChat.
 import RomanCheckInNotice from '../../components/roman/RomanCheckInNotice';
 import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 
+/** A concurrent open sees 'generating'; poll until the brief is ready. */
+export const BRIEF_POLL_INTERVAL_MS = 2_500;
+export const BRIEF_POLL_MAX_ATTEMPTS = 12;
+
 /**
  * §2.4 pending check-in-consistency-claim selector. Returns the first client
  * whose latest verified-progress item has `kind === 'check_in_consistency'`
- * and is still in the `pending` signoff state — which the SignoffStatus enum
- * defines as "submitted, awaiting coach review" (see types/wave11.ts:43-45,
- * 68-91,146-147). That proves a check-in-consistency CLAIM is awaiting the
- * coach's sign-off; it does NOT prove a check-in form arrived, that
- * attachments exist, or that any review queue was reordered, so the §2.4 copy
- * asserts only the pending-claim fact. A `check_in_overdue` todo does NOT
- * qualify (an overdue check-in is a missing one, not a pending claim).
- * Exported for direct true/false behaviour testing.
+ * and is still `pending` (submitted, awaiting coach review). A
+ * `check_in_overdue` todo does NOT qualify. Exported for behaviour tests.
  */
 export function selectPendingCheckInClaim(
   clients: CoachBriefClientCard[] | undefined,
@@ -63,77 +66,167 @@ export function selectPendingCheckInClaim(
 }
 
 /**
- * §2.5 newly-onboarded-client selector. The CoachBriefPayload carries NO
- * first-party "new client" event/flag and NO join/created timestamp on the
- * client card, so there is no truthful onboarding signal to render. This
- * selector therefore returns undefined for every roster: the §2.5 surface is
- * gated OFF rather than inventing an onboarding event (the R4-flagged
- * heuristic). It is kept as a typed seam so the host wiring stays compiled and
- * flag-gated, and so it can be replaced the moment the payload carries a real
- * joined-timestamp/onboarding event — at which point it returns the joined
- * client and the existing render path re-activates with no further wiring.
+ * §2.5 newly-onboarded-client selector. No truthful onboarding signal exists
+ * in the brief contract, so this returns undefined for every roster and the
+ * §2.5 surface stays off rather than inventing an onboarding event.
  */
 export function selectNewlyOnboardedClient(
   _clients: CoachBriefClientCard[] | undefined,
 ): CoachBriefClientCard | undefined {
-  // No truthful signal exists in the contract today. Always undefined.
   return undefined;
 }
 
+// The live brief route returns action items, not Wave 11 verified-progress
+// client cards, so the §2.4 / §2.5 notices have no signal and stay off.
+const SURFACED_CLIENT_CARDS: CoachBriefClientCard[] = [];
+
+type LoadState =
+  | { kind: 'loading' }
+  | { kind: 'ready'; brief: CoachBrief }
+  | { kind: 'preparing' }
+  | { kind: 'failed' }
+  | { kind: 'error' }
+  | { kind: 'throttled' };
+
+type BriefNav = NavigationProp<CoachTabParamList>;
+/** actionTarget builds nested params per tab; navigate's tuple overloads cannot take a union. */
+type LooseNavigate = (name: keyof CoachTabParamList, params?: object) => void;
+
+/** Where an action item opens. null = informational row (no tap). */
+export function actionTarget(
+  item: CoachBriefActionItem,
+): { tab: keyof CoachTabParamList; params?: object } | null {
+  const clientId = item.client_id;
+  const clientName = item.client_name ?? 'Client';
+  switch (item.type) {
+    case 'message_unread':
+      return clientId
+        ? {
+            tab: 'ClientsStack',
+            params: { screen: 'ClientMessages', params: { clientId, clientName }, initial: false },
+          }
+        : null;
+    // An older server may still send a workout item. Nothing in the app
+    // approves a workout, so it opens the client's workout history
+    // (S-BRIEF-124 B-398-1) and never says approve.
+    case 'workout_approval':
+      return clientId
+        ? {
+            tab: 'ClientsStack',
+            params: {
+              screen: 'ClientDetail',
+              params: { clientId, clientName, initialTab: 'workouts' },
+              initial: false,
+            },
+          }
+        : null;
+    case 'weight_flag':
+    case 'checkin_missing':
+      return clientId
+        ? {
+            tab: 'ClientsStack',
+            params: { screen: 'ClientDetail', params: { clientId, clientName }, initial: false },
+          }
+        : null;
+    case 'dunning_queue':
+    case 'team_revenue_review':
+      return { tab: 'SettingsStack', params: { screen: 'CoachMoney', initial: false } };
+    case 'sub_coach_operations':
+    case 'team_performance':
+      return { tab: 'TeamStack' };
+    default:
+      return null;
+  }
+}
+
+const ACTION_ICON: Record<string, keyof typeof Ionicons.glyphMap> = {
+  message_unread: 'chatbubble-ellipses-outline',
+  workout_approval: 'barbell-outline',
+  weight_flag: 'trending-up-outline',
+  checkin_missing: 'calendar-outline',
+  dunning_queue: 'card-outline',
+  team_revenue_review: 'cash-outline',
+  sub_coach_operations: 'people-outline',
+  team_performance: 'stats-chart-outline',
+};
+
 export default function CoachBriefScreen() {
   const currentUser = useCurrentUser();
-  const [payload, setPayload] = useState<CoachBriefPayload | null>(null);
-  // True when the brief payload could not be assembled (a source was slow) —
-  // selects Roman's §2.3 error variant.
-  const [briefError, setBriefError] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [refreshing, setRefreshing] = useState(false);
-  const [draftApproved, setDraftApproved] = useState(false);
+  const [preparingAgain, setPreparingAgain] = useState(false);
+  const mounted = useRef(true);
+  const markedReadId = useRef<string | null>(null);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  const settle = useCallback((brief: CoachBrief) => {
+    if (brief.status === 'generated' && brief.summary) {
+      setState({ kind: 'ready', brief });
+      if (markedReadId.current !== brief.id) {
+        markedReadId.current = brief.id;
+        coachBriefApi.markRead(brief.id).catch((err) => {
+          logger.warn('CoachBriefScreen', 'failed to mark brief read', err);
+        });
+      }
+      return true;
+    }
+    if (brief.status === 'failed') {
+      setState({ kind: 'failed' });
+      return true;
+    }
+    return false;
+  }, []);
 
   const load = useCallback(async () => {
     try {
-      const next = await fetchCoachBrief();
-      setPayload(next);
-      setDraftApproved(next.morningSummary.approvedByCoach);
-      setBriefError(false);
+      for (let attempt = 0; attempt < BRIEF_POLL_MAX_ATTEMPTS; attempt += 1) {
+        const brief = await coachBriefApi.today();
+        if (!mounted.current) return;
+        if (settle(brief)) return;
+        setState((s) => (s.kind === 'ready' ? s : { kind: 'preparing' }));
+        await new Promise((r) => setTimeout(r, BRIEF_POLL_INTERVAL_MS));
+        if (!mounted.current) return;
+      }
+      setState({ kind: 'preparing' });
     } catch (err) {
-      // Bradley Law #36: surface the failure (Roman's §2.3 error variant
-      // renders below) rather than swallowing it. Logged for diagnostics.
-      setBriefError(true);
+      // Bradley Law #36: surfaced (error state below) and logged.
       logger.warn('CoachBriefScreen', 'failed to load brief', err);
+      if (mounted.current) setState({ kind: 'error' });
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mounted.current) setRefreshing(false);
     }
-  }, []);
+  }, [settle]);
 
   useEffect(() => {
-    load();
+    if (featureFlags.coachBrief) void load();
   }, [load]);
 
-  // §2.4 pending check-in-consistency claim — derived from a REAL verified-
-  // progress signal in the brief payload: a client whose latest verified-
-  // progress item has `kind === 'check_in_consistency'` and is still `pending`
-  // (the SignoffStatus enum defines `pending` as "submitted, awaiting coach
-  // review"; see types/wave11.ts:43-45,68-91,146-147). That proves a check-in-
-  // consistency CLAIM is awaiting the coach's sign-off — exactly and only what
-  // the §2.4 line states; it does not assert a form arrival or queue reorder.
-  // First such client only, to keep one Roman line in the brief.
-  const checkInClient = selectPendingCheckInClaim(payload?.clients);
-  // §2.5 New client onboarded — the CoachBriefPayload carries NO first-party
-  // "new client" event/flag and NO join/created timestamp on the client card
-  // (the only `createdAt` in this domain is on CopilotSuggestion, not on the
-  // roster — see types/wave11.ts CoachBriefClientCard). The prior R3 build
-  // invented an onboarding event from a roster shape (single quiet client),
-  // which the R4 audit correctly flagged as event-theater. With no truthful
-  // signal available, the §2.5 surface is gated OFF rather than asserting an
-  // onboarding that the data cannot prove. The component + host wiring remain
-  // compiled and flag-gated so they re-activate the moment the payload carries
-  // a real joined-timestamp/onboarding event. Roman must only assert what the
-  // data proves, so absent a truthful onboarding signal the surface stays OFF
-  // rather than fabricating a "new client" event from roster shape.
-  const clientList = payload?.clients ?? [];
-  const newClient = selectNewlyOnboardedClient(clientList);
+  const prepareAgain = useCallback(async () => {
+    setPreparingAgain(true);
+    try {
+      const brief = await coachBriefApi.regenerate();
+      if (!mounted.current) return;
+      if (!settle(brief)) await load();
+    } catch (err) {
+      logger.warn('CoachBriefScreen', 'failed to prepare brief again', err);
+      if (mounted.current) {
+        setState({
+          kind:
+            err instanceof CoachBriefApiError && err.kind === 'throttled'
+              ? 'throttled'
+              : 'error',
+        });
+      }
+    } finally {
+      if (mounted.current) setPreparingAgain(false);
+    }
+  }, [load, settle]);
 
   if (!featureFlags.coachBrief) {
     return (
@@ -151,22 +244,34 @@ export default function CoachBriefScreen() {
     );
   }
 
-  if (loading && !payload) {
+  if (state.kind === 'loading') {
     return (
       <View
         style={styles.center}
-        accessibilityLabel="Loading today's brief"
+        accessibilityLabel="Preparing today's brief"
         accessibilityRole="none"
       >
         <ActivityIndicator color={tokens.forest} />
+        <Text style={styles.centerText}>Preparing today&apos;s brief</Text>
       </View>
     );
   }
 
   const onRefresh = () => {
     setRefreshing(true);
-    load();
+    void load();
   };
+
+  // Roman's card falls back to its own greeting only without a narrative.
+  const coachName = (currentUser?.firstName ?? '').trim() || 'Coach';
+  const summary = state.kind === 'ready' ? state.brief.summary : null;
+  const narrative = summary?.narrative;
+  const items = summary?.action_items ?? [];
+  const briefError = state.kind === 'error';
+
+  // §2.4 / §2.5 — see SURFACED_CLIENT_CARDS.
+  const checkInClient = selectPendingCheckInClaim(SURFACED_CLIENT_CARDS);
+  const newClient = selectNewlyOnboardedClient(SURFACED_CLIENT_CARDS);
 
   return (
     <ScrollView
@@ -182,92 +287,69 @@ export default function CoachBriefScreen() {
       }
     >
       <Text style={styles.title} accessibilityRole="header">Today&apos;s brief</Text>
-      <Text style={styles.subtitle}>
-        AI drafts the summary. You approve before anything is sent.
-      </Text>
 
-      {/* §2.3 Coach Brief header. P1-G-01: the Roman voiced+face delivery is
-          gated behind featureFlags.romanChat (the dedicated Roman flag,
-          default OFF). When the flag is off a polished non-Roman fallback
-          header carries the SAME brief status (coach name + attention count,
-          stale/error states) with no avatar and no Roman voice, so a coach
-          with coachBrief=true and romanChat=false never sees Roman in the
-          daily brief. P2-B-04: an empty surfaced-client list is NOT proof
-          that "every client is on track" (the CoachBriefClientCard list is a
-          surfaced-attention list, not the full roster), so the celebration
-          mode is removed — an empty, non-stale brief renders a neutral line
-          via the default mode (clientCount 0). */}
-      {featureFlags.romanChat ? (
-        <RomanBriefCard
-          coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
-          clientCount={payload?.clients.length ?? 0}
-          mode={briefError ? 'error' : 'default'}
-          testID="roman-brief-card"
-        />
-      ) : (
-        <CoachBriefHeaderFallback
-          coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
-          clientCount={payload?.clients.length ?? 0}
-          briefError={briefError}
-          testID="coach-brief-header-fallback"
-        />
-      )}
-
-      {payload?.isStale ? (
-        <View
-          style={styles.stale}
-          accessibilityLabel="Brief data is not yet live"
-          accessibilityRole="none"
-        >
-          <Ionicons name="time-outline" size={14} color={tokens.charcoal} />
-          <Text style={styles.staleText}>Brief data isn&apos;t live yet.</Text>
-        </View>
+      {/* §2.3 header. P1-G-01: Roman (face + brief text) only behind
+          featureFlags.romanChat; otherwise the same text with no avatar. */}
+      {narrative ? (
+        featureFlags.romanChat ? (
+          <RomanBriefCard
+            coachName={coachName}
+            clientCount={items.length}
+            narrative={narrative}
+            mode="default"
+            testID="roman-brief-card"
+          />
+        ) : (
+          <CoachBriefHeaderFallback narrative={narrative} testID="coach-brief-header-fallback" />
+        )
       ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle} accessibilityRole="header">Morning summary</Text>
-        {payload?.morningSummary.aiDraft ? (
-          <>
-            <AINote variant="draft">{payload.morningSummary.aiDraft}</AINote>
-            <Pressable
-              onPress={() => setDraftApproved((v) => !v)}
-              style={[styles.approveBtn, draftApproved && styles.approveBtnOn]}
-              accessibilityRole="button"
-              accessibilityLabel={draftApproved ? 'Draft approved — tap to revoke' : 'Approve draft to send'}
-              accessibilityState={{ checked: draftApproved }}
-            >
-              <Ionicons
-                name={draftApproved ? 'checkmark-circle' : 'ellipse-outline'}
-                size={18}
-                color={draftApproved ? tokens.bone : tokens.forest}
-              />
-              <Text
-                style={[
-                  styles.approveLabel,
-                  draftApproved && styles.approveLabelOn,
-                ]}
-              >
-                {draftApproved ? 'Approved by you' : 'Approve to send'}
-              </Text>
-            </Pressable>
-          </>
-        ) : (
-          <EmptyState
-            icon="sunny-outline"
-            title="No brief yet"
-            subtitle="Once your clients log activity, the AI will draft a summary you can review and approve."
-          />
-        )}
-      </View>
+      {state.kind === 'preparing' ? (
+        <StatusCard
+          icon="hourglass-outline"
+          title="Today's brief is still being prepared."
+          detail="It appears here in a moment. Pull down to check again."
+          testID="coach-brief-preparing"
+        />
+      ) : null}
 
-      {/* §2.4 Roman check-in notice — voiced beside his face when a real client
-          card flags a check-in needing attention. HIDE-UNTIL-LIVE (P1-BF-01):
-          the host signal (latestVerifiedProgress.kind === 'check_in_consistency')
-          is a mobile-only Wave 11 scaffold that backend `main` does NOT expose,
-          so the surface is additionally gated behind
-          featureFlags.romanCheckInBackendLive (default OFF). Until backend
-          `main` ships the authoritative check-in claim field this never
-          renders regardless of the latestVerifiedProgress shape. */}
+      {state.kind === 'failed' ? (
+        <StatusCard
+          icon="refresh-outline"
+          title="Today's brief could not be prepared."
+          detail="Tap Prepare again to build it from the latest activity."
+          ctaLabel="Prepare again"
+          onCta={prepareAgain}
+          busy={preparingAgain}
+          testID="coach-brief-failed"
+        />
+      ) : null}
+
+      {state.kind === 'throttled' ? (
+        <StatusCard
+          icon="time-outline"
+          title="Today's brief was prepared several times this hour."
+          detail="It can be prepared again within the hour. Pull down to load the latest version."
+          testID="coach-brief-throttled"
+        />
+      ) : null}
+
+      {briefError ? (
+        <StatusCard
+          icon="cloud-offline-outline"
+          title="Today's brief could not load."
+          detail="Check the connection, then try again."
+          ctaLabel="Try again"
+          onCta={() => {
+            setState({ kind: 'loading' });
+            void load();
+          }}
+          testID="coach-brief-error"
+        />
+      ) : null}
+
+      {/* §2.4 / §2.5 Roman notices — no signal from the live brief route yet
+          (SURFACED_CLIENT_CARDS); kept wired behind their flags. */}
       {featureFlags.romanChat && featureFlags.romanCheckInBackendLive && checkInClient ? (
         <RomanCheckInNotice
           clientName={checkInClient.clientDisplayName}
@@ -275,122 +357,141 @@ export default function CoachBriefScreen() {
           testID="roman-checkin-card"
         />
       ) : null}
-
-      {/* §2.5 Roman new-client notice — gated OFF. selectNewlyOnboardedClient
-          always returns undefined because the CoachBriefPayload carries no
-          truthful onboarding signal (no first-party new-client event/flag and
-          no join/created timestamp on the client card; see types/wave11.ts
-          CoachBriefClientCard), so this block never renders today. The
-          component and host wiring are kept compiled and flag-gated so the
-          surface re-activates the moment the payload carries a real joined-
-          timestamp/onboarding event. Gated OFF (not faked) so Roman never
-          asserts an onboarding the data cannot prove. */}
       {featureFlags.romanChat && newClient ? (
         <RomanNewClientNotice
           clientName={newClient.clientDisplayName}
-          clientCount={clientList.length}
+          clientCount={SURFACED_CLIENT_CARDS.length}
           mode="default"
           testID="roman-newclient-card"
         />
       ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle} accessibilityRole="header">Clients</Text>
-        {payload && payload.clients.length > 0 ? (
-          payload.clients.map((c) => <ClientCard key={c.clientId} card={c} />)
-        ) : (
-          <EmptyState
-            icon="people-outline"
-            title="No client activity to surface"
-            subtitle="Clients will appear here when they log a check-in, hit a streak, or submit a verified-progress claim."
-          />
-        )}
-      </View>
+      {summary ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle} accessibilityRole="header">Needs you</Text>
+          {items.length > 0 ? (
+            items.map((item, i) => (
+              <ActionRow key={`${item.type}-${item.client_id ?? 'team'}-${i}`} item={item} />
+            ))
+          ) : (
+            <Text style={styles.allClear} testID="coach-brief-all-clear">
+              Nothing needs you right now.
+            </Text>
+          )}
+          <Text style={styles.footnote}>
+            {summary.generated_by === 'ai'
+              ? 'Prepared by Roman from today\u2019s activity.'
+              : 'Prepared from today\u2019s activity.'}
+          </Text>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
 
 /**
  * CoachBriefHeaderFallback — the non-Roman brief header shown when
- * featureFlags.romanChat is OFF (P1-G-01). It carries the SAME brief status as
- * the Roman card — the coach's name and the count of clients needing attention
- * — in calm, institutional copy, with NO avatar and NO Roman voice. The empty,
- * non-stale case states a neutral "nothing needs attention" line; it never
- * asserts "every client is on track" (P2-B-04: a surfaced-attention list of
- * length zero is not roster-wide proof).
+ * featureFlags.romanChat is OFF (P1-G-01): the same brief text with no avatar
+ * and no Roman voice. The narrative already opens with the greeting.
  */
 export function CoachBriefHeaderFallback({
-  coachName,
-  clientCount,
-  briefError,
+  narrative,
   testID,
 }: {
-  coachName: string;
-  clientCount: number;
-  briefError: boolean;
+  narrative: string;
   testID?: string;
 }) {
-  const headline = briefError
-    ? 'Your brief is not yet ready.'
-    : clientCount === 0
-      ? 'No clients need attention right now.'
-      : `${clientCount} ${clientCount === 1 ? 'client needs' : 'clients need'} attention today.`;
-  const detail = briefError
-    ? 'One of the data sources is slow to respond. It will be along shortly.'
-    : 'Reviewed and ready when you are.';
   return (
     <View
       style={styles.fallbackCard}
       testID={testID}
       accessibilityRole="summary"
-      accessibilityLabel={`Good morning, ${coachName}. ${headline}`}
+      accessibilityLabel={narrative}
     >
-      <Text style={styles.fallbackGreeting}>Good morning, {coachName}.</Text>
-      <Text style={styles.fallbackHeadline}>{headline}</Text>
-      <Text style={styles.fallbackDetail}>{detail}</Text>
+      <Text style={styles.fallbackNarrative}>{narrative}</Text>
     </View>
   );
 }
 
-function ClientCard({ card }: { card: CoachBriefClientCard }) {
+function ActionRow({ item }: { item: CoachBriefActionItem }) {
+  const navigation = useNavigation<BriefNav>();
+  const target = actionTarget(item);
+  const detail = item.type === 'workout_approval' ? 'Completed a workout' : item.detail;
+  const label = item.client_name ? `${item.client_name}: ${detail}` : detail;
+  const body = (
+    <>
+      <Ionicons
+        name={ACTION_ICON[item.type] ?? 'ellipse-outline'}
+        size={18}
+        color={tokens.forest}
+      />
+      <View style={styles.actionText}>
+        {item.client_name ? <Text style={styles.actionName}>{item.client_name}</Text> : null}
+        <Text style={styles.actionDetail}>{detail}</Text>
+      </View>
+      {target ? <Ionicons name="chevron-forward" size={16} color={tokens.charcoal} /> : null}
+    </>
+  );
+  if (!target) {
+    return (
+      <View style={styles.actionRow} accessibilityLabel={label} testID={`brief-action-${item.type}`}>
+        {body}
+      </View>
+    );
+  }
   return (
-    <View
-      style={styles.card}
-      accessibilityRole="none"
-      accessibilityLabel={`Client: ${card.clientDisplayName}`}
+    <Pressable
+      style={({ pressed }) => [styles.actionRow, pressed && styles.actionRowPressed]}
+      onPress={() => (navigation.navigate as LooseNavigate).call(navigation, target.tab, target.params)}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint="Opens the screen for this item"
+      testID={`brief-action-${item.type}`}
     >
-      <Text style={styles.cardHeadline}>{card.clientDisplayName}</Text>
-      <AINote variant="summary">{card.aiSummary}</AINote>
-      {card.aiFlags.length > 0 ? (
-        <View
-          style={styles.flagsBlock}
-          accessibilityLabel={`AI flagged ${card.aiFlags.length} items for your review`}
-          accessibilityRole="none"
+      {body}
+    </Pressable>
+  );
+}
+
+function StatusCard({
+  icon,
+  title,
+  detail,
+  ctaLabel,
+  onCta,
+  busy,
+  testID,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  detail: string;
+  ctaLabel?: string;
+  onCta?: () => void;
+  busy?: boolean;
+  testID?: string;
+}) {
+  return (
+    <View style={styles.statusCard} testID={testID} accessibilityRole="summary">
+      <View style={styles.statusHead}>
+        <Ionicons name={icon} size={18} color={tokens.charcoal} />
+        <Text style={styles.statusTitle}>{title}</Text>
+      </View>
+      <Text style={styles.statusDetail}>{detail}</Text>
+      {ctaLabel && onCta ? (
+        <Pressable
+          onPress={onCta}
+          disabled={busy}
+          style={styles.statusBtn}
+          accessibilityRole="button"
+          accessibilityLabel={ctaLabel}
+          accessibilityState={{ busy: !!busy, disabled: !!busy }}
         >
-          <Text style={styles.flagsLabel}>AI flagged for your review:</Text>
-          {card.aiFlags.map((f, i) => (
-            <Text key={i} style={styles.flagText}>
-              · {f}
-            </Text>
-          ))}
-        </View>
-      ) : null}
-      {card.todos.length > 0 ? (
-        <View
-          style={styles.todos}
-          accessibilityLabel={`${card.todos.length} action items`}
-          accessibilityRole="none"
-        >
-          {card.todos.map((t) => (
-            <View key={t.id} style={styles.todoRow}>
-              <Ionicons name="square-outline" size={14} color={tokens.charcoal} />
-              <Text style={styles.todoText}>{t.label}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-      {card.latestVerifiedProgress ? (
-        <VerifiedProgressRow item={card.latestVerifiedProgress} />
+          {busy ? (
+            <ActivityIndicator color={tokens.bone} />
+          ) : (
+            <Text style={styles.statusBtnLabel}>{ctaLabel}</Text>
+          )}
+        </Pressable>
       ) : null}
     </View>
   );
@@ -400,62 +501,58 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: tokens.bone },
   content: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   flagOff: { flex: 1, backgroundColor: tokens.bone, justifyContent: 'center' },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: tokens.bone },
-  title: { ...typography.h1, color: tokens.ink, marginBottom: spacing.sm },
-  subtitle: { ...typography.body, color: tokens.charcoal, marginBottom: spacing.lg },
-  stale: {
-    flexDirection: 'row',
+  center: {
+    flex: 1,
     alignItems: 'center',
-    gap: 6,
-    marginBottom: spacing.md,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: tokens.bone,
   },
-  staleText: { ...typography.bodySmall, color: tokens.charcoal },
+  centerText: { ...typography.bodySmall, color: tokens.charcoal },
+  title: { ...typography.h1, color: tokens.ink, marginBottom: spacing.lg },
   fallbackCard: {
-    gap: 4,
     padding: spacing.lg,
     backgroundColor: tokens.cream,
     borderRadius: 4,
     marginBottom: spacing.lg,
   },
-  fallbackGreeting: { ...typography.body, color: tokens.charcoal },
-  fallbackHeadline: { ...typography.h4, color: tokens.ink },
-  fallbackDetail: { ...typography.bodySmall, color: tokens.charcoal },
-  section: { marginTop: spacing.lg, gap: spacing.md },
+  fallbackNarrative: { ...typography.body, color: tokens.ink },
+  section: { marginTop: spacing.sm, gap: spacing.sm },
   sectionTitle: { ...typography.h3, color: tokens.ink, marginBottom: spacing.xs },
-  card: {
-    backgroundColor: tokens.cream,
-    borderRadius: 4,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  cardHeadline: { ...typography.h4, color: tokens.ink },
-  flagsBlock: { gap: 4 },
-  flagsLabel: {
-    ...typography.bodySmall,
-    color: tokens.charcoal,
-    fontWeight: '600',
-  },
-  flagText: { ...typography.bodySmall, color: tokens.charcoal },
-  todos: { gap: 6 },
-  todoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  todoText: { ...typography.bodySmall, color: tokens.ink },
-  approveBtn: {
+  actionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
+    gap: spacing.md,
+    minHeight: 48,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: tokens.cream,
     borderRadius: 4,
-    borderWidth: 1,
-    borderColor: tokens.forest,
+  },
+  actionRowPressed: { opacity: 0.7 },
+  actionText: { flex: 1, gap: 2 },
+  actionName: { ...typography.bodyMd, fontSize: 15, fontWeight: '600', color: tokens.ink },
+  actionDetail: { ...typography.bodySmall, color: tokens.charcoal },
+  allClear: { ...typography.body, color: tokens.charcoal },
+  footnote: { ...typography.bodySmall, color: tokens.charcoal, marginTop: spacing.md },
+  statusCard: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    backgroundColor: tokens.cream,
+    borderRadius: 4,
+    marginBottom: spacing.lg,
+  },
+  statusHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusTitle: { ...typography.h4, color: tokens.ink, flex: 1 },
+  statusDetail: { ...typography.bodySmall, color: tokens.charcoal },
+  statusBtn: {
     alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+    borderRadius: 4,
+    backgroundColor: tokens.forest,
+    marginTop: spacing.xs,
   },
-  approveBtnOn: { backgroundColor: tokens.forest, borderColor: tokens.forest },
-  approveLabel: {
-    ...typography.bodyMd,
-    fontSize: 14,
-    color: tokens.forest,
-    fontWeight: '600',
-  },
-  approveLabelOn: { color: tokens.bone },
+  statusBtnLabel: { ...typography.bodyMd, fontSize: 15, fontWeight: '600', color: tokens.bone },
 });

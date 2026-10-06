@@ -26,7 +26,7 @@ import * as path from 'path';
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 
-import type { CoachBriefPayload, CoachBriefClientCard, VerifiedProgressItem } from '../../../types/wave11';
+import type { CoachBrief } from '../../../api/coachBriefApi';
 
 // Every Roman-relevant flag OFF — the production default. coachBrief stays ON
 // so the brief screen renders its content (the fallback), not the preview lock,
@@ -44,9 +44,17 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'c1', email: 'm@x.io', firstName: 'Marcus' }),
 }));
 
-const mockFetchCoachBrief = jest.fn();
-jest.mock('../../../services/wave11Adapters', () => ({
-  fetchCoachBrief: () => mockFetchCoachBrief(),
+const mockToday = jest.fn();
+jest.mock('../../../api/coachBriefApi', () => ({
+  coachBriefApi: {
+    today: () => mockToday(),
+    regenerate: jest.fn(),
+    markRead: jest.fn().mockResolvedValue(undefined),
+  },
+  CoachBriefApiError: class CoachBriefApiError extends Error {},
+}));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: jest.fn() }),
 }));
 
 import CoachBriefScreen from '../../../screens/coach/CoachBriefScreen';
@@ -62,34 +70,18 @@ const ACTIVE = readSrc('screens', 'client', 'ActiveWorkoutScreen.tsx');
 const EARNINGS = readSrc('screens', 'coach', 'money', 'MoneyScreen.tsx');
 const BRIEF = readSrc('screens', 'coach', 'CoachBriefScreen.tsx');
 
-function vp(over: Partial<VerifiedProgressItem>): VerifiedProgressItem {
+function liveBrief(): CoachBrief {
   return {
-    id: 'vp1',
-    kind: 'check_in_consistency',
-    label: 'Weekly check-in',
-    submittedAt: '2026-06-09T07:00:00.000Z',
-    submittedBy: { id: 'u1', kind: 'client', displayName: 'Dana' },
-    signoffStatus: 'pending',
-    ...over,
-  };
-}
-function card(over: Partial<CoachBriefClientCard>): CoachBriefClientCard {
-  return {
-    clientId: 'c1',
-    clientDisplayName: 'Dana',
-    aiSummary: 'summary',
-    aiFlags: [],
-    todos: [],
-    ...over,
-  } as CoachBriefClientCard;
-}
-function payload(over: Partial<CoachBriefPayload> = {}): CoachBriefPayload {
-  return {
-    morningSummary: { aiDraft: 'draft', approvedByCoach: false },
-    clients: [],
-    generatedAt: '2026-06-09T08:00:00.000Z',
-    isStale: false,
-    ...over,
+    id: '7b0c6a43-6a3f-4f3e-9a55-2f1f3b0f2a11',
+    brief_date: '2026-10-07',
+    status: 'generated',
+    summary: {
+      date: '2026-10-07',
+      brief_mode: 'solo_coach',
+      narrative: 'Good morning, Marcus. Two clients checked in today. Nothing else needs your attention right now.',
+      generated_by: 'ai',
+      action_items: [],
+    },
   };
 }
 
@@ -100,9 +92,7 @@ describe('§2.3 CoachBriefScreen with romanChat OFF mounts the non-Roman fallbac
   afterEach(() => jest.clearAllMocks());
 
   it('renders CoachBriefHeaderFallback and NO Roman brief card / avatar', async () => {
-    mockFetchCoachBrief.mockResolvedValue(
-      payload({ clients: [card({ clientDisplayName: 'A' }), card({ clientDisplayName: 'B' })] }),
-    );
+    mockToday.mockResolvedValue(liveBrief());
     const { getByTestId, queryByTestId } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('coach-brief-header-fallback')).toBeTruthy());
     // The Roman voiced+face delivery must NOT be mounted with the flag off.
@@ -111,11 +101,9 @@ describe('§2.3 CoachBriefScreen with romanChat OFF mounts the non-Roman fallbac
   });
 
   it('the §2.4 check-in notice and §2.5 new-client notice do NOT mount, even with a pending claim present', async () => {
-    // A real pending check-in claim is present in the payload; with romanChat
-    // (and romanCheckInBackendLive) OFF the §2.4 notice must still not appear.
-    mockFetchCoachBrief.mockResolvedValue(
-      payload({ clients: [card({ latestVerifiedProgress: vp({ signoffStatus: 'pending' }) })] }),
-    );
+    // With romanChat (and romanCheckInBackendLive) OFF the §2.4 / §2.5
+    // notices must not appear.
+    mockToday.mockResolvedValue(liveBrief());
     const { getByTestId, queryByTestId } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('coach-brief-header-fallback')).toBeTruthy());
     expect(queryByTestId('roman-checkin-card')).toBeNull();

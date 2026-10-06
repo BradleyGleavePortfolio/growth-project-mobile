@@ -1,14 +1,16 @@
 /**
  * S-COACH — cards at the top of the coach Home (Command Center Overview):
  * the setup checklist (each item opens the matching wizard step, which stays
- * reachable after setup) and the Money card, which expands into the Money
- * page.
+ * reachable after setup), today's brief (flag coachBrief) and the Money card,
+ * which expands into the Money page.
  */
 import React, { useCallback } from "react";
 import { View } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import MoneyHomeCard from "../../../components/coach/money/MoneyHomeCard";
+import BriefHomeCard from "../../../components/coach/brief/BriefHomeCard";
+import { featureFlags } from "../../../config/featureFlags";
 import CoachSetupChecklist, {
   type ChecklistTarget,
 } from "../../../components/coach/setup/CoachSetupChecklist";
@@ -60,9 +62,19 @@ export default function CoachHomeCards() {
     },
     [navigation, openMoney],
   );
+  // Today's brief (SettingsStack > CoachBrief); `initial: false` as above.
+  const openBrief = useCallback(
+    () =>
+      navigation.navigate("SettingsStack", {
+        screen: "CoachBrief",
+        initial: false,
+      }),
+    [navigation],
+  );
   return (
     <View testID="coach-home-cards">
       <CoachSetupChecklist onOpen={open} />
+      {featureFlags.coachBrief ? <BriefHomeCard onOpen={openBrief} /> : null}
       <MoneyHomeCard
         onOpenMoney={openMoney}
         onSetUpStripe={() => open("get_paid")}

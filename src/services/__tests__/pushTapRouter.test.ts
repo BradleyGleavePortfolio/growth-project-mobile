@@ -3,6 +3,7 @@ const mockFlags = {
   communityEvents: true,
   coachCommunity: true,
   clientCalendar: true,
+  coachBrief: true,
 };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
@@ -167,6 +168,33 @@ describe('pushTapRouter', () => {
       setPushSession(COACH_A);
       routePushTap('CoachBookingInbox', { sessionId: 's-1' }, 'nb4');
       expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBookingInbox', params: { sessionId: 's-1' } });
+    });
+
+    // S-BRIEF-124 (agent 124): the daily brief push opens today's brief and
+    // keeps Settings under it; with the flag off the tap is not routed.
+    it('coach CoachBrief -> Settings stack brief, Settings kept underneath', () => {
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CoachBrief', { briefId: 'b-1' }, 'nbr1');
+      expect(nav.navigate).toHaveBeenCalledWith('SettingsStack', {
+        screen: 'CoachBrief',
+        params: { briefId: 'b-1' },
+        initial: false,
+      });
+    });
+
+    it('coach CoachBrief with the brief flag off does not open the brief', () => {
+      mockFlags.coachBrief = false;
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CoachBrief', {}, 'nbr2');
+      expect(nav.navigate).not.toHaveBeenCalledWith(
+        'SettingsStack',
+        expect.objectContaining({ screen: 'CoachBrief' }),
+      );
+      mockFlags.coachBrief = true;
     });
   });
 

@@ -4,7 +4,7 @@
  * Asserts the main render paths for all 4 Wave 11 surfaces:
  *   1. ClientPathCopilotScreen  — flag-off empty state + contract invariants
  *   2. PrivateCommunityHubScreen — flag-off empty state + contract invariants
- *   3. CoachBriefScreen          — flag-off empty state + approve-draft contract
+ *   3. CoachBriefScreen          — flag-off empty state + live-route contract
  *   4. AdminControlRoomScreen    — flag-off empty state + KPI + alert contracts
  *
  * Pattern: source-level guards for contract invariants + light RTL renders
@@ -110,28 +110,20 @@ describe('CoachBriefScreen — source guards', () => {
     expect(BRIEF_SRC).toMatch(/featureFlags\.coachBrief/);
   });
 
-  it('approve-to-send toggle has accessibilityRole="button"', () => {
+  it('reads the live brief route, not the Wave 11 stub adapter', () => {
+    expect(BRIEF_SRC).toMatch(/coachBriefApi/);
+    expect(BRIEF_SRC).not.toMatch(/wave11Adapters/);
+  });
+
+  it('never promises an approve-to-send step the brief does not have', () => {
+    expect(BRIEF_SRC).not.toMatch(/Approve to send/);
+    expect(BRIEF_SRC).not.toMatch(/approve before anything is sent/i);
+    expect(BRIEF_SRC).not.toMatch(/isn.*t live yet/i);
+  });
+
+  it('action rows and retry buttons are accessible buttons', () => {
     expect(BRIEF_SRC).toMatch(/accessibilityRole="button"/);
-  });
-
-  it('approve button has descriptive accessibilityLabel', () => {
-    expect(BRIEF_SRC).toMatch(/Approve draft to send/);
-    expect(BRIEF_SRC).toMatch(/Draft approved/);
-  });
-
-  it('shows stale banner when payload.isStale is true', () => {
-    expect(BRIEF_SRC).toMatch(/payload\?\.isStale/);
-    expect(BRIEF_SRC).toMatch(/isn.*t live yet/i);
-  });
-
-  it('wraps AI draft in AINote component', () => {
-    expect(BRIEF_SRC).toMatch(/AINote/);
-    expect(BRIEF_SRC).toMatch(/variant="draft"/);
-  });
-
-  it('uses VerifiedProgressRow for client cards', () => {
-    expect(BRIEF_SRC).toMatch(/VerifiedProgressRow/);
-    expect(BRIEF_SRC).toMatch(/latestVerifiedProgress/);
+    expect(BRIEF_SRC).toMatch(/accessibilityHint="Opens the screen for this item"/);
   });
 
   it('has accessibilityLabel on screen and section headers', () => {
