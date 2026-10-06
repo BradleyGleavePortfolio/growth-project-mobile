@@ -139,10 +139,13 @@ const agrees = (r: Receipt, p: ClientPlan | undefined) =>
 export default function YourPlansPanel({
   reloadKey = 0,
   onUpdateCard,
+  onPlanChanged,
 }: {
   reloadKey?: number;
   /** Opens the native Update card screen; absent keeps the coach copy. */
   onUpdateCard?: () => void;
+  /** B-402-1: End / Keep succeeded, so the screen's own plan summary re-reads. */
+  onPlanChanged?: () => void;
 }) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -249,6 +252,7 @@ export default function YourPlansPanel({
           });
         }
         await load();
+        if (mounted.current) onPlanChanged?.();
       } catch (err) {
         if (!mounted.current) return;
         const n = describePlanActionFailure(err, action);
@@ -259,7 +263,7 @@ export default function YourPlansPanel({
         if (mounted.current) setBusyId(null);
       }
     },
-    [load],
+    [load, onPlanChanged],
   );
 
   const stale = list.kind === "failed" || list.kind === "unavailable";

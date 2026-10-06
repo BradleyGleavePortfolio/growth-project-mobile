@@ -106,7 +106,9 @@ function formatDate(iso: string | null): string | null {
 export function currentPlanLine(d: ClientPaymentStatus): string {
   if (d.state === 'past_due') return 'The last payment did not go through.';
   if (d.state === 'canceled' || d.cancel_at_period_end) {
-    const ends = formatDate(d.access_expires_at ?? null) ?? formatDate(d.current_period_end);
+    // B-402-2: access ends with the billing period (Your plans shows that
+    // date); access_expires_at carries a 24 h renewal pad on paid rows.
+    const ends = formatDate(d.current_period_end) ?? formatDate(d.access_expires_at ?? null);
     return ends
       ? `Ends ${ends}. Nothing more is charged.`
       : 'Ends at the close of this period. Nothing more is charged.';
@@ -223,6 +225,14 @@ export default function ClientPackagesScreen() {
   }, [load]);
 
   const { refreshEntitlement } = useEntitlement();
+
+  // B-402-1: after End my plan / Keep my plan succeeds, Current plan, the
+  // buy buttons and the second-plan notice re-read payment status. Only the
+  // status is re-read: bumping plansTick would clear the panel's receipt.
+  const onPlanChanged = useCallback(() => {
+    void clientPaymentsApi.getPaymentStatus().then(setStatus);
+    void refreshEntitlement().catch(() => false);
+  }, [refreshEntitlement]);
   const { appearance, colorScheme } = usePaymentSheetAppearance();
   const purchase = usePackagePurchase({
     surface: 'plans',
@@ -330,7 +340,11 @@ export default function ClientPackagesScreen() {
       <SmartDunningBanner surface="ClientPackagesScreen" />
 
       {/* Renewing plans: next charge, End my plan / Keep my plan */}
-      <YourPlansPanel reloadKey={plansTick} onUpdateCard={handleUpdateCard} />
+      <YourPlansPanel
+        reloadKey={plansTick}
+        onUpdateCard={handleUpdateCard}
+        onPlanChanged={onPlanChanged}
+      />
 
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
