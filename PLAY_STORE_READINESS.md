@@ -39,6 +39,25 @@ The corresponding iOS notes live alongside each item in parentheses where they d
 
 ## 4. Data safety form (Play Console)
 
+> **SUPERSEDED 2026-10-05 — do not paste these rows into Play Console.** The table and permission list below describe an
+> older build. Use the October 07 store packet instead: [STORE_TEXT_10-07.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/handoffs/op-123/STORE_TEXT_10-07.md) (section 4, B-STORECOPY-4), and fill
+> the form from the final 10-07 binary. Known gaps in the old rows:
+> - Messages: coach/client messages and Roman chat are collected (Messages > Other in-app messages); Roman sends message and
+>   account context to Anthropic only after the optional AI permission.
+> - App activity: community posts, comments and reactions are user-generated content, not only analytics events.
+> - Personal info: account IDs (User IDs) are sent with analytics and crash reports; consultation answers (date of birth, sex)
+>   are Other info.
+> - Health and fitness: readiness/injury answers, check-ins, sleep and heart data, plus Health Connect reads where a profile
+>   enables it (the `production` profile has Health Connect off).
+> - Device or other IDs: the Expo push token is uploaded after the person allows notifications.
+> - Financial info: purchase, renewal, refund and invoice metadata (Stripe holds card numbers).
+> - Analytics (PostHog) and diagnostics (Sentry) start automatically when configured, so they are not "optional" unless an
+>   in-app opt-out exists.
+> - Permissions (10-07 build): no `RECORD_AUDIO` (voice notes are off; `recordAudioAndroid: false` and blocked), calendar
+>   read/write blocked, notifications asked from Home (not at first launch). iOS camera and photo-library strings exist for the
+>   support chat and Save Image only; nothing is collected from the camera.
+> - Keep "collected" and "shared" separate: sending data to The Growth Project's own backend is collection, not sharing.
+
 The form must be filled in to match what the app actually does. Current behavior:
 
 | Category                        | Collected? | Shared off-device? | Encrypted in transit | Optional? | Reason                                                              |
@@ -57,6 +76,8 @@ The form must be filled in to match what the app actually does. Current behavior
 Confirm the form with whichever account types are listed in the live privacy policy. If we add features that touch a new category, this table is the diff to update.
 
 ### Permissions declared
+
+> **SUPERSEDED 2026-10-05** — see the banner at the top of section 4 and [STORE_TEXT_10-07.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/handoffs/op-123/STORE_TEXT_10-07.md).
 
 `app.json` only declares one runtime permission today:
 

@@ -46,6 +46,7 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
+import { openPrivacyPolicyPage, openTermsOfService } from '../../lib/legalLinks';
 import { signInWithApple } from '../../utils/appleAuth';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 // Static import (was a dynamic `import()`): Metro bundles the module either
@@ -1372,6 +1373,29 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           />
         </View>
 
+        {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
+        <Text style={styles.legalText} testID="create-account-legal">
+          By creating an account, you agree to the{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={openTermsOfService}
+            accessibilityRole="link"
+            testID="create-account-terms-link"
+          >
+            Terms of Service
+          </Text>{' '}
+          and the{' '}
+          <Text
+            style={styles.legalLink}
+            onPress={openPrivacyPolicyPage}
+            accessibilityRole="link"
+            testID="create-account-privacy-link"
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
+
         <TouchableOpacity
           style={[styles.registerButton, loading && styles.buttonDisabled]}
           onPress={handleRegister}
@@ -1521,6 +1545,8 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: Spacing.xl,
   },
   signupText: { color: colors.textMuted, fontSize: 15 },
+  legalText: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: Spacing.md, textAlign: 'center' },
+  legalLink: { color: colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
   signupLink: { color: colors.primary, fontSize: 15, fontWeight: '600' },
   verifyContent: {
     flex: 1,

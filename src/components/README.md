@@ -232,3 +232,13 @@ npm dependency is required.
 - RTL render of the Skeleton primitive
 - Wiring assertions for all three screens
 
+
+## Community terms agreement (Apple 1.2, 2026-10-05)
+
+`community/CommunityTermsGate.tsx` wraps the client Community stack (`CommunityNavigator`), the coach Community stack
+(`CoachCommunityNavigator`) and More > Community (`withCommunityTerms(CommunityScreen)` in `ClientNavigator`). Before first
+use it shows `COMMUNITY_GUIDELINES`, the zero-tolerance sentence, "Agree and continue" (stored per user in `prefsStorage`
+under `community_terms_agreed:v1:<userId>`) and "Read the Terms of Service" (`TERMS_URL`). Legal links open through
+`src/lib/legalLinks.ts`, which names the page and gives its web address when the phone cannot open it. The Create account
+screen states the Terms of Service and Privacy Policy agreement with both links. Tests:
+`community/__tests__/CommunityTermsGate.test.tsx`, `screens/auth/__tests__/CreateAccountScreen.test.tsx`.

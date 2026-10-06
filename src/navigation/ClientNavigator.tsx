@@ -137,6 +137,7 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
+import { withCommunityTerms } from '../components/community/CommunityTermsGate';
 // Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
 // unless featureFlags.clientTutorial is on.
 import TutorialHost from '../components/tutorial/TutorialHost';
@@ -160,7 +161,9 @@ const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPl
 const ProtectedFastingScreen = withProtectedScreen(FastingScreen);
 const ProtectedLogScreen = withProtectedScreen(LogScreen);
 const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
-const ProtectedCommunityScreen = withProtectedScreen(CommunityScreen);
+// Apple 1.2 (B-IOSREV-2): the wins feed is community content, so it sits
+// behind the one-time community terms agreement too.
+const ProtectedCommunityScreen = withProtectedScreen(withCommunityTerms(CommunityScreen));
 const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 // Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
 // the assigned coach is free server-side (client-messaging.controller.ts:

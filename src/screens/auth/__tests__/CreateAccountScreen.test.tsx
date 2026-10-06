@@ -78,6 +78,7 @@ const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
 
 import CreateAccountScreen from '../CreateAccountScreen';
+import { PRIVACY_POLICY_URL, TERMS_URL } from '../../../config/env';
 import { __resetSignupPolicyCacheForTests, loadSignupPolicy } from '../../../lib/signupPolicy';
 import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
@@ -137,6 +138,29 @@ describe('CreateAccountScreen', () => {
     const { findByText } = await renderScreen();
     expect(await findByText('Continue with Google')).toBeTruthy();
     expect(await findByText('INVITE CODE')).toBeTruthy();
+  });
+
+  it('B-IOSREV-2: states the Terms and Privacy agreement above the sign-up buttons, with both links', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const { findByTestId, getByTestId } = await renderScreen();
+    const line = await findByTestId('create-account-legal');
+    const flat = (node: unknown): string =>
+      typeof node === 'string'
+        ? node
+        : Array.isArray(node)
+          ? node.map(flat).join('')
+          : node && typeof node === 'object' && 'props' in node
+            ? flat((node as { props: { children?: unknown } }).props.children)
+            : '';
+    expect(flat(line.props.children)).toBe(
+      'By creating an account, you agree to the Terms of Service and the Privacy Policy.',
+    );
+    await fireEvent.press(getByTestId('create-account-terms-link'));
+    expect(openUrl).toHaveBeenCalledWith(TERMS_URL);
+    await fireEvent.press(getByTestId('create-account-privacy-link'));
+    expect(openUrl).toHaveBeenCalledWith(PRIVACY_POLICY_URL);
+    openUrl.mockRestore();
   });
 
   it('falls back to legacy names when canonical ones are absent', async () => {

@@ -115,6 +115,10 @@ git status --porcelain   # must be empty before `eas build`
 
 ## 5. Android permissions review
 
+> **SUPERSEDED 2026-10-05 — do not paste.** This section describes an older build. Use the October 07 store packet
+> [STORE_TEXT_10-07.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/handoffs/op-123/STORE_TEXT_10-07.md) (section 4, B-STORECOPY-4) and the banner in `PLAY_STORE_READINESS.md` section 4, and check
+> the final 10-07 binary's manifest. The 10-07 build declares no `RECORD_AUDIO` (voice notes off).
+
 `app.json` declares no Android `<uses-permission>` entries directly. Permissions are inferred by Expo from the plugins/APIs in use. Resulting AndroidManifest will (per Expo SDK 55 defaults for the libraries we depend on) include:
 
 | Permission | Source | Visible to user? | Justification (for Data Safety + listing) |
@@ -140,6 +144,10 @@ unzip -p app-release.aab base/manifest/AndroidManifest.xml \
 If anything other than the table above shows up, that permission needs a justification before listing. The most common surprise is `READ_EXTERNAL_STORAGE` getting pulled in by a transitive dependency — investigate before submitting.
 
 ## 6. Data Safety form
+
+> **SUPERSEDED 2026-10-05 — do not paste.** This section describes an older build. Use the October 07 store packet
+> [STORE_TEXT_10-07.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/handoffs/op-123/STORE_TEXT_10-07.md) (section 4, B-STORECOPY-4) and the banner in `PLAY_STORE_READINESS.md` section 4, and check
+> the final 10-07 binary's manifest. The 10-07 build declares no `RECORD_AUDIO` (voice notes off).
 
 Source of truth for the answers: `PLAY_STORE_READINESS.md` § 4. Summary copy-paste for the Play form:
 

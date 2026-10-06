@@ -25,6 +25,7 @@
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { colors } from '../theme/tokens';
 import { featureFlags } from '../config/featureFlags';
 import CommunityTabScreen from '../screens/community/CommunityTabScreen';
@@ -47,7 +48,19 @@ import type { CommunityStackParamList } from '../screens/community/communityNavT
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
 
+/**
+ * Apple 1.2 (B-IOSREV-2): the whole stack sits behind the one-time community
+ * terms agreement, so a deep link or push into any Community route asks first.
+ */
 export default function CommunityNavigator(): React.ReactElement {
+  return (
+    <CommunityTermsGate>
+      <CommunityNavigatorStack />
+    </CommunityTermsGate>
+  );
+}
+
+function CommunityNavigatorStack(): React.ReactElement {
   return (
     <CommunityStack.Navigator
       screenOptions={{

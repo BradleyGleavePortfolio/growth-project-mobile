@@ -155,6 +155,24 @@ describe('TrustCenterScreen source', () => {
   });
 });
 
+describe('TrustCenterScreen security copy (B-STORECOPY-1: no universal guarantees)', () => {
+  it('drops the TLS 1.3 / AES-256 / secure enclave promises', () => {
+    expect(SCREEN_SRC).not.toMatch(/TLS 1\.3|AES-256|secure enclave/);
+  });
+
+  it('says what the app actually does: encrypted transport, Keychain/Keystore tokens, device cache', () => {
+    const bullets = [...SCREEN_SRC.matchAll(/<BulletItem text="([^"]+)"/g)].map((m) => m[1]);
+    expect(bullets).toEqual(
+      expect.arrayContaining([
+        "Data sent to The Growth Project's servers is encrypted in transit.",
+        'Authentication tokens use iOS Keychain or Android Keystore-backed secure storage.',
+        'Some app data is cached on this device. The Privacy Policy describes server storage and access.',
+      ]),
+    );
+    expect(SCREEN_SRC).toContain('value="Encrypted in transit; secure token storage"');
+  });
+});
+
 describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete account")', () => {
   it('uses the approved Settings labels', () => {
     expect(SCREEN_SRC).toContain('>Delete account</Text>');

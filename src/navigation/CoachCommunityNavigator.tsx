@@ -22,6 +22,7 @@
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import CommunityTermsGate from '../components/community/CommunityTermsGate';
 import { Colors } from '../theme';
 import { featureFlags } from '../config/featureFlags';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
@@ -37,7 +38,19 @@ import type { CoachCommunityStackParamList } from '../screens/community/coachCom
 const CoachCommunityStack =
   createNativeStackNavigator<CoachCommunityStackParamList>();
 
+/**
+ * Apple 1.2 (B-IOSREV-2): the whole stack sits behind the one-time community
+ * terms agreement, so a deep link or push into any Community route asks first.
+ */
 export default function CoachCommunityNavigator(): React.ReactElement {
+  return (
+    <CommunityTermsGate>
+      <CoachCommunityNavigatorStack />
+    </CommunityTermsGate>
+  );
+}
+
+function CoachCommunityNavigatorStack(): React.ReactElement {
   return (
     <CoachCommunityStack.Navigator
       screenOptions={{
