@@ -36,6 +36,14 @@ describe('HomeHeaderActions', () => {
     expect(messageCoachLabel('  ')).toBe('Message your coach');
   });
 
+  it('lets the message action label wrap at larger text sizes', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    const label = view.getByText('Message your coach');
+    expect(label.props.numberOfLines).toBeUndefined();
+    expect(label.props.allowFontScaling).not.toBe(false);
+  });
+
   it('message entry opens Messages; bell opens NotificationCenter with unread label', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
     mockGet.mockRejectedValue(new Error('404'));
