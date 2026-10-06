@@ -43,6 +43,12 @@ type Props = {
 
 function errorCopy(e: DayOneError): string {
   switch (e.kind) {
+    case 'invite_revoked':
+      return t('coachPairing.errors.revoked');
+    case 'coach_unavailable':
+      return t('coachPairing.errors.coachUnavailable');
+    case 'already_paired':
+      return t('coachPairing.errors.alreadyPaired');
     case 'invite_expired':
       return t('coachPairing.errors.expired');
     case 'invite_max_uses':

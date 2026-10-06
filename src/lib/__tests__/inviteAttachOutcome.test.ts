@@ -38,6 +38,15 @@ describe('inviteAttachErrorMessage', () => {
     expect(inviteAttachErrorMessage('invalid_code')).toMatch(/was not found/);
   });
 
+  it('names each existing-code refusal from the backend (code_revoked / code_expired / code_exhausted)', () => {
+    expect(inviteAttachErrorMessage('code_revoked')).toMatch(/turned off by your coach/);
+    expect(inviteAttachErrorMessage('code_revoked')).not.toMatch(/expired/);
+    expect(inviteAttachErrorMessage('code_expired')).toMatch(/has expired/);
+    expect(inviteAttachErrorMessage('code_exhausted')).toMatch(/used up/);
+    expect(inviteAttachErrorMessage('coach_not_accepting_clients')).toMatch(/not accepting new clients/);
+    expect(inviteAttachErrorMessage('already_attached_to_different_coach')).toMatch(/different coach/);
+  });
+
   it('never echoes an unknown raw server string', () => {
     const raw = 'PrismaClientKnownRequestError at /app/src/x.ts:42';
     expect(inviteAttachErrorMessage(raw)).toBe(DEFAULT_INVITE_ATTACH_MESSAGE);

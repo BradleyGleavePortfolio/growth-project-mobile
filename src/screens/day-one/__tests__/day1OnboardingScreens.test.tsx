@@ -190,6 +190,17 @@ describe('CoachPairingScreen', () => {
     expect(await findByText(/expired/)).toBeTruthy();
   });
 
+  it('a code the coach turned off says so instead of "not recognized"', async () => {
+    mockedPair.mockResolvedValue({ ok: false, error: { kind: 'invite_revoked' } });
+    const { getByTestId, findByText, queryByText } = await renderPairing();
+    await fireEvent.changeText(getByTestId('day-one-invite-input'), 'GP-OLD234');
+    await act(async () => {
+      await fireEvent.press(getByTestId('day-one-invite-submit'));
+    });
+    expect(await findByText(/This code was turned off by your coach/)).toBeTruthy();
+    expect(queryByText(/not recognized/)).toBeNull();
+  });
+
   it('skip path advances without calling the backend', async () => {
     const { nav, getByTestId } = await renderPairing();
     await act(async () => {
