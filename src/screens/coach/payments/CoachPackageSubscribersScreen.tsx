@@ -39,6 +39,14 @@ const STATUS_COPY: Record<PackageSubscriber['status'], { label: string; tone: 'o
   trialing: { label: 'Trial', tone: 'ok' },
   past_due: { label: 'Past due', tone: 'attention' },
   canceled: { label: 'Canceled', tone: 'muted' },
+  paid: { label: 'Paid', tone: 'ok' },
+  granted: { label: 'Access granted', tone: 'ok' },
+  pending: { label: 'Not paid yet', tone: 'muted' },
+  payment_failed: { label: 'Payment failed', tone: 'attention' },
+  expired: { label: 'Access ended', tone: 'muted' },
+  revoked: { label: 'Access revoked', tone: 'muted' },
+  refunded: { label: 'Refunded', tone: 'muted' },
+  unknown: { label: 'Status from TGP', tone: 'muted' },
 };
 
 function formatDate(iso: string | null | undefined): string | null {
@@ -57,6 +65,7 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [unavailable, setUnavailable] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const load = useCallback(async () => {
     setError('');
@@ -65,12 +74,9 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
       const res = await coachPackagesApi.subscribers(packageId);
       setData(res.data);
     } catch (err) {
-      // 404 here means the endpoint is not deployed in this environment
-      // (Wave 4 backend dependency). Surface it honestly — collapsing 404
-      // to an empty list would lie to the coach as "0 subscribers".
       if (errorStatus(err) === 404) {
         setUnavailable(
-          'Subscriber reporting is not available in this environment yet. It will appear once the marketplace backend ships.',
+          'This package is no longer available. Go back to Packages and open it again.',
         );
         setData(null);
       } else {
@@ -90,6 +96,20 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
     await load();
     setRefreshing(false);
   }, [load]);
+
+  const loadMore = async () => {
+    if (data?.nextOffset == null || loadingMore) return;
+    setLoadingMore(true);
+    setError('');
+    try {
+      const res = await coachPackagesApi.subscribers(packageId, data.nextOffset);
+      setData({ ...res.data, subscribers: [...data.subscribers, ...res.data.subscribers] });
+    } catch (err) {
+      setError(errorMessage(err, 'The next clients could not be loaded. Tap Load more to try again.'));
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -118,12 +138,14 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
             data ? (
               <View style={styles.summary}>
                 <View style={styles.summaryItem}>
-                  <Text style={styles.summaryValue}>{data.totalActive}</Text>
-                  <Text style={styles.summaryLabel}>Active</Text>
+                  <Text style={styles.summaryValue}>{data.totalActive ?? 'Not available'}</Text>
+                  <Text style={styles.summaryLabel}>Clients with access</Text>
                 </View>
                 <View style={styles.summaryItem}>
                   <Text style={styles.summaryValue}>
-                    {formatCurrencyCents(data.monthlyRecurringRevenueCents, 'usd')}
+                    {data.monthlyRecurringRevenueCents !== null && data.currency
+                      ? formatCurrencyCents(data.monthlyRecurringRevenueCents, data.currency)
+                      : 'Not available'}
                   </Text>
                   <Text style={styles.summaryLabel}>MRR</Text>
                 </View>
@@ -133,6 +155,17 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
           data={data?.subscribers ?? []}
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.content}
+          ListFooterComponent={
+            <View>
+              {error && data?.subscribers.length ? <Text style={styles.emptyBody}>{error}</Text> : null}
+              {data?.nextOffset != null ? (
+                <TouchableOpacity onPress={() => void loadMore()} disabled={loadingMore}
+                  accessibilityRole="button" accessibilityLabel="Load more clients">
+                  <Text style={styles.emptyBody}>{loadingMore ? 'Loading clients' : 'Load more clients'}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          }
           ListEmptyComponent={
             unavailable ? (
               <View style={styles.emptyWrap}>
@@ -171,10 +204,13 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
             return (
               <View style={styles.row}>
                 <View style={styles.rowMain}>
-                  <Text style={styles.rowName}>{item.name || item.email}</Text>
+                  <Text style={styles.rowName}>{item.name || item.email || 'Client'}</Text>
                   <Text style={styles.rowMeta}>
+                    {item.entitlementActive ? 'Access active' : 'Access ended'}{' · '}
                     Started {formatDate(item.startedAt) ?? '—'}
-                    {item.nextRenewalAt
+                    {item.cancelAtPeriodEnd
+                      ? ' · Renewal canceled'
+                      : item.nextRenewalAt
                       ? ` · Renews ${formatDate(item.nextRenewalAt)}`
                       : ''}
                   </Text>
@@ -196,11 +232,13 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
                         copy.tone === 'muted' && { color: semanticColors.textMuted },
                       ]}
                     >
-                      {copy.label}
+                      {item.status === 'unknown'
+                        ? `Status: ${item.rawStatus.replace(/_/g, ' ')}`
+                        : copy.label}
                     </Text>
                   </View>
                   <Text style={styles.rowAmount}>
-                    {formatCurrencyCents(item.totalPaidCents, 'usd')}
+                    Package price {formatCurrencyCents(item.amountCents, item.currency)}
                   </Text>
                 </View>
               </View>
