@@ -107,7 +107,9 @@ describe('coachPackagesApi list contract', () => {
       },
     });
     const res = await coachPackagesApi.list();
-    expect(apiMock.get).toHaveBeenCalledWith('/v1/coach/packages');
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/coach/packages', {
+      params: { include_archived: true },
+    });
     expect(res.data).toHaveLength(1);
     expect(res.data[0]).toMatchObject({
       id: 'pkg_1',

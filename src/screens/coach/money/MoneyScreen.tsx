@@ -1004,7 +1004,7 @@ function PayoutsBlock({
     return (
       <Text style={styles.body} testID="money-payouts-empty">
         {stripeActive
-          ? "No payouts yet. Stripe sends your first payout a few days after your first sale."
+          ? "No payout is scheduled in Stripe yet. Open Payout settings to check your balance and payout schedule."
           : "Payouts start once Stripe has approved your account."}
       </Text>
     );

@@ -527,6 +527,15 @@ describe("MoneyScreen", () => {
     );
   });
 
+  it("MONEY-CONNECT-124: an enabled account with no payouts is not promised a first-payout date", async () => {
+    routeGets({ "/coach/connect/payouts": [] });
+    const r = await render(<MoneyScreen />);
+    await r.findByText(
+      "No payout is scheduled in Stripe yet. Open Payout settings to check your balance and payout schedule.",
+    );
+    expect(r.queryByText(/first payout a few days/)).toBeNull();
+  });
+
   it("before Stripe: shows the setup action and an empty state, and Payout settings opens setup", async () => {
     routeGets({
       "/coach/connect/status": { account_id: null },
