@@ -45,7 +45,13 @@ export interface DunningLockoutScreenProps {
  * inquiry moves none), so no surface claims a reversal (B-353-8).
  */
 export function isDisputeCycle(status: ClientDunningStatus | null | undefined): boolean {
-  return status?.kind === 'dispute' || status?.reason === 'dispute_paused';
+  // Compatibility name shared by the action gates: both pauses require
+  // the coach to restart, never a card update or an automatic recovery.
+  return status?.kind === 'dispute' || status?.reason === 'dispute_paused' || isRefundCycle(status);
+}
+
+export function isRefundCycle(status: ClientDunningStatus | null | undefined): boolean {
+  return status?.kind === 'refund' || status?.reason === 'refund_paused';
 }
 
 /** 'account' when the dispute locks the whole app, 'plan' when another plan keeps access. */
@@ -68,6 +74,12 @@ export function lockoutSummary(status: ClientDunningStatus | null): string {
   if (!status) return `Your plan is paused because of a payment problem. ${safe}`;
   const amount = formatDunningAmount(status.amount_cents ?? null, status.currency ?? null);
   const coach = status.coach_name ?? 'your coach';
+  if (isRefundCycle(status)) {
+    const facts = status.billing_paused === false
+      ? 'Access to this plan has ended. The billing pause is being completed; pull down to refresh or message your coach.'
+      : disputePauseFacts(status.coach_name, disputeScope(status));
+    return `A payment for your plan with ${coach} was fully refunded. ${facts} ${safe}`;
+  }
   if (isDisputeCycle(status)) {
     // R-DISPUTE-PAUSE (B-353-3 / B-353-6): the three facts, no lock date, no card fix.
     return `Your bank opened a dispute or inquiry about a payment${amount ? ` of ${amount}` : ''} to ${coach}. ${disputePauseFacts(

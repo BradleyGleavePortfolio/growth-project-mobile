@@ -5,7 +5,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
 import { disputePauseFacts } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
-import { isDisputeCycle } from './DunningLockoutScreen';
+import { isDisputeCycle, isRefundCycle } from './DunningLockoutScreen';
 
 /**
  * The lock date, only while it is still ahead and the lock is not waived
@@ -22,6 +22,14 @@ function upcomingLockDate(status: ClientDunningStatus, now: number): string | nu
 export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()): { title: string; body: string } {
   const amount = formatDunningAmount(status.amount_cents, status.currency);
   const lockOn = upcomingLockDate(status, now);
+  if (isRefundCycle(status)) {
+    return {
+      title: 'Your plan is paused after a full refund',
+      body: status.billing_paused === false
+        ? 'A full refund was completed. Access to this plan has ended. The billing pause is being completed; pull down to refresh or message your coach.'
+        : `A full refund was completed. ${disputePauseFacts(status.coach_name, 'plan')}`,
+    };
+  }
   if (isDisputeCycle(status)) {
     // R-DISPUTE-PAUSE (B-353-3 / B-353-6): access to the disputed plan has
     // already ended, so no lock date, no condition and no card fix. B-353-8:
