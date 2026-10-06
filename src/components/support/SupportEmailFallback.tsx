@@ -48,7 +48,7 @@ export interface SupportEmailHandle {
   copy: () => Promise<void>;
 }
 
-export function useSupportEmail(subject?: string): SupportEmailHandle {
+export function useSupportEmail(subject?: string, body?: string): SupportEmailHandle {
   const [state, setState] = useState<SupportEmailState>('idle');
   const mounted = useRef(true);
   useEffect(() => {
@@ -63,12 +63,12 @@ export function useSupportEmail(subject?: string): SupportEmailHandle {
 
   const open = useCallback(async () => {
     try {
-      await Linking.openURL(supportMailto(subject));
+      await Linking.openURL(supportMailto(subject, body));
       set('idle');
     } catch {
       set('failed');
     }
-  }, [subject, set]);
+  }, [subject, body, set]);
 
   const copy = useCallback(async () => {
     try {

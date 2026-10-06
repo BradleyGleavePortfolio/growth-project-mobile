@@ -45,10 +45,23 @@ jest.mock('@react-navigation/native', () => {
       isReady: () => true,
       navigate: jest.fn(),
       resetRoot: jest.fn(),
+      // S-DUNNING: the payment-lockout provider reads the focused route.
+      getCurrentRoute: () => undefined,
+      addListener: () => () => undefined,
       current: null,
     }),
   };
 });
+// S-DUNNING: the lockout provider's status read is not under test here.
+jest.mock('../entitlements/dunning/dunningApi', () => ({
+  ...jest.requireActual('../entitlements/dunning/dunningApi'),
+  dunningApi: {
+    getStatus: jest.fn(async () => ({ enabled: false, state: 'none' })),
+    createCardSetup: jest.fn(),
+    confirmCardUpdate: jest.fn(),
+    cancelPlan: jest.fn(),
+  },
+}));
 jest.mock('../navigation/AuthNavigator', () => {
   const React = jest.requireActual('react');
   const { Text } = jest.requireActual('react-native');
