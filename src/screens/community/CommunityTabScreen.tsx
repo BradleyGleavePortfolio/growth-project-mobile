@@ -44,6 +44,7 @@ export default function CommunityTabScreen(): React.ReactElement {
   const client = useCurrentUser();
   const badge = useCommunityBadge(client?.id);
   const me = useCommunityMe();
+  const hasCoach = Boolean(client?.coach_id);
 
   const [active, setActive] = useState<CommunitySpaceKey>('today');
 
@@ -86,20 +87,36 @@ export default function CommunityTabScreen(): React.ReactElement {
         onSelect={setActive}
         testID="community-space-tabbar"
       />
-      {/* Apple 1.2: guidelines, report/block help, contact and block list. */}
-      <HapticPressable
-        intent="light"
-        onPress={() => navigation.navigate('CommunitySafety')}
-        accessibilityRole="button"
-        accessibilityLabel="Community safety: guidelines, reporting, blocking and contact"
-        style={styles.safetyLink}
-        testID="community-safety-link"
-      >
-        <Ionicons name="shield-checkmark-outline" size={14} color={semanticColors.textMuted} />
-        <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>
-          Community safety
-        </Text>
-      </HapticPressable>
+      <View style={styles.linkRow}>
+        {/* Opt-in board of one coach's clients: no coach, no entry point. */}
+        {hasCoach ? (
+          <HapticPressable
+            intent="light"
+            onPress={() => navigation.navigate('Leaderboard')}
+            accessibilityRole="button"
+            accessibilityLabel="Leaderboard: opt-in ranking with your coach's other clients"
+            style={styles.headerLink}
+            testID="community-leaderboard-link"
+          >
+            <Ionicons name="stats-chart-outline" size={14} color={semanticColors.textMuted} />
+            <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>Leaderboard</Text>
+          </HapticPressable>
+        ) : null}
+        {/* Apple 1.2: guidelines, report/block help, contact and block list. */}
+        <HapticPressable
+          intent="light"
+          onPress={() => navigation.navigate('CommunitySafety')}
+          accessibilityRole="button"
+          accessibilityLabel="Community safety: guidelines, reporting, blocking and contact"
+          style={[styles.headerLink, styles.safetyLink]}
+          testID="community-safety-link"
+        >
+          <Ionicons name="shield-checkmark-outline" size={14} color={semanticColors.textMuted} />
+          <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>
+            Community safety
+          </Text>
+        </HapticPressable>
+      </View>
       <View style={styles.body}>
         {active === 'today' ? (
           <CommunityTodayScreen embedded />
@@ -162,14 +179,15 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  safetyLink: {
+  linkRow: { flexDirection: 'row', alignItems: 'center' },
+  headerLink: {
     minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-end',
     gap: spacing.xs,
     paddingHorizontal: spacing.lg,
   },
+  safetyLink: { marginLeft: 'auto' },
   safetyText: {
     fontSize: 13,
   },

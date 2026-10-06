@@ -22,6 +22,10 @@ export type CommunityStackParamList = {
   CommunityDmList: undefined;
   /** Community guidelines, report/block help, contact and block list (Apple 1.2). */
   CommunitySafety: undefined;
+  /** Opt-in roster leaderboard (the client's coach roster only). */
+  Leaderboard: undefined;
+  /** Leaderboard opt-in, display name and what is measured. */
+  LeaderboardSettings: undefined;
   /** Single DM conversation. */
   CommunityDmThread: { recipientId: string; participantLabel?: string };
   /** Compose a post (or, with a recipient, a DM). */

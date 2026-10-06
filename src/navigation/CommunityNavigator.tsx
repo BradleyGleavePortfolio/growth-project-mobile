@@ -44,6 +44,8 @@ import CommunityVoiceComposerScreen from '../screens/community/CommunityVoiceCom
 import CommunityFindScreen from '../screens/community/CommunityFindScreen';
 import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
 import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
+import LeaderboardScreen from '../screens/client/LeaderboardScreen';
+import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -77,6 +79,10 @@ function CommunityNavigatorStack(): React.ReactElement {
       )}
       <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
       <CommunityStack.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
+      {/* Opt-in roster leaderboard: opened from the Community tab header, so
+          Back returns to the tab on this same stack. */}
+      <CommunityStack.Screen name="Leaderboard" component={LeaderboardScreen} />
+      <CommunityStack.Screen name="LeaderboardSettings" component={LeaderboardSettingsScreen} />
       <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
       <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
       {featureFlags.communityChallenges ? (
