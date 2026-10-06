@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
+  EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
@@ -53,6 +54,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
+  EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
   EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH: process.env.EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH,
   EXPO_PUBLIC_FF_ROMAN_CHAT: process.env.EXPO_PUBLIC_FF_ROMAN_CHAT,
@@ -116,6 +118,21 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_CLIENT_TUTORIAL
    */
   clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', false),
+
+  // ─── S-SCHED — client Calendar tab (native scheduling) ───────────────────
+  /**
+   * The client Calendar bottom tab (coach, appointment types, open slots,
+   * booking, upcoming sessions, Add to my calendar), the booking
+   * push routes into it, and the two Roman tutorial steps that depend on it
+   * (Calendar intro, welcome call). OFF by default unconditionally; the
+   * kill switch. ON in the clinic and production EAS profiles once the
+   * S-SCHED audits pass. Off means: no tab, no Calendar routes, booking
+   * pushes open the notification center, the tutorial is exactly as before.
+   * Google Calendar sync is unrelated and stays off.
+   *
+   * env: EXPO_PUBLIC_FF_CLIENT_CALENDAR
+   */
+  clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */
@@ -350,6 +367,17 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
   mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
+  // ─── S-MWB — coach Programs library (master workout builder) ────────────
+  // ON: the coach "Programs" tab (library, week x day grid that opens the
+  // workout builder for each day, saved workouts, bulk assign, add to package,
+  // history, promote to regime) replaces the hard-coded Templates tab, and the
+  // package content form offers a program picker. Needs the backend
+  // FEATURE_MWB_TEMPLATES (the API answers 404 programs_unavailable while off;
+  // the screens show that state with a support path). OFF (default): the legacy
+  // Templates tab, unchanged.
+  //
+  // env: EXPO_PUBLIC_FF_MWB_PROGRAMS
+  mwbPrograms: readFlag('EXPO_PUBLIC_FF_MWB_PROGRAMS', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate

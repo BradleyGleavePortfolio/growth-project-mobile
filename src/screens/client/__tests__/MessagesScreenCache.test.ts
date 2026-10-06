@@ -71,6 +71,12 @@ describe('reconcilePending', () => {
     expect(reconcilePending(prev, server)).toEqual([]);
   });
 
+  it('keeps a keyed unsent row when only an older equal-text row returns; drops it on its own key', () => {
+    const row = (id: string, key: string, pending?: boolean) => ({ id, sender_role: 'client' as const, body: 'Done', created_at: '2026-05-21T10:00:00Z', pending, v2: { reply_to: null, deleted: false, edited_at: null, pinned_at: null, client_message_id: key } });
+    expect(reconcilePending([row('pending_k2', 'k2', true)], [row('srv-1', 'k1')]).map((m) => m.id)).toEqual(['pending_k2']);
+    expect(reconcilePending([row('pending_k2', 'k2', true)], [row('srv-2', 'k2')])).toEqual([]);
+  });
+
   it('keeps a pending message newer than the oldest server message', () => {
     const prev: Msg[] = [
       {

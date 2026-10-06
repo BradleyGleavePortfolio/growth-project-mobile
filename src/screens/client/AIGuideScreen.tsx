@@ -27,7 +27,9 @@ import { ChatMessage } from '../../types';
 import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import { aiRefusalOf, type AiRefusal } from '../../lib/ai/aiRefusal';
+import { aiDailyCapOf, type AiDailyCap } from '../../lib/ai/aiDailyCap';
 import { shortReference, supportReferenceOf, diagnosticReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 
@@ -127,6 +129,9 @@ export default function AIGuideScreen() {
   // with a working action; never an invented AI reply.
   const [refusal, setRefusal] = useState<AiRefusal | null>(null);
   const [refusedText, setRefusedText] = useState<string | null>(null);
+  // 429 AI_DAILY_QUOTA_EXCEEDED: the daily AI cap pop-up, never the generic
+  // service-problem reply.
+  const [dailyCap, setDailyCap] = useState<AiDailyCap | null>(null);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
@@ -216,6 +221,17 @@ export default function AIGuideScreen() {
           setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
           setRefusal(refused);
           setRefusedText(text.trim());
+          return;
+        }
+
+        // Daily AI cap: nothing was answered, so the turn is not kept; the
+        // draft goes back in the input and the pop-up says when it resets.
+        const cap = aiDailyCapOf(err);
+        if (cap) {
+          setIsTyping(false);
+          setInput(text.trim());
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          setDailyCap(cap);
           return;
         }
 
@@ -406,6 +422,13 @@ export default function AIGuideScreen() {
           testID="ai-guide-refusal"
         />
       ) : null}
+
+      <AiDailyCapModal
+        cap={dailyCap}
+        audience="client"
+        onClose={() => setDailyCap(null)}
+        testID="ai-guide-daily-cap"
+      />
 
       {/* Input Bar */}
       <View style={styles.inputBar}>

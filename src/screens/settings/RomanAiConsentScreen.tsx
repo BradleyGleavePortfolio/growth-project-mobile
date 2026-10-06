@@ -40,6 +40,7 @@ import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
 import { logger } from '../../utils/logger';
+import { ROMAN_CHATS_COPY } from './romanChatsCopy';
 
 export type RomanAiConsentApi = Pick<typeof defaultApi, 'getStatus' | 'grantRoman' | 'withdrawRoman'>;
 
@@ -335,6 +336,9 @@ export default function RomanAiConsentScreen({
         {notice ? (
           <Text style={styles.notice} accessibilityLiveRegion="polite" testID="roman-ai-notice">{notice}</Text>
         ) : null}
+        {/* Owner 10-01 20:32 + OR-110-1: chats are kept until the client deletes
+            them or their account, so they can be found and deleted here. */}
+        {button(ROMAN_CHATS_COPY.entryLabel, () => navigation.navigate('RomanConversations'), 'roman-ai-conversations', true)}
         <View style={styles.divider} />
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}

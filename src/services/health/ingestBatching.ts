@@ -42,8 +42,26 @@ export const MAX_REQUEST_BYTES = 90_000;
 /** Attempts per batch when the server answers 429 (rate limited). */
 export const MAX_ATTEMPTS_PER_BATCH = 3;
 
-/** Longest wait honoured from a Retry-After header, in milliseconds. */
+/**
+ * Longest wait honoured from a Retry-After header, in milliseconds. The
+ * backend's 429 filter sends one conservative Retry-After (3600 s) for every
+ * throttler, but the ingest route is governed only by its per-user 60-second
+ * bucket (backend `wearables-throttle.ts`, WEARABLES_SKIP_THROTTLERS), and the
+ * in-app copy for a 429 says to wait a minute. A longer Retry-After is
+ * therefore honoured for one full bucket window.
+ */
 export const MAX_RETRY_WAIT_MS = 60_000;
+
+/**
+ * C-370-2: the backend allows 60 ingest requests per user per 60 seconds
+ * (`WEARABLES_INGEST_PER_MIN`). The device sends at most this many in any
+ * 60-second window, so a large import waits for the window instead of being
+ * refused; the margin covers a second phone on the same account.
+ */
+export const INGEST_REQUESTS_PER_WINDOW = 50;
+
+/** The window {@link INGEST_REQUESTS_PER_WINDOW} applies to, in milliseconds. */
+export const INGEST_WINDOW_MS = 60_000;
 
 /** The exact over-the-wire sample shape the backend schema accepts. */
 export interface IngestWireSample {
@@ -182,6 +200,12 @@ export interface PostIngestDeps {
   post?: (path: string, body: IngestWireSample[]) => Promise<{ data: IngestResult }>;
   sleep?: (ms: number) => Promise<void>;
   /**
+   * C-370-2: the request pacer to share. A sync run passes one pacer to
+   * every post it makes (the app passes {@link sharedIngestPacer}); without
+   * one, this call gets its own pacer.
+   */
+  pacer?: IngestPacer;
+  /**
    * Called before every request (including retries). Throwing stops the post
    * before anything else is sent. The session fence uses it so a sign-out or
    * account switch mid-import can never send one account's data under
@@ -194,13 +218,114 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Seconds from a Retry-After header, as bounded milliseconds. */
-function retryWaitMs(err: unknown): number {
+/**
+ * C-370-2: paces ingest requests and holds them back after a 429. Every
+ * request waits for {@link IngestPacer.acquire}; a 429 calls
+ * {@link IngestPacer.backOff}, after which no request sharing this pacer is
+ * sent until the Retry-After wait has passed.
+ */
+export interface IngestPacer {
+  /** Resolves when one more request may be sent, and counts it. */
+  acquire(): Promise<void>;
+  /** Holds every later request back for `waitMs` (bounded by {@link MAX_RETRY_WAIT_MS}). */
+  hold(waitMs: number): void;
+  /** {@link IngestPacer.hold}, then resolves when the wait is over. */
+  backOff(waitMs: number): Promise<void>;
+}
+
+/** Seams for {@link createIngestPacer}. */
+export interface IngestPacerOptions {
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  limit?: number;
+  windowMs?: number;
+}
+
+/**
+ * A pacer that sends at most `limit` requests in any `windowMs` window
+ * (defaults {@link INGEST_REQUESTS_PER_WINDOW} per {@link INGEST_WINDOW_MS}).
+ * Callers are served one at a time, in order. Time is the later of the clock
+ * and the end of the last wait, so an injected `sleep` that returns at once
+ * still paces by the wait it was asked for.
+ */
+export function createIngestPacer(options: IngestPacerOptions = {}): IngestPacer {
+  const now = options.now ?? (() => Date.now());
+  const sleep = options.sleep ?? defaultSleep;
+  const limit = Math.max(1, Math.floor(options.limit ?? INGEST_REQUESTS_PER_WINDOW));
+  const windowMs = options.windowMs ?? INGEST_WINDOW_MS;
+  let sent: number[] = [];
+  let heldUntil = -Infinity;
+  let waitedUntil = -Infinity;
+  let queue: Promise<void> = Promise.resolve();
+
+  const clock = (): number => Math.max(now(), waitedUntil);
+  const waitUntil = async (target: number, from: number = clock()): Promise<number> => {
+    const t = from;
+    if (target <= t) return t;
+    await sleep(target - t);
+    waitedUntil = Math.max(waitedUntil, target);
+    return clock();
+  };
+  const holdFrom = (t: number, waitMs: number): void => {
+    const wait = Math.max(0, Math.min(waitMs, MAX_RETRY_WAIT_MS));
+    heldUntil = Math.max(heldUntil, t + wait);
+  };
+  const serial = (step: () => Promise<void>): Promise<void> => {
+    const run = queue.then(step);
+    queue = run.catch(() => undefined);
+    return run;
+  };
+
+  return {
+    acquire: () =>
+      serial(async () => {
+        // Each pass waits out any hold, then the window; a hold placed while
+        // waiting for the window is waited out on the next pass.
+        let t = clock();
+        for (;;) {
+          t = await waitUntil(heldUntil, t);
+          const from = t;
+          sent = sent.filter((at) => from - at < windowMs);
+          if (sent.length < limit) break;
+          t = await waitUntil(sent[sent.length - limit] + windowMs, t);
+        }
+        sent.push(t);
+      }),
+    hold: (waitMs: number) => {
+      holdFrom(clock(), waitMs);
+    },
+    backOff: (waitMs: number) =>
+      serial(async () => {
+        const t = clock();
+        holdFrom(t, waitMs);
+        await waitUntil(heldUntil, t);
+      }),
+  };
+}
+
+/**
+ * The app's one pacer: every on-device import and refresh in this process
+ * shares it (`onDeviceSync.ts`), so separate runs together stay under the
+ * backend limit and all of them respect a Retry-After.
+ */
+export const sharedIngestPacer: IngestPacer = createIngestPacer();
+
+/**
+ * Milliseconds a 429 asks to wait: Retry-After as seconds or as an HTTP date,
+ * bounded by {@link MAX_RETRY_WAIT_MS}. A missing or unreadable header waits
+ * the full bound.
+ */
+export function retryWaitMs(err: unknown, nowMs: number = Date.now()): number {
   if (!axios.isAxiosError(err)) return MAX_RETRY_WAIT_MS;
   const header = err.response?.headers?.['retry-after'];
-  const seconds = Number(Array.isArray(header) ? header[0] : header);
-  if (!Number.isFinite(seconds) || seconds <= 0) return MAX_RETRY_WAIT_MS;
-  return Math.min(seconds * 1000, MAX_RETRY_WAIT_MS);
+  const value = String(Array.isArray(header) ? header[0] : header ?? '').trim();
+  if (/^\d+(\.\d+)?$/.test(value)) {
+    const seconds = Number(value);
+    return seconds > 0 ? Math.min(seconds * 1000, MAX_RETRY_WAIT_MS) : MAX_RETRY_WAIT_MS;
+  }
+  const at = value ? Date.parse(value) : NaN;
+  if (!Number.isFinite(at)) return MAX_RETRY_WAIT_MS;
+  return Math.min(Math.max(at - nowMs, 0), MAX_RETRY_WAIT_MS);
 }
 
 function isRateLimited(err: unknown): boolean {
@@ -208,10 +333,14 @@ function isRateLimited(err: unknown): boolean {
 }
 
 /**
- * POST every batch sequentially. A 429 waits for Retry-After (bounded) and
- * retries the same batch, up to {@link MAX_ATTEMPTS_PER_BATCH} attempts; any
- * other failure rejects immediately so the caller keeps its sync cursor and
- * the next run re-reads the same window (ingest is idempotent on dedup_key).
+ * POST every batch sequentially through the pacer (C-370-2), so no more than
+ * {@link INGEST_REQUESTS_PER_WINDOW} requests leave in any window. A 429 holds
+ * every request on the pacer back for its Retry-After (bounded) and retries
+ * the same batch, up to {@link MAX_ATTEMPTS_PER_BATCH} attempts; the last
+ * 429 still holds the pacer, so the next run waits it out before sending.
+ * Any other failure rejects immediately. The caller saves progress only after a call
+ * resolves, so a stopped run resumes after the last saved page or piece and
+ * re-reads only the one in hand (ingest is idempotent on dedup_key).
  */
 export async function postIngestBatches(
   samples: IngestableSample[],
@@ -219,7 +348,7 @@ export async function postIngestBatches(
 ): Promise<IngestResult & { requests: number; oversized: number }> {
   const post =
     deps.post ?? ((path: string, body: IngestWireSample[]) => api.post<IngestResult>(path, body));
-  const sleep = deps.sleep ?? defaultSleep;
+  const pacer = deps.pacer ?? createIngestPacer({ sleep: deps.sleep });
 
   const { batches, oversized } = chunkForIngestWithReport(samples.map(toIngestWire));
   let inserted = 0;
@@ -228,6 +357,7 @@ export async function postIngestBatches(
   for (const batch of batches) {
     for (let attempt = 1; ; attempt += 1) {
       try {
+        await pacer.acquire();
         if (deps.beforeEachRequest) await deps.beforeEachRequest();
         requests += 1;
         const res = await post(WEARABLES_INGEST_PATH, batch);
@@ -235,8 +365,13 @@ export async function postIngestBatches(
         skipped += res.data?.skipped ?? 0;
         break;
       } catch (err) {
-        if (!isRateLimited(err) || attempt >= MAX_ATTEMPTS_PER_BATCH) throw err;
-        await sleep(retryWaitMs(err));
+        if (!isRateLimited(err)) throw err;
+        const wait = retryWaitMs(err);
+        if (attempt >= MAX_ATTEMPTS_PER_BATCH) {
+          pacer.hold(wait);
+          throw err;
+        }
+        await pacer.backOff(wait);
       }
     }
   }

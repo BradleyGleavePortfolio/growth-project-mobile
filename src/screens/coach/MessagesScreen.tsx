@@ -16,6 +16,8 @@ import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import CoachInboxV2 from './CoachInboxV2';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -24,7 +26,21 @@ interface UnreadByClient {
   [clientId: string]: number;
 }
 
+/**
+ * Coach Messages tab. Server flag `messaging_core_v2` ON: the one inbox on
+ * the v2 routes (CoachInboxV2). OFF, or when the server answers 503
+ * messaging.feature_disabled to a stale flag cache: the legacy client list
+ * below, unchanged.
+ */
 export default function MessagesScreen() {
+  const { flags } = useFeatureFlags();
+  const [v2Refused, setV2Refused] = useState(false);
+  const onFeatureDisabled = useCallback(() => setV2Refused(true), []);
+  if (flags.messaging_core_v2 && !v2Refused) return <CoachInboxV2 onFeatureDisabled={onFeatureDisabled} />;
+  return <LegacyCoachMessages />;
+}
+
+function LegacyCoachMessages() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();

@@ -37,7 +37,12 @@
  *    the first payload sane.
  */
 
-import { postIngestBatches, WEARABLES_INGEST_PATH, type PostIngestDeps } from '../ingestBatching';
+import {
+  createIngestPacer,
+  postIngestBatches,
+  WEARABLES_INGEST_PATH,
+  type PostIngestDeps,
+} from '../ingestBatching';
 import {
   getSyncProgress,
   setSyncProgress,
@@ -57,6 +62,7 @@ import {
 } from './healthKitClient';
 import {
   normalizeHealthKitResult,
+  SLEEP_SESSION_GAP_MS,
   type NormalizationContext,
   type NormalizedSample,
 } from './healthKitNormalizer';
@@ -264,6 +270,9 @@ export class HealthKitSyncService {
       resume: {},
     };
     const failed = new Set<HealthKitMetricKey>();
+    // C-370-2: one pacer for every request of this run (the app passes the
+    // process-wide one through ingestDeps).
+    const pacer = options.ingestDeps?.pacer ?? createIngestPacer({ sleep: options.ingestDeps?.sleep });
     let postedCount = 0;
     let cursorAdvanced = false;
     let savedThrough = since.getTime();
@@ -300,11 +309,20 @@ export class HealthKitSyncService {
       for (const key of raw.failed ?? []) failed.add(key);
 
       // 3) Normalize to the canonical wire contract (unsettled hours wait).
+      //    C-370-3: a sleep session is posted only from the piece in which
+      //    its end lies in [piece start - gap, piece end - gap). The ranges
+      //    of consecutive pieces (and of consecutive runs, which start a day
+      //    behind the last one's end) join up, so each night is posted
+      //    whole, once, and a tail cut by a piece's sleep look-back is not.
       const samples: NormalizedSample[] = normalizeHealthKitResult(
         {
           ...raw,
           steps: settledOnly(raw.steps, settledThrough),
           activeEnergy: settledOnly(raw.activeEnergy, settledThrough),
+          sleepPostEnds: {
+            from: new Date(start.getTime() - SLEEP_SESSION_GAP_MS).toISOString(),
+            to: new Date(end.getTime() - SLEEP_SESSION_GAP_MS).toISOString(),
+          },
         },
         ctx,
       );
@@ -318,6 +336,7 @@ export class HealthKitSyncService {
         //    request so a sign-out or account switch stops the upload.
         await postIngestBatches(samples, {
           ...options.ingestDeps,
+          pacer,
           beforeEachRequest: async () => {
             await fence.assertCurrent();
             if (options.ingestDeps?.beforeEachRequest) await options.ingestDeps.beforeEachRequest();

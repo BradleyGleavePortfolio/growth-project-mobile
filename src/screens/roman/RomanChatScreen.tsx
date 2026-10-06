@@ -14,7 +14,8 @@
  *
  * Typed states (brief §3): loading skeleton, "Roman unavailable" (404 flag-off
  * — calm, no retry loop), offline, generic error, send-failure (message stays
- * in the composer for retry), and rate-limited (calm backoff copy).
+ * in the composer for retry), rate-limited (calm backoff copy), and the daily
+ * AI cap pop-up (AiDailyCapModal, owner words + local reset time).
  *
  * Emotional target (DESIGN_INTELLIGENCE §5.1): the user leaves feeling attended
  * to and in capable hands. Primary path (Hick's Law §4.4): a single composer +
@@ -41,6 +42,7 @@ import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
 import RomanComposer from '../../components/roman/RomanComposer';
 import RomanState from '../../components/roman/RomanState';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
+import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import {
@@ -57,6 +59,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
@@ -182,8 +185,12 @@ export default function RomanChatScreen({
   // generic send-failed row.
   const refusal = sendError?.kind === 'aiRefused' ? (sendError.refusal ?? null) : null;
   const refusalAudience = surface === 'coach' ? 'coach' : 'client';
+  // Daily AI cap: the pop-up carries the copy, so no inline error row. The
+  // draft (or the stored turn) stays; the composer is never blocked, so a
+  // crisis message, which the server never caps, still goes through.
+  const dailyCap = sendError?.kind === 'dailyCap' ? (sendError.dailyCap ?? null) : null;
   const sendErrorCopy =
-    sendError == null
+    sendError == null || dailyCap
       ? null
       : refusal
         ? (() => {
@@ -263,6 +270,7 @@ export default function RomanChatScreen({
       <Text style={styles.headerTitle} accessibilityRole="header">
         Roman
       </Text>
+      <RomanConversationsButton />
     </View>
   );
 
@@ -353,6 +361,13 @@ export default function RomanChatScreen({
             testID="roman-ai-refusal"
           />
         ) : null}
+
+        <AiDailyCapModal
+          cap={dailyCap}
+          audience={refusalAudience}
+          onClose={clearSendError}
+          testID="roman-daily-cap"
+        />
 
         {askAgainHint && sendError == null ? (
           <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
