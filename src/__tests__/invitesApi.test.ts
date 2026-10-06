@@ -441,7 +441,7 @@ describe('invitesApi.resendInvite', () => {
   it('hits the /send route with the recipient email body', async () => {
     mockedApi.post.mockResolvedValueOnce({ data: {} });
     const out = await invitesApi.resendInvite('inv_1', 'alice@ex.com');
-    expect(out).toEqual({ supported: true });
+    expect(out).toEqual({ supported: true, emailStatus: null });
     expect(mockedApi.post).toHaveBeenCalledWith(
       '/coach/invite-codes/inv_1/send',
       { email: 'alice@ex.com' },
@@ -458,6 +458,13 @@ describe('invitesApi.resendInvite', () => {
       '/coach/invite-codes/inv_1/send',
       { email: 'alice@ex.com', name: 'Alice', note: 'hello' },
     );
+  });
+
+  it('passes the backend send outcome through (AUDIT-17-125)', async () => {
+    for (const status of ['skipped', 'failed', 'sent']) {
+      mockedApi.post.mockResolvedValueOnce({ data: { status } });
+      expect(await invitesApi.resendInvite('inv_1', 'a@ex.com')).toEqual({ supported: true, emailStatus: status });
+    }
   });
 
   it('returns { supported: false } on 404', async () => {

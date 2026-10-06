@@ -47,6 +47,13 @@ describe('inviteAttachErrorMessage', () => {
     expect(inviteAttachErrorMessage('already_attached_to_different_coach')).toMatch(/different coach/);
   });
 
+  it('names the emailed-invite address mismatch instead of the generic retry copy (AUDIT-17-125)', () => {
+    const msg = inviteAttachErrorMessage('invite_intended_email_mismatch');
+    expect(msg).toMatch(/sent to a different email address/);
+    expect(msg).toMatch(/coach code/);
+    expect(msg).not.toBe(DEFAULT_INVITE_ATTACH_MESSAGE);
+  });
+
   it('never echoes an unknown raw server string', () => {
     const raw = 'PrismaClientKnownRequestError at /app/src/x.ts:42';
     expect(inviteAttachErrorMessage(raw)).toBe(DEFAULT_INVITE_ATTACH_MESSAGE);

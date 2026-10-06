@@ -188,7 +188,7 @@ export default function CoachCodesScreen({
         <CreateCode styles={styles} onCreated={(c) => applyChange(c)} />
         <TouchableOpacity
           style={styles.action}
-          onPress={() => navigation.navigate('CoachBulkInvite')}
+          onPress={() => navigation.navigate('BulkInvite')}
           accessibilityRole="button"
           testID="coach-codes-bulk-invite"
         >
