@@ -36,6 +36,8 @@ export interface Exercise {
 }
 
 export interface ExerciseDetail extends Exercise {
+  /** Animation supplied by the legacy ExerciseDB detail route. */
+  gifUrl?: string | null;
   /**
    * Signed Mux HLS URL. `null` when the exercise has no `muxPlaybackId`
    * or when the backend has Mux disabled. UI must hide the player and

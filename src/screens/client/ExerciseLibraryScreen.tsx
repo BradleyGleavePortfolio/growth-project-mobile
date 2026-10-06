@@ -48,16 +48,18 @@ import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 // `feat/video-library-v1-backend` Wger importer. They're intentionally short:
 // v1 only needs to feel useful, not exhaustive. Power-users still have the
 // free-text search bar.
-const CATEGORY_CHIPS = ['strength', 'cardio', 'mobility', 'core'] as const;
+const CATEGORY_CHIPS = ['push', 'pull', 'legs', 'cardio', 'mobility', 'core'] as const;
 const MUSCLE_CHIPS = [
-  'chest',
-  'back',
-  'legs',
-  'shoulders',
-  'arms',
+  'pectorals',
+  'lats',
+  'quads',
+  'hamstrings',
+  'front delts',
+  'biceps',
+  'triceps',
   'glutes',
 ] as const;
-const EQUIPMENT_CHIPS = ['barbell', 'dumbbell', 'bodyweight', 'machine'] as const;
+const EQUIPMENT_CHIPS = ['barbell', 'dumbbell', 'body weight', 'machine', 'cable'] as const;
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseLibrary'>;
 
@@ -84,7 +86,8 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
       primaryMuscle: primaryMuscle ?? undefined,
       equipment: equipment ?? undefined,
       cursor: next ?? undefined,
-      limit: 20,
+      // The existing backend defaults to 20; omit until its numeric-query
+      // conversion fix deploys so the 10-07 app also works on today's server.
     }),
     [submittedSearch, category, primaryMuscle, equipment],
   );
@@ -103,10 +106,8 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
         );
         setCursor(body.nextCursor);
         setExhausted(body.nextCursor === null);
-      } catch (e) {
-        setError(
-          e instanceof Error ? e.message : 'Could not load exercises.',
-        );
+      } catch {
+        setError('Exercises did not load. Check your connection and try again.');
       } finally {
         setLoading(false);
       }
@@ -232,6 +233,9 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
       {error ? (
         <View style={styles.emptyWrap}>
           <Text style={styles.errorText}>{error}</Text>
+          <Pressable accessibilityRole="button" onPress={() => void fetchPage('replace')}>
+            <Text style={styles.errorText}>Retry</Text>
+          </Pressable>
         </View>
       ) : null}
 
