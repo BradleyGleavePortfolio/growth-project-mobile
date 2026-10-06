@@ -367,6 +367,29 @@ export default function SettingsScreen() {
         styles={styles}
       />
 
+      {/* M-FEATURED-123 — owner-only: the coachless banner, offer, code and Roman pitch. */}
+      {currentUser?.role === 'owner' ? (
+        <>
+          <Text style={styles.sectionHeader}>Owner</Text>
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => {
+                mediumTap();
+                navigation.navigate('ClientsStack', { screen: 'FeaturedCoachEditor' });
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Open featured coach"
+              testID="settings-featured-coach"
+            >
+              <Ionicons name="star-outline" size={20} color={colors.textSecondary} />
+              <Text style={styles.rowLabel}>Featured coach</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : null}
+
       {/* Client Management */}
       <Text style={styles.sectionHeader}>Client Management</Text>
       <View style={styles.section}>

@@ -663,6 +663,14 @@ export default function RootNavigator() {
       setSessionUserId(typeof parsedUser.id === 'string' && parsedUser.id.trim() ? parsedUser.id : null);
       const role = user?.role;
 
+      // B-391-1: the owner account runs the platform from the coach app (Settings > Owner > Featured coach).
+      // The coach routes accept role owner (RolesGuard owner bypass, CoachGuard, CoachOrOwnerGuard,
+      // SubscriptionGuard), and an owner has no coach setup, so the coach onboarding wizard is skipped.
+      if (role === 'owner') {
+        setAuthState('coach');
+        return;
+      }
+
       if (role === 'coach') {
         // Sync Crisp identity so operators see the coach's account in the dashboard.
         syncCrispIdentity({

@@ -147,7 +147,7 @@ export default function CoachlessHomeSlot(): React.ReactElement | null {
   );
 }
 
-function Banner({
+export function Banner({
   home,
   onUseCode,
   onEnterCode,
@@ -216,7 +216,7 @@ function Banner({
   );
 }
 
-function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnterCode: () => void; onNotNow: () => void }) {
+export function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnterCode: () => void; onNotNow: () => void }) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="coachless-roman-card">

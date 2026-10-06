@@ -79,8 +79,10 @@ jest.mock("../../theme/ThemeProvider", () => ({
   AppearanceOverride: {},
 }));
 
+// M-FEATURED-123: the role decides whether the owner-only Featured coach row shows.
+let mockRole: string | undefined;
 jest.mock("../../hooks/useCurrentUser", () => ({
-  useCurrentUser: () => ({ id: "me", email: "me@example.com" }),
+  useCurrentUser: () => ({ id: "me", email: "me@example.com", role: mockRole }),
 }));
 
 jest.mock("../../hooks/useSettings", () => ({
@@ -136,6 +138,7 @@ jest.mock("@react-navigation/native", () => {
 
 beforeEach(() => {
   mockNavigate.mockReset();
+  mockRole = undefined;
 });
 
 describe("coach Settings Money row", () => {
@@ -171,5 +174,25 @@ describe("coach Settings Money row", () => {
     });
     expect(r.queryByTestId("settings-money")).toBeNull();
     noteHeadCoachHandlesMoney(false);
+  });
+});
+
+describe("coach Settings Featured coach row (M-FEATURED-123)", () => {
+  it("the owner sees one row, and it opens the editor", async () => {
+    mockRole = "owner";
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const CoachSettings = require("../../screens/coach/SettingsScreen").default;
+    const r = await render(<CoachSettings />);
+    expect(r.getAllByTestId("settings-featured-coach")).toHaveLength(1);
+    await fireEvent.press(r.getByTestId("settings-featured-coach"));
+    expect(mockNavigate).toHaveBeenCalledWith("ClientsStack", { screen: "FeaturedCoachEditor" });
+  });
+
+  it.each(["coach", "sub_coach"])("a %s account never sees it", async (role) => {
+    mockRole = role;
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const CoachSettings = require("../../screens/coach/SettingsScreen").default;
+    const r = await render(<CoachSettings />);
+    expect(r.queryByTestId("settings-featured-coach")).toBeNull();
   });
 });
