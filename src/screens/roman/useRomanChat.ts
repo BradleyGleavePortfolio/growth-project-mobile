@@ -13,6 +13,12 @@
  * in-flight send is guarded by `sendingRef` so a double-tap cannot fire two
  * turns. Failed sends DO NOT clear the draft — the screen preserves it for
  * retry (brief §3).
+ *
+ * Erased chats (B-376-1): this screen stays mounted under the history screens
+ * its header opens. When the person erases the chat it holds there (Delete on
+ * its row or in its transcript, or Delete all), it drops that chat at once (no
+ * erased text stays on screen) and opens a fresh one; a send made before the
+ * fresh chat is open waits for it, so nothing is ever sent to the erased chat.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -29,6 +35,8 @@ import {
 } from '../../api/romanApi';
 import { logger } from '../../utils/logger';
 import type { AiRefusal } from '../../lib/ai/aiRefusal';
+import type { AiDailyCap } from '../../lib/ai/aiDailyCap';
+import { romanChatsEvents } from '../settings/romanChatsEvents';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
 const PAGE_LIMIT = 30;
@@ -46,6 +54,8 @@ export interface RomanSendError {
   retryAfterSeconds?: number;
   /** R2b refusal (kind `aiRefused`): consent required or egress blocked. */
   refusal?: AiRefusal;
+  /** Kind `dailyCap`: when AI help resets (shown in the daily cap pop-up). */
+  dailyCap?: AiDailyCap;
   /**
    * The server had already stored the user turn when this failed (an
    * in-stream error after HTTP 200). The turn stays in the thread; nothing
@@ -110,6 +120,8 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
   const active = useRef(true);
   const sendingRef = useRef(false);
   const sessionRef = useRef<RomanSession | null>(null);
+  /** The open in flight, if any (never rejects). */
+  const openingRef = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     active.current = true;
@@ -118,7 +130,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
     };
   }, []);
 
-  const open = useCallback(async () => {
+  const runOpen = useCallback(async () => {
     if (active.current) setPhase('loading');
     try {
       const s = await openOrResumeSession(surface);
@@ -141,6 +153,36 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
       setPhase(phaseFromError(err));
     }
   }, [surface]);
+
+  const open = useCallback((): Promise<void> => {
+    const run = runOpen();
+    openingRef.current = run;
+    void run.finally(() => {
+      if (openingRef.current === run) openingRef.current = null;
+    });
+    return run;
+  }, [runOpen]);
+
+  // The chat this screen holds was erased from the history screens: drop it
+  // (transcript and session id) and open a fresh one (B-376-1).
+  useEffect(() => {
+    const drop = (id: string | null) => {
+      if (!active.current) return;
+      if (id !== null && id !== sessionRef.current?.id) return;
+      sessionRef.current = null;
+      setSession(null);
+      setMessages([]);
+      setNextCursor(null);
+      setSendError(null);
+      void open();
+    };
+    const offGone = romanChatsEvents.onGone((e) => drop(e.id));
+    const offErased = romanChatsEvents.onErased((e) => drop(e.id));
+    return () => {
+      offGone();
+      offErased();
+    };
+  }, [open]);
 
   useEffect(() => {
     open();
@@ -170,8 +212,18 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
 
   const send = useCallback(async (content: string): Promise<RomanSendOutcome> => {
     const trimmed = content.trim();
-    const s = sessionRef.current;
-    if (trimmed === '' || !s || sendingRef.current) return 'noop';
+    if (trimmed === '' || sendingRef.current) return 'noop';
+    let s = sessionRef.current;
+    if (!s && openingRef.current) {
+      // A fresh chat is opening (the held one was just erased): send there.
+      sendingRef.current = true;
+      setSending(true);
+      await openingRef.current;
+      sendingRef.current = false;
+      s = sessionRef.current;
+      if (!s && active.current) setSending(false);
+    }
+    if (!s) return 'noop';
     sendingRef.current = true;
     setSending(true);
     setSendError(null);
@@ -207,6 +259,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
             kind: e?.kind ?? 'generic',
             message: e?.message ?? 'Roman could not finish this answer.',
             ...(e?.refusal ? { refusal: e.refusal } : {}),
+            ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
             turnStored: true,
           });
         }
@@ -235,6 +288,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
           message: e?.message ?? 'That request did not complete.',
           retryAfterSeconds: e?.retryAfterSeconds,
           ...(e?.refusal ? { refusal: e.refusal } : {}),
+          ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
         });
       }
       sendingRef.current = false;

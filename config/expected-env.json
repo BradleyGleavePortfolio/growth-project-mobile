@@ -66,6 +66,11 @@
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_CLIENT_CALENDAR": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Native client Calendar tab and Roman booking tutorial; on in clinic and production profiles."
+    },
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
       "default": "off",
@@ -171,6 +176,11 @@
       "default": "off",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_MWB_PROGRAMS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
     "EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB": {
       "kind": "flag",
       "default": "on in dev, off in release",
@@ -220,6 +230,11 @@
       "kind": "flag",
       "default": "on in dev, off in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
+    },
+    "EXPO_PUBLIC_FF_WEARABLE_AI_INSIGHTS": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key (client wearable AI insight panel, #317). Keep off in every EAS profile until the panel honours the D2 AI consent (box 2)."
     },
     "EXPO_PUBLIC_GOOGLE_PAY_ENABLED": {
       "kind": "optional",

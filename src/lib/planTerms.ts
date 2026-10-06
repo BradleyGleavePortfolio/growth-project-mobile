@@ -276,7 +276,7 @@ export function purchasableFromPublicPackage(p: {
   title: string;
   priceCents: number;
   currency: string;
-  billingInterval: "one_time" | "monthly" | "quarterly" | "yearly";
+  billingInterval: "one_time" | "weekly" | "monthly" | "quarterly" | "yearly";
   intervalCount?: number;
   trialDays: number | null;
 }): PurchasablePackage | null {
@@ -286,7 +286,9 @@ export function purchasableFromPublicPackage(p: {
     ? null
     : p.billingInterval === "yearly"
       ? "year"
-      : "month";
+      : p.billingInterval === "weekly"
+        ? "week"
+        : "month";
   return {
     id: p.id,
     name: p.title,

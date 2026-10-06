@@ -12,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useHeadCoachHandlesMoney } from '../../lib/money/headCoachRole';
 // Security: sign-out now flows through authActions which clears tokens
 // (in SecureStore), AsyncStorage, and notifies the auth event emitter —
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
@@ -51,6 +52,7 @@ export default function SettingsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
+  const headCoachHandlesMoney = useHeadCoachHandlesMoney();
   // signOut imported directly — no store wiring needed.
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
   const [clientCount, setClientCount] = useState(0);
@@ -266,9 +268,10 @@ export default function SettingsScreen() {
     mediumTap();
     navigation.navigate('CoachConnect');
   };
-  const handleOpenEarnings = () => {
+  // S-COACH-MOB-2 — TGP Money replaces Earnings and Business metrics.
+  const handleOpenMoney = () => {
     mediumTap();
-    navigation.navigate('CoachEarnings');
+    navigation.navigate('CoachMoney');
   };
 
   const handleOpenTrustCenter = () => {
@@ -456,17 +459,25 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>Payouts (Stripe Connect)</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={handleOpenEarnings}
-          accessibilityRole="button"
-          accessibilityLabel="View earnings"
-        >
-          <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Earnings</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        {/* B-332-9 (Opus): an active sub-coach's money is the head coach's,
+            so the Money row is hidden once the server has said so. C-332-12:
+            this is the only Settings row that opens Money. */}
+        {headCoachHandlesMoney ? null : (
+          <>
+            <View style={styles.divider} />
+            <TouchableOpacity
+              style={styles.row}
+              onPress={handleOpenMoney}
+              accessibilityRole="button"
+              accessibilityLabel="Open Money: earnings, payouts and business numbers"
+              testID="settings-money"
+            >
+              <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
+              <Text style={styles.rowLabel}>Money</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       {/* Coach Tools — surfaces the per-coach building tools that previously
@@ -537,6 +548,40 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* S-SCHED — appointment types clients book from, and time off. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', {
+              screen: 'CoachAppointmentTypes',
+              params: currentUser?.id ? { coachId: currentUser.id } : undefined,
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open appointment types"
+          testID="settings-appointment-types"
+        >
+          <Ionicons name="list-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Appointment Types</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachTimeOff' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open time off"
+          testID="settings-time-off"
+        >
+          <Ionicons name="airplane-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Time Off</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
         {/* Legacy single-invite generator. The new email-pipeline Bulk
             invite + Invites & email rows live under Client Management. */}
         <TouchableOpacity
@@ -558,14 +603,6 @@ export default function SettingsScreen() {
         onOpenTeamProfile={() => {
           mediumTap();
           navigation.navigate('CoachTeamProfile');
-        }}
-        onOpenBusinessMetrics={() => {
-          mediumTap();
-          navigation.navigate('CoachBusinessMetrics');
-        }}
-        onOpenEarnings={() => {
-          mediumTap();
-          navigation.navigate('CoachEarnings');
         }}
         onOpenBilling={handleOpenBilling}
         colors={colors}
@@ -640,6 +677,28 @@ export default function SettingsScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        {/* Roman chat history (backend #635): a coach's own Roman chats are
+            kept until they delete them or their account. Shown in builds
+            where Roman exists, like the client Roman and AI row. Hidden for
+            a sub-coach (C-331-3): the backend Roman routes allow student,
+            coach and owner only, so a sub-coach would reach a 403. */}
+        {(featureFlags.consultationOnboarding || featureFlags.romanChat) && currentUser?.role !== 'sub_coach' ? (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={() => navigation.navigate('RomanConversations')}
+            accessibilityRole="button"
+            accessibilityLabel="Your conversations with Roman"
+            accessibilityHint="See, open and delete your past conversations with Roman"
+            testID="coach-settings-roman-conversations"
+          >
+            <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowLabel}>Your conversations with Roman</Text>
+              <Text style={styles.rowSubLabel}>Kept until you delete them or your account</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Stage 3 — cross-pillar federated coach surface. Settings row

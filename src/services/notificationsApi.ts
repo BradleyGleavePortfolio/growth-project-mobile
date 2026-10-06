@@ -75,6 +75,9 @@ export interface NotificationPreferences {
 
 // ─── Default preferences ─────────────────────────────────────────────────────
 
+/** The quiet hours the backend enforces, in the recipient's own zone. */
+export const QUIET_HOURS = { enabled: true, startTime: '21:00', endTime: '08:00' } as const;
+
 const ALL_KINDS: NotificationKind[] = [
   'coach',
   'milestone',
@@ -94,8 +97,67 @@ function defaultPreferences(): NotificationPreferences {
   return {
     channels,
     muteAll: false,
-    quietHours: { enabled: false, startTime: '22:00', endTime: '07:00' },
+    quietHours: { ...QUIET_HOURS },
   };
+}
+
+// ─── Backend preferences mapping (B-NOTIF-6) ─────────────────────────────────
+//
+// GET/PATCH /notifications/preferences speak flat columns
+// (`muted`, `<prefix>_push`, `<prefix>_inapp`, `<prefix>_email`) and the
+// backend rejects any other key (forbidNonWhitelisted). The screen model
+// above is nested, so the live path maps both ways. Kinds without a backend
+// switch are not offered (KIND_PREFS_PREFIX), and quiet hours are never sent:
+// the backend applies one fixed window to everyone (OR-113-5, QUIET_HOURS).
+
+/** Backend column prefix for each kind that has a real switch. */
+export const KIND_PREFS_PREFIX: Partial<Record<NotificationKind, string>> = {
+  message: 'message',
+  milestone: 'milestone',
+  check_in: 'missed_checkin',
+  build_week: 'build_week',
+};
+
+const CHANNEL_SUFFIX: Record<NotificationChannel, string> = {
+  push: 'push',
+  in_app: 'inapp',
+  email: 'email',
+};
+
+/** Flat backend row -> screen model. A missing or non-boolean column reads as on (the schema default). */
+export function preferencesFromBackend(row: unknown): NotificationPreferences {
+  const r = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+  const prefs = defaultPreferences();
+  prefs.muteAll = r.muted === true;
+  for (const kind of ALL_KINDS) {
+    const prefix = KIND_PREFS_PREFIX[kind];
+    if (!prefix) continue;
+    for (const channel of Object.keys(CHANNEL_SUFFIX) as NotificationChannel[]) {
+      const v = r[`${prefix}_${CHANNEL_SUFFIX[channel]}`];
+      prefs.channels[kind][channel] = typeof v === 'boolean' ? v : true;
+    }
+  }
+  return prefs;
+}
+
+/**
+ * Screen update -> flat PATCH body: `muted` and the columns of kinds that
+ * have a backend switch. Quiet hours and unmapped kinds are never sent.
+ */
+export function preferencesToBackend(updates: Partial<NotificationPreferences>): Record<string, boolean> {
+  const body: Record<string, boolean> = {};
+  if (typeof updates.muteAll === 'boolean') body.muted = updates.muteAll;
+  for (const [kind, channels] of Object.entries(updates.channels ?? {}) as Array<
+    [NotificationKind, Partial<Record<NotificationChannel, boolean>> | undefined]
+  >) {
+    const prefix = KIND_PREFS_PREFIX[kind];
+    if (!prefix || !channels) continue;
+    for (const channel of Object.keys(CHANNEL_SUFFIX) as NotificationChannel[]) {
+      const v = channels[channel];
+      if (typeof v === 'boolean') body[`${prefix}_${CHANNEL_SUFFIX[channel]}`] = v;
+    }
+  }
+  return body;
 }
 
 // ─── Mock data store ──────────────────────────────────────────────────────────
@@ -183,6 +245,86 @@ const MOCK_STORE: {
   preferences: defaultPreferences(),
 };
 
+// ─── Live row normalizer ──────────────────────────────────────────────────────
+//
+// S-SCHED-2: the live GET /notifications returns backend rows
+//   { id, kind, body, payload: { title, actionScreen, actionParams, ... },
+//     deep_link, read_at, created_at }
+// while this module's callers read AppNotification. Normalise every item so
+// the center shows the real title and routes a tap (booking rows carry
+// actionScreen CalendarSession / CoachBookingInbox + { sessionId }). Items
+// already in AppNotification shape pass through unchanged.
+
+const SCREEN_NAME = /^[A-Za-z][A-Za-z0-9_]{0,59}$/;
+const PARAM_KEY = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? { ...v } : null;
+}
+
+function appKindFor(kind: string): NotificationKind {
+  const known = ALL_KINDS.find((k) => k === kind);
+  if (known) return known;
+  if (kind.startsWith('booking_reminder')) return 'reminder';
+  if (kind.startsWith('booking_')) return 'coach';
+  if (kind.includes('message')) return 'message';
+  return 'system';
+}
+
+function defaultTitleFor(kind: string): string {
+  if (kind.startsWith('booking_reminder')) return 'Session reminder';
+  if (kind.startsWith('booking_')) return 'Calendar update';
+  return 'Update';
+}
+
+function stringParams(raw: unknown): Record<string, string> | undefined {
+  const rec = asRecord(raw);
+  if (!rec) return undefined;
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(rec).slice(0, 8)) {
+    if (!PARAM_KEY.test(k)) continue;
+    if (typeof v === 'string' && v.length <= 200) out[k] = v;
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = String(v);
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** Backend row or AppNotification -> AppNotification; null when unusable. */
+export function normalizeNotification(raw: unknown): AppNotification | null {
+  const r = asRecord(raw);
+  if (!r || typeof r.id !== 'string' || r.id.length === 0) return null;
+  const rawKind = typeof r.kind === 'string' ? r.kind : 'system';
+  const payload = asRecord(r.payload) ?? {};
+  const title =
+    typeof r.title === 'string' && r.title.trim()
+      ? r.title
+      : typeof payload.title === 'string' && payload.title.trim()
+        ? payload.title
+        : defaultTitleFor(rawKind);
+  const body = typeof r.body === 'string' ? r.body : '';
+  const read =
+    typeof r.read === 'boolean' ? r.read : r.read_at !== null && r.read_at !== undefined;
+  const createdRaw = typeof r.createdAt === 'string' ? r.createdAt : r.created_at;
+  const createdAt =
+    typeof createdRaw === 'string' && !Number.isNaN(Date.parse(createdRaw))
+      ? createdRaw
+      : new Date(0).toISOString();
+  const screenRaw = typeof r.actionScreen === 'string' ? r.actionScreen : payload.actionScreen;
+  const actionScreen =
+    typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw) ? screenRaw : undefined;
+  const actionParams = stringParams(r.actionParams ?? payload.actionParams);
+  return {
+    id: r.id,
+    kind: appKindFor(rawKind),
+    title,
+    body,
+    read,
+    createdAt,
+    ...(actionScreen ? { actionScreen } : {}),
+    ...(actionParams ? { actionParams } : {}),
+  };
+}
+
 // ─── Mock helpers ─────────────────────────────────────────────────────────────
 
 function simulateLatency(): Promise<void> {
@@ -204,10 +346,16 @@ export async function fetchNotifications(
     if (cursor) q.set('cursor', cursor);
     if (limit) q.set('limit', String(limit));
     const qs = q.toString();
-    const res = await api.get<NotificationPage>(
+    const res = await api.get<{ items?: unknown; nextCursor?: unknown }>(
       `/notifications${qs ? `?${qs}` : ''}`,
     );
-    return res.data;
+    const items = Array.isArray(res.data?.items) ? res.data.items : [];
+    return {
+      items: items
+        .map(normalizeNotification)
+        .filter((n): n is AppNotification => n !== null),
+      nextCursor: typeof res.data?.nextCursor === 'string' ? res.data.nextCursor : null,
+    };
   }
 
   await simulateLatency();
@@ -286,8 +434,8 @@ export async function markAllNotificationsRead(): Promise<void> {
  */
 export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    const res = await api.get<NotificationPreferences>('/notifications/preferences');
-    return res.data;
+    const res = await api.get<unknown>('/notifications/preferences');
+    return preferencesFromBackend(res.data);
   }
   await simulateLatency();
   // Deep-clone so callers cannot mutate the store directly.
@@ -302,24 +450,25 @@ export async function saveNotificationPreferences(
   updates: Partial<NotificationPreferences>,
 ): Promise<NotificationPreferences> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    const res = await api.patch<NotificationPreferences>(
+    const res = await api.patch<unknown>(
       '/notifications/preferences',
-      updates,
+      preferencesToBackend(updates),
     );
-    return res.data;
+    return preferencesFromBackend(res.data);
   }
   await simulateLatency();
   MOCK_STORE.preferences = {
     ...MOCK_STORE.preferences,
     ...updates,
-    channels: {
-      ...MOCK_STORE.preferences.channels,
-      ...(updates.channels ?? {}),
-    },
-    quietHours: {
-      ...MOCK_STORE.preferences.quietHours,
-      ...(updates.quietHours ?? {}),
-    },
+    // Per kind, so a one-channel update keeps the other channels.
+    channels: Object.fromEntries(
+      Object.entries(MOCK_STORE.preferences.channels).map(([kind, current]) => [
+        kind,
+        { ...current, ...(updates.channels?.[kind as NotificationKind] ?? {}) },
+      ]),
+    ) as NotificationPreferences['channels'],
+    // Quiet hours are fixed (QUIET_HOURS); an update never changes them.
+    quietHours: { ...QUIET_HOURS },
   };
   return JSON.parse(JSON.stringify(MOCK_STORE.preferences)) as NotificationPreferences;
 }

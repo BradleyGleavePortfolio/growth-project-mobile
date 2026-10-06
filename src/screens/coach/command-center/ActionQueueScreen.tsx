@@ -30,6 +30,7 @@ import {
 } from '../../../services/commandCenterApi';
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import RomanAdjustmentsSection from '../../../components/roman/adjust/RomanAdjustmentsSection';
 
 type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
 
@@ -42,6 +43,8 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
   const [items, setItems] = useState<ActionQueueItem[]>([]);
   const [totalPending, setTotalPending] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
+  // Pull-to-refresh also reloads Roman's workout suggestions.
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
@@ -114,11 +117,16 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
         refreshControl={
           <RefreshControl
             refreshing={state === 'refreshing'}
-            onRefresh={() => load(true)}
+            onRefresh={() => {
+              setRefreshKey((k) => k + 1);
+              load(true);
+            }}
             tintColor={colors.forest}
           />
         }
         ListHeaderComponent={
+          <View>
+          <RomanAdjustmentsSection refreshKey={refreshKey} />
           <View style={styles.listHeader}>
             <Text style={styles.heading}>Action Queue</Text>
             {totalPending > 0 ? (
@@ -126,6 +134,7 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
                 {totalPending} {totalPending === 1 ? 'action' : 'actions'} waiting
               </Text>
             ) : null}
+          </View>
           </View>
         }
         ListEmptyComponent={

@@ -1,0 +1,67 @@
+{
+  "outcome": "in_progress",
+  "card": {
+    "brand": "visa",
+    "last4": "4242",
+    "exp_month": 12,
+    "exp_year": 2030
+  },
+  "amount_paid_cents": 15000,
+  "amount_due_cents": 0,
+  "currency": "usd",
+  "paid_totals": [
+    {
+      "currency": "usd",
+      "amount_cents": 15000
+    }
+  ],
+  "due_totals": [],
+  "access_restored": false,
+  "access_state": "partial",
+  "plans": [
+    {
+      "purchase_id": "purchase-1",
+      "coach_name": "Morgan Coach",
+      "currency": "usd",
+      "outcome": "paid",
+      "amount_paid_cents": 15000,
+      "amount_due_cents": 0,
+      "access": "restored",
+      "dispute_open": false,
+      "error_code": null,
+      "invoices": [
+        {
+          "invoice_id": "in_dv2_renewal_1",
+          "currency": "usd",
+          "amount_due_cents": 15000,
+          "amount_paid_cents": 15000,
+          "result": "paid",
+          "decline_code": null
+        }
+      ]
+    },
+    {
+      "purchase_id": "purchase-2",
+      "coach_name": "Morgan Coach",
+      "currency": "usd",
+      "outcome": "in_progress",
+      "amount_paid_cents": 0,
+      "amount_due_cents": 0,
+      "access": "unchanged",
+      "dispute_open": false,
+      "error_code": "BILLING_ACTION_IN_PROGRESS",
+      "invoices": []
+    }
+  ],
+  "quote": {
+    "quote_id": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "complete": true,
+    "lines": [],
+    "totals": [],
+    "disputes": []
+  },
+  "payment_intent_client_secret": null,
+  "requires_action_purchase_id": null,
+  "decline_code": null,
+  "message": "Your card ending 4242 is saved. $150.00 went through. Another change to your other plan is still being processed. Pull down in a few seconds to see the result."
+}

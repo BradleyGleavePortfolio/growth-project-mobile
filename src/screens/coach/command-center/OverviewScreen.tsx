@@ -37,6 +37,8 @@ interface Props {
   onNavigateToWinStreaks?: () => void;
   onNavigateToInbox?: () => void;
   onNavigateToActionQueue?: () => void;
+  /** S-COACH — Home cards (setup checklist, Money) shown above the roster. */
+  header?: React.ReactNode;
 }
 
 export default function OverviewScreen({
@@ -44,6 +46,7 @@ export default function OverviewScreen({
   onNavigateToWinStreaks,
   onNavigateToInbox,
   onNavigateToActionQueue,
+  header,
 }: Props) {
   const [state, setState] = useState<LoadState>('idle');
   const [data, setData] = useState<CommandCenterOverview | null>(null);
@@ -107,6 +110,7 @@ export default function OverviewScreen({
       }
     >
       <CommandCenterMockDataBanner />
+      {header}
 
       <Text style={styles.heading}>Command Center</Text>
       <Text style={styles.subheading}>Your roster at a glance</Text>
