@@ -297,7 +297,7 @@ describe("B-329-2 payouts not configured", () => {
       ),
     ]) {
       expect(e.title).toBe("Payouts are not switched on for your account yet");
-      expect(e.body).toMatch(/Home checklist/);
+      expect(e.body).toMatch(/Get paid on the Overview tab/);
       expect(e.body).toMatch(/Bradleyapple1031@gmail\.com/);
       expect(e.body).not.toMatch(/version|Money|!/);
     }
