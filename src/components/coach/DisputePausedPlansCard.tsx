@@ -25,7 +25,10 @@ interface Props {
 }
 
 export const RESTART_CONFIRM_TITLE = 'Restart this plan?';
-export function restartConfirmBody(clientName: string): string {
+export function restartConfirmBody(clientName: string, pauseReason?: 'refund' | 'dispute'): string {
+  if (pauseReason === 'refund') {
+    return `Billing for ${clientName || 'the client'} resumes on the plan's usual schedule and access to the plan returns. The refund is not reversed. Restart only after agreeing with the client to continue the plan.`;
+  }
   return `Billing for ${clientName || 'the client'} resumes on the plan's usual schedule and access to the plan returns. Restart only once the payment dispute or inquiry is resolved or settled.`;
 }
 
@@ -58,12 +61,13 @@ export function DisputePausedPlansCard({ clientUserId, clientName, reloadKey = 0
 
   const confirmRestart = useCallback(
     (purchaseId: string) => {
-      Alert.alert(RESTART_CONFIRM_TITLE, restartConfirmBody(clientName), [
+      const plan = plans.find((p) => p.purchaseId === purchaseId);
+      Alert.alert(RESTART_CONFIRM_TITLE, restartConfirmBody(clientName, plan?.pauseReason), [
         { text: 'Cancel', style: 'cancel' },
         { text: 'Restart plan', onPress: () => void restart(purchaseId) },
       ]);
     },
-    [clientName, restart],
+    [clientName, restart, plans],
   );
 
   if (plans.length === 0) return null;
@@ -78,11 +82,14 @@ export function DisputePausedPlansCard({ clientUserId, clientName, reloadKey = 0
         return (
           <View key={plan.purchaseId} style={styles.plan}>
             <Text style={[styles.title, { color: colors.noticeWarningText }]}>
-              {out?.ok ? 'Plan restarted' : 'Plan paused after a payment dispute or inquiry'}
+              {out?.ok ? 'Plan restarted' : plan.pauseReason === 'refund'
+                ? 'Plan paused after a full refund' : 'Plan paused after a payment dispute or inquiry'}
             </Text>
             {out?.ok ? null : (
               <Text style={[styles.body, { color: colors.textSecondary }]}>
-                {`The bank opened a dispute or inquiry about a payment on this plan${
+                {plan.pauseReason === 'refund'
+                  ? 'A full refund was completed. Access to this plan has ended and its billing is paused until the plan is restarted.'
+                  : `The bank opened a dispute or inquiry about a payment on this plan${
                   amount ? ` (${amount})` : ''
                 }. Access to this plan has ended and its billing is paused until the plan is restarted.`}
               </Text>

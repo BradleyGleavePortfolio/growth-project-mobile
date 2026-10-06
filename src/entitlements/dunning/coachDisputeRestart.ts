@@ -20,6 +20,7 @@ import api from '../../services/api';
 
 /** Backend DUNNING_V2_REVERSAL_REASON. */
 export const DISPUTE_PAUSE_REASON = 'charge_disputed';
+export const REFUND_PAUSE_REASON = 'charge_refunded';
 
 /** Purchase statuses the backend treats as ended (restart refused). */
 const PLAN_ENDED_STATUSES = new Set(['canceled', 'expired', 'incomplete_expired']);
@@ -32,6 +33,7 @@ export interface DisputePausedPlan {
   amountCents: number | null;
   currency: string | null;
   pausedAt: string | null;
+  pauseReason?: 'refund' | 'dispute';
 }
 
 interface RosterPurchase {
@@ -68,7 +70,9 @@ export function isDisputePaused(detail: PurchaseDetail | null | undefined): bool
   if (!p || !d) return false;
   if (p.billing_type !== 'recurring') return false;
   if (typeof p.status === 'string' && PLAN_ENDED_STATUSES.has(p.status)) return false;
-  return d.status === 'active' && d.last_failure_reason === DISPUTE_PAUSE_REASON && str(d.entered_at) !== null;
+  return d.status === 'active' &&
+    (d.last_failure_reason === DISPUTE_PAUSE_REASON || d.last_failure_reason === REFUND_PAUSE_REASON) &&
+    str(d.entered_at) !== null;
 }
 
 /** A roster row that could be dispute-paused (recurring, access off, not ended). */
@@ -109,6 +113,7 @@ export async function loadDisputePausedPlans(clientUserId: string): Promise<Disp
       amountCents: typeof amount === 'number' ? amount : null,
       currency: str(detail?.purchase?.currency),
       pausedAt: str(detail?.dunning?.entered_at),
+      ...(detail?.dunning?.last_failure_reason === REFUND_PAUSE_REASON ? { pauseReason: 'refund' as const } : {}),
     });
   }
   return out;
@@ -130,7 +135,7 @@ const REFUSAL_COPY: Record<string, { message: string; final: boolean }> = {
   },
   PLAN_NOT_DISPUTE_PAUSED: {
     message:
-      'This plan is not paused by a payment dispute or inquiry, so there is nothing to restart. Pull down to refresh.',
+      'This plan is not paused by a refund, payment dispute or inquiry, so there is nothing to restart. Pull down to refresh.',
     final: true,
   },
   PLAN_ENDED: {
