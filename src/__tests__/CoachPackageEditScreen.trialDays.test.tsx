@@ -172,7 +172,9 @@ describe("CoachPackageEditScreen — free trial days (B-TRIALS-2)", () => {
       const trial = calls.find((c) => c[0] === "Check the free trial");
       expect(trial).toBeTruthy();
       expect(trial[1]).toMatch(/Make this package renew/);
-      expect(calls.find((c) => c[0] === "Could not save")).toBeUndefined();
+      expect(
+        calls.find((c) => c[0] === "Could not save the package"),
+      ).toBeUndefined();
     });
   });
 
@@ -199,7 +201,8 @@ describe("CoachPackageEditScreen — free trial days (B-TRIALS-2)", () => {
     await fireEvent.press(r.getByTestId("trial-preset-7"));
     await fireEvent.press(r.getByLabelText("Save changes"));
     expect(mockUpdate).not.toHaveBeenCalled();
-    expect(r.getByText(/Price must be greater than zero/)).toBeTruthy();
+    // Main's price rule (S-FEE): $0 is free only on a one-time package.
+    expect(r.getAllByText(/Free packages are one-time/).length).toBeGreaterThan(0);
   });
 
   it("a one-time package shows no trial field", async () => {

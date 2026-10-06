@@ -16,6 +16,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "channel": "preview",
       "environment": "preview",
       "prebuildCommand": "prebuild --no-install",
       "android": {
@@ -30,18 +31,23 @@
     },
     "production": {
       "distribution": "store",
+      "channel": "production",
       "environment": "production",
       "prebuildCommand": "prebuild --no-install",
       "env": {
         "TGP_ANDROID_HEALTH_CONNECT": "0",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
-        "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true"
+        "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true",
+        "EXPO_PUBLIC_FF_CLIENT_CALENDAR": "true"
       }
     },
     "clinic": {
       "extends": "production",
+      "channel": "clinic",
+      "environment": "production",
       "env": {
+        "TGP_ANDROID_HEALTH_CONNECT": "1",
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
         "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true",
@@ -49,6 +55,7 @@
         "EXPO_PUBLIC_FF_COMMUNITY_HALL": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
         "EXPO_PUBLIC_FF_COACH_BRIEF": "true",
+        "EXPO_PUBLIC_FF_CLIENT_CALENDAR": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_DM": "false"
       }

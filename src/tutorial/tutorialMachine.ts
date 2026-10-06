@@ -77,6 +77,8 @@ function requirementOutcome(
       return env.hasMacros ? null : 'pending';
     case 'community':
       return env.communityAvailable ? null : 'unavailable';
+    case 'calendar':
+      return env.calendarAvailable ? null : 'unavailable';
     default:
       return null;
   }

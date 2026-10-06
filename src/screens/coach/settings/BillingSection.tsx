@@ -6,15 +6,11 @@ import type { SettingsStyles } from './styles';
 
 export function BillingSection({
   onOpenTeamProfile,
-  onOpenBusinessMetrics,
-  onOpenEarnings,
   onOpenBilling,
   colors,
   styles,
 }: {
   onOpenTeamProfile: () => void;
-  onOpenBusinessMetrics: () => void;
-  onOpenEarnings: () => void;
   onOpenBilling: () => void;
   colors: ThemeColors;
   styles: SettingsStyles;
@@ -36,31 +32,7 @@ export function BillingSection({
           <Text style={styles.rowLabel}>Team / Gym profile</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenBusinessMetrics}
-          accessibilityRole="button"
-          accessibilityLabel="Open business metrics"
-        >
-          <Ionicons name="trending-up-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Revenue & metrics</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        {/* Earnings + payout readiness — backend PR #216.
-            Packages CRUD lives in the top Payments section
-            (CoachPackagesList) — single entry per surface. */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenEarnings}
-          accessibilityRole="button"
-          accessibilityLabel="Open earnings and payouts"
-        >
-          <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Earnings & payouts</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
+        {/* C-332-12 (Opus): Money opens from the Payments section only. */}
       </View>
 
       {/* Subscription & access */}

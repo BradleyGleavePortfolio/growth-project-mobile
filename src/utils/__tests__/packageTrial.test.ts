@@ -137,11 +137,17 @@ describe("packagesApi sends trial_days (backend #656 DTOs accept it)", () => {
 
   it("update: sends trial_days only when the editor provided it; 0 clears", () => {
     expect(toBackendUpdate({ title: "B" })).not.toHaveProperty("trial_days");
+    // Main's #321 B-321-3: a billingInterval also sends the billing fields.
     expect(
       toBackendUpdate({ billingInterval: "yearly", trialDays: 14 }),
-    ).toEqual({ trial_days: 14 });
+    ).toEqual({
+      billing_type: "recurring",
+      billing_interval: "year",
+      billing_interval_count: 1,
+      trial_days: 14,
+    });
     expect(
       toBackendUpdate({ billingInterval: "monthly", trialDays: 0 }),
-    ).toEqual({ trial_days: 0 });
+    ).toMatchObject({ billing_type: "recurring", trial_days: 0 });
   });
 });

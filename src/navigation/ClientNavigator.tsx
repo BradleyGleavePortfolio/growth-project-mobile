@@ -41,6 +41,8 @@ import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
+import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
+import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -86,7 +88,6 @@ import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Sprint B-2 — client surfaces from PR #130 wired here.
 import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
 // Concierge Phase 1 — scheduling client surfaces.
-import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestScreen';
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 // Payments — checkout surface for a coach's package share link.
 import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
@@ -100,6 +101,7 @@ import NotificationPreferencesScreen from '../screens/notifications/Notification
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import UpdateCardScreen from '../entitlements/dunning/UpdateCardScreen';
 import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 // PR-13 — buyer-facing Deliverables timeline (drip engine consumer surface,
 // master plan §3 ScheduledDrop rows).
@@ -143,6 +145,11 @@ import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
+// S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
+import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
+import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
+import type { CalendarStackParamList } from './calendarRoutes';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -161,8 +168,12 @@ const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 // ClientEntitlementGuard; only voice-upload is paid and still 402s into the
 // paywall). It is also the one action the iOS coach-managed gate offers, so
 // gating it here would trap an unentitled client in a loop.
-const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
+// Scheduling endpoints sit behind ClientEntitlementGuard server-side, so the
+// Calendar screens take the same client-side gate as the booking screens.
+const ProtectedCalendarHomeScreen = withProtectedScreen(CalendarHomeScreen);
+const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);
+const ProtectedCalendarSessionScreen = withProtectedScreen(CalendarSessionScreen);
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
 export type HomeStackParamList = {
@@ -183,6 +194,8 @@ export type ClientTabParamList = {
   WorkoutTab: undefined;  // Train
   Log:        undefined;  // Coach (Log+Plan hub — keeps Log screen for food logging)
   MoreTab:    undefined;  // Profile / More
+  // S-SCHED — only mounted when featureFlags.clientCalendar is true.
+  CalendarTab: { screen?: keyof CalendarStackParamList; params?: object } | undefined;
   // v1-5 Community tab — only mounted when featureFlags.communityTab is true.
   CommunityTab: undefined;
 };
@@ -244,6 +257,9 @@ export type MoreStackParamList = {
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
+  /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
+  RomanConversations: undefined;
+  RomanConversation: RomanConversationParams;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -271,12 +287,13 @@ export type MoreStackParamList = {
   ClientWorkoutViewer: { assignmentId: string };
   WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
-  ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
   /** Payments — client-facing packages list (backend PR #215). */
   ClientPackages: undefined;
+  /** OR-110-2 native card update; `autostart` opens the card form on arrival. */
+  UpdateCard: { autostart?: boolean } | undefined;
   /**
    * PR-13 — buyer-facing Deliverables timeline for one ClientPurchase.
    * Renders the buyer's ScheduledDrops (delivered + upcoming) and routes
@@ -330,10 +347,47 @@ export type MoreStackParamList = {
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
+/**
+ * S-REACH: screens that used to be tabs (Plan, Progress) or had no menu entry
+ * (ClientMacros, Habits, Timeline) draw their own title but no back control.
+ * Opened from More they get a native header with only the back chevron, so
+ * the way back is always visible and the safe area is respected.
+ */
+function backOnlyHeader(title = '') {
+  return {
+    headerShown: true,
+    title,
+    headerBackTitle: 'Back',
+    headerShadowVisible: false,
+    headerStyle: { backgroundColor: colors.bone },
+    headerTintColor: colors.ink,
+  } as const;
+}
+
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
 const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
+const CalendarStackNav = createNativeStackNavigator<CalendarStackParamList>();
+
+function CalendarStackNavigator() {
+  return (
+    <CalendarStackNav.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerTitle: '',
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: colors.bone },
+        headerTintColor: colors.ink,
+        contentStyle: { backgroundColor: colors.bone },
+      }}
+    >
+      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
+      <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
+    </CalendarStackNav.Navigator>
+  );
+}
 
 function HomeStackNavigator() {
   // The Home stack runs headerShown:false, so a headerRight bell here never
@@ -347,7 +401,7 @@ function HomeStackNavigator() {
       }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
+      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} options={backOnlyHeader()} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* Phase 9 — Notification center screens */}
@@ -423,25 +477,32 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
-      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} />
+      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
       <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
-      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
+      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
+      {/* Roman chat history (backend #635): always registered, like the backend
+          routes, so finding and deleting chats never depends on the chat flag. */}
+      <MoreStackNav.Screen name="RomanConversations" component={RomanConversationsScreen} />
+      <MoreStackNav.Screen name="RomanConversation" component={RomanConversationScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
-      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} />
+      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
-      {/* Bloodwork — client-entered labs (flag OFF by default) */}
-      <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
+      {/* Bloodwork: personal training only, no lab surfaces in v1.0. Registered
+          only behind featureFlags.bloodwork (OFF), so no deep link reaches it. */}
+      {featureFlags.bloodwork && (
+        <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
+      )}
       {/* Wave 11 — gated routes. Only registered when the matching feature
           flag is explicitly true, so stub/coming-soon copy never ships to
           production binaries (the screens still render an empty state if
@@ -472,15 +533,13 @@ function MoreStackNavigator() {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} />
+      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} options={backOnlyHeader('Macro targets')} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
-      {/* Concierge Phase 1 — scheduling client surfaces. */}
-      <MoreStackNav.Screen
-        name="ClientBookingRequest"
-        component={ProtectedClientBookingRequestScreen}
-      />
+      {/* Concierge Phase 1 — scheduling client surfaces. The old
+          ClientBookingRequest route (no entry point, superseded by the
+          Calendar tab's booking) was removed in S-SCHED-4. */}
       <MoreStackNav.Screen
         name="ClientUpcomingSessions"
         component={ProtectedClientUpcomingSessionsScreen}
@@ -491,6 +550,8 @@ function MoreStackNavigator() {
           (backend PR #215). The return screen is the deep-link target for
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
       <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
+      {/* OR-110-2 — native card update (dunning banner, lockout, emails). */}
+      <MoreStackNav.Screen name="UpdateCard"      component={UpdateCardScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
       {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
       <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />
@@ -549,10 +610,13 @@ function CommunityTabBarIcon({ color }: { color: string }) {
   );
 }
 
+// Order must match the rendered <Tab.Screen> order (the overlay spotlights
+// tab N of this list).
 const TUTORIAL_TABS = [
   'Home',
   'WorkoutTab',
   'Log',
+  ...(featureFlags.clientCalendar ? ['CalendarTab'] : []),
   'MoreTab',
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
@@ -567,7 +631,10 @@ export default function ClientNavigator() {
   const tabNavRef = React.useRef<{ navigate: (name: string, params?: object) => void } | null>(null);
   const onTutorialNavigate = React.useCallback((t: TutorialNavTarget) => {
     try {
-      tabNavRef.current?.navigate(t.tab, t.screen ? { screen: t.screen } : undefined);
+      tabNavRef.current?.navigate(
+        t.tab,
+        t.screen ? { screen: t.screen, ...(t.params ? { params: t.params } : {}) } : undefined,
+      );
     } catch (err) {
       logger.warn('ClientNavigator', 'tutorial navigate failed', err);
     }
@@ -635,6 +702,20 @@ export default function ClientNavigator() {
           ),
         }}
       />
+      {/* S-SCHED Calendar tab — gated by featureFlags.clientCalendar (default
+          OFF). Off: the tab, its routes and deep links do not register. */}
+      {featureFlags.clientCalendar && (
+        <Tab.Screen
+          name="CalendarTab"
+          component={CalendarStackNavigator}
+          options={{
+            tabBarAccessibilityLabel: 'Calendar',
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="calendar-outline" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="MoreTab"
         component={MoreStackNavigator}

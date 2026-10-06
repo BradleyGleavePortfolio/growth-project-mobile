@@ -36,6 +36,7 @@
 
 import { z } from 'zod';
 import api from '../services/api';
+import { currentAuthGeneration, OnDeviceSessionChangedError } from '../services/health/sessionFence';
 
 // ─── Provider enum (mirror of backend `WearableProvider`) ────────────────────
 
@@ -158,7 +159,7 @@ export const PROVIDER_CONFIG: Readonly<Record<WearableProvider, ProviderConfig>>
     displayName: 'Samsung Health',
     icon: '',
     dataDescription:
-      "We'll read your steps, heart rate, body composition and sleep from Samsung Health on this device.",
+      'The Growth Project reads the Health Connect data on this phone, including what Samsung Health shares with Health Connect.',
     buckets: ['HEALTH_FITNESS', 'SLEEP_RECOVERY'],
   },
   GARMIN: {
@@ -347,13 +348,44 @@ export const wearablesConnectionsApi = {
   },
 
   /**
+   * S14 — register (or re-activate) the caller's on-device source after the
+   * user granted read access in Apple Health / Health Connect. Idempotent on
+   * the server. Returns the token-free connection; its `id` is the
+   * `connectionId` every ingested sample references. The owner is the JWT
+   * user; the body carries only the provider.
+   *
+   * The server answers 503 `wearables_ingest_disabled` while
+   * FEATURE_WEARABLES_INGEST_POST is off; callers render that as a plain
+   * "not available yet" state.
+   * @throws ZodError on a drifted response.
+   */
+  async registerOnDevice(
+    provider: 'APPLE_HEALTHKIT' | 'HEALTH_CONNECT',
+  ): Promise<WearableConnection> {
+    const res = await api.post<unknown>(`${BASE}/on-device`, { provider });
+    return safeWearableConnectionSchema.parse(res.data);
+  },
+
+  /**
    * Soft-disconnect the caller's connection for a provider. Idempotent from the
    * UI's perspective: a 404 (no connection) is surfaced as a thrown error so
    * the caller never mistakes a no-op for success.
+   *
+   * Sol B-362-6: the request leaves only for the session it started in. The
+   * fence runs after the auth interceptor attached the token, synchronously
+   * before dispatch (also on a 401 retry); after any auth event nothing is sent.
+   * @throws OnDeviceSessionChangedError when the session changed first.
    * @throws ZodError on a drifted response.
    */
   async disconnect(provider: WearableProvider): Promise<DisconnectResult> {
-    const res = await api.delete<unknown>(`${BASE}/${provider}`);
+    const generation = currentAuthGeneration();
+    const sameSession = (data: unknown) => {
+      if (currentAuthGeneration() !== generation) throw new OnDeviceSessionChangedError();
+      return data;
+    };
+    const res = await api.delete<unknown>(`${BASE}/${provider}`, {
+      transformRequest: [sameSession, ...[api.defaults.transformRequest ?? []].flat()],
+    });
     return disconnectResultSchema.parse(res.data);
   },
 };

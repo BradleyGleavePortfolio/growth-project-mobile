@@ -20,8 +20,8 @@ export type SupportEmailState = 'idle' | 'failed' | 'copied' | 'copy_failed';
 
 export const SUPPORT_EMAIL_COPY = {
   failed:
-    'This phone could not open an email app. Copy the address below and write to us from any email app or device.',
-  copied: 'Address copied. Paste it into any email app to write to us.',
+    'This phone could not open an email app. Copy the address below and email support from any email app or device.',
+  copied: 'Address copied. Paste it into any email app to email support.',
   copyFailed: 'The address could not be copied. Press and hold the address to select it.',
   copy: 'Copy address',
   retry: 'Try again',
@@ -48,7 +48,7 @@ export interface SupportEmailHandle {
   copy: () => Promise<void>;
 }
 
-export function useSupportEmail(subject?: string): SupportEmailHandle {
+export function useSupportEmail(subject?: string, body?: string): SupportEmailHandle {
   const [state, setState] = useState<SupportEmailState>('idle');
   const mounted = useRef(true);
   useEffect(() => {
@@ -63,12 +63,12 @@ export function useSupportEmail(subject?: string): SupportEmailHandle {
 
   const open = useCallback(async () => {
     try {
-      await Linking.openURL(supportMailto(subject));
+      await Linking.openURL(supportMailto(subject, body));
       set('idle');
     } catch {
       set('failed');
     }
-  }, [subject, set]);
+  }, [subject, body, set]);
 
   const copy = useCallback(async () => {
     try {

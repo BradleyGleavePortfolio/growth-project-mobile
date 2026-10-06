@@ -68,6 +68,14 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
   Log: () => ({ root: 'Log' }),
+  // S-SCHED destination for the existing actionScreen/actionParams format.
+  // Backend booking delivery must supply this format before launch; registering
+  // a destination does not establish an end-to-end notification transport.
+  // Flag off: the tab does not exist, so land on the notification center.
+  CalendarSession: () =>
+    featureFlags.clientCalendar
+      ? { root: 'CalendarTab', screen: 'CalendarSession' }
+      : { root: 'Home', screen: 'NotificationCenter' },
   CommunityEventDetail: () =>
     featureFlags.communityTab && featureFlags.communityEvents
       ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
@@ -80,6 +88,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
+  // S-SCHED: coach booking pushes open the booking inbox.
+  CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
   // AI credit top-ups are not purchasable on hidden iOS builds: a budget
   // push lands on Settings, never on the checkout route (whose gated
   // wrapper would only say "Managed on the web").
@@ -250,21 +260,48 @@ export function flushPendingPushTap(): boolean {
   if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
 
   const { screen, params } = pending;
-  let target = resolvePushTarget(session.role, screen);
-  if (!routeNames.includes(target.root)) {
-    target = resolvePushTarget(session.role, 'NotificationCenter');
-  }
   pending = null;
+  // Unroutable target: dropped rather than crashing (deliver returns false).
+  deliver(navigator, session.role, routeNames, screen, params);
+  return true;
+}
+
+function deliver(
+  nav: PushNavigator,
+  role: PushRole,
+  routeNames: readonly string[],
+  screen: string,
+  params: Record<string, string> | undefined,
+): boolean {
+  let target = resolvePushTarget(role, screen);
+  if (!routeNames.includes(target.root)) {
+    target = resolvePushTarget(role, 'NotificationCenter');
+  }
   try {
     if (target.screen) {
-      navigator.navigate(target.root, { screen: target.screen, params });
+      nav.navigate(target.root, { screen: target.screen, params });
     } else {
-      navigator.navigate(target.root, params);
+      nav.navigate(target.root, params);
     }
+    return true;
   } catch {
-    // Unroutable target: drop it rather than crash.
+    return false;
   }
-  return true;
+}
+
+/**
+ * S-SCHED-2: route a notification-center tap through the same role-aware,
+ * allow-listed table as a push tap (e.g. a client booking row opens
+ * Calendar > session, a coach row opens the booking inbox). Returns false
+ * when the app navigator is not ready or the screen name is not routable, so
+ * the caller can fall back. Never holds or replays the tap.
+ */
+export function routeInAppNotification(actionScreen: string | undefined, actionParams?: unknown): boolean {
+  if (!actionScreen || typeof actionScreen !== 'string' || !SCREEN_NAME.test(actionScreen)) return false;
+  if (session.kind !== 'app' || !navigator || !navigator.isReady()) return false;
+  const routeNames = navigator.getRootState()?.routeNames ?? [];
+  if (!routeNames.includes(ROLE_ANCHOR[session.role])) return false;
+  return deliver(navigator, session.role, routeNames, actionScreen, decodePushParams(actionParams));
 }
 
 /** Drop a held tap (kept for callers; setPushSession signedOut does this). */

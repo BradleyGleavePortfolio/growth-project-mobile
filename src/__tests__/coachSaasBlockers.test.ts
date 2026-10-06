@@ -189,7 +189,8 @@ describe('Coach Tools section wires the previously-disconnected routes', () => {
   });
 
   it('SettingsScreen exposes the new Business surfaces', () => {
-    expect(settingsSrc).toContain("'CoachBusinessMetrics'");
+    // S-COACH-MOB-2: Business metrics are folded into TGP Money.
+    expect(settingsSrc).toContain("'CoachMoney'");
     expect(settingsSrc).toContain("'CoachTeamProfile'");
   });
 
@@ -262,17 +263,16 @@ describe('CoachTeamProfileScreen honesty', () => {
   });
 });
 
-// ── 9) CoachBusinessMetricsScreen renders honest empty state ──────────────
-describe('CoachBusinessMetricsScreen honesty', () => {
-  const src = readSrc('screens/coach/CoachBusinessMetricsScreen.tsx');
+// ── 9) TGP Money (Business metrics folded in) renders honest states ───────
+describe('MoneyScreen honesty', () => {
+  const src = readSrc('screens/coach/money/MoneyScreen.tsx');
 
-  it('renders a Connect Stripe CTA when status.configured === false', () => {
-    expect(src).toMatch(/Connect Stripe to enable revenue/);
-    expect(src).toContain('isNotConfigured');
+  it('offers the Stripe setup action when payouts are not ready', () => {
+    expect(src).toContain('money-setup-open');
+    expect(src).toContain('openStripeSetup');
   });
 
   it('does not hardcode any revenue numbers in the rendered output', () => {
-    // No literal money strings like "$" or fake totals in the source.
     const fakeMoney = src.match(/\$[\s]*[0-9]/g);
     expect(fakeMoney).toBeNull();
   });
