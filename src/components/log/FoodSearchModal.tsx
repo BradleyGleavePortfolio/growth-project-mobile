@@ -44,6 +44,7 @@ interface Props {
   manualFields: ManualFields;
   onManualFieldChange: (field: keyof ManualFields, value: string) => void;
   onManualLog: () => void;
+  saving?: boolean;
 }
 
 export default function FoodSearchModal(props: Props) {
@@ -60,13 +61,13 @@ export default function FoodSearchModal(props: Props) {
   } = props;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <KeyboardAvoidingView
         style={styles.modalContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.modalHeader}>
-          <HapticPressable intent="light" onPress={onClose}>
+          <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
             <Ionicons name="close" size={24} color={Colors.dark} />
           </HapticPressable>
           <Text style={styles.modalTitle}>
@@ -99,6 +100,7 @@ export default function FoodSearchModal(props: Props) {
             onFieldChange={onManualFieldChange}
             onBack={onExitManualMode}
             onSubmit={onManualLog}
+            saving={props.saving}
           />
         )}
       </KeyboardAvoidingView>
@@ -107,6 +109,7 @@ export default function FoodSearchModal(props: Props) {
 }
 
 const styles = StyleSheet.create({
+  closeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   modalContainer: {
     flex: 1,
     backgroundColor: Colors.background,

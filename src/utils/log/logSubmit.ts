@@ -126,10 +126,9 @@ export async function submitSearchLogOnline({
 }
 
 // Convert a manual qty + unit pair into grams, so we can store a real
-// serving_size_grams instead of the legacy hardcoded 100. Returns null if
-// the unit is not mass / volume-resolvable — in that case we keep the
-// PER_SERVING basis but use a serving_size_grams of `null` (server stores
-// as nullable so coaches see "unknown" rather than a wrong 100g).
+// serving_size_grams instead of the legacy hardcoded 100. Returns null for
+// an unweighed portion; the payload stores 0 with PER_SERVING so the app
+// does not invent a weight or offer unresolvable conversions.
 function manualServingGrams(qty: number, unit: string): number | null {
   const u = (unit || '').trim().toLowerCase();
   if (!Number.isFinite(qty) || qty <= 0) return null;
@@ -137,8 +136,8 @@ function manualServingGrams(qty: number, unit: string): number | null {
   if (u === 'oz') return qty * OZ_TO_GRAMS;
   if (u === 'cup' || u === 'tbsp' || u === 'tsp') {
     // Manual entry doesn't know the food category, so we have no density
-    // table to resolve against — explicitly defer to the backend (null).
-    const grams = densityGramsFor({} as never, u);
+    // table to resolve against — the portion remains unweighed.
+    const grams = densityGramsFor({}, u);
     return grams != null ? qty * grams : null;
   }
   // "serving" or unrecognised: gram weight unknown.
@@ -150,12 +149,13 @@ function buildManualPayload(args: ManualLogArgs) {
   if (!name) {
     throw new FoodLogValidationError('A food name is required.');
   }
-  // B4: parseFloat handles "1.5" and ",5" via parseQuantityInput; default to
-  // 1 only when the input was *blank*, not "0" or "abc".
-  const qty = parseQuantityInput(args.quantity) ?? 1;
+  const qty = parseQuantityInput(args.quantity);
+  if (qty == null) {
+    throw new FoodLogValidationError('Enter a portion quantity greater than zero.');
+  }
 
-  // B4: macros come from text inputs, parsed as floats. Treat blank as
-  // "unknown" (null); 0 is allowed only when explicitly typed.
+  // The numeric server contract cannot preserve unknown nutrition. Require
+  // entered values instead of silently turning blanks into measured zeros.
   const parseMacro = (raw: string): number | null => {
     const trimmed = (raw ?? '').trim().replace(',', '.');
     if (!trimmed) return null;
@@ -166,10 +166,19 @@ function buildManualPayload(args: ManualLogArgs) {
   const protein = parseMacro(args.protein);
   const carbs = parseMacro(args.carbs);
   const fat = parseMacro(args.fat);
-  if (calories == null && protein == null && carbs == null && fat == null) {
-    throw new FoodLogValidationError(
-      'Enter at least calories or one macro for this manual food.',
-    );
+  for (const [label, raw] of [
+    ['Calories', args.calories], ['Protein', args.protein],
+    ['Carbs', args.carbs], ['Fat', args.fat],
+  ]) {
+    if (raw.trim() && parseMacro(raw) == null) {
+      throw new FoodLogValidationError(`${label} must be zero or a positive number.`);
+    }
+  }
+  if (protein == null || carbs == null || fat == null) {
+    throw new FoodLogValidationError('Enter protein, carbs and fat. Use 0 if there is none.');
+  }
+  if (calories == null) {
+    throw new FoodLogValidationError('Enter calories. Use 0 if there is none.');
   }
   const unit = args.unit || 'serving';
   const servingGrams = manualServingGrams(qty, unit);
@@ -178,10 +187,9 @@ function buildManualPayload(args: ManualLogArgs) {
     brand_or_restaurant: null,
     category: 'generic',
     serving_description: `${qty} ${unit}`,
-    // B4: was always 100 — now reflects the actual mass of the user's
-    // serving when we can compute it. PER_SERVING basis means the
-    // macros below are for ONE qty+unit, not 100g.
-    serving_size_grams: servingGrams,
+    // 0 denotes an unweighed portion; PER_SERVING preserves its nutrition and
+    // the picker does not offer weight conversions until a weight is known.
+    serving_size_grams: servingGrams ?? 0,
     nutrient_basis: 'PER_SERVING' as const,
     calories,
     protein_g: protein,

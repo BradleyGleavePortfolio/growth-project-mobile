@@ -12,7 +12,7 @@ describe('DailySummaryBar', () => {
   it('defaults to the full bar (no behaviour change without the backend field)', async () => {
     await render(<DailySummaryBar dailyTotals={TOTALS} remaining={889} />);
     expect(screen.getByTestId('daily-summary-full')).toBeTruthy();
-    for (const label of ['Eaten', 'Remaining', 'Protein', 'Carbs', 'Fat']) {
+    for (const label of ['Eaten (kcal)', 'Remaining', 'Protein', 'Carbs', 'Fat']) {
       expect(screen.getByText(label)).toBeTruthy();
     }
   });
@@ -20,11 +20,27 @@ describe('DailySummaryBar', () => {
   it('shows calories and protein only in the simple view', async () => {
     await render(<DailySummaryBar dailyTotals={TOTALS} remaining={889} mode="simple" />);
     expect(screen.getByTestId('daily-summary-simple')).toBeTruthy();
-    expect(screen.getByText('Eaten')).toBeTruthy();
+    expect(screen.getByText('Eaten (kcal)')).toBeTruthy();
     expect(screen.getByText('Remaining')).toBeTruthy();
     expect(screen.getByText('72g')).toBeTruthy();
     expect(screen.queryByText('Carbs')).toBeNull();
     expect(screen.queryByText('Fat')).toBeNull();
     expect(screen.queryByText('110g')).toBeNull();
+  });
+
+  it('does not invent a calorie target when no target is available', async () => {
+    await render(<DailySummaryBar dailyTotals={TOTALS} remaining={null} />);
+    expect(screen.getByText('No target')).toBeTruthy();
+    expect(screen.getByText('—')).toBeTruthy();
+    expect(screen.queryByText('Remaining')).toBeNull();
+  });
+
+  it('shows the overage and each available macro target', async () => {
+    await render(<DailySummaryBar dailyTotals={TOTALS} remaining={-100} targets={{ calories: 800, protein: 100, carbs: 120, fat: 40 }} />);
+    expect(screen.getByText('Over target')).toBeTruthy();
+    expect(screen.getByText('100')).toBeTruthy();
+    for (const label of ['800 goal', '100g goal', '120g goal', '40g goal']) {
+      expect(screen.getByText(label)).toBeTruthy();
+    }
   });
 });

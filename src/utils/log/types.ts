@@ -1,15 +1,14 @@
 import { MealType } from '../../types';
+import { densityGramsFor } from './macros';
 
-// Canonical assumption after the quality-floor fix: every FoodItem returned by
-// the backend stores its macros on a per-100g basis. The old per-serving math
-// path is gone — see src/utils/log/macros.ts for the conversion logic and
-// README.md for the architectural note.
+// Imported foods use per-100g nutrition. Custom foods may instead describe
+// one whole portion, so their declared PER_SERVING basis must be preserved.
 export type NutrientBasis = 'PER_100G' | 'PER_SERVING';
 
 export interface SearchResult {
   id?: string;
   name: string;
-  // Per-100g macros.
+  // Macros on the declared nutrient_basis.
   calories: number;
   protein: number;
   carbs: number;
@@ -60,13 +59,16 @@ export const UNIT_OPTIONS: readonly string[] = [
   ...VOLUME_UNIT_OPTIONS,
 ];
 
-// Returns the chip list for the picker given the selected food. When the
-// backend hasn't confirmed a density for this food, volume units are hidden
-// because they'd produce wrong macros. Foods with no metadata (legacy rows,
-// manual entries) are treated as volume-capable to preserve existing UX.
-export function unitOptionsFor(food: Pick<SearchResult, 'supports_volume_units'> | null | undefined): readonly string[] {
-  if (food && food.supports_volume_units === false) {
-    return MASS_UNIT_OPTIONS;
+// Offer only conversions the app can actually calculate.
+export function unitOptionsFor(food: Partial<SearchResult> | null | undefined): readonly string[] {
+  if (food?.nutrient_basis === 'PER_SERVING' && !(food.serving_size_grams && food.serving_size_grams > 0)) {
+    return ['serving'];
   }
-  return UNIT_OPTIONS;
+  const volumeUnits = !food || food.supports_volume_units === false
+    ? []
+    : VOLUME_UNIT_OPTIONS.filter((unit) => {
+        const grams = densityGramsFor(food, unit);
+        return grams != null && grams > 0;
+      });
+  return [...MASS_UNIT_OPTIONS, ...volumeUnits];
 }

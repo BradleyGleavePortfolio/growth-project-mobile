@@ -3,6 +3,7 @@ import { logApi, waterApi } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
+import { mapFoodItem, type RawFoodItem } from '../utils/log/mapFoodItem';
 
 interface DailyTotals {
   calories: number;
@@ -73,13 +74,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         original_unit?: string | null;
         logged_at?: string;
         created_at?: string;
-        food_item?: {
-          name?: string;
-          calories?: number;
-          protein_g?: number;
-          carbs_g?: number;
-          fat_g?: number;
-        };
+        food_item?: RawFoodItem;
       }
       const entries = (data.entries || []) as DailyLogEntry[];
       // The existing mapping intentionally writes both `foodName` (the
@@ -101,6 +96,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         return ({
           id: e.id,
           foodItemId: e.food_item_id,
+          quantityMultiplier: e.quantity_multiplier,
+          foodItem: e.food_item ? mapFoodItem(e.food_item) : undefined,
           foodName: e.food_item?.name || '',
           name: e.food_item?.name || '',
           calories: Math.round((e.food_item?.calories || 0) * e.quantity_multiplier),

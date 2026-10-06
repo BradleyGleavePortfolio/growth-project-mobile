@@ -16,11 +16,11 @@
 // category-keyed density table — graceful degradation rather than the
 // previous silent `multiplier = qty` fall-through that produced 2-4× errors.
 //
-// Legacy rows that still report `nutrient_basis: 'PER_SERVING'` are handled
-// by treating their macros as belonging to one serving and scaling by qty
-// directly. New code should not produce PER_SERVING rows.
+// PER_SERVING rows (including custom foods) belong to one described portion.
+// Serving counts scale directly; mass and volume use that portion's gram
+// weight when it is known.
 
-import { SearchResult } from './types';
+import type { SearchResult } from './types';
 
 const OZ_TO_GRAMS = 28.3495;
 
@@ -73,20 +73,21 @@ export function quantityMultiplier(
   qty: number,
   unit: string,
 ): number {
-  // Legacy PER_SERVING rows: macros already represent one serving, so qty
-  // is the multiplier no matter the unit.
-  if (food?.nutrient_basis === 'PER_SERVING') return qty;
-
-  const u = (unit || '').toLowerCase();
-  if (u === 'g') return qty / 100;
-  if (u === 'oz') return (qty * OZ_TO_GRAMS) / 100;
+  const u = (unit || '').trim().toLowerCase();
+  const perServing = food?.nutrient_basis === 'PER_SERVING';
+  const basisGrams = perServing ? food?.serving_size_grams : 100;
+  // A per-serving food can be weighed only when the serving's weight is known.
+  // The picker hides weight units otherwise.
+  if (u === 'g') return basisGrams ? qty / basisGrams : qty;
+  if (u === 'oz') return basisGrams ? (qty * OZ_TO_GRAMS) / basisGrams : qty;
   if (u === 'serving') {
+    if (perServing) return qty;
     const grams = food?.serving_size_grams ?? 100;
     return (qty * grams) / 100;
   }
   if (u === 'cup' || u === 'tbsp' || u === 'tsp') {
     const grams = food ? densityGramsFor(food, u) : null;
-    if (grams != null) return (qty * grams) / 100;
+    if (grams != null && basisGrams) return (qty * grams) / basisGrams;
     // No density: treat one unit as one 100g portion. Picker should have
     // hidden these chips when supports_volume_units is false; this branch
     // exists only as a defensive fall-back.

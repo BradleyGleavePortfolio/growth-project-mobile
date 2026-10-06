@@ -12,7 +12,8 @@ interface DailyTotals {
 
 interface Props {
   dailyTotals: DailyTotals;
-  remaining: number;
+  remaining: number | null;
+  targets?: DailyTotals | null;
   /**
    * 'simple' during a never-tracker's first week (clinic contract v1
    * addition 8): calories and protein only. Defaults to 'full'.
@@ -23,6 +24,7 @@ interface Props {
 export default function DailySummaryBar({
   dailyTotals,
   remaining,
+  targets,
   mode = 'full',
 }: Props) {
   const simple = mode === 'simple';
@@ -35,14 +37,15 @@ export default function DailySummaryBar({
         <Text style={styles.summaryValue}>
           {Math.round(dailyTotals.calories)}
         </Text>
-        <Text style={styles.summaryLabel}>Eaten</Text>
+        <Text style={styles.summaryLabel}>Eaten (kcal)</Text>
+        {targets ? <Text style={styles.summaryLabel}>{targets.calories} goal</Text> : null}
       </View>
       <View style={styles.summaryDivider} />
       <View style={styles.summaryItem}>
         <Text style={[styles.summaryValue, { color: Colors.primary }]}>
-          {Math.round(remaining)}
+          {remaining == null ? '—' : Math.round(Math.abs(remaining))}
         </Text>
-        <Text style={styles.summaryLabel}>Remaining</Text>
+        <Text style={styles.summaryLabel}>{remaining == null ? 'No target' : remaining < 0 ? 'Over target' : 'Remaining'}</Text>
       </View>
       <View style={styles.summaryDivider} />
       <View style={styles.summaryItem}>
@@ -50,6 +53,7 @@ export default function DailySummaryBar({
           {Math.round(dailyTotals.protein)}g
         </Text>
         <Text style={styles.summaryLabel}>Protein</Text>
+        {targets ? <Text style={styles.summaryLabel}>{targets.protein}g goal</Text> : null}
       </View>
       {simple ? null : (
         <>
@@ -59,6 +63,7 @@ export default function DailySummaryBar({
               {Math.round(dailyTotals.carbs)}g
             </Text>
             <Text style={styles.summaryLabel}>Carbs</Text>
+            {targets ? <Text style={styles.summaryLabel}>{targets.carbs}g goal</Text> : null}
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
@@ -66,6 +71,7 @@ export default function DailySummaryBar({
               {Math.round(dailyTotals.fat)}g
             </Text>
             <Text style={styles.summaryLabel}>Fat</Text>
+            {targets ? <Text style={styles.summaryLabel}>{targets.fat}g goal</Text> : null}
           </View>
         </>
       )}

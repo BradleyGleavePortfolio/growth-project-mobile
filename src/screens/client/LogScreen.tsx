@@ -29,8 +29,9 @@ import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { useFoodBrowse } from '../../hooks/useFoodBrowse';
-import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
+import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/types';
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
+import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import {
   submitSearchLogOffline,
@@ -89,6 +90,9 @@ export default function LogScreen() {
   const [editQty, setEditQty] = useState<string>('');
   const [editUnit, setEditUnit] = useState<string>('');
   const [editSaving, setEditSaving] = useState(false);
+  const [editMealType, setEditMealType] = useState<MealType>('breakfast');
+  const [foodSaving, setFoodSaving] = useState(false);
+  const [savedMessage, setSavedMessage] = useState<string | null>(null);
 
   // Quantity modal state
   const [selectedFood, setSelectedFood] = useState<SearchResult | null>(null);
@@ -115,6 +119,7 @@ export default function LogScreen() {
   });
 
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchRequest = useRef(0);
 
   // Show "Searching 1M+ foods..." after 3 seconds of searching
   useEffect(() => {
@@ -133,6 +138,7 @@ export default function LogScreen() {
   }, [currentUser?.id]);
 
   const handleDateChange = (date: string) => {
+    setSavedMessage(null);
     setSelectedDate(date);
     if (currentUser) {
       loadDayData(currentUser.id, date);
@@ -151,6 +157,11 @@ export default function LogScreen() {
     });
 
   const openAddFood = useCallback(async (mealType: MealType) => {
+    searchRequest.current += 1;
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    setSearching(false);
+    setParsedQuantity(null);
+    setParsedUnit(null);
     setActiveMealType(mealType);
     setSearchQuery('');
     setSearchResults([]);
@@ -166,18 +177,24 @@ export default function LogScreen() {
 
   // Debounced food search via REST API
   const handleSearch = (query: string) => {
+    const request = ++searchRequest.current;
     setSearchQuery(query);
+    setSearchResults([]);
+    setParsedQuantity(null);
+    setParsedUnit(null);
     setDidYouMean([]);
     setSearchError(null);
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     if (query.length < 2) {
-      setSearchResults([]);
+      setSearching(false);
       return;
     }
+    setSearching(true);
     searchTimeout.current = setTimeout(async () => {
       setSearching(true);
       try {
         const res = await foodApi.search(query, 50);
+        if (request !== searchRequest.current) return;
         const data = res.data;
         // Backend always returns { results, suggestions, did_you_mean }
         // Guard against legacy plain-array responses
@@ -205,11 +222,12 @@ export default function LogScreen() {
           setDidYouMean([]);
         }
       } catch (err) {
+        if (request !== searchRequest.current) return;
         setSearchResults([]);
         setDidYouMean([]);
         setSearchError('Search unavailable. Check your connection.');
       } finally {
-        setSearching(false);
+        if (request === searchRequest.current) setSearching(false);
       }
     }, 600);
   };
@@ -220,9 +238,7 @@ export default function LogScreen() {
     // If the parsed unit is one the picker no longer offers for this food
     // (e.g. parsed 'cup' but the food has no density), fall through to
     // 'serving' so the picker stays in a valid state.
-    const allowedUnits = food.supports_volume_units === false
-      ? ['serving', 'g', 'oz']
-      : ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp'];
+    const allowedUnits = unitOptionsFor(food);
     const unit = parsedUnit && allowedUnits.includes(parsedUnit) ? parsedUnit : 'serving';
     const qty = parsedQuantity && parsedQuantity > 0 ? String(parsedQuantity) : '1';
     setQuantityInput(qty);
@@ -236,10 +252,12 @@ export default function LogScreen() {
   // an Alert with the real error message. When the device is offline we queue
   // the log to AsyncStorage and close cleanly with a confirmation.
   const handleConfirmLog = async () => {
-    if (!currentUser || !selectedFood) return;
-    // B4: locale-aware decimal parsing — "1.5", "0,5" and "  2  " all valid;
-    // blank/garbage falls back to 1 (the existing "one serving" default).
-    const qty = parseQuantityInput(quantityInput) ?? 1;
+    if (!currentUser || !selectedFood || foodSaving) return;
+    const qty = parseQuantityInput(quantityInput);
+    if (qty == null) {
+      Alert.alert('Quantity required', 'Enter a number greater than zero before logging this food.');
+      return;
+    }
     const multiplier = quantityMultiplier(selectedFood, qty, selectedUnit);
     const args = {
       food: selectedFood,
@@ -249,6 +267,7 @@ export default function LogScreen() {
       originalQuantity: qty,
       originalUnit: selectedUnit,
     };
+    setFoodSaving(true);
 
     if (!online) {
       try {
@@ -262,7 +281,9 @@ export default function LogScreen() {
         );
       } catch (err) {
         console.error('LogScreen: enqueue failed', err);
-        Alert.alert("Couldn't save food", errorMessage(err, 'Please try again.'));
+        Alert.alert("Couldn't save food", errorMessage(err, 'Keep this portion open and try saving again.'));
+      } finally {
+        setFoodSaving(false);
       }
       return;
     }
@@ -277,20 +298,25 @@ export default function LogScreen() {
       setQuantityModalVisible(false);
       setSelectedFood(null);
       setModalVisible(false);
+      setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
       HapticService.error();
-      Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
+      Alert.alert("Couldn't log food", errorMessage(err, 'This food was not added. Check the connection and try again.'));
+    } finally {
+      setFoodSaving(false);
     }
   };
 
   const handleManualLog = async () => {
+    if (foodSaving) return;
     if (!currentUser || !manualFields.foodName.trim() || !manualFields.calories) {
       Alert.alert('Missing Info', 'Enter at least a food name and calories.');
       return;
     }
     const args = { ...manualFields, date: selectedDate, mealType: activeMealType };
+    setFoodSaving(true);
 
     if (!online) {
       try {
@@ -299,7 +325,9 @@ export default function LogScreen() {
         Alert.alert('Saved offline', `${name} will sync when you reconnect.`);
       } catch (err) {
         console.error('LogScreen: manual enqueue failed', err);
-        Alert.alert("Couldn't save food", errorMessage(err, 'Please try again.'));
+        Alert.alert("Couldn't save food", errorMessage(err, 'Keep these food details open and try saving again.'));
+      } finally {
+        setFoodSaving(false);
       }
       return;
     }
@@ -312,11 +340,14 @@ export default function LogScreen() {
       // Psych Report #4: Analytics — meal_logged (manual flow)
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
+      setSavedMessage(`${manualFields.foodName.trim()} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
     } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
       // Phase 11 / Track 3: error haptic on failed API action
       HapticService.error();
-      Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
+      Alert.alert("Couldn't log food", errorMessage(err, 'These food details were not added. Check the connection and try again.'));
+    } finally {
+      setFoodSaving(false);
     }
   };
 
@@ -326,16 +357,10 @@ export default function LogScreen() {
   // the original_* columns persisted.
   const handleEditFood = (log: FoodLog) => {
     setEditLog(log);
-    const hasOriginal =
-      typeof log.originalQuantity === 'number' &&
-      !!log.originalUnit &&
-      (log.originalUnit || '').trim().length > 0;
-    setEditQty(
-      hasOriginal
-        ? String(log.originalQuantity)
-        : String(log.quantity || 1),
-    );
-    setEditUnit(hasOriginal ? (log.originalUnit as string) : 'serving');
+    const portion = initialEditPortion(log);
+    setEditQty(String(portion.quantity));
+    setEditUnit(portion.unit);
+    setEditMealType(log.mealType);
   };
 
   const handleEditCancel = () => {
@@ -352,20 +377,14 @@ export default function LogScreen() {
       Alert.alert('Invalid quantity', 'Enter a number greater than zero.');
       return;
     }
-    const unitTrim = editUnit.trim() || 'serving';
-    // Compute the new multiplier the same way logSubmit does so totals
-    // stay consistent with the create path. We don't carry the SearchResult
-    // for an already-logged entry, so pass `null` — `quantityMultiplier`
-    // falls back to a 100g-equivalent for grams/oz and treats `serving` /
-    // volume units as 1×100g, which is the same legacy floor the create
-    // path uses when food metadata is missing.
-    const multiplier = quantityMultiplier(null, parsed, unitTrim);
     setEditSaving(true);
     try {
+      const multiplier = editPortionMultiplier(editLog, parsed, editUnit);
       await logApi.updateEntry(editLog.id, {
         quantity_multiplier: multiplier,
         original_quantity: parsed,
-        original_unit: unitTrim,
+        original_unit: editUnit,
+        meal_type: editMealType,
       });
       setEditLog(null);
       setEditQty('');
@@ -375,7 +394,7 @@ export default function LogScreen() {
       console.error('LogScreen: handleEditSave failed', err);
       Alert.alert(
         "Couldn't update food",
-        errorMessage(err, 'Please try again.'),
+        errorMessage(err, 'The entry was not changed. Keep this edit open and try again.'),
       );
     } finally {
       setEditSaving(false);
@@ -414,8 +433,7 @@ export default function LogScreen() {
   const getMealCalories = (mealType: MealType) =>
     getMealLogs(mealType).reduce((sum, f) => sum + f.calories, 0);
 
-  const calorieTarget = macroTargets?.calories || 2000;
-  const remaining = Math.max(0, calorieTarget - dailyTotals.calories);
+  const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
@@ -436,10 +454,7 @@ export default function LogScreen() {
   }, [currentUser?.id, selectedDate, online]);
 
   const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setDidYouMean([]);
-    setSearchError(null);
+    handleSearch('');
   };
 
   const onManualFieldChange = (field: keyof ManualFields, value: string) =>
@@ -465,7 +480,10 @@ export default function LogScreen() {
 
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
 
-        <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} mode={macroMode} />
+        <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} />
+        {savedMessage ? (
+          <Text style={styles.savedMessage} accessibilityLiveRegion="polite">{savedMessage}</Text>
+        ) : null}
 
         {MEAL_SECTIONS.map((section) => (
           <MealSectionCard
@@ -490,7 +508,7 @@ export default function LogScreen() {
       <FoodSearchModal
         visible={modalVisible}
         activeMealType={activeMealType}
-        onClose={() => setModalVisible(false)}
+        onClose={() => { if (!foodSaving) setModalVisible(false); }}
         searchQuery={searchQuery}
         onSearchChange={handleSearch}
         onClearSearch={clearSearch}
@@ -511,6 +529,7 @@ export default function LogScreen() {
         manualFields={manualFields}
         onManualFieldChange={onManualFieldChange}
         onManualLog={handleManualLog}
+        saving={foodSaving}
       />
 
       <QuantityPickerModal
@@ -521,6 +540,7 @@ export default function LogScreen() {
         onQuantityChange={setQuantityInput}
         onUnitChange={setSelectedUnit}
         onConfirm={handleConfirmLog}
+        saving={foodSaving}
         onCancel={() => {
           setQuantityModalVisible(false);
           setSelectedFood(null);
@@ -540,7 +560,7 @@ export default function LogScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.editModalBackdrop}
         >
-          <View style={styles.editModalCard}>
+          <ScrollView style={styles.editModalCard} contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
             <Text style={styles.editModalTitle} numberOfLines={1}>
               {editLog?.foodName || 'Edit entry'}
             </Text>
@@ -553,13 +573,46 @@ export default function LogScreen() {
               style={styles.editModalInput}
             />
             <Text style={styles.editModalSubtitle}>Unit</Text>
-            <TextInput
-              accessibilityLabel="Edit unit"
-              value={editUnit}
-              onChangeText={setEditUnit}
-              autoCapitalize="none"
-              style={styles.editModalInput}
-            />
+            <View style={styles.editUnitRow}>
+              {(editLog ? editUnitsFor(editLog) : []).map((unit) => (
+                <TouchableOpacity
+                  key={unit}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit unit ${unit}`}
+                  accessibilityState={{ selected: editUnit === unit }}
+                  disabled={editSaving}
+                  onPress={() => setEditUnit(unit)}
+                  style={[styles.editModalBtn, editUnit === unit && { borderColor: colors.primary }]}
+                >
+                  <Text style={{ color: colors.textPrimary }}>{unit}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={styles.editModalSubtitle}>Meal</Text>
+            <View style={styles.editUnitRow}>
+              {MEAL_SECTIONS.map((meal) => (
+                <TouchableOpacity
+                  key={meal.type}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: editMealType === meal.type }}
+                  disabled={editSaving}
+                  onPress={() => setEditMealType(meal.type)}
+                  style={[styles.editModalBtn, editMealType === meal.type && { borderColor: colors.primary }]}
+                >
+                  <Text style={{ color: colors.textPrimary }}>{meal.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              disabled={editSaving}
+              style={styles.deleteEntryButton}
+              onPress={() => {
+                if (editLog) { setEditLog(null); void handleDeleteFood(editLog); }
+              }}
+            >
+              <Text style={{ color: colors.error }}>Delete entry</Text>
+            </TouchableOpacity>
             <View style={styles.editModalActions}>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -592,7 +645,7 @@ export default function LogScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
     </View>
@@ -625,6 +678,14 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: Spacing.lg,
     marginBottom: 20,
   },
+  savedMessage: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 12,
+    color: colors.primary,
+    fontSize: 14,
+  },
+  editUnitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  deleteEntryButton: { minHeight: 44, justifyContent: 'center', marginTop: 8 },
   editModalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
@@ -635,10 +696,11 @@ const makeStyles = (colors: ThemeColors) =>
   editModalCard: {
     width: '100%',
     maxWidth: 420,
+    maxHeight: '100%',
     backgroundColor: colors.surface,
     borderRadius: 12,
-    padding: Spacing.lg,
   },
+  editModalContent: { padding: Spacing.lg },
   editModalTitle: {
     fontSize: 18,
     fontWeight: '600',

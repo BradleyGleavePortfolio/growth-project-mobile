@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, colors } from '../../theme/index';
 import FoodImage from '../FoodImage';
 import { SearchResult, unitOptionsFor } from '../../utils/log/types';
-import { calcMacros } from '../../utils/log/macros';
+import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
 
 interface Props {
   visible: boolean;
@@ -26,6 +26,7 @@ interface Props {
   onUnitChange: (unit: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
+  saving?: boolean;
 }
 
 export default function QuantityPickerModal({
@@ -37,17 +38,20 @@ export default function QuantityPickerModal({
   onUnitChange,
   onConfirm,
   onCancel,
+  saving = false,
 }: Props) {
+  const quantity = parseQuantityInput(quantityInput);
   const previewMacros = selectedFood
-    ? calcMacros(selectedFood, parseFloat(quantityInput) || 0, selectedUnit)
+    ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
+  const displayMacro = (value: number) => Number.isFinite(value) ? String(value) : '—';
 
   return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle="pageSheet"
-      onRequestClose={onCancel}
+      onRequestClose={() => { if (!saving) onCancel(); }}
     >
       <KeyboardAvoidingView
         style={styles.quantityModalContainer}
@@ -74,28 +78,29 @@ export default function QuantityPickerModal({
 
           <View style={styles.macroPreviewCard}>
             <View style={styles.macroPreviewItem}>
-              <Text style={styles.macroPreviewValue}>{previewMacros.calories}</Text>
+              <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.calories)}</Text>
               <Text style={styles.macroPreviewLabel}>Cal</Text>
             </View>
             <View style={styles.macroPreviewDivider} />
             <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: Colors.orange }]}>{previewMacros.protein}g</Text>
+              <Text style={[styles.macroPreviewValue, { color: Colors.orange }]}>{displayMacro(previewMacros.protein)}g</Text>
               <Text style={styles.macroPreviewLabel}>Protein</Text>
             </View>
             <View style={styles.macroPreviewDivider} />
             <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: Colors.gold }]}>{previewMacros.carbs}g</Text>
+              <Text style={[styles.macroPreviewValue, { color: Colors.gold }]}>{displayMacro(previewMacros.carbs)}g</Text>
               <Text style={styles.macroPreviewLabel}>Carbs</Text>
             </View>
             <View style={styles.macroPreviewDivider} />
             <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{previewMacros.fat}g</Text>
+              <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{displayMacro(previewMacros.fat)}g</Text>
               <Text style={styles.macroPreviewLabel}>Fat</Text>
             </View>
           </View>
 
           <Text style={styles.quantitySectionLabel}>Quantity</Text>
           <TextInput
+            accessibilityLabel="Food quantity"
             style={styles.quantityInput}
             value={quantityInput}
             onChangeText={onQuantityChange}
@@ -109,6 +114,9 @@ export default function QuantityPickerModal({
             {unitOptionsFor(selectedFood).map((u) => (
               <TouchableOpacity
                 key={u}
+                accessibilityRole="button"
+                accessibilityLabel={`Portion unit ${u}`}
+                accessibilityState={{ selected: selectedUnit === u }}
                 style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}
                 onPress={() => onUnitChange(u)}
               >
@@ -120,19 +128,29 @@ export default function QuantityPickerModal({
           {selectedFood?.serving_size ? (
             <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
           ) : null}
+          {['cup', 'tbsp', 'tsp'].includes(selectedUnit) ? (
+            <Text style={styles.servingSizeInfo}>Volume weights are estimates. Use grams for a weighed portion.</Text>
+          ) : null}
+          {quantity == null ? (
+            <Text style={styles.servingSizeInfo}>Enter a quantity greater than zero to log this food.</Text>
+          ) : null}
 
           <TouchableOpacity
-            style={styles.quantityLogButton}
+            style={[styles.quantityLogButton, quantity == null && { opacity: 0.5 }]}
+            accessibilityRole="button"
+            accessibilityLabel={saving ? 'Saving food' : 'Log Food'}
+            disabled={quantity == null || saving}
             onPress={onConfirm}
             activeOpacity={0.8}
           >
             <Ionicons name="add-circle" size={22} color={Colors.white} />
-            <Text style={styles.quantityLogButtonText}>Log Food</Text>
+            <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.quantityCancelLink}
             onPress={onCancel}
+            disabled={saving}
           >
             <Text style={styles.quantityCancelText}>Cancel</Text>
           </TouchableOpacity>
@@ -231,6 +249,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   unitChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
