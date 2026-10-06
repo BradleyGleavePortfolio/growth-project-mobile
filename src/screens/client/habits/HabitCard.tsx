@@ -21,6 +21,9 @@ export function HabitCard({
 }) {
   return (
     <TouchableOpacity
+      accessibilityRole="checkbox"
+      accessibilityLabel={habit.name}
+      accessibilityState={{ checked: habit.log?.completed ?? false }}
       style={styles.habitCard}
       onPress={() => onToggle(habit)}
       onLongPress={() => onLongPress(habit)}
@@ -52,6 +55,8 @@ export function HabitCard({
             {habit.weekDots.map((done, i) => (
               <View key={i} style={styles.weekDotCol}>
                 <View
+                  testID={`habit-week-${habit.id}-${i}`}
+                  accessibilityLabel={`${DAY_LABELS[i]}: ${done ? 'completed' : 'not completed'}`}
                   style={[
                     styles.weekDot,
                     done && { backgroundColor: habit.color },

@@ -2,8 +2,6 @@ import React from 'react';
 import { Modal, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import type { IoniconName } from '../../../types/common';
-import { HABIT_ICONS } from './constants';
 import type { HabitsStyles } from './styles';
 
 export function AddHabitSheet({
@@ -11,15 +9,10 @@ export function AddHabitSheet({
   onClose,
   newName,
   setNewName,
-  newIcon,
-  setNewIcon,
-  newColor,
-  setNewColor,
   newTarget,
   setNewTarget,
   newUnit,
   setNewUnit,
-  HABIT_COLORS,
   onAdd,
   colors,
   styles,
@@ -28,15 +21,10 @@ export function AddHabitSheet({
   onClose: () => void;
   newName: string;
   setNewName: (s: string) => void;
-  newIcon: string;
-  setNewIcon: (s: string) => void;
-  newColor: string;
-  setNewColor: (s: string) => void;
   newTarget: string;
   setNewTarget: (s: string) => void;
   newUnit: string;
   setNewUnit: (s: string) => void;
-  HABIT_COLORS: string[];
   onAdd: () => void;
   colors: ThemeColors;
   styles: HabitsStyles;
@@ -61,34 +49,6 @@ export function AddHabitSheet({
             onChangeText={setNewName}
             maxLength={60}
           />
-
-          <Text style={styles.fieldLabel}>Icon</Text>
-          <View style={styles.iconGrid}>
-            {HABIT_ICONS.map((item) => (
-              <TouchableOpacity
-                key={item.icon}
-                style={[styles.iconOption, newIcon === item.icon && styles.iconOptionActive]}
-                onPress={() => setNewIcon(item.icon)}
-              >
-                <Ionicons
-                  name={item.icon as IoniconName}
-                  size={20}
-                  color={newIcon === item.icon ? colors.primary : colors.textMuted}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          <Text style={styles.fieldLabel}>Color</Text>
-          <View style={styles.colorGrid}>
-            {HABIT_COLORS.map((c) => (
-              <TouchableOpacity
-                key={c}
-                style={[styles.colorOption, { backgroundColor: c }, newColor === c && styles.colorOptionActive]}
-                onPress={() => setNewColor(c)}
-              />
-            ))}
-          </View>
 
           <View style={styles.targetRow}>
             <View style={styles.targetField}>
