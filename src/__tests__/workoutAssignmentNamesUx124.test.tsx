@@ -79,7 +79,7 @@ describe('coach-assigned workout names (B: client saw "Push 001" / "Exercise")',
     expect(await findByText('2. Barbell Bent Over Row')).toBeTruthy();
     expect(getByText(/^Strength/)).toBeTruthy();
 
-    fireEvent.press(getByText('Start workout'));
+    await fireEvent.press(getByText('Start workout'));
     expect(mockNavigate).toHaveBeenCalledTimes(1);
     const params = mockNavigate.mock.calls[0][1].params;
     const names = JSON.parse(params.exercises).map((e: { exerciseName: string }) => e.exerciseName);
@@ -99,7 +99,7 @@ describe('assignment load error (U: "Pull to retry" on a screen that cannot be p
     mockAssignment = { data: undefined, isLoading: false, isError: true };
     const { getByTestId, queryByText } = await render(wrap(<WorkoutAssignmentDetailScreen />));
     expect(queryByText(/Pull to retry/)).toBeNull();
-    fireEvent.press(getByTestId('assignment-retry'));
+    await fireEvent.press(getByTestId('assignment-retry'));
     await waitFor(() => expect(mockRefetch).toHaveBeenCalledTimes(1));
   });
 });
