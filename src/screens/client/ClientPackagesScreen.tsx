@@ -293,6 +293,19 @@ export default function ClientPackagesScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
     >
+      {/* U-MC-5: the More stack hides headers, so the screen brings its own
+          back control (cross-tab opens have nothing to go back to). */}
+      {navigation.canGoBack?.() ? (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="client-packages-back"
+        >
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
+        </TouchableOpacity>
+      ) : null}
       <Text style={styles.header} testID="client-packages-header">
         {oneToOneCoachingLabel(coachName)}
       </Text>
@@ -539,6 +552,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       justifyContent: 'center',
       backgroundColor: semanticColors.bgPrimary,
     },
+    backBtn: { width: 44, height: 44, justifyContent: 'center', marginLeft: -10, marginTop: -12 },
     header: { fontSize: 28, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 4 },
     subheader: {
       fontSize: 13,

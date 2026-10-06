@@ -10,6 +10,7 @@
  * still read "Renews <date>" under Current plan.
  * U-MC-3: another plan says the renewing one keeps charging alongside it.
  * U-MC-4: a past-due plan offers Update card on the plan itself.
+ * U-MC-5: the plans screen has a back control (the More stack hides headers).
  *
  * Real clientPaymentsApi and ClientPackagesScreen; only HTTP is mocked.
  */
@@ -24,10 +25,12 @@ jest.mock('../theme/ThemeProvider', () => {
 });
 jest.mock('../ui/skeletons/Skeleton', () => ({ SkeletonScreen: () => null }));
 const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
+let mockCanGoBack = false;
 jest.mock('@react-navigation/native', () => {
   const ReactLib = jest.requireActual('react');
   return {
-    useNavigation: () => ({ navigate: mockNavigate }),
+    useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack, canGoBack: () => mockCanGoBack }),
     useFocusEffect: (cb: () => void) => ReactLib.useEffect(cb, []),
   };
 });
@@ -73,6 +76,7 @@ beforeEach(() => {
   process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_build';
   purchases = [];
   plans = [];
+  mockCanGoBack = false;
   mockGet.mockImplementation(async (url: string) => {
     if (url === '/v1/clients/me/coach') return { data: { name: 'Coach Lee' } };
     if (url === '/v1/clients/me/coach/packages') return { data: [MONTHLY, QUARTERLY] };
@@ -171,5 +175,21 @@ describe('U-MC-4: a past-due plan offers Update card on the plan', () => {
     expect(r.getByTestId('current-plan-line').props.children).toBe('The last payment did not go through.');
     await fireEvent.press(r.getByTestId('your-plan-update-card-purchase-1'));
     expect(mockNavigate).toHaveBeenCalledWith('UpdateCard', { autostart: true });
+  });
+});
+
+describe('U-MC-5: the plans screen has a back control', () => {
+  it('shows Back when there is a screen to return to', async () => {
+    mockCanGoBack = true;
+    const r = await render(<ClientPackagesScreen />);
+    await waitFor(() => expect(r.getByTestId('client-packages-back')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('client-packages-back'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows no Back when opened from another tab with nothing beneath', async () => {
+    const r = await render(<ClientPackagesScreen />);
+    await waitFor(() => expect(r.getByTestId('client-packages-header')).toBeTruthy());
+    expect(r.queryByTestId('client-packages-back')).toBeNull();
   });
 });
