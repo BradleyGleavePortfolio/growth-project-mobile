@@ -97,6 +97,9 @@ export function SetLogger({
   onToggleComplete,
   colors,
   styles,
+  previous,
+  editable = true,
+  hideCompletion = false,
 }: {
   set: SessionSet;
   setIdx: number;
@@ -105,9 +108,13 @@ export function SetLogger({
   onToggleComplete: (exIdx: number, setIdx: number) => void;
   colors: ThemeColors;
   styles: ActiveWorkoutStyles;
+  previous?: SessionSet;
+  editable?: boolean;
+  hideCompletion?: boolean;
 }) {
   return (
-    <View style={[styles.setRow, set.completed && styles.setRowCompleted]}>
+    <View>
+    <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
       <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
       <NumericCell
         style={[styles.setInput, { flex: 1 }]}
@@ -131,7 +138,7 @@ export function SetLogger({
         accessibilityLabel={`Set ${setIdx + 1} reps`}
         testID={`set-reps-${exIdx}-${setIdx}`}
       />
-      <HapticPressable
+      {!hideCompletion && <HapticPressable
         intent="medium"
         style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
         onPress={() => onToggleComplete(exIdx, setIdx)}
@@ -142,7 +149,21 @@ export function SetLogger({
         testID={`set-done-${exIdx}-${setIdx}`}
       >
         <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />
-      </HapticPressable>
+      </HapticPressable>}
+    </View>
+    {previous && <HapticPressable
+      intent="light"
+      disabled={set.completed || !editable}
+      style={styles.previousSet}
+      accessibilityRole="button"
+      accessibilityLabel={`Use previous set ${setIdx + 1}: ${previous.weight} pounds, ${previous.reps} reps`}
+      onPress={() => {
+        onUpdate(exIdx, setIdx, 'weight', previous.weight);
+        onUpdate(exIdx, setIdx, 'reps', previous.reps);
+      }}
+    >
+      <Text style={styles.previousSetText}>Last time: {previous.weight > 0 ? `${previous.weight} lb × ` : ''}{previous.reps} reps{set.completed ? '' : ' · Use'}</Text>
+    </HapticPressable>}
     </View>
   );
 }

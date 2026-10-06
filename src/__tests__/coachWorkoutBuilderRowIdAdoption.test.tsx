@@ -21,6 +21,9 @@
 
 import React from 'react';
 import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
+jest.mock('../api/exerciseLibraryApi', () => ({
+  exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated autosave test')) },
+}));
 
 // Flag read live from the env var (mirrors coachWorkoutBuilderAutosave.test).
 jest.mock('../config/featureFlags', () => {

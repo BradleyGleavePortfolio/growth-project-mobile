@@ -806,6 +806,15 @@ export default function WorkoutScreen() {
                     {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
                   </Text>
                   <HapticPressable
+                    intent="light"
+                    onPress={() => navigation.navigate('WorkoutHistoryEdit', { workout: JSON.stringify(session) })}
+                    hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit workout ${session.workout_name || session.notes || ''}`.trim()}
+                  >
+                    <Ionicons name="create-outline" size={18} color={colors.primary} />
+                  </HapticPressable>
+                  <HapticPressable
                     intent="warning"
                     onPress={() => confirmDeleteSession(session)}
                     hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
@@ -1148,4 +1157,3 @@ const makeStyles = (colors: ThemeColors) =>
   },
 
   });
-

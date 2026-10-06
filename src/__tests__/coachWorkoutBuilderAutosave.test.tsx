@@ -21,6 +21,11 @@
 
 import React from 'react';
 import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
+import { exerciseLibraryApi } from '../api/exerciseLibraryApi';
+
+jest.mock('../api/exerciseLibraryApi', () => ({
+  exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated autosave test')) },
+}));
 
 // Drive the MWB-4 autosave flag WITHOUT `jest.resetModules()`. The screen
 // reads `featureFlags.mwbAutosave` at *render* time (a live property access in
@@ -280,6 +285,13 @@ afterEach(() => {
 // ─── Flag OFF: byte-identical legacy behaviour ───────────────────────────────
 
 describe('CoachWorkoutBuilderScreen — flag OFF invariance', () => {
+  it('shows the catalog name for a saved plan row instead of the raw id (B-SESSION-2)', async () => {
+    setFlag(false);
+    jest.mocked(exerciseLibraryApi.getById).mockResolvedValueOnce({ data: { name: 'Barbell Bench Press' } } as never);
+    const Screen = loadScreen();
+    const screen = await render(<Screen />);
+    await waitFor(() => expect(screen.getByText('1. Barbell Bench Press')).toBeTruthy());
+  });
   it('renders no save-state pill and fires zero autosave calls', async () => {
     setFlag(false);
     jest.useFakeTimers();

@@ -32,6 +32,10 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // import, producing two React copies, a null hook dispatcher, and the
 // "Invalid hook call" at `useMemo`. Keeping a single React also keeps RTL's
 // auto-cleanup `afterEach` intact, so no test leaks an open handle.
+jest.mock('../api/exerciseLibraryApi', () => ({
+  exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated undo test')) },
+}));
+
 jest.mock("../config/featureFlags", () => {
   const readEnvFlag = () => {
     const raw = process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE;

@@ -85,6 +85,7 @@ import {
   type WorkoutBuilderWorkingCopy,
 } from './workoutBuilderAutosaveDiff';
 import { describeAutosaveRefusal } from './workoutBuilderAccess';
+import CoachExerciseName from '../../components/coach/workout-builder/CoachExerciseName';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -1643,9 +1644,12 @@ export default function CoachWorkoutBuilderScreen() {
               style={[styles.rowCard, { borderColor: sc.border }]}
             >
               <View style={styles.rowHeader}>
-                <Text style={[typography.body, { color: sc.textPrimary }]}>
-                  {idx + 1}. {row.display_name}
-                </Text>
+                <CoachExerciseName
+                  id={row.exercise_external_id}
+                  fallback={row.display_name}
+                  prefix={`${idx + 1}. `}
+                  style={[typography.body, { color: sc.textPrimary, flex: 1 }]}
+                />
                 <View style={styles.rowControls}>
                   <Pressable
                     accessibilityLabel="Move exercise up"

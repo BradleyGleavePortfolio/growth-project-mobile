@@ -47,6 +47,7 @@ import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
+import WorkoutHistoryEditScreen from '../screens/client/WorkoutHistoryEditScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
 // Mux video + exercise library v1 (feat/video-library-v1-mobile).
@@ -154,6 +155,7 @@ import type { CalendarStackParamList } from './calendarRoutes';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
+const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen);
 const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen);
 const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen);
 const ProtectedPlanScreen = withProtectedScreen(PlanScreen);
@@ -219,6 +221,7 @@ export type WorkoutStackParamList = {
    */
   WorkoutMain: { justCompletedId?: string } | undefined;
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
+  WorkoutHistoryEdit: { workout: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;
   /**
@@ -432,6 +435,7 @@ function WorkoutStackNavigator() {
     >
       <WorkoutStackNav.Screen name="WorkoutMain"     component={ProtectedWorkoutScreen} />
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} />
+      <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}

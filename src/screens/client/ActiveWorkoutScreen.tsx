@@ -19,7 +19,6 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
-import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
@@ -71,6 +70,9 @@ import type {
 } from './active-workout/types';
 import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
+import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
+import { workoutApi } from '../../services/api';
+import { completedExercisePayload, moveExercise, newSessionExercise, previousSets, swapExercise, workoutSummary, type LoggedWorkout } from './active-workout/sessionQuality';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
@@ -120,6 +122,10 @@ export default function ActiveWorkoutScreen() {
   const userId = currentUser?.id ?? '';
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
+  const [workoutNotes, setWorkoutNotes] = useState('');
+  const [history, setHistory] = useState<LoggedWorkout[]>([]);
+  const [historyState, setHistoryState] = useState<'loading' | 'loaded' | 'unavailable'>('loading');
+  const [swapIndex, setSwapIndex] = useState<number | null>(null);
   // Elapsed seconds is always recomputed from a wallclock anchor — the
   // setInterval tick only forces a re-render. This is what makes the
   // timer robust to JS-thread suspension when the app is backgrounded.
@@ -166,6 +172,7 @@ export default function ActiveWorkoutScreen() {
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const restEndsAtRef = useRef(0);
   const [showAddModal, setShowAddModal] = useState(false);
   // True from the Finish confirmation until the server answers. Blocks a
   // second Finish (which logged the workout twice) and shows progress.
@@ -174,9 +181,21 @@ export default function ActiveWorkoutScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [selectedMuscle, setSelectedMuscle] = useState('All');
-  const [showLogModal, setShowLogModal] = useState(false);
-  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const createWorkout = useCreateWorkout();
+  const summary = useMemo(() => workoutSummary(sessionExercises, history), [sessionExercises, history]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    setHistory([]);
+    setHistoryState('loading');
+    workoutApi.getAll(50).then(({ data }) => {
+      if (!active) return;
+      setHistory(Array.isArray(data) ? data : []);
+      setHistoryState('loaded');
+    }).catch(() => { if (active) setHistoryState('unavailable'); });
+    return () => { active = false; };
+  }, [userId]);
   const queryClient = useOptionalQueryClient();
 
   // Default (fresh) session exercises derived from the routine param.
@@ -226,6 +245,7 @@ export default function ActiveWorkoutScreen() {
       sessionStartTimeRef.current = new Date(session.startedAtMs);
       idempotencyKeyRef.current = session.idempotencyKey;
       setSessionExercises(session.sessionExercises);
+      setWorkoutNotes(session.workoutNotes ?? '');
       const elapsedMs = Math.max(0, Date.now() - session.startedAtMs);
       lastKnownElapsedMsRef.current = elapsedMs;
       setTimer(Math.floor(elapsedMs / 1000));
@@ -420,6 +440,7 @@ export default function ActiveWorkoutScreen() {
       assignmentId,
       idempotencyKey: idempotencyKeyRef.current,
       sessionExercises,
+      workoutNotes,
     };
     pendingPersistPayloadRef.current = payload;
     if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
@@ -434,7 +455,7 @@ export default function ActiveWorkoutScreen() {
         persistDebounceRef.current = null;
       }
     };
-  }, [hydrated, sessionExercises, routineName, exercisesJson, assignmentId, userId]);
+  }, [hydrated, sessionExercises, workoutNotes, routineName, exercisesJson, assignmentId, userId]);
 
   // Rest timer cleanup.
   useEffect(() => {
@@ -443,23 +464,32 @@ export default function ActiveWorkoutScreen() {
     };
   }, []);
 
+  const refreshRest = useCallback(() => {
+    const seconds = Math.max(0, Math.ceil((restEndsAtRef.current - Date.now()) / 1000));
+    setRestSeconds(seconds);
+    if (seconds === 0) {
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+      setRestActive(false);
+      HapticService.heavyImpact();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!restActive) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refreshRest();
+    });
+    return () => subscription.remove();
+  }, [restActive, refreshRest]);
+
   const startRest = (seconds: number) => {
     if (seconds <= 0) return;
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
     setRestSeconds(seconds);
     setRestActive(true);
-    restIntervalRef.current = setInterval(() => {
-      setRestSeconds((prev) => {
-        if (prev <= 1) {
-          if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-          restIntervalRef.current = null;
-          setRestActive(false);
-          HapticService.heavyImpact();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    restEndsAtRef.current = Date.now() + seconds * 1000;
+    restIntervalRef.current = setInterval(refreshRest, 1000);
   };
 
   const formatTime = (sec: number): string => {
@@ -550,13 +580,19 @@ export default function ActiveWorkoutScreen() {
     });
   };
 
-  const openAddExercise = async () => {
+  const openAddExercise = async (index: number | null = null) => {
+    setSwapIndex(index);
     setShowAddModal(true);
     setSearchQuery('');
     setSelectedMuscle('All');
-    const all = await getAllExercises();
-    setAllExercises(all);
-    setFilteredExercises(all);
+    try {
+      const all = await getAllExercises();
+      setAllExercises(all);
+      setFilteredExercises(all);
+    } catch {
+      setShowAddModal(false);
+      Alert.alert('Exercise list unavailable', 'The exercise list did not load. Keep this workout open and try Add Exercise again.');
+    }
   };
 
   const filterExercises = (query: string, muscle: string) => {
@@ -594,38 +630,23 @@ export default function ActiveWorkoutScreen() {
   };
 
   const addExerciseToSession = (exercise: Exercise) => {
-    // Open ExerciseLogModal to capture weight/reps/sets before adding to session
-    setSelectedExercise(exercise);
-    setShowLogModal(true);
-  };
-
-  const handleExerciseLogSave = (data: ExerciseLogSaveData) => {
-    // Add the exercise to the active session with the logged sets. Persistence
-    // happens once at the end via useCreateWorkout — we no longer dual-write
-    // to a local SQLite volume table.
-    setSessionExercises((prev) => [
-      ...prev,
-      {
-        exerciseId: data.exerciseId,
-        exerciseName: data.exerciseName,
-        muscleGroup: toServerMuscleGroup(data.muscle),
-        sets: data.sets.map((s) => ({
-          reps: s.reps,
-          weight: s.weight,
-          completed: true, // pre-logged sets are already complete
-        })),
-      },
-    ]);
-
-    // Close both the log modal and the add-exercise picker modal
-    setShowLogModal(false);
+    setSessionExercises((prev) => swapIndex === null
+      ? [...prev, newSessionExercise(exercise)]
+      : swapExercise(prev, swapIndex, exercise));
     setShowAddModal(false);
-    setSelectedExercise(null);
+    setSwapIndex(null);
   };
 
-  const handleExerciseLogClose = () => {
-    setShowLogModal(false);
-    setSelectedExercise(null);
+  const requestSwap = (index: number) => {
+    const exercise = sessionExercises[index];
+    if (!exercise.sets.some((s) => s.completed)) {
+      void openAddExercise(index);
+      return;
+    }
+    Alert.alert('Swap remaining sets?', `Logged sets stay under ${exercise.exerciseName}. The replacement starts with unlogged sets.`, [
+      { text: 'Keep exercise', style: 'cancel' },
+      { text: 'Choose replacement', onPress: () => { void openAddExercise(index); } },
+    ]);
   };
 
   const finishWorkout = () => {
@@ -635,7 +656,8 @@ export default function ActiveWorkoutScreen() {
       Alert.alert('No sets completed', 'Complete at least one set before finishing.');
       return;
     }
-    Alert.alert('Finish Workout?', `${completedSets} sets completed`, [
+    const recordLines = summary.records.map((r) => `Recent best: ${r.name} · ${r.weight} lb`).join('\n');
+    Alert.alert('Finish Workout?', `${completedSets} sets completed · ${summary.exercises} exercises · ${summary.volume.toLocaleString()} lb volume${recordLines ? `\n${recordLines}\nCompared with the last 50 saved workouts.` : ''}${completedSets < sessionExercises.reduce((n, ex) => n + ex.sets.length, 0) ? '\nUnfinished sets will not be saved.' : ''}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finish',
@@ -777,14 +799,8 @@ export default function ActiveWorkoutScreen() {
               workout_name: routineName || 'Workout',
               workout_type: 'strength',
               duration_minutes: durationMinutes,
-              notes: routineName,
-              exercises: completedExercises.map((e) => ({
-                exercise_name: e.exerciseName,
-                muscle_group: toServerMuscleGroup(e.muscleGroup),
-                sets_completed: e.sets.filter((s) => s.completed).length,
-                weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
-                reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
-              })),
+              notes: workoutNotes,
+              exercises: completedExercises.map(completedExercisePayload),
             },
             {
               onSuccess: (data: unknown) => {
@@ -944,6 +960,7 @@ export default function ActiveWorkoutScreen() {
                     assignmentId,
                     idempotencyKey: idempotencyKeyRef.current,
                     sessionExercises,
+                    workoutNotes,
                   }).catch((error: unknown) => {
                     // Best-effort re-save so the session stays recoverable after
                     // a failed server save. Surfaced for diagnosis.
@@ -1056,7 +1073,7 @@ export default function ActiveWorkoutScreen() {
           <Ionicons name="close" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <View style={styles.topCenter}>
-          <Text style={styles.topTitle}>{routineName}</Text>
+          <Text style={styles.topTitle} numberOfLines={2}>{routineName}</Text>
           <Text style={styles.timerText}>{formatTime(timer)}</Text>
         </View>
         <HapticPressable
@@ -1083,7 +1100,8 @@ export default function ActiveWorkoutScreen() {
         <View style={[styles.progressFill, { width: totalSets > 0 ? `${(completedSets / totalSets) * 100}%` : '0%' }]} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
+        <Text style={[styles.previousSetText, { marginHorizontal: 20, marginBottom: 12 }]}>{completedSets} of {totalSets} sets completed</Text>
         {/* §2.9 Roman voice-log readback — voiced beside his face, reading back
             the most recently completed set. Only when the Roman flag is on AND
             at least one set has been completed. Default mode: a per-set PR
@@ -1110,31 +1128,34 @@ export default function ActiveWorkoutScreen() {
             onOpenExerciseDetail={openExerciseDetail}
             colors={colors}
             styles={styles}
+            previous={previousSets(history, exercise.exerciseName)}
+            isLast={exIdx === sessionExercises.length - 1}
+            disabled={saving}
+            onMove={(index, direction) => setSessionExercises((prev) => moveExercise(prev, index, direction))}
+            onSwap={requestSwap}
+            onChangeNotes={(index, notes) => setSessionExercises((prev) => prev.map((e, i) => i === index ? { ...e, notes } : e))}
+            onChangeRest={(index, restSec) => setSessionExercises((prev) => prev.map((e, i) => i === index ? { ...e, restSec } : e))}
           />
         ))}
 
-        <HapticPressable intent="medium" style={styles.addExerciseBtn} onPress={openAddExercise}>
+        <HapticPressable intent="medium" style={styles.addExerciseBtn} disabled={saving} onPress={() => { void openAddExercise(); }}>
           <Ionicons name="add-circle" size={22} color={colors.primary} />
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </HapticPressable>
+        <View style={[styles.exerciseCard, { marginTop: 16 }]}>
+          <TextInput style={styles.notesInput} value={workoutNotes} onChangeText={setWorkoutNotes} placeholder="Workout notes" accessibilityLabel="Workout notes" placeholderTextColor={colors.textMuted} multiline maxLength={2000} editable={!saving} />
+        </View>
+        {completedSets > 0 && <WorkoutFinishSummary summary={summary} styles={styles} historyState={historyState} />}
       </ScrollView>
 
-      {/* Exercise Log Modal — opens after selecting an exercise to capture sets/weight/reps */}
-      <ExerciseLogModal
-        visible={showLogModal}
-        exercise={selectedExercise}
-        onSave={handleExerciseLogSave}
-        onClose={handleExerciseLogClose}
-      />
-
       {/* Add Exercise Modal */}
-      <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <HapticPressable intent="light" onPress={() => setShowAddModal(false)}>
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </HapticPressable>
-            <Text style={styles.modalTitle}>Add Exercise</Text>
+            <Text style={styles.modalTitle}>{swapIndex === null ? 'Add Exercise' : 'Choose replacement'}</Text>
             <View style={{ width: 24 }} />
           </View>
 
@@ -1175,6 +1196,7 @@ export default function ActiveWorkoutScreen() {
           </ScrollView>
 
           <FlatList
+            keyboardShouldPersistTaps="handled"
             data={filteredExercises}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.exerciseList}
@@ -1238,7 +1260,11 @@ export default function ActiveWorkoutScreen() {
             {Math.floor(restSeconds / 60).toString().padStart(2, '0')}
             :{(restSeconds % 60).toString().padStart(2, '0')}
           </Text>
+          <HapticPressable intent="light" style={styles.toolButton} onPress={() => { restEndsAtRef.current += 30_000; refreshRest(); }} accessibilityLabel="Add 30 seconds to rest timer">
+            <Text style={styles.restSkip}>+30s</Text>
+          </HapticPressable>
           <TouchableOpacity
+            style={styles.toolButton}
             onPress={() => {
               if (restIntervalRef.current) clearInterval(restIntervalRef.current);
               restIntervalRef.current = null;
