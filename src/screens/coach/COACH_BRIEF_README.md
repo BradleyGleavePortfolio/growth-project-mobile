@@ -2,55 +2,40 @@
 
 ## Purpose
 
-The Coach Brief is a daily morning summary screen for coaches. The AI drafts a short overview of which clients logged activity, who needs attention, and what verified-progress claims are waiting for signoff. The coach explicitly approves the draft before anything is sent — there is no autonomous delivery. The approve-to-send toggle is local state only until the backend approval endpoint ships.
+The Coach Brief is the coach's once-a-day read: Roman turns the day's scattered activity (money since midnight, unread messages, check-ins, workouts waiting for approval, weight trends) into a short highlights paragraph, then lists the items that need the coach. Each item opens the screen that resolves it. The brief is for the coach only; nothing is sent to clients.
 
-All backend endpoints are **not yet live**. The adapter returns a stale empty payload.
+## Entry points
 
-## Screens + State Machine
+- Coach Home (Command Center Overview): `BriefHomeCard` in `CoachHomeCards`, behind `featureFlags.coachBrief`.
+- Daily push (backend `coach-brief.scheduler`, `actionScreen: 'CoachBrief'`) via `pushTapRouter` `CoachBrief`.
+- Route: `SettingsStack > CoachBrief`, always opened with `initial: false` so the Settings root stays underneath.
 
-| Screen | File | State |
-|---|---|---|
-| CoachBriefScreen | `src/screens/coach/CoachBriefScreen.tsx` | `loading → flag-off empty / stale empty / brief with draft + client cards` |
-
-### State transitions
+## State machine
 
 ```
 mount
-  └─ featureFlags.coachBrief === false
-       └─ render: "Coach Brief is preview-only" [terminal until flag on]
-  └─ featureFlags.coachBrief === true
-       └─ loading=true → fetch fetchCoachBrief()
-            └─ success → payload.isStale=true → render stale banner
-            └─ payload.morningSummary.aiDraft empty → "No brief yet" empty state
-            └─ payload.morningSummary.aiDraft present → AINote draft + approve toggle
-            └─ payload.clients present → CoachBriefClientCard list
-  └─ pull-to-refresh → re-fetch
-  └─ Pressable (approve toggle) → setDraftApproved(v => !v) [local state only]
+  └─ featureFlags.coachBrief === false → "Coach Brief is preview-only" (terminal)
+  └─ GET /coach/brief/today
+       └─ status generated → header (Roman card when romanChat, else plain card) + "Needs you" list; POST :id/read once
+       └─ status pending/generating → "still being prepared", polls every 2.5 s (12 tries)
+       └─ status failed → "could not be prepared" + Prepare again (POST /coach/brief/regenerate, 3/hour)
+       └─ request error → "could not load" + Try again
+  └─ pull-to-refresh → GET again (cheap; the brief is prepared once a day)
 ```
 
-## API Endpoints Consumed
+## API
 
-| Endpoint | Status | Notes |
-|---|---|---|
-| `GET /coach/brief` | **MOCKED** | Adapter returns empty stub. Replace `fetchCoachBrief()` body when endpoint ships. |
-| `POST /coach/brief/approve` | **MOCKED** | Approve toggle is local state. Must call this endpoint when it exists. |
-
-## Feature Flags
-
-| Flag | Env var | Default (prod) | Default (dev) | Meaning |
-|---|---|---|---|---|
-| `coachBrief` | `EXPO_PUBLIC_FF_COACH_BRIEF` | `false` | `true` | Enables the Coach Brief surface |
+| Endpoint | Notes |
+|---|---|
+| `GET /coach/brief/today` | First call of the day prepares the brief (up to ~30 s); 40 s client timeout. Zod-validated. |
+| `POST /coach/brief/regenerate` | Only offered when today's brief failed. 429 shows the throttled card. |
+| `POST /coach/brief/:id/read` | Fire-and-forget; feeds the dormancy guard. |
 
 ## Tests
 
 | File | What it asserts |
 |---|---|
-| `src/__tests__/wave11Screens.test.tsx` | Flag-off renders preview-only empty state (RTL). Source guards: flag check present, AINote draft wrapper present, approve-button has `accessibilityRole="button"` and descriptive labels, stale banner present, VerifiedProgressRow used for client cards. |
-| `src/__tests__/wave11Doctrine.test.ts` | `fetchCoachBrief()` returns empty + `isStale: true`. |
-
-## Future Work / Known Limits
-
-- **No live backend.** `GET /coach/brief` does not exist yet. When it ships, replace `fetchCoachBrief()` body with `api.get(...)`.
-- **Approve-to-send wiring.** The toggle must call `POST /coach/brief/approve` once the endpoint exists, and the response should include the `approvedAt` timestamp.
-- **Delivery channel.** The approved draft can be posted as a community announcement, an in-app banner, or both — this is not yet decided. The PR description lists this as an open question.
-- **Coach Brief delivery channel.** Once the brief is approved, the intent is to surface it to clients. The delivery mechanism (announcement post vs. push notification) needs a product decision before the endpoint is built.
+| `src/screens/coach/__tests__/CoachBriefScreenRoman.test.tsx` | Ready / no clients / load error / failed / polling states, tap routing, mark read. |
+| `src/components/roman/__tests__/romanP3FlagOff.test.tsx` | romanChat off: plain header, no Roman surfaces. |
+| `src/__tests__/wave11Screens.test.tsx` | Flag-off preview lock; source guards (live route, no approve-to-send copy). |
+| `src/services/__tests__/pushTapRouter.test.ts` | `CoachBrief` push tap opens the brief with Settings underneath. |

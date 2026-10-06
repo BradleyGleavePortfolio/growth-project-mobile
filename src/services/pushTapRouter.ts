@@ -51,6 +51,11 @@ export type PushSession =
 interface Target {
   root: string;
   screen?: string;
+  /**
+   * false keeps the nested stack's root under the target (a Settings stack
+   * opened by a push still reaches Settings, sign out and account deletion).
+   */
+  initial?: false;
 }
 
 type Resolver = () => Target | null;
@@ -90,6 +95,11 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
   // S-SCHED: coach booking pushes open the booking inbox.
   CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
+  // The daily brief push (backend coach-brief.scheduler actionScreen).
+  CoachBrief: () =>
+    featureFlags.coachBrief
+      ? { root: 'SettingsStack', screen: 'CoachBrief', initial: false }
+      : null,
   // AI credit top-ups are not purchasable on hidden iOS builds: a budget
   // push lands on Settings, never on the checkout route (whose gated
   // wrapper would only say "Managed on the web").
@@ -279,7 +289,11 @@ function deliver(
   }
   try {
     if (target.screen) {
-      nav.navigate(target.root, { screen: target.screen, params });
+      nav.navigate(target.root, {
+        screen: target.screen,
+        params,
+        ...(target.initial === false ? { initial: false } : {}),
+      });
     } else {
       nav.navigate(target.root, params);
     }
