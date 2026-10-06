@@ -68,6 +68,7 @@ export interface PersistedActiveWorkoutSession {
   idempotencyKey: string;
   // Working state.
   sessionExercises: SessionExercise[];
+  workoutNotes?: string;
 }
 
 export interface ActiveWorkoutLoadResult {

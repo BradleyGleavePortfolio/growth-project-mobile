@@ -15,7 +15,7 @@ export const makeStyles = (colors: ThemeColors) =>
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  topCenter: { alignItems: 'center' },
+  topCenter: { alignItems: 'center', flex: 1, paddingHorizontal: 8 },
   topTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
   timerText: { fontSize: 20, fontWeight: '500', color: colors.primary, marginTop: 2 },
   finishBtn: {
@@ -47,7 +47,12 @@ export const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     marginBottom: 12,
   },
-  exerciseName: { fontSize: 16, fontWeight: '500', color: colors.primary },
+  exerciseName: { fontSize: 16, fontWeight: '500', color: colors.primary, flex: 1, marginRight: 8 },
+  exerciseTools: { flexDirection: 'row', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' },
+  toolButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  previousSet: { minHeight: 44, justifyContent: 'center', alignItems: 'flex-end', paddingHorizontal: 8, marginBottom: 4 },
+  previousSetText: { fontSize: 12, color: colors.textSecondary },
+  notesInput: { minHeight: 44, padding: 12, fontSize: 14, color: colors.textPrimary, backgroundColor: colors.background, marginTop: 8 },
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -68,7 +73,7 @@ export const makeStyles = (colors: ThemeColors) =>
   setInput: {
     backgroundColor: colors.background,
     borderRadius: 0, // radius.sm
-    paddingVertical: 8,
+    paddingVertical: 12,
     paddingHorizontal: 12,
     fontSize: 15,
     fontWeight: '600',
@@ -76,8 +81,8 @@ export const makeStyles = (colors: ThemeColors) =>
     textAlign: 'center',
   },
   checkBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     borderRadius: 0, // radius.sm
     backgroundColor: colors.background,
     justifyContent: 'center',
@@ -94,7 +99,7 @@ export const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    paddingVertical: 8,
+    paddingVertical: 12,
     marginTop: 4,
   },
   addSetText: { fontSize: 13, fontWeight: '600', color: colors.primary },

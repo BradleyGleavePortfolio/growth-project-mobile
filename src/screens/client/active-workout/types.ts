@@ -6,6 +6,7 @@ export interface SessionExercise {
   workoutPlanExerciseId?: string;
   /** Server MuscleGroup value saved with the workout (defaults to full_body). */
   muscleGroup?: string;
+  notes?: string;
 }
 
 export interface SessionSet {
