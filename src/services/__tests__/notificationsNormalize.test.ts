@@ -50,4 +50,14 @@ describe('normalizeNotification (S-SCHED-2 live rows)', () => {
     expect(odd?.actionScreen).toBeUndefined();
     expect(odd?.createdAt).toBe(new Date(0).toISOString());
   });
+
+  it('AUDIT-09-125: rows without an actionScreen open the screen their kind belongs to', () => {
+    const row = (kind: string) =>
+      normalizeNotification({ id: `r-${kind}`, kind, body: 'b', payload: {}, read_at: null, created_at: '2027-03-01T10:00:00.000Z' });
+    expect(row('message_received')?.actionScreen).toBe('Messages');
+    expect(row('community_post_replied')?.actionScreen).toBe('Community');
+    expect(row('workout_reminder')?.actionScreen).toBe('WorkoutMain');
+    expect(row('drip_released')?.actionScreen).toBe('Deliverables');
+    expect(row('coach_alert')?.actionScreen).toBeUndefined();
+  });
 });
