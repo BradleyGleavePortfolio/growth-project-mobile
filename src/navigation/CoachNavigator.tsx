@@ -45,6 +45,11 @@ import { featureFlags } from '../config/featureFlags';
 // bottom-tab ONLY when `featureFlags.coachCommunity` is true; when the flag is
 // OFF the tab does not render and none of the six routes register.
 import CoachCommunityNavigator from './CoachCommunityNavigator';
+// AUDIT-10-125 B-1: the community report queue is reachable from the coach
+// Messages header (CommunityReportsEntry) even while the coach Community tab
+// is off, so member reports always have a moderator screen (Apple 1.2).
+import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
+import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
 // Stage 3 — cross-pillar federated coach surface. Mounted as a nested
 // navigator so the practice-selection picker, dashboard, roster, detail
@@ -137,7 +142,7 @@ import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
-import { useCoachRoleType } from '../hooks/useCoachRoleType';
+import { useCoachTeamStatus } from '../hooks/useCoachRoleType';
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
@@ -205,6 +210,9 @@ export type ClientsStackParamList = {
   /** M-BCAST-123 — coach broadcasts list and composer (server flag FEATURE_COACH_BROADCASTS). */
   CoachBroadcasts:          undefined;
   CoachBroadcastComposer:   undefined;
+  /** AUDIT-10-125 B-1 — community report queue and the reported post. */
+  CoachCommunityModeration: undefined;
+  CoachCommunityPostDetail: { postId: string; flagged?: boolean };
   /** M-FEATURED-123 — owner-only featured coach editor. */
   FeaturedCoachEditor:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
@@ -448,6 +456,17 @@ function ClientsStackNavigator() {
         component={BroadcastComposerScreen}
         options={{ headerShown: true, title: 'New broadcast', headerBackTitle: 'Back' }}
       />
+      {/* AUDIT-10-125 B-1 — opened from CommunityReportsEntry (coach Messages header). */}
+      <ClientsStack.Screen
+        name="CoachCommunityModeration"
+        component={CoachCommunityModerationScreen}
+        options={{ headerShown: true, title: 'Community reports', headerBackTitle: 'Back' }}
+      />
+      <ClientsStack.Screen
+        name="CoachCommunityPostDetail"
+        component={CoachCommunityPostDetailScreen}
+        options={{ headerShown: true, title: 'Reported post', headerBackTitle: 'Back' }}
+      />
       {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
       <ClientsStack.Screen
         name="AIWorkoutDraft"
@@ -652,8 +671,12 @@ export default function CoachNavigator() {
   // closed (returns 'unknown' until a positive head-coach signal), so the
   // tab disappears for sub-coaches and during the initial resolution
   // window.
-  const coachRoleType = useCoachRoleType();
-  const showTeamTab = coachRoleType === 'head_coach';
+  // AUDIT-16-125: the members route lists every coach as the head coach of
+  // their own roster, so role alone put a Team tab in front of every coach,
+  // where it could only show the plan gate. The tab now mounts only for a
+  // head coach (useCoachRoleType contract) whose roster already has a sub-coach.
+  const teamStatus = useCoachTeamStatus();
+  const showTeamTab = teamStatus.role === 'head_coach' && teamStatus.hasSubCoaches;
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,

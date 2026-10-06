@@ -10,7 +10,7 @@
  *      buyer). Pure function unit test on `__test.buyerStatusOf`.
  *   3. Tappability per asset_type — workout_program/_plan + meal_plan +
  *      auto_message tappable when the row has a `materialised_ref`; pdf
- *      / video non-tappable today (PR-12 viewers OOS). Unit test on
+ *      / video tappable once delivered (B-DELIV-125). Unit test on
  *      `__test.isTappableDelivered`.
  *   4. The screen renders Delivered + Upcoming sections from a healthy
  *      response, the empty state when both lists are empty, the error
@@ -113,17 +113,17 @@ describe('tappability per asset_type', () => {
     ).toBe(true);
   });
 
-  it('pdf + video are NOT tappable today (PR-12 viewers OOS)', () => {
+  it('pdf + video are tappable once delivered (B-DELIV-125: grant-scoped signed URL)', () => {
     expect(
       DeliverablesTest.isTappableDelivered(
         baseDrop({ status: 'fired', asset_type: 'pdf', materialised_ref: 'm_1' }),
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       DeliverablesTest.isTappableDelivered(
         baseDrop({ status: 'fired', asset_type: 'video', materialised_ref: 'm_2' }),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('non-delivered status is never tappable', () => {

@@ -134,6 +134,7 @@ jest.mock('../services/firstWinApi', () => ({
 // Silence font-loading warnings in test environment
 jest.mock('expo-font', () => ({ isLoaded: () => true }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 
 describe('Day1WinScreen — RTL mount', () => {
@@ -164,6 +165,16 @@ describe('Day1WinScreen — RTL mount', () => {
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
+    expect(mockComplete).not.toHaveBeenCalled();
+  });
+
+  it('skip remembers the skip for the signed-in user (AUDIT-01-125)', async () => {
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({ id: 'client-K', role: 'student', name: 'Kai' }));
+    const onComplete = jest.fn();
+    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
+    await fireEvent.press(getByTestId('day1win-skip-button'));
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(await AsyncStorage.getItem('prefs:onboarding.day1win_skipped_at:client-K')).toBeTruthy();
     expect(mockComplete).not.toHaveBeenCalled();
   });
 

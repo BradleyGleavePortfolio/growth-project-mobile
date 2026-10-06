@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logApi, weightApi } from '../../services/api';
+import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
 import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -37,7 +38,13 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
     if (!currentUser) return;
     try {
       const weightRes = await weightApi.getHistory(7);
-      const logs = weightRes.data?.logs || weightRes.data || [];
+      // Rows carry weight_lbs and an ISO date; normalise them with the same
+      // parser the Progress screen uses so the report shows real numbers.
+      const uid = currentUser.id;
+      const logs = weightHistoryRows(weightRes.data)
+        .map((row) => parseWeightLogRow(row, uid))
+        .filter((x): x is WeightLog => x !== null)
+        .sort((a, b) => a.date.localeCompare(b.date));
       setWeeklyWeights(logs.slice(-7));
     } catch (err) {
       // Read-only weight history; empty chart is the graceful fallback.

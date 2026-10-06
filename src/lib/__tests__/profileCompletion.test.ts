@@ -8,6 +8,7 @@ import {
   getProfileCompletion,
   summarizeMissing,
   buildProfileUpdatePayload,
+  resolveProfileFields,
   FIELD_LABEL,
 } from '../profileCompletion';
 import type { CurrentUser } from '../../hooks/useCurrentUser';
@@ -260,5 +261,49 @@ describe('buildProfileUpdatePayload', () => {
         dietRestrictionsAnswered: true,
       }),
     ).toEqual({ diet_restrictions: ['Nut Allergy', 'Vegan'] });
+  });
+});
+
+// AUDIT-12-125: sign-in and /auth/me return the stored profile row, whose
+// columns use the server names. Answers given in onboarding must still count.
+describe('server column names (sign-in / auth/me profile row)', () => {
+  const serverRow = {
+    sex: 'female',
+    date_of_birth: '1992-04-15T00:00:00.000Z',
+    target_weight_lbs: 165,
+    dietary_pattern: 'none',
+    workout_days_per_week: 4,
+    has_gym_membership: true,
+    current_weight_lbs: 172,
+    height_cm: 168,
+    activity_level: 'moderate',
+    goal_type: 'maintenance',
+    dietary_restrictions: ['Nut Allergy'],
+  };
+
+  it('counts a completed server profile as complete (no Home nudge)', () => {
+    const r = getProfileCompletion(userWith(serverRow));
+    expect(r.missing).toEqual([]);
+    expect(r.isComplete).toBe(true);
+  });
+
+  it('maps server columns onto the Edit Profile vocabulary', () => {
+    const f = resolveProfileFields(serverRow);
+    expect(f.dob).toBe('1992-04-15');
+    expect(f.target_weight).toBe(165);
+    expect(f.current_weight).toBe(172);
+    expect(f.diet_type).toBe('omnivore');
+    expect(f.gym_membership).toBe('yes_regular');
+    expect(f.primary_goal).toBe('maintain');
+    expect(f.diet_restrictions).toEqual(['Nut Allergy']);
+  });
+
+  it('prefers the app names and keeps an empty server restrictions list unanswered', () => {
+    const f = resolveProfileFields({ ...serverRow, primary_goal: 'lose_fast', dietary_restrictions: [] });
+    expect(f.primary_goal).toBe('lose_fast');
+    expect(f.diet_restrictions).toBeUndefined();
+    expect(getProfileCompletion(userWith({ ...serverRow, dietary_restrictions: [] })).missing).toEqual([
+      'diet_restrictions',
+    ]);
   });
 });

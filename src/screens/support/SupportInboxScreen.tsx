@@ -20,7 +20,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
@@ -33,7 +32,7 @@ import { SUPPORT_EMAIL } from '../../constants/support';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 interface Props {
-  navigation: NavigationProp<ParamListBase>;
+  navigation: Pick<NavigationProp<ParamListBase>, 'goBack'>;
   /**
    * Opened from the auth stack (nobody signed in). The chat session is reset
    * first unless it is already this device's anonymous one, so a previous
@@ -57,6 +56,7 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
   const [unavailable, setUnavailable] = useState(false);
   // Sol B-324-1: a failed email launch is shown, never swallowed.
   const supportEmail = useSupportEmail('Support request');
+  const problemEmail = useSupportEmail('Report a problem');
   const open = () => {
     const result = openSupportChat({ preSignIn });
     setBlocked(result === 'blocked');
@@ -145,15 +145,25 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
           <Text style={styles.openBtnText}>{blocked ? 'Try again' : 'Open Support Chat'}</Text>
         </HapticPressable>
         )}
-        {unavailable ? (
-          <SupportEmailFallback
-            handle={supportEmail}
-            textStyle={styles.body_text}
-            linkColor={colors.primary}
-            testID="support-email-fallback"
-            centered
-          />
+        {!unavailable ? (
+          <HapticPressable
+            intent="light"
+            style={styles.emailAction}
+            onPress={() => void problemEmail.open()}
+            accessibilityRole="button"
+            accessibilityLabel="Report a problem by email"
+            testID="support-report-problem"
+          >
+            <Text style={styles.emailActionText}>Report a problem by email</Text>
+          </HapticPressable>
         ) : null}
+        <SupportEmailFallback
+          handle={unavailable ? supportEmail : problemEmail}
+          textStyle={styles.body_text}
+          linkColor={colors.primary}
+          testID="support-email-fallback"
+          centered
+        />
 
         <Text style={styles.note}>
           Support is separate from Coach AI and the Client Bot. A human
@@ -230,6 +240,17 @@ function makeStyles(colors: ThemeColors) {
       fontSize: 16,
       fontWeight: '500',
       color: colors.textOnPrimary,
+    },
+    emailAction: {
+      minHeight: 44,
+      justifyContent: 'center',
+      paddingHorizontal: 16,
+    },
+    emailActionText: {
+      color: colors.primary,
+      fontSize: 15,
+      fontWeight: '500',
+      textDecorationLine: 'underline',
     },
     note: {
       fontSize: 13,

@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
-import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -30,7 +30,7 @@ export interface AIBudgetHardPauseModalProps {
   budget: CoachAIBudgetResponse;
   onClose: () => void;
   onSelectPack: (amountCents: number | 'custom') => void;
-  /** iOS with non-P2P purchases hidden: neutral pause notice, no packs. */
+  /** Digital purchases hidden: neutral pause notice, no packs. */
   purchasesHidden?: boolean;
   testID?: string;
 }
@@ -40,7 +40,7 @@ export function AIBudgetHardPauseModal({
   budget,
   onClose,
   onSelectPack,
-  purchasesHidden = nonP2PPurchasesHidden(),
+  purchasesHidden = digitalPurchasesHidden(),
   testID,
 }: AIBudgetHardPauseModalProps): React.ReactElement {
   const { colors } = useTheme();

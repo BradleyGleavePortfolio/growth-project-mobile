@@ -42,6 +42,14 @@ export function inviteAttachFailed(data: unknown): boolean {
 
 const MESSAGES: Array<{ test: RegExp; message: string }> = [
   {
+    // invite_intended_email_mismatch: an emailed (bulk) invite only works for
+    // the address it was sent to, e.g. not for a Sign in with Apple hidden
+    // email (AUDIT-17-125). Retrying the same code can never work.
+    test: /email_mismatch|intended_email/i,
+    message:
+      'That invite was sent to a different email address. Sign up with the email the invite was sent to, or ask your coach for their coach code and enter it below.',
+  },
+  {
     // code_revoked: the coach turned the code off (revoke, or a rotation with no grace period).
     test: /revoked|turned_off/i,
     message:

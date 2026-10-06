@@ -72,6 +72,9 @@ export interface CoachPackage {
   shareToken: string | null;
   subscriberCount: number;
   monthlyRevenueCents: number;
+  /** False when the server did not report client count/MRR. Never display fabricated zeros. */
+  statsAvailable?: boolean;
+  pricingLocked?: boolean;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -103,16 +106,24 @@ export interface PackageSubscriber {
   name: string;
   email: string;
   startedAt: string;
-  status: 'active' | 'past_due' | 'canceled' | 'trialing';
+  status: 'active' | 'past_due' | 'canceled' | 'trialing' | 'paid' | 'pending' |
+    'payment_failed' | 'expired' | 'granted' | 'revoked' | 'refunded' | 'unknown';
+  rawStatus: string;
   nextRenewalAt: string | null;
-  totalPaidCents: number;
+  /** The agreed package price snapshot, not a lifetime total or proof of payment. */
+  amountCents: number;
+  currency: string;
+  entitlementActive: boolean;
+  cancelAtPeriodEnd: boolean;
 }
 
 export interface PackageSubscribersResponse {
   packageId: string;
   subscribers: PackageSubscriber[];
-  totalActive: number;
-  monthlyRecurringRevenueCents: number;
+  totalActive: number | null;
+  monthlyRecurringRevenueCents: number | null;
+  currency: string | null;
+  nextOffset: number | null;
 }
 
 export interface PublicPackageView {
@@ -179,8 +190,8 @@ function billingCycleToInterval(
  * Adapt the backend public-storefront payload (snake_case `PublicPackageData`)
  * into the camelCase `PublicPackageView` the client screens consume.
  *
- * Quarterly maps to intervalCount 3 (months); everything else is count 1 so
- * `intervalCopy()` renders "per month/year" rather than "every N months".
+ * Every UI interval counts its own unit: quarterly is one quarter, not
+ * three quarters. The write adapter turns quarters back into months.
  */
 export function adaptPublicPackage(raw: BackendPublicPackage): PublicPackageView {
   const interval = billingCycleToInterval(raw.billing_cycle);
@@ -191,7 +202,7 @@ export function adaptPublicPackage(raw: BackendPublicPackage): PublicPackageView
     priceCents: raw.price_cents ?? 0,
     currency: (raw.currency ?? 'usd').toLowerCase(),
     billingInterval: interval,
-    intervalCount: interval === 'quarterly' ? 3 : 1,
+    intervalCount: 1,
     trialDays: raw.trial_days ?? null,
     features: Array.isArray(raw.features) ? raw.features : [],
     coach: {
@@ -278,6 +289,7 @@ interface BackendPackageRow {
   share_token?: string | null;
   subscriber_count?: number;
   monthly_revenue_cents?: number;
+  pricing_locked?: boolean;
   created_at?: string;
   updated_at?: string;
   archived_at?: string | null;
@@ -291,7 +303,7 @@ function fromBackendInterval(
   if (billingType === 'one_time') return 'one_time';
   if (raw === 'week') return 'weekly';
   if (raw === 'month') {
-    if (count >= 3 && count < 12) return 'quarterly';
+    if (count >= 3 && count < 12 && count % 3 === 0) return 'quarterly';
     return 'monthly';
   }
   if (raw === 'year') return 'yearly';
@@ -329,13 +341,19 @@ export function fromBackend(row: BackendPackageRow): CoachPackage {
     priceCents: row.amount_cents ?? row.price_cents ?? 0,
     currency: row.currency ?? 'usd',
     billingInterval: interval,
-    intervalCount: count,
+    // A quarterly UI interval counts quarters, not months: 3 months = 1
+    // quarter. Keep other month counts as monthly so no cadence is relabelled.
+    intervalCount: interval === 'quarterly' &&
+      (row.billing_interval ?? row.interval) === 'month' ? count / 3 : count,
     trialDays: row.trial_days ?? null,
     features: Array.isArray(row.features) ? row.features : [],
     status,
     shareToken: row.share_token ?? null,
     subscriberCount: row.subscriber_count ?? 0,
     monthlyRevenueCents: row.monthly_revenue_cents ?? 0,
+    statsAvailable: typeof row.subscriber_count === 'number' &&
+      typeof row.monthly_revenue_cents === 'number',
+    pricingLocked: row.pricing_locked,
     createdAt: row.created_at ?? '',
     updatedAt: row.updated_at ?? '',
     archivedAt: row.archived_at ?? null,
@@ -505,12 +523,71 @@ export function isLivePackage(p: CoachPackage): boolean {
   return typeof p.publishedAt === 'string' && p.publishedAt.length > 0;
 }
 
+/** Raw mutation replies have no statistics; keep the last measured values. */
+export function preservePackageStats(next: CoachPackage, saved: CoachPackage): CoachPackage {
+  if (next.statsAvailable !== false) return next;
+  return {
+    ...next, subscriberCount: saved.subscriberCount,
+    monthlyRevenueCents: saved.monthlyRevenueCents, statsAvailable: saved.statsAvailable,
+    pricingLocked: saved.pricingLocked,
+  };
+}
+
+interface BackendSubscriber {
+  id: string;
+  client_user_id: string;
+  client?: { name?: string | null; email?: string | null };
+  status: string;
+  billing_type: string;
+  amount_cents: number;
+  currency: string;
+  entitlement_active: boolean;
+  cancel_at_period_end: boolean;
+  current_period_end?: string | null;
+  created_at: string;
+}
+interface BackendSubscribersPage {
+  package_id?: string;
+  currency?: string;
+  subscriber_count?: number;
+  monthly_revenue_cents?: number;
+  next_offset?: number | null;
+  subscribers: BackendSubscriber[];
+}
+const SUBSCRIBER_STATUSES: readonly PackageSubscriber['status'][] = [
+  'active', 'past_due', 'canceled', 'trialing', 'paid', 'pending',
+  'payment_failed', 'expired', 'granted', 'revoked', 'refunded',
+];
+
+function adaptSubscribers(id: string, raw: BackendSubscribersPage): PackageSubscribersResponse {
+  return {
+    packageId: raw.package_id ?? id,
+    totalActive: typeof raw.subscriber_count === 'number' ? raw.subscriber_count : null,
+    monthlyRecurringRevenueCents: typeof raw.monthly_revenue_cents === 'number'
+      ? raw.monthly_revenue_cents : null,
+    currency: raw.currency ?? null,
+    nextOffset: raw.next_offset ?? null,
+    subscribers: raw.subscribers.map((p) => ({
+      id: p.id, userId: p.client_user_id, name: p.client?.name ?? '',
+      email: p.client?.email ?? '', startedAt: p.created_at,
+      status: SUBSCRIBER_STATUSES.includes(p.status as PackageSubscriber['status'])
+        ? p.status as PackageSubscriber['status'] : 'unknown',
+      rawStatus: p.status, amountCents: p.amount_cents, currency: p.currency,
+      entitlementActive: p.entitlement_active, cancelAtPeriodEnd: p.cancel_at_period_end,
+      nextRenewalAt: p.billing_type === 'recurring' && !p.cancel_at_period_end &&
+        ['active', 'past_due', 'trialing'].includes(p.status)
+        ? p.current_period_end ?? null : null,
+    })),
+  };
+}
+
 // ─── coach API ──────────────────────────────────────────────────────────────
 
 export const coachPackagesApi = {
   list: async () => {
     const res = await api.get<{ packages?: BackendPackageRow[] } | BackendPackageRow[]>(
       '/v1/coach/packages',
+      { params: { include_archived: true } },
     );
     const rows = Array.isArray(res.data)
       ? res.data
@@ -592,13 +669,15 @@ export const coachPackagesApi = {
     return { ...res, data: fromBackend(row) };
   },
 
-  // TODO(backend): `GET /v1/coach/packages/:id/subscribers` not yet deployed.
-  // 404 is surfaced to the caller — we do NOT convert to an empty list so
-  // a missing endpoint doesn't masquerade as "0 subscribers".
-  subscribers: (id: string) =>
-    api.get<PackageSubscribersResponse>(
+  // The live route returns allow-listed snake_case purchase rows, not
+  // PackageSubscriber. A package price is never labelled as total paid.
+  subscribers: async (id: string, offset = 0) => {
+    const res = await api.get<BackendSubscribersPage>(
       `/v1/coach/packages/${encodeURIComponent(id)}/subscribers`,
-    ),
+      { params: { offset } },
+    );
+    return { ...res, data: adaptSubscribers(id, res.data) };
+  },
 
   // C-332-2: the old split-ledger earnings client is gone; every coach
   // money figure comes from TGP Money (src/api/coachMoneyApi.ts).

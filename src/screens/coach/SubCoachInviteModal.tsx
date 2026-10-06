@@ -27,7 +27,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { subCoachApi, type SubCoachInviteResult } from '../../api/subCoachApi';
 import { errorMessage } from '../../types/common';
-import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
 
 /**
  * Seat-limit copy. With non-P2P purchases hidden (iOS) it never tells the
@@ -141,7 +141,7 @@ export default function SubCoachInviteModal({
       // ceiling. Surface a structured Rule-9 message naming the exact
       // headroom so the head coach knows what to do.
       if (typeof remainingSeats === 'number' && n > remainingSeats) {
-        setError(seatLimitMessage(remainingSeats, nonP2PPurchasesHidden()));
+        setError(seatLimitMessage(remainingSeats, digitalPurchasesHidden()));
         return;
       }
       maxClientsNum = n;

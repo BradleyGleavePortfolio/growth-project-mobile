@@ -95,6 +95,9 @@ export default function OverviewScreen({
   }
 
   const d = data;
+  // HUNT-05-124 U-H05-2: a coach with no clients yet has no check-in rate.
+  // Show a neutral dash instead of a red 0%, and no "of 0" under Active today.
+  const noClients = d !== null && d.roster_size === 0;
 
   return (
     <ScrollView
@@ -127,7 +130,7 @@ export default function OverviewScreen({
         <KpiTile
           label="Active today"
           value={d?.active_today ?? '—'}
-          subtext={d ? `of ${d.roster_size}` : undefined}
+          subtext={d && !noClients ? `of ${d.roster_size}` : undefined}
           valueColor={colors.forest}
           testID="command-center-kpi-active-today"
           style={styles.tileFlex}
@@ -138,9 +141,11 @@ export default function OverviewScreen({
       <View style={styles.tileRow}>
         <KpiTile
           label="Check-in rate (7 days)"
-          value={d ? `${Math.round(d.check_in_rate_7day * 100)}%` : '—'}
+          value={d && !noClients ? `${Math.round(d.check_in_rate_7day * 100)}%` : '—'}
           valueColor={
-            d && d.check_in_rate_7day >= 0.7
+            !d || noClients
+              ? colors.stone
+              : d.check_in_rate_7day >= 0.7
               ? colors.forest
               : d && d.check_in_rate_7day >= 0.5
               ? colors.mutedGold

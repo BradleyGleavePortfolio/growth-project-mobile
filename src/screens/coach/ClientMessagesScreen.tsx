@@ -179,10 +179,15 @@ export default function ClientMessagesScreen() {
       const unsubClient = subscribeToMessages(clientId, () => {
         loadSinceNewest().then(markRead);
       });
+      // A client message lands on the coach's own channel: it is on screen,
+      // so it is read (AUDIT-03-125 U1; was a refetch that left it unread).
+      const refetchAndRead = () => {
+        void loadSinceNewest().then(markRead);
+      };
       const unsubSelf = currentUser?.id
         ? subscribeToMessages(
             currentUser.id,
-            loadSinceNewest,
+            refetchAndRead,
             thread.enabled
               ? (ping) => {
                   // The backend's public-channel ping carries no ids, so every
@@ -196,7 +201,7 @@ export default function ClientMessagesScreen() {
           )
         : () => {};
 
-      pollRef.current = setInterval(loadSinceNewest, FALLBACK_POLL_MS);
+      pollRef.current = setInterval(refetchAndRead, FALLBACK_POLL_MS);
       return () => {
         unsubClient();
         unsubSelf();

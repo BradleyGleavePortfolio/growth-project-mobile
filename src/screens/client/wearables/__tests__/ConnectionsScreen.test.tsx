@@ -57,13 +57,18 @@ jest.mock('../../../../hooks/useWearableConnections', () => ({
   }),
 }));
 
+// B-WEARLIST-125: the server-listed cloud trackers (empty = older server / 404).
+const mockCloud = jest.fn((): ReadonlySet<string> => new Set<string>());
+jest.mock('../../../../hooks/useConnectableCloudProviders', () => ({
+  useConnectableCloudProviders: () => mockCloud(),
+}));
 const mockReportUnexpected = jest.fn();
 jest.mock('../../../../lib/consultation/report', () => ({
   reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
 }));
 
 import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
-import { configFor, WEARABLE_PROVIDERS } from '../../../../api/wearablesConnectionsApi';
+import { configFor, type WearableProvider } from '../../../../api/wearablesConnectionsApi';
 import { disconnectConfirmCopy } from '../disconnectCopy';
 import { emptyImportMessage } from '../onDeviceCopy';
 import { OnDeviceSessionChangedError } from '../../../../services/health/sessionFence';
@@ -113,18 +118,17 @@ beforeEach(() => {
 });
 
 describe('ConnectionsScreen — list + badges', () => {
-  it('renders a row for every provider in the catalog', async () => {
+  // AUDIT-11-125: only what this phone can connect is offered. The cloud
+  // services are not switched on for launch; their Connect only ever said
+  // "isn't switched on yet".
+  it('on an iPhone with nothing connected, offers Apple Health only', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
     await render(<ConnectionsScreen />);
-    // Every provider's display name appears (Apple Health, Oura, WHOOP, …).
-    expect(screen.getByText('Apple Health')).toBeTruthy();
-    expect(screen.getByText('Oura')).toBeTruthy();
-    expect(screen.getByText('WHOOP')).toBeTruthy();
-    // Sanity: the number of rendered Connect/Reconnect/Disconnect actions
-    // equals the catalog size (one primary action per provider row).
-    const actions = screen.getAllByRole('button');
-    // Header has no buttons; each row has exactly one action button.
-    expect(actions.length).toBeGreaterThanOrEqual(WEARABLE_PROVIDERS.length);
+    expect(screen.getByLabelText('Connect Apple Health')).toBeTruthy();
+    for (const name of ['Oura', 'WHOOP', 'Garmin', 'Strava', 'Peloton', 'Health Connect', 'Samsung Health']) {
+      expect(screen.queryByText(name)).toBeNull();
+    }
+    expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
   it('shows the Connected badge + relative sync time for a connected provider', async () => {
@@ -160,8 +164,9 @@ describe('ConnectionsScreen — list + badges', () => {
   it('shows the Not connected badge + Connect action for an unconnected provider', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
     await render(<ConnectionsScreen />);
-    // Strava is not connected → "Connect Strava".
-    expect(screen.getByLabelText('Connect Strava')).toBeTruthy();
+    // Apple Health is not connected → "Connect Apple Health".
+    expect(screen.getByText('Not connected')).toBeTruthy();
+    expect(screen.getByLabelText('Connect Apple Health')).toBeTruthy();
   });
 });
 
@@ -169,9 +174,9 @@ describe('ConnectionsScreen — interactions', () => {
   it('opens the connect sheet with the tapped provider on Connect', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
     await render(<ConnectionsScreen />);
-    await fireEvent.press(screen.getByLabelText('Connect Strava'));
+    await fireEvent.press(screen.getByLabelText('Connect Apple Health'));
     expect(sheetProps.visible).toBe(true);
-    expect(sheetProps.provider).toBe('STRAVA');
+    expect(sheetProps.provider).toBe('APPLE_HEALTHKIT');
   });
 
   // Opus C-317-4 / owner ruling 2026-10-02: Disconnect asks first.
@@ -392,7 +397,7 @@ describe('ConnectionsScreen — Samsung Health row (B-364-1)', () => {
     ['a stored Samsung row only', [legacy], none],
     ['a stored Samsung row and Health Connect', [legacy, hc], here],
   ])('mirrors Health Connect: %s', (_case, conns, local) => {
-    const rows = buildRows(conns as Conns, local);
+    const rows = buildRows(conns as Conns, local, 'HEALTH_CONNECT');
     const samsung = rows.find((r) => r.provider === 'SAMSUNG_HEALTH');
     expect({ ...samsung, provider: 'HEALTH_CONNECT' }).toEqual(
       rows.find((r) => r.provider === 'HEALTH_CONNECT'),
@@ -421,5 +426,72 @@ describe('ConnectionsScreen — Samsung Health row (B-364-1)', () => {
     const empty = emptyImportMessage('SAMSUNG_HEALTH', 'Health Connect').text;
     expect(empty).toContain('Samsung Health is connected through Health Connect');
     expect(empty).toContain('In Samsung Health, open Settings, then Health Connect');
+  });
+});
+
+// AUDIT-11-125: Connect is offered only for what this phone can connect; a
+// provider the person already has a connection for stays listed to manage.
+describe('ConnectionsScreen — sources offered on this phone (AUDIT-11-125)', () => {
+  type Conns = Parameters<typeof buildRows>[0];
+  const names = (rows: ReturnType<typeof buildRows>) => rows.map((r) => r.provider).sort();
+
+  it('Android offers Health Connect and Samsung Health, no cloud service and no Apple Health', () => {
+    expect(names(buildRows([], null, 'HEALTH_CONNECT'))).toEqual(['HEALTH_CONNECT', 'SAMSUNG_HEALTH']);
+  });
+
+  it('iPhone offers Apple Health only', () => {
+    expect(names(buildRows([], null, 'APPLE_HEALTHKIT'))).toEqual(['APPLE_HEALTHKIT']);
+  });
+
+  it('keeps a provider with an existing connection, and drops one that is disconnected', () => {
+    const conns = [
+      connection('OURA', 'connected'),
+      connection('GARMIN', 'expired'),
+      connection('STRAVA', 'disconnected'),
+      connection('HEALTH_CONNECT', 'connected'),
+    ] as Conns;
+    expect(names(buildRows(conns, null, 'APPLE_HEALTHKIT'))).toEqual([
+      'APPLE_HEALTHKIT',
+      'GARMIN',
+      'HEALTH_CONNECT',
+      'OURA',
+      'SAMSUNG_HEALTH',
+    ]);
+  });
+});
+
+// B-WEARLIST-125: a cloud tracker appears the moment the server lists it as
+// connectable; with no list (older server, 404, error) nothing changes.
+describe('ConnectionsScreen — server-listed cloud trackers (B-WEARLIST-125)', () => {
+  afterEach(() => {
+    mockCloud.mockReturnValue(new Set<string>());
+  });
+
+  it('shows a listed tracker with its benefit and a working Connect', async () => {
+    mockCloud.mockReturnValue(new Set(['OURA']));
+    mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
+    await render(<ConnectionsScreen />);
+    expect(screen.getByText('Oura')).toBeTruthy();
+    expect(screen.getByText('Sleep, readiness and heart rate from your Oura ring')).toBeTruthy();
+    expect(screen.queryByText('WHOOP')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Connect Oura'));
+    expect(sheetProps.visible).toBe(true);
+    expect(sheetProps.provider).toBe('OURA');
+  });
+
+  it('shows no cloud tracker when the server lists none', async () => {
+    mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
+    await render(<ConnectionsScreen />);
+    for (const name of ['Oura', 'WHOOP', 'Garmin', 'Polar', 'Withings']) {
+      expect(screen.queryByText(name)).toBeNull();
+    }
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('buildRows adds only the listed cloud providers', () => {
+    const names = buildRows([], null, 'APPLE_HEALTHKIT', new Set<WearableProvider>(['OURA', 'POLAR']))
+      .map((r) => r.provider)
+      .sort();
+    expect(names).toEqual(['APPLE_HEALTHKIT', 'OURA', 'POLAR']);
   });
 });

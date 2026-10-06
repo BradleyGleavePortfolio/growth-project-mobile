@@ -63,6 +63,16 @@ import type {
   CoachModerationOutcome,
 } from '../../api/coachCommunityApi';
 import VoiceNotePlayer from '../../components/community/VoiceNotePlayer';
+import { COMMUNITY_REPORT_REASONS } from '../../api/communitySafetyApi';
+
+/**
+ * The reviewer-facing label for a stored report reason code ("self_harm" ->
+ * "Self-harm or suicide"), the same labels the member picked from. An unknown
+ * code is shown as stored.
+ */
+export function reportReasonLabel(reason: string): string {
+  return COMMUNITY_REPORT_REASONS.find((r) => r.code === reason)?.label ?? reason;
+}
 
 /** Reviewer-facing noun for each reported content type. */
 export const TARGET_NOUN: Record<CoachFlaggedItem['target_type'], string> = {
@@ -248,7 +258,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
             </Text>
           </View>
           <Text style={[styles.meta, { color: semanticColors.textMuted }]} numberOfLines={1}>
-            {(item.cohort_name ? `${item.cohort_name} · ` : '') + `${noun} · ${item.reason}`}
+            {(item.cohort_name ? `${item.cohort_name} · ` : '') + `${noun} · ${reportReasonLabel(item.reason)}`}
           </Text>
           {due ? (
             <Text

@@ -23,39 +23,10 @@ export function SettingsToggles({
       {/* Notifications */}
       <Text style={styles.sectionHeader}>Notifications</Text>
       <View style={styles.section}>
-        <View style={styles.row}>
-          <Ionicons name="alarm-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Daily Check-in</Text>
-          <Switch
-            value={settings.dailyCheckin}
-            onValueChange={(v) => onUpdateSetting('dailyCheckin', v)}
-            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
-            thumbColor={colors.textOnPrimary}
-          />
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.row}>
-          <Ionicons name="person-add-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>New Client Alerts</Text>
-          <Switch
-            value={settings.newClientAlerts}
-            onValueChange={(v) => onUpdateSetting('newClientAlerts', v)}
-            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
-            thumbColor={colors.textOnPrimary}
-          />
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.row}>
-          <Ionicons name="stats-chart-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Weekly Summary</Text>
-          <Switch
-            value={settings.weeklySummary}
-            onValueChange={(v) => onUpdateSetting('weeklySummary', v)}
-            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
-            thumbColor={colors.textOnPrimary}
-          />
-        </View>
-        <View style={styles.divider} />
+        {/* HUNT-05-124 B-H05-1: the Daily Check-in, New Client Alerts and Weekly
+            Summary switches were removed. The server stored them but sends no
+            alert for any of them, so a coach left them on and waited for alerts
+            that never came. Real channels live in Notification preferences. */}
         {/* Audit P1: surface the canonical NotificationPreferences screen. */}
         <TouchableOpacity
           style={styles.row}

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TextInput,
+  RefreshControl,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
@@ -14,20 +15,44 @@ import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
-import { User } from '../../types';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { SkeletonClientCard } from '../../ui/skeletons';
-import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
+import { EmptyState, EmptyStateNoClients, EmptyStateNoResults, IconPeople } from '../../ui/empty-states';
+import {
+  rosterActivityLine,
+  rosterCountLine,
+  rosterDisplayName,
+  rosterReviewBadge,
+  sortRoster,
+  type RosterClient,
+  type RosterSort,
+} from '../../utils/coach/clientRoster';
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
 };
+
+type RosterFilter = 'all' | 'active' | 'archived';
+const FILTERS: Array<{ key: RosterFilter; label: string }> = [
+  { key: 'active', label: 'Active' },
+  { key: 'archived', label: 'Archived' },
+  { key: 'all', label: 'All' },
+];
+
+function initials(c: RosterClient): string {
+  const name = rosterDisplayName(c);
+  const words = name.split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? '?';
+  const second = words.length > 1 ? words[words.length - 1][0] : '';
+  return `${first}${second}`.toUpperCase();
+}
 
 export default function ClientsListScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const {
+    clients,
     isLoading,
     loadError,
     searchQuery,
@@ -37,53 +62,107 @@ export default function ClientsListScreen({ navigation }: Props) {
     setFilterStatus,
     getFilteredClients,
   } = useCoachStore();
+  // UX-COACHLOOKUP-124: name A to Z by default (fastest way to find one
+  // person); "Recent" puts the clients who logged most recently first and the
+  // quiet ones last.
+  const [sort, setSort] = useState<RosterSort>('name');
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
-      loadClients(currentUser.id, filterStatus === 'all' ? undefined : filterStatus);
+      loadClients(currentUser.id, filterStatus);
     }
   }, [currentUser?.id, filterStatus]);
 
-  const filteredClients = getFilteredClients();
-  const filters: Array<'all' | 'active' | 'archived'> = ['all', 'active', 'archived'];
-
-  const renderClient = ({ item }: { item: User }) => (
-    <HapticPressable
-      intent="light"
-      style={styles.clientCard}
-      onPress={() =>
-        navigation.navigate('ClientDetail', {
-          clientId: item.id,
-          clientName: `${item.firstName} ${item.lastName}`,
-        })
-      }
-      accessibilityRole="button"
-      accessibilityLabel={`Open client ${item.firstName} ${item.lastName}`}
-    >
-      <View style={styles.avatar}>
-        <Text style={styles.avatarText}>
-          {(item.firstName || '?')[0]}
-          {(item.lastName || '')[0]}
-        </Text>
-      </View>
-      <View style={styles.clientInfo}>
-        <Text style={styles.clientName}>
-          {item.firstName} {item.lastName}
-        </Text>
-        <Text style={styles.clientEmail}>{item.email}</Text>
-      </View>
-      <View style={styles.statusBadge}>
-        <View
-          style={[
-            styles.statusDot,
-            { backgroundColor: item.status === 'active' ? colors.success : colors.textMuted },
-          ]}
-        />
-        <Text style={styles.statusText}>{item.status}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-    </HapticPressable>
+  // Coming back from a client (archived, messaged, reviewed a check-in) or
+  // from another tab that reloaded the shared list: refresh in place. The
+  // first focus is the mount, already loaded above.
+  const focusedOnce = useRef(false);
+  const coachId = currentUser?.id;
+  useEffect(
+    () =>
+      navigation.addListener('focus', () => {
+        if (!focusedOnce.current) {
+          focusedOnce.current = true;
+          return;
+        }
+        if (coachId) loadClients(coachId, filterStatus, { silent: true });
+      }),
+    [navigation, coachId, filterStatus, loadClients],
   );
+
+  const onRefresh = useCallback(async () => {
+    if (!currentUser) return;
+    setRefreshing(true);
+    try {
+      await loadClients(currentUser.id, filterStatus, { silent: true });
+    } finally {
+      setRefreshing(false);
+    }
+  }, [currentUser?.id, filterStatus, loadClients]);
+
+  const searching = searchQuery.trim().length > 0;
+  const shownClients = sortRoster(getFilteredClients(), sort);
+  const total = clients.length;
+  const countLine = rosterCountLine(shownClients, total, filterStatus, searching);
+
+  const renderClient = ({ item }: { item: RosterClient }) => {
+    const name = rosterDisplayName(item);
+    const line = rosterActivityLine(item);
+    const review = rosterReviewBadge(item);
+    const archived = item.status === 'archived';
+    const lineColor =
+      line.tone === 'quiet' ? colors.warning : line.tone === 'ok' ? colors.textSecondary : colors.textMuted;
+    const a11y = [name, line.text, review, archived ? 'Archived' : null].filter(Boolean).join(', ');
+    return (
+      <HapticPressable
+        intent="light"
+        style={styles.clientCard}
+        onPress={() =>
+          navigation.navigate('ClientDetail', {
+            clientId: item.id,
+            clientName: name,
+          })
+        }
+        accessibilityRole="button"
+        accessibilityLabel={`Open client ${a11y}`}
+        testID={`client-row-${item.id}`}
+      >
+        <View style={[styles.avatar, archived && styles.avatarArchived]}>
+          <Text style={styles.avatarText}>{initials(item)}</Text>
+        </View>
+        <View style={styles.clientInfo}>
+          <Text style={styles.clientName} numberOfLines={1}>
+            {name}
+          </Text>
+          <View style={styles.activityRow}>
+            {line.tone !== 'muted' ? (
+              <View
+                style={[
+                  styles.statusDot,
+                  { backgroundColor: line.tone === 'quiet' ? colors.warning : colors.success },
+                ]}
+              />
+            ) : null}
+            <Text style={[styles.activityText, { color: lineColor }]} numberOfLines={1}>
+              {line.text}
+            </Text>
+          </View>
+        </View>
+        {review ? (
+          <View style={styles.reviewBadge}>
+            <Text style={styles.reviewBadgeText}>{review}</Text>
+          </View>
+        ) : null}
+        {archived ? (
+          <View style={styles.archivedTag}>
+            <Text style={styles.archivedTagText}>Archived</Text>
+          </View>
+        ) : null}
+        <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+      </HapticPressable>
+    );
+  };
 
   // Audit fix CR-4 / Coach #8: a single goToInviteCodes handler
   // reused by the header pill (always visible) and by
@@ -101,13 +180,27 @@ export default function ClientsListScreen({ navigation }: Props) {
   const canSeeRiskBoard = currentUser?.role === 'coach' || currentUser?.role === 'owner';
   const goToRiskBoard = () => navigation.navigate('RiskBoard');
 
+  const emptyList = searchQuery ? (
+    <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
+  ) : filterStatus === 'archived' ? (
+    <EmptyState
+      icon={<IconPeople />}
+      headline="No archived clients"
+      body="Clients you archive from their profile appear here."
+    />
+  ) : (
+    <EmptyStateNoClients onInvite={goToInviteCodes} />
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>Clients</Text>
-            <Text style={styles.subtitle}>{filteredClients.length} total</Text>
+            <Text style={styles.subtitle} testID="clients-count">
+              {isLoading ? ' ' : countLine}
+            </Text>
           </View>
           {canSeeRiskBoard ? (
             <HapticPressable
@@ -149,7 +242,7 @@ export default function ClientsListScreen({ navigation }: Props) {
       <View style={styles.privacyBanner}>
         <Ionicons name="shield-checkmark-outline" size={16} color={colors.info} style={{ marginTop: 1 }} />
         <Text style={styles.privacyBannerText}>
-          Your students see what they share. You only see what they log.
+          Clients choose what they share with you. Anything not shared stays private.
         </Text>
       </View>
 
@@ -159,34 +252,60 @@ export default function ClientsListScreen({ navigation }: Props) {
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search clients..."
+          placeholder="Search by name or email"
           placeholderTextColor={colors.textMuted}
           accessibilityLabel="Search clients"
+          autoCorrect={false}
+          autoCapitalize="none"
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+          testID="clients-search"
         />
       </View>
 
       <View style={styles.filterRow}>
-        {filters.map((f) => (
+        {FILTERS.map(({ key, label }) => (
           <HapticPressable
-            key={f}
+            key={key}
             intent="light"
-            style={[styles.filterChip, filterStatus === f && styles.filterChipActive]}
-            onPress={() => setFilterStatus(f)}
+            style={[styles.filterChip, filterStatus === key && styles.filterChipActive]}
+            onPress={() => setFilterStatus(key)}
             accessibilityRole="button"
-            accessibilityLabel={`Filter ${f}`}
-            accessibilityState={{ selected: filterStatus === f }}
+            accessibilityLabel={`Show ${label.toLowerCase()} clients`}
+            accessibilityState={{ selected: filterStatus === key }}
+            testID={`clients-filter-${key}`}
           >
             <Text
               style={[
                 styles.filterChipText,
-                filterStatus === f && styles.filterChipTextActive,
+                filterStatus === key && styles.filterChipTextActive,
               ]}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {label}
             </Text>
           </HapticPressable>
         ))}
+        <View style={styles.filterSpacer} />
+        <HapticPressable
+          intent="light"
+          style={styles.sortToggle}
+          onPress={() => setSort(sort === 'name' ? 'recent' : 'name')}
+          accessibilityRole="button"
+          accessibilityLabel={sort === 'name' ? 'Sorted by name. Sort by most recent log' : 'Sorted by most recent log. Sort by name'}
+          testID="clients-sort"
+        >
+          <Ionicons name="swap-vertical" size={14} color={colors.textSecondary} />
+          <Text style={styles.sortToggleText}>{sort === 'name' ? 'Name' : 'Recent'}</Text>
+        </HapticPressable>
       </View>
+
+      {loadError && shownClients.length > 0 ? (
+        // A reload failed while an earlier list is on screen: say so instead
+        // of showing the old list as current.
+        <Text style={styles.staleText} testID="clients-stale">
+          Clients did not refresh. Pull down to try again.
+        </Text>
+      ) : null}
 
       {isLoading ? (
         <>
@@ -194,7 +313,7 @@ export default function ClientsListScreen({ navigation }: Props) {
             <SkeletonClientCard key={i} />
           ))}
         </>
-      ) : loadError && filteredClients.length === 0 ? (
+      ) : loadError && shownClients.length === 0 ? (
         // Network/server failure with no prior data — show an explicit error
         // surface with a retry button instead of falling through to the
         // empty-roster CTA (which falsely implied the coach had no clients).
@@ -204,10 +323,7 @@ export default function ClientsListScreen({ navigation }: Props) {
           <HapticPressable
             intent="medium"
             style={styles.retryButton}
-            onPress={() =>
-              currentUser &&
-              loadClients(currentUser.id, filterStatus === 'all' ? undefined : filterStatus)
-            }
+            onPress={() => currentUser && loadClients(currentUser.id, filterStatus)}
             accessibilityRole="button"
             accessibilityLabel="Retry loading clients"
           >
@@ -216,16 +332,22 @@ export default function ClientsListScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
-          data={filteredClients}
+          data={shownClients}
           renderItem={renderClient}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            searchQuery
-              ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
-              : <EmptyStateNoClients onInvite={goToInviteCodes} />
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
           }
+          ListEmptyComponent={emptyList}
         />
       )}
     </View>
@@ -356,24 +478,64 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  clientEmail: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
-  statusBadge: {
+  activityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    marginTop: 3,
+  },
+  activityText: {
+    flexShrink: 1,
+    fontSize: 13,
   },
   statusDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
   },
-  statusText: {
+  avatarArchived: {
+    backgroundColor: colors.textMuted,
+  },
+  reviewBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.primaryPale,
+  },
+  reviewBadgeText: {
     fontSize: 12,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  archivedTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  archivedTagText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  filterSpacer: { flex: 1 },
+  sortToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  sortToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
     color: colors.textSecondary,
+  },
+  staleText: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    paddingHorizontal: 24,
+    marginBottom: 8,
   },
   loader: {
     marginTop: 40,

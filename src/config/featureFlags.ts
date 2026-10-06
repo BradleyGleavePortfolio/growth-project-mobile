@@ -108,8 +108,9 @@ export const featureFlags = {
   /**
    * The action-gated Roman tour after the plan reveal, the pinned macro and
    * plan explanation cards on Home and Train, the Home "Message your coach"
-   * row, the Profile and more "Connected devices" / "Health and sleep" rows,
-   * and Settings > Tutorial. OFF by default unconditionally (owner decision
+   * row, the Profile and more "Connected devices" / "Health and sleep" rows at
+   * the top of the list (AUDIT-11-125: without it they still show after the
+   * plan rows on iPhone and in Health Connect builds), and Settings > Tutorial. OFF by default unconditionally (owner decision
    * T-1); ON only in the `clinic` EAS build profile. Turning it off is the
    * whole rollback: no overlay, no cards, no rows, and startClientTutorial()
    * returns false. See src/tutorial/README.md for the companion flags the

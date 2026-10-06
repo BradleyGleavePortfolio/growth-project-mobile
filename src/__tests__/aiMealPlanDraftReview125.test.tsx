@@ -216,7 +216,7 @@ describe('AIWorkoutDraftScreen approve (AUDIT-08-125)', () => {
     );
     mockedPost.mockResolvedValue(ok({}));
     const { findByLabelText } = await renderScreen('AIWorkoutDraft', AIWorkoutDraftScreen);
-    const approve = await findByLabelText('Approve and assign');
+    const approve = await findByLabelText('Approve draft');
     await act(async () => {
       await fireEvent.press(approve);
     });

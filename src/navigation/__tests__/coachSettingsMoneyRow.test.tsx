@@ -5,7 +5,8 @@
  * imessageDmRoutes.test.tsx (the existing coach Settings render harness).
  */
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { Linking } from "react-native";
 import { act } from "@testing-library/react-native";
 // Required lazily so the Settings harness loads on a head without it.
 const noteHeadCoachHandlesMoney = (v: boolean): void => {
@@ -102,7 +103,10 @@ jest.mock("../../components/BiometricUnlockSetting", () => {
   return { __esModule: true, default: () => React.createElement(View) };
 });
 
-jest.mock("../../config/env", () => ({ helpUrl: "https://example.com/help" }));
+// HUNT-09-124: helpUrl is a function; the help-row case below asserts the path it is called with.
+jest.mock("../../config/env", () => ({
+  helpUrl: (p?: string) => `https://example.com/help${p ? (p.startsWith("/") ? p : `/${p}`) : ""}`,
+}));
 
 // Coach settings sub-components — replace with minimal stubs so the screen
 // renders without their internal data dependencies firing.
@@ -194,5 +198,20 @@ describe("coach Settings Featured coach row (M-FEATURED-123)", () => {
     const CoachSettings = require("../../screens/coach/SettingsScreen").default;
     const r = await render(<CoachSettings />);
     expect(r.queryByTestId("settings-featured-coach")).toBeNull();
+  });
+});
+
+describe("coach Settings Help centre row (HUNT-09-124)", () => {
+  it("opens the help centre home, not the missing /help/coach page", async () => {
+    const canOpen = jest.spyOn(Linking, "canOpenURL").mockResolvedValue(true);
+    const open = jest.spyOn(Linking, "openURL").mockResolvedValue(true);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const CoachSettings = require("../../screens/coach/SettingsScreen").default;
+    const r = await render(<CoachSettings />);
+    await fireEvent.press(r.getByLabelText("Open help centre"));
+    await waitFor(() => expect(open).toHaveBeenCalledWith("https://example.com/help"));
+    expect(open).not.toHaveBeenCalledWith("https://example.com/help/coach");
+    canOpen.mockRestore();
+    open.mockRestore();
   });
 });

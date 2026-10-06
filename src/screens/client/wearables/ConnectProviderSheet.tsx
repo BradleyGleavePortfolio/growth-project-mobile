@@ -72,6 +72,8 @@ import {
 } from '../../../services/health/sessionFence';
 import {
   cloudConnectFailureMessage,
+  cloudReturnFailed,
+  cloudReturnedErrorMessage,
   cloudSessionLockedMessage,
   connectFailureMessage,
   ctaLabelFor,
@@ -251,6 +253,12 @@ export default function ConnectProviderSheet({
       // list — the server may have completed the connection even if the
       // in-app session reported a dismiss (e.g. redirect handled out-of-band).
       invalidate();
+      // B-WEARLIST-125: the server callback reports a failed connect in the
+      // return URL; keep the sheet open with a retry instead of closing it.
+      if (result.type === 'success' && cloudReturnFailed(result.url)) {
+        showMessage(cloudReturnedErrorMessage(name));
+        return;
+      }
       // Clinic tutorial: only an explicit success counts as connected; a
       // dismiss is confirmed (or not) by the re-read connections list.
       if (result.type === 'success') emitTutorialSignal('wearable_connected');

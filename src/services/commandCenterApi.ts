@@ -284,6 +284,10 @@ function mockDelay<T>(value: T): Promise<{ data: T }> {
   );
 }
 
+// AUDIT-13-125: the five reads below used to swallow every failure and
+// return zeros, so a failed load showed "0 clients", a red 0% and "No
+// at-risk clients". Errors now reach the screens, which show their
+// specific message and a Retry button.
 export const commandCenterApi = {
   /**
    * GET /coach/command-center/overview
@@ -291,11 +295,7 @@ export const commandCenterApi = {
    */
   getOverview: async (): Promise<{ data: CommandCenterOverview }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_OVERVIEW);
-    try {
-      return await api.get<CommandCenterOverview>(`${BASE}/overview`);
-    } catch {
-      return { data: { roster_size: 0, active_today: 0, check_in_rate_7day: 0, open_alerts: 0, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 } };
-    }
+    return api.get<CommandCenterOverview>(`${BASE}/overview`);
   },
 
   /**
@@ -304,11 +304,7 @@ export const commandCenterApi = {
    */
   getAtRisk: async (): Promise<{ data: AtRiskResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_AT_RISK);
-    try {
-      return await api.get<AtRiskResponse>(`${BASE}/at-risk`);
-    } catch {
-      return { data: { items: [], total_at_risk: 0 } };
-    }
+    return api.get<AtRiskResponse>(`${BASE}/at-risk`);
   },
 
   /**
@@ -317,11 +313,7 @@ export const commandCenterApi = {
    */
   getWinStreaks: async (): Promise<{ data: WinStreaksResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_WIN_STREAKS);
-    try {
-      return await api.get<WinStreaksResponse>(`${BASE}/win-streaks`);
-    } catch {
-      return { data: { items: [], total_active_streaks: 0 } };
-    }
+    return api.get<WinStreaksResponse>(`${BASE}/win-streaks`);
   },
 
   /**
@@ -332,11 +324,7 @@ export const commandCenterApi = {
    */
   getInbox: async (): Promise<{ data: InboxResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_INBOX);
-    try {
-      return await api.get<InboxResponse>(`${BASE}/inbox`);
-    } catch {
-      return { data: { threads: [], total_unread: 0 } };
-    }
+    return api.get<InboxResponse>(`${BASE}/inbox`);
   },
 
   /**
@@ -345,11 +333,7 @@ export const commandCenterApi = {
    */
   getActionQueue: async (): Promise<{ data: ActionQueueResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_ACTION_QUEUE);
-    try {
-      return await api.get<ActionQueueResponse>(`${BASE}/action-queue`);
-    } catch {
-      return { data: { items: [], total_pending: 0 } };
-    }
+    return api.get<ActionQueueResponse>(`${BASE}/action-queue`);
   },
 
   /**

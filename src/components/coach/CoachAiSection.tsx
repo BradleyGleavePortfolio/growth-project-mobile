@@ -281,9 +281,11 @@ export default function CoachAiSection({
       const res = await coachAiApi.generateMealPlan({
         clientId,
         days,
+        // The safety fields travel inside `notes` only: the backend body
+        // allow-list (GenerateMealPlanDto, forbidNonWhitelisted) refuses any
+        // other key with a 400, so sending them as their own keys failed
+        // every generation.
         notes: composedNotes || undefined,
-        allergies: clientAllergies,
-        dietary_restrictions: clientDietaryRestrictions,
       });
       const draftId = res.data.draftId;
       closeModal();

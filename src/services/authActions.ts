@@ -49,6 +49,12 @@ const ASYNC_SIGN_OUT_KEYS = [
   'user_data',
   'needs_role_selection',
   'onboarding_complete',
+  // Raw AsyncStorage drafts are outside the MMKV namespaces cleared below.
+  // Never let the next account inherit optional health answers, replay the
+  // previous person's Day-1 goals, or see another coach's recent clients.
+  'onboarding_data',
+  'day_one_onboarding_state_v1',
+  'tgp.recent_clients.v1',
   // Legacy global macro cache (no user suffix). Per-user macro_targets:<id>
   // keys are wiped via PER_USER_KEY_PREFIXES with the exact signing-out id.
   'macro_targets',

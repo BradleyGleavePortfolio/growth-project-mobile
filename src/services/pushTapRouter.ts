@@ -25,7 +25,7 @@
  *    is bounded.
  */
 import { featureFlags } from '../config/featureFlags';
-import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../config/purchaseSurfaces';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -85,6 +85,8 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.communityTab && featureFlags.communityEvents
       ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
       : null,
+  // AUDIT-09-125: a community push (kind community_*) opens the Community tab.
+  Community: () => (featureFlags.communityTab ? { root: 'CommunityTab' } : null),
 };
 
 /** Coach destinations. Root = CoachNavigator tab names. */
@@ -100,11 +102,11 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.coachBrief
       ? { root: 'SettingsStack', screen: 'CoachBrief', initial: false }
       : null,
-  // AI credit top-ups are not purchasable on hidden iOS builds: a budget
+  // Digital AI credit top-ups are not purchasable in store builds: a budget
   // push lands on Settings, never on the checkout route (whose gated
   // wrapper would only say "Managed on the web").
   CreditPackCheckout: () =>
-    nonP2PPurchasesHidden()
+    digitalPurchasesHidden()
       ? { root: 'SettingsStack', screen: 'SettingsHome' }
       : { root: 'SettingsStack', screen: 'CreditPackCheckout' },
   CommunityEventDetail: () =>

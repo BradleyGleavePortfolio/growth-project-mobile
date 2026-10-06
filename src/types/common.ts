@@ -34,9 +34,27 @@ export interface ApiErrorLike {
 // Extract a human-readable message from an unknown error without using `any`.
 // Axios response body wins over Error.message — the backend message is more
 // specific than the generic JS error message.
-export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
+export function errorMessage(
+  err: unknown,
+  fallback = 'The request could not be completed. Try again in a moment.',
+): string {
   if (err && typeof err === 'object') {
-    const e = err as { response?: { data?: unknown }; message?: string };
+    const e = err as {
+      response?: { data?: unknown; status?: number };
+      message?: string;
+      code?: string;
+    };
+    // Transport/server failures carry technical Axios text or a gateway HTML
+    // body, not a useful instruction. Keep specific 4xx/domain copy below.
+    if (typeof e.response?.status === 'number' && e.response.status >= 500) {
+      return 'The service is temporarily unavailable. Try again in a moment.';
+    }
+    if (e.code === 'ECONNABORTED' || e.code === 'ETIMEDOUT') {
+      return 'The request timed out. Check your connection and try again.';
+    }
+    if (e.code === 'ERR_NETWORK' || e.message === 'Network Error') {
+      return 'The service could not be reached. Check your connection and try again.';
+    }
     const data = e.response?.data;
     if (data && typeof data === 'object') {
       const d = data as Record<string, unknown>;

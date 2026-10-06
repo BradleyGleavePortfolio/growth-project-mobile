@@ -72,7 +72,7 @@ function mockCreateDatabase(): MockDatabase {
     rows,
     execAsync: async (sql: string) => {
       if (
-        /CREATE TABLE|CREATE INDEX|PRAGMA|ALTER TABLE/i.test(sql) ||
+        /CREATE TABLE|CREATE (UNIQUE )?INDEX|PRAGMA|ALTER TABLE/i.test(sql) ||
         sql.trim() === ''
       ) {
         return;

@@ -12,7 +12,7 @@ import * as path from 'path';
 let mockHidden = true;
 jest.mock('../config/purchaseSurfaces', () => {
   const actual = jest.requireActual('../config/purchaseSurfaces');
-  return { ...actual, nonP2PPurchasesHidden: () => mockHidden };
+  return { ...actual, nonP2PPurchasesHidden: () => mockHidden, digitalPurchasesHidden: () => mockHidden };
 });
 const mockColors = new Proxy({}, { get: () => '#000000' });
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: mockColors, semanticColors: mockColors }) }));

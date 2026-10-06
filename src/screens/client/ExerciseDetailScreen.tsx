@@ -19,7 +19,8 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
+  Image,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,19 +46,22 @@ export default function ExerciseDetailScreen({ route }: Props) {
   const [detail, setDetail] = useState<ExerciseDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [attempt, setAttempt] = useState(0);
+  const [mediaFailed, setMediaFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setMediaFailed(false);
     exerciseCatalogApi
-      .getByIdOrSlug(idOrSlug)
+      .getDetail(idOrSlug)
       .then((res) => {
         if (!cancelled) setDetail(res.data as ExerciseDetail);
       })
-      .catch((e) => {
+      .catch(() => {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : 'Could not load exercise.');
+          setError('Exercise details did not load. Check your connection and try again.');
         }
       })
       .finally(() => {
@@ -66,7 +70,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [idOrSlug]);
+  }, [idOrSlug, attempt]);
 
   // Always call useVideoPlayer (hook contract). We pass null when there is
   // no URL — the player simply sits idle in that case.
@@ -76,6 +80,12 @@ export default function ExerciseDetailScreen({ route }: Props) {
     // the native play control to start the HLS stream.
     instance.loop = false;
   });
+  useEffect(() => {
+    const subscription = player.addListener('statusChange', ({ status }) => {
+      if (status === 'error') setMediaFailed(true);
+    });
+    return () => subscription.remove();
+  }, [player]);
 
   if (loading) {
     return <SkeletonScreen testID="exercise-detail-loading" count={5} />;
@@ -88,6 +98,9 @@ export default function ExerciseDetailScreen({ route }: Props) {
         testID="exercise-detail-error"
       >
         <Text style={styles.errorText}>{error ?? 'Exercise not found.'}</Text>
+        <Pressable accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}>
+          <Text style={styles.errorText}>Retry</Text>
+        </Pressable>
       </View>
     );
   }
@@ -105,7 +118,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
           .join(' · ')}
       </Text>
 
-      {playbackUrl ? (
+      {playbackUrl && !mediaFailed ? (
         <VideoView
           style={styles.player}
           player={player}
@@ -114,9 +127,20 @@ export default function ExerciseDetailScreen({ route }: Props) {
           allowsPictureInPicture
           testID="exercise-detail-player"
         />
+      ) : detail.gifUrl && !mediaFailed ? (
+        <Image
+          source={{ uri: detail.gifUrl }}
+          style={styles.player}
+          resizeMode="contain"
+          accessibilityLabel={`${detail.name} demonstration`}
+          onError={() => setMediaFailed(true)}
+          testID="exercise-detail-animation"
+        />
       ) : (
         <View style={styles.noVideo} testID="exercise-detail-no-video">
-          <Text style={styles.noVideoText}>Video not yet available.</Text>
+          <Text style={styles.noVideoText}>
+            {mediaFailed ? 'The demonstration did not load. Follow the instructions below.' : 'Video not yet available.'}
+          </Text>
         </View>
       )}
 

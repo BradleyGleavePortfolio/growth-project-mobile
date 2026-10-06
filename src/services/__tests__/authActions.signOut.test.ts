@@ -129,7 +129,8 @@ describe('signOut → store resets (Hunter #2 P1-7)', () => {
     expect(coach.isLoading).toBe(false);
     expect(coach.loadError).toBeNull();
     expect(coach.searchQuery).toBe('');
-    expect(coach.filterStatus).toBe('all');
+    // UX-COACHLOOKUP-124: the Clients list opens on Active.
+    expect(coach.filterStatus).toBe('active');
 
     const client = useClientStore.getState();
     expect(client.foodLogs).toEqual([]);

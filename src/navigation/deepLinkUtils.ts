@@ -48,3 +48,23 @@ export function fragmentToQuery(rawPath: string): string {
   const sep = base.includes('?') ? '&' : '?';
   return `${base}${sep}${fragment}`;
 }
+
+/**
+ * HUNT-01-124: the sign-up confirmation email returns to `tgp://verified`.
+ * Supabase appends the new session (`#access_token=...&refresh_token=...`)
+ * on success and `#error=...&error_code=otp_expired...` when the link has
+ * expired or was already used. The landing screen needs only which of the
+ * two happened, so this returns a token-free path: the session values never
+ * reach route params, navigation state or logs.
+ *
+ * Returns `null` for any other path.
+ */
+export function emailVerifiedPath(rawPath: string): string | null {
+  const match = /^\/?verified(?=$|[/?#])/i.exec(rawPath);
+  if (!match) return null;
+  const rest = rawPath.slice(match[0].length).replace(/^\/+/, '');
+  if (rest && !/^[?#]/.test(rest)) return null;
+  const params = new URLSearchParams(rest.replace(/^[?#]/, '').replace('#', '&'));
+  const failed = params.has('error') || params.has('error_code');
+  return failed ? 'verified?status=link_problem' : 'verified?status=confirmed';
+}

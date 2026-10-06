@@ -38,6 +38,7 @@ import type {
   ScheduledDropAssetType,
   ScheduledDropView,
 } from '../../../api/clientPaymentsApi';
+import { openPurchasedMedia } from './openPurchasedMedia';
 
 // ─── Asset-type display tables ──────────────────────────────────────────────
 
@@ -154,14 +155,15 @@ export function upcomingCaption(drop: ScheduledDropView): string {
  * Pre-flight: can this delivered drop route to a real existing viewer?
  *
  * - workout_program / workout_plan need a `materialised_ref` (assignment id).
- * - meal_plan needs a `materialised_ref` we treat as the start date string.
+ * - meal_plan needs a `materialised_ref`: the DailyMealPlanAssignment id
+ *   the backend materialised (older rows may carry a YYYY-MM-DD date).
  * - auto_message routes to Messages (no params needed beyond opening
  *   the thread surface).
- * - pdf / video have no viewer registered today (PR-12 is out of scope).
+ * - pdf / video need the `asset_id` (CoachMediaAsset id); tapping asks the
+ *   backend for a grant-scoped signed URL (openPurchasedMedia).
  *
- * If a delivered drop cannot route, the row renders non-tappable with a
- * neutral "Saved to your library" caption. Master plan rule 18 — we never
- * fabricate success when the operation can't complete.
+ * If a delivered drop cannot route, the row renders non-tappable. Master
+ * plan rule 18 — never fabricate success when the operation can't complete.
  */
 export function isTappableDelivered(drop: ScheduledDropView): boolean {
   if (drop.status !== 'fired') return false;
@@ -175,18 +177,20 @@ export function isTappableDelivered(drop: ScheduledDropView): boolean {
       return true; // routes to Messages list
     case 'pdf':
     case 'video':
-      return false; // viewer not built yet (PR-12)
+      return typeof drop.asset_id === 'string' && drop.asset_id.length > 0;
     default:
       return false;
   }
 }
 
-export function deliveredFallbackCaption(asset_type: ScheduledDropAssetType): string {
-  if (asset_type === 'pdf' || asset_type === 'video') {
-    return 'Saved to your library';
-  }
+export function deliveredFallbackCaption(_asset_type: ScheduledDropAssetType): string {
   return 'Tap to open';
 }
+
+// The backend's meal_plan `materialised_ref` is a DailyMealPlanAssignment id.
+// Older rows and fixtures carry a YYYY-MM-DD start date; keep routing those
+// by date so neither shape ever lands on the wrong plan.
+const MEAL_PLAN_DATE_REF = /^\d{4}-\d{2}-\d{2}$/;
 
 // ─── Per-asset_type viewer routing ──────────────────────────────────────────
 
@@ -220,13 +224,10 @@ export function routeForDrop(
       return;
     case 'meal_plan':
       if (drop.materialised_ref) {
-        (
-          navigation as unknown as {
-            navigate: (n: string, p: { date: string }) => void;
-          }
-        ).navigate('ClientDailyMealPlan', {
-          date: drop.materialised_ref,
-        });
+        const params = MEAL_PLAN_DATE_REF.test(drop.materialised_ref)
+          ? { date: drop.materialised_ref }
+          : { assignmentId: drop.materialised_ref };
+        navigation.navigate('ClientDailyMealPlan', params);
       }
       return;
     case 'auto_message': {
@@ -247,8 +248,7 @@ export function routeForDrop(
     }
     case 'pdf':
     case 'video':
-      // Viewers ship in PR-12; row is rendered non-tappable today, so
-      // we should never reach here. Guard anyway.
+      void openPurchasedMedia(drop.asset_id);
       return;
     default:
       return;

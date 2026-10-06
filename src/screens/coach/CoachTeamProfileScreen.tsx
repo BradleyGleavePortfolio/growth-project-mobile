@@ -1,9 +1,11 @@
 /**
  * CoachTeamProfileScreen
  *
- * The head coach's team / gym / organization profile. Renders the team
- * code clients can sign up with, total seat capacity across head coach +
- * sub-coaches, and links into TeamManagement for sub-coach administration.
+ * The head coach's team / gym / organization profile. Renders the coach's
+ * permanent invite link (the code every sign-up path accepts) and the client
+ * count. AUDIT-16-125: the stored team code (GP-TEAM-...) is not accepted by
+ * any sign-up or join path, so it is no longer shown or shared; the invented
+ * seat capacity and the unreachable sub-coach link are gone too.
  *
  * Renders an honest setup CTA when the backend has not provisioned the
  * /coach/team endpoint yet (404). Never invents data.
@@ -14,7 +16,6 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -31,7 +32,7 @@ import {
 } from '../../api/coachTeamApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
-import { buildInviteUniversalLink } from '../../utils/deepLink';
+import InviteShareCard from '../../components/coach/setup/InviteShareCard';
 
 export default function CoachTeamProfileScreen() {
   const { colors } = useTheme();
@@ -76,18 +77,6 @@ export default function CoachTeamProfileScreen() {
     }
   };
 
-  const handleShareTeamCode = async (profile: TeamProfile) => {
-    try {
-      const url = buildInviteUniversalLink(profile.team_code);
-      await Share.share({
-        url,
-        message: `Join ${profile.business_name} on The Growth Project: ${url}\nTeam code: ${profile.team_code}`,
-      });
-    } catch {
-      // Share sheet dismissed — no-op.
-    }
-  };
-
   if (!team) {
     return <SkeletonScreen count={5} />;
   }
@@ -112,8 +101,8 @@ export default function CoachTeamProfileScreen() {
           <Ionicons name="business-outline" size={36} color={colors.textMuted} />
           <Text style={styles.gateTitle}>Set up your team</Text>
           <Text style={styles.gateBody}>
-            Add a business name to generate a team code clients can use at signup.
-            Sub-coaches you add later live under this team.
+            Add a business name for your team profile. Clients join with your
+            invite link.
           </Text>
           <TouchableOpacity
             style={styles.cta}
@@ -179,44 +168,13 @@ export default function CoachTeamProfileScreen() {
       <Text style={styles.header}>{profile.business_name}</Text>
       <Text style={styles.subheader}>Team profile</Text>
 
-      <View style={styles.codeCard}>
-        <Text style={styles.codeLabel}>TEAM CODE</Text>
-        <Text style={styles.codeText} selectable>
-          {profile.team_code}
-        </Text>
-        <Text style={styles.codeHint}>
-          Clients who sign up with this code join your team. You can reassign them
-          to any sub-coach.
-        </Text>
-        <View style={styles.codeActions}>
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => handleShareTeamCode(profile)}
-            accessibilityRole="button"
-            accessibilityLabel="Share team code"
-          >
-            <Ionicons name="share-outline" size={16} color={colors.primary} />
-            <Text style={styles.actionBtnText}>Share team code</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+      <Text style={styles.codeLabel}>CLIENT INVITE LINK</Text>
+      <InviteShareCard testID="team-invite-share" />
 
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
           <Text style={styles.statValue}>{profile.clients_assigned}</Text>
           <Text style={styles.statLabel}>Clients</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{profile.client_capacity}</Text>
-          <Text style={styles.statLabel}>Seats</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            {profile.client_capacity > 0
-              ? Math.max(0, profile.client_capacity - profile.clients_assigned)
-              : 0}
-          </Text>
-          <Text style={styles.statLabel}>Open</Text>
         </View>
       </View>
 
@@ -233,17 +191,6 @@ export default function CoachTeamProfileScreen() {
           </Text>
         </TouchableOpacity>
       ) : null}
-
-      <TouchableOpacity
-        style={styles.linkRow}
-        onPress={() => navigation.navigate('TeamManagement')}
-        accessibilityRole="button"
-        accessibilityLabel="Open team management"
-      >
-        <Ionicons name="people-outline" size={20} color={colors.primary} />
-        <Text style={styles.linkText}>Manage sub-coaches</Text>
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.linkRow}
@@ -284,28 +231,7 @@ const makeStyles = (colors: ThemeColors) =>
     center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
     header: { fontSize: 26, fontWeight: '600', color: colors.textPrimary },
     subheader: { fontSize: 13, color: colors.textSecondary, marginBottom: 16 },
-    codeCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 14,
-      padding: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-      marginTop: 12,
-    },
-    codeLabel: { fontSize: 11, color: colors.textMuted, letterSpacing: 0.5 },
-    codeText: { fontSize: 28, fontWeight: '600', color: colors.textPrimary, marginVertical: 4 },
-    codeHint: { fontSize: 12, color: colors.textSecondary, lineHeight: 17, marginBottom: 12 },
-    codeActions: { flexDirection: 'row', gap: 12 },
-    actionBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      backgroundColor: colors.primary + '15',
-      borderRadius: 8,
-    },
-    actionBtnText: { color: colors.primary, fontSize: 13, fontWeight: '500' },
+    codeLabel: { fontSize: 11, color: colors.textMuted, letterSpacing: 0.5, marginTop: 12, marginBottom: 8 },
     statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
     statCard: {
       flex: 1,

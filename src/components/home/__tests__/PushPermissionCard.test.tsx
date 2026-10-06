@@ -49,7 +49,7 @@ describe('PushPermissionCard (deferred OS prompt)', () => {
       <PushPermissionCard audience="coach" />,
     );
     await findByTestId('push-permission-card');
-    expect(getByText('Turn on notifications so you see client messages and new client alerts.')).toBeTruthy();
+    expect(getByText('Turn on notifications so you see client messages and bookings as they arrive.')).toBeTruthy();
     expect(queryByText(/plan updates from your coach/)).toBeNull();
     await fireEvent.press(getByTestId('push-permission-enable'));
     await waitFor(() => expect(mockRegister).toHaveBeenCalledWith({ requestPermission: true }));

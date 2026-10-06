@@ -1002,10 +1002,6 @@ export const checkInsApi = {
     mood?: number | null;
     energy?: number | null;
     sleep_hours?: number | null;
-    /** B10: 1–5 self-reported sleep quality (separate from sleep_hours). */
-    sleep_quality?: number | null;
-    /** B10: 1–5 self-reported stress level. */
-    stress?: number | null;
     weight_kg?: number | null;
     notes?: string | null;
   }) => api.post('/check-ins', data),

@@ -97,6 +97,43 @@ function formatDate(iso: string | null): string | null {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+/**
+ * MONEY-CLIENT-124: the one line under "Current plan". B-MC-2: a plan the
+ * client ended (cancel at period end) or a canceled plan that still has
+ * access says when it ends, never "Renews"; a one-time plan says when its
+ * access runs out; a past-due plan says the payment did not go through.
+ */
+export function currentPlanLine(d: ClientPaymentStatus): string {
+  if (d.state === 'past_due') return 'The last payment did not go through.';
+  if (d.state === 'canceled' || d.cancel_at_period_end) {
+    // B-402-2: access ends with the billing period (Your plans shows that
+    // date); access_expires_at carries a 24 h renewal pad on paid rows.
+    const ends = formatDate(d.current_period_end) ?? formatDate(d.access_expires_at ?? null);
+    return ends
+      ? `Ends ${ends}. Nothing more is charged.`
+      : 'Ends at the close of this period. Nothing more is charged.';
+  }
+  if (d.state === 'trialing' && d.trial_ends_at) {
+    return `Trial ends ${formatDate(d.trial_ends_at)}`;
+  }
+  if (d.current_period_end) {
+    const renews = formatDate(d.current_period_end);
+    if (renews) return `Renews ${renews}`;
+  }
+  const until = formatDate(d.access_expires_at ?? null);
+  return until ? `Access until ${until}` : '';
+}
+
+function isRenewing(pkg: ClientCoachPackage | undefined): boolean {
+  if (!pkg) return false;
+  return pkg.purchasable ? pkg.purchasable.renewing : pkg.type === 'recurring';
+}
+
+/** U-MC-3: buying another plan never replaces a renewing one. */
+export function secondPlanNotice(currentName: string): string {
+  return `${currentName} keeps renewing alongside this plan. To switch, end ${currentName} in Your plans first.`;
+}
+
 function DunningBanner({
   dunning,
   onUpdateCard,
@@ -188,6 +225,14 @@ export default function ClientPackagesScreen() {
   }, [load]);
 
   const { refreshEntitlement } = useEntitlement();
+
+  // B-402-1: after End my plan / Keep my plan succeeds, Current plan, the
+  // buy buttons and the second-plan notice re-read payment status. Only the
+  // status is re-read: bumping plansTick would clear the panel's receipt.
+  const onPlanChanged = useCallback(() => {
+    void clientPaymentsApi.getPaymentStatus().then(setStatus);
+    void refreshEntitlement().catch(() => false);
+  }, [refreshEntitlement]);
   const { appearance, colorScheme } = usePaymentSheetAppearance();
   const purchase = usePackagePurchase({
     surface: 'plans',
@@ -258,6 +303,19 @@ export default function ClientPackagesScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
     >
+      {/* U-MC-5: the More stack hides headers, so the screen brings its own
+          back control (cross-tab opens have nothing to go back to). */}
+      {navigation.canGoBack?.() ? (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="client-packages-back"
+        >
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
+        </TouchableOpacity>
+      ) : null}
       <Text style={styles.header} testID="client-packages-header">
         {oneToOneCoachingLabel(coachName)}
       </Text>
@@ -282,21 +340,19 @@ export default function ClientPackagesScreen() {
       <SmartDunningBanner surface="ClientPackagesScreen" />
 
       {/* Renewing plans: next charge, End my plan / Keep my plan */}
-      <YourPlansPanel reloadKey={plansTick} />
+      <YourPlansPanel
+        reloadKey={plansTick}
+        onUpdateCard={handleUpdateCard}
+        onPlanChanged={onPlanChanged}
+      />
 
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
         <View style={styles.currentPlanCard}>
           <Text style={styles.currentPlanLabel}>Current plan</Text>
           <Text style={styles.currentPlanName}>{status.data.package_name}</Text>
-          <Text style={styles.currentPlanSub}>
-            {status.data.state === 'trialing' && status.data.trial_ends_at
-              ? `Trial ends ${formatDate(status.data.trial_ends_at)}`
-              : status.data.state === 'past_due'
-              ? 'Past due — see banner above'
-              : status.data.current_period_end
-              ? `Renews ${formatDate(status.data.current_period_end)}`
-              : ''}
+          <Text style={styles.currentPlanSub} testID="current-plan-line">
+            {currentPlanLine(status.data)}
           </Text>
           {/* PR-13 — buyer-facing Deliverables entry. Two gates:
               (1) feature flag `deliverables` — OFF in production until
@@ -384,6 +440,18 @@ export default function ClientPackagesScreen() {
             // (the backend CoachPackage schema has no such column —
             // backend prisma/schema.prisma:2942-3000).
             const current = status.ok && status.data.package_id === pkg.id;
+            // U-MC-3: a live renewing plan keeps charging when another plan
+            // is bought (each plan is its own subscription), so say so.
+            const st = status.ok ? status.data : null;
+            const renewingName =
+              st &&
+              !current &&
+              st.package_name &&
+              (st.state === 'active' || st.state === 'trialing' || st.state === 'past_due') &&
+              !st.cancel_at_period_end &&
+              isRenewing(packages.data.find((p) => p.id === st.package_id))
+                ? st.package_name
+                : null;
             return (
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>
@@ -411,6 +479,11 @@ export default function ClientPackagesScreen() {
                   </View>
                 ) : null}
                 {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
+                {sellable && renewingName ? (
+                  <Text style={styles.pkgDesc} testID={`plan-second-${pkg.id}`}>
+                    {secondPlanNotice(renewingName)}
+                  </Text>
+                ) : null}
                 {active ? (
                   <PurchaseFeedback
                     purchase={purchase}
@@ -493,6 +566,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       justifyContent: 'center',
       backgroundColor: semanticColors.bgPrimary,
     },
+    backBtn: { width: 44, height: 44, justifyContent: 'center', marginLeft: -10, marginTop: -12 },
     header: { fontSize: 28, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 4 },
     subheader: {
       fontSize: 13,

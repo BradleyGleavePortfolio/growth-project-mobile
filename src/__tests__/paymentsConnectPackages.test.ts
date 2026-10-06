@@ -449,7 +449,9 @@ describe('coachPackagesApi (package CRUD)', () => {
   it('list GETs /v1/coach/packages', async () => {
     mockedApi.get.mockResolvedValueOnce({ data: { packages: [] } });
     await coachPackagesApi.list();
-    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/packages');
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/packages', {
+      params: { include_archived: true },
+    });
   });
 
   it('create POSTs the backend (snake_case) shape with Idempotency-Key', async () => {

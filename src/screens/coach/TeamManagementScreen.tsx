@@ -29,7 +29,7 @@ import { coachTeamApi } from '../../api/coachTeamApi';
 import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
-import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
+import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
 
@@ -135,9 +135,8 @@ function SubCoachRow({
   );
 }
 
-export function UpgradeGate({ purchasesHidden = nonP2PPurchasesHidden() }: { purchasesHidden?: boolean } = {}) {
-  // iOS with non-P2P purchases hidden: neutral access information only, no
-  // instruction to upgrade (plan changes are not offered in the iOS app).
+export function UpgradeGate({ purchasesHidden = digitalPurchasesHidden() }: { purchasesHidden?: boolean } = {}) {
+  // Digital purchases hidden: neutral access information only, no upgrade instruction.
   if (purchasesHidden) {
     return (
       <View style={styles.gate} testID="team-gate-neutral">

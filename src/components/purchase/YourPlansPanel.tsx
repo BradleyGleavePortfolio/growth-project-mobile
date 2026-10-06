@@ -79,6 +79,12 @@ export const YOUR_PLANS_COPY = {
   // B-344-5: the native Update card is not on this tree (lockout #352-#354).
   pastDue:
     "The last payment did not go through. To keep this plan, message your coach about the payment. To end it now, choose End my plan.",
+  // MONEY-CLIENT-124 U-MC-4: the card fix sits on the plan itself (the
+  // native Update card screen also pays the open invoice). The coach cannot
+  // change a client's card.
+  pastDueUpdateCard:
+    "The last payment did not go through. To keep this plan, choose Update card. To end it now, choose End my plan.",
+  updateCard: "Update card",
   paymentFailed:
     "The first payment for this plan did not go through, so it has not started and nothing more is charged. Choose the plan below to start it with another card.",
   endedNow: "This plan has ended. Nothing more is charged.",
@@ -132,8 +138,14 @@ const agrees = (r: Receipt, p: ClientPlan | undefined) =>
 
 export default function YourPlansPanel({
   reloadKey = 0,
+  onUpdateCard,
+  onPlanChanged,
 }: {
   reloadKey?: number;
+  /** Opens the native Update card screen; absent keeps the coach copy. */
+  onUpdateCard?: () => void;
+  /** B-402-1: End / Keep succeeded, so the screen's own plan summary re-reads. */
+  onPlanChanged?: () => void;
 }) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -240,6 +252,7 @@ export default function YourPlansPanel({
           });
         }
         await load();
+        if (mounted.current) onPlanChanged?.();
       } catch (err) {
         if (!mounted.current) return;
         const n = describePlanActionFailure(err, action);
@@ -250,7 +263,7 @@ export default function YourPlansPanel({
         if (mounted.current) setBusyId(null);
       }
     },
-    [load],
+    [load, onPlanChanged],
   );
 
   const stale = list.kind === "failed" || list.kind === "unavailable";
@@ -370,7 +383,9 @@ export default function YourPlansPanel({
             : plan.state === "confirming"
               ? YOUR_PLANS_COPY.confirming
               : plan.state === "past_due"
-                ? YOUR_PLANS_COPY.pastDue
+                ? onUpdateCard
+                  ? YOUR_PLANS_COPY.pastDueUpdateCard
+                  : YOUR_PLANS_COPY.pastDue
                 : plan.state === "payment_failed"
                   ? YOUR_PLANS_COPY.paymentFailed
                   : plan.cancelAtPeriodEnd
@@ -410,6 +425,17 @@ export default function YourPlansPanel({
               </Text>
             ) : null}
             {n?.support ? support : null}
+            {plan.state === "past_due" && onUpdateCard && !receipt ? (
+              <Pressable
+                onPress={onUpdateCard}
+                style={styles.action}
+                accessibilityRole="button"
+                accessibilityLabel={`${YOUR_PLANS_COPY.updateCard}, ${plan.packageName}`}
+                testID={`your-plan-update-card-${plan.purchaseId}`}
+              >
+                <Text style={styles.actionText}>{YOUR_PLANS_COPY.updateCard}</Text>
+              </Pressable>
+            ) : null}
             {plan.canCancel ? (
               <Pressable
                 onPress={() => confirmEnd(plan)}

@@ -57,6 +57,7 @@ import {
 } from '../../lib/profileCompletion';
 import { getTodayString } from '../../utils/date';
 import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
+import CoachErrorState from '../../components/community/coach/CoachErrorState';
 
 // ─── Date-as-poetry helpers ──────────────────────────────────────────────────
 
@@ -155,6 +156,8 @@ export default function HomeScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
+    isLoading,
+    loadError,
     loadDayData,
     loadProfile,
   } = useClientStore();
@@ -326,6 +329,14 @@ export default function HomeScreen() {
         }
       >
         <HomeHeaderActions />
+        {loadError ? (
+          <CoachErrorState
+            message={loadError}
+            onRetry={() => void onRefresh()}
+            retrying={isLoading || refreshing}
+            testID="home-day-data-error"
+          />
+        ) : null}
         <DunningBanner surface="HomeScreen" />
         <CoachlessHomeSlot />
         <PendingInviteBanner />
@@ -451,4 +462,3 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
-

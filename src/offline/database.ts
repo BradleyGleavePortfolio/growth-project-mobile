@@ -23,6 +23,8 @@
  *       shared device cannot leak User A's pending pushes onto User B's JWT).
  *   v3: add status TEXT (pending|dead_letter|synced) so permanent 4xx push
  *       failures stop hammering the server forever (Hunt P1-1).
+ *   v4: add payload / client_key / assignment_json TEXT so a finished workout
+ *       is queued as one row and reaches the server exactly once.
  *
  * @see docs/offline-architecture.md
  */
@@ -89,6 +91,20 @@ async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
       `CREATE INDEX IF NOT EXISTS idx_workout_logs_user_id ON workout_logs(user_id);`,
     );
   }
+
+  // v4 (WORKOUT-SYNC-124): one row per finished workout. `payload` is the
+  // exact POST /workouts body, `client_key` identifies the workout session
+  // (unique, so tapping Finish again updates the same row instead of queueing
+  // a second copy) and `assignment_json` is the coach-assignment completion
+  // still to send once the workout itself is on the server.
+  for (const column of ['payload', 'client_key', 'assignment_json']) {
+    if (!(await tableHasColumn(db, 'workout_logs', column))) {
+      await db.execAsync(`ALTER TABLE workout_logs ADD COLUMN ${column} TEXT;`);
+    }
+  }
+  await db.execAsync(
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_workout_logs_client_key ON workout_logs(client_key);`,
+  );
 
   // v3: status column for dead-letter tracking. sync_status already exists for
   // the original tri-state machine (pending|synced|conflict); we extend that

@@ -7,7 +7,9 @@
  *
  * Coverage:
  *   - report(): POST /messages/report with { messageId, reason, details }
- *   - report(): every ReportReason value is exactly what backend accepts
+ *   - report(): every sheet category is sent as a reason the backend DTO accepts
+ *     (spam | harassment | sexual | self_harm | other); folded categories keep
+ *     their label in details (AUDIT-03-125 B1)
  *   - report(): details truncated to DETAILS_MAX (1000)
  *   - report(): non-2xx throws (no soft-success / no swallowed 4xx)
  *   - block(): POST /users/:id/block
@@ -18,8 +20,12 @@ import {
   messagesModerationApi,
   REPORT_REASON_OPTIONS,
   DETAILS_MAX,
+  REPORT_WIRE_REASON,
   ReportReason,
 } from '../messagesApi';
+
+// Mirror of backend src/messages-safety/dto/report-message.dto.ts REPORT_REASONS.
+const BACKEND_REPORT_REASONS = ['spam', 'harassment', 'sexual', 'self_harm', 'other'];
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -70,31 +76,41 @@ describe('messagesModerationApi.report', () => {
   });
 
   it.each(REPORT_REASON_OPTIONS.map((o) => o.value))(
-    'sends reason "%s" verbatim (no rewrites or drift)',
+    'sends category "%s" as a reason the backend accepts',
     async (reason: ReportReason) => {
       api.post.mockResolvedValueOnce({ data: {} });
       await messagesModerationApi.report('msg-1', { reason });
-      expect(api.post.mock.calls[0][1].reason).toBe(reason);
+      const sent = api.post.mock.calls[0][1].reason;
+      expect(BACKEND_REPORT_REASONS).toContain(sent);
+      expect(sent).toBe(REPORT_WIRE_REASON[reason]);
     },
   );
 
-  it('uses backend reason "sexual" (never legacy "sexual_content")', () => {
+  it.each([
+    ['hate_speech', 'harassment', 'Hate speech.'],
+    ['violence', 'harassment', 'Violence or threats.'],
+    ['misinformation', 'other', 'Misinformation.'],
+  ] as const)('folds "%s" into "%s" and keeps the category in details', async (reason, wire, label) => {
+    api.post.mockResolvedValueOnce({ data: {} });
+    await messagesModerationApi.report('msg-1', { reason, details: 'said it twice' });
+    expect(api.post.mock.calls[0][1]).toEqual({
+      messageId: 'msg-1',
+      reason: wire,
+      details: `${label} said it twice`,
+    });
+    api.post.mockResolvedValueOnce({ data: {} });
+    await messagesModerationApi.report('msg-2', { reason });
+    expect(api.post.mock.calls[1][1].details).toBe(label);
+  });
+
+  it('offers self-harm and sends it verbatim; never legacy "sexual_content"', async () => {
     const values = REPORT_REASON_OPTIONS.map((o) => o.value);
     expect(values).toContain('sexual');
     expect(values).not.toContain('sexual_content');
-    expect(values).not.toContain('self_harm');
-    // Backend-accepted reasons from PR #263.
-    expect(values).toEqual(
-      expect.arrayContaining([
-        'spam',
-        'harassment',
-        'sexual',
-        'hate_speech',
-        'violence',
-        'misinformation',
-        'other',
-      ]),
-    );
+    expect(values).toContain('self_harm');
+    api.post.mockResolvedValueOnce({ data: {} });
+    await messagesModerationApi.report('msg-1', { reason: 'self_harm' });
+    expect(api.post.mock.calls[0][1]).toEqual({ messageId: 'msg-1', reason: 'self_harm', details: undefined });
   });
 
   it('caps details at DETAILS_MAX (1000)', async () => {

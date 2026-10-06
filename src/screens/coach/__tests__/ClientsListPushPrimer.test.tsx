@@ -28,6 +28,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 jest.mock('../../../store/coachStore', () => ({
   useCoachStore: () => ({
+    clients: [],
     isLoading: false,
     loadError: null,
     searchQuery: '',
@@ -58,7 +59,10 @@ import { pushPrimerDismissedKey } from '../../../components/home/PushPermissionC
 
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 async function mount() {
-  const navigation: Pick<Nav, 'navigate'> = { navigate: jest.fn() };
+  const navigation: Pick<Nav, 'navigate' | 'addListener'> = {
+    navigate: jest.fn(),
+    addListener: () => () => undefined,
+  };
   return await render(<ClientsListScreen navigation={navigation as Nav} />);
 }
 
@@ -72,7 +76,7 @@ it('a fresh coach install sees the notification ask; Turn on registers the push 
   mockRegister.mockResolvedValue({ token: 'coach-tok', granted: true });
   await mount();
   await screen.findByTestId('push-permission-card');
-  expect(screen.getByText('Turn on notifications so you see client messages and new client alerts.')).toBeTruthy();
+  expect(screen.getByText('Turn on notifications so you see client messages and bookings as they arrive.')).toBeTruthy();
   // The OS prompt only comes from the tap.
   expect(mockRegister).not.toHaveBeenCalled();
   await fireEvent.press(screen.getByTestId('push-permission-enable'));
