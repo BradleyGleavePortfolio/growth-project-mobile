@@ -155,20 +155,12 @@ export interface GenerateMealPlanInput {
   clientId: string;
   /** 1-14 inclusive. */
   days: number;
-  notes?: string;
   /**
-   * B14: explicit safety fields. The backend already reads the client's
-   * stored profile, but a missing-by-default field in a prompt is a silent
-   * way to drop an allergy on the floor. We mirror these into the request
-   * so:
-   *   - the generator sees them in the API contract (not just from a DB
-   *     side-channel),
-   *   - the values are auditable on the wire (Sentry / server logs),
-   *   - any field added on mobile is immediately usable without a backend
-   *     deploy.
+   * B14: the client's allergies and dietary restrictions are mirrored into
+   * `notes` by CoachAiSection. The backend body allow-list accepts only
+   * clientId, days and notes; any other key is refused with a 400.
    */
-  allergies?: string[];
-  dietary_restrictions?: string[];
+  notes?: string;
 }
 
 export interface GenerateInsightInput {
@@ -182,6 +174,9 @@ export interface GenerateInsightInput {
 export interface ApproveResult {
   approvedAsId: string;
   approvedType: CoachAiDraftType;
+  /** Workouts scheduled for the client by a backend that assigns AI program
+   *  days on approval. Absent on the production backend (library save only). */
+  assigned_count?: number;
 }
 
 export interface RejectInput {
