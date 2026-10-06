@@ -18,6 +18,7 @@ interface ClientStore {
   dailyTotals: DailyTotals;
   waterOz: number;
   isLoading: boolean;
+  loadError: string | null;
 
   setSelectedDate: (date: string) => void;
   loadDayData: (userId: string, date?: string) => Promise<void>;
@@ -45,6 +46,7 @@ const initialClientState = {
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
   isLoading: false,
+  loadError: null as string | null,
 };
 
 export const useClientStore = create<ClientStore>((set, get) => ({
@@ -62,7 +64,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Fetch food logs and water in parallel
       const [foodResponse, waterResponse] = await Promise.all([
         logApi.getDaily(d),
-        waterApi.getDaily(d).catch(() => ({ data: { total_ml: 0 } })),
+        waterApi.getDaily(d).catch((err: unknown) => {
+          logger.error('ClientStore', 'water data load failed', err);
+          return null;
+        }),
       ]);
       const data = foodResponse.data;
 
@@ -125,8 +130,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       });
 
       // Convert ml to oz for display (1 oz = 29.5735 ml)
-      const totalMl = waterResponse.data?.total_ml || 0;
-      const waterOz = Math.round(totalMl / 29.5735);
+      const totalMl = waterResponse?.data?.total_ml || 0;
+      const waterOz = waterResponse ? Math.round(totalMl / 29.5735) : get().waterOz;
 
       set({
         foodLogs: logs,
@@ -139,12 +144,18 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         waterOz,
         selectedDate: d,
         isLoading: false,
+        loadError: waterResponse
+          ? null
+          : 'Water data could not refresh. Check your connection and try again.',
       });
     } catch (err) {
-      // Read-only day data aggregation. Empty totals are acceptable; the
-      // UI falls back to zeros and the user can retry via pull-to-refresh.
+      // Preserve the last data, but mark this as a failed read rather than
+      // presenting empty/stale values as a successfully loaded day.
       logger.error('ClientStore', 'loadDayData failed', err);
-      set({ isLoading: false });
+      set({
+        isLoading: false,
+        loadError: 'Food and water data could not refresh. Check your connection and try again.',
+      });
     }
   },
 
