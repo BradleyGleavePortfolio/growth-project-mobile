@@ -202,6 +202,7 @@ export type RomanErrorKind =
   | 'dailyCap' // 429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED — daily cap pop-up
   | 'offline' // no network reachability
   | 'aiRefused' // R2b: 403 ai_consent_required / 503 ai_egress_blocked (HTTP or in-stream)
+  | 'poolEmpty' // 402 COACH_AI_BUDGET_EXHAUSTED: the coach's monthly AI credit pool is used up
   | 'generic'; // anything else (5xx, malformed, unknown)
 
 export class RomanApiError extends Error {
@@ -273,6 +274,18 @@ function parseRetryAfter(value: unknown): number | undefined {
 }
 
 const ROMAN_DAILY_CAP_MESSAGE = 'Daily AI limit reached.';
+
+/** Backend B-668-1 machine code: the coach's monthly AI credit pool is used up (402). */
+export const COACH_AI_BUDGET_EXHAUSTED_CODE = 'COACH_AI_BUDGET_EXHAUSTED';
+const ROMAN_POOL_EMPTY_MESSAGE = 'AI credits used up for this month.';
+
+function isPoolEmptyBody(body: unknown): boolean {
+  return (
+    !!body &&
+    typeof body === 'object' &&
+    (body as { code?: unknown }).code === COACH_AI_BUDGET_EXHAUSTED_CODE
+  );
+}
 
 /** Map any thrown error (axios or otherwise) to a typed RomanApiError. */
 function toRomanApiError(err: unknown): RomanApiError {
@@ -501,8 +514,17 @@ export async function sendMessage(
       if (response.status === 404) {
         throw new RomanApiError('unavailable', 'Roman is not available right now.');
       }
-      const coded = response.status === 429 || response.status === 403 || response.status === 503;
+      const coded =
+        response.status === 402 ||
+        response.status === 429 ||
+        response.status === 403 ||
+        response.status === 503;
       const errorBody = coded ? await readErrorBody(response) : null;
+      // The coach's monthly AI credit pool is used up (backend B-668-1),
+      // before the turn is stored: its own copy, never a retryable error.
+      if (response.status === 402 && isPoolEmptyBody(errorBody)) {
+        throw new RomanApiError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE);
+      }
       if (response.status === 429 || response.status === 503) {
         // Daily AI cap (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED),
         // before the turn is stored: the pop-up, never a generic error.
@@ -566,6 +588,9 @@ export async function sendMessage(
       const dailyCap = aiDailyCapFromStreamCode(streamError.code);
       if (dailyCap) {
         throw new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, true, dailyCap);
+      }
+      if (streamError.code === COACH_AI_BUDGET_EXHAUSTED_CODE) {
+        throw new RomanApiError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE, undefined, undefined, true);
       }
       const kind: RomanErrorKind =
         streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
