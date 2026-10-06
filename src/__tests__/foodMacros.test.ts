@@ -68,8 +68,11 @@ describe('quantityMultiplier', () => {
     expect(quantityMultiplier(food({}), 2, 'tsp')).toBe(2);
   });
 
-  it('treats PER_SERVING basis as qty regardless of unit', () => {
-    expect(quantityMultiplier(food({ nutrient_basis: 'PER_SERVING' }), 2, 'g')).toBe(2);
+  it('converts weighed PER_SERVING portions against their own serving weight', () => {
+    const portion = food({ nutrient_basis: 'PER_SERVING', serving_size_grams: 200 });
+    expect(quantityMultiplier(portion, 100, 'g')).toBe(0.5);
+    expect(quantityMultiplier(portion, 1, 'oz')).toBeCloseTo(28.3495 / 200);
+    expect(quantityMultiplier(portion, 2, 'serving')).toBe(2);
   });
 
   it('is case-insensitive on the unit string', () => {
@@ -210,14 +213,18 @@ describe('unitOptionsFor', () => {
   });
 
   it('shows the full chip row when supports_volume_units is true', () => {
-    const opts = unitOptionsFor({ supports_volume_units: true });
+    const opts = unitOptionsFor({ supports_volume_units: true, cup_grams: 240, tbsp_grams: 15, tsp_grams: 5 });
     expect(opts).toContain('cup');
     expect(opts).toContain('tbsp');
     expect(opts).toContain('tsp');
   });
 
-  it('defaults to showing volume chips when the field is missing', () => {
-    expect(unitOptionsFor(null)).toContain('cup');
-    expect(unitOptionsFor({})).toContain('cup');
+  it('does not offer a volume conversion without a usable density', () => {
+    expect(unitOptionsFor(null)).toEqual(['serving', 'g', 'oz']);
+    expect(unitOptionsFor({ supports_volume_units: true })).toEqual(['serving', 'g', 'oz']);
+  });
+
+  it('does not offer mass units for an unweighed per-serving food', () => {
+    expect(unitOptionsFor({ nutrient_basis: 'PER_SERVING', serving_size_grams: 0 })).toEqual(['serving']);
   });
 });

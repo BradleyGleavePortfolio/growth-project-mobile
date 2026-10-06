@@ -150,12 +150,13 @@ function buildManualPayload(args: ManualLogArgs) {
   if (!name) {
     throw new FoodLogValidationError('A food name is required.');
   }
-  // B4: parseFloat handles "1.5" and ",5" via parseQuantityInput; default to
-  // 1 only when the input was *blank*, not "0" or "abc".
-  const qty = parseQuantityInput(args.quantity) ?? 1;
+  const qty = parseQuantityInput(args.quantity);
+  if (qty == null) {
+    throw new FoodLogValidationError('Enter a portion quantity greater than zero.');
+  }
 
-  // B4: macros come from text inputs, parsed as floats. Treat blank as
-  // "unknown" (null); 0 is allowed only when explicitly typed.
+  // Quick calorie entries do not track omitted macros. The form states this
+  // explicitly; the current server contract requires numeric macro columns.
   const parseMacro = (raw: string): number | null => {
     const trimmed = (raw ?? '').trim().replace(',', '.');
     if (!trimmed) return null;
@@ -171,6 +172,14 @@ function buildManualPayload(args: ManualLogArgs) {
       'Enter at least calories or one macro for this manual food.',
     );
   }
+  for (const [label, raw] of [
+    ['Calories', args.calories], ['Protein', args.protein],
+    ['Carbs', args.carbs], ['Fat', args.fat],
+  ]) {
+    if (raw.trim() && parseMacro(raw) == null) {
+      throw new FoodLogValidationError(`${label} must be zero or a positive number.`);
+    }
+  }
   const unit = args.unit || 'serving';
   const servingGrams = manualServingGrams(qty, unit);
   const foodPayload = {
@@ -178,15 +187,14 @@ function buildManualPayload(args: ManualLogArgs) {
     brand_or_restaurant: null,
     category: 'generic',
     serving_description: `${qty} ${unit}`,
-    // B4: was always 100 — now reflects the actual mass of the user's
-    // serving when we can compute it. PER_SERVING basis means the
-    // macros below are for ONE qty+unit, not 100g.
-    serving_size_grams: servingGrams,
+    // 0 denotes an unweighed portion; PER_SERVING preserves its nutrition and
+    // the picker does not offer weight conversions until a weight is known.
+    serving_size_grams: servingGrams ?? 0,
     nutrient_basis: 'PER_SERVING' as const,
-    calories,
-    protein_g: protein,
-    carbs_g: carbs,
-    fat_g: fat,
+    calories: calories ?? 0,
+    protein_g: protein ?? 0,
+    carbs_g: carbs ?? 0,
+    fat_g: fat ?? 0,
     tags: [],
     search_aliases: [],
   };

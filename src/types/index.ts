@@ -82,6 +82,9 @@ export interface FoodLog {
   // carry them; consumers fall back to `quantity` + `unit` when absent.
   originalQuantity?: number;
   originalUnit?: string;
+  foodItemId?: string;
+  quantityMultiplier?: number;
+  foodItem?: import('../utils/log/types').SearchResult;
 }
 
 export interface WeightLog {

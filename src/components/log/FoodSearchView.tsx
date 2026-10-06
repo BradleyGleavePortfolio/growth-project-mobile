@@ -72,6 +72,8 @@ export default function FoodSearchView({
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
   const showEmpty =
     searchQuery.length >= 2 && !searching && searchResults.length === 0 && didYouMean.length === 0;
+  const nutrient = (value: number) => Number.isFinite(value) ? String(Math.round(value * 10) / 10) : '—';
+  const basisLabel = (item: SearchResult) => item.nutrient_basis === 'PER_SERVING' ? 'Per portion' : 'Per 100g';
 
   return (
     <View style={styles.modalBody}>
@@ -86,8 +88,8 @@ export default function FoodSearchView({
           autoFocus
         />
         {searching && <ActivityIndicator size="small" color={Colors.primary} />}
-        {!searching && searchQuery.length > 0 && (
-          <TouchableOpacity onPress={onClearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        {searchQuery.length > 0 && (
+          <TouchableOpacity onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
             <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -102,7 +104,7 @@ export default function FoodSearchView({
 
       {searching && showSlowMessage && (
         <View style={styles.slowSearchBanner}>
-          <Text style={styles.slowSearchText}>Searching 1M+ foods...</Text>
+          <Text style={styles.slowSearchText}>Searching the food catalog…</Text>
         </View>
       )}
 
@@ -113,7 +115,7 @@ export default function FoodSearchView({
             onPress={() => onRecentTabChange('recent')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>Recent</Text>
+            <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>This day</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabChip, recentTab === 'frequent' && styles.tabChipActive]}
@@ -144,10 +146,11 @@ export default function FoodSearchView({
                   <Text style={styles.searchResultBrand}>{item.brand}</Text>
                 ) : null}
                 <Text style={styles.searchResultMacros}>
-                  P: {Math.round(item.protein)}g · C: {Math.round(item.carbs)}g · F: {Math.round(item.fat)}g
+                  Protein {nutrient(item.protein)}g · Carbs {nutrient(item.carbs)}g · Fat {nutrient(item.fat)}g
                 </Text>
+                <Text style={styles.searchResultMacros}>{basisLabel(item)}</Text>
               </View>
-              <Text style={styles.searchResultCals}>{Math.round(item.calories)} kcal</Text>
+              <Text style={styles.searchResultCals}>{Number.isFinite(item.calories) ? Math.round(item.calories) : '—'} kcal</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -159,14 +162,19 @@ export default function FoodSearchView({
         ListHeaderComponent={
           searchQuery.length < 2 && browseList.length > 0 ? (
             <Text style={styles.listHeader}>
-              {recentTab === 'recent' ? 'Recent Foods' : 'Frequent Foods'}
+              {recentTab === 'recent' ? "This day's foods" : 'Frequent Foods'}
             </Text>
+          ) : searchQuery.length < 2 && browseList.length === 0 ? (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateTitle}>{recentTab === 'recent' ? 'No foods logged on this day' : 'No frequent foods yet'}</Text>
+              <Text style={styles.emptyStateSubtitle}>Search for a food above or enter its label details manually.</Text>
+            </View>
           ) : showEmpty ? (
             <View style={styles.emptyStateContainer}>
               <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
-              <Text style={styles.emptyStateTitle}>No results found</Text>
+              <Text style={styles.emptyStateTitle}>{searchError ? 'Search unavailable' : 'No results found'}</Text>
               <Text style={styles.emptyStateSubtitle}>
-                Try a simpler name, check spelling, or log it manually below.
+                {searchError ? 'Check the connection and retry, or enter food details manually below.' : 'Try a simpler name, check spelling, or log it manually below.'}
               </Text>
               <TouchableOpacity
                 style={{ backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
@@ -190,11 +198,13 @@ export default function FoodSearchView({
                 <Text style={styles.searchResultBrand}>{item.brand}</Text>
               ) : null}
               <Text style={styles.searchResultMacros}>
-                P: {Math.round(item.protein)}g · C: {Math.round(item.carbs)}g · F: {Math.round(item.fat)}g
-                {item.serving_size ? ` · ${item.serving_size}` : ''}
+                Protein {nutrient(item.protein)}g · Carbs {nutrient(item.carbs)}g · Fat {nutrient(item.fat)}g
+              </Text>
+              <Text style={styles.searchResultMacros}>
+                {basisLabel(item)}{item.serving_size ? ` · Serving: ${item.serving_size}` : ''}
               </Text>
             </View>
-            <Text style={styles.searchResultCals}>{Math.round(item.calories)} kcal</Text>
+            <Text style={styles.searchResultCals}>{Number.isFinite(item.calories) ? Math.round(item.calories) : '—'} kcal</Text>
           </TouchableOpacity>
         )}
         contentContainerStyle={styles.searchList}
@@ -215,6 +225,7 @@ export default function FoodSearchView({
 }
 
 const styles = StyleSheet.create({
+  clearButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   modalBody: {
     flex: 1,
   },
@@ -271,6 +282,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tabChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderRadius: 4, // radius.lg

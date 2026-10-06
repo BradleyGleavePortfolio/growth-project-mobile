@@ -47,8 +47,9 @@ export default function MealSectionCard({
       </View>
 
       {logs.length === 0 && (
-        <Text style={styles.emptyMealText}>No foods logged yet</Text>
+        <Text style={styles.emptyMealText}>No foods logged. Use Add Food below.</Text>
       )}
+      {logs.length > 0 && onEditPress ? <Text style={styles.emptyMealText}>Tap an entry to edit, move or delete it.</Text> : null}
 
       {logs.map((log) => {
         // F-3: prefer the original entered quantity/unit pair when the
@@ -169,6 +170,7 @@ const styles = StyleSheet.create({
     color: Colors.dark,
   },
   addFoodButton: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
