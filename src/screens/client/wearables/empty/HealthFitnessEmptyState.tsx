@@ -11,7 +11,7 @@
  */
 
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   colors,
@@ -25,7 +25,21 @@ import ThreeRingHero, { type RingDatum } from '../cards/ThreeRingHero';
 interface Props {
   readonly tone: BucketTone;
   readonly reduceMotion: boolean;
-  readonly onConnect: () => void;
+  /**
+   * Opens Connections. AUDIT-11-125: omitted in the coach embed (a coach's
+   * client view has no Connections route), which then shows coach copy and no
+   * button.
+   */
+  readonly onConnect?: () => void;
+}
+
+/**
+ * AUDIT-11-125: name only what this phone can connect. Cloud trackers are not
+ * switched on for launch, so "Garmin, Fitbit or any tracker" was not true.
+ */
+function connectBody(): string {
+  const store = Platform.OS === 'android' ? 'Health Connect' : 'Apple Health';
+  return `Connect ${store} to fill your rings and watch your heart, workouts and body trends come to life.`;
 }
 
 export default function HealthFitnessEmptyState({
@@ -53,25 +67,36 @@ export default function HealthFitnessEmptyState({
         empty
       />
 
-      <Text style={styles.title}>See your fitness in one place</Text>
-      <Text style={styles.body}>
-        Connect Apple Health, Garmin, Fitbit or any tracker to fill your rings
-        and watch your heart, workouts and body trends come to life.
-      </Text>
+      {onConnect == null ? (
+        <>
+          <Text style={styles.title}>No health data from this client yet</Text>
+          <Text style={styles.body}>
+            When your client connects Apple Health or Health Connect in the app, their activity,
+            heart rate and workouts show here.
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.title}>See your fitness in one place</Text>
+          <Text style={styles.body}>{connectBody()}</Text>
+        </>
+      )}
 
-      <Pressable
-        onPress={onConnect}
-        accessibilityRole="button"
-        accessibilityLabel="Connect a tracker"
-        style={({ pressed }) => [
-          styles.cta,
-          { backgroundColor: toneTk.accent },
-          pressed && styles.ctaPressed,
-        ]}
-      >
-        <Ionicons name="add-circle-outline" size={18} color={colors.bone} />
-        <Text style={styles.ctaText}>Connect a tracker</Text>
-      </Pressable>
+      {onConnect != null && (
+        <Pressable
+          onPress={onConnect}
+          accessibilityRole="button"
+          accessibilityLabel="Connect a tracker"
+          style={({ pressed }) => [
+            styles.cta,
+            { backgroundColor: toneTk.accent },
+            pressed && styles.ctaPressed,
+          ]}
+        >
+          <Ionicons name="add-circle-outline" size={18} color={colors.bone} />
+          <Text style={styles.ctaText}>Connect a tracker</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
