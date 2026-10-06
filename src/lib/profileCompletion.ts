@@ -64,15 +64,60 @@ function hasValue(v: unknown): boolean {
   return true;
 }
 
+const DIET_FROM_PATTERN: Record<string, string> = {
+  none: 'omnivore',
+  vegetarian: 'vegetarian',
+  vegan: 'vegan',
+  pescatarian: 'pescatarian',
+  keto: 'keto',
+  paleo: 'paleo',
+  other: 'other',
+};
+const GOAL_FROM_TYPE: Record<string, string> = {
+  fat_loss: 'lose_moderate',
+  maintenance: 'maintain',
+  muscle_gain: 'gain',
+};
+
+/**
+ * Sign-in and /auth/me return the stored profile row, whose columns use the
+ * server names (date_of_birth, current_weight_lbs, goal_type, ...). The app's
+ * own writes use the older names. Read the older name first, then the server
+ * column, so answers given in onboarding still count after the next sign-in.
+ * An empty server restrictions list stays unanswered (safety prompt).
+ */
+export function resolveProfileFields(
+  p: NonNullable<CurrentUser['profile']>,
+): Record<ProfileField, unknown> {
+  const dobIso = typeof p.date_of_birth === 'string' ? p.date_of_birth.slice(0, 10) : undefined;
+  const serverRestrictions =
+    Array.isArray(p.dietary_restrictions) && p.dietary_restrictions.length > 0
+      ? p.dietary_restrictions
+      : undefined;
+  return {
+    sex: p.sex,
+    dob: p.dob ?? dobIso,
+    target_weight: p.target_weight ?? p.target_weight_lbs,
+    diet_type: p.diet_type ?? (p.dietary_pattern ? DIET_FROM_PATTERN[p.dietary_pattern] : undefined),
+    workout_days_per_week: p.workout_days_per_week,
+    gym_membership: p.gym_membership ?? (p.has_gym_membership === true ? 'yes_regular' : undefined),
+    current_weight: p.current_weight ?? p.current_weight_lbs,
+    height_cm: p.height_cm,
+    activity_level: p.activity_level,
+    primary_goal: p.primary_goal ?? (p.goal_type ? GOAL_FROM_TYPE[p.goal_type] : undefined),
+    diet_restrictions: p.diet_restrictions ?? serverRestrictions,
+  };
+}
+
 export function getProfileCompletion(
   user: Pick<CurrentUser, 'profile'> | null | undefined,
 ): ProfileCompletionStatus {
-  const profile = user?.profile;
+  const profile = user?.profile ? resolveProfileFields(user.profile) : undefined;
   const filled: ProfileField[] = [];
   const missing: ProfileField[] = [];
 
   for (const field of REQUIRED_FIELDS) {
-    const value = profile ? (profile as Record<string, unknown>)[field] : undefined;
+    const value = profile ? profile[field] : undefined;
     // diet_restrictions has special semantics: a *present* array — even an
     // empty one — is an explicit answer ("I have no restrictions"). Only
     // an undefined / null / non-array value counts as unanswered. This is
