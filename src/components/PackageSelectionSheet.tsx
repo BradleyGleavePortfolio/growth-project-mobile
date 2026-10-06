@@ -85,6 +85,8 @@ export interface PackageSelectionSheetProps {
    * ended without a clear answer (B-334-3). Tests pass zeros.
    */
   recheckDelaysMs?: number[];
+  /** Coachless Home hand-off: select this package once the list loads (when it is in the list). */
+  initialPackageId?: string | null;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -114,6 +116,7 @@ export default function PackageSelectionSheet({
   planPollDelaysMs,
   entitlementPollDelaysMs,
   recheckDelaysMs,
+  initialPackageId,
 }: PackageSelectionSheetProps) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
@@ -214,6 +217,9 @@ export default function PackageSelectionSheet({
         }
         setPackages(list);
         setDescriptions(desc);
+        if (firstLoad && initialPackageId && list.some((p) => p.id === initialPackageId)) {
+          setSelectedId(initialPackageId);
+        }
         setLoading(false);
       } catch {
         // API error on the first load — dismiss quietly; a failed reload
@@ -222,7 +228,7 @@ export default function PackageSelectionSheet({
       }
     })();
     return () => { cancelled = true; };
-  }, [ready, reloadTick]);
+  }, [ready, reloadTick, initialPackageId]);
 
   const selected = packages.find((p) => p.id === selectedId) ?? null;
 

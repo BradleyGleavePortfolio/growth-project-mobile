@@ -35,6 +35,7 @@ jest.mock('../../../components/home/HolisticInsightsTile', () => () => null);
 jest.mock('../../../components/PendingInviteBanner', () => () => null);
 jest.mock('../../../components/home/CoachIntroductionBanner', () => () => null);
 jest.mock('../../../components/tutorial/TutorialHomeSlot', () => () => null);
+jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 
 import HomeScreen from '../HomeScreen';
 import {

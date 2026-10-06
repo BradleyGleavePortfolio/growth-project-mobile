@@ -27,6 +27,7 @@ jest.mock('../../api/featureFlagsApi', () => ({
     'community_classroom',
     'community_events',
     'messaging_core_v2',
+    'coachless_home',
   ],
 }));
 
@@ -68,6 +69,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       community_classroom: false,
       community_events: false,
       messaging_core_v2: false,
+      coachless_home: false,
     });
   });
 
@@ -83,6 +85,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       community_classroom: false,
       community_events: false,
       messaging_core_v2: false,
+      coachless_home: false,
     });
   });
 });
@@ -107,6 +110,7 @@ describe('useFeatureFlags — server resolution', () => {
       community_classroom: false,
       community_events: true,
       messaging_core_v2: false,
+      coachless_home: false,
     });
   });
 
@@ -129,6 +133,15 @@ describe('useFeatureFlags — server resolution', () => {
 
     await waitFor(() => expect(result.current.flags.messaging_core_v2).toBe(true));
     expect(result.current.flags.community_search).toBe(false);
+  });
+
+  it('reads coachless_home from the server map (coachless Home gate)', async () => {
+    api.getFeatureFlags.mockResolvedValue(resp({ coachless_home: true }));
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.flags.coachless_home).toBe(true));
+    expect(result.current.flags.messaging_core_v2).toBe(false);
   });
 
   it('surfaces a server-resolved coach flag without re-applying client role gating', async () => {
