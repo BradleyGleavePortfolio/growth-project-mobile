@@ -7,6 +7,9 @@
  * showed three switches for alerts that never arrive.
  * U-H05-2: a coach with no clients yet saw a red "0%" check-in rate and
  * "Active today 0 of 0" on the Overview tab.
+ * U-H05-3: the wizard and the payouts notice sent the coach to "your Home
+ * screen" / "your Home checklist", but the coach app has no Home tab: the
+ * setup checklist lives on the Overview tab.
  */
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
@@ -96,5 +99,30 @@ describe('U-H05-2: Overview with no clients yet', () => {
     await waitFor(() => expect(getByText('75%')).toBeTruthy());
     expect(getByText('of 12')).toBeTruthy();
     expect(getByTestId('command-center-kpi-checkin-rate')).toBeTruthy();
+  });
+});
+
+describe('U-H05-3: setup copy names the tab the coach can see', () => {
+  const fs = jest.requireActual('fs') as typeof import('fs');
+  const path = jest.requireActual('path') as typeof import('path');
+  const read = (rel: string) => fs.readFileSync(path.join(__dirname, rel), 'utf8');
+
+  it('the wizard points to the Overview tab, never a Home screen', () => {
+    const src = read('../../../navigation/CoachWizardNavigator.tsx');
+    expect(src).not.toMatch(/Home screen|Home checklist/);
+    expect(src).toContain('You can finish this later from the checklist on the Overview tab.');
+    expect(src).toContain('Anything still open stays on the checklist on the Overview tab.');
+  });
+
+  it('the payouts-not-switched-on notice points to the Overview tab', () => {
+    const { describeError } = jest.requireActual('../../../lib/coachSetup/errors');
+    const e = describeError(
+      Object.assign(new Error('x'), {
+        response: { status: 503, data: { error: 'CONNECT_NOT_CONFIGURED' }, headers: {} },
+      }),
+      'open Stripe',
+    );
+    expect(e.body).toContain('Get paid on the Overview tab');
+    expect(e.body).not.toMatch(/Home checklist/);
   });
 });
