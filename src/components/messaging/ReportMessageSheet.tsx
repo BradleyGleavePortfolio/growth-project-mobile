@@ -54,7 +54,7 @@ export function ReportMessageSheet({
       await onSubmit({ reason, details: details.trim() ? details.trim() : undefined });
       reset();
     } catch {
-      setError("Your report was not sent. Check your connection, then try again.");
+      setError('Sending your report could not be confirmed. Check your connection, then try again.');
       setSubmitting(false);
     }
   }, [reason, submitting, details, onSubmit, reset]);

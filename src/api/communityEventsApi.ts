@@ -234,7 +234,9 @@ export function describeMutationError(err: unknown): MutationErrorInfo {
         };
       case 'server':
         return {
-          message: 'The event service had a problem and nothing was changed. Try again in a moment.',
+          // Sol B-339-1: a 5xx is not a rollback receipt, so the copy does not
+          // claim the change was or was not made.
+          message: 'The event service had a problem, so the change could not be confirmed. Check the event, then try again if needed.',
           conflict: false,
         };
       default:

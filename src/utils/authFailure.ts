@@ -97,7 +97,7 @@ export function reportAuthFailure(
 
 const UNKNOWN_LEAD: Record<AuthFlow, string> = {
   sign_in: 'Sign-in did not complete because of a server problem.',
-  sign_up: 'Your account was not created because of a server problem.',
+  sign_up: 'Account creation could not be confirmed because of a server problem.',
   verify: 'Sign-in after verification did not complete because of a server problem.',
   role_selection: 'Account setup did not finish because of a server problem.',
 };

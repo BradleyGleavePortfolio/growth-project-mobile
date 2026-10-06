@@ -153,7 +153,9 @@ export const SIGNUP_INVITE_INVALID_MESSAGE =
 export const SIGNUP_INVALID_EMAIL_MESSAGE = 'Enter a valid email address.';
 export const SIGNUP_PASSWORD_RULE_FALLBACK =
   'Password must be at least 8 characters with one uppercase letter, one number, and one special character.';
-export const SIGNUP_UNKNOWN_MESSAGE = 'Your account was not created. Try again, and if it keeps happening, contact support.';
+// Sol B-339-1: an unrecognized result is not proof that no account exists.
+export const SIGNUP_UNKNOWN_MESSAGE =
+  'Account creation could not be confirmed. Sign in with the same email first; if the account exists, you will be signed in. If not, try again, or contact support if it keeps happening.';
 
 function signupErrorParts(err: unknown): { status?: number; code?: string; messages: string[] } {
   // #306 r7: a provider helper's sanitised detail (utils/authErrorDetail).
