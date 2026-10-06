@@ -13,6 +13,8 @@ jest.mock('../../services/api', () => ({
 
 import { useFoodBrowse } from '../useFoodBrowse';
 import { logApi } from '../../services/api';
+import { calcMacros, quantityMultiplier } from '../../utils/log/macros';
+import type { SearchResult } from '../../utils/log/types';
 
 const getDaily = logApi.getDaily as jest.MockedFunction<typeof logApi.getDaily>;
 
@@ -96,5 +98,54 @@ describe('useFoodBrowse — recent foods and past meals for fast logging', () =>
     // Lunch also comes from the most recent day that has one, not a mix of days.
     expect(result.current.lastMeals.lunch?.entries.map((e) => e.name)).toEqual(['Chicken breast']);
     expect(result.current.lastMeals.dinner).toBeUndefined();
+  });
+});
+
+describe('useFoodBrowse — last portion reproduces the saved entry exactly (B-403-1)', () => {
+  // Manual foods store nutrition for the whole described portion: PER_SERVING,
+  // multiplier 1, with "2 serving" kept only as the description.
+  const customLunch = {
+    id: 'food-custom-lunch', name: 'Custom lunch', calories: 400, protein_g: 12, carbs_g: 60, fat_g: 12,
+    serving_size_grams: 0, serving_description: '2 serving', nutrient_basis: 'PER_SERVING', supports_volume_units: false,
+  };
+  const customBowl = {
+    id: 'food-custom-bowl', name: 'Custom bowl', calories: 520, protein_g: 30, carbs_g: 50, fat_g: 20,
+    serving_size_grams: 150, serving_description: '150 g', nutrient_basis: 'PER_SERVING', supports_volume_units: false,
+  };
+
+  beforeEach(() => {
+    getDaily.mockImplementation(async (date: string) => ({
+      data: {
+        entries: date === '2026-10-05'
+          ? [
+            entry('c1', customLunch as never, 'lunch', 1, 2, 'serving'),
+            entry('c2', customBowl as never, 'dinner', 1, 150, 'g'),
+            entry('c3', oats, 'breakfast', 0.6, 60, 'g'),
+          ]
+          : [],
+      },
+    }) as never);
+  });
+
+  const multiplierOf = (food: SearchResult) =>
+    quantityMultiplier(food, food.last_quantity as number, food.last_unit as string);
+
+  it('starts a custom whole-portion food at the one portion that was saved, not its description count', async () => {
+    const result = await loaded();
+    const lunch = result.current.recentFoods.find((f) => f.id === 'food-custom-lunch') as SearchResult;
+    expect(lunch).toMatchObject({ last_quantity: 1, last_unit: 'serving' });
+    expect(multiplierOf(lunch)).toBe(1);
+    expect(calcMacros(lunch, lunch.last_quantity as number, lunch.last_unit as string))
+      .toEqual({ calories: 400, protein: 12, carbs: 60, fat: 12 });
+  });
+
+  it('keeps the weighed amount when it reproduces the saved entry (custom and catalog foods)', async () => {
+    const result = await loaded();
+    const bowl = result.current.recentFoods.find((f) => f.id === 'food-custom-bowl') as SearchResult;
+    expect(bowl).toMatchObject({ last_quantity: 150, last_unit: 'g' });
+    expect(multiplierOf(bowl)).toBe(1);
+    const recentOats = result.current.recentFoods.find((f) => f.id === 'food-oats') as SearchResult;
+    expect(recentOats).toMatchObject({ last_quantity: 60, last_unit: 'g' });
+    expect(multiplierOf(recentOats)).toBeCloseTo(0.6, 10);
   });
 });
