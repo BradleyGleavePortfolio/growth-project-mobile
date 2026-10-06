@@ -13,6 +13,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, colors } from '../../theme/index';
 import FoodImage from '../FoodImage';
 import { SearchResult } from '../../utils/log/types';
+import type { PastMeal } from '../../hooks/useFoodBrowse';
+import { formatPortion } from '../../utils/log/quickLog';
 
 interface Props {
   searchQuery: string;
@@ -32,6 +34,19 @@ interface Props {
 
   onSelectFood: (food: SearchResult) => void;
   onEnterManualMode: () => void;
+
+  // Most recent earlier meal in this slot, offered as a one-tap repeat.
+  repeatMeal?: PastMeal | null;
+  repeatMealTitle?: string;
+  onRepeatMeal?: () => void;
+  saving?: boolean;
+}
+
+// "From your log · Last time 2 servings" for foods the client has logged.
+function logNote(item: SearchResult): string | null {
+  const last = item.last_quantity && item.last_unit ? `Last time ${formatPortion(item.last_quantity, item.last_unit)}` : null;
+  if (item.from_log) return last ? `From your log · ${last}` : 'From your log';
+  return last;
 }
 
 function FoodThumb({ item }: { item: SearchResult }) {
@@ -67,6 +82,10 @@ export default function FoodSearchView({
   frequentFoods,
   onSelectFood,
   onEnterManualMode,
+  repeatMeal,
+  repeatMealTitle,
+  onRepeatMeal,
+  saving,
 }: Props) {
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
@@ -108,6 +127,30 @@ export default function FoodSearchView({
         </View>
       )}
 
+      {searchQuery.length < 2 && repeatMeal && repeatMeal.entries.length > 0 && onRepeatMeal ? (
+        <View style={styles.repeatCard}>
+          <View style={styles.repeatText}>
+            <Text style={styles.repeatTitle}>{repeatMealTitle}</Text>
+            <Text style={styles.repeatSubtitle} numberOfLines={2}>
+              {repeatMeal.entries.map((e) => e.name).join(', ')} · {Math.round(repeatMeal.calories)} kcal
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.repeatButton, saving && { opacity: 0.6 }]}
+            onPress={onRepeatMeal}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel={`${repeatMealTitle}: add all ${repeatMeal.entries.length} ${repeatMeal.entries.length === 1 ? 'food' : 'foods'}`}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={Colors.white} />
+            ) : (
+              <Text style={styles.repeatButtonText}>Add all</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
       {searchQuery.length < 2 && (
         <View style={styles.tabRow}>
           <TouchableOpacity
@@ -115,7 +158,7 @@ export default function FoodSearchView({
             onPress={() => onRecentTabChange('recent')}
             activeOpacity={0.7}
           >
-            <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>This day</Text>
+            <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>Recent</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabChip, recentTab === 'frequent' && styles.tabChipActive]}
@@ -162,11 +205,11 @@ export default function FoodSearchView({
         ListHeaderComponent={
           searchQuery.length < 2 && browseList.length > 0 ? (
             <Text style={styles.listHeader}>
-              {recentTab === 'recent' ? "This day's foods" : 'Frequent Foods'}
+              {recentTab === 'recent' ? 'Recent foods, last 7 days' : 'Most logged, last 7 days'}
             </Text>
           ) : searchQuery.length < 2 && browseList.length === 0 ? (
             <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateTitle}>{recentTab === 'recent' ? 'No foods logged on this day' : 'No frequent foods yet'}</Text>
+              <Text style={styles.emptyStateTitle}>{recentTab === 'recent' ? 'No foods logged in the last 7 days' : 'No frequent foods yet'}</Text>
               <Text style={styles.emptyStateSubtitle}>Search for a food above or enter its label details manually.</Text>
             </View>
           ) : showEmpty ? (
@@ -203,6 +246,7 @@ export default function FoodSearchView({
               <Text style={styles.searchResultMacros}>
                 {basisLabel(item)}{item.serving_size ? ` · Serving: ${item.serving_size}` : ''}
               </Text>
+              {logNote(item) ? <Text style={styles.logNote}>{logNote(item)}</Text> : null}
             </View>
             <Text style={styles.searchResultCals}>{Number.isFinite(item.calories) ? Math.round(item.calories) : '—'} kcal</Text>
           </TouchableOpacity>
@@ -225,6 +269,30 @@ export default function FoodSearchView({
 }
 
 const styles = StyleSheet.create({
+  repeatCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surface,
+    gap: 12,
+  },
+  repeatText: { flex: 1 },
+  repeatTitle: { fontSize: 14, fontWeight: '600', color: Colors.dark },
+  repeatSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  repeatButton: {
+    minHeight: 44,
+    minWidth: 88,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.primary,
+  },
+  repeatButtonText: { color: Colors.white, fontWeight: '600', fontSize: 14 },
+  logNote: { fontSize: 12, color: Colors.primary, marginTop: 2 },
   clearButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   modalBody: {
     flex: 1,

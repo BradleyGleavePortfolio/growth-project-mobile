@@ -31,6 +31,9 @@ interface ClientStore {
     notes?: string;
   }) => Promise<void>;
   logWater: (userId: string, coachId: string, amount: number) => Promise<void>;
+  // Drops an entry from the day on screen and takes its nutrition off the
+  // day's totals straight away, before the server confirms the delete.
+  removeFoodLogLocally: (entryId: string) => void;
   // Security: reset all in-memory state on logout so the next user on the
   // same device doesn't briefly see the previous user's food/water data.
   reset: () => void;
@@ -163,6 +166,22 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       throw err;
     }
   },
+
+  removeFoodLogLocally: (entryId: string) =>
+    set((state) => {
+      const removed = state.foodLogs.find((f) => f.id === entryId);
+      if (!removed) return {};
+      const t = state.dailyTotals;
+      return {
+        foodLogs: state.foodLogs.filter((f) => f.id !== entryId),
+        dailyTotals: {
+          calories: Math.max(0, t.calories - removed.calories),
+          protein: Math.max(0, t.protein - removed.protein),
+          carbs: Math.max(0, t.carbs - removed.carbs),
+          fat: Math.max(0, t.fat - removed.fat),
+        },
+      };
+    }),
 
   logWater: async (_userId: string, _coachId: string, amountOz: number) => {
     // Optimistic update — add immediately, sync to backend

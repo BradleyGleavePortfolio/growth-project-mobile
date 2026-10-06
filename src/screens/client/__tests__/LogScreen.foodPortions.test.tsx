@@ -28,7 +28,7 @@ jest.mock('../../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({}), isEffectivelyOnline: () => true,
 }));
 jest.mock('../../../hooks/useFoodBrowse', () => ({
-  useFoodBrowse: () => ({ recentFoods: [], frequentFoods: [], loadRecentFoods: jest.fn(), loadFrequentFoods: jest.fn() }),
+  useFoodBrowse: () => ({ recentFoods: [], frequentFoods: [], lastMeals: {}, loadBrowseFoods: jest.fn() }),
 }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
 jest.mock('../../../services/api', () => ({

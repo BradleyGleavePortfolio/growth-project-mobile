@@ -33,6 +33,8 @@ import { SearchResult, MEAL_SECTIONS, unitOptionsFor } from '../../utils/log/typ
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { initialEditPortion, editUnitsFor, editPortionMultiplier } from '../../utils/log/editPortion';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
+import { matchLoggedFoods, mergeWithLoggedMatches, repeatPastMeal } from '../../utils/log/quickLog';
+import { addDays, getTodayString } from '../../utils/date';
 import {
   submitSearchLogOffline,
   submitSearchLogOnline,
@@ -64,9 +66,10 @@ export default function LogScreen() {
     setSelectedDate,
     loadDayData,
     logWater,
+    removeFoodLogLocally,
   } = useClientStore();
 
-  const { recentFoods, frequentFoods, loadRecentFoods, loadFrequentFoods } = useFoodBrowse(
+  const { recentFoods, frequentFoods, lastMeals, loadBrowseFoods } = useFoodBrowse(
     currentUser?.id,
     selectedDate,
   );
@@ -171,15 +174,18 @@ export default function LogScreen() {
     setRecentTab('recent');
     resetManualFields();
     setModalVisible(true);
-    await loadRecentFoods();
-    loadFrequentFoods();
-  }, [loadRecentFoods, loadFrequentFoods]);
+    // One parallel fetch fills Recent, Frequent and the repeat-meal card.
+    await loadBrowseFoods();
+  }, [loadBrowseFoods]);
 
   // Debounced food search via REST API
   const handleSearch = (query: string) => {
     const request = ++searchRequest.current;
     setSearchQuery(query);
-    setSearchResults([]);
+    // Foods already in the client's log show the moment they type; catalog
+    // results are appended when the search returns.
+    const logged = query.length >= 2 ? matchLoggedFoods(query, recentFoods, frequentFoods) : [];
+    setSearchResults(logged);
     setParsedQuantity(null);
     setParsedUnit(null);
     setDidYouMean([]);
@@ -214,16 +220,16 @@ export default function LogScreen() {
         setParsedUnit(pu);
 
         const mapped = results.map(mapFoodItem);
-        setSearchResults(mapped);
+        setSearchResults(mergeWithLoggedMatches(logged, mapped));
 
-        if (mapped.length === 0 && suggestions.length > 0) {
+        if (mapped.length === 0 && logged.length === 0 && suggestions.length > 0) {
           setDidYouMean(suggestions.map(mapFoodItem));
         } else {
           setDidYouMean([]);
         }
       } catch (err) {
         if (request !== searchRequest.current) return;
-        setSearchResults([]);
+        setSearchResults(logged);
         setDidYouMean([]);
         setSearchError('Search unavailable. Check your connection.');
       } finally {
@@ -239,8 +245,14 @@ export default function LogScreen() {
     // (e.g. parsed 'cup' but the food has no density), fall through to
     // 'serving' so the picker stays in a valid state.
     const allowedUnits = unitOptionsFor(food);
-    const unit = parsedUnit && allowedUnits.includes(parsedUnit) ? parsedUnit : 'serving';
-    const qty = parsedQuantity && parsedQuantity > 0 ? String(parsedQuantity) : '1';
+    // A portion typed into the search wins; otherwise a food from the
+    // client's log starts at the portion logged last time.
+    const typedQty = parsedQuantity && parsedQuantity > 0 ? parsedQuantity : null;
+    const typedUnit = parsedUnit && allowedUnits.includes(parsedUnit) ? parsedUnit : null;
+    const useLast = typedQty == null && typedUnit == null && !!food.last_quantity && !!food.last_unit
+      && allowedUnits.includes(food.last_unit);
+    const unit = useLast ? (food.last_unit as string) : typedUnit ?? 'serving';
+    const qty = useLast ? String(food.last_quantity) : typedQty != null ? String(typedQty) : '1';
     setQuantityInput(qty);
     setSelectedUnit(unit);
     setQuantityModalVisible(true);
@@ -351,6 +363,54 @@ export default function LogScreen() {
     }
   };
 
+  const mealLabel = (type: MealType) => MEAL_SECTIONS.find((s) => s.type === type)?.label ?? 'Meal';
+  // Offered only while this meal is still empty on the selected day, so a
+  // second open of Add Food cannot add the same meal twice by accident.
+  const repeatMeal = foodLogs.some((f) => f.mealType === activeMealType)
+    ? null
+    : lastMeals[activeMealType] ?? null;
+  const repeatMealDay = repeatMeal
+    ? selectedDate === getTodayString() && repeatMeal.date === addDays(selectedDate, -1)
+      ? 'yesterday'
+      : new Date(`${repeatMeal.date}T00:00:00`).toLocaleDateString('en-US', { weekday: 'long' })
+    : '';
+  const repeatMealTitle = repeatMeal
+    ? `Repeat ${repeatMealDay}'s ${mealLabel(activeMealType).toLowerCase()}`
+    : '';
+
+  // Logs every food of the most recent earlier meal in this slot with the
+  // same saved portions, so a repeated breakfast is two taps.
+  const handleRepeatMeal = async () => {
+    if (!currentUser || !repeatMeal || foodSaving) return;
+    if (!online) {
+      Alert.alert(
+        'Connection needed',
+        'Repeating a past meal needs a connection. Search for a food or enter it manually to save it offline.',
+      );
+      return;
+    }
+    const target = mealLabel(activeMealType);
+    setFoodSaving(true);
+    try {
+      const { added, failedNames } = await repeatPastMeal(repeatMeal, selectedDate, activeMealType);
+      await loadDayData(currentUser.id, selectedDate);
+      if (failedNames.length === 0) {
+        HapticService.success();
+        track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'repeat_meal' });
+        setModalVisible(false);
+        setSavedMessage(`${added} ${added === 1 ? 'food' : 'foods'} added to ${target}.`);
+      } else {
+        HapticService.error();
+        Alert.alert(
+          added > 0 ? 'Some foods were not added' : "Couldn't repeat this meal",
+          `${added} of ${repeatMeal.entries.length} foods added to ${target}. Not added: ${failedNames.join(', ')}. Check the connection, then add ${failedNames.length === 1 ? 'it' : 'them'} from Recent.`,
+        );
+      }
+    } finally {
+      setFoodSaving(false);
+    }
+  };
+
   // F-2: open the inline edit modal for a logged entry, pre-filled with
   // whichever (originalQuantity, originalUnit) pair the backend sent back,
   // falling back to the multiplier when the row is a legacy one without
@@ -409,11 +469,14 @@ export default function LogScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          // The row and the day's totals update at once; the reload below
+          // brings the entry back if the server did not delete it.
+          removeFoodLogLocally(log.id);
           try {
             await logApi.deleteEntry(log.id);
           } catch (err) {
             console.error('LogScreen: handleDeleteFood failed', err);
-            Alert.alert("Couldn't remove food", errorMessage(err, 'Please try again.'));
+            Alert.alert("Couldn't remove food", errorMessage(err, `${log.foodName} is still in the log. Check the connection and try again.`));
           }
           loadDayData(currentUser.id, selectedDate);
         },
@@ -523,6 +586,9 @@ export default function LogScreen() {
         recentFoods={recentFoods}
         frequentFoods={frequentFoods}
         onSelectFood={handleSelectFood}
+        repeatMeal={repeatMeal}
+        repeatMealTitle={repeatMealTitle}
+        onRepeatMeal={handleRepeatMeal}
         manualMode={manualMode}
         onEnterManualMode={() => setManualMode(true)}
         onExitManualMode={() => setManualMode(false)}
