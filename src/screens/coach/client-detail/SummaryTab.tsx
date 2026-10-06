@@ -41,7 +41,7 @@ export function SummaryTab({
    * Stream 2 — opens the AskAiActionSheet for this client. Optional so
    * existing usages of SummaryTab in other contexts (e.g. unit tests
    * that don't mount the sheet wiring) don't have to supply it. When
-   * omitted, the "Ask AI" pill renders disabled.
+   * omitted, the "Ask AI" pill is not shown.
    */
   onOpenAskAi?: () => void;
   colors: ThemeColors;
@@ -152,18 +152,20 @@ export function SummaryTab({
           <Ionicons name="barbell-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Workouts</Text>
         </TouchableOpacity>
-        {/* Stream 2 — opens the four-capability Ask-AI sheet. */}
-        <TouchableOpacity
-          style={[styles.actionPill, !onOpenAskAi && { opacity: 0.5 }]}
-          onPress={onOpenAskAi}
-          disabled={!onOpenAskAi}
-          accessibilityRole="button"
-          accessibilityLabel="Ask AI to draft a message, workout, meal plan, or nudge"
-          testID="summary-tab-ask-ai-pill"
-        >
-          <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
-          <Text style={styles.actionPillText}>Ask AI</Text>
-        </TouchableOpacity>
+        {/* Stream 2 — opens the Ask-AI sheet. Shown only when a caller wires
+            it; ClientDetailScreen does not (see the note there). */}
+        {onOpenAskAi ? (
+          <TouchableOpacity
+            style={styles.actionPill}
+            onPress={onOpenAskAi}
+            accessibilityRole="button"
+            accessibilityLabel="Ask AI to draft a check-in nudge"
+            testID="summary-tab-ask-ai-pill"
+          >
+            <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+            <Text style={styles.actionPillText}>Ask AI</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
       {nudgeSuccess && (
         <View style={styles.successBanner} accessibilityLiveRegion="polite">

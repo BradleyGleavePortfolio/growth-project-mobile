@@ -236,6 +236,36 @@ describe('CoachAiSection', () => {
   });
 });
 
+describe('CoachAiSection meal-plan body (AUDIT-14-125)', () => {
+  it('sends only the keys the backend allow-list accepts, with allergies inside notes', async () => {
+    // GenerateMealPlanDto (backend, forbidNonWhitelisted) accepts clientId,
+    // days and notes. Extra keys such as allergies or dietary_restrictions
+    // are refused with a 400, which failed every generation.
+    mockedGet.mockResolvedValue(ok({ ready: true, modelUsed: 'claude-opus-4-7' }));
+    mockedPost.mockResolvedValueOnce(ok({ draftId: 'm1', type: 'MEAL_PLAN', clientId: 'c1' }));
+    const { findByTestId, findByText } = await renderWithNav(
+      <CoachAiSection
+        clientId="c1"
+        clientName="Jane Doe"
+        clientAllergies={['peanuts']}
+        clientDietaryRestrictions={['gluten']}
+      />,
+    );
+    const cta = await findByTestId('coach-ai-cta-meal');
+    await waitFor(() =>
+      expect(cta.props.accessibilityState).toEqual(expect.objectContaining({ disabled: false })),
+    );
+    fireEvent.press(cta);
+    fireEvent.press(await findByText('Generate'));
+    await waitFor(() => expect(mockedPost).toHaveBeenCalled());
+    const [url, body] = mockedPost.mock.calls[0];
+    expect(url).toBe('/coach/ai/meal-plan');
+    expect(Object.keys(body).sort()).toEqual(['clientId', 'days', 'notes']);
+    expect(body.notes).toContain('Allergies: peanuts.');
+    expect(body.notes).toContain('Dietary restrictions: gluten.');
+  });
+});
+
 // ─── 5. AIWorkoutDraftScreen — edit/save flow ────────────────────────────────
 
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';

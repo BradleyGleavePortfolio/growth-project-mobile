@@ -7,7 +7,8 @@
  *   2. Render the WorkoutPayload as an editable structure
  *      (weeks → days → exercises). Inline edits update local state.
  *   3. "Save edits" → POST /coach/ai/drafts/:draftId/edit { patch }
- *   4. "Approve & assign" → POST /coach/ai/drafts/:draftId/approve →
+ *   4. "Approve" → POST /coach/ai/drafts/:draftId/approve → truthful
+ *      saved/assigned alert (aiWorkoutApproveCopy) →
  *      navigate back to ClientDetail (workouts tab).
  *   5. "Reject" → reason modal → POST /coach/ai/drafts/:draftId/reject.
  *
@@ -43,6 +44,7 @@ import type {
   WorkoutPayload,
 } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
+import { aiWorkoutApproveCopy } from '../../utils/coach/aiWorkoutApproveCopy';
 
 type Nav = NativeStackNavigationProp<ClientsStackParamList, 'AIWorkoutDraft'>;
 type R = RouteProp<ClientsStackParamList, 'AIWorkoutDraft'>;
@@ -244,10 +246,11 @@ export default function AIWorkoutDraftScreen() {
     if (!draft) return;
     setApproving(true);
     try {
-      await coachAiApi.approveDraft(draft.draftId);
+      const res = await coachAiApi.approveDraft(draft.draftId);
+      const copy = aiWorkoutApproveCopy(clientName, res?.data);
       Alert.alert(
-        'Approved',
-        `Workout program assigned to ${clientName}.`,
+        copy.title,
+        copy.body,
         [
           {
             text: 'OK',
@@ -466,10 +469,10 @@ export default function AIWorkoutDraftScreen() {
             onPress={handleApprove}
             disabled={approving}
             accessibilityRole="button"
-            accessibilityLabel="Approve and assign"
+            accessibilityLabel="Approve draft"
           >
             <Text style={styles.btnApproveText}>
-              {approving ? 'Approving…' : 'Approve & assign'}
+              {approving ? 'Approving…' : 'Approve'}
             </Text>
           </TouchableOpacity>
         </View>

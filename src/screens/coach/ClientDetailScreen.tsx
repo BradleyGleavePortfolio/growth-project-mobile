@@ -472,7 +472,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
-            onOpenAskAi={() => setAskAiVisible(true)}
             colors={colors}
             styles={styles}
           />
@@ -612,7 +611,12 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         styles={styles}
       />
 
-      {/* Stream 2 — Ask-AI sheet for the four execution capabilities.
+      {/* AUDIT-14-125: the Ask AI pill is not wired (SummaryTab hides it).
+          Every draft it creates names the coach as requester, and the
+          gateway refuses a decision by the requester (403), so the coach
+          could never approve or reject the nudge it created. The sheet
+          stays mounted, closed, until the approval rule supports it.
+          Stream 2 — Ask-AI sheet for the four execution capabilities.
           Mounted always; `visible` controls render. On a successful
           submit the sheet closes and we navigate to the pending-drafts
           inbox so the coach sees their new draft land. */}
