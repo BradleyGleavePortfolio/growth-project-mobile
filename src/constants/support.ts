@@ -11,9 +11,14 @@
  */
 export const SUPPORT_EMAIL = "Bradleyapple1031@gmail.com";
 
-/** `mailto:` link to SUPPORT_EMAIL, with an optional subject line. */
-export function supportMailto(subject?: string): string {
-  return subject
-    ? `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}`
-    : `mailto:${SUPPORT_EMAIL}`;
+/**
+ * `mailto:` link to SUPPORT_EMAIL, with an optional subject line and an
+ * optional prefilled body (for example a request reference, so support can
+ * find the exact failure).
+ */
+export function supportMailto(subject?: string, body?: string): string {
+  const params: string[] = [];
+  if (subject) params.push(`subject=${encodeURIComponent(subject)}`);
+  if (body) params.push(`body=${encodeURIComponent(body)}`);
+  return params.length > 0 ? `mailto:${SUPPORT_EMAIL}?${params.join("&")}` : `mailto:${SUPPORT_EMAIL}`;
 }

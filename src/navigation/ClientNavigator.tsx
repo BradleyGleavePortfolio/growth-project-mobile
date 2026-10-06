@@ -101,6 +101,7 @@ import NotificationPreferencesScreen from '../screens/notifications/Notification
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import UpdateCardScreen from '../entitlements/dunning/UpdateCardScreen';
 import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 // PR-13 — buyer-facing Deliverables timeline (drip engine consumer surface,
 // master plan §3 ScheduledDrop rows).
@@ -291,6 +292,8 @@ export type MoreStackParamList = {
   DataExport: undefined;
   /** Payments — client-facing packages list (backend PR #215). */
   ClientPackages: undefined;
+  /** OR-110-2 native card update; `autostart` opens the card form on arrival. */
+  UpdateCard: { autostart?: boolean } | undefined;
   /**
    * PR-13 — buyer-facing Deliverables timeline for one ClientPurchase.
    * Renders the buyer's ScheduledDrops (delivered + upcoming) and routes
@@ -547,6 +550,8 @@ function MoreStackNavigator() {
           (backend PR #215). The return screen is the deep-link target for
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
       <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
+      {/* OR-110-2 — native card update (dunning banner, lockout, emails). */}
+      <MoreStackNav.Screen name="UpdateCard"      component={UpdateCardScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
       {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
       <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />

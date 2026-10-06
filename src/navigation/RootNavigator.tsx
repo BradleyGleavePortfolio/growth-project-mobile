@@ -39,6 +39,7 @@ import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
 import { prefsStorage } from '../storage/mmkv';
 import { signOut } from '../services/authActions';
+import { DunningLockoutProvider } from '../entitlements/dunning/DunningLockoutProvider';
 // S6-P1: identity boundary for the persisted React Query cache. Mounted
 // inside NavigationContainer around the per-auth-state navigator so the
 // container, its ref and the deep-link replay behaviour are untouched.
@@ -261,6 +262,15 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
                 Fast: 'fast',
               }
             : {}),
+          // OR-110-2: native card update. The dunning emails link to
+          // https://app.trygrowthproject.com/billing/update-card (a universal
+          // link: the backend AASA lists the path, app.json registers the
+          // Android filter); the backend's in-app blocker uses
+          // tgp://billing/update. Reachable while locked.
+          UpdateCard: {
+            path: 'billing/update-card',
+            alias: ['billing/update'],
+          },
           CheckoutReturn: {
             path: 'checkout/:outcome',
             parse: {
@@ -278,6 +288,38 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
 // ClientNavigator after Day1WinScreen completes. Only used for the Day 1 Win
 // hand-off; other navigation continues to flow through props/hooks.
 const navigationRef = createNavigationContainerRef<Record<string, object | undefined>>();
+
+// S-DUNNING: the payment-lockout state needs the focused route (it steps
+// aside on the screens a locked client can still use) and the three
+// reachable destinations. Module-level so the provider's subscriptions stay
+// stable across renders.
+function currentRouteName(): string | undefined {
+  return navigationRef.isReady() ? navigationRef.getCurrentRoute()?.name : undefined;
+}
+
+function subscribeToRouteChanges(listener: () => void): () => void {
+  return navigationRef.addListener('state', listener);
+}
+
+function openDataExport(): void {
+  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DataExport' });
+}
+
+function openDeleteAccount(): void {
+  if (navigationRef.isReady()) navigationRef.navigate('MoreTab', { screen: 'DeleteAccount' });
+}
+
+function openUpdateCard(params: { autostart: boolean; surface: string }): void {
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('MoreTab', { screen: 'UpdateCard', params: { autostart: params.autostart } });
+  }
+}
+
+function signOutFromLockout(): void {
+  signOut().catch((err: unknown) => {
+    logger.warn('RootNavigator', 'sign out from payment lockout failed', err);
+  });
+}
 
 // Extract the accept-invite token from a deep link URL. Returns null when
 // the URL is not an accept-invite link OR the token cannot be parsed.
@@ -904,7 +946,18 @@ export default function RootNavigator() {
           }}
           onMessageCoach={openCoachThread}
         >
-          <ClientNavigator />
+          <DunningLockoutProvider
+            enabled
+            onMessageCoach={openCoachThread}
+            onOpenDataExport={openDataExport}
+            onOpenDeleteAccount={openDeleteAccount}
+            onOpenUpdateCard={openUpdateCard}
+            onSignOut={signOutFromLockout}
+            getCurrentRouteName={currentRouteName}
+            subscribeToRouteChanges={subscribeToRouteChanges}
+          >
+            <ClientNavigator />
+          </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
             onDismiss={() => setAuthState('student')}
@@ -923,7 +976,18 @@ export default function RootNavigator() {
           }}
           onMessageCoach={openCoachThread}
         >
-          <ClientNavigator />
+          <DunningLockoutProvider
+            enabled
+            onMessageCoach={openCoachThread}
+            onOpenDataExport={openDataExport}
+            onOpenDeleteAccount={openDeleteAccount}
+            onOpenUpdateCard={openUpdateCard}
+            onSignOut={signOutFromLockout}
+            getCurrentRouteName={currentRouteName}
+            subscribeToRouteChanges={subscribeToRouteChanges}
+          >
+            <ClientNavigator />
+          </DunningLockoutProvider>
         </EntitlementProvider>
       )}
       </PersistedQueryCacheGate>

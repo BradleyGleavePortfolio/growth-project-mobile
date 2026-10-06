@@ -26,6 +26,7 @@ jest.mock('../../api/featureFlagsApi', () => ({
     'coach_community_wearable_prompts',
     'community_classroom',
     'community_events',
+    'messaging_core_v2',
   ],
 }));
 
@@ -66,6 +67,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       coach_community_wearable_prompts: false,
       community_classroom: false,
       community_events: false,
+      messaging_core_v2: false,
     });
   });
 
@@ -80,6 +82,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       coach_community_wearable_prompts: false,
       community_classroom: false,
       community_events: false,
+      messaging_core_v2: false,
     });
   });
 });
@@ -103,6 +106,7 @@ describe('useFeatureFlags — server resolution', () => {
       coach_community_wearable_prompts: true,
       community_classroom: false,
       community_events: true,
+      messaging_core_v2: false,
     });
   });
 
@@ -115,6 +119,16 @@ describe('useFeatureFlags — server resolution', () => {
     expect(result.current.flags.coach_community_wearable_prompts).toBe(false);
     expect(result.current.flags.community_classroom).toBe(false);
     expect(result.current.flags.community_events).toBe(false);
+    expect(result.current.flags.messaging_core_v2).toBe(false);
+  });
+
+  it('reads messaging_core_v2 from the server map (messaging v2 inbox gate)', async () => {
+    api.getFeatureFlags.mockResolvedValue(resp({ messaging_core_v2: true }));
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.flags.messaging_core_v2).toBe(true));
+    expect(result.current.flags.community_search).toBe(false);
   });
 
   it('surfaces a server-resolved coach flag without re-applying client role gating', async () => {

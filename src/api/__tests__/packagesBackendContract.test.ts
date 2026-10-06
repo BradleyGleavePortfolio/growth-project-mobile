@@ -94,7 +94,8 @@ describe('create body contract (B-321-2)', () => {
 describe('update body contract (B-321-3)', () => {
   it('switching to one-time sends billing_type one_time and billing_interval null', () => {
     const body = toBackendUpdate({ billingInterval: 'one_time', intervalCount: 1 });
-    expect(body).toEqual({ billing_type: 'one_time', billing_interval: null });
+    // B-345-1 (wizard train): the count is cleared too (backend resets it to 1).
+    expect(body).toEqual({ billing_type: 'one_time', billing_interval: null, billing_interval_count: null });
     expect(unknownFields(body)).toEqual([]);
   });
 

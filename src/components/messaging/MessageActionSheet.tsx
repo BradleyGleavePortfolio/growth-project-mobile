@@ -25,6 +25,10 @@ export interface MessageActionSheetProps {
    *  on the user's own messages (Apple 1.2 says only foreign content is
    *  reportable). Defaults to true. */
   canReport?: boolean;
+  /** When false, Reply is hidden. The legacy send routes reject a reply
+   *  reference (messaging v2 carries replies), so the legacy thread hides
+   *  Reply instead of sending a message that fails. Defaults to true. */
+  canReply?: boolean;
 }
 
 export function MessageActionSheet({
@@ -35,17 +39,22 @@ export function MessageActionSheet({
   onReport,
   onClose,
   canReport = true,
+  canReply = true,
 }: MessageActionSheetProps): React.ReactElement | null {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     if (!visible || Platform.OS !== 'ios') return;
-    const options = canReport
-      ? ['Reply', 'Copy', 'Report Message', 'Cancel']
-      : ['Reply', 'Copy', 'Cancel'];
-    const cancelButtonIndex = canReport ? 3 : 2;
-    const destructiveButtonIndex = canReport ? 2 : undefined;
+    const keys: Array<'reply' | 'copy' | 'report'> = [
+      ...(canReply ? (['reply'] as const) : []),
+      'copy',
+      ...(canReport ? (['report'] as const) : []),
+    ];
+    const labels = { reply: 'Reply', copy: 'Copy', report: 'Report Message' };
+    const options = [...keys.map((k) => labels[k]), 'Cancel'];
+    const cancelButtonIndex = keys.length;
+    const destructiveButtonIndex = canReport ? keys.indexOf('report') : undefined;
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options,
@@ -56,9 +65,10 @@ export function MessageActionSheet({
       },
       (idx) => {
         onClose();
-        if (idx === 0) onReply();
-        else if (idx === 1) onCopy();
-        else if (canReport && idx === 2) onReport();
+        const k = keys[idx];
+        if (k === 'reply') onReply();
+        else if (k === 'copy') onCopy();
+        else if (k === 'report') onReport();
       },
     );
     // The parent re-toggles `visible` to re-trigger the native sheet;
@@ -96,7 +106,9 @@ export function MessageActionSheet({
               {messagePreview}
             </Text>
           ) : null}
-          <ActionRow icon="return-up-back-outline" label="Reply" onPress={handleReply} styles={styles} color={colors.textPrimary} />
+          {canReply ? (
+            <ActionRow icon="return-up-back-outline" label="Reply" onPress={handleReply} styles={styles} color={colors.textPrimary} />
+          ) : null}
           <ActionRow icon="copy-outline" label="Copy" onPress={handleCopy} styles={styles} color={colors.textPrimary} />
           {canReport ? (
             <ActionRow icon="flag-outline" label="Report Message" onPress={handleReport} styles={styles} color={colors.error} destructive />

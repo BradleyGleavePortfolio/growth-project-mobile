@@ -35,6 +35,7 @@ import {
 } from '../../api/romanApi';
 import { logger } from '../../utils/logger';
 import type { AiRefusal } from '../../lib/ai/aiRefusal';
+import type { AiDailyCap } from '../../lib/ai/aiDailyCap';
 import { romanChatsEvents } from '../settings/romanChatsEvents';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
@@ -53,6 +54,8 @@ export interface RomanSendError {
   retryAfterSeconds?: number;
   /** R2b refusal (kind `aiRefused`): consent required or egress blocked. */
   refusal?: AiRefusal;
+  /** Kind `dailyCap`: when AI help resets (shown in the daily cap pop-up). */
+  dailyCap?: AiDailyCap;
   /**
    * The server had already stored the user turn when this failed (an
    * in-stream error after HTTP 200). The turn stays in the thread; nothing
@@ -256,6 +259,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
             kind: e?.kind ?? 'generic',
             message: e?.message ?? 'Roman could not finish this answer.',
             ...(e?.refusal ? { refusal: e.refusal } : {}),
+            ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
             turnStored: true,
           });
         }
@@ -284,6 +288,7 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
           message: e?.message ?? 'That request did not complete.',
           retryAfterSeconds: e?.retryAfterSeconds,
           ...(e?.refusal ? { refusal: e.refusal } : {}),
+          ...(e?.dailyCap ? { dailyCap: e.dailyCap } : {}),
         });
       }
       sendingRef.current = false;

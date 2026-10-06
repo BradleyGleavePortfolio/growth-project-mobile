@@ -71,11 +71,9 @@ idle
 
 | Control | What it does |
 | --- | --- |
-| Mute all | Suppresses all push and in-app notifications. Email continues unless also toggled off. |
-| Quiet hours enabled | Suppresses push between start and end times. |
-| Quiet hours start | 24-hour time, 30-minute increments, +/- buttons. |
-| Quiet hours end | Same. |
-| Per-kind × per-channel | 8 kinds × 3 channels = 24 toggles. Each has a 1-sentence description. |
+| Mute all | Turns off all push, in-app and email notifications, session reminders included (the backend `muted` gate blocks every channel). The channel switches wait while it is on. |
+| Quiet hours | Read-only (B-NOTIF-6): 9:00 PM to 8:00 AM in the user's own zone, the window the backend applies to everyone (OR-113-5). Overnight notifications wait until 8:00 AM; a reminder for a session starting within the hour still comes through. Nothing is sent for it. |
+| Per-kind × per-channel | The kinds with a backend switch (`KIND_PREFS_PREFIX`: messages, milestones, check-in reminders, build week) × 3 channels. Each has a 1-sentence description. One save at a time: the switches wait while a save is in flight (B-341-1). A failed save puts the switch back and says what happened by status, with a reference and the support address for a server failure, and shows the server's row when the change may have reached it (B-341-2, `notificationPreferenceErrors.ts`). |
 
 ---
 
@@ -86,8 +84,9 @@ idle
 | `GET /notifications?cursor=&limit=` | MOCKED | Paginated notification list, newest first |
 | `PATCH /notifications/:id/read` | MOCKED | Mark a single notification read |
 | `PATCH /notifications/read-all` | MOCKED | Mark all notifications read |
-| `GET /notifications/preferences` | MOCKED | Fetch channel prefs + quiet hours |
-| `PUT /notifications/preferences` | MOCKED | Save channel prefs + quiet hours |
+| `GET /notifications/preferences` | LIVE | Flat columns (`muted`, `<prefix>_push/_inapp/_email`), mapped by `preferencesFromBackend` |
+| `PATCH /notifications/preferences` | LIVE | Only the changed columns (`preferencesToBackend`); never quiet hours |
+| `PUT /notifications/timezone` | LIVE | Device zone (`source: 'device'`) on sign-in and foreground (`timezoneSync.ts`); falls back to the preferences PATCH on a backend without the route |
 | `GET /notifications/unread-count` | MOCKED | Lightweight badge count polling |
 
 All calls go through `src/services/notificationsApi.ts`. The mock flag is `NOTIFICATIONS_MOCK_ENABLED` in `src/config/featureFlags.ts`. Flip to `false` and add the real axios calls once the backend Phase 9 PR merges.

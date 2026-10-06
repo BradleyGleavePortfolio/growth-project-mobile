@@ -40,6 +40,7 @@ import { useClientDetailData } from './client-detail/useClientDetailData';
 import { SleepRecoveryTab } from './client-detail/SleepRecoveryTab';
 // Stream 2 — AskAi sheet for the four execution capabilities.
 import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActionSheet';
+import { DisputePausedPlansCard } from '../../components/coach/DisputePausedPlansCard';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 
@@ -96,6 +97,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // successful submit (the sheet calls onClose then onAfterSubmit so
   // the screen can route to the pending-drafts inbox).
   const [askAiVisible, setAskAiVisible] = useState(false);
+  // R-DISPUTE-PAUSE: pull-to-refresh also re-reads the dispute-paused plans.
+  const [planReloadKey, setPlanReloadKey] = useState(0);
 
   // Server-side meal plans (Tier 2). The legacy local-SQLite `mealPlanDb`
   // shim was removed in the nutrition P0 cleanup — Grocery / Shopping /
@@ -247,6 +250,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
+    setPlanReloadKey((k) => k + 1);
     await loadData();
     setRefreshing(false);
   }, [loadData, setRefreshing]);
@@ -438,6 +442,12 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
+        <DisputePausedPlansCard
+          clientUserId={clientId}
+          clientName={clientName}
+          reloadKey={planReloadKey}
+          colors={colors}
+        />
         {activeTab === 'summary' && (
           <SummaryTab
             profile={profile}

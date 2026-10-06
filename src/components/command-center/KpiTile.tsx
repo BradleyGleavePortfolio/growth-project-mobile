@@ -67,7 +67,8 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.eyebrow,
-    color: colors.stone,
+    // charcoal on cream is ~7.4:1 (WCAG AA); stone was ~2.1:1.
+    color: colors.charcoal,
     marginBottom: spacing.xs,
   },
   value: {
@@ -76,7 +77,7 @@ const styles = StyleSheet.create({
   },
   subtext: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.charcoal,
     marginTop: 2,
   },
 });
