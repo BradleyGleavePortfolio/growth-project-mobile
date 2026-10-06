@@ -64,7 +64,7 @@ describe('Home day-data failure state', () => {
     expect(screen.getByTestId('home-day-data-error')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('home-day-data-error-retry'));
     expect(mockDayState.loadDayData).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('CONTINUE')).toBeTruthy();
+    expect(screen.getByTestId('home-number-grid')).toBeTruthy();
   });
 
   it('keeps retry disabled while the refresh is loading', async () => {

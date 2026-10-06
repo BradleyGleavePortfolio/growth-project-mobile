@@ -1,7 +1,6 @@
 import React from 'react';
 import { Linking } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import SupportInboxScreen from '../SupportInboxScreen';
 
 const mockOpenChat = jest.fn();
@@ -13,7 +12,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn().mockResolvedValue(true) }));
 
-const navigation = { goBack: jest.fn() } as NavigationProp<ParamListBase>;
+const navigation = { goBack: jest.fn() };
 
 describe('Support problem reporting', () => {
   beforeEach(() => {

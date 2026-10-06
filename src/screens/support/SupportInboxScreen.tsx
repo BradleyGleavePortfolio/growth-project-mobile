@@ -32,7 +32,7 @@ import { SUPPORT_EMAIL } from '../../constants/support';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 interface Props {
-  navigation: NavigationProp<ParamListBase>;
+  navigation: Pick<NavigationProp<ParamListBase>, 'goBack'>;
   /**
    * Opened from the auth stack (nobody signed in). The chat session is reset
    * first unless it is already this device's anonymous one, so a previous
