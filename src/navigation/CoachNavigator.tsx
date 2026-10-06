@@ -29,10 +29,8 @@ import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesList
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
 import CoachPackageContentsScreen from '../screens/coach/payments/CoachPackageContentsScreen';
-// NOTE: payments/CoachEarningsScreen exists on disk (from feat branch) but
-// is intentionally not imported — the main `CoachEarningsScreen` (imported
-// below from `../screens/coach/CoachEarningsScreen`) is the production
-// surface for the `CoachEarnings` route.
+// The `CoachEarnings` route redirects to TGP Money (screens/coach/money),
+// the production money surface (the old earnings screens are deleted).
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding. The screen registrations below only mount
@@ -95,11 +93,14 @@ import CoachSetupScreen from '../screens/coach/setup/CoachSetupScreen';
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
 import PendingAiDraftsScreen from '../screens/coach/PendingAiDraftsScreen';
 // TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
-import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
 // Payments — earnings/payouts (backend PR #216). Package CRUD is the
 // `CoachPackagesList`/`CoachPackageEdit`/`CoachPackageSubscribers` family
 // from `screens/coach/payments/*`, imported above.
-import CoachEarningsScreen from '../screens/coach/CoachEarningsScreen';
+import MoneyScreen from '../screens/coach/money/MoneyScreen';
+import MoneyChargesScreen from '../screens/coach/money/MoneyChargesScreen';
+import MoneyChargeScreen from '../screens/coach/money/MoneyChargeScreen';
+import MoneyRedirect from '../screens/coach/money/MoneyRedirect';
+import type { ChargeFilter } from '../api/coachMoneyApi';
 import CoachTeamProfileScreen from '../screens/coach/CoachTeamProfileScreen';
 import InviteCodeRedeemersScreen from '../screens/coach/InviteCodeRedeemersScreen';
 // Phase 9 — Notification center
@@ -219,6 +220,7 @@ export type SettingsStackParamList = {
   /** Importer v0.3 — coach-facing extension import entry (flag-gated, default OFF). */
   ImportData: undefined;
   /** TestFlight coach SaaS — business metrics / Stripe Connect surface. */
+  /** Retired: redirects to CoachMoney (Business metrics live in Money). */
   CoachBusinessMetrics: undefined;
   /** TestFlight coach SaaS — team/gym profile and team code. */
   CoachTeamProfile: undefined;
@@ -232,7 +234,12 @@ export type SettingsStackParamList = {
   /** PR-17 M2 — coach package content-authoring screen. */
   CoachPackageContents: { packageId: string; title?: string };
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
+  /** Retired: redirects to CoachMoney (S-COACH-MOB-2). */
   CoachEarnings: undefined;
+  /** TGP Money (Home card -> Money page). `from: "home"`: Back returns to Home. */
+  CoachMoney: { from?: "home" } | undefined;
+  CoachMoneyCharges: { filter?: ChargeFilter } | undefined;
+  CoachMoneyCharge: { chargeId: string };
   /** iMessage-grade DM — manage blocked users from coach Settings. */
   BlockedUsers: undefined;
   /** Stream 1 — AI credit-pack checkout. `preselect` lets callers route
@@ -440,10 +447,11 @@ function SettingsStackNavigator() {
       {featureFlags.extensionImport && (
         <SettingsStack.Screen name="ImportData" component={ImportDataScreen} />
       )}
-      {/* TestFlight coach SaaS — Stripe-Connect-backed business metrics. */}
+      {/* S-COACH-MOB-2 — Business metrics folded into Money; the old route
+          redirects so every existing entry point lands on Money. */}
       <SettingsStack.Screen
         name="CoachBusinessMetrics"
-        component={CoachBusinessMetricsScreen}
+        component={MoneyRedirect}
       />
       {/* TestFlight coach SaaS — team / gym / organization profile. */}
       <SettingsStack.Screen
@@ -466,10 +474,21 @@ function SettingsStackNavigator() {
         name="CoachPackageContents"
         component={CoachPackageContentsScreen}
       />
-      {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
+      {/* S-COACH-MOB-2 — TGP Money replaces the retired Earnings screen
+          (which called six routes that never shipped). The old route
+          redirects to Money. */}
+      <SettingsStack.Screen name="CoachMoney" component={MoneyScreen} />
+      <SettingsStack.Screen
+        name="CoachMoneyCharges"
+        component={MoneyChargesScreen}
+      />
+      <SettingsStack.Screen
+        name="CoachMoneyCharge"
+        component={MoneyChargeScreen}
+      />
       <SettingsStack.Screen
         name="CoachEarnings"
-        component={CoachEarningsScreen}
+        component={MoneyRedirect}
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
