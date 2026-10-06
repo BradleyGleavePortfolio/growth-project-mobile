@@ -154,8 +154,8 @@ function buildManualPayload(args: ManualLogArgs) {
     throw new FoodLogValidationError('Enter a portion quantity greater than zero.');
   }
 
-  // Quick calorie entries do not track omitted macros. The form states this
-  // explicitly; the current server contract requires numeric macro columns.
+  // The numeric server contract cannot preserve unknown nutrition. Require
+  // entered values instead of silently turning blanks into measured zeros.
   const parseMacro = (raw: string): number | null => {
     const trimmed = (raw ?? '').trim().replace(',', '.');
     if (!trimmed) return null;
@@ -166,11 +166,6 @@ function buildManualPayload(args: ManualLogArgs) {
   const protein = parseMacro(args.protein);
   const carbs = parseMacro(args.carbs);
   const fat = parseMacro(args.fat);
-  if (calories == null && protein == null && carbs == null && fat == null) {
-    throw new FoodLogValidationError(
-      'Enter at least calories or one macro for this manual food.',
-    );
-  }
   for (const [label, raw] of [
     ['Calories', args.calories], ['Protein', args.protein],
     ['Carbs', args.carbs], ['Fat', args.fat],
@@ -178,6 +173,12 @@ function buildManualPayload(args: ManualLogArgs) {
     if (raw.trim() && parseMacro(raw) == null) {
       throw new FoodLogValidationError(`${label} must be zero or a positive number.`);
     }
+  }
+  if (protein == null || carbs == null || fat == null) {
+    throw new FoodLogValidationError('Enter protein, carbs and fat. Use 0 if there is none.');
+  }
+  if (calories == null) {
+    throw new FoodLogValidationError('Enter calories. Use 0 if there is none.');
   }
   const unit = args.unit || 'serving';
   const servingGrams = manualServingGrams(qty, unit);
@@ -190,10 +191,10 @@ function buildManualPayload(args: ManualLogArgs) {
     // the picker does not offer weight conversions until a weight is known.
     serving_size_grams: servingGrams ?? 0,
     nutrient_basis: 'PER_SERVING' as const,
-    calories: calories ?? 0,
-    protein_g: protein ?? 0,
-    carbs_g: carbs ?? 0,
-    fat_g: fat ?? 0,
+    calories,
+    protein_g: protein,
+    carbs_g: carbs,
+    fat_g: fat,
     tags: [],
     search_aliases: [],
   };
