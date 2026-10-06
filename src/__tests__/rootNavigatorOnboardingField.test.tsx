@@ -317,7 +317,7 @@ describe("HUNT-08 B-08-4: completed offline onboarding rejoins server state", ()
 
   it("saves queued goals and check-in after an online cold start, without reopening Ready", async () => {
     await completedOffline();
-    const r = mount();
+    const r = await mount();
     await r.findByTestId("nav-client");
     await expectSaved();
   });
@@ -326,13 +326,13 @@ describe("HUNT-08 B-08-4: completed offline onboarding rejoins server state", ()
     await completedOffline();
     mockNetwork.isOnline = false;
     mockNetwork.isInternetReachable = false;
-    const r = mount();
+    const r = await mount();
     await r.findByTestId("nav-client");
     expect(completeDayOne).not.toHaveBeenCalled();
     expect((await readResumeState())?.pendingSync).toHaveLength(3);
     mockNetwork.isOnline = true;
     mockNetwork.isInternetReachable = true;
-    r.rerender(<QueryClientProvider client={queryClient}><RootNavigator /></QueryClientProvider>);
+    await r.rerender(<QueryClientProvider client={queryClient}><RootNavigator /></QueryClientProvider>);
     await expectSaved();
   });
 
@@ -343,7 +343,7 @@ describe("HUNT-08 B-08-4: completed offline onboarding rejoins server state", ()
       listeners.push(listener as (state: string) => void);
       return { remove: jest.fn() };
     });
-    const r = mount();
+    const r = await mount();
     await r.findByTestId("nav-client");
     await writeResumeState({ step: "Ready", pendingSync: [{ kind: "goals", goals: ["fitness"] }, { kind: "complete" }] });
     await act(async () => listeners.forEach((listener) => listener("active")));
@@ -355,7 +355,7 @@ describe("HUNT-08 B-08-4: completed offline onboarding rejoins server state", ()
   it("never submits a saved queue while signed out", async () => {
     await completedOffline();
     delete mockSecure["supabase_token"];
-    const r = mount();
+    const r = await mount();
     await r.findByTestId("nav-auth");
     expect(completeDayOne).not.toHaveBeenCalled();
     expect(saveGoals).not.toHaveBeenCalled();
