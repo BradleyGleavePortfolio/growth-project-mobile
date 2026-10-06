@@ -137,6 +137,8 @@ import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import { Colors } from '../constants/colors';
+import { useTheme } from '../theme/ThemeProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
 export type CoachTabParamList = {
@@ -645,6 +647,8 @@ function useCoachUnreadPolling(): number {
 }
 
 export default function CoachNavigator() {
+  const { semanticColors: sc } = useTheme();
+  const insets = useSafeAreaInsets();
   const unreadCount = useCoachUnreadPolling();
   // P0-1: TeamStack must only mount for head coaches. Sub-coaches who land
   // on team-management surfaces hit `/sub-coaches` 403s the screen treats as
@@ -665,15 +669,15 @@ export default function CoachNavigator() {
       initialRouteName={initialTab}
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarActiveTintColor: sc.accentText,
+        tabBarInactiveTintColor: sc.textMuted,
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
+          backgroundColor: sc.bgSurface,
+          borderTopColor: sc.border,
           borderTopWidth: 1,
-          paddingBottom: 4,
+          paddingBottom: 4 + insets.bottom,
           paddingTop: 4,
-          height: 60,
+          height: 60 + insets.bottom,
         },
         tabBarLabelStyle: {
           fontSize: 10,

@@ -24,6 +24,7 @@ import { View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/client/HomeScreen';
 import HabitsScreen from '../screens/client/HabitsScreen';
@@ -125,7 +126,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors } from '../theme/tokens';
+import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
 // rendered and the deep-link route is not registered (see CommunityTabBarIcon
@@ -629,6 +630,8 @@ const TUTORIAL_TABS = [
 ];
 
 export default function ClientNavigator() {
+  const { semanticColors: sc } = useTheme();
+  const insets = useSafeAreaInsets();
   // Sol B-310-5: a Roman and AI withdrawal from onboarding that the ledger
   // has not confirmed yet is sent when the app opens.
   useAiWithdrawalDrain();
@@ -653,13 +656,13 @@ export default function ClientNavigator() {
         headerShown: false,
         tabBarShowLabel: false,
         tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor:   colors.ink,
-        tabBarInactiveTintColor: colors.stone,
+        tabBarActiveTintColor:   sc.textPrimary,
+        tabBarInactiveTintColor: sc.textMuted,
         tabBarStyle: {
-          backgroundColor: colors.bone,
+          backgroundColor: sc.bgPrimary,
           borderTopWidth: 0.5,
-          borderTopColor: colors.stone,
-          height: 64,
+          borderTopColor: sc.border,
+          height: 64 + insets.bottom,
         },
       }}
       screenListeners={({ navigation }) => {

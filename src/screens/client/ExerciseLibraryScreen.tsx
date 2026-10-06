@@ -319,7 +319,7 @@ function makeStyles(sc: SemanticTokens) {
       textTransform: 'capitalize',
     },
     chipTextActive: {
-      color: sc.bgSurface,
+      color: sc.textOnAccent,
     },
     listContent: {
       paddingBottom: spacing.xl,
@@ -351,7 +351,7 @@ function makeStyles(sc: SemanticTokens) {
     },
     errorText: {
       ...typography.body,
-      color: sc.accent,
+      color: sc.accentText,
     },
     footerWrap: {
       paddingVertical: spacing.lg,
