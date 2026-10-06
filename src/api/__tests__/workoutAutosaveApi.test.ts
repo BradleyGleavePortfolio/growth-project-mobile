@@ -266,6 +266,31 @@ describe('autosave() error classification', () => {
     });
   });
 
+  it('parses the conflict through the backend error-filter envelope (B-355-1)', async () => {
+    api.patch.mockRejectedValueOnce(
+      axiosErrorWith(409, {
+        statusCode: 409,
+        code: 'autosave_lock_stale',
+        message: 'Conflict Exception',
+        error: 'Conflict',
+        timestamp: '2026-10-05T16:40:00.000Z',
+        path: '/workout-plans/p1/autosave',
+        request_id: '3f6c2a1e-0d7b-4c55-9a51-8f0e2b7d9c11',
+        head_revision_index: 3,
+        lock_token: VALID_TOKEN,
+      }),
+    );
+    const err = await workoutAutosaveApi
+      .autosave({ planId: 'p1', idempotencyKey: 'k', body: validBatch() })
+      .catch((e: unknown) => e);
+    expect(err).toMatchObject({ kind: 'conflict' });
+    expect((err as WorkoutAutosaveApiError).conflict).toEqual({
+      error: 'autosave_lock_stale',
+      head_revision_index: 3,
+      lock_token: VALID_TOKEN,
+    });
+  });
+
   it('still yields a conflict (no payload) when the 409 body is malformed', async () => {
     api.patch.mockRejectedValueOnce(axiosErrorWith(409, { garbage: true }));
     try {
@@ -391,5 +416,106 @@ describe('byteLengthUtf8', () => {
     // no raw emoji literal lives in the source (MWB-4 #237 R13 D-003). The
     // UTF-8 byte-length contract is unchanged: a U+1F600 code point is 4 bytes.
     expect(__byteLengthUtf8ForTest('\uD83D\uDE00')).toBe(4); // surrogate pair
+  });
+});
+
+describe('undo() head fence (S-MWB-3 B-328-6)', () => {
+  it('sends expected_head_index with the target', async () => {
+    api.post.mockResolvedValueOnce({
+      data: { head_revision_index: 4, lock_token: VALID_TOKEN },
+    });
+    await workoutAutosaveApi.undo('p1', {
+      to_revision_index: 2,
+      expected_head_index: 3,
+    });
+    expect(api.post).toHaveBeenCalledWith(
+      '/workout-plans/p1/undo',
+      { to_revision_index: 2, expected_head_index: 3 },
+      expect.objectContaining({ headers: expect.any(Object) }),
+    );
+  });
+
+  it('parses a 409 undo_head_moved body (with code and message) onto headMoved', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, {
+        error: 'undo_head_moved',
+        code: 'undo_head_moved',
+        message: 'This workout changed since Undo was tapped.',
+        head_revision_index: 4,
+        lock_token: VALID_TOKEN,
+      }),
+    );
+    await expect(
+      workoutAutosaveApi.undo('p1', {
+        to_revision_index: 2,
+        expected_head_index: 3,
+      }),
+    ).rejects.toMatchObject({
+      kind: 'conflict',
+      status: 409,
+      headMoved: { head_revision_index: 4, lock_token: VALID_TOKEN },
+    });
+  });
+
+  it('parses headMoved through the backend error-filter envelope (B-356-1)', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, {
+        statusCode: 409,
+        code: 'undo_head_moved',
+        message: 'This workout changed after the undo was requested. Showing the latest saved version.',
+        error: 'undo_head_moved',
+        timestamp: '2026-10-05T16:40:00.000Z',
+        path: '/workout-plans/p1/undo',
+        request_id: '3f6c2a1e-0d7b-4c55-9a51-8f0e2b7d9c11',
+        head_revision_index: 4,
+        lock_token: VALID_TOKEN,
+      }),
+    );
+    await expect(
+      workoutAutosaveApi.undo('p1', { to_revision_index: 2, expected_head_index: 3 }),
+    ).rejects.toMatchObject({
+      kind: 'conflict',
+      headMoved: { head_revision_index: 4, lock_token: VALID_TOKEN },
+    });
+  });
+
+  it('an undo_head_moved 409 without head and token is an unreadable answer, not a refusal (B-356-1)', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, {
+        statusCode: 409,
+        code: 'undo_head_moved',
+        message: 'This workout changed after the undo was requested. Showing the latest saved version.',
+        error: 'undo_head_moved',
+        timestamp: '2026-10-05T16:40:00.000Z',
+        path: '/workout-plans/p1/undo',
+      }),
+    );
+    const err = await workoutAutosaveApi
+      .undo('p1', { to_revision_index: 0, expected_head_index: 1 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WorkoutAutosaveApiError);
+    expect(err).toMatchObject({ kind: 'contract', status: 409 });
+    expect((err as WorkoutAutosaveApiError).headMoved).toBeUndefined();
+  });
+
+  it('a plain 409 on undo stays a conflict with no headMoved', async () => {
+    api.post.mockRejectedValueOnce(
+      axiosErrorWith(409, { error: 'autosave_conflict_retry', head_revision_index: 4, lock_token: VALID_TOKEN }),
+    );
+    const err = await workoutAutosaveApi
+      .undo('p1', { to_revision_index: 2 })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(WorkoutAutosaveApiError);
+    expect((err as WorkoutAutosaveApiError).headMoved).toBeUndefined();
+  });
+
+  it('rejects a negative expected_head_index locally', async () => {
+    await expect(
+      workoutAutosaveApi.undo('p1', {
+        to_revision_index: 2,
+        expected_head_index: -1,
+      }),
+    ).rejects.toMatchObject({ kind: 'contract', status: 400 });
+    expect(api.post).not.toHaveBeenCalled();
   });
 });

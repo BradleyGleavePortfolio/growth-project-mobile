@@ -84,9 +84,12 @@ describe("B-347-1 free first package", () => {
     await fireEvent.press(s.getByLabelText("Save changes"));
     await waitFor(() => expect(alerts()).toContain("Package updated"));
     expect(mockPatch).toHaveBeenCalledTimes(1);
+    // Main refresh (B-WIZ6-122): S-FEE B-321-3 sends billing only when the
+    // coach changed it, so a name edit keeps the stored one-time billing.
     expect(mockPatch.mock.calls[0][1]).toEqual(
-      expect.objectContaining({ name: "Free intro", amount_cents: 0, billing_type: "one_time" }),
+      expect.objectContaining({ name: "Free intro", amount_cents: 0 }),
     );
+    expect(mockPatch.mock.calls[0][1].billing_type).toBeUndefined();
   });
 });
 
@@ -124,7 +127,12 @@ describe("B-347-3 draft made in the editor", () => {
     expect(s.getByText(/Coaching is saved as a draft/)).toBeTruthy();
     await fireEvent.press(s.getByLabelText("Make Coaching live"));
     await waitFor(() => expect(alerts()).toContain("Package is live"));
-    expect(mockPost).toHaveBeenCalledWith("/v1/coach/packages/pkg_w4/publish");
+    // S-FEE round 4: the one publish call carries an Idempotency-Key.
+    expect(mockPost).toHaveBeenCalledWith(
+      "/v1/coach/packages/pkg_w4/publish",
+      {},
+      expect.objectContaining({ headers: expect.objectContaining({ "Idempotency-Key": expect.any(String) }) }),
+    );
     expect(s.queryByLabelText("Make Coaching live")).toBeNull();
   });
 

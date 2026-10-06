@@ -95,4 +95,21 @@ describe('MessageActionSheet (Android modal)', () => {
     await fireEvent.press(getByText('Cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it('hides Reply when canReply is false (legacy thread: the legacy send routes reject a reply reference)', async () => {
+    const { getByLabelText, queryByLabelText } = await render(
+      <MessageActionSheet
+        visible
+        messagePreview="hello"
+        onReply={jest.fn()}
+        onCopy={jest.fn()}
+        onReport={jest.fn()}
+        onClose={jest.fn()}
+        canReply={false}
+      />,
+    );
+    expect(queryByLabelText('Reply')).toBeNull();
+    expect(getByLabelText('Copy')).toBeTruthy();
+    expect(getByLabelText('Report Message')).toBeTruthy();
+  });
 });

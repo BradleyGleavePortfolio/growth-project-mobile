@@ -79,6 +79,19 @@ import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
 import { Alert, Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
+import {
+  AccountChangedError,
+  assertBindingMatches,
+  bindingIsCurrent,
+  isAccountChangedError,
+  type AccountBinding,
+} from './accountBinding';
+import {
+  holdSessionFence,
+  sessionGeneration,
+  sessionWritesSettled,
+  type SessionFencePass,
+} from './sessionFence';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -105,7 +118,14 @@ const api = axios.create({
 // Security: token now comes from SecureStore (iOS Keychain / Android Keystore)
 // via the secureStorage adapter, not plain AsyncStorage.
 api.interceptors.request.use(async (config) => {
-  const token = await secureStorage.getItem('supabase_token');
+  const token = await readTokenForRequest(config as RetryableConfig);
+  // Mobile #331 Sol A-331-4: a request bound to an account (destructive
+  // Roman chat deletes, and the reads that offer them) goes out only with a
+  // credential of that same account and sign-in. This check runs after the
+  // asynchronous token read, immediately before transport; on a mismatch the
+  // request is cancelled here and never sent (see accountBinding.ts).
+  const binding = (config as RetryableConfig).accountBinding;
+  if (binding) assertBindingMatches(binding, token);
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -126,6 +146,32 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+/**
+ * Mobile #331 A-331-7: the stored access token, read so that the request's
+ * session generation (sessionFence) and the token agree. The first send
+ * records the generation the token belongs to (re-reading if a sign-in or
+ * sign-out wrote the session keys during the read). A 401 replay must still
+ * be in that generation: a request started under one session is never
+ * replayed with the credential of the next one, even of the same account.
+ */
+async function readTokenForRequest(config: RetryableConfig): Promise<string | null> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    // Never read while a session-key write is landing (a half-written pair).
+    await sessionWritesSettled();
+    const before = sessionGeneration();
+    const token = await secureStorage.getItem('supabase_token');
+    if (sessionGeneration() !== before) continue;
+    if (config._sessionGeneration === undefined) {
+      config._sessionGeneration = before;
+    } else if (config._sessionGeneration !== before) {
+      throw new AccountChangedError(false);
+    }
+    return token;
+  }
+  // The session keys kept changing during every read: send nothing.
+  throw new AccountChangedError(false);
+}
 
 // ---------------------------------------------------------------------------
 // Token-refresh mutex + request queue
@@ -156,9 +202,19 @@ type RetryableConfig = AxiosRequestConfig & {
   // session expired". Refresh-and-retry would replay a wrong password against
   // a 5/min throttle, so these 401s go straight back to the caller.
   skipAuthRefresh?: boolean;
+  // Mobile #331 Sol A-331-4: the account and sign-in this request belongs
+  // to. Checked before every send (including a 401 replay); a 401 refreshes
+  // only while that sign-in is still current.
+  accountBinding?: AccountBinding;
+  // Mobile #331 A-331-7: the session generation (sessionFence) whose token
+  // this request was first sent with. A replay must still be in it.
+  _sessionGeneration?: number;
 };
 
-async function performRefresh(): Promise<string> {
+/** Request options for a request bound to one account (see accountBinding.ts). */
+export type BoundRequestConfig = AxiosRequestConfig & { accountBinding: AccountBinding };
+
+async function performRefresh(startGeneration: number): Promise<string> {
   // Read refresh token from the SAME store the writers use (SecureStore via
   // secureStorage). Previously this read AsyncStorage while LoginScreen /
   // CreateAccountScreen / appleAuth / googleAuth all wrote to SecureStore —
@@ -181,11 +237,32 @@ async function performRefresh(): Promise<string> {
   const { data, error: refreshError } = await refreshSession({
     refresh_token: refreshToken,
   });
+  // Mobile #331 Sol A-331-4: a refresh belongs to the session it started
+  // in. If that session ended meanwhile (signed out, or another sign-in
+  // stored its own refresh token), these tokens are for a session that is
+  // over: they are never written over the new session's tokens, and nobody
+  // is signed out for it.
+  //
+  // A-331-7 / B-331-7: the stored-token comparison alone is a check followed
+  // by awaits. The tokens are published only under the session fence for the
+  // generation this refresh started in, taken synchronously after the last
+  // read: a sign-in or sign-out that began earlier has moved the generation
+  // (nothing is written), and one that begins during the two writes waits
+  // for them and then overwrites (sessionFence.ts).
+  if ((await secureStorage.getItem('supabase_refresh_token')) !== refreshToken) {
+    throw new AccountChangedError(false);
+  }
   if (refreshError || !data.session) {
     throw refreshError || new Error('Refresh returned no session');
   }
-  await secureStorage.setItem('supabase_token', data.session.access_token);
-  await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+  const fence = holdSessionFence(startGeneration);
+  if (!fence) throw new AccountChangedError(false);
+  try {
+    await secureStorage.setItem('supabase_token', data.session.access_token, fence.pass);
+    await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token, fence.pass);
+  } finally {
+    fence.release();
+  }
   // Bump only on success — failures must not advance the cycle, otherwise a
   // stale request would think the next cycle's token is in play and ask for
   // a third refresh.
@@ -193,7 +270,7 @@ async function performRefresh(): Promise<string> {
   return data.session.access_token;
 }
 
-async function handleRefreshFailure(): Promise<void> {
+async function handleRefreshFailure(startGeneration: number): Promise<void> {
   // Fire exactly once per refresh-failure cascade. The flag is reset in the
   // refreshPromise.finally() chain so a subsequent successful login → 401
   // cycle still works without depending on a wall-clock timer.
@@ -205,6 +282,11 @@ async function handleRefreshFailure(): Promise<void> {
   // person is told the deletion is complete rather than silently signed
   // out. Only a server-confirmed `deleted` counts; any other answer, or no
   // answer, is an ordinary sign-out.
+  //
+  // B-331-8: the sign-out belongs to the session whose refresh failed. If
+  // that session already ended or was replaced (the generation moved), nobody
+  // is signed out for it.
+  if (sessionGeneration() !== startGeneration) return;
   let deletionComplete = false;
   try {
     const stale = await secureStorage.getItem('supabase_token');
@@ -217,14 +299,25 @@ async function handleRefreshFailure(): Promise<void> {
   // cycle between api.ts and authActions.ts (authActions imports profileApi
   // from this file). The `__testSignOut` seam exists only so unit tests can
   // sidestep the dynamic import — production goes through `await import(...)`.
+  //
+  // B-331-8: the receipt check above awaited the network, so the session is
+  // re-checked by taking the fence for it, synchronously, and the fence is
+  // held for the whole sign-out. A sign-in that begins meanwhile waits and
+  // writes its tokens after this sign-out finished; one that began earlier
+  // has moved the generation, and this sign-out does not happen.
+  const fence = holdSessionFence(startGeneration, 'signout');
+  if (!fence) return;
   try {
     const signOut = __testSignOut
       ? __testSignOut
       : (await import('./authActions')).signOut;
-    await signOut();
+    await signOut(undefined, { sessionFence: fence.pass });
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
+  } finally {
+    // The failed session has ended: the generation moves.
+    fence.release(true);
   }
   if (deletionComplete) {
     Alert.alert(DELETION_COMPLETE_NOTICE.title, DELETION_COMPLETE_NOTICE.body);
@@ -258,7 +351,15 @@ async function deletedByReceipt(accessToken: string): Promise<boolean> {
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // A bound request stopped before it was sent: pass it through untouched.
+    if (isAccountChangedError(error)) return Promise.reject(error);
     const originalConfig = error.config as RetryableConfig | undefined;
+    const binding = originalConfig?.accountBinding;
+    // A bound request whose sign-in ended while it was in flight (aborted, or
+    // answered late): its answer belongs to a session that is over.
+    if (binding && !bindingIsCurrent(binding)) {
+      return Promise.reject(new AccountChangedError(true));
+    }
 
     // Network error — no response from server (cold start, no wifi, etc.).
     // Do NOT log the user out; just surface a friendly message.
@@ -305,15 +406,37 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // A-331-7 (Sol round 2): a 401 for a request first sent in an older
+    // session generation belongs to a session that has ended or is being
+    // replaced (a sign-in or sign-out wrote a session key since, possibly
+    // only one key of the pair so far). It never starts or joins a refresh,
+    // which could otherwise read the old refresh token beside the new access
+    // token. An unbound request keeps its original 401 (C-331-8).
+    if (
+      originalConfig._sessionGeneration !== undefined &&
+      originalConfig._sessionGeneration !== sessionGeneration()
+    ) {
+      return Promise.reject(binding ? new AccountChangedError(false) : error);
+    }
+
     // If a refresh is already in flight, await it. Otherwise start one. The
     // promise is shared across all concurrent 401s so N parallel requests
     // produce a single refresh call per cycle.
     if (!refreshPromise) {
-      refreshPromise = performRefresh()
-        .catch(async (err) => {
-          await handleRefreshFailure();
+      refreshPromise = (async () => {
+        // The session this refresh belongs to (sessionFence generation),
+        // taken once no session-key write is landing.
+        await sessionWritesSettled();
+        const startGeneration = sessionGeneration();
+        try {
+          return await performRefresh(startGeneration);
+        } catch (err) {
+          // A refresh overtaken by a sign-out or sign-in is not a failed
+          // session: the new session must not be signed out for it.
+          if (!isAccountChangedError(err)) await handleRefreshFailure(startGeneration);
           throw err;
-        })
+        }
+      })()
         .finally(() => {
           // Clear the promise so the next 401 burst can trigger a fresh
           // refresh. Reset `loggedOutOnce` on the SAME chain so the guard's
@@ -325,12 +448,31 @@ api.interceptors.response.use(
 
     try {
       const newToken = await refreshPromise;
+      // The replay below goes through the request interceptor, which checks
+      // the binding against the stored token again; stop here already when
+      // the sign-in changed during the refresh.
+      if (binding && !bindingIsCurrent(binding)) throw new AccountChangedError(false);
+      // A-331-7: a request first sent under another session (a sign-in or
+      // sign-out wrote the session keys since) is never replayed with the
+      // new session's credential.
+      if (
+        originalConfig._sessionGeneration !== undefined &&
+        originalConfig._sessionGeneration !== sessionGeneration()
+      ) {
+        throw new AccountChangedError(false);
+      }
       originalConfig._refreshAttempts = attempts + 1;
       originalConfig._lastUsedCycleId = currentCycleId;
       originalConfig.headers = originalConfig.headers || {};
       (originalConfig.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
-      return api.request(originalConfig);
+      // Awaited so a replay stopped by the request interceptor (session
+      // changed) is mapped by the catch below like the check above.
+      return await api.request(originalConfig);
     } catch (refreshErr) {
+      // C-331-8: an unbound request whose session ended under it keeps its
+      // original 401 (already mapped to signed-out copy by callers); only a
+      // bound request reports AccountChangedError.
+      if (!binding && isAccountChangedError(refreshErr)) return Promise.reject(error);
       return Promise.reject(refreshErr);
     }
   },
@@ -346,12 +488,13 @@ type RefreshSessionFn = (args: { refresh_token: string }) => Promise<{
   error: unknown;
 }>;
 let __testRefreshSession: RefreshSessionFn | null = null;
-let __testSignOut: (() => Promise<void>) | null = null;
+type SignOutFn = (userId?: string | null, opts?: { sessionFence?: SessionFencePass }) => Promise<void>;
+let __testSignOut: SignOutFn | null = null;
 
 export function __setRefreshSessionForTests(fn: RefreshSessionFn | null): void {
   __testRefreshSession = fn;
 }
-export function __setSignOutForTests(fn: (() => Promise<void>) | null): void {
+export function __setSignOutForTests(fn: SignOutFn | null): void {
   __testSignOut = fn;
 }
 
@@ -581,8 +724,19 @@ export const habitsApi = {
 };
 
 export const coachApi = {
-  getClients: (status?: 'active' | 'archived' | 'all') =>
-    api.get('/coach/clients' + (status ? `?status=${status}` : '')),
+  /** One roster page; `cursor` is the last row id of the previous page. */
+  getClients: (
+    status?: 'active' | 'archived' | 'all',
+    cursor?: string,
+    take?: number,
+  ) => {
+    const query = new URLSearchParams();
+    if (status) query.set('status', status);
+    if (cursor) query.set('cursor', cursor);
+    if (take) query.set('take', String(take));
+    const qs = query.toString();
+    return api.get('/coach/clients' + (qs ? `?${qs}` : ''));
+  },
   archiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/archive`),
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
   getClientTimeline: (clientId: string, days?: number) =>

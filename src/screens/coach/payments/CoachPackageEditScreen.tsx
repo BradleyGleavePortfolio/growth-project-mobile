@@ -44,7 +44,7 @@ import {
   PackageCreateInput,
   PackageUpdateInput,
 } from "../../../api/packagesApi";
-import { errorCode, errorMessage } from "../../../types/common";
+import { errorMessage } from "../../../types/common";
 import {
   createPackageOnce,
   intentStorageCopy,
@@ -59,6 +59,15 @@ import { track } from "../../../lib/analytics";
 import { useTheme } from "../../../theme/ThemeProvider";
 import type { SemanticTokens, Tokens } from "../../../theme/tokens";
 import { parseDollarsToCents } from "../../../utils/currency";
+import {
+  packagePriceHelper,
+  packagePriceIssue,
+} from "../../../utils/packagePrice";
+import {
+  describePackageSaveFailure,
+  type PackageSaveFailure,
+} from "../../../utils/packageSaveFailure";
+import { signOut } from "../../../services/authActions";
 import { buildPackageShareUrl } from "../../../utils/packageShare";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import PackageDetailSurface, {
@@ -81,8 +90,11 @@ interface Props {
   route: RouteProp<ParamList, "CoachPackageEdit">;
 }
 
-// B-347-4: the editable terms as one comparable value.
-const formKey = (...fields: string[]) => JSON.stringify(fields);
+/**
+ * #321 (Opus B-321-5) + B-347-4: "Make <name> live" publishes the stored row,
+ * so it waits for a save while the form has edits.
+ */
+export const SAVE_BEFORE_PUBLISH = "Save your changes before making this live.";
 
 const INTERVAL_OPTIONS: Array<{
   label: string;
@@ -113,17 +125,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [priceText, setPriceText] = useState("");
   const [billingInterval, setBillingInterval] =
     useState<PackageBillingInterval>("monthly");
-  const [trialText, setTrialText] = useState("");
-  const [featuresText, setFeaturesText] = useState("");
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
-  // B-347-4: "Make live" publishes the stored row, so it waits until the
-  // terms on screen are the terms last loaded or saved.
-  const [savedForm, setSavedForm] = useState<string | null>(null);
-  const formNow = formKey(title, description, priceText, billingInterval, featuresText);
-  const unsaved = savedForm !== null && formNow !== savedForm;
   // B-329-1 (B-COACH-5): a create from this editor is durable like the
   // wizard's. Its Idempotency-Key and body are on disk before the request
   // leaves; reopening the editor after a kill resumes that same create.
@@ -141,8 +146,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       setDescription(it.input.description ?? "");
       setPriceText((it.input.priceCents / 100).toFixed(2));
       setBillingInterval(it.input.billingInterval);
-      setTrialText(it.input.trialDays ? String(it.input.trialDays) : "");
-      setFeaturesText((it.input.features ?? []).join("\n"));
       setResumedCreate(true);
     });
     return () => {
@@ -166,19 +169,6 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       setDescription(initialPackage.description ?? "");
       setPriceText(((initialPackage.priceCents ?? 0) / 100).toFixed(2));
       setBillingInterval(initialPackage.billingInterval);
-      setTrialText(
-        initialPackage.trialDays ? String(initialPackage.trialDays) : "",
-      );
-      setFeaturesText((initialPackage.features ?? []).join("\n"));
-      setSavedForm(
-        formKey(
-          initialPackage.title ?? "",
-          initialPackage.description ?? "",
-          ((initialPackage.priceCents ?? 0) / 100).toFixed(2),
-          initialPackage.billingInterval,
-          (initialPackage.features ?? []).join("\n"),
-        ),
-      );
       setLoaded(true);
       return;
     }
@@ -199,51 +189,93 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       return { payload: null, message: "Please give the package a name." };
     }
     const cents = parseDollarsToCents(priceText);
-    if (cents == null) {
-      return { payload: null, message: "Enter a valid price." };
+    // S-FEE: free (exactly $0, one-time) or $19.99 and up. B-347-1: the free
+    // first package from setup keeps saving at its unchanged $0 one-time
+    // price; a $0 recurring price is still refused.
+    const priceIssue = packagePriceIssue(cents, billingInterval, original);
+    if (cents == null || priceIssue) {
+      return { payload: null, message: priceIssue };
     }
-    // B-347-1: the free one-time package from setup keeps its $0 price when
-    // the coach edits its name or details. A new $0 price is still refused.
-    const freeKept =
-      isEdit && original?.priceCents === 0 && billingInterval === "one_time";
-    if (cents === 0 && !freeKept) {
-      return {
-        payload: null,
-        message:
-          original?.priceCents === 0
-            ? "Free packages are one-time. Choose One-time, or enter a price."
-            : "Price must be greater than zero. Use a free invite code for comps.",
-      };
-    }
-    const features = featuresText
-      .split("\n")
-      .map((f) => f.trim())
-      .filter(Boolean);
-    let trialDays: number | null = null;
-    if (trialText.trim()) {
-      const n = Number(trialText.trim());
-      if (!Number.isInteger(n) || n < 0 || n > 365) {
-        return {
-          payload: null,
-          message: "Trial days must be a whole number between 0 and 365.",
-        };
-      }
-      trialDays = n;
-    }
+    // #321 (Opus B-321-4) + B-347-2: trial days and features are not stored
+    // by the backend (no package column, no checkout trial), so the editor
+    // does not offer them; every input on this screen reaches the request.
     return {
       payload: {
         title: trimmedTitle,
         description: description.trim() || null,
         priceCents: cents,
         billingInterval,
-        intervalCount: 1,
-        trialDays,
-        features,
+        intervalCount:
+          billingInterval === "weekly" ? original?.intervalCount ?? 1 : 1,
       },
       message: null,
     };
-  }, [title, description, priceText, billingInterval, trialText, featuresText,
-    isEdit, original]);
+  }, [title, description, priceText, billingInterval, original]);
+
+  // #321 (Opus B-321-5) + B-347-4: the form differs from the saved row.
+  // Publishing then would put the SAVED terms on sale while the screen shows
+  // others, so "Make <name> live" waits until the coach saves.
+  const unsaved = useMemo(() => {
+    if (!original) return false;
+    const cents = parseDollarsToCents(priceText);
+    return (
+      title.trim() !== (original.title ?? "").trim() ||
+      (description.trim() || null) !==
+        ((original.description ?? "").trim() || null) ||
+      cents !== (original.priceCents ?? 0) ||
+      billingInterval !== original.billingInterval
+    );
+  }, [original, title, description, priceText, billingInterval]);
+
+  // Retry from the failure dialog runs the latest save (current form state).
+  const handleSaveRef = useRef<() => Promise<void>>(async () => undefined);
+  const showSaveFailure = useCallback(
+    (
+      f: PackageSaveFailure,
+      retry: () => void = () => void handleSaveRef.current(),
+    ) => {
+      warningTap();
+      setError(f.message);
+      const close = { text: "Close", style: "cancel" as const };
+      const support = {
+        text: "Contact support",
+        onPress: () => navigation.navigate("SupportInbox"),
+      };
+      const buttons: Array<{
+        text: string;
+        style?: "cancel";
+        onPress?: () => void;
+      }> = [];
+      switch (f.action) {
+        case "retry":
+          buttons.push({ text: "Try again", onPress: retry });
+          if (f.support) buttons.push(support);
+          buttons.push(close);
+          break;
+        case "sign_in":
+          buttons.push({ text: "Sign in", onPress: () => void signOut() }, close);
+          break;
+        case "billing":
+          buttons.push(
+            { text: "Open billing", onPress: () => navigation.navigate("Billing") },
+            close,
+          );
+          break;
+        case "back_to_packages":
+          buttons.push({
+            text: "Back to packages",
+            onPress: () => navigation.navigate("CoachPackagesList"),
+          });
+          if (f.support) buttons.push(support);
+          buttons.push(close);
+          break;
+        default:
+          buttons.push({ text: "OK" });
+      }
+      Alert.alert(f.title, f.message, buttons);
+    },
+    [navigation],
+  );
 
   // OR-112-16 + B-329-1: one create attempt = one Idempotency-Key and one
   // body, stored on the device before the request leaves (see
@@ -265,10 +297,19 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     saveInFlight.current = true;
     try {
       if (isEdit && original) {
-        const updated: PackageUpdateInput = v.payload;
+        // #321 (B-321-3): billing goes to the backend only when the coach
+        // changed it, so a name or description edit never touches the price
+        // configuration (no pricing lock, no floor re-check, no cadence
+        // drift). A changed cadence is sent and checked against the row the
+        // server answers (B-345-1 / B-345-2, PACKAGE_UPDATE_NOT_APPLIED).
+        const { billingInterval: nextInterval, intervalCount, ...rest } =
+          v.payload;
+        const updated: PackageUpdateInput =
+          nextInterval !== original.billingInterval
+            ? { ...rest, billingInterval: nextInterval, intervalCount }
+            : rest;
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
-        setSavedForm(formNow);
         successTap();
         Alert.alert("Package updated", "Changes saved.");
       } else {
@@ -329,56 +370,64 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         return;
       }
     } catch (err) {
-      const code = errorCode(err);
       if (err instanceof IntentStorageError) {
         const copy = intentStorageCopy(err);
         Alert.alert(copy.title, copy.body);
-      } else if (code === "PACKAGES_NOT_CONFIGURED") {
-        Alert.alert(
-          "Packages not enabled yet",
-          errorMessage(
-            err,
-            "The packages backend module is not deployed in this environment.",
-          ),
-        );
-      } else if (code === "PACKAGE_PRICING_LOCKED") {
-        warningTap();
-        Alert.alert(
-          "Pricing is locked",
-          "Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.",
+      } else if (isEdit) {
+        // #321 (Sol B-321-1): status + machine code decide the message and
+        // the next action; unknown failures carry a reference (request_id)
+        // and are reported to Sentry. The form keeps the coach's edits.
+        showSaveFailure(
+          describePackageSaveFailure(err, "update", billingInterval),
         );
       } else {
-        const f = describeError(
-          err,
-          isEdit ? "save this package" : "create this package",
-        );
+        // B-329-1: a create is durable (its key and body stay on the device
+        // until it lands), so it keeps the wizard's create failure copy.
+        const f = describeError(err, "create this package");
         Alert.alert(f.title, f.body);
       }
     } finally {
       saveInFlight.current = false;
       setSaving(false);
     }
-  }, [validate, isEdit, original, navigation, coachId, formNow]);
+  }, [validate, isEdit, original, navigation, coachId, showSaveFailure,
+    billingInterval]);
+  handleSaveRef.current = handleSave;
 
-  // B-347-3: a draft made here (or skipped in setup) can go live from the
-  // editor with the wizard's publish call; the row the server answers decides
-  // what the screen shows next.
+  // B-347-3 + S-FEE round 4: a draft made here (or skipped in setup) goes
+  // live from the editor (POST :id/publish, the wizard's route; the backend
+  // applies the $19.99 floor to a first publish); a live package can be taken
+  // off sale. The row the server answers decides what the screen shows next.
   const [publishing, setPublishing] = useState(false);
-  const handlePublish = useCallback(async () => {
+  const handlePublishToggleRef = useRef<() => Promise<void>>(
+    async () => undefined,
+  );
+  const handlePublishToggle = useCallback(async () => {
     if (!original || publishing) return;
-    if (unsaved) {
+    const mode = isLivePackage(original) ? "unpublish" : "publish";
+    // The button is disabled while the form has edits; the line under it
+    // says why (SAVE_BEFORE_PUBLISH).
+    if (mode === "publish" && unsaved) {
       warningTap();
-      Alert.alert(
-        "Save your changes first",
-        "Save your changes before making this live.",
-      );
       return;
     }
+    mediumTap();
+    setError("");
     setPublishing(true);
     try {
-      const res = await coachPackagesApi.publish(original.id);
+      const res =
+        mode === "publish"
+          ? await coachPackagesApi.publish(original.id)
+          : await coachPackagesApi.unpublish(original.id);
       setOriginal(res.data);
-      if (isLivePackage(res.data)) {
+      if (mode === "unpublish") {
+        successTap();
+        track("coach_package_unpublished", { package_id: original.id });
+        Alert.alert(
+          "Package unpublished",
+          "New clients cannot buy it now. Current clients keep their access.",
+        );
+      } else if (isLivePackage(res.data)) {
         successTap();
         track("coach_package_published", { package_id: original.id });
         Alert.alert("Package is live", `${res.data.title} is live.`);
@@ -389,12 +438,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         );
       }
     } catch (err) {
-      const f = describeError(err, "make your package live");
-      Alert.alert(f.title, f.body);
+      showSaveFailure(
+        describePackageSaveFailure(err, mode, original.billingInterval),
+        () => void handlePublishToggleRef.current(),
+      );
     } finally {
       setPublishing(false);
     }
-  }, [original, publishing, unsaved]);
+  }, [original, publishing, unsaved, showSaveFailure]);
+  handlePublishToggleRef.current = handlePublishToggle;
 
   const handleArchive = useCallback(() => {
     if (!original) return;
@@ -417,7 +469,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             } catch (err) {
               Alert.alert(
                 "Could not archive",
-                errorMessage(err, "Please try again."),
+                errorMessage(
+                  err,
+                  "We could not archive the package. Check your connection, then tap Archive again.",
+                ),
               );
             } finally {
               setArchiving(false);
@@ -467,12 +522,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   // No network round-trip: everything here comes from local state + `original`.
   const previewViewModel = useMemo<PackageDetailViewModel>(() => {
     const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
-    const features = featuresText
-      .split("\n")
-      .map((f) => f.trim())
-      .filter(Boolean);
-    // B-347-2: only a trial the server returned on the saved package; this
-    // build never sends trial_days, so a typed trial is never previewed.
+    // B-321-4 + B-347-2: the preview shows only what clients will really see:
+    // no typed trial or features (neither reaches the server), only a trial
+    // the saved package carries.
     const savedTrial = original?.trialDays ?? null;
     const trialDays =
       billingInterval !== "one_time" && savedTrial ? savedTrial : null;
@@ -485,12 +537,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       billingInterval,
       intervalCount: original?.intervalCount ?? 1,
       trialDays,
-      features,
+      features: [],
       coach: { displayName: coachDisplayName, bio: null },
     };
   }, [
     priceText,
-    featuresText,
     billingInterval,
     title,
     description,
@@ -508,6 +559,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
   const archived = original?.status === "archived";
   const draft = isEdit && !!original && !archived && !isLivePackage(original);
+  // S-FEE — inline price rule under the field, as the coach types.
+  const priceInlineIssue = priceText.trim()
+    ? packagePriceIssue(parseDollarsToCents(priceText), billingInterval, original)
+    : null;
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
   const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
@@ -547,8 +602,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               color={tokens.semantic.warning.icon}
             />
             <Text style={styles.archivedText}>
-              This package is archived. Restore it by setting status back to
-              Active in the form below — current subscribers are unaffected.
+              This package is archived. It cannot be sold or changed. Create a
+              new package instead. Current clients keep their access.
             </Text>
           </View>
         ) : null}
@@ -590,10 +645,24 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           keyboardType="decimal-pad"
           maxLength={12}
         />
+        <Text
+          testID="package-price-helper"
+          style={
+            priceInlineIssue ? styles.priceIssueText : styles.priceHelperText
+          }
+        >
+          {priceInlineIssue ?? packagePriceHelper(billingInterval)}
+        </Text>
 
         <Label semanticColors={semanticColors} tokens={tokens}>
           Billing
         </Label>
+        {billingInterval === "weekly" ? (
+          <Text style={styles.priceHelperText} testID="package-weekly-note">
+            Billed weekly. Leave this as it is to keep weekly billing, or pick
+            another option to change it.
+          </Text>
+        ) : null}
         <View style={styles.segment}>
           {INTERVAL_OPTIONS.map((opt) => {
             const active = billingInterval === opt.value;
@@ -633,20 +702,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {/* B-347-2: no trial input until trial_days reaches the server
-            (backend trials + m#338 bring it back together). */}
-
-        <Label semanticColors={semanticColors} tokens={tokens}>
-          Features (one per line)
-        </Label>
-        <TextInput
-          value={featuresText}
-          onChangeText={setFeaturesText}
-          placeholder={"Weekly check-ins\nCustom workout plan\nMeal plan"}
-          style={[styles.input, styles.inputMultiline, { minHeight: 120 }]}
-          placeholderTextColor={semanticColors.textMuted}
-          multiline
-        />
+        {/* B-347-2 + B-321-4: no trial or features input until the backend
+            stores them (backend trials + m#338 bring trials back). */}
 
         {resumedCreate ? (
           <Text style={styles.resumedText} testID="package-edit-resumed">
@@ -685,11 +742,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                     styles.secondaryBtn,
                     (publishing || unsaved) && styles.primaryBtnDisabled,
                   ]}
-                  onPress={() => void handlePublish()}
-                  disabled={publishing}
+                  onPress={() => void handlePublishToggle()}
+                  disabled={publishing || unsaved}
                   accessibilityRole="button"
                   accessibilityLabel={`Make ${original.title} live`}
-                  accessibilityState={{ busy: publishing, disabled: publishing }}
+                  accessibilityState={{
+                    busy: publishing,
+                    disabled: publishing || unsaved,
+                  }}
                   testID="package-edit-publish"
                 >
                   <Text style={styles.secondaryBtnText}>
@@ -701,9 +761,45 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                     style={styles.resumedText}
                     testID="package-edit-publish-unsaved"
                   >
-                    Save your changes before making this live.
+                    {SAVE_BEFORE_PUBLISH}
                   </Text>
                 ) : null}
+              </View>
+            ) : !archived ? (
+              <View testID="package-edit-live">
+                <Text
+                  style={styles.priceHelperText}
+                  testID="package-publish-state"
+                >
+                  On sale. Unpublishing stops new sales; current clients keep
+                  access.
+                </Text>
+                <TouchableOpacity
+                  style={[
+                    styles.secondaryBtn,
+                    publishing && styles.primaryBtnDisabled,
+                  ]}
+                  onPress={() => void handlePublishToggle()}
+                  disabled={publishing}
+                  accessibilityRole="button"
+                  accessibilityLabel="Unpublish package"
+                  accessibilityState={{ busy: publishing, disabled: publishing }}
+                >
+                  {publishing ? (
+                    <ActivityIndicator color={semanticColors.accent} />
+                  ) : (
+                    <>
+                      <Ionicons
+                        name="eye-off-outline"
+                        size={18}
+                        color={semanticColors.accent}
+                      />
+                      <Text style={styles.secondaryBtnText}>
+                        Unpublish package
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
               </View>
             ) : null}
             <TouchableOpacity
@@ -1064,4 +1160,10 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       color: semanticColors.textMuted,
       fontSize: 13,
     },
+    priceHelperText: {
+      marginTop: 6,
+      fontSize: 12,
+      color: semanticColors.textMuted,
+    },
+    priceIssueText: { marginTop: 6, fontSize: 12, color: tokens.colors.error },
   });

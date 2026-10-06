@@ -87,8 +87,12 @@ describe("B-347-4 Make live with unsaved terms", () => {
     expect(s.queryByTestId("package-edit-publish-unsaved")).toBeNull();
     await fireEvent.changeText(s.getByPlaceholderText("199.00"), "199");
     expect(s.getByText("Save your changes before making this live.")).toBeTruthy();
-    await fireEvent.press(s.getByLabelText("Make Coaching live"));
-    await waitFor(() => expect(alerts()).toContain("Save your changes first"));
+    // Main refresh (B-WIZ6-122): one publish-waits-for-save path with S-FEE
+    // B-321-5: the button is disabled and the line under it says why.
+    const makeLive = s.getByLabelText("Make Coaching live");
+    expect(makeLive.props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(makeLive);
+    expect(alerts()).not.toContain("Package is live");
     expect(mockPost).not.toHaveBeenCalled();
     expect(soldCents).toBeNull();
     expect(s.getByText(/Coaching is saved as a draft/)).toBeTruthy();
