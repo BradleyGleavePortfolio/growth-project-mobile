@@ -14,6 +14,14 @@ export function ProgressTab({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
+  // The summary sends weight_logs newest first. Order by day explicitly so
+  // First is the oldest entry, Latest the newest and Change = latest - first
+  // (it read backwards: a client down 10 lb showed +10.0).
+  const ascending = [...weightLogs].sort((x, y) => x.date.localeCompare(y.date));
+  const first = ascending[0]?.weight;
+  const latest = ascending[ascending.length - 1]?.weight;
+  const change = (latest ?? 0) - (first ?? 0);
+  const newestFirst = [...ascending].reverse();
   return (
     <>
       <Text style={styles.sectionTitle}>Weight (Last 30 Days)</Text>
@@ -21,12 +29,12 @@ export function ProgressTab({
         <>
           <View style={styles.progressStatsRow}>
             <View style={styles.progressStat}>
-              <Text style={styles.progressStatValue}>{weightLogs[0]?.weight || '—'}</Text>
+              <Text style={styles.progressStatValue}>{first ?? '—'}</Text>
               <Text style={styles.progressStatLabel}>First</Text>
             </View>
             <View style={styles.progressStat}>
               <Text style={[styles.progressStatValue, { color: colors.primary }]}>
-                {weightLogs[weightLogs.length - 1]?.weight || '—'}
+                {latest ?? '—'}
               </Text>
               <Text style={styles.progressStatLabel}>Latest</Text>
             </View>
@@ -35,23 +43,20 @@ export function ProgressTab({
                 style={[
                   styles.progressStatValue,
                   {
-                    color:
-                      (weightLogs[weightLogs.length - 1]?.weight || 0) - (weightLogs[0]?.weight || 0) <= 0
-                        ? colors.success
-                        : colors.warning,
+                    color: change <= 0 ? colors.success : colors.warning,
                   },
                 ]}
               >
-                {((weightLogs[weightLogs.length - 1]?.weight || 0) - (weightLogs[0]?.weight || 0)).toFixed(1)}
+                {change > 0 ? '+' : ''}{change.toFixed(1)}
               </Text>
               <Text style={styles.progressStatLabel}>Change</Text>
             </View>
           </View>
-          {weightLogs.map((log) => (
+          {newestFirst.map((log) => (
             <View key={log.id} style={styles.logItem}>
               <View style={styles.logHeader}>
                 <Text style={styles.logMeal}>{log.date}</Text>
-                <Text style={styles.logCalories}>{log.weight} {log.unit}</Text>
+                <Text style={styles.logCalories}>{log.weight} {log.unit || 'lbs'}</Text>
               </View>
               {log.notes ? <Text style={styles.logMacros}>{log.notes}</Text> : null}
             </View>
