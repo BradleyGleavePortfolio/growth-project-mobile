@@ -3,7 +3,10 @@
  *
  * Wired via `clientPaymentsApi`:
  *   - GET  /v1/clients/me/coach/packages    (packages list)
- *   - POST /v1/checkout/sessions            (CheckoutController — buy)
+ *   - Buy: the shared purchase flow (src/hooks/usePackagePurchase.ts):
+ *     renewing plans -> POST /v1/checkout/subscription-intent, one-time ->
+ *     POST /v1/checkout/payment-intent, $0 -> claim-free, all through the
+ *     native TGP-themed PaymentSheet (OR-113-1; no hosted Checkout).
  *   - GET  /v1/checkout/purchases           (CheckoutController — purchase history)
  *   - GET  /v1/checkout/entitlement         (CheckoutController — paid-access flag)
  *   Update card opens the native `UpdateCard` screen (OR-110-2: Stripe
@@ -34,10 +37,11 @@
  *    banner does not render. Its Update button opens the native
  *    `UpdateCard` screen, which in dunning also pays the open invoice
  *    (owner ruling 1A).
- *  - Tapping a package opens Stripe Checkout in the branded in-app
- *    webview (basis: Guideline 3.1.3(d), real-time 1:1). The success /
- *    cancel deep links are intercepted by the webview screen and routed
- *    via `CheckoutReturn`; this screen refreshes payment-status on focus.
+ *  - Each plan shows its terms before paying (PlanTermsBlock). Tapping
+ *    its button runs the shared purchase flow in the native PaymentSheet
+ *    (basis: Guideline 3.1.3(d), real-time 1:1 coaching). Success and the
+ *    calm "still confirming" state render inline; payment-status reloads
+ *    when the client continues and on focus.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -66,6 +70,13 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import tokens, { type SemanticTokens, type Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { usePackagePurchase } from '../../hooks/usePackagePurchase';
+import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
+import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
+import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import YourPlansPanel from '../../components/purchase/YourPlansPanel';
+import { planTerms, priceLabel } from '../../lib/planTerms';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -146,8 +157,7 @@ export default function ClientPackagesScreen() {
   const [packages, setPackages] = useState<PaymentsResult<ClientCoachPackage[]> | null>(null);
   const [status, setStatus] = useState<PaymentsResult<ClientPaymentStatus> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [checkoutBusyId, setCheckoutBusyId] = useState<string | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [plansTick, setPlansTick] = useState(0);
 
   const load = useCallback(async () => {
     const [pkgs, st] = await Promise.all([
@@ -156,6 +166,7 @@ export default function ClientPackagesScreen() {
     ]);
     setPackages(pkgs);
     setStatus(st);
+    setPlansTick((t) => t + 1);
   }, []);
 
   useEffect(() => {
@@ -176,65 +187,34 @@ export default function ClientPackagesScreen() {
     setRefreshing(false);
   }, [load]);
 
-  // Typed-nav helper: route into the BrandedCheckoutWebView screen
-  // registered on ClientNavigator. The branded webview screen handles
-  // its own success / cancel deep-link short-circuit and routes through
-  // CheckoutReturn, which refreshes payment-status on mount. Navigation
-  // is fire-and-forget; post-checkout refresh happens on the destination
-  // screen and via `useFocusEffect` when the user returns here.
-  const navigateToBrandedCheckout = useCallback(
-    (params: {
-      checkoutUrl: string;
-      packageName: string;
-      returnScheme: string;
-    }) => {
-      (
-        navigation as unknown as {
-          navigate: (
-            name: string,
-            params: {
-              checkoutUrl: string;
-              packageName: string;
-              returnScheme: string;
-            },
-          ) => void;
-        }
-      ).navigate('BrandedCheckoutWebView', params);
+  const { refreshEntitlement } = useEntitlement();
+  const { appearance, colorScheme } = usePaymentSheetAppearance();
+  const purchase = usePackagePurchase({
+    surface: 'plans',
+    appearance,
+    colorScheme,
+    onEntitled: () => {
+      void refreshEntitlement().catch(() => false);
     },
-    [navigation],
-  );
+    onReloadNeeded: () => {
+      void load();
+    },
+  });
 
   const handleBuy = useCallback(
-    async (pkg: ClientCoachPackage) => {
-      setCheckoutError(null);
-      setCheckoutBusyId(pkg.id);
-      try {
-        const res = await clientPaymentsApi.createCheckoutSession(pkg.id);
-        if (!res.ok) {
-          setCheckoutError(
-            res.reason === 'not_configured'
-              ? 'Self-serve checkout is not enabled yet. Message your coach.'
-              : res.message,
-          );
-          return;
-        }
-        // Guideline 3.1.3(d): real-time 1:1 coaching may be paid outside IAP.
-        // Stripe Checkout opens in the branded in-app webview (UX, not the basis).
-        navigateToBrandedCheckout({
-          checkoutUrl: res.data.url,
-          packageName: pkg.name,
-          returnScheme: 'com.growthproject.app',
-        });
-      } catch (err) {
-        setCheckoutError(
-          (err as { message?: string })?.message || 'Could not open checkout.',
-        );
-      } finally {
-        setCheckoutBusyId(null);
-      }
+    (pkg: ClientCoachPackage) => {
+      if (!pkg.purchasable) return;
+      void purchase.start(pkg.purchasable);
     },
-    [navigateToBrandedCheckout],
+    [purchase],
   );
+
+  // After success, the slow state, or "Open your plan": back to the list,
+  // reloaded so the Current plan card shows the new plan.
+  const finishPurchase = useCallback(() => {
+    purchase.reset();
+    void load();
+  }, [purchase, load]);
 
   const handleUpdateCard = useCallback(() => {
     // OR-110-2: the native card screen (Stripe PaymentSheet, TGP theme)
@@ -301,6 +281,9 @@ export default function ClientPackagesScreen() {
           field is always null today. */}
       <SmartDunningBanner surface="ClientPackagesScreen" />
 
+      {/* Renewing plans: next charge, End my plan / Keep my plan */}
+      <YourPlansPanel reloadKey={plansTick} />
+
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
         <View style={styles.currentPlanCard}>
@@ -353,23 +336,6 @@ export default function ClientPackagesScreen() {
         </View>
       ) : null}
 
-      {checkoutError ? (
-        <>
-          <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle-outline" size={18} color={tokens.neutral[0]} />
-            <Text style={styles.errorBannerText}>{checkoutError}</Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => void load()}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh coaching status"
-            style={styles.refreshLink}
-          >
-            <Text style={styles.refreshLinkText}>Already paid your coach? Tap to refresh your coaching status.</Text>
-          </TouchableOpacity>
-        </>
-      ) : null}
-
       {/* Packages list */}
       {notConfigured ? (
         <View style={styles.gate}>
@@ -408,7 +374,10 @@ export default function ClientPackagesScreen() {
           </View>
         ) : (
           packages.data.map((pkg) => {
-            const busy = checkoutBusyId === pkg.id;
+            const active = purchase.state.packageId === pkg.id;
+            const busy = active && purchase.busy;
+            const anyBusy = purchase.busy;
+            const sellable = pkg.purchasable ?? null;
             // PR-1 round 3: "current package" comes from the real backend
             // ClientPurchase row surfaced via getPaymentStatus().package_id,
             // not from a fabricated `is_current` field on the package row
@@ -426,14 +395,8 @@ export default function ClientPackagesScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.pkgPrice}>
-                  {formatMoney(pkg.price ?? 0, pkg.currency)}
-                  {pkg.type === 'recurring' && pkg.interval ? (
-                    <Text style={styles.pkgInterval}> / {pkg.interval}</Text>
-                  ) : null}
+                  {sellable ? priceLabel(sellable) : formatMoney(pkg.price ?? 0, pkg.currency)}
                 </Text>
-                {pkg.trial_days && pkg.type === 'recurring' ? (
-                  <Text style={styles.pkgTrial}>{pkg.trial_days}-day free trial</Text>
-                ) : null}
                 {pkg.description ? (
                   <Text style={styles.pkgDesc}>{pkg.description}</Text>
                 ) : null}
@@ -447,43 +410,59 @@ export default function ClientPackagesScreen() {
                     ))}
                   </View>
                 ) : null}
-                <TouchableOpacity
-                  style={[
-                    styles.buyBtn,
-                    (current || busy) && styles.buyBtnDisabled,
-                  ]}
-                  onPress={() => handleBuy(pkg)}
-                  disabled={current || busy}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    current ? 'Current plan' : `Buy ${pkg.name}`
-                  }
-                >
-                  {busy ? (
-                    <ActivityIndicator
-                      color={
-                        current || busy
-                          ? semanticColors.textOnDisabled
-                          : semanticColors.textOnAccent
-                      }
-                    />
-                  ) : (
-                    <Text
-                      style={[
-                        styles.buyBtnText,
-                        (current || busy) && styles.buyBtnTextDisabled,
-                      ]}
-                    >
-                      {current
+                {sellable && !current ? <PlanTermsBlock pkg={sellable} testID={`plan-terms-${pkg.id}`} /> : null}
+                {active ? (
+                  <PurchaseFeedback
+                    purchase={purchase}
+                    onContinue={finishPurchase}
+                    onOpenPlan={finishPurchase}
+                  />
+                ) : null}
+                {!sellable && !current ? (
+                  <Text style={styles.pkgDesc} testID={`plan-unsellable-${pkg.id}`}>
+                    Your coach sets this plan up directly. Message your coach to join it.
+                  </Text>
+                ) : null}
+                {!sellable && !current ? null : active && (purchase.state.phase === 'success' ||
+                  purchase.state.phase === 'confirm_slow' ||
+                  purchase.state.phase === 'confirmed_pending' ||
+                  purchase.state.priceChange) ? null : (
+                  <TouchableOpacity
+                    style={[
+                      styles.buyBtn,
+                      (current || anyBusy || !sellable) && styles.buyBtnDisabled,
+                    ]}
+                    onPress={() => handleBuy(pkg)}
+                    disabled={current || anyBusy || !sellable}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: current || anyBusy || !sellable, busy }}
+                    accessibilityLabel={
+                      current
                         ? 'Current plan'
-                        : pkg.type === 'recurring'
-                        ? pkg.trial_days
-                          ? 'Start free trial'
-                          : 'Subscribe'
-                        : 'Buy'}
-                    </Text>
-                  )}
-                </TouchableOpacity>
+                        : sellable
+                          ? `${planTerms(sellable).cta}, ${pkg.name}`
+                          : `${pkg.name} is not available to buy in the app`
+                    }
+                    testID={`buy-plan-${pkg.id}`}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color={semanticColors.textOnDisabled} />
+                    ) : (
+                      <Text
+                        style={[
+                          styles.buyBtnText,
+                          (current || anyBusy || !sellable) && styles.buyBtnTextDisabled,
+                        ]}
+                      >
+                        {current
+                          ? 'Current plan'
+                          : sellable
+                            ? planTerms(sellable).cta
+                            : ''}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
               </View>
             );
           })
@@ -496,9 +475,9 @@ export default function ClientPackagesScreen() {
       ) : null}
 
       <Text style={styles.fineprint}>
-        Payments are processed by Stripe. The Growth Project is a
-        coach-managed platform; cancellations and refunds are handled by
-        your coach.
+        Payments are processed securely by Stripe inside the app. A renewing
+        plan can be ended at any time in Your plans when it shows End my
+        plan, or through your coach; refunds are handled by your coach.
       </Text>
     </ScrollView>
   );
@@ -616,8 +595,6 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     currentPillText: { color: semanticColors.accent, fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
     pkgPrice: { fontSize: 22, fontWeight: '600', color: semanticColors.textPrimary, marginTop: 6 },
-    pkgInterval: { fontSize: 13, fontWeight: '400', color: semanticColors.textMuted },
-    pkgTrial: { fontSize: 12, color: tokens.colors.forest, marginTop: 2 },
     pkgDesc: { fontSize: 13, color: semanticColors.textMuted, marginTop: 8, lineHeight: 18 },
     pkgFeatures: { marginTop: 10, gap: 6 },
     pkgFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -641,15 +618,5 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       textAlign: 'center',
       marginTop: 20,
       lineHeight: 16,
-    },
-    refreshLink: {
-      alignSelf: 'center',
-      marginBottom: 12,
-      paddingVertical: 4,
-    },
-    refreshLinkText: {
-      fontSize: 13,
-      color: semanticColors.accent,
-      textAlign: 'center',
     },
   });

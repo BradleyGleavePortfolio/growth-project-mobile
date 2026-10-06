@@ -64,6 +64,12 @@ interface Props {
   onPay?: () => void;
   /** Buyer-only: disables/spins the CTA while a checkout session is in flight. */
   paying?: boolean;
+  /** Buyer-only: plan terms and purchase feedback, rendered above the pay CTA. */
+  purchaseSlot?: React.ReactNode;
+  /** Buyer-only: the pay CTA label from the plan terms (e.g. "Subscribe for $49.00 a month"). */
+  payLabel?: string;
+  /** Buyer-only: hide the pay CTA (success, slow confirmation, price confirmation). */
+  hidePay?: boolean;
 }
 
 export function intervalCopy(p: PackageDetailViewModel): string {
@@ -81,7 +87,15 @@ export function intervalCopy(p: PackageDetailViewModel): string {
   return `billed ${every}`;
 }
 
-export default function PackageDetailSurface({ package: pkg, mode, onPay, paying = false }: Props) {
+export default function PackageDetailSurface({
+  package: pkg,
+  mode,
+  onPay,
+  paying = false,
+  purchaseSlot,
+  payLabel: payLabelOverride,
+  hidePay = false,
+}: Props) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
 
@@ -93,9 +107,9 @@ export default function PackageDetailSurface({ package: pkg, mode, onPay, paying
   // AA on both modes (see tokens.ts / scopedTokenGate).
   const isDisabled = paying || isPreview;
   const onAccentColor = isDisabled ? semanticColors.textOnDisabled : semanticColors.textOnAccent;
-  const payLabel = pkg.trialDays
-    ? 'Start free trial'
-    : `Pay ${formatCurrencyCents(pkg.priceCents, pkg.currency)}`;
+  const payLabel =
+    (!isPreview && payLabelOverride) ||
+    (pkg.trialDays ? 'Start free trial' : `Pay ${formatCurrencyCents(pkg.priceCents, pkg.currency)}`);
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -151,6 +165,9 @@ export default function PackageDetailSurface({ package: pkg, mode, onPay, paying
         </View>
       ) : null}
 
+      {!isPreview ? purchaseSlot : null}
+
+      {!isPreview && hidePay ? null : (
       <TouchableOpacity
         style={[styles.payBtn, isDisabled && styles.payBtnDisabled]}
         // Coach preview MUST NOT trigger checkout: no onPress wired at all.
@@ -169,6 +186,7 @@ export default function PackageDetailSurface({ package: pkg, mode, onPay, paying
           </>
         )}
       </TouchableOpacity>
+      )}
 
       {isPreview ? (
         <Text style={styles.fineprint}>
