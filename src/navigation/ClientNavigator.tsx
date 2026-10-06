@@ -126,6 +126,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
+import { colors } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not

@@ -11,38 +11,25 @@ import type { WorkoutStackParamList } from '../../../navigation/ClientNavigator'
 
 let mockColorScheme: 'light' | 'dark' = 'dark';
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({
-    semanticColors: mockColorScheme === 'dark'
-      ? require('../../../theme/tokens').darkTokens
-      : require('../../../theme/tokens').lightTokens,
-  }),
+  useTheme: () => ({ semanticColors: require('../../../theme/tokens')[`${mockColorScheme}Tokens`] }),
 }));
-jest.mock('../../../api/exerciseCatalog', () => ({
-  exerciseCatalogApi: { list: jest.fn() },
-}));
+jest.mock('../../../api/exerciseCatalog', () => ({ exerciseCatalogApi: { list: jest.fn() } }));
 
 const list = jest.mocked(exerciseCatalogApi.list);
 const Stack = createNativeStackNavigator<WorkoutStackParamList>();
 const renderLibrary = () => render(
-  <NavigationContainer>
-    <Stack.Navigator>
-      <Stack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} />
-    </Stack.Navigator>
-  </NavigationContainer>,
+  <NavigationContainer><Stack.Navigator><Stack.Screen name="ExerciseLibrary"
+    component={ExerciseLibraryScreen} /></Stack.Navigator></NavigationContainer>,
 );
 
 beforeEach(() => {
   mockColorScheme = 'dark';
   list.mockReset();
   list.mockResolvedValue({
-    data: { items: [], nextCursor: null, total: 0 },
-    status: 200,
-    statusText: 'OK',
-    headers: {},
-    config: { headers: new AxiosHeaders() },
+    data: { items: [], nextCursor: null, total: 0 }, status: 200, statusText: 'OK',
+    headers: {}, config: { headers: new AxiosHeaders() },
   });
 });
-
 describe('exercise library contrast', () => {
   it.each(['light', 'dark'] as const)('uses the on-accent label in %s appearance', async (scheme) => {
     mockColorScheme = scheme;
@@ -50,8 +37,7 @@ describe('exercise library contrast', () => {
     const view = await renderLibrary();
     await waitFor(() => expect(view.getByText('No exercises match.')).toBeTruthy());
     await fireEvent.press(view.getByRole('button', { name: 'strength' }));
-    expect(StyleSheet.flatten(view.getByText('strength').props.style).color)
-      .toBe(tokens.textOnAccent);
+    expect(StyleSheet.flatten(view.getByText('strength').props.style).color).toBe(tokens.textOnAccent);
   });
 
   it('uses the readable accent foreground for a load error in dark appearance', async () => {
