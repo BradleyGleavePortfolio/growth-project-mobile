@@ -83,8 +83,10 @@ export default function RiskBoardScreen() {
         // Owner reads the platform-wide /admin endpoint. Coaches read the
         // coach-scoped endpoint, which is roster-filtered and redacts the
         // numeric score on the server.
-        const fetcher = isOwner ? ptmApi.getRiskBoard : ptmApi.getMyRiskBoard;
-        const res = await fetcher({
+        // AUDIT-13-125: /admin/ptm/* also needs the server service token, so
+        // an app session can never read it; the owner account reads its own
+        // roster through the coach endpoint like every coach.
+        const res = await ptmApi.getMyRiskBoard({
           bucket,
           cursor: useCursor,
           limit: PAGE_SIZE,
@@ -104,7 +106,7 @@ export default function RiskBoardScreen() {
         setLoadingMore(false);
       }
     },
-    [cursor, isOwner],
+    [cursor],
   );
 
   useEffect(() => {
@@ -149,13 +151,15 @@ export default function RiskBoardScreen() {
       intent="light"
       style={styles.row}
       onPress={() =>
-        navigation.navigate('ClientRiskDetail', {
-          userId: item.user_id,
+        // AUDIT-13-125: the risk detail screen reads an owner-only admin
+        // route and always failed; open the client's own page instead.
+        navigation.navigate('ClientDetail', {
+          clientId: item.user_id,
           clientName: item.name,
         })
       }
       accessibilityRole="button"
-      accessibilityLabel={`Open risk detail for ${item.name}`}
+      accessibilityLabel={`Open ${item.name}`}
     >
       <RiskDot bucket={item.bucket} size={12} />
       <View style={styles.rowBody}>
@@ -241,7 +245,7 @@ export default function RiskBoardScreen() {
               <Text style={styles.emptyBody}>
                 {error
                   ? error
-                  : 'Recompute runs nightly at 04:00 UTC.'}
+                  : 'Risk levels update every night once clients start logging.'}
               </Text>
             </View>
           }
