@@ -23,6 +23,8 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 const mockPatch = jest.fn(async (_patch: unknown) => undefined);
 jest.mock('../../../lib/userCache', () => ({ patchUserCache: (p: unknown) => mockPatch(p) }));
+let mockIosHidden = false;
+jest.mock('../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => mockIosHidden }));
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
 jest.mock('../../PackageSelectionSheet', () => {
@@ -101,6 +103,7 @@ beforeEach(() => {
   mockNavigate.mockReset();
   mockPatch.mockClear();
   mockFlagOn = true;
+  mockIosHidden = false;
   mockUser = { id: 'client-1' };
   mockGet.mockResolvedValue({ data: homeAccepting() });
 });
@@ -159,6 +162,23 @@ describe('CoachlessHomeSlot banner and story', () => {
 
     await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
     expect(await screen.findByText('plan sheet pkg-49', {}, { timeout: 2000 })).toBeTruthy();
+    expect(mockNavigate).not.toHaveBeenCalled(); // Android: the Day 1 sheet, not a navigation
+  });
+
+  it('iOS (non-P2P purchases hidden): Choose a plan opens the labelled 1:1 coaching screen, never the plan sheet', async () => {
+    mockIosHidden = true;
+    routePost({
+      '/coachless/coach-code/check': () => ({ data: { valid: true, coach: COACH } }),
+      '/coachless/coach-code/redeem': () => ({ data: redeemOk() }),
+    });
+    await renderSlot();
+    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(screen.getByTestId('coach-code-join'));
+    expect(await screen.findByText('Alex Rivera is now your coach.')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages' });
+    await new Promise((r) => setTimeout(r, 600));
+    expect(screen.queryByTestId('plan-sheet')).toBeNull();
   });
 
   it('reuses the Idempotency-Key when Join is retried for the same code, and uses a new one for a new code', async () => {

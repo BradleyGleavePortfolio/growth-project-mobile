@@ -17,7 +17,8 @@
  *     Each display is recorded once (POST /coachless/roman-card/seen); "Not
  *     now" is persisted (POST /coachless/roman-card/not-now).
  *   - After a join, the welcome moment hands off to the Day 1 plan sheet
- *     (PackageSelectionSheet) with the featured package selected, or to the
+ *     (PackageSelectionSheet) with the featured package selected (Android;
+ *     on iOS the labelled 1:1 coaching screen, ClientPackages), or to the
  *     coach thread.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,6 +32,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 import RomanAvatar from '../roman/RomanAvatar';
 import PackageSelectionSheet from '../PackageSelectionSheet';
 import CoachCodeSheet from './CoachCodeSheet';
@@ -122,6 +124,12 @@ export default function CoachlessHomeSlot(): React.ReactElement | null {
           onClose={() => setSheet(null)}
           onAttached={refetchHome}
           onChoosePlan={(packageId) => {
+            // B-386-OPUS-1: iOS sells a client plan only on the labelled 1:1
+            // coaching screen (store package P0); Android keeps the Day 1 sheet.
+            if (nonP2PPurchasesHidden()) {
+              navigation.navigate('MoreTab', { screen: 'ClientPackages' });
+              return;
+            }
             planTimer.current = setTimeout(() => setPlan({ packageId }), PLAN_SHEET_DELAY_MS);
           }}
           onMessageCoach={() => navigation.navigate('Messages')}

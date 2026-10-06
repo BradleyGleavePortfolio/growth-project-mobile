@@ -30,6 +30,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { patchUserCache } from '../../lib/userCache';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
 import {
@@ -86,6 +87,7 @@ export default function CoachCodeSheet({
   debounceMs = CHECK_DEBOUNCE_MS,
 }: CoachCodeSheetProps) {
   const { semanticColors: sc } = useTheme();
+  const { refreshEntitlement } = useEntitlement();
   const [code, setCode] = useState(initialCode ?? '');
   const [check, setCheck] = useState<Check>({ state: 'idle' });
   const [joining, setJoining] = useState(false);
@@ -141,6 +143,12 @@ export default function CoachCodeSheet({
       await patchUserCache({ coach_id: result.coach.id }).catch((e: unknown) =>
         logger.warn('CoachCodeSheet', 'user cache patch failed', e),
       );
+      // B-386-SOL-1: a code with a free or prepaid plan activates access on the
+      // server; refresh the shared gate now (the same refresh checkout uses),
+      // not only on the next foreground.
+      void refreshEntitlement().catch((e: unknown) =>
+        logger.warn('CoachCodeSheet', 'entitlement refresh after redeem failed', e),
+      );
       track('coachless_code_redeemed', { already_attached: result.already_attached });
       setWelcome(result);
       onAttached(result);
@@ -152,7 +160,7 @@ export default function CoachCodeSheet({
     } finally {
       setJoining(false);
     }
-  }, [code, joining, onAttached]);
+  }, [code, joining, onAttached, refreshEntitlement]);
 
   const close = useCallback(() => {
     if (joining) return;
