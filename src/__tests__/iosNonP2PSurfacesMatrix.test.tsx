@@ -261,8 +261,8 @@ describe.each(ROWS)('$name', (row) => {
 
   it('exhausted / partial seat messages: no upgrade instruction when hidden', () => {
     const hidden = digitalPurchasesHidden();
-    expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!row.hidden);
-    expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!row.hidden);
+    expect(/upgrade/i.test(seatLimitMessage(0, hidden))).toBe(!digitalHidden);
+    expect(/upgrade/i.test(seatLimitMessage(2, hidden))).toBe(!digitalHidden);
     expect(seatLimitMessage(0, hidden)).toMatch(/Revoke an existing sub-coach|revoke an existing sub-coach/);
   });
 
