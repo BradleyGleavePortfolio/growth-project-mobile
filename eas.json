@@ -39,7 +39,9 @@
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
         "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true",
-        "EXPO_PUBLIC_FF_CLIENT_CALENDAR": "true"
+        "EXPO_PUBLIC_FF_CLIENT_CALENDAR": "true",
+        "EXPO_PUBLIC_FF_MWB_PROGRAMS": "true",
+        "EXPO_PUBLIC_FF_MWB_AUTOSAVE": "true"
       }
     },
     "clinic": {
@@ -56,6 +58,8 @@
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
         "EXPO_PUBLIC_FF_COACH_BRIEF": "true",
         "EXPO_PUBLIC_FF_CLIENT_CALENDAR": "true",
+        "EXPO_PUBLIC_FF_MWB_PROGRAMS": "true",
+        "EXPO_PUBLIC_FF_MWB_AUTOSAVE": "true",
         "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_DM": "false"
       }

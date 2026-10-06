@@ -174,12 +174,12 @@
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
       "default": "off",
-      "reason": "Feature flag read via featureFlags.ts with a literal key."
+      "reason": "Workout builder autosave and undo (MWB-4); on in clinic and production profiles with backend FEATURE_MWB_AUTOSAVE_UNDO."
     },
     "EXPO_PUBLIC_FF_MWB_PROGRAMS": {
       "kind": "flag",
       "default": "off",
-      "reason": "Feature flag read via featureFlags.ts with a literal key."
+      "reason": "Coach Programs library tab (S-MWB); on in clinic and production profiles with backend FEATURE_MWB_TEMPLATES."
     },
     "EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB": {
       "kind": "flag",
