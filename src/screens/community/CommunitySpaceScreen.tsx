@@ -4,6 +4,8 @@
  * Cohort. The Lab/Hall is a POST feed, not a chat (§2.3).
  *
  * Empty state uses Roman voice + a primary action ("Be the first to post").
+ * A feed with posts carries a "New post" button above the list, so the
+ * composer stays reachable after the first post (AUDIT-10-125 B-2).
  * Tapping a post opens its thread. Standardized on semanticColors / tokens.ts.
  *
  * The workspace prerequisite (useCommunityMe) is resolved BEFORE any post empty
@@ -269,7 +271,24 @@ export default function CommunitySpaceScreen({
           testID="community-space-screen"
           data={data}
           keyExtractor={(p) => p.id}
-          ListHeaderComponent={voiceSection}
+          ListHeaderComponent={
+            <>
+              {voiceSection}
+              <HapticPressable
+                intent="light"
+                onPress={compose}
+                accessibilityRole="button"
+                accessibilityLabel="Write a new post"
+                testID="community-space-new-post"
+                style={[styles.newPost, { borderColor: semanticColors.accent }]}
+              >
+                <Ionicons name="create-outline" size={18} color={semanticColors.accentText} />
+                <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+                  New post
+                </Text>
+              </HapticPressable>
+            </>
+          }
           renderItem={({ item }) => (
             <PostCard
               post={item}
@@ -316,4 +335,16 @@ const styles = StyleSheet.create({
   },
   retryLabel: { fontSize: 14, fontWeight: '600' },
   list: { paddingVertical: 8 },
+  newPost: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    minHeight: 44,
+  },
 });

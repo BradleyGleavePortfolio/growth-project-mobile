@@ -48,6 +48,7 @@ import {
   type MuteDuration,
 } from '../../api/messagingV2Api';
 import { BroadcastsEntry } from './broadcasts/BroadcastsEntry';
+import { CommunityReportsEntry } from './CommunityReportsEntry';
 
 const FALLBACK_POLL_MS = 60000;
 const PAGE_LIMIT = 50;
@@ -314,7 +315,10 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Messages</Text>
-          <BroadcastsEntry />
+          <View style={styles.headerEntries}>
+            <CommunityReportsEntry />
+            <BroadcastsEntry />
+          </View>
         </View>
         {totalUnread > 0 ? (
           <Text style={styles.unreadSummary}>
@@ -397,7 +401,9 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
-    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+    // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
+    headerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+    headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
     title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
     unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
     searchContainer: { paddingHorizontal: 24, marginBottom: 8, gap: 10 },
