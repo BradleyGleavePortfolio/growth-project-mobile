@@ -176,6 +176,27 @@ export default function BroadcastComposerScreen() {
   const values = optionValues(audience.kind, options.data);
   const [rh, rm] = repeat.localTime.split(':').map(Number);
   const pickerValue = picker === 'repeatTime' ? new Date(2000, 0, 1, rh, rm) : sendAt ?? new Date(Date.now() + 3_600_000);
+  // Shown under the control that opened it. Android opens a dialog; iOS shows
+  // the picker inline with a Done button.
+  const pickerFor = (which: Array<'date' | 'time' | 'repeatTime'>) =>
+    picker && which.includes(picker) ? (
+      <View>
+        <DateTimePicker
+          key={picker}
+          value={pickerValue}
+          mode={picker === 'date' ? 'date' : 'time'}
+          display={Platform.OS === 'ios' ? (picker === 'date' ? 'inline' : 'spinner') : 'default'}
+          minimumDate={picker === 'date' ? new Date() : undefined}
+          onChange={onPick}
+          testID="composer-picker"
+        />
+        {Platform.OS === 'ios' ? (
+          <Pressable onPress={() => setPicker(null)} accessibilityRole="button" accessibilityLabel="Done choosing" style={[chip(false), { alignSelf: 'flex-end' }]} testID="composer-picker-done">
+            <Text style={chipText(false)}>Done</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    ) : null;
 
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" testID="broadcast-composer">
@@ -258,6 +279,7 @@ export default function BroadcastComposerScreen() {
           </Pressable>
         </View>
       ) : null}
+      {later ? pickerFor(['date', 'time']) : null}
 
       <Text style={[styles.label, muted]}>Repeat</Text>
       <View style={styles.wrap}>
@@ -295,21 +317,11 @@ export default function BroadcastComposerScreen() {
           <Pressable onPress={() => setPicker('repeatTime')} accessibilityRole="button" accessibilityLabel={`Time of day, ${formatLocalTime(repeat.localTime)}`} style={[chip(false), { alignSelf: 'flex-start', marginTop: spacing.sm }]} testID="composer-repeat-time">
             <Text style={chipText(false)}>{`At ${formatLocalTime(repeat.localTime)}`}</Text>
           </Pressable>
+          {pickerFor(['repeatTime'])}
           <Text style={[typography.bodySmall, muted, { marginTop: spacing.xs }]}>
             {recurrence ? `${describeRepeat(recurrence)}, this phone's time zone. Months without that day use their last day.` : null}
           </Text>
         </View>
-      ) : null}
-
-      {picker ? (
-        <DateTimePicker
-          key={picker}
-          value={pickerValue}
-          mode={picker === 'date' ? 'date' : 'time'}
-          minimumDate={picker === 'date' ? new Date() : undefined}
-          onChange={onPick}
-          testID="composer-picker"
-        />
       ) : null}
 
       {formError ? (

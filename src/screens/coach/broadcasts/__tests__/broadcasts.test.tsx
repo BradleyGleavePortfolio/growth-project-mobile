@@ -240,6 +240,6 @@ describe('BroadcastsEntry', () => {
     const r = await renderQ(<BroadcastsEntry />);
     await waitFor(() => expect(r.getByTestId('messages-broadcasts-entry')).toBeTruthy());
     await fireEvent.press(r.getByTestId('messages-broadcasts-entry'));
-    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBroadcasts' });
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBroadcasts', initial: false });
   });
 });

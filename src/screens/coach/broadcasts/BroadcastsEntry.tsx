@@ -20,7 +20,9 @@ export function BroadcastsEntry() {
   if (q.data !== true) return null;
   return (
     <Pressable
-      onPress={() => navigation.navigate('ClientsStack', { screen: 'CoachBroadcasts' })}
+      // `initial: false` keeps the client list under Broadcasts, so a Clients
+      // stack opened here for the first time still has its root (B-332-7).
+      onPress={() => navigation.navigate('ClientsStack', { screen: 'CoachBroadcasts', initial: false })}
       accessibilityRole="button"
       accessibilityLabel="Open broadcasts"
       style={[styles.button, { borderColor: colors.border }]}
