@@ -49,7 +49,14 @@ export function keepsIdempotencyKey(code: CoachlessFailureCode): boolean {
   return code !== 'idempotency_key_reused' && code !== 'idempotency_key_required';
 }
 
-/** Grant statuses that mean the code already gave the client an active plan (no checkout needed). */
-export function grantIsActive(status: string | null | undefined): boolean {
-  return status === 'created' || status === 'already_active';
+/**
+ * What the code's own plan grant means for the next step: 'active' (created /
+ * already_active: the plan is on), 'pending' (pending_consent: the free plan
+ * exists and turns on after the onboarding agreement), else null (no grant
+ * from the code; the client chooses a plan). Never send a granted client to pay.
+ */
+export function grantState(status: string | null | undefined): 'active' | 'pending' | null {
+  if (status === 'created' || status === 'already_active') return 'active';
+  if (status === 'pending_consent') return 'pending';
+  return null;
 }

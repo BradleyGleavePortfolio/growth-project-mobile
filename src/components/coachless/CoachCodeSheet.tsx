@@ -10,7 +10,8 @@
  *   3. Welcome moment from the redeem answer: the coach, then the next step:
  *      an active plan from the code (Done), the featured plan through the
  *      Day 1 plan sheet (Choose a plan), or a message to the coach when the
- *      coach sells no plan in the app.
+ *      coach sells no plan in the app or the code's free plan waits for the
+ *      onboarding agreement (a granted client is never sent to pay).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -41,7 +42,7 @@ import {
   type CoachlessFailure,
   type RedeemResult,
 } from '../../api/coachlessApi';
-import { grantIsActive, keepsIdempotencyKey, refusalLine } from './coachlessCopy';
+import { grantState, keepsIdempotencyKey, refusalLine } from './coachlessCopy';
 
 export const CHECK_DEBOUNCE_MS = 400;
 
@@ -263,9 +264,10 @@ function Welcome({
 }) {
   const { semanticColors: sc } = useTheme();
   const { coach } = result;
-  const planActive = grantIsActive(result.grant?.status);
+  const grant = grantState(result.grant?.status);
   const plan = featuredPlanLine(result);
-  const next = planActive ? 'done' : result.next.packages_available > 0 ? 'plan' : 'message';
+  const next =
+    grant === 'active' ? 'done' : grant === null && result.next.packages_available > 0 ? 'plan' : 'message';
   return (
     <View testID="coach-code-welcome">
       <Text style={[styles.eyebrow, { color: sc.textMuted }]}>WELCOME</Text>
@@ -285,7 +287,9 @@ function Welcome({
             ? plan
               ? `Next, start the plan: ${plan}.`
               : `Next, choose a plan from ${coach.name}.`
-            : `${coach.name} has no plan to buy in the app yet. Send a message to get started.`}
+            : grant === 'pending'
+              ? `This code includes a plan with ${coach.name}. It turns on once the onboarding agreement is accepted. Message ${coach.name} if it does not show in Membership soon.`
+              : `${coach.name} has no plan to buy in the app yet. Send a message to get started.`}
       </Text>
       <Pressable
         onPress={next === 'done' ? onDone : next === 'plan' ? onChoosePlan : onMessage}

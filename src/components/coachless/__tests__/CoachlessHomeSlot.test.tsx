@@ -230,6 +230,23 @@ describe('CoachlessHomeSlot banner and story', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Messages');
   });
 
+  it('a code whose free plan waits for consent never leads to paying', async () => {
+    routePost({
+      '/coachless/coach-code/check': () => ({ data: { valid: true, coach: COACH } }),
+      '/coachless/coach-code/redeem': () => ({
+        data: redeemOk({ grant: { status: 'pending_consent', purchase_id: 'p2', package_id: 'pkg-c' } }),
+      }),
+    });
+    await renderSlot();
+    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(screen.getByTestId('coach-code-join'));
+    expect(await screen.findByText(/This code includes a plan with Alex Rivera/)).toBeTruthy();
+    expect(screen.queryByText('Choose a plan')).toBeNull();
+    await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
+    expect(mockNavigate).toHaveBeenCalledWith('Messages');
+    expect(screen.queryByTestId('plan-sheet')).toBeNull();
+  });
+
   it('while the featured coach is not accepting: no offer, no featured coach, no Roman card, only Enter a coach code', async () => {
     mockGet.mockResolvedValue({
       data: {
