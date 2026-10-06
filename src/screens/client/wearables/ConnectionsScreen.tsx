@@ -18,8 +18,9 @@
  * Data comes from `useWearableConnections` (cache key ['wearable-connections']).
  * The list is the join of the user's existing connections with the sources
  * this phone can connect (AUDIT-11-125: Apple Health on iPhone, Health Connect
- * and Samsung Health on Android), so those appear with a Connect button even
- * before a first connect. Tapping Connect / Reconnect opens
+ * and Samsung Health on Android) plus the cloud trackers the server lists as
+ * connectable (B-WEARLIST-125, `useConnectableCloudProviders`), so those
+ * appear with a Connect button even before a first connect. Tapping Connect / Reconnect opens
  * `ConnectProviderSheet`; Disconnect asks first (DisconnectConfirmDialog, S14 round 4b) and then calls the soft-disconnect mutation.
  *
  * States: loading skeleton, error-with-retry, and a per-row pending state on
@@ -57,6 +58,8 @@ import { notSyncingHereCopy } from './onDeviceCopy';
 import DisconnectConfirmDialog from './DisconnectConfirmDialog';
 import { disconnectFailureMessage } from './disconnectCopy';
 import { isOnDeviceStop } from '../../../services/health/sessionFence';
+import { useConnectableCloudProviders } from '../../../hooks/useConnectableCloudProviders';
+import { cloudBenefit } from './cloudCopy';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
 
@@ -151,11 +154,20 @@ interface ProviderRow {
  * WHOOP, ...) are not switched on for launch, so offering Connect for them, or
  * for the other platform's store, only ever ended in "isn't switched on yet".
  */
-function connectableHere(provider: WearableProvider, here: WearableProvider | null): boolean {
+function connectableHere(
+  provider: WearableProvider,
+  here: WearableProvider | null,
+  cloud: ReadonlySet<WearableProvider>,
+): boolean {
+  // B-WEARLIST-125: a cloud tracker is offered once the server lists it as
+  // connectable (switch on, keys set); an older server lists none.
+  if (cloud.has(provider)) return true;
   if (here == null) return false;
   if (provider === here) return true;
   return here === 'HEALTH_CONNECT' && provider === 'SAMSUNG_HEALTH';
 }
+
+const NO_CLOUD: ReadonlySet<WearableProvider> = new Set<WearableProvider>();
 
 /**
  * Build the flat row list: the sources this phone can connect, plus any other
@@ -169,6 +181,7 @@ export function buildRows(
   connections: WearableConnection[],
   local?: { provider: WearableProvider; connectionId: string | null } | null,
   here: WearableProvider | null = deviceSourceForPlatform(),
+  cloud: ReadonlySet<WearableProvider> = NO_CLOUD,
 ): ProviderRow[] {
   const byProvider = new Map<WearableProvider, WearableConnection>();
   for (const c of connections) {
@@ -203,7 +216,7 @@ export function buildRows(
   // as an active source.
   const rows: ProviderRow[] = WEARABLE_PROVIDERS.map((provider) =>
     provider === 'SAMSUNG_HEALTH' ? { ...rowFor('HEALTH_CONNECT'), provider } : rowFor(provider),
-  ).filter((row) => row.status !== 'disconnected' || connectableHere(row.provider, here));
+  ).filter((row) => row.status !== 'disconnected' || connectableHere(row.provider, here, cloud));
 
   const tier = (s: BadgeTone): number =>
     s === 'connected' ? 0 : s === 'error' || s === 'expired' || s === 'notSyncing' ? 1 : 2;
@@ -237,6 +250,7 @@ function ConnectionRow({
   const badge = BADGE_COLORS[row.status];
   const action = rowAction(row.status);
   const synced = relativeTime(row.lastSyncedAt);
+  const benefit = cloudBenefit(row.provider);
 
   const handlePress = useCallback(() => {
     if (action === 'disconnect') onDisconnect(row.provider);
@@ -248,7 +262,7 @@ function ConnectionRow({
       style={styles.row}
       accessibilityLabel={`${config.displayName}, ${badge.label}${
         synced ? `, last synced ${synced}` : ''
-      }`}
+      }${benefit ? `. ${benefit}` : ''}`}
     >
       {/* Decorative brand glyph — conveyed to AT via the row label. */}
       <Text style={styles.rowIcon} importantForAccessibility="no">
@@ -257,6 +271,7 @@ function ConnectionRow({
 
       <View style={styles.rowMain}>
         <Text style={styles.rowName}>{config.displayName}</Text>
+        {benefit != null && <Text style={styles.benefit}>{benefit}</Text>}
         <View style={styles.rowMeta}>
           <View style={[styles.badge, { backgroundColor: badge.bg }]}>
             <Text style={[styles.badgeText, { color: badge.fg }]}>
@@ -331,7 +346,11 @@ export default function ConnectionsScreen() {
         : null,
     [deviceSource, localAuth.data],
   );
-  const rows = useMemo(() => buildRows(data ?? [], local), [data, local]);
+  const cloud = useConnectableCloudProviders();
+  const rows = useMemo(
+    () => buildRows(data ?? [], local, deviceSource, cloud),
+    [data, local, deviceSource, cloud],
+  );
 
   const openConnect = useCallback((provider: WearableProvider) => {
     setSheetProvider(provider);
@@ -533,6 +552,11 @@ const styles = StyleSheet.create({
   rowName: {
     ...typography.h4,
     color: colors.ink,
+  },
+  benefit: {
+    ...typography.bodySmall,
+    color: colors.charcoal,
+    marginTop: 2,
   },
   rowMeta: {
     flexDirection: 'row',
