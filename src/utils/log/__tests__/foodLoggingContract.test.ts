@@ -29,7 +29,7 @@ const log: FoodLog = {
 };
 
 const manual = {
-  foodName: 'Label lunch', calories: '400', protein: '', carbs: '', fat: '',
+  foodName: 'Label lunch', calories: '400', protein: '12', carbs: '60', fat: '12',
   quantity: '2', unit: 'serving', date: '2026-10-06', mealType: 'lunch' as const,
 };
 
@@ -84,12 +84,43 @@ describe('manual and packaged save payloads', () => {
     await submitManualLogOnline(manual);
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({
       nutrient_basis: 'PER_SERVING', serving_size_grams: 0,
-      calories: 400, protein_g: 0, carbs_g: 0, fat_g: 0,
+      calories: 400, protein_g: 12, carbs_g: 60, fat_g: 12,
     }));
     expect(logApi.logFood).toHaveBeenCalledWith(expect.objectContaining({
       food_item_id: 'created-food', quantity_multiplier: 1,
       original_quantity: 2, original_unit: 'serving',
     }));
+  });
+
+  it('blocks a calorie-only manual save rather than manufacturing zero macros', async () => {
+    const calorieOnly = { ...manual, protein: '', carbs: '', fat: '' };
+    const message = 'Enter protein, carbs and fat. Use 0 if there is none.';
+    await expect(submitManualLogOnline(calorieOnly)).rejects.toThrow(message);
+    await expect(submitManualLogOffline(calorieOnly)).rejects.toThrow(message);
+    expect(foodApi.create).not.toHaveBeenCalled();
+    expect(logApi.logFood).not.toHaveBeenCalled();
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it.each(['protein', 'carbs', 'fat'] as const)('requires an explicitly entered %s value', async (field) => {
+    await expect(submitManualLogOnline({ ...manual, [field]: '' })).rejects.toThrow(
+      'Enter protein, carbs and fat. Use 0 if there is none.',
+    );
+    expect(foodApi.create).not.toHaveBeenCalled();
+  });
+
+  it('accepts typed zero macros as actual values', async () => {
+    await submitManualLogOnline({ ...manual, protein: '0', carbs: '0', fat: '0' });
+    expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({
+      calories: 400, protein_g: 0, carbs_g: 0, fat_g: 0,
+    }));
+  });
+
+  it('does not manufacture zero calories when the calorie field is blank', async () => {
+    await expect(submitManualLogOnline({ ...manual, calories: '' })).rejects.toThrow(
+      'Enter calories. Use 0 if there is none.',
+    );
+    expect(foodApi.create).not.toHaveBeenCalled();
   });
 
   it('keeps weighed manual portions correctly convertible when reused', async () => {
@@ -107,7 +138,7 @@ describe('manual and packaged save payloads', () => {
     await submitManualLogOffline(manual);
     expect(enqueue).toHaveBeenCalledWith(expect.objectContaining({
       kind: 'manual',
-      food: expect.objectContaining({ nutrient_basis: 'PER_SERVING', serving_size_grams: 0, protein_g: 0 }),
+      food: expect.objectContaining({ nutrient_basis: 'PER_SERVING', serving_size_grams: 0, protein_g: 12 }),
       log: expect.objectContaining({ quantity_multiplier: 1, original_quantity: 2 }),
     }));
   });
