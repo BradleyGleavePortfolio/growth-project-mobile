@@ -64,6 +64,7 @@ type SheetResult = { error?: { code: string; declineCode?: string } };
 let returnListener: ((event: { url: string }) => void) | undefined;
 const mockRemove = jest.fn();
 let linkingSpy: jest.SpyInstance;
+const addReturnListener = Linking.addEventListener.bind(Linking);
 
 const mount = async () => {
   const onEntitled = jest.fn();
@@ -79,7 +80,13 @@ beforeEach(() => {
   returnListener = undefined;
   linkingSpy = jest.spyOn(Linking, 'addEventListener').mockImplementation((_type, listener) => {
     returnListener = listener;
-    return { remove: mockRemove };
+    const subscription = addReturnListener(_type, listener);
+    const remove = subscription.remove.bind(subscription);
+    subscription.remove = () => {
+      mockRemove();
+      remove();
+    };
+    return subscription;
   });
   mockPost.mockResolvedValue({ data: intent });
   mockGet.mockResolvedValue({ data: {
