@@ -24,7 +24,11 @@ jest.mock('expo-notifications', () => ({
   AndroidImportance: { MAX: 5 },
 }));
 
-import { registerForPushNotifications, installNotificationResponseHandler } from '../pushNotifications';
+import {
+  registerForPushNotifications,
+  installNotificationResponseHandler,
+  fallbackScreenForKind,
+} from '../pushNotifications';
 
 function response(id: string, data: Record<string, unknown>) {
   return { notification: { request: { identifier: id, content: { data } } } };
@@ -102,6 +106,38 @@ describe('installNotificationResponseHandler', () => {
     await Promise.resolve();
     expect(onResponse).toHaveBeenCalledTimes(1);
     again();
+  });
+});
+
+describe('AUDIT-09-125: a push without actionScreen still opens a screen', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('routes by kind: community, workout reminder, everything else to the notification center', () => {
+    let live: ((r: unknown) => void) | undefined;
+    mockAddResponse.mockImplementation((cb: (r: unknown) => void) => {
+      live = cb;
+      return { remove: jest.fn() };
+    });
+    mockGetLast.mockResolvedValue(null);
+    const onResponse = jest.fn();
+    const cleanup = installNotificationResponseHandler(onResponse);
+    live?.(response('c1', { kind: 'community_post_replied', target_id: 'p1' }));
+    expect(onResponse).toHaveBeenLastCalledWith('Community', undefined, 'c1');
+    live?.(response('w1', { kind: 'workout_reminder', deep_link: 'tgp://workouts' }));
+    expect(onResponse).toHaveBeenLastCalledWith('WorkoutMain', undefined, 'w1');
+    live?.(response('n1', { kind: 'nudge_missed_checkin' }));
+    expect(onResponse).toHaveBeenLastCalledWith('NotificationCenter', undefined, 'n1');
+    live?.(response('m1', { kind: 'message_received', actionScreen: 'Messages' }));
+    expect(onResponse).toHaveBeenLastCalledWith('Messages', undefined, 'm1');
+    live?.(response('x1', {}));
+    expect(onResponse).toHaveBeenLastCalledWith(undefined, undefined, 'x1');
+    cleanup();
+  });
+
+  it('fallbackScreenForKind ignores a missing or non-string kind', () => {
+    expect(fallbackScreenForKind(undefined)).toBeUndefined();
+    expect(fallbackScreenForKind(7)).toBeUndefined();
+    expect(fallbackScreenForKind('')).toBeUndefined();
   });
 });
 
