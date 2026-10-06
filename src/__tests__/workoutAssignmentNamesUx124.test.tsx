@@ -4,7 +4,7 @@
  * capitalised, and Home knows a workout was logged today.
  */
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { formatPlanType } from '../utils/workout/formatPlanType';
 import { isWorkoutDoneToday } from '../utils/workout/workoutDoneToday';
@@ -85,6 +85,52 @@ describe('coach-assigned workout names (B: client saw "Push 001" / "Exercise")',
     const names = JSON.parse(params.exercises).map((e: { exerciseName: string }) => e.exerciseName);
     expect(names).toEqual(['Barbell Bench Press', 'Barbell Bent Over Row']);
   });
+
+  // FIX ROUND 2 (B-399-1): a client who taps Start while the names are
+  // still loading used to get "Push 001" / "Exercise" frozen into the live
+  // workout. Start now waits for the in-flight reads.
+  const startButton = (q: Awaited<ReturnType<typeof render>>) =>
+    q.getByLabelText(/^(Start workout|Loading exercise names)/);
+  const realName = (id: string) => (id === '0025' ? 'barbell bent over row' : 'Barbell Bench Press');
+  const startedNames = () =>
+    JSON.parse(mockNavigate.mock.calls[0][1].params.exercises).map(
+      (e: { exerciseName: string }) => e.exerciseName,
+    );
+
+  it('cold cache: a Start tap while names load does not seed placeholders; the real names go in', async () => {
+    mockAssignment = { data: PLAN, isLoading: false, isError: false };
+    const release: Array<() => void> = [];
+    mockGetById.mockImplementation(
+      (id: string) =>
+        new Promise((resolve) => {
+          release.push(() => resolve({ data: { id, name: realName(id) } }));
+        }),
+    );
+    const screen = await render(wrap(<WorkoutAssignmentDetailScreen />));
+    await waitFor(() => expect(mockGetById).toHaveBeenCalledTimes(2));
+
+    await fireEvent.press(startButton(screen));
+    expect(mockNavigate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      release.forEach((r) => r());
+    });
+    expect(await screen.findByText('Start workout')).toBeTruthy();
+    await fireEvent.press(startButton(screen));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(startedNames()).toEqual(['Barbell Bench Press', 'Barbell Bent Over Row']);
+  });
+
+  it('a failed lookup does not block Start; the session keeps the fallback names', async () => {
+    mockAssignment = { data: PLAN, isLoading: false, isError: false };
+    mockGetById.mockRejectedValue(new Error('503'));
+    const screen = await render(wrap(<WorkoutAssignmentDetailScreen />));
+    // One retry (about 1 s) per lookup, then Start is offered.
+    await waitFor(() => expect(screen.getByText('Start workout')).toBeTruthy(), { timeout: 6000 });
+    await fireEvent.press(startButton(screen));
+    expect(mockNavigate).toHaveBeenCalledTimes(1);
+    expect(startedNames()).toEqual(['Push 001', 'Exercise']);
+  }, 10000);
 
   it('falls back to the prettified id when a lookup fails', async () => {
     mockAssignment = { data: PLAN, isLoading: false, isError: false };

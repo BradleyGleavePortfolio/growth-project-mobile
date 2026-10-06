@@ -63,7 +63,11 @@ export default function WorkoutAssignmentDetailScreen() {
     () => (data?.workout_plan?.exercises ?? []).map((e) => e.exercise_external_id),
     [data],
   );
-  const exerciseNames = useExerciseNames(exerciseIds);
+  // Start waits while the names are still loading: the session copies the
+  // names at Start, so starting early used to freeze "Push 001" / "Exercise"
+  // into the live workout and its saved history. A failed or offline
+  // lookup does not block Start; it keeps the prettified fallback.
+  const { names: exerciseNames, loading: namesLoading } = useExerciseNames(exerciseIds);
   const nameFor = useCallback(
     (externalId: string) =>
       exerciseNames[externalId] || prettifyExerciseName(externalId) || 'Exercise',
@@ -71,7 +75,7 @@ export default function WorkoutAssignmentDetailScreen() {
   );
 
   const handleStart = useCallback(() => {
-    if (!data) return;
+    if (!data || namesLoading) return;
     const exercises = buildActiveWorkoutExercises(data.workout_plan).map((e) => ({
       ...e,
       // Saved with the workout, shown in history and to the coach.
@@ -102,7 +106,7 @@ export default function WorkoutAssignmentDetailScreen() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ActiveWorkout', params);
-  }, [data, navigation, exerciseNames]);
+  }, [data, navigation, exerciseNames, namesLoading]);
 
   if (isLoading) {
     return <SkeletonScreen count={5} />;
@@ -189,12 +193,19 @@ export default function WorkoutAssignmentDetailScreen() {
       ) : (
         <HapticPressable
           intent="success"
-          style={styles.startBtn}
+          style={[styles.startBtn, namesLoading && { opacity: 0.6 }]}
           onPress={handleStart}
+          disabled={namesLoading}
           accessibilityRole="button"
-          accessibilityLabel={`Start workout ${plan.name}`}
+          accessibilityState={{ disabled: namesLoading, busy: namesLoading }}
+          accessibilityLabel={namesLoading ? 'Loading exercise names' : `Start workout ${plan.name}`}
+          testID="assignment-start"
         >
-          <Text style={styles.startBtnText}>Start workout</Text>
+          {namesLoading ? (
+            <ActivityIndicator color={sc.bgPrimary} />
+          ) : (
+            <Text style={styles.startBtnText}>Start workout</Text>
+          )}
         </HapticPressable>
       )}
     </ScrollView>
