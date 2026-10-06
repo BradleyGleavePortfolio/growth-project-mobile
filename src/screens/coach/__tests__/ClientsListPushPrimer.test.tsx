@@ -28,6 +28,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 jest.mock('../../../store/coachStore', () => ({
   useCoachStore: () => ({
+    clients: [],
     isLoading: false,
     loadError: null,
     searchQuery: '',
@@ -58,7 +59,10 @@ import { pushPrimerDismissedKey } from '../../../components/home/PushPermissionC
 
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 async function mount() {
-  const navigation: Pick<Nav, 'navigate'> = { navigate: jest.fn() };
+  const navigation: Pick<Nav, 'navigate' | 'addListener'> = {
+    navigate: jest.fn(),
+    addListener: () => () => undefined,
+  };
   return await render(<ClientsListScreen navigation={navigation as Nav} />);
 }
 
