@@ -6,7 +6,7 @@
  * Mux finishes.
  */
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
 import { useQuery } from '@tanstack/react-query';
 
@@ -123,12 +123,14 @@ export default function MediaAssetPicker({
           </TouchableOpacity>
         ) : null}
       </View>
+      {kind === 'video' && Platform.OS === 'ios' ? hint(IOS_VIDEO_HINT) : null}
       {uploading ? hint(`Uploading the ${noun}. Keep the app open until it finishes.`) : null}
       {msg && !uploading ? hint(msg.text, msg.error ? colors.error : colors.textSecondary) : null}
     </View>
   );
 }
 
+const IOS_VIDEO_HINT = 'A video in Photos: tap Share, then Save to Files, then upload it here.';
 const VIDEO_PENDING = 'Uploaded. The video can be attached once processing ends. Tap Refresh in a minute.';
 
 const styles = StyleSheet.create({
