@@ -74,6 +74,34 @@ describe('FOOD-COACH-124 normal-day regressions', () => {
     expect(api.get).toHaveBeenLastCalledWith('/coach/clients/client-a/timeline?days=7&mealsCursor=new-99');
   });
 
+  it('B-404-O1: counts each entry once when the next page repeats the boundary day', async () => {
+    const whole = (id: string, date: string) => ({ ...meal(id, date), quantity_multiplier: 1 });
+    // A date-only server sort restarts page 2 at the boundary day, so
+    // b-1 and b-2 arrive on both pages.
+    respondWithPages([
+      [
+        ...Array.from({ length: 97 }, (_, i) => whole(`a-${i}`, '2026-10-05')),
+        whole('b-0', '2026-10-04'), whole('b-1', '2026-10-04'), whole('b-2', '2026-10-04'),
+      ],
+      [
+        whole('b-1', '2026-10-04'), whole('b-2', '2026-10-04'),
+        whole('b-3', '2026-10-04'), whole('b-4', '2026-10-04'),
+        whole('c-0', '2026-10-03'),
+      ],
+    ]);
+    await render(<FoodLogReviewSection {...reviewProps} />);
+    await waitFor(() => expect(screen.getByText('Food c-0')).toBeTruthy());
+    expect(api.get).toHaveBeenLastCalledWith('/coach/clients/client-a/timeline?days=7&mealsCursor=b-2');
+    expect(screen.getAllByText('Food b-1')).toHaveLength(1);
+    expect(screen.getAllByText('Food b-2')).toHaveLength(1);
+    expect(screen.getByText('3 days with logs · 103 food entries')).toBeTruthy();
+    // Day totals equal what the client logged: 97, 5 and 1 entries of 100 kcal.
+    expect(screen.getByText('9700 kcal')).toBeTruthy();
+    expect(screen.getByText('500 kcal')).toBeTruthy();
+    expect(screen.queryByText('700 kcal')).toBeNull();
+    expect(screen.getByText('Average per logged day: 3433 kcal · P: 343g')).toBeTruthy();
+  });
+
   it('shows macro totals and averages only over recorded days', async () => {
     respondWithPages([[meal('one'), meal('two', '2026-10-04')]]);
     await render(<FoodLogReviewSection {...reviewProps} />);
