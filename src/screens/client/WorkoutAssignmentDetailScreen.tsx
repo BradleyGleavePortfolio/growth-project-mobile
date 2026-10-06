@@ -36,6 +36,7 @@ import {
   buildActiveWorkoutExercises,
   prettifyExerciseName,
 } from '../../utils/workout/buildActiveWorkout';
+import { overlayRomanAdjustedSets } from '../../utils/workout/romanAdjustedSets';
 
 type RouteParams = {
   WorkoutAssignmentDetail: { assignmentId: string };
@@ -54,6 +55,18 @@ export default function WorkoutAssignmentDetailScreen() {
   const onRefresh = useCallback(() => {
     void refetch();
   }, [refetch]);
+
+  // B-ROMANADJ-125: set counts the coach approved from Roman's Action Queue
+  // are laid over the live plan by `order`, for the list and for Start. No
+  // field (older server) = the live plan exactly as before.
+  const overlay = useMemo(
+    () =>
+      overlayRomanAdjustedSets(
+        data?.workout_plan?.exercises ?? [],
+        data?.roman_adjusted_sets,
+      ),
+    [data],
+  );
 
   // The plan stores only catalog ids (e.g. "0025" or "seed:push-001"). The
   // screen used to prettify the id, so a client saw "1. Exercise" or
@@ -76,7 +89,7 @@ export default function WorkoutAssignmentDetailScreen() {
 
   const handleStart = useCallback(() => {
     if (!data || namesLoading) return;
-    const exercises = buildActiveWorkoutExercises(data.workout_plan).map((e) => ({
+    const exercises = buildActiveWorkoutExercises({ exercises: overlay.exercises }).map((e) => ({
       ...e,
       // Saved with the workout, shown in history and to the coach.
       exerciseName: exerciseNames[e.exerciseId] || e.exerciseName,
@@ -106,7 +119,7 @@ export default function WorkoutAssignmentDetailScreen() {
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (navigation as any).navigate('ActiveWorkout', params);
-  }, [data, navigation, exerciseNames, namesLoading]);
+  }, [data, navigation, exerciseNames, namesLoading, overlay]);
 
   if (isLoading) {
     return <SkeletonScreen count={5} />;
@@ -135,7 +148,7 @@ export default function WorkoutAssignmentDetailScreen() {
   }
 
   const plan = data.workout_plan;
-  const sorted = [...plan.exercises].sort((a, b) => a.order - b.order);
+  const sorted = [...overlay.exercises].sort((a, b) => a.order - b.order);
   const isCompleted = !!data.completed_at;
 
   return (
@@ -173,6 +186,14 @@ export default function WorkoutAssignmentDetailScreen() {
               {ex.weight_lbs ? ` • ${ex.weight_lbs} lbs` : ''}
               {ex.rest_seconds ? ` • ${ex.rest_seconds}s rest` : ''}
             </Text>
+            {overlay.adjustedOrders.has(ex.order) ? (
+              <Text
+                style={[typography.bodySmall, { color: sc.accent, marginTop: 4 }]}
+                testID={`assignment-adjusted-${ex.order}`}
+              >
+                Updated by your coach
+              </Text>
+            ) : null}
             {ex.notes ? (
               <Text
                 style={[typography.bodySmall, { color: sc.textMuted, marginTop: 4 }]}
