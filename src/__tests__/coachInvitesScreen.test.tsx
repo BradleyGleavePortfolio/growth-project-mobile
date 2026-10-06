@@ -13,7 +13,8 @@
  */
 
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockListInvites = jest.fn();
 jest.mock('../api/invites', () => ({
@@ -23,6 +24,8 @@ jest.mock('../api/invites', () => ({
     revokeInvite: jest.fn(),
   },
 }));
+
+jest.mock('../utils/haptics', () => ({ mediumTap: jest.fn(), successTap: jest.fn(), warningTap: jest.fn() }));
 
 jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn().mockResolvedValue(undefined),
@@ -44,6 +47,7 @@ jest.mock('../theme/ThemeProvider', () => ({
 
 import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
 import type { Invite } from '../types/invites';
+import { invitesApi, type ResendEmailStatus } from '../api/invites';
 
 // Build a navigation-prop stub that satisfies the typed nav prop. We
 // only assert against the rendered text so the inner shape can be a
@@ -157,4 +161,23 @@ describe('CoachInvitesScreen — R26 render mapping (client_email + last_email_s
     expect(getByTestId('invite-row-inv-null-status')).toBeTruthy();
   });
 
+});
+
+// AUDIT-17-125 — a 200 from /send can be `skipped` (the email key is already
+// spent: every resend on today's backend) or `failed`; only `sent` is a resend.
+describe('CoachInvitesScreen resend honesty (AUDIT-17-125)', () => {
+  const cases: Array<[ResendEmailStatus, string, RegExp]> = [
+    ['skipped', 'No new email sent', /no new email was sent/],
+    ['failed', 'Email not sent', /did not send/],
+    ['sent', 'Invite re-sent', /^Invite re-sent to alice@example.com\.$/],
+  ];
+  it.each(cases)('a %s send shows "%s"', async (emailStatus, title, body) => {
+    mockListInvites.mockResolvedValue([{ id: 'inv-r', code: 'GP-RSND23', clientEmail: 'alice@example.com', status: 'PENDING', createdAt: new Date().toISOString(), lastEmailStatus: null }]);
+    jest.mocked(invitesApi.resendInvite).mockResolvedValue({ supported: true, emailStatus });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { findByTestId } = await render(<CoachInvitesScreen navigation={makeNavigation()} />);
+    await fireEvent.press(await findByTestId('invite-resend-inv-r'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(title, expect.stringMatching(body)));
+    alert.mockRestore();
+  });
 });
