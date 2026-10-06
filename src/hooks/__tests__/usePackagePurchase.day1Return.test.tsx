@@ -65,12 +65,13 @@ let returnListener: ((event: { url: string }) => void) | undefined;
 const mockRemove = jest.fn();
 let linkingSpy: jest.SpyInstance;
 
-const mount = () => {
+const mount = async () => {
   const onEntitled = jest.fn();
-  return renderHook(() => usePackagePurchase({
+  const hook = await renderHook(() => usePackagePurchase({
     surface: 'plans', appearance: {}, colorScheme: 'light', onEntitled,
     planPollDelaysMs: [0], entitlementPollDelaysMs: [0], recheckDelaysMs: [0],
-  })).then((hook) => ({ ...hook, onEntitled }));
+  }));
+  return { ...hook, onEntitled };
 };
 
 beforeEach(() => {
@@ -182,5 +183,34 @@ describe('HUNT-04 day-1 bank authentication returns to package PaymentSheet', ()
     expect(h.result.current.state.notice?.message).not.toMatch(/nothing was charged/i);
     expect(h.onEntitled).not.toHaveBeenCalled();
     expect(mockRemove).toHaveBeenCalledTimes(1);
+  });
+
+  it('after a bank return, a late webhook stays pending and Check again reads without charging again', async () => {
+    const held = deferred<SheetResult>();
+    mockPresent.mockReturnValueOnce(held.promise);
+    mockHandleReturn.mockImplementation(async () => {
+      held.resolve({});
+      return true;
+    });
+    mockGet.mockResolvedValueOnce({ data: {
+      purchase_id: PURCHASE, package_id: pkg.id,
+      state: 'confirming', entitlement_active: false, checkout_state: 'paid',
+    } });
+    const h = await mount();
+    let running!: Promise<void>;
+    await act(async () => { running = h.result.current.start(pkg); });
+    await waitFor(() => expect(mockPresent).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      returnListener?.({ url: STRIPE_RETURN_URL });
+      await Promise.resolve();
+      held.resolve({});
+      await running;
+    });
+    expect(mockHandleReturn).toHaveBeenCalledWith(STRIPE_RETURN_URL);
+    expect(h.result.current.state.phase).toBe('confirm_slow');
+    expect(h.result.current.state.success).toBeNull();
+    await act(async () => { await h.result.current.checkAgain(); });
+    expect(h.result.current.state.phase).toBe('success');
+    expect(mockPost).toHaveBeenCalledTimes(1);
   });
 });
