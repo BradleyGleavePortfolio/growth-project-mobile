@@ -51,6 +51,10 @@ export const SERVER_FEATURE_FLAG_KEYS = [
   // one inbox, read-up-to, edit, delete, pins, mute. OFF keeps the legacy
   // client list and thread exactly as before.
   'messaging_core_v2',
+  // Coachless Home (backend FEATURE_COACHLESS_HOME, b#721-#723): banner, code
+  // sheet and scripted Roman card for a client with no coach. ON only for a
+  // student while the env is on.
+  'coachless_home',
 ] as const;
 export type ServerFeatureFlagKey = (typeof SERVER_FEATURE_FLAG_KEYS)[number];
 

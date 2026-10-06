@@ -624,3 +624,22 @@ describe('Apple Pay / Google Pay are off by config (OR-113-2)', () => {
     );
   });
 });
+
+describe('coachless Home hand-off (initialPackageId)', () => {
+  it('selects the featured package once the list loads, so Subscribe is ready without a tap', async () => {
+    const r = await render(
+      <PackageSelectionSheet visible onDismiss={jest.fn()} onPaymentSuccess={jest.fn()} initialPackageId={PKG_MONTHLY} />,
+    );
+    await waitFor(() =>
+      expect(r.getByTestId('select-plan-btn').props.accessibilityLabel).toBe('Subscribe for $99.00 a month'),
+    );
+  });
+
+  it('selects nothing when the featured package is not in the coach list', async () => {
+    const r = await render(
+      <PackageSelectionSheet visible onDismiss={jest.fn()} onPaymentSuccess={jest.fn()} initialPackageId="not-listed" />,
+    );
+    await waitFor(() => expect(r.getByTestId(`package-card-${PKG_MONTHLY}`)).toBeTruthy());
+    expect(r.getByTestId('select-plan-btn').props.accessibilityLabel).not.toBe('Subscribe for $99.00 a month');
+  });
+});

@@ -37,6 +37,9 @@ import { DunningBanner } from '../../entitlements/dunning/DunningBanner';
 import HomeHeaderActions from '../../components/home/HomeHeaderActions';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
 import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
+// A1-COACHLESS: banner, code sheet and scripted Roman card for a client with
+// no coach. Renders nothing unless the server flag coachless_home is on.
+import CoachlessHomeSlot from '../../components/coachless/CoachlessHomeSlot';
 // Clinic tutorial (C08/C09): pinned macro card, Message your coach row and the
 // passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
 import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
@@ -329,6 +332,7 @@ export default function HomeScreen() {
       >
         <HomeHeaderActions />
         <DunningBanner surface="HomeScreen" />
+        <CoachlessHomeSlot />
         <PendingInviteBanner />
         <PushPermissionCard />
         {showProfileNudge ? (
