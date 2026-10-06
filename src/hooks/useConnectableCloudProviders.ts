@@ -10,6 +10,7 @@
  * never a Connect that cannot work. The failure is logged, never shown.
  */
 
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { wearablesConnectionsApi, type WearableProvider } from '../api/wearablesConnectionsApi';
 import { logger } from '../utils/logger';
@@ -37,5 +38,5 @@ export function useConnectableCloudProviders(): ReadonlySet<WearableProvider> {
     staleTime: 5 * 60_000,
   });
   const data = query.data;
-  return data && data.length > 0 ? new Set(data) : NONE;
+  return useMemo(() => (data && data.length > 0 ? new Set(data) : NONE), [data]);
 }
