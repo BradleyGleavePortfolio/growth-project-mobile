@@ -43,6 +43,7 @@ function meal(id: string, date = '2026-10-05') {
 const reviewProps = { clientId: 'client-a', todayLogs: [], colors, styles };
 const summaryProps = {
   clientId: 'client-a', clientName: 'Client', profile: null,
+  foodShared: true,
   totals: { calories: 1100, protein: 80, carbs: 100, fat: 30 },
   nudgeSuccess: false, onOpenMessages: jest.fn(), onOpenNudge: jest.fn(),
   onOpenMacrosReview: jest.fn(), onOpenWorkoutBuilder: jest.fn(),

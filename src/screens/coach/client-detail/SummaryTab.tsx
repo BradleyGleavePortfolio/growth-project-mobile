@@ -19,6 +19,7 @@ import { resolveCoachTargets } from '../../../utils/coach/foodReview';
 export function SummaryTab({
   profile,
   totals,
+  foodShared,
   clientId,
   clientName,
   nudgeSuccess,
@@ -32,6 +33,7 @@ export function SummaryTab({
 }: {
   profile: ClientProfile | null;
   totals: { calories: number; protein: number; carbs: number; fat: number };
+  foodShared: boolean;
   clientId: string;
   clientName: string;
   nudgeSuccess: boolean;
@@ -60,8 +62,13 @@ export function SummaryTab({
 
   return (
     <>
+      {foodShared === false ? (
+        <View style={styles.calorieCard}>
+          <Text style={styles.emptyText}>Food logs are not shared with this coach.</Text>
+        </View>
+      ) : null}
       {/* Calorie Ring Card */}
-      <View style={styles.calorieCard}>
+      {foodShared !== false && <View style={styles.calorieCard}>
         <View style={styles.calorieMain}>
           <Text style={styles.calorieValue}>{Math.round(totals.calories)}</Text>
           <Text style={styles.calorieTarget}>/ {calTarget || '—'} kcal</Text>
@@ -79,14 +86,14 @@ export function SummaryTab({
             <Text style={styles.actionPillText}>Retry target</Text>
           </TouchableOpacity>
         ) : null}
-      </View>
+      </View>}
 
       {/* Macro Cards */}
-      <View style={styles.macroGrid}>
+      {foodShared !== false && <View style={styles.macroGrid}>
         <MacroCard label="Protein" value={totals.protein} target={targets?.protein ?? undefined} unit="g" color={colors.protein} />
         <MacroCard label="Carbs" value={totals.carbs} target={targets?.carbs ?? undefined} unit="g" color={colors.carbs} />
         <MacroCard label="Fat" value={totals.fat} target={targets?.fat ?? undefined} unit="g" color={colors.fat} />
-      </View>
+      </View>}
 
       {/* Profile Info */}
       <Text style={styles.sectionTitle}>Profile</Text>

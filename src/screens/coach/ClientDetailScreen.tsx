@@ -60,6 +60,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const {
     profile,
     totals,
+    foodShared,
     weightLogs,
     workoutSessions,
     timeline,
@@ -451,6 +452,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <SummaryTab
             profile={profile}
             totals={totals}
+            foodShared={foodShared}
             clientId={clientId}
             clientName={route.params.clientName}
             nudgeSuccess={nudgeSuccess}
