@@ -29,7 +29,9 @@ export type PushPermissionAudience = 'client' | 'coach';
 
 const BODY_COPY: Record<PushPermissionAudience, string> = {
   client: 'Turn on notifications so you see messages and plan updates from your coach.',
-  coach: 'Turn on notifications so you see client messages and new client alerts.',
+  // HUNT-05-124 B-H05-1: name only alerts the server sends to coaches today
+  // (client messages and bookings); there is no new-client alert yet.
+  coach: 'Turn on notifications so you see client messages and bookings as they arrive.',
 };
 
 export default function PushPermissionCard({

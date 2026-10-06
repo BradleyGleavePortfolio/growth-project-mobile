@@ -195,7 +195,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
       title: "Payouts are not switched on for your account yet",
       body:
         "You cannot connect Stripe right now because payouts are not switched on for your account yet. " +
-        "Finish the rest of setup, then connect Stripe later from Get paid on your Home checklist. " +
+        "Finish the rest of setup, then connect Stripe later from Get paid on the Overview tab. " +
         `Free packages work today.${referenceSentence(requestId, "If this has not changed by tomorrow")}`,
       retryable: false,
     };
