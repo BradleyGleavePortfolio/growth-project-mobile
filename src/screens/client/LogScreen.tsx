@@ -46,6 +46,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import CoachErrorState from '../../components/community/coach/CoachErrorState';
 
 export default function LogScreen() {
   const { colors } = useTheme();
@@ -63,6 +64,8 @@ export default function LogScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
+    isLoading,
+    loadError,
     setSelectedDate,
     loadDayData,
     logWater,
@@ -542,6 +545,15 @@ export default function LogScreen() {
         </View>
 
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
+
+        {loadError ? (
+          <CoachErrorState
+            message={loadError}
+            onRetry={() => void onRefresh()}
+            retrying={isLoading || refreshing}
+            testID="log-day-data-error"
+          />
+        ) : null}
 
         <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} />
         {savedMessage ? (

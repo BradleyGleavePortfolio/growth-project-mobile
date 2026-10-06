@@ -6,7 +6,17 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen } from '@testing-library/react-native';
+
+const mockDayState = {
+  foodLogs: [],
+  dailyTotals: { calories: 600, protein: 40, carbs: 70, fat: 20 },
+  waterOz: 0,
+  isLoading: false,
+  loadError: null as string | null,
+  loadDayData: jest.fn().mockResolvedValue(undefined),
+  loadProfile: jest.fn().mockResolvedValue(undefined),
+};
 
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({
@@ -16,13 +26,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
   }),
 }));
 jest.mock('../../../store/clientStore', () => ({
-  useClientStore: () => ({
-    foodLogs: [],
-    dailyTotals: { calories: 600, protein: 40, carbs: 70, fat: 20 },
-    waterOz: 0,
-    loadDayData: jest.fn(),
-    loadProfile: jest.fn(),
-  }),
+  useClientStore: () => mockDayState,
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
@@ -46,8 +50,32 @@ import {
 } from '../../../macros/macroDisplayStore';
 
 beforeEach(async () => {
+  jest.clearAllMocks();
+  mockDayState.loadError = null;
+  mockDayState.isLoading = false;
   await AsyncStorage.clear();
   __resetMacroDisplayStoreForTests();
+});
+
+describe('Home day-data failure state', () => {
+  it('shows a specific failure and a working retry without losing navigation', async () => {
+    mockDayState.loadError = 'Food and water data could not refresh. Check your connection and try again.';
+    await render(<HomeScreen />);
+    expect(screen.getByText(mockDayState.loadError)).toBeTruthy();
+    expect(screen.getByTestId('home-day-data-error')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('home-day-data-error-retry'));
+    expect(mockDayState.loadDayData).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('home-number-grid')).toBeTruthy();
+  });
+
+  it('keeps retry disabled while the refresh is loading', async () => {
+    mockDayState.loadError = 'Water data could not refresh. Check your connection and try again.';
+    mockDayState.isLoading = true;
+    await render(<HomeScreen />);
+    expect(screen.getByTestId('home-day-data-error-retry').props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+  });
 });
 
 describe('HomeScreen macro display mode', () => {

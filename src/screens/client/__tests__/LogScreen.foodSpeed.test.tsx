@@ -39,6 +39,7 @@ const mockLog: FoodLog = {
 const mockStore = {
   selectedDate: mockToday, foodLogs: [mockLog],
   dailyTotals: { calories: 248, protein: 47, carbs: 0, fat: 5 }, waterOz: 0,
+  isLoading: false, loadError: null as string | null,
   setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
   removeFoodLogLocally: jest.fn(),
 };
@@ -71,10 +72,33 @@ const ok: AxiosResponse = { data: {}, status: 200, statusText: 'OK', headers: {}
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockStore.loadError = null;
+  mockStore.isLoading = false;
   jest.mocked(logApi.logFood).mockResolvedValue(ok);
   jest.mocked(logApi.deleteEntry).mockResolvedValue(ok);
   // The catalog search never answers here: local matches must not wait for it.
   jest.mocked(foodApi.search).mockReturnValue(new Promise<never>(() => {}));
+});
+
+describe('Food Log day-data failure state', () => {
+  it('shows a failed read with retry while Add Food remains available', async () => {
+    mockStore.loadError = 'Food and water data could not refresh. Check your connection and try again.';
+    await render(<LogScreen />);
+    expect(screen.getByText(mockStore.loadError)).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('log-day-data-error-retry'));
+    expect(mockStore.loadDayData).toHaveBeenCalledWith('user', mockToday);
+    expect(mockStore.loadDayData).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText('Add Food')).not.toHaveLength(0);
+  });
+
+  it('keeps retry disabled while day data is loading', async () => {
+    mockStore.loadError = 'Water data could not refresh. Check your connection and try again.';
+    mockStore.isLoading = true;
+    await render(<LogScreen />);
+    expect(screen.getByTestId('log-day-data-error-retry').props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+  });
 });
 
 async function openBreakfast() {
