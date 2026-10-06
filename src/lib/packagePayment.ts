@@ -423,6 +423,8 @@ export interface PackageStripeSdk {
     params: Record<string, unknown>,
   ) => Promise<{ error?: StripeSdkError }>;
   presentPaymentSheet: () => Promise<{ error?: StripeSdkError }>;
+  /** Complete a bank authentication return while the native sheet is open. */
+  handleURLCallback?: (url: string) => Promise<boolean>;
 }
 
 /** App scheme (app.json `scheme`); Stripe returns here after a bank redirect. */
