@@ -77,6 +77,8 @@ import CoachAppointmentTypesScreen from '../screens/coach/CoachAppointmentTypesS
 import CoachTimeOffScreen from '../screens/coach/CoachTimeOffScreen';
 // S-AVAIL-122 — booking options (notice, window, buffers, daily maximum).
 import CoachBookingOptionsScreen from '../screens/coach/CoachBookingOptionsScreen';
+import CoachBroadcastsScreen from '../screens/coach/broadcasts/CoachBroadcastsScreen';
+import BroadcastComposerScreen from '../screens/coach/broadcasts/BroadcastComposerScreen';
 // Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
 import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
@@ -196,6 +198,9 @@ export type ClientsStackParamList = {
   CoachTimeOff:             undefined;
   /** S-AVAIL-122 — the coach's booking options. */
   CoachBookingOptions:      undefined;
+  /** M-BCAST-123 — coach broadcasts list and composer (server flag FEATURE_COACH_BROADCASTS). */
+  CoachBroadcasts:          undefined;
+  CoachBroadcastComposer:   undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
@@ -420,6 +425,17 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBookingOptions"
         component={CoachBookingOptionsScreen}
+      />
+      {/* M-BCAST-123 — broadcasts; the Messages entry shows only when the server offers them. */}
+      <ClientsStack.Screen
+        name="CoachBroadcasts"
+        component={CoachBroadcastsScreen}
+        options={{ headerShown: true, title: 'Broadcasts', headerBackTitle: 'Back' }}
+      />
+      <ClientsStack.Screen
+        name="CoachBroadcastComposer"
+        component={BroadcastComposerScreen}
+        options={{ headerShown: true, title: 'New broadcast', headerBackTitle: 'Back' }}
       />
       {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
       <ClientsStack.Screen

@@ -19,6 +19,8 @@ jest.mock('../../../services/api', () => ({
   default: { get: jest.fn(), post: jest.fn(), put: jest.fn(), patch: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('../../../tutorial/tutorialEvents', () => ({ emitTutorialSignal: jest.fn() }));
+// The Broadcasts header entry has its own probe and tests (broadcasts.test.tsx).
+jest.mock('../broadcasts/BroadcastsEntry', () => ({ BroadcastsEntry: () => null }));
 const mockSubscribe = jest.fn((..._args: unknown[]) => () => undefined);
 jest.mock('../../../services/realtime', () => ({
   subscribeToMessages: (...args: unknown[]) => mockSubscribe(...args),
