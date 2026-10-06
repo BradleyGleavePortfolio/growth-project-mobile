@@ -79,6 +79,8 @@ import CoachTimeOffScreen from '../screens/coach/CoachTimeOffScreen';
 // S-AVAIL-122 — booking options (notice, window, buffers, daily maximum).
 import CoachBookingOptionsScreen from '../screens/coach/CoachBookingOptionsScreen';
 import CoachBroadcastsScreen from '../screens/coach/broadcasts/CoachBroadcastsScreen';
+// M-FEATURED-123 — owner-only featured coach editor (Settings > Owner).
+import FeaturedCoachEditorScreen from '../screens/coach/featured/FeaturedCoachEditorScreen';
 import BroadcastComposerScreen from '../screens/coach/broadcasts/BroadcastComposerScreen';
 // Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
@@ -202,6 +204,8 @@ export type ClientsStackParamList = {
   /** M-BCAST-123 — coach broadcasts list and composer (server flag FEATURE_COACH_BROADCASTS). */
   CoachBroadcasts:          undefined;
   CoachBroadcastComposer:   undefined;
+  /** M-FEATURED-123 — owner-only featured coach editor. */
+  FeaturedCoachEditor:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
@@ -426,6 +430,11 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBookingOptions"
         component={CoachBookingOptionsScreen}
+      />
+      <ClientsStack.Screen
+        name="FeaturedCoachEditor"
+        component={FeaturedCoachEditorScreen}
+        options={{ headerShown: true, title: 'Featured coach', headerBackTitle: 'Back' }}
       />
       {/* M-BCAST-123 — broadcasts; the Messages entry shows only when the server offers them. */}
       <ClientsStack.Screen
