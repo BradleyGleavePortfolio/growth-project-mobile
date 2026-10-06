@@ -41,6 +41,13 @@ export interface SearchResult {
   // the local density table when the backend doesn't ship explicit gram
   // weights for cup/tbsp/tsp.
   food_category?: string;
+
+  // Set for foods taken from the client's own log: the portion logged last
+  // time (prefilled in the quantity picker) and whether this result came
+  // from the log rather than the catalog search.
+  last_quantity?: number;
+  last_unit?: string;
+  from_log?: boolean;
 }
 
 export const MEAL_SECTIONS: { type: MealType; label: string; icon: string }[] = [

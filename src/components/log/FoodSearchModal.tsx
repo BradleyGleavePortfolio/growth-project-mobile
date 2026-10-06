@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../theme/index';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
+import type { PastMeal } from '../../hooks/useFoodBrowse';
 import FoodSearchView from './FoodSearchView';
 import ManualFoodEntryForm, { ManualFields } from './ManualFoodEntryForm';
 
@@ -36,6 +37,10 @@ interface Props {
   frequentFoods: SearchResult[];
 
   onSelectFood: (food: SearchResult) => void;
+
+  repeatMeal?: PastMeal | null;
+  repeatMealTitle?: string;
+  onRepeatMeal?: () => void;
 
   manualMode: boolean;
   onEnterManualMode: () => void;
@@ -92,6 +97,10 @@ export default function FoodSearchModal(props: Props) {
             recentFoods={props.recentFoods}
             frequentFoods={props.frequentFoods}
             onSelectFood={props.onSelectFood}
+            repeatMeal={props.repeatMeal}
+            repeatMealTitle={props.repeatMealTitle}
+            onRepeatMeal={props.onRepeatMeal}
+            saving={props.saving}
             onEnterManualMode={onEnterManualMode}
           />
         ) : (
