@@ -50,6 +50,7 @@ import { useTheme, ThemeColors } from '../../../../theme/ThemeProvider';
 import { mediumTap, warningTap } from '../../../../utils/haptics';
 import { featureFlags } from '../../../../config/featureFlags';
 import ProgramAssetPicker from '../../programs/ProgramAssetPicker';
+import MediaAssetPicker from './MediaAssetPicker';
 
 // ─── option tables (mirror the M1 ContentAssetType / CadenceKind unions) ──────
 
@@ -375,9 +376,29 @@ export default function ContentAttachForm({
                   />
                 </>
               ) : null}
+              {/* B-DROPS-125: PDFs and videos are picked from (or uploaded
+                  to) the coach's own media library instead of pasting an ID. */}
+              {assetType === 'pdf' || assetType === 'video' ? (
+                <>
+                  <Label colors={colors}>
+                    {assetType === 'pdf' ? 'PDF' : 'Video'}
+                  </Label>
+                  <MediaAssetPicker
+                    kind={assetType}
+                    selectedId={assetId.trim()}
+                    title={title}
+                    onSelect={(id, name) => {
+                      setAssetId(id);
+                      if (title.trim() === '') setTitle(name);
+                    }}
+                  />
+                </>
+              ) : null}
               <Label colors={colors}>
-                {featureFlags.mwbPrograms &&
-                (assetType === 'workout_program' || assetType === 'workout_plan')
+                {assetType === 'pdf' ||
+                assetType === 'video' ||
+                (featureFlags.mwbPrograms &&
+                  (assetType === 'workout_program' || assetType === 'workout_plan'))
                   ? 'Or paste an asset reference'
                   : 'Asset reference'}
               </Label>
