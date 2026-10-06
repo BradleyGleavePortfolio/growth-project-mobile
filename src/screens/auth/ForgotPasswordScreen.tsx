@@ -20,7 +20,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState('');
-  const [sent, setSent] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -43,11 +43,10 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
     setLoading(true);
     try {
       await authApi.forgotPassword(trimmed);
-      // Only show the success screen if the request actually completed.
-      // Previously `setSent(true)` ran in `finally`, so a network failure
-      // looked identical to a successful send and silently dropped the
-      // request. The success copy still hides whether the email exists.
-      setSent(true);
+      // The anonymous backend response is identical for a missing account
+      // and a refused mail send. A completed request proves submission,
+      // not email delivery; do not promise a link that may never arrive.
+      setSubmitted(true);
     } catch (err) {
       const msg =
         (err as { response?: { data?: { message?: string } }; message?: string })?.response
@@ -74,21 +73,32 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       </TouchableOpacity>
 
       <View style={styles.header}>
-        <Text style={styles.title} accessibilityRole="header">Reset Password</Text>
+        <Text style={styles.title} accessibilityRole="header">
+          {submitted ? 'Reset request submitted' : 'Reset Password'}
+        </Text>
         <Text style={styles.subtitle}>
-          {sent
-            ? 'Check your email for a reset link'
+          {submitted
+            ? 'Check your inbox and spam folder'
             : "Enter your email to get a reset link"}
         </Text>
       </View>
 
-      {sent ? (
+      {submitted ? (
         <View style={styles.successContainer} accessible accessibilityRole="alert">
           <Ionicons name="checkmark-circle" size={64} color={colors.primary} />
           <Text style={styles.successText}>
-            If an account exists with {email}, you'll receive a password reset
-            email shortly.
+            The request for {email.trim()} was submitted. For account privacy,
+            this screen cannot confirm whether an email was sent. If no reset
+            link arrives, contact support.
           </Text>
+          <TouchableOpacity
+            style={styles.backToLogin}
+            onPress={() => navigation.navigate('SupportInbox')}
+            accessibilityRole="button"
+            accessibilityLabel="Contact support"
+          >
+            <Text style={styles.backToLoginText}>Contact support</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={styles.backToLogin}
             onPress={() => navigation.navigate('Login')}
