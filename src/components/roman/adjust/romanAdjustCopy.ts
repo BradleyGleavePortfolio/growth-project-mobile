@@ -178,8 +178,13 @@ export function signalLabel(s: RomanAdjustSignal): string {
   }
 }
 
+// volume_pct is the server's cut: positive = less volume, negative = more
+// (an edit that raises sets), 0 = the same total.
 export function changeSummary(c: RomanAdjustChange): string {
-  return `${c.sets_before} to ${c.sets_after} sets, ${c.volume_pct}% less volume`;
+  const sets = `${c.sets_before} to ${c.sets_after} sets`;
+  if (c.volume_pct > 0) return `${sets}, ${c.volume_pct}% less volume`;
+  if (c.volume_pct < 0) return `${sets}, ${Math.abs(c.volume_pct)}% more volume`;
+  return `${sets}, same volume`;
 }
 
 export function pendingLine(kind: 'approve' | 'edit' | 'dismiss', seconds: number): string {
