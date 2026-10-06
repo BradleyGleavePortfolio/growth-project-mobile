@@ -32,6 +32,12 @@ jest.mock('../../services/api', () => ({
   AccountStatus: {},
 }));
 
+// S-AVAIL-122: the Booking Options row reads a react-query hook; this test
+// renders Settings without a QueryClientProvider and is about Blocked Users.
+jest.mock('../../screens/coach/settings/BookingOptionsEntry', () => ({
+  BookingOptionsEntry: () => null,
+}));
+
 jest.mock('../../services/authActions', () => ({
   signOut: jest.fn(async () => undefined),
   refreshProfile: jest.fn(async () => undefined),

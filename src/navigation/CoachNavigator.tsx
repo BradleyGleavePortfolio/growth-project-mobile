@@ -75,6 +75,8 @@ import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
 // S-SCHED — appointment types manager + time off, next to Availability.
 import CoachAppointmentTypesScreen from '../screens/coach/CoachAppointmentTypesScreen';
 import CoachTimeOffScreen from '../screens/coach/CoachTimeOffScreen';
+// S-AVAIL-122 — booking options (notice, window, buffers, daily maximum).
+import CoachBookingOptionsScreen from '../screens/coach/CoachBookingOptionsScreen';
 // Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
 import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
 import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
@@ -192,6 +194,8 @@ export type ClientsStackParamList = {
   /** S-SCHED — appointment types (create / edit / archive) and time off. */
   CoachAppointmentTypes:    { coachId?: string } | undefined;
   CoachTimeOff:             undefined;
+  /** S-AVAIL-122 — the coach's booking options. */
+  CoachBookingOptions:      undefined;
   /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
   AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
@@ -412,6 +416,10 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachTimeOff"
         component={CoachTimeOffScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachBookingOptions"
+        component={CoachBookingOptionsScreen}
       />
       {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
       <ClientsStack.Screen

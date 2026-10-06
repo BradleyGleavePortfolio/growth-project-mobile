@@ -399,6 +399,35 @@ export interface SessionListOptions {
   status?: readonly SchedulingSessionStatus[];
 }
 
+/**
+ * S-AVAIL-122 coach booking options (backend #735,
+ * `GET|PATCH /scheduling/coach/booking-options`, coach only, own data). One
+ * set per coach for every appointment type. Defaults reproduce the old fixed
+ * rules: 5 minutes notice, 120 days ahead, no buffers, no daily maximum.
+ */
+export interface BookingOptions {
+  /** 5..43200. Clients cannot book a start earlier than now + this. */
+  min_notice_minutes: number;
+  /** 1..365. Clients cannot book a start later than now + this many days. */
+  booking_window_days: number;
+  /** 0..240. Free time kept before each session. */
+  buffer_before_minutes: number;
+  /** 0..240. Free time kept after each session. */
+  buffer_after_minutes: number;
+  /** 1..50, or null for no daily maximum. */
+  daily_max_sessions: number | null;
+}
+
+export type BookingOptionKey = keyof BookingOptions;
+
+export type BookingOptionLimits = Record<BookingOptionKey, { min: number; max: number }>;
+
+export interface BookingOptionsView extends BookingOptions {
+  coach_id: string;
+  defaults?: BookingOptions;
+  limits?: BookingOptionLimits;
+}
+
 export interface CompleteSessionInput {
   reason?: string;
   coach_notes_md?: string;
@@ -492,6 +521,20 @@ export const schedulingApi = {
 
   deleteAvailabilityOverride: async (id: string): Promise<void> => {
     await api.delete(`/scheduling/coach/availability-overrides/${encodeURIComponent(id)}`);
+  },
+
+  // Coach booking options (S-AVAIL-122). PATCH takes any subset; null
+  // daily_max_sessions removes the daily maximum. Both return the saved set.
+  getMyBookingOptions: async (): Promise<BookingOptionsView> => {
+    const res = await api.get<BookingOptionsView>('/scheduling/coach/booking-options');
+    return res.data;
+  },
+
+  updateMyBookingOptions: async (
+    input: Partial<BookingOptions>,
+  ): Promise<BookingOptionsView> => {
+    const res = await api.patch<BookingOptionsView>('/scheduling/coach/booking-options', input);
+    return res.data;
   },
 
   createSessionType: async (

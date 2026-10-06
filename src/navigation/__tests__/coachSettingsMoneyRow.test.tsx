@@ -46,6 +46,12 @@ jest.mock("../../utils/haptics", () => ({
   successTap: jest.fn(),
 }));
 
+// The booking options row (m#381) reads a query hook; this harness renders Settings without a QueryClient,
+// so the row is stubbed exactly as in imessageDmRoutes.test.tsx.
+jest.mock("../../screens/coach/settings/BookingOptionsEntry", () => ({
+  BookingOptionsEntry: () => null,
+}));
+
 jest.mock("../../utils/supabaseAuth", () => ({
   updateSupabasePassword: jest.fn(async () => ({ ok: true })),
 }));

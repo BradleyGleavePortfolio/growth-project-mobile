@@ -45,6 +45,7 @@ import { ProfileSection } from './settings/ProfileSection';
 import { SettingsToggles } from './settings/SettingsToggles';
 import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
+import { BookingOptionsEntry } from './settings/BookingOptionsEntry';
 import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
 
 export default function SettingsScreen() {
@@ -548,6 +549,15 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* S-AVAIL-122 — booking options; hidden when the backend does not offer them. */}
+        <BookingOptionsEntry
+          styles={styles}
+          colors={colors}
+          onOpen={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachBookingOptions' });
+          }}
+        />
         {/* S-SCHED — appointment types clients book from, and time off. */}
         <TouchableOpacity
           style={styles.row}
