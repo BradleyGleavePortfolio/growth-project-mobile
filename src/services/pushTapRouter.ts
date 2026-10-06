@@ -85,6 +85,8 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.communityTab && featureFlags.communityEvents
       ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
       : null,
+  // AUDIT-09-125: a community push (kind community_*) opens the Community tab.
+  Community: () => (featureFlags.communityTab ? { root: 'CommunityTab' } : null),
 };
 
 /** Coach destinations. Root = CoachNavigator tab names. */
