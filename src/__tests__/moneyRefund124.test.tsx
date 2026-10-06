@@ -101,9 +101,9 @@ describe('MONEY-REFUND-124 refund pause is not failed payment or a bank dispute'
     serveRefund();
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     const colors = new Proxy({}, { get: () => '#000000' }) as ThemeColors;
-    const view = render(<DisputePausedPlansCard clientUserId="client" clientName="Taylor" colors={colors} />);
+    const view = await render(<DisputePausedPlansCard clientUserId="client" clientName="Taylor" colors={colors} />);
     await waitFor(() => expect(view.getByText('Plan paused after a full refund')).toBeTruthy());
-    fireEvent.press(view.getByTestId('dispute-restart-purchase'));
+    await fireEvent.press(view.getByTestId('dispute-restart-purchase'));
     expect(alert).toHaveBeenCalledWith(
       'Restart this plan?', expect.stringMatching(/refund is not reversed.*agreeing with the client/),
       expect.any(Array),

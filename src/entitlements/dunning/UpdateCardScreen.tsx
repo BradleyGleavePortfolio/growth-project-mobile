@@ -87,6 +87,9 @@ export function updateCardIntro(status: ClientDunningStatus | null | undefined):
   const amount = formatDunningAmount(status?.amount_cents ?? null, status?.currency ?? null);
   const coach = status?.coach_name ?? 'your coach';
   if (inDunning(status) && isRefundCycle(status)) {
+    if (status?.billing_paused === false) {
+      return 'A full refund was completed. Access to this plan has ended. The billing pause is being completed; pull down to refresh or message your coach. Updating a card does not restart the plan.';
+    }
     return `A payment for your plan with ${coach} was fully refunded. ${disputePauseFacts(
       status?.coach_name, disputeScope(status),
     )} Updating a card does not restart it.`;
