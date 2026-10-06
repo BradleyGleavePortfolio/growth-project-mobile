@@ -55,6 +55,8 @@ import {
   getProfileCompletion,
   summarizeMissing,
 } from '../../lib/profileCompletion';
+import { getTodayString } from '../../utils/date';
+import { isWorkoutDoneToday, type WorkoutRowLike } from '../../utils/workout/workoutDoneToday';
 
 // ─── Date-as-poetry helpers ──────────────────────────────────────────────────
 
@@ -183,15 +185,8 @@ export default function HomeScreen() {
     (async () => {
       try {
         const res = await workoutApi.getAll(5);
-        const rows = (res.data as Array<{ date?: string; completed?: boolean }> | undefined) || [];
-        const todayStr = new Date().toDateString();
-        const done = rows.some((r) => {
-          if (!r?.date) return false;
-          const d = new Date(r.date);
-          if (Number.isNaN(d.getTime())) return false;
-          // A row counts when it is today AND not explicitly marked incomplete.
-          return d.toDateString() === todayStr && r.completed === true;
-        });
+        const rows = (res.data as WorkoutRowLike[] | undefined) || [];
+        const done = isWorkoutDoneToday(rows, getTodayString());
         if (!cancelled) {
           setWorkoutDone(done);
           setWorkoutExists(rows.length > 0);
