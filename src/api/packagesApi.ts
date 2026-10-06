@@ -11,7 +11,11 @@
 //     mobile UI values ('monthly','quarterly','yearly') to backend enums.
 //   • Backend `UpdatePackageDto` accepts name, description, amount_cents,
 //     currency, billing_type, billing_interval, billing_interval_count (null
-//     clears the cadence) and is_active. trial_days/features are TODO.
+//     clears the cadence) and is_active. features are TODO.
+//   • B-TRIALS-2: both DTOs accept `trial_days` (backend #656): 0 = no trial,
+//     1..30 on a paid plan that renews. Refusals are coded 400s
+//     (PACKAGE_TRIAL_DAYS_OUT_OF_RANGE / _REQUIRES_RECURRING / _NOT_ON_FREE);
+//     see src/utils/packageTrial.ts.
 //   • Backend checkout is `POST /v1/checkout/sessions` with `{ package_id,
 //     success_url, cancel_url }`. URLs must use growthproject://,
 //     com.growthproject.app://, or https:// prefixes.
@@ -348,9 +352,18 @@ interface BackendCreateBody {
   billing_interval?: 'week' | 'month' | 'year';
   billing_interval_count?: number;
   is_active?: boolean;
-  // TODO(backend): trial_days and features are not yet on the backend
-  // CreatePackageDto. Once added, expand the body. Mobile keeps the UI
-  // fields in `PackageCreateInput` so we don't lose them.
+  // B-TRIALS-2 — free trial days (0 = none). features are not yet on the
+  // backend CreatePackageDto; mobile keeps them in `PackageCreateInput`.
+  trial_days?: number;
+}
+
+/** Trial days for the wire: a one-time package never carries a trial. */
+function trialDaysForBackend(
+  interval: PackageBillingInterval | undefined,
+  days: number | null | undefined,
+): number {
+  if (interval === 'one_time') return 0;
+  return typeof days === 'number' && Number.isInteger(days) && days > 0 ? days : 0;
 }
 
 export function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
@@ -368,7 +381,12 @@ export function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
   if (intervalFields.billing_interval_count != null) {
     body.billing_interval_count = intervalFields.billing_interval_count;
   }
-  // TODO(backend): trial_days, features rejected by whitelist DTO. Omit until added.
+  // features are still rejected by the whitelist DTO; omitted until added.
+  // B-TRIALS-3 (C-338-3) — no trial = field omitted (the backend default is
+  // no trial), so creating a package never depends on a backend that knows
+  // trial_days unless the coach actually chose a trial.
+  const trialDays = trialDaysForBackend(input.billingInterval, input.trialDays);
+  if (trialDays > 0) body.trial_days = trialDays;
   return body;
 }
 
@@ -383,7 +401,9 @@ interface BackendUpdateBody {
   /** null resets the count to 1. */
   billing_interval_count?: number | null;
   is_active?: boolean;
-  // TODO(backend): UpdatePackageDto does not accept trial_days or features.
+  // B-TRIALS-2 — free trial days (0 clears the trial).
+  trial_days?: number;
+  // TODO(backend): UpdatePackageDto does not accept features.
 }
 
 /**
@@ -415,7 +435,23 @@ export function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
     }
   }
   if (input.status !== undefined) out.is_active = input.status === 'active';
+  if (input.trialDays !== undefined) {
+    out.trial_days = trialDaysForBackend(input.billingInterval, input.trialDays);
+  }
   return out;
+}
+
+/**
+ * B-TRIALS-3 (C-338-3) — the edit screen sends trial_days only when the trial
+ * changed, so an edit that leaves the trial alone never depends on it.
+ */
+export function trialDaysChange(
+  original: { billingInterval: PackageBillingInterval; trialDays: number | null },
+  next: { billingInterval: PackageBillingInterval; trialDays?: number | null },
+): number | undefined {
+  const before = trialDaysForBackend(original.billingInterval, original.trialDays);
+  const after = trialDaysForBackend(next.billingInterval, next.trialDays);
+  return before === after ? undefined : after;
 }
 
 /** The server row did not take the price or billing the app sent. */

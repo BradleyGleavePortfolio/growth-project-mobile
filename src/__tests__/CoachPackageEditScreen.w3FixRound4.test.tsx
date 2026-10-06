@@ -1,7 +1,7 @@
 // FIX ROUND 4 (B-WIZ4-122): Sol's W3 full-review Bs on the package editor.
 //   B-347-1 the free first package saves a name change at its unchanged $0.
-//   B-347-2 no trial input while trial_days never reaches the server; the
-//           buyer preview shows only the trial the saved package carries.
+//   B-347-2 the buyer preview shows only trial terms that reach the server
+//           (m#338 B-TRIALS-2: the trial input is back and its days are sent).
 //   B-347-3 a draft made in the editor has a reachable "Make ... live" action
 //           (the wizard's publish route); the server row decides the state.
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -94,12 +94,15 @@ describe("B-347-1 free first package", () => {
 });
 
 describe("B-347-2 trial terms", () => {
-  it("offers no trial input and previews only the saved trial", async () => {
+  it("previews no trial until one is set, then the trial that will be saved", async () => {
     const s = await render(<CoachPackageEditScreen navigation={nav() as never} route={edit(row())} />);
     expect(s.queryByText(/Trial days/i)).toBeNull();
     expect(s.queryByPlaceholderText("0")).toBeNull();
     await fireEvent.press(s.getByLabelText("Preview as buyer"));
     expect(s.getByTestId("w4-preview-trial").props.children).toBe("null");
+    // m#338 (B-TRIALS-2): the trial input is back and reaches the PATCH.
+    await fireEvent.changeText(s.getByTestId("trial-days-input"), "7");
+    expect(s.getByTestId("w4-preview-trial").props.children).toBe("7");
   });
 });
 

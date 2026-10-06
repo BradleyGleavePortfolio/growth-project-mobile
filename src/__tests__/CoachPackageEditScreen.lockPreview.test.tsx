@@ -548,7 +548,7 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     (Alert.alert as jest.Mock).mockClear();
   });
 
-  it('B-321-4: no trial days or features inputs; every input on the screen reaches the PATCH body', async () => {
+  it('B-321-4: no features input; every input on the screen reaches the PATCH body', async () => {
     mockUpdate.mockResolvedValue({ data: pkg() });
     const props = makeProps(pkg());
     const screen = await render(
@@ -556,17 +556,19 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     );
     expect(screen.queryByText('Trial days (optional)')).toBeNull();
     expect(screen.queryByText('Features (one per line)')).toBeNull();
-    // Every text input the coach can type in: name, description, price.
+    // Every text input the coach can type in: name, description, price and
+    // (m#338 B-TRIALS-2) the free trial days.
     const countInputs = (node: unknown): number => {
       if (!node || typeof node !== 'object') return 0;
       if (Array.isArray(node)) return node.reduce((n: number, c) => n + countInputs(c), 0);
       const n = node as { type?: string; children?: unknown };
       return (n.type === 'TextInput' ? 1 : 0) + countInputs(n.children ?? null);
     };
-    expect(countInputs(screen.toJSON())).toBe(3);
+    expect(countInputs(screen.toJSON())).toBe(4);
     await fireEvent.changeText(screen.getByDisplayValue('Strength Builder'), 'Strength Plus');
     await fireEvent.changeText(screen.getByDisplayValue('Get strong.'), 'Get stronger.');
     await fireEvent.changeText(screen.getByDisplayValue('99.00'), '120.00');
+    await fireEvent.changeText(screen.getByTestId('trial-days-input'), '7');
     await fireEvent.press(screen.getByLabelText('Save changes'));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
     const body = toBackendUpdate(mockUpdate.mock.calls[0][1]);
@@ -574,6 +576,7 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
       name: 'Strength Plus',
       description: 'Get stronger.',
       amount_cents: 12000,
+      trial_days: 7,
     });
   });
 

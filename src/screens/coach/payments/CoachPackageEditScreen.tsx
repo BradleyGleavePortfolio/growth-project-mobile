@@ -43,8 +43,9 @@ import {
   PackageBillingInterval,
   PackageCreateInput,
   PackageUpdateInput,
+  trialDaysChange,
 } from "../../../api/packagesApi";
-import { errorMessage } from "../../../types/common";
+import { errorCode, errorMessage } from "../../../types/common";
 import {
   createPackageOnce,
   intentStorageCopy,
@@ -67,6 +68,13 @@ import {
   describePackageSaveFailure,
   type PackageSaveFailure,
 } from "../../../utils/packageSaveFailure";
+import {
+  isTrialErrorCode,
+  parseTrialDays,
+  TRIAL_COPY,
+  TRIAL_DAY_PRESETS,
+  trialErrorMessage,
+} from "../../../utils/packageTrial";
 import { signOut } from "../../../services/authActions";
 import { buildPackageShareUrl } from "../../../utils/packageShare";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
@@ -106,6 +114,16 @@ const INTERVAL_OPTIONS: Array<{
   { label: "Yearly", value: "yearly" },
 ];
 
+/** The backend's own message on a coded 400, never a transport string. */
+function serverMessageOf(err: unknown): string | null {
+  const data = (err as { response?: { data?: unknown } } | null)?.response?.data;
+  if (data && typeof data === "object") {
+    const message = (data as { message?: unknown }).message;
+    if (typeof message === "string") return message;
+  }
+  return null;
+}
+
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -125,6 +143,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [priceText, setPriceText] = useState("");
   const [billingInterval, setBillingInterval] =
     useState<PackageBillingInterval>("monthly");
+  const [trialText, setTrialText] = useState("");
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState("");
@@ -146,6 +165,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       setDescription(it.input.description ?? "");
       setPriceText((it.input.priceCents / 100).toFixed(2));
       setBillingInterval(it.input.billingInterval);
+      setTrialText(it.input.trialDays ? String(it.input.trialDays) : "");
       setResumedCreate(true);
     });
     return () => {
@@ -169,6 +189,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       setDescription(initialPackage.description ?? "");
       setPriceText(((initialPackage.priceCents ?? 0) / 100).toFixed(2));
       setBillingInterval(initialPackage.billingInterval);
+      setTrialText(
+        initialPackage.trialDays ? String(initialPackage.trialDays) : "",
+      );
       setLoaded(true);
       return;
     }
@@ -196,9 +219,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     if (cents == null || priceIssue) {
       return { payload: null, message: priceIssue };
     }
-    // #321 (Opus B-321-4) + B-347-2: trial days and features are not stored
-    // by the backend (no package column, no checkout trial), so the editor
-    // does not offer them; every input on this screen reaches the request.
+    // B-TRIALS-2 — same rule as the backend (#656): 0..30 days, renewing
+    // plans only; a one-time package always sends 0. Features are still not
+    // stored by the backend (#321 B-321-4 + B-347-2), so the editor does not
+    // offer them.
+    const trial = parseTrialDays(trialText, billingInterval);
+    if (!trial.ok) {
+      return { payload: null, message: trial.message };
+    }
+    const trialDays = trial.days;
     return {
       payload: {
         title: trimmedTitle,
@@ -207,10 +236,11 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         billingInterval,
         intervalCount:
           billingInterval === "weekly" ? original?.intervalCount ?? 1 : 1,
+        trialDays,
       },
       message: null,
     };
-  }, [title, description, priceText, billingInterval, original]);
+  }, [title, description, priceText, billingInterval, trialText, original]);
 
   // #321 (Opus B-321-5) + B-347-4: the form differs from the saved row.
   // Publishing then would put the SAVED terms on sale while the screen shows
@@ -218,14 +248,19 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const unsaved = useMemo(() => {
     if (!original) return false;
     const cents = parseDollarsToCents(priceText);
+    // B-TRIALS-2: a typed trial the server does not have yet is unsaved too.
+    const trial = parseTrialDays(trialText, billingInterval);
     return (
       title.trim() !== (original.title ?? "").trim() ||
       (description.trim() || null) !==
         ((original.description ?? "").trim() || null) ||
       cents !== (original.priceCents ?? 0) ||
-      billingInterval !== original.billingInterval
+      billingInterval !== original.billingInterval ||
+      !trial.ok ||
+      trialDaysChange(original, { billingInterval, trialDays: trial.days }) !==
+        undefined
     );
-  }, [original, title, description, priceText, billingInterval]);
+  }, [original, title, description, priceText, billingInterval, trialText]);
 
   // Retry from the failure dialog runs the latest save (current form state).
   const handleSaveRef = useRef<() => Promise<void>>(async () => undefined);
@@ -304,10 +339,13 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         // server answers (B-345-1 / B-345-2, PACKAGE_UPDATE_NOT_APPLIED).
         const { billingInterval: nextInterval, intervalCount, ...rest } =
           v.payload;
+        // B-TRIALS-3 (C-338-3): trial_days goes on the wire only when the
+        // trial changed.
+        const trialDays = trialDaysChange(original, v.payload);
         const updated: PackageUpdateInput =
           nextInterval !== original.billingInterval
-            ? { ...rest, billingInterval: nextInterval, intervalCount }
-            : rest;
+            ? { ...rest, billingInterval: nextInterval, intervalCount, trialDays }
+            : { ...rest, trialDays };
         const res = await coachPackagesApi.update(original.id, updated);
         setOriginal(res.data);
         successTap();
@@ -370,9 +408,16 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         return;
       }
     } catch (err) {
+      const code = errorCode(err);
       if (err instanceof IntentStorageError) {
         const copy = intentStorageCopy(err);
         Alert.alert(copy.title, copy.body);
+      } else if (isTrialErrorCode(code)) {
+        // B-TRIALS-2 — coded trial refusal: say exactly what to change.
+        const message = trialErrorMessage(code, serverMessageOf(err));
+        warningTap();
+        setError(message);
+        Alert.alert(TRIAL_COPY.errorTitle, message);
       } else if (isEdit) {
         // #321 (Sol B-321-1): status + machine code decide the message and
         // the next action; unknown failures carry a reference (request_id)
@@ -523,11 +568,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const previewViewModel = useMemo<PackageDetailViewModel>(() => {
     const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
     // B-321-4 + B-347-2: the preview shows only what clients will really see:
-    // no typed trial or features (neither reaches the server), only a trial
-    // the saved package carries.
-    const savedTrial = original?.trialDays ?? null;
-    const trialDays =
-      billingInterval !== "one_time" && savedTrial ? savedTrial : null;
+    // no features (they do not reach the server). B-TRIALS-2: the typed trial
+    // does reach the server, so the preview shows it.
+    const trialParse = parseTrialDays(trialText, billingInterval);
+    const trialDays = trialParse.ok && trialParse.days > 0 ? trialParse.days : null;
     return {
       id: original?.id ?? "preview",
       title: title.trim() || "Untitled package",
@@ -543,6 +587,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   }, [
     priceText,
     billingInterval,
+    trialText,
     title,
     description,
     original,
@@ -702,8 +747,45 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        {/* B-347-2 + B-321-4: no trial or features input until the backend
-            stores them (backend trials + m#338 bring trials back). */}
+        {billingInterval !== "one_time" ? (
+          <>
+            <Label semanticColors={semanticColors} tokens={tokens}>{TRIAL_COPY.label}</Label>
+            <View style={styles.segment} testID="trial-presets">
+              {[0, ...TRIAL_DAY_PRESETS].map((days) => {
+                const current = parseTrialDays(trialText, billingInterval);
+                const active = current.ok && current.days === days;
+                const label = days === 0 ? TRIAL_COPY.noneLabel : TRIAL_COPY.presetLabel(days);
+                return (
+                  <TouchableOpacity
+                    key={days}
+                    testID={`trial-preset-${days}`}
+                    style={[styles.segmentItem, active && styles.segmentItemActive]}
+                    onPress={() => setTrialText(days === 0 ? "" : String(days))}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    accessibilityLabel={days === 0 ? "No free trial" : `${days}-day free trial`}
+                  >
+                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TextInput
+              testID="trial-days-input"
+              value={trialText}
+              onChangeText={setTrialText}
+              placeholder="Days, 1 to 30"
+              style={styles.input}
+              placeholderTextColor={semanticColors.textMuted}
+              keyboardType="number-pad"
+              maxLength={2}
+              accessibilityLabel="Free trial length in days"
+            />
+            <Text style={styles.trialHelp}>{TRIAL_COPY.help}</Text>
+          </>
+        ) : null}
 
         {resumedCreate ? (
           <Text style={styles.resumedText} testID="package-edit-resumed">
@@ -1042,6 +1124,12 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       fontSize: 12,
       lineHeight: 17,
       color: semanticColors.textPrimary,
+    },
+    trialHelp: {
+      fontSize: 12,
+      lineHeight: 17,
+      color: semanticColors.textMuted,
+      marginTop: 6,
     },
     input: {
       backgroundColor: semanticColors.bgSurface,

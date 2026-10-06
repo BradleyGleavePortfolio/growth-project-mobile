@@ -41,6 +41,9 @@ const DTO_FIELDS = new Set([
   'recurring_amount_cents',
   'recurring_interval',
   'recurring_interval_count',
+  // m#338 (B-TRIALS-2): the backend trials train (b#671, split of #656) adds
+  // trial_days to both DTOs; m#338 lands after that backend is deployed.
+  'trial_days',
   'is_active',
 ]);
 const BACKEND_INTERVALS = new Set(['week', 'month', 'year']);
