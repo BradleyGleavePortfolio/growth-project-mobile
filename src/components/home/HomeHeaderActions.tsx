@@ -103,7 +103,7 @@ export default function HomeHeaderActions() {
         ]}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={18} color={sc.textPrimary} />
-        <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]} numberOfLines={1}>
+        <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
           {label}
         </Text>
         <NotificationBadge count={unreadMessages} />

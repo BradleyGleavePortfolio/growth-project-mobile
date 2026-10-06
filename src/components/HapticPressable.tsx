@@ -84,6 +84,7 @@ export default function HapticPressable({
   pressScale = 0.97,
   pressOpacity = 0.85,
   disableAnimation = false,
+  accessibilityRole,
   ...rest
 }: HapticPressableProps) {
   // GLOBAL reduce-motion gate (R4 P2): every HapticPressable — the client Roman
@@ -170,6 +171,7 @@ export default function HapticPressable({
       style={{ transform: [{ scale: scaleAnim }], opacity: opacityAnim }}
     >
       <Pressable
+        accessibilityRole={accessibilityRole ?? (onPress || rest.onLongPress ? 'button' : undefined)}
         onPress={handlePress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
