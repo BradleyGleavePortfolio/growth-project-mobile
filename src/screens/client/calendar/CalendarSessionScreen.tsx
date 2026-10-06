@@ -223,6 +223,15 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
           <SecondaryButton label="Cancel session" onPress={onCancel} disabled={cancel.isPending} testID="calendar-cancel" />
         </>
       ) : null}
+      {s.status === 'expired' ? (
+        <SecondaryButton
+          label="Pick another time"
+          onPress={() =>
+            navigation.navigate('CalendarBook', { coachId: s.coach_id, sessionTypeId: s.session_type_id ?? undefined })
+          }
+          testID="calendar-expired-rebook"
+        />
+      ) : null}
       {msg ? <Note text={msg} testID="calendar-session-msg" /> : null}
 
       {s.client_recap_md ? (

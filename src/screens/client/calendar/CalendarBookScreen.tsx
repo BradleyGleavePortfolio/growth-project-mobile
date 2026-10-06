@@ -63,7 +63,7 @@ export function bookedMessage(session: CoachingSession, coachName: string, moved
     return `Requested, waiting for your coach. Check Calendar to see when ${coachName} confirms.${copyNote}`;
   }
   if (session.status === 'pending_provider') return `Your time is reserved. The call link is being prepared. Open Calendar to check its status.${copyNote}`;
-  const base = moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in Calendar.`;
+  const base = moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in the booking inbox.`;
   const linkNote = session.meeting_link_status === 'pending' ? ` ${coachName} will add the call link before it starts.` : '';
   return `${base}${linkNote}${copyNote}`;
 }
@@ -120,6 +120,9 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
     const id = selectedTypeId ?? params.sessionTypeId ?? moving.data?.session_type_id ?? undefined;
     return list.find((t) => t.id === id) ?? null;
   }, [types.data, params.welcome, params.sessionTypeId, moving.data?.session_type_id, selectedTypeId, welcomeInfo?.session_type_id]);
+  // Welcome heading and tutorial signal follow the type actually booked: a
+  // regular type picked from the welcome fallback is not a welcome call.
+  const bookingWelcome = !!params.welcome && !!type && pickWelcomeType([type], welcomeInfo?.session_type_id) !== null;
 
   // Persistent marker: the welcome call is already booked (upcoming) or done.
   const welcomeDone =
@@ -165,7 +168,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
     setError(null);
     const onSuccess = (s: CoachingSession) => {
       setDone(s);
-      if (params.welcome) emitTutorialSignal('welcome_call_booked');
+      if (bookingWelcome) emitTutorialSignal('welcome_call_booked');
     };
     const onError = (err: unknown) => {
       setError(bookingErrorMessage(err));
@@ -278,7 +281,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
   if (noTimes) {
     return screen(
       <View testID="calendar-book-fallback">
-        <Title>{params.welcome ? `Welcome call with ${coachName}` : type?.name ?? 'Book a time'}</Title>
+        <Title>{(params.welcome && !type) || bookingWelcome ? `Welcome call with ${coachName}` : type?.name ?? 'Book a time'}</Title>
         <Body muted>
           {!type
             ? params.welcome
@@ -298,7 +301,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
 
   return screen(
     <View>
-      <Title>{params.welcome ? `Book your welcome call with ${coachName}` : type.name}</Title>
+      <Title>{bookingWelcome ? `Book your welcome call with ${coachName}` : type.name}</Title>
       <Note
         text={`${type.duration_minutes} minutes. ${type.auto_approve ? 'Confirmed right away.' : `${coachName} confirms each request.`} Times are in your time zone.`}
       />

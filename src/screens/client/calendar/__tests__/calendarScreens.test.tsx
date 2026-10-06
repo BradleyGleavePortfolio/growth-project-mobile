@@ -63,6 +63,7 @@ import CalendarHomeScreen from '../CalendarHomeScreen';
 import CalendarBookScreen, { bookedMessage, bookingErrorMessage, moveNeedsApprovalWarning } from '../CalendarBookScreen';
 import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
 import { pickWelcomeType } from '../CalendarBookScreen';
+import { statusLabel } from '../calendarUi';
 
 describe('pickWelcomeType', () => {
   const list = [
@@ -312,7 +313,7 @@ describe('CalendarBookScreen', () => {
     });
     await act(async () => resolve(sess()));
     await waitFor(() => expect(r.getByTestId('calendar-book-done')).toBeTruthy());
-    expect(r.getByText('Booked. Bradley will see it in Calendar.')).toBeTruthy();
+    expect(r.getByText('Booked. Bradley will see it in the booking inbox.')).toBeTruthy();
     await fireEvent.press(r.getByTestId('calendar-add-phone'));
     await waitFor(() => expect(addSessionToPhoneCalendar).toHaveBeenCalled());
     expect(emitTutorialSignal).not.toHaveBeenCalled();
@@ -405,7 +406,7 @@ describe('CalendarBookScreen', () => {
     await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
     await fireEvent.press(r.getByTestId('calendar-submit'));
-    await waitFor(() => expect(r.getByText('Booked. Bradley will see it in Calendar. Bradley will add the call link before it starts.')).toBeTruthy());
+    await waitFor(() => expect(r.getByText('Booked. Bradley will see it in the booking inbox. Bradley will add the call link before it starts.')).toBeTruthy());
   });
 
   it('welcome mode without a welcome type falls back to Calendar and Message your coach', async () => {
@@ -622,5 +623,68 @@ describe('S-SCHED-3 C-325-4: moving a confirmed approval-type session warns firs
   it('a moved request repeats the phone-calendar note too', () => {
     expect(bookedMessage(sess({ status: 'requested' }), 'Bradley', true)).toMatch(/update that copy in your calendar app\.$/);
     expect(bookedMessage(sess({ status: 'scheduled' }), 'Bradley', false)).not.toMatch(/phone calendar/);
+  });
+});
+
+// ─── B-SCH2-122 fix round (m#367 @ 6418e759 lens repros) ───────────────────
+
+describe('Sol B-367-1: a regular type picked from the welcome fallback is not a welcome call', () => {
+  it('a regular appointment selected from the welcome fallback is labelled as that appointment', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: null }]);
+    api.listSessionTypes.mockResolvedValue([type({ is_welcome: false })]);
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-book-fallback')).toBeTruthy());
+    expect(r.getByText('Welcome call with Bradley')).toBeTruthy();
+    await fireEvent.press(r.getByText('Quick Q/A Call, 20 minutes'));
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+    expect(r.queryByText('Book your welcome call with Bradley')).toBeNull();
+    expect(r.getByText('Quick Q/A Call')).toBeTruthy();
+  });
+
+  it('booking a regular appointment from the welcome fallback does not report a welcome call booked', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: null }]);
+    api.listSessionTypes.mockResolvedValue([type({ is_welcome: false })]);
+    api.requestSession.mockResolvedValue(sess({
+      session_type: {
+        id: 'st-1', name: 'Quick Q/A Call', duration_minutes: 20,
+        auto_approve: true, is_welcome: false, archived: false,
+      },
+    }));
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-book-fallback')).toBeTruthy());
+    await fireEvent.press(r.getByText('Quick Q/A Call, 20 minutes'));
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+    await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
+    await fireEvent.press(r.getByTestId('calendar-submit'));
+    await waitFor(() => expect(r.getByTestId('calendar-book-done')).toBeTruthy());
+    expect(api.requestSession).toHaveBeenCalledWith(expect.objectContaining({ session_type_id: 'st-1' }));
+    expect(emitTutorialSignal).not.toHaveBeenCalledWith('welcome_call_booked');
+  });
+});
+
+describe('Opus B-367-1: a request the coach did not answer in time reads as closed', () => {
+  it('statusLabel names the expired status instead of the unknown-status default', () => {
+    expect(statusLabel('expired')).toBe('Request closed, your coach did not answer in time');
+    expect(statusLabel('expired')).not.toMatch(/Status unavailable/);
+  });
+
+  it('Calendar lists an expired request as closed', async () => {
+    api.listMySessions.mockResolvedValue([sess({ status: 'expired' })]);
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getAllByText(/Request closed, your coach did not answer in time/).length).toBeGreaterThan(0));
+    expect(r.queryByText(/Status unavailable/)).toBeNull();
+  });
+
+  it('the session view (push tap target) says the request closed and offers another time', async () => {
+    api.getSession.mockResolvedValue(sess({ status: 'expired' }));
+    const n = nav();
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
+    expect(r.getByText('Request closed, your coach did not answer in time')).toBeTruthy();
+    expect(r.queryByText(/Status unavailable/)).toBeNull();
+    expect(r.queryByTestId('calendar-cancel')).toBeNull();
+    expect(r.queryByTestId('calendar-reschedule')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-expired-rebook'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', sessionTypeId: 'st-1' });
   });
 });

@@ -24,6 +24,8 @@ export function statusLabel(status: SchedulingSessionStatus): string {
       return 'Completed';
     case 'no_show':
       return 'Missed';
+    case 'expired':
+      return 'Request closed, your coach did not answer in time';
     default:
       return 'Status unavailable. Refresh Calendar or message your coach.';
   }
