@@ -42,6 +42,21 @@ describe('PushPermissionCard (deferred OS prompt)', () => {
     expect(mockStore.get(pushPrimerDismissedKey('u1'))).toBe('true');
   });
 
+  it('coach audience (C-S-PUSH-3): coach copy, then the same token registration on tap', async () => {
+    mockGetPerms.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
+    mockRegister.mockResolvedValue({ token: 'coach-tok', granted: true });
+    const { findByTestId, getByTestId, getByText, queryByText } = await render(
+      <PushPermissionCard audience="coach" />,
+    );
+    await findByTestId('push-permission-card');
+    expect(getByText('Turn on notifications so you see client messages and new client alerts.')).toBeTruthy();
+    expect(queryByText(/plan updates from your coach/)).toBeNull();
+    await fireEvent.press(getByTestId('push-permission-enable'));
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledWith({ requestPermission: true }));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('coach-tok'));
+    expect(mockStore.get(pushPrimerDismissedKey('u1'))).toBe('true');
+  });
+
   it('stays hidden when already granted', async () => {
     mockGetPerms.mockResolvedValue({ status: 'granted', canAskAgain: true });
     const { queryByTestId } = await render(<PushPermissionCard />);

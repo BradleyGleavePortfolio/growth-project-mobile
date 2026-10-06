@@ -7,6 +7,11 @@
  * and only a tap on "Turn on" shows the OS prompt. It renders only when the OS
  * can still ask (status undetermined) and the user has not dismissed it.
  * Dismissal is stored per user (R15) in prefsStorage.
+ *
+ * C-S-PUSH-3: the coach app mounts the same card (audience="coach") at the top
+ * of the Clients landing screen, so a fresh coach install also gets the ask
+ * and registers its token through the same path. Same per-user key, so it
+ * shows once per account.
  */
 import React, { useEffect, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -20,7 +25,16 @@ import { typography } from '../../theme/tokens';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
-export default function PushPermissionCard() {
+export type PushPermissionAudience = 'client' | 'coach';
+
+const BODY_COPY: Record<PushPermissionAudience, string> = {
+  client: 'Turn on notifications so you see messages and plan updates from your coach.',
+  coach: 'Turn on notifications so you see client messages and new client alerts.',
+};
+
+export default function PushPermissionCard({
+  audience = 'client',
+}: { audience?: PushPermissionAudience } = {}) {
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
   const userId = user?.id ?? null;
@@ -71,9 +85,7 @@ export default function PushPermissionCard() {
       testID="push-permission-card"
     >
       <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>STAY IN TOUCH</Text>
-      <Text style={{ ...typography.body, color: sc.textPrimary }}>
-        Turn on notifications so you see messages and plan updates from your coach.
-      </Text>
+      <Text style={{ ...typography.body, color: sc.textPrimary }}>{BODY_COPY[audience]}</Text>
       <View style={styles.actions}>
         <Pressable
           onPress={enable}

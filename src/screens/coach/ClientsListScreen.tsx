@@ -7,6 +7,7 @@ import {
   TextInput,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
+import PushPermissionCard from '../../components/home/PushPermissionCard';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
@@ -137,6 +138,13 @@ export default function ClientsListScreen({ navigation }: Props) {
         </View>
       </View>
 
+      {/* C-S-PUSH-3: the coach landing screen carries the same deferred push
+          ask as client Home (once per account, dismissible, OS prompt only on
+          tap), so client messages and new-client alerts reach a fresh install. */}
+      <View style={styles.pushCardWrap}>
+        <PushPermissionCard audience="coach" />
+      </View>
+
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
       <View style={styles.privacyBanner}>
         <Ionicons name="shield-checkmark-outline" size={16} color={colors.info} style={{ marginTop: 1 }} />
@@ -234,6 +242,9 @@ const makeStyles = (colors: ThemeColors) =>
   header: {
     paddingHorizontal: 24,
     marginBottom: 20,
+  },
+  pushCardWrap: {
+    paddingHorizontal: 24,
   },
   titleRow: {
     flexDirection: 'row',

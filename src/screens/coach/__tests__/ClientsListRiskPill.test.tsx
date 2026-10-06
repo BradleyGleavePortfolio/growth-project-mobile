@@ -30,6 +30,8 @@ jest.mock('../../../components/HapticPressable', () => {
   return Pressable;
 });
 jest.mock('../../../ui/skeletons', () => ({ SkeletonClientCard: () => null }));
+// The push ask has its own suite (ClientsListPushPrimer.test.tsx).
+jest.mock('../../../components/home/PushPermissionCard', () => () => null);
 jest.mock('../../../ui/empty-states', () => ({
   EmptyStateNoClients: () => null,
   EmptyStateNoResults: () => null,

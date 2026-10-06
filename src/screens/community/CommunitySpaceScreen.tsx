@@ -200,7 +200,8 @@ export default function CommunitySpaceScreen({
   }
 
   // No space yet: point the member to their coach and offer no composer, so
-  // nothing can post to an empty workspace id (B-E2E-1).
+  // nothing can post to an empty workspace id (B-E2E-1). A client with no
+  // coach gets no message button (C-F6-1): there is no one to message.
   if (noWorkspace) {
     return (
       <Container>
@@ -209,8 +210,8 @@ export default function CommunitySpaceScreen({
             stem="noCohorts"
             firstName={client?.firstName ?? client?.name ?? null}
             title="No cohort yet"
-            actionLabel="Send your coach a message"
-            onAction={messageCoach}
+            actionLabel={client?.coach_id ? 'Send your coach a message' : undefined}
+            onAction={client?.coach_id ? messageCoach : undefined}
             testID="community-space-no-workspace"
           />
         </View>
