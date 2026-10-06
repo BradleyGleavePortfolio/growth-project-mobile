@@ -257,3 +257,21 @@ describe("profile onboarding flag uses the backend field name", () => {
     expect(r.queryByTestId("nav-client")).toBeNull();
   });
 });
+
+// B-391-1 (M-FEATURED-123): an owner session lands in the coach app, where
+// Settings > Owner > Featured coach lives, and never in the coach wizard.
+describe("owner account routing", () => {
+  it("a signed-in owner opens the coach app, not sign-in, without the coach onboarding check", async () => {
+    await freshInstall(BACKEND_PROFILE);
+    await AsyncStorage.setItem(
+      "prefs:auth.user_data",
+      JSON.stringify({ id: "owner-1", email: "owner@example.com", role: "owner", name: "Owner" }),
+    );
+    const apiGet = jest.requireMock("../services/api").default.get as jest.Mock;
+    apiGet.mockClear();
+    const r = await mount();
+    await r.findByTestId("nav-coach");
+    expect(r.queryByTestId("nav-auth")).toBeNull();
+    expect(apiGet.mock.calls.some(([url]) => url === "/coach/onboarding")).toBe(false);
+  });
+});

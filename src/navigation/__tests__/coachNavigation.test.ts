@@ -16,6 +16,11 @@ const NAV_SRC = fs.readFileSync(
 );
 
 describe('CoachNavigator wiring', () => {
+  it('registers the owner Featured coach editor where the Settings row navigates (ClientsStack)', () => {
+    expect(NAV_SRC).toMatch(/ClientsStack\.Screen\s+name="FeaturedCoachEditor"\s+component=\{FeaturedCoachEditorScreen\}/);
+    expect(NAV_SRC).toMatch(/import FeaturedCoachEditorScreen from '\.\.\/screens\/coach\/featured\/FeaturedCoachEditorScreen'/);
+  });
+
   it('registers a Billing route inside the Settings stack', () => {
     expect(NAV_SRC).toMatch(/SettingsStack\.Screen\s+name="Billing"/);
     expect(NAV_SRC).toMatch(/component=\{CoachBillingScreen\}/);
