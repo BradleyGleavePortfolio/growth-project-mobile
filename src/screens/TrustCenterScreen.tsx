@@ -536,6 +536,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
           <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
+          <BulletItem text="Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score." />
           <BulletItem text="Not your coach — your Roman conversations, which are kept until you delete them or your account" />
           <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />

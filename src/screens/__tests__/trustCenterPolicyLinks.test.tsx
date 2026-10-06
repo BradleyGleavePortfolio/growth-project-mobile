@@ -173,6 +173,15 @@ describe('TrustCenterScreen security copy (B-STORECOPY-1: no universal guarantee
   });
 });
 
+describe('TrustCenterScreen who can see your data (S-PRIVACY-123)', () => {
+  it('names community members and the opt-in leaderboard as recipients', () => {
+    const bullets = [...SCREEN_SRC.matchAll(/<BulletItem text="([^"]+)"/g)].map((m) => m[1]);
+    expect(bullets).toContain(
+      'Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score.',
+    );
+  });
+});
+
 describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete account")', () => {
   it('uses the approved Settings labels', () => {
     expect(SCREEN_SRC).toContain('>Delete account</Text>');
