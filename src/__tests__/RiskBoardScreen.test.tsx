@@ -42,9 +42,9 @@ describe('RiskBoardScreen — source guards', () => {
     expect(SCREEN_SRC).not.toMatch(/risk-board-placeholder/);
   });
 
-  it('routes coaches to /coach/clients/risk-board and owners to /admin/ptm/risk-board', () => {
-    // The screen picks the fetcher off ptmApi based on isOwner.
-    expect(SCREEN_SRC).toMatch(/isOwner\s*\?\s*ptmApi\.getRiskBoard\s*:\s*ptmApi\.getMyRiskBoard/);
+  it('AUDIT-13-125: every role reads /coach/clients/risk-board (the admin route needs a server token)', () => {
+    expect(SCREEN_SRC).toMatch(/ptmApi\.getMyRiskBoard\(/);
+    expect(SCREEN_SRC).not.toMatch(/ptmApi\.getRiskBoard\b/);
   });
 
   it('renders all four filter chips and re-fetches on filter change', () => {
@@ -53,13 +53,14 @@ describe('RiskBoardScreen — source guards', () => {
     expect(SCREEN_SRC).toMatch(/\}\s*,\s*\[filter,\s*canViewBoard\]\s*\)\s*;/);
   });
 
-  it('navigates to ClientRiskDetail with the userId param', () => {
-    expect(SCREEN_SRC).toMatch(/navigation\.navigate\(\s*['"]ClientRiskDetail['"]/);
-    expect(SCREEN_SRC).toMatch(/userId:\s*item\.user_id/);
+  it('AUDIT-13-125: a row opens the client page (the admin-only risk detail always failed)', () => {
+    expect(SCREEN_SRC).toMatch(/navigation\.navigate\(\s*['"]ClientDetail['"]/);
+    expect(SCREEN_SRC).toMatch(/clientId:\s*item\.user_id/);
+    expect(SCREEN_SRC).not.toMatch(/navigation\.navigate\(\s*['"]ClientRiskDetail['"]/);
   });
 
-  it('shows the 04:00 UTC empty-state copy', () => {
-    expect(SCREEN_SRC).toMatch(/04:00 UTC/);
+  it('shows plain empty-state copy (no UTC times)', () => {
+    expect(SCREEN_SRC).not.toMatch(/04:00 UTC/);
   });
 
   it('uses cursor-based pagination with PAGE_SIZE = 20', () => {
@@ -203,8 +204,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
       data: { items: [], next_cursor: null },
     });
     const { findByText } = await render(<RiskBoardScreen />);
-    // Empty-state body text references the nightly recompute window.
-    expect(await findByText(/04:00 UTC/i)).toBeTruthy();
+    expect(await findByText(/Risk levels update every night/i)).toBeTruthy();
   });
 
   it('renders a client row when the API returns data (coach — bucket label only)', async () => {
@@ -246,7 +246,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
 
 // ─── Owner branch ────────────────────────────────────────────────────────────
 
-describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
+describe('RiskBoardScreen — owner reads the coach-scoped endpoint (AUDIT-13-125)', () => {
   beforeEach(() => {
     mockGetRiskBoard.mockClear();
     mockGetMyRiskBoard.mockClear();
@@ -257,16 +257,16 @@ describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
     });
   });
 
-  it('calls getRiskBoard (OWNER) and never the coach endpoint', async () => {
+  it('calls getMyRiskBoard and never the /admin endpoint an app session cannot pass', async () => {
     await render(<RiskBoardScreen />);
     await Promise.resolve();
-    expect(mockGetRiskBoard).toHaveBeenCalled();
-    expect(mockGetMyRiskBoard).not.toHaveBeenCalled();
+    expect(mockGetMyRiskBoard).toHaveBeenCalled();
+    expect(mockGetRiskBoard).not.toHaveBeenCalled();
   });
 
   it('renders a client row with a numeric percentage for the owner', async () => {
-    // Owner scope: risk_score is returned as a number and displayed as a %.
-    mockGetRiskBoard.mockResolvedValueOnce({
+    // A numeric risk_score, when present, is still shown as a %.
+    mockGetMyRiskBoard.mockResolvedValueOnce({
       data: {
         items: [
           {

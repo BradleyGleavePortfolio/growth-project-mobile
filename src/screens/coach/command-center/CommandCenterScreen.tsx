@@ -17,7 +17,11 @@ import {
   ScrollView,
   Platform,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing, typography } from '../../../theme/tokens';
+import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
 import OverviewScreen from './OverviewScreen';
 import AtRiskScreen from './AtRiskScreen';
 import WinStreaksScreen from './WinStreaksScreen';
@@ -55,6 +59,27 @@ export default function CommandCenterScreen({
   initialTab = 'overview',
 }: Props) {
   const [activeTab, setActiveTab] = React.useState<CommandCenterTab>(initialTab);
+  // AUDIT-13-125: the Overview tab mounts this screen with no props, so every
+  // client row and inbox thread was a dead tap. Default to the Clients stack
+  // (`initial: false` keeps the Clients list under it for Back).
+  const navigation = useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
+  const insets = useSafeAreaInsets();
+  const selectClient =
+    onSelectClient ??
+    ((clientId: string, clientName: string) =>
+      navigation.navigate('ClientsStack', {
+        screen: 'ClientDetail',
+        params: { clientId, clientName },
+        initial: false,
+      }));
+  const openThread =
+    onOpenThread ??
+    ((clientId: string, clientName: string) =>
+      navigation.navigate('ClientsStack', {
+        screen: 'ClientMessages',
+        params: { clientId, clientName },
+        initial: false,
+      }));
 
   const renderContent = () => {
     switch (activeTab) {
@@ -69,20 +94,22 @@ export default function CommandCenterScreen({
           />
         );
       case 'at-risk':
-        return <AtRiskScreen onSelectClient={onSelectClient} />;
+        return <AtRiskScreen onSelectClient={selectClient} />;
       case 'win-streaks':
-        return <WinStreaksScreen onSelectClient={onSelectClient} />;
+        return <WinStreaksScreen onSelectClient={selectClient} />;
       case 'inbox':
-        return <InboxScreen onOpenThread={onOpenThread} />;
+        return <InboxScreen onOpenThread={openThread} />;
       case 'action-queue':
-        return <ActionQueueScreen onSelectClient={onSelectClient} />;
+        return <ActionQueueScreen onSelectClient={selectClient} />;
     }
   };
 
   return (
     <View style={styles.container} testID="command-center-root">
       {/* Top tab bar */}
-      <View style={styles.tabBarWrapper}>
+      {/* AUDIT-13-125: no header above this tab, so keep the tab row out
+          of the status bar / Dynamic Island on iOS. */}
+      <View style={[styles.tabBarWrapper, { paddingTop: insets.top + (Platform.OS === 'ios' ? 0 : spacing.sm) }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
