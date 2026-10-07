@@ -15,10 +15,11 @@ Pre-login surface area: welcome, login, invite-gated signup, password reset, and
 
 | File | What it does |
 | --- | --- |
-| `WelcomeScreen.tsx` | Brand-first landing screen — bone background, Cormorant headline, "Get Started" / "Log In" CTAs. |
-| `LoginScreen.tsx` | Email + password form. Calls `authApi.login`, persists tokens, hands off to `RootNavigator`. Google button delegates to `signInWithGoogle`. Apple button (iOS only) delegates to `signInWithApple` and POSTs the identity token to `/auth/apple`. While the policy has `role_choice`, both provider buttons first ask "Already have an account?" (see Signup role choice). |
+| `WelcomeScreen.tsx` | Scrollable bone landing with an outlined GP mark, one Cormorant title, forest "Sign in" → Login and text "Create account" → CreateAccount. Optional coach-code note retained. Uses semantic theme colors. |
+| `LoginScreen.tsx` | Hairline email/password form with Inter labels and one forest sign-in action. Calls `authApi.login`, persists tokens, hands off to `RootNavigator`. Google button delegates to `signInWithGoogle`; provider sizing, typography and handlers are unchanged. Apple button (iOS only) delegates to `signInWithApple` and POSTs the identity token to `/auth/apple`. While the policy has `role_choice`, both provider buttons first ask "Already have an account?" with secondary text actions. Forgot password, signup, failure support and coach-recovery actions remain reachable. Uses semantic theme colors; error mapping is unchanged. |
 | `CreateAccountScreen.tsx` | Signup: optional role step (only when the policy has `role_choice` and no invite code), register (form), then verify (poll until email confirmed). Reads `/auth/signup-policy` on mount; falls back to "require invite" on failure. Auto-previews invite codes from deep-link params. Apple Sign-Up button (iOS only) is required by App Store Review whenever Google sign-in is offered. |
-| `ForgotPasswordScreen.tsx` | Triggers Supabase's reset-password flow via `/auth/forgot-password`. |
+| `ForgotPasswordScreen.tsx` | Scrollable, keyboard-aware hairline form for `/auth/forgot-password`. Submission confirms only the request, never mail delivery; Contact support → SupportInbox and Back to login → Login remain available. Semantic colors, Inter controls, 44 pt back target. |
+| `ResetPasswordScreen.tsx` | Scrollable, keyboard-aware recovery-link form with hairline password inputs, visibility toggle and forest update action. Token gate, validator, Supabase session/update/sign-out and error handling are unchanged. Invalid-link back and success login routes remain available. Semantic colors and Inter controls. |
 | `EmailVerifiedScreen.tsx` | Landing for the sign-up confirmation link `tgp://verified` (HUNT-01-124). Says the email is confirmed and offers Sign in, or Continue back to an open sign-up screen so "I verified my email" finishes. An expired or used link (`error_code=otp_expired`) gets its own copy and Contact support. The linking config drops the session tokens Supabase appends (`emailVerifiedPath` in `navigation/deepLinkUtils.ts`). Supabase must allow-list `tgp://verified` under Authentication > URL Configuration > Redirect URLs. |
 | `RoleSelectionScreen.tsx` | One-shot screen that fires after a Google sign-in or codeless email signup. Hardcodes `selectRole('student', …)` — there is no self-serve "Become a coach" surface. Shows the C13 `signupNotice` (param or persisted) when a role request did not end as chosen. |
 
@@ -42,10 +43,10 @@ Pre-login surface area: welcome, login, invite-gated signup, password reset, and
 
 | Screen | Entry condition | Exit condition |
 | --- | --- | --- |
-| `WelcomeScreen` | No session token in SecureStore | Taps "Log In" → `LoginScreen`. Taps "Get Started" → `CreateAccountScreen`. |
+| `WelcomeScreen` | No session token in SecureStore | Taps "Sign in" → `LoginScreen`. Taps "Create account" → `CreateAccountScreen`. |
 | `LoginScreen` | From WelcomeScreen | Successful login → `authEvents.emit()`. |
 | `CreateAccountScreen` | From WelcomeScreen or deep link with invite code | Successful signup + email verify → `authEvents.emit()`. New/unroled user → `RoleSelectionScreen`. |
-| `ForgotPasswordScreen` | From LoginScreen | Email sent toast → back to `LoginScreen`. |
+| `ForgotPasswordScreen` | From LoginScreen | Request-submitted state (delivery not confirmed) → support or `LoginScreen`. |
 | `RoleSelectionScreen` | `needs_role_selection === 'true'` in AsyncStorage | Role saved → `needs_role_selection` cleared → `authEvents.emit()`. |
 
 ## Data flow
