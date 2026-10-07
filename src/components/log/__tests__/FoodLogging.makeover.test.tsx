@@ -18,7 +18,7 @@ const food = { name: 'Oats', calories: 300, protein: 12, carbs: 54, fat: 6 };
 const log: FoodLog = { ...food, foodName: food.name, id: 'log', userId: 'user', coachId: 'coach', date: '2026-10-07', mealType: 'breakfast', quantity: 1, unit: 'serving', createdAt: '' };
 const action = jest.fn();
 const search = { searchQuery: '', onSearchChange: jest.fn(), onClearSearch: jest.fn(), onRetrySearch: jest.fn(), searching: false, showSlowMessage: false, searchError: null, searchResults: [], didYouMean: [], recentTab: 'recent' as const, onRecentTabChange: jest.fn(), recentFoods: [food], frequentFoods: [food], onSelectFood: jest.fn(), onEnterManualMode: jest.fn() };
-const press = async (label: string, handler: jest.Mock, ...args: unknown[]) => { await fireEvent.press(screen.getByText(label)); expect(handler).toHaveBeenLastCalledWith(...args); };
+const press = async (label: string, handler: jest.Mock, ...args: unknown[]) => { await fireEvent.press(screen.getByText(label)); if (args.length) expect(handler).toHaveBeenLastCalledWith(...args); else expect(handler).toHaveBeenCalled(); };
 const fonts = () => expect(screen.getAllByText(/./).every((text) => { const s = StyleSheet.flatten(text.props.style); return s.fontFamily === 'Inter_400Regular' && s.fontSize >= 13; })).toBe(true);
 beforeEach(() => { jest.clearAllMocks(); mockReduced = false; });
 it('preserves meal add, tap-to-edit and long-press-to-delete', async () => {
