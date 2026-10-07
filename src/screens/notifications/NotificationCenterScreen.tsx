@@ -116,7 +116,7 @@ function reducer(state: State, action: Action): State {
     case 'LOAD_FIRST_ERROR':
       return { ...state, isLoadingFirst: false, error: action.error };
     case 'LOAD_MORE_START':
-      return { ...state, isLoadingMore: true };
+      return { ...state, isLoadingMore: true, error: null };
     case 'LOAD_MORE_ERROR':
       return { ...state, isLoadingMore: false, error: 'Could not load more notifications. Pull down to try again.' };
     case 'LOAD_MORE_SUCCESS':

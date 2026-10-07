@@ -339,6 +339,9 @@ describe('NotificationCenterScreen', () => {
     expect(ui.getByText('Could not load more notifications. Pull down to try again.')).toBeTruthy();
     expect(ui.getByText('Update')).toBeTruthy();
     expect(ui.queryByLabelText('Loading more notifications')).toBeNull();
+    (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValueOnce({ items: [], nextCursor: null });
+    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    expect(ui.queryByText('Could not load more notifications. Pull down to try again.')).toBeNull();
   });
 
   it('keeps the role-aware router authoritative and read targets navigable', async () => {
