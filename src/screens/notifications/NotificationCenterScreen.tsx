@@ -10,9 +10,9 @@
 //   - Pull-to-refresh
 //   - Tap to mark read + deep-link routing to the appropriate screen
 //   - "Mark all read" action
-//   - Empty state: "You're all caught up." (no emoji)
+//   - Neutral empty state and notification preferences
 
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useReducer, useRef } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
-import NotificationRow from '../../components/NotificationRow';
+import { typography } from '../../theme/tokens';
 import {
   AppNotification,
   NotificationPage,
@@ -37,6 +37,22 @@ import {
 } from '../../services/notificationsApi';
 import { routeInAppNotification } from '../../services/pushTapRouter';
 import type { IoniconName } from '../../types/common';
+
+const KIND_ICON: Record<AppNotification['kind'], IoniconName> = {
+  coach: 'person-outline', milestone: 'document-outline', check_in: 'checkmark-circle-outline',
+  message: 'chatbubble-outline', build_week: 'layers-outline', system: 'information-circle-outline',
+  reminder: 'alarm-outline', tip: 'bulb-outline',
+};
+function relativeTime(iso: string): string {
+  const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'Yesterday' : days < 7 ? `${days}d ago`
+    : new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
 
 // ─── Deep-link routing table ──────────────────────────────────────────────────
 // Maps notification.actionScreen to a navigate() call. Keep in sync with
@@ -79,6 +95,7 @@ type Action =
   | { type: 'LOAD_FIRST_ERROR'; error: string }
   | { type: 'LOAD_MORE_START' }
   | { type: 'LOAD_MORE_SUCCESS'; payload: NotificationPage }
+  | { type: 'LOAD_MORE_ERROR' }
   | { type: 'REFRESH_START' }
   | { type: 'REFRESH_SUCCESS'; payload: NotificationPage; unreadCount: number }
   | { type: 'MARK_READ'; id: string }
@@ -100,6 +117,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, isLoadingFirst: false, error: action.error };
     case 'LOAD_MORE_START':
       return { ...state, isLoadingMore: true };
+    case 'LOAD_MORE_ERROR':
+      return { ...state, isLoadingMore: false, error: 'Could not load more notifications. Pull down to try again.' };
     case 'LOAD_MORE_SUCCESS':
       return {
         ...state,
@@ -182,7 +201,7 @@ export default function NotificationCenterScreen() {
       const page = await fetchNotifications(state.nextCursor, 25);
       dispatch({ type: 'LOAD_MORE_SUCCESS', payload: page });
     } catch {
-      // Fail silently — user can pull to refresh if needed.
+      dispatch({ type: 'LOAD_MORE_ERROR' });
     } finally {
       loadingMoreRef.current = false;
     }
@@ -230,9 +249,23 @@ export default function NotificationCenterScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: AppNotification }) => (
-      <NotificationRow notification={item} onPress={handlePress} />
+      <TouchableOpacity onPress={() => handlePress(item)} activeOpacity={0.72} style={styles.row}
+        disabled={item.read && !item.actionScreen}
+        accessibilityRole={item.read && !item.actionScreen ? 'text' : 'button'}
+        accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}. ${item.body}`}
+        accessibilityHint={item.actionScreen ? 'Open notification' : item.read ? undefined : 'Mark as read'}>
+        <Ionicons name={KIND_ICON[item.kind]} size={20} color={colors.textMuted} accessibilityElementsHidden />
+        <View style={styles.rowContent}>
+          <View style={styles.rowTitleLine}>
+            <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
+            {!item.read && <View style={styles.unreadDot} accessibilityLabel="Unread" />}
+          </View>
+          <Text style={styles.rowBody}>{item.body}</Text>
+          <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
+        </View>
+      </TouchableOpacity>
     ),
-    [handlePress],
+    [handlePress, colors, styles],
   );
 
   const ListFooter = state.isLoadingMore ? (
@@ -241,7 +274,8 @@ export default function NotificationCenterScreen() {
       style={styles.loadingMore}
       accessibilityLabel="Loading more notifications"
     />
-  ) : null;
+  ) : state.error && state.notifications.length > 0
+    ? <Text style={styles.emptyBody} accessibilityLiveRegion="polite">{state.error}</Text> : null;
 
   const ListEmpty = !state.isLoadingFirst ? (
     <View style={styles.emptyContainer} accessibilityLiveRegion="polite">
@@ -252,11 +286,11 @@ export default function NotificationCenterScreen() {
         accessibilityElementsHidden
       />
       <Text style={styles.emptyTitle}>
-        {state.error ?? "You're all caught up."}
+        {state.error ?? 'No notifications.'}
       </Text>
       {!state.error && (
         <Text style={styles.emptyBody}>
-          Notifications from your coach and the platform appear here.
+          Pull down to refresh.
         </Text>
       )}
     </View>
@@ -268,6 +302,7 @@ export default function NotificationCenterScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
+          style={styles.headerAction}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
@@ -282,6 +317,7 @@ export default function NotificationCenterScreen() {
         {state.unreadCount > 0 ? (
           <TouchableOpacity
             onPress={handleMarkAllRead}
+            style={styles.headerAction}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
             accessibilityLabel="Mark all notifications as read"
@@ -292,12 +328,16 @@ export default function NotificationCenterScreen() {
           <View style={styles.headerSpacer} />
         )}
       </View>
+      <TouchableOpacity style={styles.preferencesLink} accessibilityRole="button"
+        onPress={() => navigation.navigate('NotificationPreferences')}>
+        <Text style={[styles.markAllText, { color: colors.textSecondary }]}>Notification preferences</Text>
+      </TouchableOpacity>
 
       {/* Unread count banner */}
       {state.unreadCount > 0 && (
-        <View style={[styles.unreadBanner, { backgroundColor: colors.primaryPale }]}>
+        <View style={styles.unreadBanner}>
           <Ionicons
-            name={'notifications' as IoniconName}
+            name={'notifications-outline' as IoniconName}
             size={15}
             color={colors.primary}
             accessibilityElementsHidden
@@ -354,7 +394,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingBottom: 12,
     },
     title: {
-      fontFamily: 'CormorantGaramond_400Regular',
+      ...typography.h2,
       fontSize: 24,
       lineHeight: 29,
       color: colors.textPrimary,
@@ -366,28 +406,39 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       lineHeight: 18,
     },
     headerSpacer: {
-      width: 80,
+      width: 44,
     },
+    headerAction: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
+    preferencesLink: { minHeight: 44, justifyContent: 'center', marginHorizontal: 20 },
+    row: { flexDirection: 'row', gap: 12, minHeight: 44, paddingVertical: 20,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+    rowContent: { flex: 1, gap: 6 },
+    rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    rowTitle: { ...typography.bodySmall, fontSize: 15, color: colors.textPrimary, flex: 1 },
+    rowTitleUnread: { fontFamily: 'Inter_500Medium', fontWeight: '500' },
+    rowBody: { ...typography.bodySmall, fontSize: 13, color: colors.textSecondary },
+    rowTime: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+    unreadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
     unreadBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
       marginHorizontal: 20,
       marginBottom: 10,
-      borderRadius: 4,
-      paddingHorizontal: 14,
+      paddingHorizontal: 0,
       paddingVertical: 10,
     },
     unreadBannerText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
       lineHeight: 18,
+      fontVariant: ['tabular-nums'],
     },
     loadingFirst: {
       marginTop: 60,
     },
     listContent: {
-      paddingHorizontal: 16,
+      paddingHorizontal: 24,
       paddingBottom: 40,
       paddingTop: 4,
       flexGrow: 1,

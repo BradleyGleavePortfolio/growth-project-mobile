@@ -41,8 +41,9 @@ error (message shown in empty state)
 
 - Infinite scroll, cursor-based, 25 items per page.
 - Pull-to-refresh resets cursor and replaces the list.
-- Empty state copy: "You're all caught up." — no emoji.
-- Unread rows have a 3 px forest-green left border.
+- Empty state: "No notifications."; failed loads show the notification-specific error instead.
+- Rows use theme hairlines without fills; unread is a small forest dot and medium Inter title. Titles/body remain fully visible; relative times are 13 pt.
+- Back, mark-all, and the notification-preferences text link have 44 pt minimum targets. Existing refresh, pagination and role-aware destinations are unchanged.
 - Tapping an unread row marks it read (optimistic, then API), then routes to `actionScreen`.
 - Tapping a read row routes without any API call.
 - "Mark all read" fires `markAllNotificationsRead` and zeroes the badge immediately.
@@ -55,7 +56,7 @@ error (message shown in empty state)
 | --- | --- |
 | Route name | `NotificationPreferences` |
 | Role | Client and Coach |
-| Entry point | `NotificationCenterScreen` settings icon, or `MoreStack → Settings` |
+| Entry point | `NotificationCenterScreen` notification-preferences text link, or `MoreStack → Settings` |
 
 #### State machine
 
@@ -110,7 +111,7 @@ All calls go through `src/services/notificationsApi.ts`. The mock flag is `NOTIF
 | Component | Location | Purpose |
 | --- | --- | --- |
 | `NotificationBadge` | `src/components/NotificationBadge.tsx` | Bell icon badge; count capped at "99+"; theme accent background |
-| `NotificationRow` | `src/components/NotificationRow.tsx` | Single row in the list; read/unread state, icon, title, body, time |
+| Center row | `NotificationCenterScreen.tsx` | Scoped hairline row; read/unread dot, outline kind icon, full title/body, relative time |
 | `ForegroundNotificationBanner` | `src/components/ForegroundNotificationBanner.tsx` | In-app banner for foreground pushes; auto-dismisses after 4 s; swipe-up to dismiss |
 
 ---
@@ -145,7 +146,7 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 | | Calls `markNotificationRead` on unread row tap |
 | | Badge count decreases after mark-read interaction |
 | | Calls `markAllNotificationsRead` on "Mark all read" tap |
-| | Shows empty state "You're all caught up." when list is empty |
+| | Shows neutral empty state, hairline layout, each kind's destination, back, preferences, refresh and pagination |
 | | Preferences screen renders all 8 kind sections |
 | | Preferences screen calls `saveNotificationPreferences` on mute-all toggle |
 | | Badge renders "99+" for count > 99 |
