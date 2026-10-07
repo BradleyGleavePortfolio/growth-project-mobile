@@ -16,6 +16,11 @@
  * is already booked or done, the screen says so (and satisfies the tutorial
  * step) instead of offering a second booking.
  * No open times provides a refresh and a working coach-message action.
+ *
+ * U-04-2: open times load 14 days at a time (the server's range cap). Show
+ * later times / Show earlier times step through the coach's booking window
+ * (booking_window_days on the open-slots reply); an older backend that does
+ * not send it keeps the first 14 days only.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
@@ -26,10 +31,11 @@ import {
   schedulingErrorStatus,
   type CoachingSession,
 } from '../../../api/schedulingApi';
-import { useBookableTypes, useMyCoaches, useOpenSlots } from '../../../hooks/useCalendar';
+import { OPEN_SLOTS_RANGE_DAYS, useBookableTypes, useMyCoaches, useOpenSlots } from '../../../hooks/useCalendar';
 import { useRequestSession, useRescheduleSession, useSession } from '../../../hooks/useScheduling';
 import {
   coachTimeLabel,
+  formatDayLabel,
   formatRange,
   formatTime,
   formatWhen,
@@ -84,6 +90,37 @@ export function moveNeedsApprovalWarning(
   return `This session is confirmed. Moving it sends the new time to ${coachName} for approval and gives up your current time. If ${coachName} declines, you will need to pick another time.`;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * U-04-2: which 14-day page of open times is showing, whether the coach's
+ * booking window reaches past it, and a plain label for its dates.
+ */
+export function openTimesPage(
+  baseIso: string,
+  page: number,
+  windowDays: number | undefined,
+  tz: string,
+): { fromIso: string; hasEarlier: boolean; hasLater: boolean; rangeLabel: string } {
+  const base = Date.parse(baseIso);
+  const from = base + page * OPEN_SLOTS_RANGE_DAYS * DAY_MS;
+  const pageEnd = from + OPEN_SLOTS_RANGE_DAYS * DAY_MS;
+  const windowEnd = typeof windowDays === 'number' && windowDays > 0 ? base + windowDays * DAY_MS : pageEnd;
+  const last = Math.max(from, Math.min(pageEnd, windowEnd) - 60_000);
+  return {
+    fromIso: new Date(from).toISOString(),
+    hasEarlier: page > 0,
+    hasLater: windowEnd > pageEnd,
+    rangeLabel: `${formatDayLabel(new Date(from), tz)} to ${formatDayLabel(new Date(last), tz)}`,
+  };
+}
+
+/** "two weeks", or the coach's shorter booking window ("7 days"). */
+export function firstPageSpan(windowDays: number | undefined): string {
+  if (typeof windowDays !== 'number' || windowDays >= OPEN_SLOTS_RANGE_DAYS) return 'two weeks';
+  return `${windowDays} day${windowDays === 1 ? '' : 's'}`;
+}
+
 /** Welcome type for a coach: server marker first, day-1 seed name as fallback. */
 export function pickWelcomeType<T extends { id: string; name: string; is_welcome?: boolean }>(
   list: readonly T[],
@@ -132,8 +169,16 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
     if (welcomeDone) emitTutorialSignal('welcome_call_booked');
   }, [welcomeDone]);
 
-  const [fromIso] = useState(() => nowToMinuteIso());
-  const slotsQ = useOpenSlots(coachId, type, fromIso);
+  const [baseIso] = useState(() => nowToMinuteIso());
+  const [page, setPage] = useState(0);
+  // The window is the same on every page; keep the last one the server sent.
+  const [windowDays, setWindowDays] = useState<number | undefined>(undefined);
+  const paging = openTimesPage(baseIso, page, windowDays, clientTz);
+  const slotsQ = useOpenSlots(coachId, type, paging.fromIso);
+  const sentWindow = slotsQ.data?.booking_window_days;
+  useEffect(() => {
+    if (typeof sentWindow === 'number') setWindowDays(sentWindow);
+  }, [sentWindow]);
   const days = useMemo(() => {
     const own = moving.data;
     const slots = (slotsQ.data?.slots ?? []).filter((s) => !own || s.start_at !== own.start_at);
@@ -202,6 +247,22 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       );
     }
   };
+
+  const goToPage = (next: number) => {
+    setPicked(null);
+    setError(null);
+    setPage(Math.max(0, next));
+  };
+  const pageButtons = (
+    <>
+      {paging.hasLater ? (
+        <SecondaryButton label="Show later times" onPress={() => goToPage(page + 1)} disabled={busy} testID="calendar-later-times" />
+      ) : null}
+      {paging.hasEarlier ? (
+        <SecondaryButton label="Show earlier times" onPress={() => goToPage(page - 1)} disabled={busy} testID="calendar-earlier-times" />
+      ) : null}
+    </>
+  );
 
   const addToPhone = async (s: CoachingSession) => {
     const r = await addSessionToPhoneCalendar(s, coachName);
@@ -287,8 +348,11 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
             ? params.welcome
               ? `${coachName} has not opened welcome calls yet. You can see other times in Calendar, or ask in your conversation.`
               : 'This appointment type is no longer offered.'
-            : `There are no open times in the next two weeks. ${coachName} can suggest one in your conversation.`}
+            : page > 0
+              ? `There are no open times from ${paging.rangeLabel}. ${coachName} can suggest one in your conversation.`
+              : `There are no open times in the next ${firstPageSpan(windowDays)}. ${paging.hasLater ? 'Show later times to look further ahead, or ask' : 'Ask'} ${coachName} to suggest one in your conversation.`}
         </Body>
+        {type ? pageButtons : null}
         {!type && params.welcome ? (types.data ?? []).filter((t) => !t.archived_at).map((t) => (
           <SecondaryButton key={t.id} label={`${t.name}, ${t.duration_minutes} minutes`} onPress={() => { setSelectedTypeId(t.id); setPicked(null); }} />
         )) : null}
@@ -305,6 +369,9 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       <Note
         text={`${type.duration_minutes} minutes. ${type.auto_approve ? 'Confirmed right away.' : `${coachName} confirms each request.`} Times are in your time zone.`}
       />
+      {paging.hasLater || paging.hasEarlier ? (
+        <Note text={`Showing open times from ${paging.rangeLabel}.`} testID="calendar-times-range" />
+      ) : null}
       {(() => {
         const warning = params.rescheduleSessionId ? moveNeedsApprovalWarning(moving.data, type.auto_approve, coachName) : null;
         return warning ? <Note text={warning} testID="calendar-move-approval-warning" /> : null;
@@ -366,6 +433,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       {verifyBooking ? (
         <SecondaryButton label="Check Calendar before booking again" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-verify-booking" />
       ) : null}
+      {pageButtons}
       <SecondaryButton label="Refresh open times" onPress={() => { setPicked(null); void slotsQ.refetch(); }} disabled={busy} />
     </View>,
   );
