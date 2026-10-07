@@ -4,7 +4,8 @@
  *
  * The confirm names the source and what stops. It says plainly that data
  * already shared stays with the coach (the backend soft-disconnect only
- * changes the connection status; samples are kept). Failures map status and
+ * changes the connection status; samples are kept). A client with no coach
+ * gets the same lines without the coach (FW-BODY U10). Failures map status and
  * machine code to what happened and a working next action; anything
  * unexpected shows a short reference and the support address and is
  * reported to Sentry (status, code and reference only).
@@ -30,7 +31,11 @@ export interface DisconnectConfirmCopy {
 export function disconnectConfirmCopy(
   provider: WearableProvider,
   name: string,
+  coachless = false,
 ): DisconnectConfirmCopy {
+  const kept = coachless
+    ? 'Data already brought in stays in your account.'
+    : 'Data already shared stays with your coach.';
   if (provider === 'SAMSUNG_HEALTH') {
     // B-364-1: this row disconnects Health Connect, which Samsung Health shares through.
     return {
@@ -38,16 +43,17 @@ export function disconnectConfirmCopy(
       body:
         `${name} shares its data through Health Connect, so this disconnects Health Connect. The ` +
         `Growth Project stops bringing in new Health Connect data from this phone, from ${name} and ` +
-        `every other app, and your coach stops seeing it. Data already shared stays with your coach. ` +
+        `every other app${coachless ? '' : ', and your coach stops seeing it'}. ${kept} ` +
         `You can connect again at any time.`,
     };
   }
+  const coachStops = coachless ? '' : `, and your coach stops seeing new ${name} data`;
   const stops = isOnDevice(provider)
-    ? `The Growth Project stops bringing in new ${name} data from this phone, and your coach stops seeing new ${name} data.`
-    : `The Growth Project stops receiving new ${name} data, and your coach stops seeing new ${name} data.`;
+    ? `The Growth Project stops bringing in new ${name} data from this phone${coachStops}.`
+    : `The Growth Project stops receiving new ${name} data${coachStops}.`;
   return {
     title: `Disconnect ${name}?`,
-    body: `${stops} Data already shared stays with your coach. You can connect ${name} again at any time.`,
+    body: `${stops} ${kept} You can connect ${name} again at any time.`,
   };
 }
 

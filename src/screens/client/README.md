@@ -97,6 +97,12 @@ Rules and persistence: `src/macros/README.md`.
 
 Roman's tour runs over these real screens. See `src/tutorial/README.md`.
 
+### Connected devices copy for a client with no coach (FW-BODY U10)
+
+`wearables/ConnectionsScreen.tsx` reads `useCoachlessClient()` and passes `coachless` to `ConnectProviderSheet`
+(`onDeviceDisclosure`) and `DisconnectConfirmDialog` (`disconnectConfirmCopy`). A client with no coach is not told about a
+coach; the Connect line says what the data is for and that a coach they join can see it. Coached copy is unchanged.
+
 ## Data flow
 
 ```
