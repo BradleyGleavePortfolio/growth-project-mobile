@@ -50,13 +50,13 @@ const WIN_CARDS: WinCard[] = [
   },
   {
     id: 'first_checkin',
-    title: 'Submit your first check-in',
-    description: 'Opens the daily feedback loop between you and your coach.',
+    title: "Check off today's habits",
+    description: 'Opens your habit list. One tick a day is how streaks start.',
   },
   {
     id: 'first_meal',
     title: 'Log your first meal',
-    description: 'Three days of honest food data tells your coach more than any intake form.',
+    description: 'Three days of honest food data says more than any intake form.',
   },
 ];
 
@@ -200,7 +200,7 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
           contentContainerStyle={styles.completionContainer}
           testID="day1win-complete-view"
         >
-          <Text style={styles.completionEyebrow}>YOUR FIRST DATA POINT</Text>
+          <Text style={styles.completionEyebrow}>YOUR FIRST STEP</Text>
           <Text style={styles.completionHeadline}>
             {WIN_CARDS.find((c) => c.id === selectedWin)?.title ?? 'First win logged.'}
           </Text>

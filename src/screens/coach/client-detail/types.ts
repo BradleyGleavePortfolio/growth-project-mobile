@@ -15,6 +15,8 @@ export interface SessionExercise {
   exerciseName: string;
   name?: string;
   sets: SessionSet[];
+  /** The client's note on this exercise ('' when none). */
+  notes?: string;
 }
 
 export interface WorkoutSession {
@@ -24,6 +26,10 @@ export interface WorkoutSession {
   endTime?: string;
   completed: boolean;
   exercises: string; // JSON array of SessionExercise
+  /** The client's note on the whole workout ('' when none). */
+  notes?: string;
+  /** Minutes the client trained; null when not recorded. */
+  durationMinutes?: number | null;
 }
 
 export interface WeekSummary {

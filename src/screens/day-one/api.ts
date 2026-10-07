@@ -8,6 +8,7 @@
  */
 
 import { profileApi, authApi, preferencesApi, notificationsApi } from '../../services/api';
+import { keepDayOneAnswers } from './answers';
 
 // ─── Error shape ─────────────────────────────────────────────────────────────
 
@@ -119,11 +120,14 @@ export async function pairWithCoach(code: string): Promise<{ ok: true } | { ok: 
 }
 
 /**
- * Step 3 — Goals selection. Stored on the profile as an array of slug keys.
- * Backend column: `day_one_goals` (text[]).
+ * Step 3 — Goals selection. The backend has no column for these goals and
+ * PUT /profile rejects unknown keys with a 400 (forbidNonWhitelisted), so the
+ * selection is kept on this device for this account (answers.ts) and this
+ * step never makes a network call that can only fail. The Ready step keeps
+ * the draft copy as well before it clears the resume checkpoint.
  */
 export async function saveGoals(goals: readonly GoalKey[]): Promise<void> {
-  await withRetry(() => profileApi.update({ day_one_goals: [...goals] }));
+  await keepDayOneAnswers({ goals: [...goals] });
 }
 
 /**
@@ -147,36 +151,51 @@ export function getDeviceTimezone(): string {
   return 'UTC';
 }
 
+function statusOf(err: unknown): number {
+  return (err as AxiosLikeError)?.response?.status ?? 0;
+}
+
 /**
- * Step 5 — Daily check-in time. Stored as HH:MM in 24h format on the
- * profile + propagated to notification preferences so the daily reminder
- * schedule lines up immediately. Also captures the device IANA timezone so
- * the backend can fire the reminder in the user's local time even after
- * travel or when the server lives in a different region.
+ * Step 5 — Daily check-in time. The backend stores no check-in time (no
+ * profile or notification-preference field; both reject unknown keys with a
+ * 400), so the chosen time is kept on this device for this account
+ * (answers.ts) before anything is sent. What the
+ * backend does use is the device IANA timezone (quiet hours and the times in
+ * notifications): it goes to PUT /notifications/timezone with source
+ * 'device', or the older PATCH /notifications/preferences { timezone } on a
+ * backend without that route (404/405). A zone the backend refuses (other
+ * 4xx) is not something the client can fix here, so the step still
+ * completes; sign-in sends the zone again (services/timezoneSync).
  */
 export async function saveCheckInTime(
   time: CheckInTime,
   timezone: string = getDeviceTimezone(),
 ): Promise<void> {
-  const hh = String(time.hour).padStart(2, '0');
-  const mm = String(time.minute).padStart(2, '0');
-  const value = `${hh}:${mm}`;
-  await withRetry(async () => {
-    await profileApi.update({
-      daily_checkin_time: value,
-      daily_checkin_timezone: timezone,
+  await keepDayOneAnswers({ checkInTime: time, checkInTimezone: timezone });
+  try {
+    await withRetry(async () => {
+      try {
+        await notificationsApi.setTimezone(timezone);
+      } catch (err) {
+        const status = statusOf(err);
+        if (status !== 404 && status !== 405) throw err;
+        await notificationsApi.updatePreferences({ timezone });
+      }
     });
-    await notificationsApi.updatePreferences({
-      daily_checkin_time: value,
-      daily_checkin_timezone: timezone,
-    });
-  });
+  } catch (err) {
+    const status = statusOf(err);
+    if (status >= 400 && status < 500) return;
+    throw err;
+  }
 }
 
 /**
- * Step 6 — Mark Day-1 onboarding complete. This is the terminal step;
- * RootNavigator gates Home on this flag.
+ * Step 6 — Mark Day-1 onboarding complete. This is the terminal step.
+ * The backend field is `onboarding_completed` (UpdateProfileDto); it is what
+ * RootNavigator reads back as `profile.onboardingCompleted`, so a finished
+ * client is not sent through Day-1 again on another device. The backend has
+ * no `day_one_completed` field and rejected it with a 400.
  */
 export async function completeDayOne(): Promise<void> {
-  await withRetry(() => profileApi.update({ day_one_completed: true }));
+  await withRetry(() => profileApi.update({ onboarding_completed: true }));
 }
