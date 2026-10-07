@@ -144,6 +144,20 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
   });
 
+  it('U1 (AIB-FINISH-127): the thinking stage names injuries only when an injury area was chosen', async () => {
+    const pending = new Promise(() => undefined); // stay in the thinking state
+    mockApi.post.mockReturnValueOnce(pending).mockReturnValueOnce(pending);
+    const plain = await render(<Harness />);
+    await proposeFromInput(plain);
+    [expect(plain.getByText(/Checking training limits$/)).toBeTruthy(), expect(plain.queryByText(/Checking limits and injuries/)).toBeNull()];
+    plain.unmount();
+    const injury = await render(<Harness />);
+    await waitFor(() => expect(injury.getByTestId('ai-chip-swap_for_injury')).toBeTruthy());
+    await press(injury, 'ai-chip-swap_for_injury');
+    await press(injury, 'ai-injury-knee');
+    [expect(injury.getByText(/Checking limits and injuries$/)).toBeTruthy(), expect(injury.queryByText(/Checking training limits/)).toBeNull()];
+  });
+
   it.each(['paused', 'not_configured'])('status %s: paused copy, no prompt or chips, nothing proposed', async (state) => {
     mockApi.get.mockResolvedValueOnce({ data: { ...STATUS_ON, state } });
     const s = await render(<Harness />);
