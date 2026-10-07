@@ -22,7 +22,10 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { useEntitlement } from './EntitlementProvider';
 import { useTheme } from '../theme/useTheme';
 import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
-import { COACH_MANAGED_BODY, COACH_MANAGED_TITLE } from './PaywallSheet';
+import {
+  COACH_MANAGED_BODY, COACH_MANAGED_TITLE, COACHLESS_BODY, COACHLESS_TITLE, COACHLESS_CTA,
+} from './PaywallSheet';
+import { useCoachlessClient } from '../hooks/useCoachlessClient';
 
 interface ProtectedScreenProps {
   children: React.ReactNode;
@@ -31,6 +34,7 @@ interface ProtectedScreenProps {
 export function ProtectedScreen({ children }: ProtectedScreenProps) {
   const { entitlementActive, status, openPlans, messageCoach } = useEntitlement();
   const { colors, tokens } = useTheme();
+  const noCoach = useCoachlessClient();
 
   if (status === 'loading' || status === 'checking' || status === 'unknown') {
     return (
@@ -45,17 +49,18 @@ export function ProtectedScreen({ children }: ProtectedScreenProps) {
 
   // Audit #304 B1 (App Review 3.1.1): on hidden iOS builds the gate never
   // says "Choose a Plan" or offers plans; the coach manages access.
-  if (entitlementActive !== true && nonP2PPurchasesHidden()) {
+  // A coachless client uses the same calm gate to reach the existing code sheet.
+  if (entitlementActive !== true && (nonP2PPurchasesHidden() || noCoach)) {
     return (
       <View
         style={[styles.center, { backgroundColor: colors.background }]}
         testID="protected-screen-coach-managed"
       >
         <Text style={[styles.title, { color: colors.textPrimary, ...tokens.typography.h2 }]}>
-          {COACH_MANAGED_TITLE}
+          {noCoach ? COACHLESS_TITLE : COACH_MANAGED_TITLE}
         </Text>
         <Text style={[styles.body, { color: colors.textSecondary, ...tokens.typography.body }]}>
-          {COACH_MANAGED_BODY}
+          {noCoach ? COACHLESS_BODY : COACH_MANAGED_BODY}
         </Text>
         <TouchableOpacity
           style={[styles.coachButton, { backgroundColor: colors.primary }]}
@@ -69,7 +74,7 @@ export function ProtectedScreen({ children }: ProtectedScreenProps) {
               { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
             ]}
           >
-            Message your coach
+            {noCoach ? COACHLESS_CTA : 'Message your coach'}
           </Text>
         </TouchableOpacity>
       </View>

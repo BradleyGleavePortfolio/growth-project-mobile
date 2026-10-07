@@ -77,6 +77,8 @@ import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
 import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
 import YourPlansPanel from '../../components/purchase/YourPlansPanel';
 import { planTerms, priceLabel } from '../../lib/planTerms';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
+import { COACHLESS_TITLE, COACHLESS_BODY, COACHLESS_CTA } from '../../entitlements/PaywallSheet';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -174,6 +176,7 @@ export default function ClientPackagesScreen() {
   // is referenceable from module-scope sub-components (e.g. DunningBanner).
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const noCoach = useCoachlessClient();
 
   // Clinic launch: plans are 1:1 person-to-person coaching (Guideline
   // 3.1.3(d)), so the screen names the individual coach.
@@ -276,6 +279,38 @@ export default function ClientPackagesScreen() {
       navigation.navigate('Messages' as never);
     }
   }, [navigation]);
+
+  if (noCoach) {
+    return (
+      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+        {navigation.canGoBack?.() ? (
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            testID="client-packages-back"
+          >
+            <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
+          </TouchableOpacity>
+        ) : null}
+        <View style={styles.gate} testID="client-packages-coachless">
+          <Text style={styles.gateTitle}>{COACHLESS_TITLE}</Text>
+          <Text style={styles.gateBody}>{COACHLESS_BODY}</Text>
+          <TouchableOpacity
+            style={styles.cta}
+            onPress={() => navigation.getParent()?.navigate('Home', {
+              screen: 'Messages', params: { openCoachCode: true },
+            })}
+            accessibilityRole="button"
+            accessibilityLabel={COACHLESS_CTA}
+          >
+            <Text style={styles.ctaText}>{COACHLESS_CTA}</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    );
+  }
 
   if (!packages || !status) {
     return <SkeletonScreen count={5} />;

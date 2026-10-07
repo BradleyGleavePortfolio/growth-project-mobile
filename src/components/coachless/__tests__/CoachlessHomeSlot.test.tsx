@@ -22,7 +22,7 @@ let mockUser: { id: string; coach_id?: string } | null = { id: 'client-1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 const mockPatch = jest.fn(async (_patch: unknown) => undefined);
-jest.mock('../../../lib/userCache', () => ({ patchUserCache: (p: unknown) => mockPatch(p) }));
+jest.mock('../../../lib/userCache', () => ({ patchUserCache: (p: unknown) => mockPatch(p), readUserCacheSync: () => null }));
 let mockIosHidden = false;
 jest.mock('../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => mockIosHidden }));
 const mockNavigate = jest.fn();

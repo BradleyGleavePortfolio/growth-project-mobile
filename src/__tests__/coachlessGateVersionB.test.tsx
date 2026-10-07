@@ -167,6 +167,14 @@ it('ClientPackages uses the freshly patched coach cache after a code join', asyn
   expect(r.queryByText(TITLE)).toBeNull();
 });
 
+it('ClientPackages keeps the other empty-list copy for a connected client with a current plan', async () => {
+  mockUser.coach_id = 'coach-1';
+  mockGetPaymentStatus.mockResolvedValue({ ok: true, data: { state: 'active' } });
+  const r = await render(<ClientPackagesScreen />);
+  expect(await r.findByText('No plans available right now')).toBeTruthy();
+  expect(r.getByText("Your coach hasn't published a plan yet. Message them to ask what's available.")).toBeTruthy();
+});
+
 it.each([
   ['inactive', { ok: true, data: { active: false } }],
   ['unavailable', { ok: false, reason: 'error', message: 'Network unavailable' }],

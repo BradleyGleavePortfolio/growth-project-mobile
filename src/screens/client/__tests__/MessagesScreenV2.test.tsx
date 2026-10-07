@@ -50,6 +50,7 @@ jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useRoute: () => ({ key: 'messages', name: 'Messages', params: undefined }),
     useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn(), getParent: () => ({ navigate: jest.fn() }) }),
     useFocusEffect: (cb: () => void | (() => void)) => {
       const R = jest.requireActual('react');

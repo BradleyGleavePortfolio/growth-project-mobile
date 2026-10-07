@@ -13,9 +13,9 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { MoreStackParamList } from '../../navigation/ClientNavigator';
+import type { HomeStackParamList } from '../../navigation/ClientNavigator';
 import { messagesApi, profileApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -75,7 +75,8 @@ export default function MessagesScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const textOnPrimaryDim = colors.textOnPrimary + 'B3';
   const textOnPrimaryFaint = colors.textOnPrimary + '80';
-  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>();
+  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
+  const route = useRoute<RouteProp<HomeStackParamList, 'Messages'>>();
   const currentUser = useCurrentUser();
   const { flags } = useFeatureFlags();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -87,6 +88,11 @@ export default function MessagesScreen() {
   const [error, setError] = useState('');
   const [noCoach, setNoCoach] = useState(false);
   const [showCoachCode, setShowCoachCode] = useState(false);
+  useEffect(() => {
+    if (!route.params?.openCoachCode) return;
+    setShowCoachCode(true);
+    navigation.setParams({ openCoachCode: undefined });
+  }, [route.params?.openCoachCode, navigation]);
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
