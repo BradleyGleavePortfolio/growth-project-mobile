@@ -93,14 +93,16 @@ beforeEach(() => {
 });
 
 describe('U-V1-5: assigned workout entry from Home', () => {
-  it('offers Continue for a first workout assignment, without claiming completion', async () => {
+  it('opens the first assigned workout from Home, without claiming completion', async () => {
     mockListAssignments.mockResolvedValue([PLAN]);
     const screen = await render(<HomeScreen />);
     const continueButton = await screen.findByTestId('home-continue-cta');
     expect(screen.queryByTestId('home-explore-cta')).toBeNull();
     expect(screen.queryByText(/Workout complete/)).toBeNull();
     await fireEvent.press(continueButton);
-    expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab');
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
+      screen: 'WorkoutAssignmentDetail', params: { assignmentId: PLAN.id },
+    });
     expect(mockListAssignments).toHaveBeenCalledTimes(1);
   });
 
