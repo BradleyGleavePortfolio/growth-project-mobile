@@ -17,7 +17,8 @@ import { useClientStore } from '../../store/clientStore';
 import { Spacing } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
-import { flush as flushFoodLogQueue } from '../../services/foodLogQueue';
+import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
+import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import DaySelector from '../../components/DaySelector';
 import WaterTracker from '../../components/WaterTracker';
@@ -72,10 +73,11 @@ export default function LogScreen() {
     removeFoodLogLocally,
   } = useClientStore();
 
-  const { recentFoods, frequentFoods, lastMeals, loadBrowseFoods } = useFoodBrowse(
+  const { recentFoods, frequentFoods, lastMeals, browseUnavailable, loadBrowseFoods } = useFoodBrowse(
     currentUser?.id,
     selectedDate,
   );
+  const pendingFoods = usePendingFoodLogCount();
 
   const [modalVisible, setModalVisible] = useState(false);
   const [activeMealType, setActiveMealType] = useState<MealType>('breakfast');
@@ -287,6 +289,7 @@ export default function LogScreen() {
     if (!online) {
       try {
         await submitSearchLogOffline(args);
+        void notifyPendingFoodLogs();
         setQuantityModalVisible(false);
         setSelectedFood(null);
         setModalVisible(false);
@@ -336,6 +339,7 @@ export default function LogScreen() {
     if (!online) {
       try {
         const name = await submitManualLogOffline(args);
+        void notifyPendingFoodLogs();
         setModalVisible(false);
         Alert.alert('Saved offline', `${name} will sync when you reconnect.`);
       } catch (err) {
@@ -504,17 +508,8 @@ export default function LogScreen() {
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
     setRefreshing(true);
-    // Pull-to-refresh also opportunistically flushes the offline food-log queue.
-    // If we're still offline the flush is a cheap no-op; if we just came back
-    // online this catches us up before the RootNavigator's network-change
-    // effect fires.
-    if (online) {
-      try {
-        await flushFoodLogQueue();
-      } catch (err) {
-        console.error('LogScreen: flushFoodLogQueue failed', err);
-      }
-    }
+    // Pull-to-refresh also sends foods saved offline (never rejects).
+    if (online) await syncFoodLogQueue();
     await loadDayData(currentUser.id, selectedDate);
     setRefreshing(false);
   }, [currentUser?.id, selectedDate, online]);
@@ -556,6 +551,13 @@ export default function LogScreen() {
         ) : null}
 
         <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} />
+        {pendingFoods > 0 ? (
+          <Text style={styles.pendingMessage} accessibilityLiveRegion="polite" testID="log-offline-pending">
+            {pendingFoods === 1
+              ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
+              : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
+          </Text>
+        ) : null}
         {savedMessage ? (
           <Text style={styles.savedMessage} accessibilityLiveRegion="polite">{savedMessage}</Text>
         ) : null}
@@ -597,6 +599,7 @@ export default function LogScreen() {
         onRecentTabChange={setRecentTab}
         recentFoods={recentFoods}
         frequentFoods={frequentFoods}
+        browseUnavailable={browseUnavailable}
         onSelectFood={handleSelectFood}
         repeatMeal={repeatMeal}
         repeatMealTitle={repeatMealTitle}
@@ -755,6 +758,12 @@ const makeStyles = (colors: ThemeColors) =>
   waterSection: {
     paddingHorizontal: Spacing.lg,
     marginBottom: 20,
+  },
+  pendingMessage: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 12,
+    color: colors.textSecondary,
+    fontSize: 14,
   },
   savedMessage: {
     marginHorizontal: Spacing.lg,

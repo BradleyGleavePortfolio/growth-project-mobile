@@ -35,6 +35,7 @@ interface Props {
   onRecentTabChange: (tab: 'recent' | 'frequent') => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
+  browseUnavailable?: boolean;
 
   onSelectFood: (food: SearchResult) => void;
 
@@ -96,6 +97,7 @@ export default function FoodSearchModal(props: Props) {
             onRecentTabChange={props.onRecentTabChange}
             recentFoods={props.recentFoods}
             frequentFoods={props.frequentFoods}
+            browseUnavailable={props.browseUnavailable}
             onSelectFood={props.onSelectFood}
             repeatMeal={props.repeatMeal}
             repeatMealTitle={props.repeatMealTitle}

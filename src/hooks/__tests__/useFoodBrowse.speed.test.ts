@@ -149,3 +149,35 @@ describe('useFoodBrowse — last portion reproduces the saved entry exactly (B-4
     expect(multiplierOf(recentOats)).toBeCloseTo(0.6, 10);
   });
 });
+
+// FU-FOODLOG-126: offline, the week cannot be read. Recent stays usable from
+// the last read (a recent food can still be saved offline) and the sheet is
+// told the lists are unavailable rather than empty.
+describe('useFoodBrowse — offline', () => {
+  it('keeps the last lists and flags them unavailable when no day can be read', async () => {
+    const result = await loaded();
+    expect(result.current.recentFoods).toHaveLength(3);
+    expect(result.current.browseUnavailable).toBe(false);
+    getDaily.mockRejectedValue(new Error('Network Error'));
+    await act(async () => {
+      await result.current.loadBrowseFoods();
+    });
+    expect(result.current.browseUnavailable).toBe(true);
+    expect(result.current.recentFoods.map((f) => f.name)).toEqual(['Chicken breast', 'Banana', 'Rolled oats']);
+    expect(result.current.lastMeals.breakfast).toBeDefined();
+  });
+
+  it('clears the flag on the next successful read', async () => {
+    const working = getDaily.getMockImplementation();
+    getDaily.mockRejectedValue(new Error('Network Error'));
+    const result = await loaded();
+    expect(result.current.browseUnavailable).toBe(true);
+    expect(result.current.recentFoods).toEqual([]);
+    if (working) getDaily.mockImplementation(working);
+    await act(async () => {
+      await result.current.loadBrowseFoods();
+    });
+    expect(result.current.browseUnavailable).toBe(false);
+    expect(result.current.recentFoods).toHaveLength(3);
+  });
+});
