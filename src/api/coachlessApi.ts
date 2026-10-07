@@ -163,11 +163,15 @@ export async function checkCoachCode(code: string): Promise<CoachCodeCheck> {
   return CheckSchema.parse(res.data);
 }
 
-/** One attempt = one Idempotency-Key; the caller reuses it on a retry of the same code. */
-export async function redeemCoachCode(code: string, idempotencyKey: string): Promise<RedeemResult> {
+/** One attempt = one Idempotency-Key (reused on a retry of the same code). Notice: B-SHARE-127. */
+export async function redeemCoachCode(
+  code: string,
+  idempotencyKey: string,
+  coachSharingNotice?: string | null,
+): Promise<RedeemResult> {
   const res = await api.post(
     '/coachless/coach-code/redeem',
-    { code: code.trim() },
+    { code: code.trim(), ...(coachSharingNotice ? { coach_sharing_notice: coachSharingNotice } : {}) },
     { timeout: COACHLESS_REQUEST_TIMEOUT_MS, headers: { 'Idempotency-Key': idempotencyKey } },
   );
   return RedeemSchema.parse(res.data);

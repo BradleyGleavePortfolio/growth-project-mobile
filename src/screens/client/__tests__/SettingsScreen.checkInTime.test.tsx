@@ -1,6 +1,11 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ThemeProvider } from '../../../theme/ThemeProvider';
+import { profileApi, notificationsApi } from '../../../services/api';
+import { signOut } from '../../../services/authActions';
+import { updateSupabasePassword } from '../../../utils/supabaseAuth';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import SettingsScreen from '../SettingsScreen';
 import { keepDayOneAnswers } from '../../day-one/answers';
@@ -11,15 +16,21 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: mockUserId, email: 'client@example.com' }),
 }));
 jest.mock('../../../services/api', () => ({
-  profileApi: { update: jest.fn() },
-  notificationsApi: { updatePreferences: jest.fn() },
+  profileApi: { update: jest.fn(async () => ({})) },
+  notificationsApi: { updatePreferences: jest.fn(async () => ({})) },
 }));
 jest.mock('../../../services/authActions', () => ({
   signOut: jest.fn(), refreshProfile: jest.fn(),
 }));
-jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn() }));
+jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn(async () => ({ ok: true })) }));
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
+jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
+jest.mock('../../../config/featureFlags', () => ({ featureFlags: { consultationOnboarding: true, romanChat: true } }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name }: { name: string }) =>
+    require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
+}));
 
 const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
   goBack: jest.fn(), navigate: jest.fn(),
@@ -32,6 +43,69 @@ beforeEach(async () => {
 });
 
 describe('Settings uses this account’s retained Day-1 check-in choice', () => {
+  it('preserves all other Settings navigation and preference actions', async () => {
+    const view = await render(<SettingsScreen navigation={navigation} />);
+    await fireEvent.press(view.getByTestId('icon-arrow-back'));
+    expect(navigation.goBack).toHaveBeenCalled();
+    for (const [label, route] of [
+      ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
+      ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
+      ['Roman and AI', 'RomanAiConsent'], ['Blocked Users', 'BlockedUsers'],
+      ['Request my data export', 'DataExport'],
+    ]) {
+      await fireEvent.press(view.getByLabelText(label));
+      expect(navigation.navigate).toHaveBeenLastCalledWith(route);
+    }
+    const steps = [view.getAllByTestId('icon-remove')[0], view.getAllByTestId('icon-add')[0],
+      view.getAllByTestId('icon-remove')[1], view.getAllByTestId('icon-add')[1]];
+    for (const [index, payload] of [[0, { meals_per_day: 3 }], [1, { meals_per_day: 4 }],
+      [2, { water_goal_oz: 90 }], [3, { water_goal_oz: 100 }]] as const) {
+      await fireEvent.press(steps[index]);
+      expect(profileApi.update).toHaveBeenLastCalledWith(payload);
+    }
+    const keys = ['dailyCheckin', 'mealReminders', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
+    for (let index = 0; index < keys.length; index += 1) {
+      const toggle = view.getAllByRole('switch')[index], value = !toggle.props.value;
+      await fireEvent(toggle, 'valueChange', value);
+      await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)[keys[index]]).toBe(value));
+    }
+    expect(notificationsApi.updatePreferences).toHaveBeenCalledTimes(4);
+  });
+
+  it('preserves password, reset and sign-out controls without real account writes', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const view = await render(<SettingsScreen navigation={navigation} />);
+    await fireEvent.press(view.getByText('Change Password'));
+    await fireEvent.press(view.getByLabelText('Close'));
+    await fireEvent.press(view.getByText('Change Password'));
+    await fireEvent.changeText(view.getByLabelText('New password'), 'test-password');
+    await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'test-password');
+    await fireEvent.press(view.getByLabelText('Update password'));
+    expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
+    await fireEvent.press(view.getByText('Reset Onboarding'));
+    expect(alert).toHaveBeenLastCalledWith('Reset Onboarding', expect.any(String), expect.any(Array));
+    const resetButtons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
+    await resetButtons.find((button) => button.text === 'Reset')!.onPress!();
+    expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
+    await fireEvent.press(view.getByText('Sign Out'));
+    const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
+    buttons.find((button) => button.text === 'Sign Out')!.onPress!();
+    expect(signOut).toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('offers working Light and System controls, and resolves a stored Dark to Light', async () => {
+    await AsyncStorage.setItem('gp_appearance', 'dark');
+    await render(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
+    await waitFor(() => expect(screen.getByLabelText('Light').props.accessibilityState.checked).toBe(true));
+    expect(screen.queryByLabelText('Dark')).toBeNull();
+    for (const [label, value] of [['System', 'system'], ['Light', 'light']]) {
+      await fireEvent.press(screen.getByLabelText(label));
+      await waitFor(async () => expect(await AsyncStorage.getItem('gp_appearance')).toBe(value));
+      expect(screen.getByLabelText(label).props.accessibilityState.checked).toBe(true);
+    }
+  });
+
   it.each<[number, number, string]>([
     [7, 30, '7:30 AM'],
     [18, 45, '6:45 PM'],

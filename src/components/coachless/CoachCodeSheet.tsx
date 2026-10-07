@@ -44,6 +44,8 @@ import {
   type RedeemResult,
 } from '../../api/coachlessApi';
 import { grantState, keepsIdempotencyKey, refusalLine } from './coachlessCopy';
+import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
+import CoachSharingNotice from '../coachSharing/CoachSharingNotice';
 
 export const CHECK_DEBOUNCE_MS = 400;
 
@@ -95,6 +97,8 @@ export default function CoachCodeSheet({
   const [welcome, setWelcome] = useState<RedeemResult | null>(null);
   const keyRef = useRef<{ code: string; key: string } | null>(null);
   const checkSeq = useRef(0);
+  // B-SHARE-127: the sentence above Join; its version is sent with the code.
+  const sharingVersion = useCoachSharingNotice();
 
   useEffect(() => {
     if (visible) setCode(initialCode ?? '');
@@ -137,7 +141,7 @@ export default function CoachCodeSheet({
     setJoining(true);
     setJoinFailure(null);
     try {
-      const result = await redeemCoachCode(code, keyRef.current.key);
+      const result = await redeemCoachCode(code, keyRef.current.key, sharingVersion);
       keyRef.current = null;
       // Local mirror only; the server already holds the attach.
       await patchUserCache({ coach_id: result.coach.id }).catch((e: unknown) =>
@@ -160,7 +164,7 @@ export default function CoachCodeSheet({
     } finally {
       setJoining(false);
     }
-  }, [code, joining, onAttached, refreshEntitlement]);
+  }, [code, joining, onAttached, refreshEntitlement, sharingVersion]);
 
   const close = useCallback(() => {
     if (joining) return;
@@ -231,6 +235,10 @@ export default function CoachCodeSheet({
                 </Text>
               ) : null}
             </View>
+            <CoachSharingNotice
+              version={sharingVersion}
+              coachName={check.state === 'valid' ? check.coach.name : null}
+            />
             <Pressable
               onPress={() => void join()}
               disabled={!canJoin}

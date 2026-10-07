@@ -75,7 +75,7 @@ export default function RomanTypingIndicator({
       accessibilityLiveRegion="polite"
     >
       <RomanAvatar crop="neutral" size={32} testID="roman-typing-avatar" />
-      <View style={styles.bubble}>
+      <View style={styles.content}>
         <Text style={styles.label}>{ROMAN_TYPING_LABEL}</Text>
         <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {dots.map((dot, i) => (
@@ -96,14 +96,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
-  },
-  bubble: {
-    backgroundColor: colors.cream,
-    borderRadius: radius.lg,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
+  },
+  content: {
+    flex: 1,
     gap: spacing.xs,
   },
   label: {

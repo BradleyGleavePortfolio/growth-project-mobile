@@ -55,18 +55,20 @@ import {
   conflictCodeOf,
   httpStatusOf,
 } from '../../api/consultationApi';
-import { aiConsentApi, isLiveGrant } from '../../api/aiConsentApi';
+import { aiConsentApi, type AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import {
   clearAiWithdrawalPending,
+  isLiveRomanGrant,
   runAiMarkerStep,
   grantRomanWithRetry,
   markAiWithdrawalPending,
   readAiWithdrawalPending,
+  romanBox2MemoryCopyOf,
+  romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
 } from '../../lib/consultation/aiConsent';
 import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
-import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -96,6 +98,11 @@ import {
   writeDraft,
 } from '../../lib/consultation/storage';
 import { readUserCacheSync } from '../../lib/userCache';
+import {
+  acceptFirstSignInCoachSharing,
+  readFirstSignInCoachSharing,
+  type FirstSignInSharing,
+} from '../../lib/coachSharingFirstSignIn';
 import { reconcileResume } from '../../lib/consultation/resume';
 import type { AnswerValue, Answers, ChapterId } from '../../lib/consultation/types';
 import { logger } from '../../utils/logger';
@@ -125,6 +132,13 @@ export type ConsultationApi = Pick<typeof consultationApi, 'save' | 'getState' |
    * client finishes go out only while this is still the same user.
    */
   sessionUserId?: () => string | null;
+  /**
+   * B-SHARE-GUEST-127: the coach-sharing sentence P0 prints above Continue
+   * for an account linked outside the app (GET /consent/coach-sharing-notice),
+   * and the record sent on that Continue (POST). Absent: nothing shown.
+   */
+  getCoachSharingNotice?: () => Promise<FirstSignInSharing | null>;
+  acceptCoachSharingNotice?: (version: string) => Promise<boolean>;
 };
 
 const defaultApi: ConsultationApi = {
@@ -135,6 +149,8 @@ const defaultApi: ConsultationApi = {
   grantRomanConsent: aiConsentApi.grantRoman,
   withdrawRomanConsent: aiConsentApi.withdrawRoman,
   sessionUserId: () => readUserCacheSync()?.id ?? null,
+  getCoachSharingNotice: readFirstSignInCoachSharing,
+  acceptCoachSharingNotice: acceptFirstSignInCoachSharing,
 };
 
 /**
@@ -212,6 +228,10 @@ export default function ConsultationFlow({
   /** The last failed intake save: status, machine code and support reference. */
   const lastSaveFailure = useRef<UnexpectedFailure>({ status: null });
   const [consentError, setConsentError] = useState<ConsentError>(null);
+  /** B-SHARE-GUEST-127: the coach-sharing sentence on P0 (null: none), sent once on P0 Continue. */
+  const [coachSharing, setCoachSharing] = useState<FirstSignInSharing | null>(null);
+  const coachSharingRef = useRef<FirstSignInSharing | null>(null);
+  const coachSharingSent = useRef(false);
   const [consentNonce, setConsentNonce] = useState(0);
   const answersRef = useRef<Answers>({});
   const screenRef = useRef<string>('W1');
@@ -268,6 +288,9 @@ export default function ConsultationFlow({
   /** Counts loads (and user switches): a step from an earlier load never adopts into this one. */
   const aiLoadEpoch = useRef(0);
   const [aiShown, setAiShown] = useState(false);
+  /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
+  const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
+  const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -662,7 +685,9 @@ export default function ConsultationFlow({
       const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION), true);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status);
+        setAiMemory(aiMemoryRef.current);
+        setAiConfirmed(isLiveRomanGrant(out.status), true);
         reconcileAi(gen);
       }
     } catch {
@@ -711,7 +736,11 @@ export default function ConsultationFlow({
           // Each attempt, the retry included, needs the same signed-in user
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
-            grantRomanWithRetry(api.grantRomanConsent, () => aiLive(gen) && aiWant.current === true),
+            grantRomanWithRetry(
+              api.grantRomanConsent,
+              () => aiLive(gen) && aiWant.current === true,
+              () => romanGrantBody(aiMemoryRef.current),
+            ),
           );
           if (!aiLive(gen)) return;
           if (result === 'granted') {
@@ -929,6 +958,12 @@ export default function ConsultationFlow({
         void enqueueSave(ans);
         // Box 2: optional, recorded after the P0 save, never blocking.
         recordAiChoice(aiChoice);
+        // Coach sharing: P0 printed the sentence above this Continue.
+        const sharing = coachSharingRef.current;
+        if (sharing && !coachSharingSent.current && api.acceptCoachSharingNotice) {
+          coachSharingSent.current = true;
+          void api.acceptCoachSharingNotice(sharing.version);
+        }
         goNext('P0', ans);
         return;
       }
@@ -940,8 +975,23 @@ export default function ConsultationFlow({
       }
       goNext(from, ans);
     },
-    [clearTimer, enqueueSave, goNext, persistLocal, recordAiChoice, setAnswers],
+    [api, clearTimer, enqueueSave, goNext, persistLocal, recordAiChoice, setAnswers],
   );
+
+  // B-SHARE-GUEST-127: one read per mount; a failed read shows nothing.
+  useEffect(() => {
+    const read = api.getCoachSharingNotice;
+    if (!read) return undefined;
+    let live = true;
+    void read().then((n) => {
+      if (!live) return;
+      coachSharingRef.current = n;
+      setCoachSharing(n);
+    });
+    return () => {
+      live = false;
+    };
+  }, [api]);
 
   const onBack = useCallback(() => {
     clearTimer();
@@ -1172,7 +1222,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
       />
     );
   }

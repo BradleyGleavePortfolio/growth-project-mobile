@@ -51,6 +51,16 @@ beforeEach(() => {
 });
 
 describe('saved workout corrections (B-SESSION-1)', () => {
+  it('DES-W-127 preserves the rendered correction screen save and cancel routes', async () => {
+    const screen = await render(<WorkoutHistoryEditScreen />);
+    expect(screen.getByLabelText('Save workout changes')).toBeTruthy();
+    expect(screen.getByTestId('set-weight-0-0').props.value).toBe('135');
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Cancel workout editing'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(api.put).not.toHaveBeenCalled();
+  });
+
   it('edits an actual saved weight, persists to its PUT endpoint and refreshes workouts', async () => {
     const screen = await render(<WorkoutHistoryEditScreen />);
     await fireEvent.changeText(screen.getByTestId('set-weight-0-0'), '137.5');

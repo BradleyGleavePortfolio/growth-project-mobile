@@ -74,6 +74,14 @@ Coverage:
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
 
+### RomanAiConsentScreen: "Roman's memory"
+
+The last row of Settings > Privacy > Roman and AI is a "Roman's memory" switch (R11-C2B). It is ON for a live
+client-ai-v5 grant. Off asks once, then grants client-ai-v4: Roman stays allowed and stops using his notes. On asks
+with the server's v5 text and grants it with the server sha256. Roman's notes are deleted only when the account is
+deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes them, and the off copy says neither
+"deleted" nor "kept", so it stays true while production still runs a backend that deletes them on memory off.
+
 ### RomanConversationsScreen and RomanConversationScreen
 
 `RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).

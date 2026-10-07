@@ -6,7 +6,7 @@
  * unit-tested directly in `__tests__/consultationEngine.test.ts`.
  */
 import { SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
-import { CONSULT_CONSENT_COPY_VERSION } from './consentVersion';
+import { CONSULT_CONSENT_COPY_VERSION, CONSULT_CONSENT_MEMORY_COPY_VERSION } from './consentVersion';
 import type {
   AnswerValue,
   Answers,
@@ -211,7 +211,8 @@ export function isConsentAnswerCurrent(v: AnswerValue | undefined): boolean {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
   const c = v as { agreed?: unknown; copy_version?: unknown; agreed_at?: unknown; text_sha256?: unknown };
   if (c.agreed !== true) return false;
-  if (c.copy_version !== CONSULT_CONSENT_COPY_VERSION) return false;
+  // v4 = the same screen with the server's client-ai-v5 paragraph 4 (R11-C2B).
+  if (c.copy_version !== CONSULT_CONSENT_COPY_VERSION && c.copy_version !== CONSULT_CONSENT_MEMORY_COPY_VERSION) return false;
   if (typeof c.agreed_at !== 'string' || Number.isNaN(Date.parse(c.agreed_at))) return false;
   if (c.text_sha256 !== undefined && (typeof c.text_sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(c.text_sha256))) return false;
   return true;

@@ -36,7 +36,7 @@ export const Colors = {
   background:      CanonicalColors.background,        // #F5EFE4 bone
   surface:         CanonicalColors.surface,           // #F1E8D5 cream
   surfaceElevated: CanonicalColors.surfaceElevated,
-  textMuted:       CanonicalColors.textMuted,         // #B1A89F stone
+  textMuted:       CanonicalColors.textMuted,         // readable warm grey
   textPrimary:     CanonicalColors.textPrimary,
   textSecondary:   CanonicalColors.textSecondary,
   textOnPrimary:   CanonicalColors.textOnPrimary,
@@ -100,7 +100,7 @@ export const colors = {
     fat:     CanonicalColors.fat,
     water:   CanonicalColors.water,
     fiber:   CanonicalColors.fiber,
-    consistency: CanonicalColors.textMuted,  // stone — neutral consecutive-day accent
+    consistency: CanonicalColors.textMuted,  // warm grey — neutral consecutive-day accent
     habit:       CanonicalColors.templateMobility,  // muted lavender
   },
   shadow:      CanonicalColors.cardShadow,
@@ -109,7 +109,7 @@ export const colors = {
 
 // ─── Legacy Typography export ──────────────────────────────────────────────────
 // Re-maps old keys to new luxury typography values.
-// CRITICAL: weight 400 for headings — not 700/800.
+// CRITICAL: weight 400 for headings — not 700/800; body uses the readable muted role.
 export const Typography = {
   // Map legacy keys → new token values
   hero:     { fontFamily: 'CormorantGaramond_400Regular', fontSize: 44, lineHeight: 46, fontWeight: '400' as const, letterSpacing: 0.4 },

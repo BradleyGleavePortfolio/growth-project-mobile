@@ -50,7 +50,7 @@ export const ROMAN_COMMUNITY_LINES = {
   // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (Today empty)
   todayEmpty: {
     straight:
-      'Nothing is waiting for you today, {firstName}. Everything is in order. Check back a little later.',
+      'Nothing is waiting for you today, {firstName}. Check back later.',
     dry: "It's quiet today, {firstName} — respectably so. Nothing needs you yet. Enjoy the calm while it lasts.",
   },
   // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (Hall / Lab feed empty)

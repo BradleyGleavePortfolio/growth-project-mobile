@@ -1,8 +1,8 @@
 /**
- * RomanMessageBubble — one chat turn.
+ * RomanMessageBubble — one editorial chat turn (legacy component name).
  *
- * FACE+VOICE (operator rule, P0 if violated): every ASSISTANT bubble renders
- * Roman's face (reused RomanAvatar, neutral crop) to the left of the text, so
+ * FACE+VOICE (operator rule, P0 if violated): every ASSISTANT turn renders
+ * Roman's face (reused RomanAvatar, neutral crop) beside its speaker label, so
  * Roman's voice is never disembodied. User turns render right-aligned with no
  * avatar. An interrupted assistant turn (backend persisted a partial on client
  * disconnect — toMessageView.interrupted, controller L210) shows a calm, typed
@@ -16,7 +16,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
 import type { RomanMessage } from '../../api/romanApi';
-import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+import { colors, lightTokens, spacing, typography } from '../../theme/tokens';
 
 export interface RomanMessageBubbleProps {
   message: RomanMessage;
@@ -32,8 +32,11 @@ function RomanMessageBubbleComponent({
   if (isAssistant) {
     return (
       <View style={styles.assistantRow} testID={testID} role="listitem">
-        <RomanAvatar crop="neutral" size={32} testID="roman-bubble-avatar" />
-        <View style={styles.assistantBubble}>
+        <View style={styles.speakerRow}>
+          <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" />
+          <Text style={styles.speakerLabel}>ROMAN</Text>
+        </View>
+        <View style={styles.assistantBody}>
           <Text
             style={styles.assistantText}
             accessibilityLabel={`Roman said: ${message.content}`}
@@ -52,7 +55,8 @@ function RomanMessageBubbleComponent({
 
   return (
     <View style={styles.userRow} testID={testID} role="listitem">
-      <View style={styles.userBubble}>
+      <View style={styles.userBody}>
+        <Text style={[styles.speakerLabel, styles.userLabel]}>YOU</Text>
         <Text style={styles.userText} accessibilityLabel={`You said: ${message.content}`}>
           {message.content}
         </Text>
@@ -66,21 +70,29 @@ export default RomanMessageBubble;
 
 const styles = StyleSheet.create({
   assistantRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
+    marginHorizontal: spacing.xl,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: lightTokens.border,
   },
-  assistantBubble: {
-    flex: 1,
-    backgroundColor: colors.cream,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+  speakerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  speakerLabel: {
+    ...typography.caption,
+    fontSize: 13,
+    letterSpacing: 1.6,
+    color: lightTokens.textMuted,
+  },
+  assistantBody: {
+    gap: spacing.xs,
   },
   assistantText: {
-    ...typography.body,
+    ...typography.h3,
+    lineHeight: 28,
     color: colors.ink,
   },
   interruptedNote: {
@@ -89,27 +101,22 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   userRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    alignItems: 'flex-end',
+    paddingVertical: spacing.xl,
+    marginHorizontal: spacing.xl,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: lightTokens.border,
   },
-  userBubble: {
-    // Product plan §5.1: the forest accent is for outlines/text, NOT a filled
-    // block (R1 UX finding P2). The user turn reads as a faint forest-tinted
-    // surface (token-derived via withAlpha, no raw hex) with a hairline accent
-    // border, and the text uses the forest accent itself — ink-legible on the
-    // pale tint while keeping the surface calm rather than a saturated fill.
+  userBody: {
     maxWidth: '82%',
-    backgroundColor: withAlpha(colors.forest, 0.08),
-    borderWidth: 0.5,
-    borderColor: withAlpha(colors.forest, 0.35),
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+  userLabel: {
+    textAlign: 'right',
   },
   userText: {
     ...typography.body,
     color: colors.ink,
+    textAlign: 'right',
   },
 });

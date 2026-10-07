@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { formatDate, getTodayString, addDays } from '../utils/date';
+import { useTheme } from '../theme/useTheme';
+import { QuietText as Text } from '../ui/progress/QuietBar';
 
 interface DaySelectorProps {
   selectedDate: string;
@@ -14,6 +16,7 @@ export default function DaySelector({
   onDateChange,
 }: DaySelectorProps) {
   const isToday = selectedDate === getTodayString();
+  const { semanticColors: sc } = useTheme();
   const displayLabel = isToday ? 'Today' : formatDate(selectedDate);
 
   return (
@@ -32,13 +35,15 @@ export default function DaySelector({
       </TouchableOpacity>
 
       <TouchableOpacity
+        style={styles.dateButton}
         onPress={() => onDateChange(getTodayString())}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${displayLabel}, tap to go to today`}
         accessibilityHint={isToday ? undefined : 'Double tap to jump back to today'}
       >
-        <Text style={styles.dateText}>{displayLabel}</Text>
+        <Text style={[styles.dateText, { color: selectedDate > getTodayString() ? sc.textMuted : sc.textPrimary }]}>{displayLabel}</Text>
+        {isToday ? <View testID="today-dot" style={styles.todayDot} /> : null}
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -71,6 +76,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   arrow: {
+    minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center',
     padding: 4,
   },
   dateText: {
@@ -80,4 +86,6 @@ const styles = StyleSheet.create({
     minWidth: 120,
     textAlign: 'center',
   },
+  dateButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
+  todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary, marginTop: 4 },
 });

@@ -46,6 +46,13 @@ export const AI_CONSENT_VERSION = 'client-ai-v4' as const;
  */
 export const AI_CONSENT_MEMORY_VERSION = 'client-ai-v5' as const;
 
+/**
+ * R11-C2B (owner 10-07 10:18, Roman memory on by default): the P0 screen version when box 2 shows the
+ * server's client-ai-v5 paragraph (backend consult-consent-v4: the v3 screen with that paragraph 4).
+ * Otherwise P0 stays CONSULT_CONSENT_COPY_VERSION with today's v4 paragraph.
+ */
+export const CONSULT_CONSENT_MEMORY_COPY_VERSION = 'consult-consent-v4' as const;
+
 /** Personal-training waiver version that box 1 records (via the intake). */
 export const WAIVER_VERSION = 'pt-waiver-v1' as const;
 

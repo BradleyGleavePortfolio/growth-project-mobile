@@ -101,6 +101,7 @@ export default function LogScreen() {
   const [editMealType, setEditMealType] = useState<MealType>('breakfast');
   const [foodSaving, setFoodSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [addedFoodName, setAddedFoodName] = useState<string | null>(null);
 
   // Quantity modal state
   const [selectedFood, setSelectedFood] = useState<SearchResult | null>(null);
@@ -177,6 +178,7 @@ export default function LogScreen() {
     setSearchError(null);
     setManualMode(false);
     setRecentTab('recent');
+    setAddedFoodName(null);
     resetManualFields();
     setModalVisible(true);
     // One parallel fetch fills Recent, Frequent and the repeat-meal card.
@@ -244,6 +246,7 @@ export default function LogScreen() {
   };
 
   const handleSelectFood = (food: SearchResult) => {
+    setAddedFoodName(null);
     setSelectedFood(food);
     // Pre-fill from NL parse when present, falling back to sensible defaults.
     // If the parsed unit is one the picker no longer offers for this food
@@ -315,7 +318,7 @@ export default function LogScreen() {
       track(AnalyticsEvents.MEAL_LOGGED, { meal_type: activeMealType, source: 'search' });
       setQuantityModalVisible(false);
       setSelectedFood(null);
-      setModalVisible(false);
+      setAddedFoodName(selectedFood.name);
       setSavedMessage(`${selectedFood.name} added to ${MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}.`);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
@@ -330,7 +333,7 @@ export default function LogScreen() {
   const handleManualLog = async () => {
     if (foodSaving) return;
     if (!currentUser || !manualFields.foodName.trim() || !manualFields.calories) {
-      Alert.alert('Missing Info', 'Enter at least a food name and calories.');
+      Alert.alert('Missing info', 'Enter at least a food name and calories.');
       return;
     }
     const args = { ...manualFields, date: selectedDate, mealType: activeMealType };
@@ -470,7 +473,7 @@ export default function LogScreen() {
 
   const handleDeleteFood = async (log: FoodLog) => {
     if (!currentUser) return;
-    Alert.alert('Delete Food', `Remove ${log.foodName}?`, [
+    Alert.alert('Delete food', `Remove ${log.foodName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -586,6 +589,7 @@ export default function LogScreen() {
       <FoodSearchModal
         visible={modalVisible}
         activeMealType={activeMealType}
+        addedFoodName={addedFoodName}
         onClose={() => {
           if (!foodSaving) {
             if (quantityModalVisible) {

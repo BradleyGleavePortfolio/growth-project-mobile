@@ -113,13 +113,15 @@ export interface ClaimResult {
 
 export async function claimPendingInviteCode(
   code?: string | null,
+  // B-SHARE-127: the coach-sharing sentence version, when the banner showed it.
+  coachSharingNotice?: string | null,
 ): Promise<ClaimResult> {
   const c = (code ?? (await readPendingInviteCode()))?.trim();
   if (!c) {
     return { ok: false, reason: 'missing', message: 'No invite code to claim.' };
   }
   try {
-    const response = await authApi.attachInviteCode(c);
+    const response = await authApi.attachInviteCode(c, coachSharingNotice);
     const coachId = response?.data?.coach_id;
     if (typeof coachId === 'string') {
       await patchUserCache({ coach_id: coachId }).catch((err: unknown) =>

@@ -53,11 +53,14 @@ import defaultAiConsentApi, {
   isLiveGrant,
   type AiConsentOutcome,
   type AiConsentStatusResponse,
+  type AiConsentUpgradeCopy,
 } from '../../api/aiConsentApi';
 import {
   AI_LEDGER_NOT_SENT,
   grantAiChoiceAs,
   isAmbiguousWriteOutcome,
+  romanBox2MemoryCopyOf,
+  romanGrantBody,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
 import { diagnosticReference, shortReference } from '../../utils/correlation';
@@ -86,6 +89,8 @@ interface ReadyCopy {
   status: AiConsentStatusResponse;
   paragraph: string;
   label: string;
+  /** R11-C2B: the server's client-ai-v5 copy shown and granted while Roman memory is on, else null. */
+  memory: AiConsentUpgradeCopy | null;
   /** An older version was allowed and the wording changed (C-326-2). */
   reconsent: boolean;
 }
@@ -178,7 +183,9 @@ export default function AiConsentSheet({
 
   const readyFrom = useCallback(
     (status: AiConsentStatusResponse): Phase => {
-      const copy = serverCopyOf(status);
+      // Roman memory on by default (owner 10-07 10:18): the same Roman consent, with the v5 text.
+      const memory = romanBox2MemoryCopyOf(status);
+      const copy = memory ? { paragraph: memory.paragraph.text, label: memory.box_label.text } : serverCopyOf(status);
       if (!copy) {
         // A status without the wording for its current version cannot be
         // consented to honestly; never fall back to wording the server did
@@ -188,7 +195,13 @@ export default function AiConsentSheet({
         });
         return { kind: 'failed', reference, during: 'load' };
       }
-      return { kind: 'ready', status, ...copy, reconsent: status.state === 'needs_reconsent' || status.needs_reconsent };
+      return {
+        kind: 'ready',
+        status,
+        ...copy,
+        memory,
+        reconsent: status.state === 'needs_reconsent' || status.needs_reconsent,
+      };
     },
     [reportUnknown],
   );
@@ -257,19 +270,23 @@ export default function AiConsentSheet({
 
   const allow = useCallback(async () => {
     if (phase.kind !== 'ready') return;
-    const { status } = phase;
-    const version = status.current_version;
+    const { status, memory } = phase;
+    const version = memory?.version ?? status.current_version;
     const uid = sessionUserId();
     // The choice belongs to the account whose wording is on screen: if that
     // account is no longer the signed-in one, nothing is sent.
     if (loadedFor.current !== null && uid !== loadedFor.current) return setPhase({ kind: 'not_sent' });
     setPhase({ ...phase, kind: 'saving' });
     const out: AiConsentOutcome | typeof AI_LEDGER_NOT_SENT = await grantAiChoiceAs(uid, sessionUserId, () =>
-      api.grantRoman({
-        version,
-        ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
-        platform: platformTag(),
-      }),
+      api.grantRoman(
+        memory
+          ? romanGrantBody(memory)
+          : {
+              version,
+              ...(status.copy?.sha256 ? { copy_sha256: status.copy.sha256 } : {}),
+              platform: platformTag(),
+            },
+      ),
     );
     if (!active.current) return;
     // Nothing went out (the account changed before the write's turn): true to say so.
