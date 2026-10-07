@@ -1,20 +1,19 @@
 /**
  * CalendarHomeScreen — S-SCHED client Calendar tab root.
  *
- * My coaches -> each coach's approved appointment types -> book; then
- * Upcoming sessions with their status, then Past sessions (paged). The
+ * Next session -> later sessions -> each coach's appointment types to book,
+ * then Past sessions (paged). The
  * welcome call card reads the persistent server marker (book / booked /
  * done). Times are in the client's own time zone. Empty and failed states
  * give recovery actions instead of a fake empty schedule. Phone-calendar
  * exports are explicit user-controlled copies.
  */
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { BookableCoach, CoachingSession, SessionType } from '../../../api/schedulingApi';
-import { resolveClientTimezone } from '../../../api/schedulingApi';
+import { resolveCallLink, resolveClientTimezone } from '../../../api/schedulingApi';
 import { useBookableTypes, useMyCoaches, useMySessions, usePastSessions } from '../../../hooks/useCalendar';
 import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
@@ -22,26 +21,23 @@ import { SUPPORT_EMAIL } from '../../../constants/support';
 import { SupportEmailFallback, useSupportEmail } from '../../../components/support/SupportEmailFallback';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { Body, Card, Note, SecondaryButton, Section, Title, calendarStyles, statusLabel } from './calendarUi';
+import { Body, Card, Note, PrimaryButton, SecondaryButton, Section, SessionTime, Title, calendarStyles, sessionLength, statusLabel, useOpenMessages } from './calendarUi';
+import { canJoin, openCallLink } from './CalendarSessionScreen';
 
 type Props = NativeStackScreenProps<CalendarStackParamList, 'CalendarHome'>;
 
-export function useOpenMessages(): () => void {
-  const nav = useNavigation<NavigationProp<ParamListBase>>();
-  return () => {
-    // Messages lives in the Home stack; jump there from any tab.
-    nav.navigate('Home', { screen: 'Messages' });
-  };
-}
+export { useOpenMessages } from './calendarUi';
 
 function CoachTypes({
   coach,
   onBook,
   onMessage,
+  primaryBook,
 }: {
   coach: BookableCoach;
   onBook: (coach: BookableCoach, t: SessionType) => void;
   onMessage: () => void;
+  primaryBook: boolean;
 }) {
   const types = useBookableTypes(coach.coach_id);
   const clientTz = resolveClientTimezone();
@@ -67,6 +63,9 @@ function CoachTypes({
           <Body muted>{`${coach.name} has not opened any appointment types yet. You can ask in your conversation.`}</Body>
           <SecondaryButton label="Message your coach" onPress={onMessage} testID="calendar-message-coach" />
         </View>
+      ) : null}
+      {primaryBook && !types.isLoading && !types.isError && list[0] ? (
+        <PrimaryButton label="Book a session" onPress={() => onBook(coach, list[0])} />
       ) : null}
       {list.map((t) => (
         <Card
@@ -129,17 +128,21 @@ function WelcomeCard({
 function linkNote(s: CoachingSession): string | null {
   // pending_provider already reads "call link is being prepared".
   if (s.status !== 'scheduled') return null;
-  if (s.meeting_link_status === 'pending') return 'Your coach will add the call link before it starts.';
+  if (!resolveCallLink(s.video_url)) return 'Call link not added yet.';
   return null;
 }
 
 function SessionRow({
   s,
   coachTz,
+  coachName,
+  hero = false,
   onPress,
 }: {
   s: CoachingSession;
   coachTz: string | null;
+  coachName: string;
+  hero?: boolean;
   onPress: () => void;
 }) {
   const coachClock = coachTimeLabel(s.start_at, coachTz);
@@ -147,12 +150,13 @@ function SessionRow({
   return (
     <Card
       onPress={onPress}
-      accessibilityLabel={`${s.title}. ${formatWhen(s.start_at)}. ${statusLabel(s.status)}.`}
+      accessibilityLabel={`${s.title}. ${formatWhen(s.start_at)}. With ${coachName}. ${sessionLength(s)} ${statusLabel(s.status)}.`}
       accessibilityHint="Opens the session"
       testID={`calendar-session-${s.id}`}
     >
       <Body>{s.title}</Body>
-      <Note text={`${formatWhen(s.start_at)}. ${formatRange(s.start_at, s.end_at)}.`} />
+      {hero ? <SessionTime session={s} /> : <Note text={`${formatWhen(s.start_at)}. ${formatRange(s.start_at, s.end_at)}.`} />}
+      <Note text={`With ${coachName}. ${sessionLength(s)}`} />
       {coachClock ? <Note text={coachClock} /> : null}
       <Note text={statusLabel(s.status)} />
       {link ? <Note text={link} /> : null}
@@ -208,6 +212,12 @@ export default function CalendarHomeScreen({ navigation }: Props) {
   // no email app gets the address as selectable text, Copy and Try again.
   const supportEmail = useSupportEmail('Calendar help');
   const openMessages = useOpenMessages();
+  const [callMessage, setCallMessage] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   const coachById = useMemo(() => {
     const m = new Map<string, BookableCoach>();
@@ -223,6 +233,11 @@ export default function CalendarHomeScreen({ navigation }: Props) {
 
   const list = upcoming;
   const rows = list.data ?? [];
+  const next = [...rows].sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))
+    .find((s) => ['requested', 'scheduled', 'pending_provider'].includes(s.status) && Date.parse(s.end_at) > now);
+  const nextCoach = next ? coachById.get(next.coach_id)?.name ?? next.coach_name ?? 'your coach' : '';
+  const nextLink = next ? resolveCallLink(next.video_url) : null;
+  const bookingPrimary = !list.isLoading && !list.isError && !next;
 
   return (
     <SafeAreaView style={[calendarStyles.screen, { backgroundColor: sc.bgPrimary }]} edges={['top']}>
@@ -232,7 +247,45 @@ export default function CalendarHomeScreen({ navigation }: Props) {
         testID="calendar-home"
       >
         <Title>Calendar</Title>
-        <Body muted>Book time with your coach and see your sessions. Times are shown in your time zone.</Body>
+        <Body muted>{(coaches.data?.length ?? 0) > 0
+          ? 'Book time with your coach and see your sessions. Times are shown in your time zone.'
+          : 'Times are shown in your time zone.'}</Body>
+
+        <Section title={next ? 'Next session' : 'Upcoming sessions'}>
+          {list.isLoading ? <Note text="Loading upcoming sessions." /> : null}
+          {list.isError ? (
+            <View>
+              <Note text={calendarErrorMessage(list.error, 'load upcoming sessions')} testID="calendar-sessions-error" />
+              <SecondaryButton label="Refresh sessions" onPress={() => void list.refetch()} />
+            </View>
+          ) : null}
+          {next ? (
+            <View testID="calendar-next-session">
+              <SessionRow s={next} hero coachName={nextCoach} coachTz={coachById.get(next.coach_id)?.timezone ?? null}
+                onPress={() => navigation.navigate('CalendarSession', { sessionId: next.id })} />
+              {canJoin(next, now) && nextLink ? (
+                <PrimaryButton label={nextLink.kind === 'phone' ? `Call ${nextLink.display}` : 'Join'}
+                  onPress={() => void openCallLink(nextLink, nextCoach).then(setCallMessage)} testID="calendar-home-join" />
+              ) : null}
+              {callMessage ? <Note text={callMessage} /> : null}
+            </View>
+          ) : null}
+          {!list.isLoading && !list.isError && rows.length === 0 ? (
+            <View testID="calendar-upcoming-empty">
+              <Body muted>{(coaches.data?.length ?? 0) > 0
+                ? 'Nothing booked yet. Choose an appointment type below, or message your coach.'
+                : 'No upcoming sessions.'}</Body>
+              {(coaches.data?.length ?? 0) > 0 ? (
+                <SecondaryButton label="Message your coach" onPress={openMessages} testID="calendar-empty-message" />
+              ) : null}
+            </View>
+          ) : null}
+          {rows.filter((s) => s.id !== next?.id).map((s) => (
+            <SessionRow key={s.id} s={s} coachName={coachById.get(s.coach_id)?.name ?? s.coach_name ?? 'your coach'}
+              coachTz={coachById.get(s.coach_id)?.timezone ?? null}
+              onPress={() => navigation.navigate('CalendarSession', { sessionId: s.id })} />
+          ))}
+        </Section>
 
         <Section title={(coaches.data?.length ?? 0) > 1 ? 'Your coaches' : 'Your coach'}>
           {coaches.isLoading ? <Note text="Loading your coach." /> : null}
@@ -263,38 +316,15 @@ export default function CalendarHomeScreen({ navigation }: Props) {
               onOpen={(sessionId) => navigation.navigate('CalendarSession', { sessionId })}
             />
           ))}
-          {(coaches.data ?? []).map((c) => (
+          {(coaches.data ?? []).map((c, index) => (
             <CoachTypes
               key={c.coach_id}
               coach={c}
+              primaryBook={bookingPrimary && index === 0}
               onMessage={openMessages}
               onBook={(coach, t) =>
                 navigation.navigate('CalendarBook', { coachId: coach.coach_id, sessionTypeId: t.id })
               }
-            />
-          ))}
-        </Section>
-
-        <Section title="Upcoming sessions">
-          {list.isLoading ? <Note text="Loading upcoming sessions." /> : null}
-          {list.isError ? (
-            <View>
-              <Note text={calendarErrorMessage(list.error, 'load upcoming sessions')} testID="calendar-sessions-error" />
-              <SecondaryButton label="Refresh sessions" onPress={() => void list.refetch()} />
-            </View>
-          ) : null}
-          {!list.isLoading && !list.isError && rows.length === 0 ? (
-            <View testID="calendar-upcoming-empty">
-              <Body muted>Nothing booked yet. Pick an appointment type above, or message your coach.</Body>
-              <SecondaryButton label="Message your coach" onPress={openMessages} testID="calendar-empty-message" />
-            </View>
-          ) : null}
-          {rows.map((s) => (
-            <SessionRow
-              key={s.id}
-              s={s}
-              coachTz={coachById.get(s.coach_id)?.timezone ?? null}
-              onPress={() => navigation.navigate('CalendarSession', { sessionId: s.id })}
             />
           ))}
         </Section>
