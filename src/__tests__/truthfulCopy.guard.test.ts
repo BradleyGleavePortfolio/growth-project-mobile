@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert, Share } from 'react-native';
+import { Alert, Linking, Share } from 'react-native';
 const ROOT = path.resolve(__dirname, '..');
 function shipped(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -111,12 +111,13 @@ it.each(['not_configured', 'error'])('keeps purchase fallback Done and real Retr
   await fireEvent.press(s.getByTestId('purchase-unpack-done')); expect(mockNavigate).toHaveBeenLastCalledWith('Home');
 });
 it('keeps Membership Back, plans, messages and support without predicting coach activity', async () => {
+  jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   const s = await render(React.createElement(MembershipScreen));
   await waitFor(() => expect(s.getByText('Access starts when a coach invite is attached to this account.')).toBeTruthy());
   await fireEvent.press(s.getByLabelText('Back')); expect(mockBack).toHaveBeenCalled();
   await fireEvent.press(s.getByLabelText('View coaching plans')); expect(mockNavigate).toHaveBeenLastCalledWith('ClientPackages');
   await fireEvent.press(s.getByLabelText('Message your coach')); expect(mockNavigate).toHaveBeenLastCalledWith('Home', { screen: 'Messages' });
-  expect(s.getByLabelText('Contact support').props.onPress).toEqual(expect.any(Function));
+  await fireEvent.press(s.getByLabelText('Contact support')); expect(Linking.openURL).toHaveBeenCalledWith(require('../config/env').HELP_CONTACT_URL);
 });
 it('confirms only payment status, retaining the Home action', async () => {
   mockParams = { outcome: 'success', session_id: 'session' };
@@ -139,7 +140,7 @@ it('keeps private rooms/posts and refresh, removing only a false voice-note plac
   const s = await render(React.createElement(PrivateCommunityHubScreen));
   await waitFor(() => expect(s.getByText('Private rooms appear here after an invitation. No one is added without one.')).toBeTruthy());
   expect(s.getByText('Recent posts')).toBeTruthy(); expect(s.queryByText(/coming soon/i)).toBeNull();
-  expect(s.getByLabelText('Pull to refresh community').props.onRefresh).toEqual(expect.any(Function));
+  await s.getByLabelText('Private Community Hub screen').props.refreshControl.props.onRefresh(); expect(require('../services/wave11Adapters').fetchCommunityHub).toHaveBeenCalledTimes(2);
 });
 it('labels unavailable packages honestly and retains Back and refresh', async () => {
   const s = await render(React.createElement(CoachPackagesListScreen, { navigation: jest.requireMock('@react-navigation/native').useNavigation() }));
