@@ -242,7 +242,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     const s = await render(React.createElement(WorkoutScreen));
     await waitFor(() => expect(s.getByText('No routines yet')).toBeTruthy());
     expect(s.queryByText('From coach')).toBeNull();
-    const tree = JSON.stringify(s.toJSON());
+    const tree = s.getAllByText(/Quick Workout|My Routines|Recent Workouts|Complete workouts to see volume data/).map((node) => node.props.children).join('|');
     expect(tree.indexOf('Quick Workout')).toBeLessThan(tree.indexOf('My Routines'));
     expect(tree.indexOf('Recent Workouts')).toBeLessThan(tree.indexOf('Complete workouts to see volume data'));
     await fireEvent.press(s.getByText('Quick Workout'));

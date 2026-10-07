@@ -66,11 +66,11 @@ export default function ProfileScreen() {
       api.get<{ coach_id: string; consents: Array<{ scope: string; granted: boolean }> }>(`/consent/me?coach_id=${encodeURIComponent(coachId)}`),
     ]).then(([coach, consent]) => {
       if (alive && coach.data.id === coachId && consent.data.coach_id === coachId) setSharing({
-        coachId, name: coach.data.name,
+        coachId, name: coach.data.name || 'your coach',
         workouts: consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted),
         meals: consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted),
       });
-    }).catch((err: unknown) => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load', err); });
+    }).catch(() => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load'); });
     return () => { alive = false; };
   }, [currentUser?.id, currentUser?.coach_id]);
   const privacyCopy = !currentUser ? null : !currentUser.coach_id ? 'Workouts and meals are visible only to you.'
