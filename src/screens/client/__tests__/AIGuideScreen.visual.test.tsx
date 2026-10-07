@@ -75,3 +75,12 @@ it('labels a returned degraded reply without claiming the device is offline', as
   expect(await screen.findByText('Limited guidance is available for this reply.')).toBeTruthy();
   expect(screen.queryByText(/offline mode/)).toBeNull();
 });
+
+it('a service failure shows the failure note and never says limited guidance is available', async () => {
+  // FIX-RC-128 B1: a plain 503 returns no guidance at all.
+  jest.mocked(aiApi.chat).mockRejectedValueOnce({ response: { status: 503, data: {} } });
+  const screen = await render(<AIGuideScreen />);
+  await fireEvent.press(await screen.findByText('Recovery'));
+  expect(await screen.findByText(/Guidance could not answer this time because of a problem with The Growth Project service\./)).toBeTruthy();
+  expect(screen.queryByText('Limited guidance is available for this reply.')).toBeNull();
+});

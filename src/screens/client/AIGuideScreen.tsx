@@ -248,7 +248,9 @@ export default function AIGuideScreen() {
           'Guidance could not answer this time because of a problem with The Growth Project service. ' +
           'Send your message again in a minute. If it keeps happening, contact support' +
           (ref ? ` and share reference ${ref}.` : '.');
-        setIsDegraded(true);
+        // FIX-RC-128 B1: no guidance was returned, so the "Limited guidance"
+        // banner must not show; the failure note above is the whole state.
+        setIsDegraded(false);
       }
 
       const aiMsg: ChatMessage = {
