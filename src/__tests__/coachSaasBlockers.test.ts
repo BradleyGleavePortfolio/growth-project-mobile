@@ -178,9 +178,9 @@ describe('subCoachApi.invite + revoke', () => {
 describe('Coach Tools section wires the previously-disconnected routes', () => {
   const settingsSrc = readSrc('screens/coach/SettingsScreen.tsx');
 
+  // U-V1-1: Meal Templates is intentionally hidden from Settings in v1.
   it.each([
     'CoachWorkoutBuilder',
-    'CoachMealTemplates',
     'CoachBookingInbox',
     'CoachAvailabilityEditor',
     'BulkInvite',
