@@ -62,7 +62,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
 | `EducationScreen.tsx` | Lesson library (`lessonsApi`). |
 | `CommunityScreen.tsx` | Founders' circle leaderboard / wins (`communityApi`). |
-| `ProgressScreen.tsx` | Weight chart + macro adherence (`weightApi`, `logApi.getWeekly`). |
+| `ProgressScreen.tsx` | Weight chart + macro adherence (`weightApi`, `logApi.getWeekly`). The Log weight sheet sits in a KeyboardAvoidingView (iOS padding) so the field and Save stay above the number pad; tap outside or the iOS Done bar dismisses the pad; Save is disabled while saving and checks the server range (40-1,500 lb) first. Goal reads `profile.target_weight_lbs`; Change is monochrome; entry dates read "Wed 7 Oct". Tests: `__tests__/ProgressScreen.weighIn.test.tsx`. |
 | `CoachGuidelinesScreen.tsx` | Read-only render of guidelines the coach posted. |
 
 The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in this directory because it is shared with the coach navigator).
