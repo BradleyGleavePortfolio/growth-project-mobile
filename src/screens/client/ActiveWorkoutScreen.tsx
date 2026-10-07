@@ -34,7 +34,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { errorMessage } from '../../types/common';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
-import { assignmentIdempotencyKey, localCalendarDate } from '../../utils/workout/workoutLogging';
+import { assignmentIdempotencyKey, localCalendarDate, resumedSessionRouteParams } from '../../utils/workout/workoutLogging';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -348,6 +348,18 @@ export default function ActiveWorkoutScreen() {
           {
             text: 'Resume',
             onPress: () => {
+              // FU-WORKLOG2-126: the prompt also appears when the client
+              // opens Quick Workout, a routine or another coach workout.
+              // Resume kept that entry's name and coach assignment, so a
+              // resumed coach workout was saved under the wrong name and the
+              // coach's assignment never showed as done. Carry the saved
+              // workout's own name and assignment with its sets.
+              const carried = resumedSessionRouteParams(session, {
+                routineName,
+                exercises: exercisesJson,
+                assignmentId,
+              });
+              if (carried) navigation.setParams(carried);
               adoptPersistedSession(session);
               setHydrated(true);
             },
@@ -605,7 +617,8 @@ export default function ActiveWorkoutScreen() {
       setFilteredExercises(all);
     } catch {
       setShowAddModal(false);
-      Alert.alert('Exercise list unavailable', 'The exercise list did not load. Keep this workout open and try Add Exercise again.');
+      // FU-WORKLOG2-126: a failed Swap used to say "try Add Exercise again".
+      Alert.alert('Exercise list unavailable', `The exercise list did not load. Keep this workout open and try ${index === null ? 'Add Exercise' : 'Swap'} again.`);
     }
   };
 

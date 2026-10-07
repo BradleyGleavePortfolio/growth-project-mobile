@@ -128,6 +128,7 @@ type CoachSessionExercise = {
   weight_per_set?: number[];
   reps_per_set?: number[];
   sets_data?: unknown[];
+  notes?: string | null;
 };
 type CoachSessionRow = {
   id: string;
@@ -165,6 +166,10 @@ export function mapCoachWorkoutSessions(rows: unknown) {
       startTime,
       endTime: finishedAt,
       completed: true,
+      // FU-WORKLOG2-126: the coach card shows the client's own note and the
+      // real duration (no "0 min" when the duration was not recorded).
+      notes: typeof s.notes === 'string' ? s.notes.trim() : '',
+      durationMinutes: minutes,
       exercises: JSON.stringify((s.exercises || []).map((ex) => {
         const name = ex.exercise_name || ex.name || 'Exercise';
         const weights = Array.isArray(ex.weight_per_set) ? ex.weight_per_set : [];
@@ -184,8 +189,64 @@ export function mapCoachWorkoutSessions(rows: unknown) {
             `session:${s.id}/${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
           exerciseName: name,
           sets,
+          notes: typeof ex.notes === 'string' ? ex.notes.trim() : '',
         };
       })),
     };
   });
+}
+
+/**
+ * Set-by-set line for the coach's view of a finished client workout, in the
+ * same words the client sees in history: "3 sets · 135 lb x 8, 145 lb x 6".
+ * Only sets the client completed are listed.
+ */
+export function formatCoachSessionSets(
+  sets: Array<{ weight?: number; reps?: number; completed?: boolean }>,
+): string {
+  const done = (sets || []).filter((s) => s && s.completed !== false);
+  return formatLoggedSets({
+    sets_completed: done.length,
+    weight_per_set: done.map((s) => Number(s.weight) || 0),
+    reps_per_set: done.map((s) => Number(s.reps) || 0),
+  });
+}
+
+/**
+ * Coach Timeline line under a logged workout: "4 exercises · 52 min". It
+ * used to say "Logged" for every workout (WorkoutSession has no
+ * completed_at), so the coach had to open another tab to see what was done.
+ */
+export function workoutTimelineSubtitle(s: {
+  exercises?: unknown[] | null;
+  duration_minutes?: number | null;
+}): string {
+  const n = Array.isArray(s.exercises) ? s.exercises.length : 0;
+  const parts: string[] = [];
+  if (n > 0) parts.push(`${n} ${n === 1 ? 'exercise' : 'exercises'}`);
+  if (typeof s.duration_minutes === 'number' && s.duration_minutes > 0) {
+    parts.push(`${s.duration_minutes} min`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : 'Workout logged';
+}
+
+/**
+ * Route params to carry when the client taps Resume on the "Resume
+ * workout?" prompt. The prompt can appear on any entry to the live workout
+ * (Quick Workout, a routine, a different coach workout), and Resume adopted
+ * the saved sets but kept the entry's name and coach assignment. A coach
+ * workout resumed from Quick Workout was then saved as "Quick Workout" and
+ * the coach's assignment stayed not done. Returns null when the entry
+ * already matches the saved workout.
+ */
+export function resumedSessionRouteParams(
+  stored: { routineName?: string; exercisesJson?: string; assignmentId?: string },
+  current: { routineName?: string; exercises?: string; assignmentId?: string },
+): { routineName: string; exercises: string; assignmentId: string | undefined } | null {
+  const routineName = stored.routineName || current.routineName || 'Workout';
+  const assignmentId = stored.assignmentId || undefined;
+  if (routineName === current.routineName && (assignmentId ?? '') === (current.assignmentId ?? '')) {
+    return null;
+  }
+  return { routineName, exercises: stored.exercisesJson || '[]', assignmentId };
 }

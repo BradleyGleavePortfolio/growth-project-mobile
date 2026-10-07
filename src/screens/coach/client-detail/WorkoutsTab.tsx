@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
+import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
 
 export function WorkoutsTab({
   workoutSessions,
@@ -18,10 +19,16 @@ export function WorkoutsTab({
     try { return JSON.parse(json); } catch { return []; }
   };
 
-  const formatDuration = (start: string, end?: string): string => {
-    if (!end) return 'In progress';
-    const ms = new Date(end).getTime() - new Date(start).getTime();
-    const min = Math.round(ms / 60000);
+  // FU-WORKLOG2-126: a workout saved without a duration used to read
+  // "0 min". The duration is shown only when the client's phone recorded it.
+  const formatDuration = (session: WorkoutSession): string | null => {
+    let min: number | null = null;
+    if (typeof session.durationMinutes === 'number') {
+      min = session.durationMinutes;
+    } else if (session.durationMinutes === undefined && session.endTime) {
+      min = Math.round((new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / 60000);
+    }
+    if (min === null || !Number.isFinite(min) || min <= 0) return null;
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
   };
 
@@ -38,13 +45,14 @@ export function WorkoutsTab({
           const exList = parseExercises(session.exercises);
           const totalSets = exList.reduce((s, e) => s + e.sets.length, 0);
           const completedSets = exList.reduce((s, e) => s + e.sets.filter((st) => st.completed).length, 0);
+          const duration = formatDuration(session);
           return (
             <View key={session.id} style={styles.sessionCard}>
               <View style={styles.sessionTop}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.sessionName}>{session.routineName}</Text>
                   <Text style={styles.sessionDate}>
-                    {new Date(session.startTime).toLocaleDateString()} · {formatDuration(session.startTime, session.endTime || undefined)}
+                    {new Date(session.startTime).toLocaleDateString()}{duration ? ` · ${duration}` : ''}
                   </Text>
                 </View>
                 {session.completed ? (
@@ -73,10 +81,23 @@ export function WorkoutsTab({
                   <Text style={styles.sessionStatLabel}>Volume (lbs)</Text>
                 </View>
               </View>
-              {/* Exercise names */}
-              <Text style={styles.sessionExercises} numberOfLines={2}>
-                {exList.map((e) => e.exerciseName).join(' · ')}
-              </Text>
+              {/* FU-WORKLOG2-126: the coach used to see only counts and a
+                  list of names. Each exercise now shows the weight and reps
+                  of every set, and the notes the client wrote. */}
+              {exList.map((e, i) => (
+                <View key={`${e.exerciseId}-${i}`} style={{ marginTop: i === 0 ? 0 : 8 }} testID={`coach-session-${session.id}-exercise-${i}`}>
+                  <Text style={[styles.sessionExercises, { color: colors.textPrimary }]}>{e.exerciseName}</Text>
+                  <Text style={styles.sessionExercises}>{formatCoachSessionSets(e.sets)}</Text>
+                  {e.notes ? (
+                    <Text style={styles.sessionExercises}>Client note: {e.notes}</Text>
+                  ) : null}
+                </View>
+              ))}
+              {session.notes && session.notes !== session.routineName ? (
+                <Text style={[styles.sessionExercises, { marginTop: 10 }]} testID={`coach-session-${session.id}-note`}>
+                  Workout note: {session.notes}
+                </Text>
+              ) : null}
             </View>
           );
         })
