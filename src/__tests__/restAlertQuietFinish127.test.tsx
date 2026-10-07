@@ -233,7 +233,7 @@ describe('quiet finish summary', () => {
     await openScreen();
     expect(timing.mock.calls.some(([, c]) => c.toValue === 1 && typeof c.duration === 'number' && c.duration > 0 && c.duration <= 300)).toBe(true);
     const src = fs.readFileSync(path.join(__dirname, '..', 'screens', 'client', 'active-workout', 'WorkoutFinishSummary.tsx'), 'utf8');
-    expect(src).not.toMatch(/ParticleBurst|Animated\.spring|scale/);
+    expect(src).not.toMatch(/ParticleBurst|Animated\.spring|transform|scale:/);
   });
 
   it('a saved workout gives one success haptic instead of the heavy impact', async () => {
