@@ -22,8 +22,11 @@
  * Roman memory, on by default (R11-C2B, owner 2026-10-07 10:18): Allow grants the server's client-ai-v5
  * copy while the server says memory is on (the same rule as box 2 of the consultation), otherwise v4.
  * At the very bottom, a "Roman's memory" switch: ON for a live v5 grant. Off grants client-ai-v4 (Roman
- * stays allowed; the server deletes Roman's notes about the client). On grants the server's v5 copy
- * again with its sha256. Shown only on a live grant, and for a v4 holder only while the server offers v5.
+ * stays allowed and stops using his notes). On grants the server's v5 copy again with its sha256. Shown
+ * only on a live grant, and for a v4 holder only while the server offers v5.
+ * R11-C2C (owner 2026-10-07 11:46): Roman's notes are deleted only with the account (backend #845);
+ * there is no control that deletes them. Until #845 is live, production deletes them on memory off, so
+ * the off copy says neither "deleted" nor "kept": it is true on both.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
@@ -100,14 +103,15 @@ export const ROMAN_AI_COPY = {
   allowedMemoryBody:
     'Roman and your coach\u2019s AI tools may use your information, processed by Anthropic. Roman may also keep notes and summaries about you, as described above.',
   memoryLabel: 'Roman\u2019s memory',
-  memoryHelper: 'Roman keeps notes from chats and logs to give answers that fit. Turn off to stop and delete them.',
+  memoryHelper:
+    'Roman keeps notes from chats and logs to give answers that fit. Turning this off stops Roman from using them. Notes are deleted when the account is deleted.',
   confirmMemoryOnTitle: 'Turn on Roman\u2019s memory?',
   memoryOn: 'Turn on',
   confirmMemoryOffTitle: 'Turn off Roman\u2019s memory?',
   confirmMemoryOffBody:
-    'Roman stops keeping notes, and the notes he has about you are deleted. Roman and AI stay allowed. You can turn it on again at any time.',
+    'Roman stops keeping and using notes about you. Roman and AI stay allowed. You can turn it on again at any time.',
   memoryOff: 'Turn off',
-  memoryOffDone: 'Roman\u2019s memory is off, and his notes about you are deleted.',
+  memoryOffDone: 'Roman\u2019s memory is off. Roman no longer uses his notes about you.',
   memoryChanged:
     'The wording of this option changed before your choice was saved, so nothing changed. The current wording and choice are shown here.',
 } as const;
@@ -322,15 +326,11 @@ export default function RomanAiConsentScreen({
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.memoryOn, onPress: () => void act('allow', offer) },
     ]);
-  // Memory off: the v4 grant (Roman stays allowed); the server deletes Roman's notes first.
+  // Memory off: the v4 grant (Roman stays allowed and stops using his notes; R11-C2C keeps them).
   const confirmMemoryOff = () =>
     Alert.alert(ROMAN_AI_COPY.confirmMemoryOffTitle, ROMAN_AI_COPY.confirmMemoryOffBody, [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
-      {
-        text: ROMAN_AI_COPY.memoryOff,
-        style: 'destructive',
-        onPress: () => void act('allow', null, ROMAN_AI_COPY.memoryOffDone),
-      },
+      { text: ROMAN_AI_COPY.memoryOff, onPress: () => void act('allow', null, ROMAN_AI_COPY.memoryOffDone) },
     ]);
   const confirmWithdraw = () =>
     Alert.alert(ROMAN_AI_COPY.confirmWithdrawTitle, ROMAN_AI_COPY.confirmWithdrawBody, [
