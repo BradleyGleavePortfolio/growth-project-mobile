@@ -214,7 +214,7 @@ jest.mock('../services/api', () => ({
   } : { id: 'coach', name: 'Coach Lee' } })) },
   workoutApi: {
     getRoutines: jest.fn(async () => ({ data: mockRoutines })),
-    getAll: jest.fn(async () => ({ data: mockSessions })), getVolume: jest.fn(async () => ({ data: [] })),
+    getAll: jest.fn(async (limit: number) => ({ data: limit === 5 ? mockSessions.slice(0, 5) : mockSessions })), getVolume: jest.fn(async () => ({ data: [] })),
     deleteWorkout: jest.fn(async () => ({})),
   },
   weightApi: { getHistory: jest.fn(async () => ({ data: { logs: mockWeights } })), log: jest.fn(async () => ({})) },
@@ -226,6 +226,8 @@ jest.mock('../hooks/useWorkoutBuilder', () => ({
 jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 jest.mock('../services/authActions', () => ({ signOut: jest.fn() }));
+jest.mock('../screens/day-one/api', () => ({ saveNotifPermission: jest.fn(async () => ({})) }));
+jest.mock('../services/pushNotifications', () => ({ registerForPushNotifications: jest.fn(async () => ({ granted: true })) }));
 jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
 jest.mock('../components/FadeInView', () => ({ children }: { children: import('react').ReactNode }) => children);
@@ -264,6 +266,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     mockAssignments = [{ id: 'assigned', completed_at: null, workout_plan: { name: 'Strength' } }];
     mockRoutines = [{ id: 'routine', name: 'Full body', exercises: [], is_template: false }];
     mockSessions = [{ id: 'session', date: '2026-10-06', workout_name: 'Logged session', exercises: [] }];
+    mockSessions.push(...Array.from({ length: 5 }, (_, i) => ({ id: `older-${i}`, date: '2026-10-05', workout_name: `Older ${i}`, exercises: [] as [] })));
     const s = await render(React.createElement(WorkoutScreen));
     await waitFor(() => expect(s.getByText('Full body')).toBeTruthy());
     await press(s, 'Open assigned workout: Strength');
@@ -275,7 +278,10 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('WorkoutHistoryEdit', { workout: JSON.stringify(mockSessions[0]) });
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await press(s, 'Delete workout Logged session'); expect(alert).toHaveBeenCalledWith('Delete this workout?', expect.any(String), expect.any(Array));
+    await alert.mock.calls[0][2]?.find((button) => button.text === 'Delete')?.onPress?.();
+    expect(require('../services/api').workoutApi.deleteWorkout).toHaveBeenCalledWith('session');
     alert.mockRestore();
+    await press(s, 'Show older workouts'); await press(s, 'Show recent workouts only');
     expect(s.getByTestId('workout-scroll').props.refreshControl.props.onRefresh).toEqual(expect.any(Function));
   });
   it.each([['today gap', [0, 1, 3], '2'], ['today not logged', [1, 2, 3], '3'], ['look-back limit', Array.from({ length: 60 }, (_, i) => i), '60+']])(
@@ -310,6 +316,11 @@ describe('Truthful client copy and routes/actions parity', () => {
     for (const row of s.getAllByLabelText(/Tap to edit/)) {
       await fireEvent.press(row); expect(mockNavigate).toHaveBeenLastCalledWith('EditProfile');
     }
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await fireEvent.press(s.getByText('Sign Out'));
+    const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign Out');
+    await confirm?.onPress?.();
+    expect(require('../services/authActions').signOut).toHaveBeenCalled(); alert.mockRestore();
     mockUser = { ...mockUser, coach_id: 'coach' };
     await s.rerender(React.createElement(ProfileScreen));
     await waitFor(() => expect(s.getByText('Workouts are visible to you and Coach Lee. Meals are visible only to you.')).toBeTruthy());
@@ -320,5 +331,30 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(s.queryByText('Consistency beats perfection. Keep showing up.')).toBeNull();
     await fireEvent.press(s.UNSAFE_getByType(require('react-native').TouchableOpacity));
     expect(mockBack).toHaveBeenCalled();
+  });
+  it('names a failed weight chart and retains its explicit retry', async () => {
+    require('../services/api').weightApi.getHistory.mockRejectedValueOnce(new Error('offline'));
+    const s = await render(React.createElement(ProgressScreen));
+    await waitFor(() => expect(s.getByText('The weight chart did not load. Pull down to try again.')).toBeTruthy());
+    await fireEvent.press(s.getByTestId('progress-weight-chart-error-retry'));
+  });
+  it('schedules a fasting-window message, not a claim that a goal was reached', async () => {
+    const notifications = require('expo-notifications'); notifications.SchedulableTriggerInputTypes = { DATE: 'date' };
+    await require('../utils/notifications').scheduleFastingAlert(new Date(Date.now() + 3600000));
+    expect(notifications.scheduleNotificationAsync).toHaveBeenCalledWith(expect.objectContaining({ content: expect.objectContaining({ body: 'Fasting window ended.' }) }));
+  });
+  it.each([false, true])('uses the actual pairing state in Day-1 notifications (%s), retaining enable/skip', async (paired) => {
+    if (paired) mockUser.coach_id = 'coach';
+    const NotificationsScreen = require('../screens/day-one/NotificationsScreen').default;
+    const s = await render(React.createElement(NotificationsScreen, { navigation: { navigate: mockNavigate, goBack: mockBack } }));
+    expect(s.getByText(paired ? 'Stay close to your coach' : 'Reminders and messages')).toBeTruthy();
+    await fireEvent.press(s.getByTestId('day-one-notifications-enable'));
+    expect(require('../services/pushNotifications').registerForPushNotifications).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenLastCalledWith('CheckInTime');
+    await fireEvent.press(s.getByTestId('day-one-notifications-skip'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('CheckInTime');
+    const strings = require('../screens/day-one/i18n/en.json');
+    const navigator = fs.readFileSync(path.join(ROOT, 'navigation/Day1OnboardingNavigator.tsx'), 'utf8');
+    expect(strings.welcome.subtitle).toBe(`Setup takes ${(navigator.match(/<Stack.Screen/g) ?? []).length} short steps.`);
   });
 });

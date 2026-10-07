@@ -723,7 +723,7 @@ export default function WorkoutScreen() {
         ) : null}
 
         {/* Weekly Stats */}
-        <FadeInView>
+        {historySessions.length > 0 || recentSessions.length > 0 || routines.length > 0 || assignmentsList.length > 0 ? <FadeInView>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
               <Text style={[styles.statValue, { color: colors.primary }]} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
@@ -733,52 +733,12 @@ export default function WorkoutScreen() {
               <Text style={styles.statValue}>{routines.length}</Text>
               <Text style={styles.statLabel}>Routines</Text>
             </View>
-            <View style={styles.statCard}>
+            {currentUser?.coach_id ? <View style={styles.statCard}>
               <Text style={styles.statValue}>{pendingAssignments.length}</Text>
               <Text style={styles.statLabel}>From coach</Text>
-            </View>
+            </View> : null}
           </View>
-        </FadeInView>
-
-        {/* Volume Bar Chart */}
-        <FadeInView delay={80}>
-          <View style={styles.chartCard}>
-            <View style={styles.chartHeader}>
-              <View>
-                <Text style={styles.chartTitle}>Training Volume</Text>
-                <Text style={styles.chartSubtitle}>Last 8 weeks (lbs lifted)</Text>
-              </View>
-              {totalVolumeThisWeek > 0 && (
-                <View style={styles.chartBadge}>
-                  <Text style={styles.chartBadgeText}>{totalVolumeThisWeek.toLocaleString()} lbs</Text>
-                  <Text style={styles.chartBadgeSub}>this week</Text>
-                </View>
-              )}
-            </View>
-            {weeklyVolume.some((w) => w.volume > 0) ? (
-              <BarChart data={weeklyVolume} />
-            ) : (
-              <View style={styles.chartEmpty}>
-                <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
-                <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>
-              </View>
-            )}
-          </View>
-        </FadeInView>
-
-        {/* Muscle Group Breakdown */}
-        <FadeInView delay={120}>
-          <View style={styles.muscleCard}>
-            <Text style={styles.chartTitle}>Muscle Breakdown</Text>
-            <Text style={styles.chartSubtitle}>This week's volume by muscle group</Text>
-            <MuscleBreakdown data={muscleVolume} />
-            {muscleVolume.length === 0 && (
-              <View style={styles.chartEmpty}>
-                <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>
-              </View>
-            )}
-          </View>
-        </FadeInView>
+        </FadeInView> : null}
 
         {/* Quick Start */}
         <HapticPressable intent="medium" style={styles.quickStart} onPress={startQuickWorkout}>
@@ -797,13 +757,13 @@ export default function WorkoutScreen() {
         {/* My Routines */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Routines</Text>
-          <HapticPressable intent="medium" onPress={() => navigation.navigate('RoutineBuilder')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <HapticPressable intent="medium" onPress={() => navigation.navigate('RoutineBuilder')} accessibilityLabel="Create a routine" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="add-circle" size={24} color={colors.primary} />
           </HapticPressable>
         </View>
 
         {routines.length === 0 ? (
-          <EmptyStateNoWorkouts />
+          <EmptyStateNoWorkouts onCreate={() => navigation.navigate('RoutineBuilder')} />
         ) : (
           routines.map((routine) => {
             const exList = routine.exercises || [];
@@ -909,6 +869,35 @@ export default function WorkoutScreen() {
             </Text>
           </HapticPressable>
         ) : null}
+        {/* Charts follow every training action; empty charts are one sentence. */}
+        <FadeInView delay={80}>
+          {weeklyVolume.some((w) => w.volume > 0) ? (
+            <View style={styles.chartCard}>
+              <View style={styles.chartHeader}>
+                <View>
+                  <Text style={styles.chartTitle}>Training Volume</Text>
+                  <Text style={styles.chartSubtitle}>Last 8 weeks (lbs lifted)</Text>
+                </View>
+                {totalVolumeThisWeek > 0 && (
+                  <View style={styles.chartBadge}>
+                    <Text style={styles.chartBadgeText}>{totalVolumeThisWeek.toLocaleString()} lbs</Text>
+                    <Text style={styles.chartBadgeSub}>this week</Text>
+                  </View>
+                )}
+              </View>
+              <BarChart data={weeklyVolume} />
+            </View>
+          ) : <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>}
+        </FadeInView>
+        <FadeInView delay={120}>
+          {muscleVolume.length > 0 ? (
+            <View style={styles.muscleCard}>
+              <Text style={styles.chartTitle}>Muscle Breakdown</Text>
+              <Text style={styles.chartSubtitle}>This week's volume by muscle group</Text>
+              <MuscleBreakdown data={muscleVolume} />
+            </View>
+          ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
+        </FadeInView>
       </ScrollView>
     </View>
   );

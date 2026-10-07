@@ -295,13 +295,15 @@ export default function ProgressScreen() {
       // Calculate logging streak — bucket every comparison day in the user's
       // local timezone so a Sydney user who logs at 09:00 local doesn't see
       // the streak reset because UTC is still on yesterday's date.
+      const runLogs = days >= 60 ? logs : weightHistoryRows((await weightApi.getHistory(60)).data)
+        .map((row) => parseWeightLogRow(row, userId)).filter((row): row is WeightLog => row !== null);
       let streak = 0;
       const now = new Date();
       for (let i = 0; i < 60; i++) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
         const dateStr = bucketDateLocal(d);
-        if (logs.some((l) => l.date === dateStr)) {
+        if (runLogs.some((l) => l.date === dateStr)) {
           streak++;
         } else if (i > 0) {
           break;
@@ -393,6 +395,8 @@ export default function ProgressScreen() {
   const startWeight = weightLogs.length > 0 ? weightLogs[0].weight : null;
   const goalWeight = macroTargets?.goalWeight || null;
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
+  const runCount = loggingStreak === 60 ? '60+' : String(loggingStreak);
+  const runLabel = `${runCount} days in a row with a weigh-in`;
 
   // BMI calculation — uses latest weight + profile height
   let bmi: number | null = null;
@@ -471,7 +475,7 @@ export default function ProgressScreen() {
           <Text style={styles.title}>Progress</Text>
           <View style={styles.headerRight}>
             {loggingStreak > 0 && (
-              <Text style={styles.runText}>Day {loggingStreak}</Text>
+              <Text style={styles.runText}>{runLabel}</Text>
             )}
             {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
                 navigate directly instead of through the old ProfileStack parent. */}
@@ -483,14 +487,14 @@ export default function ProgressScreen() {
                 onPress={() => {
                   const milestone: ShareCardMilestone = {
                     variant: 'streak',
-                    value: String(loggingStreak),
-                    label: loggingStreak === 1 ? 'Day Streak' : 'Day Streak',
+                    value: runCount,
+                    label: 'days in a row with a weigh-in',
                   };
                   track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
                   navigation.navigate('ShareCard', { milestone } as never);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel={`Share ${loggingStreak}-day streak`}
+                accessibilityLabel={`Share ${runLabel}`}
               >
                 <Ionicons name="share-social-outline" size={22} color={colors.primary} />
               </HapticPressable>
@@ -656,7 +660,7 @@ export default function ProgressScreen() {
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <CoachErrorState
-              message="That chart did not load. I will try again."
+              message="The weight chart did not load. Pull down to try again."
               onRetry={onChartRetry}
               retrying={chartRetrying}
               testID="progress-weight-chart-error"

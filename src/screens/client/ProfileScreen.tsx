@@ -1,13 +1,12 @@
 /**
  * ProfileScreen — Wave 3: luxury redesign.
  *
- * - Streak moved here from Home: "Day 7 of 30." as a plain text line.
  * - Identity badge kept (founding-member context lives here, not home).
  * - MilestoneCabinet now renders as MilestoneList (date · note rows).
  * - Closing CTA replaced by date list per brief.
  * - Radius literals cleaned to tokens.
  */
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +20,8 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
+import api from '../../services/api';
+import { logger } from '../../utils/logger';
 
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useFoundingNumber } from '../../hooks/useIdentity';
@@ -55,6 +56,28 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
+  const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean } | null>(null);
+  useEffect(() => {
+    const coachId = currentUser?.coach_id;
+    if (!coachId) { setSharing(null); return; }
+    let alive = true;
+    Promise.all([
+      api.get<{ id: string; name: string }>('/v1/clients/me/coach'),
+      api.get<{ coach_id: string; consents: Array<{ scope: string; granted: boolean }> }>(`/consent/me?coach_id=${encodeURIComponent(coachId)}`),
+    ]).then(([coach, consent]) => {
+      if (alive && coach.data.id === coachId && consent.data.coach_id === coachId) setSharing({
+        coachId, name: coach.data.name,
+        workouts: consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted),
+        meals: consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted),
+      });
+    }).catch((err: unknown) => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load', err); });
+    return () => { alive = false; };
+  }, [currentUser?.id, currentUser?.coach_id]);
+  const privacyCopy = !currentUser ? null : !currentUser.coach_id ? 'Workouts and meals are visible only to you.'
+    : sharing?.coachId !== currentUser.coach_id ? null
+    : sharing.workouts === sharing.meals
+      ? `Workouts and meals are visible ${sharing.workouts ? `to you and ${sharing.name}` : 'only to you'}.`
+      : `Workouts are visible ${sharing.workouts ? `to you and ${sharing.name}` : 'only to you'}. Meals are visible ${sharing.meals ? `to you and ${sharing.name}` : 'only to you'}.`;
 
   const foundingQ = useFoundingNumber();
   const foundingData = foundingQ.data ?? null;
@@ -127,13 +150,8 @@ export default function ProfileScreen() {
         </Text>
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
 
-        {/* Wave 3: Streak line — "Day 7 of 30." No flame. */}
-        <Text style={styles.streakLine}>Day 7 of 30.</Text>
-
         {/* Privacy reassurance line */}
-        <Text style={styles.privacyLine}>
-          Workouts and meals stay private to you and your assigned coach.
-        </Text>
+        {privacyCopy ? <Text style={styles.privacyLine}>{privacyCopy}</Text> : null}
       </View>
 
       {/* Quick Actions — 2×2 grid */}
