@@ -185,11 +185,8 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
 });
 
 // Render the touched client surfaces: truthful text must not cut working actions.
-import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
-const mockNavigate = jest.fn();
-const mockBack = jest.fn();
+import React from 'react'; import { render, fireEvent, waitFor } from '@testing-library/react-native'; import { Alert } from 'react-native';
+const mockNavigate = jest.fn(), mockBack = jest.fn();
 let mockUser: import('../hooks/useCurrentUser').CurrentUser = { id: 'client', email: 'client@example.test' };
 let mockAssignments: Array<{ id: string; completed_at: null; workout_plan: { name: string } }> = [];
 let mockRoutines: Array<{ id: string; name: string; exercises: []; is_template: boolean }> = [];
@@ -197,9 +194,7 @@ let mockSessions: Array<{ id: string; date: string; workout_name: string; exerci
 let mockWeights: Array<{ id: string; date: string; weight_lbs: number }> = [];
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
-    colors: require('../constants/colors').default,
-    tokens: require('../theme/tokens').default,
-    semanticColors: require('../theme/tokens').lightTokens,
+    colors: require('../constants/colors').default, tokens: require('../theme/tokens').default, semanticColors: require('../theme/tokens').lightTokens,
   }),
 }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
@@ -235,10 +230,8 @@ jest.mock('../components/tutorial/PlanExplanationCard', () => () => null);
 jest.mock('../components/workout/WorkoutSyncCards', () => () => null);
 jest.mock('../components/community/MilestoneCabinet', () => () => null);
 jest.mock('../screens/client/progress/ProgressChartCard', () => () => null);
-import WorkoutScreen from '../screens/client/WorkoutScreen';
-import ProgressScreen from '../screens/client/ProgressScreen';
-import ProfileScreen from '../screens/client/ProfileScreen';
-import ReportScreen from '../screens/client/ReportScreen';
+import WorkoutScreen from '../screens/client/WorkoutScreen'; import ProgressScreen from '../screens/client/ProgressScreen';
+import ProfileScreen from '../screens/client/ProfileScreen'; import ReportScreen from '../screens/client/ReportScreen';
 const press = async (s: Awaited<ReturnType<typeof render>>, label: string) => fireEvent.press(s.getByLabelText(label));
 beforeEach(() => {
   jest.clearAllMocks();
@@ -326,10 +319,10 @@ describe('Truthful client copy and routes/actions parity', () => {
     await waitFor(() => expect(s.getByText('Workouts are visible to you and Coach Lee. Meals are visible only to you.')).toBeTruthy());
   });
   it('labels canned report advice as general and keeps Back', async () => {
-    const s = await render(React.createElement(ReportScreen, { navigation: { goBack: mockBack } } as React.ComponentProps<typeof ReportScreen>));
+    const s = await render(React.createElement(ReportScreen, { navigation: jest.requireMock('@react-navigation/native').useNavigation() }));
     expect(s.getByText('General guidance for General Fitness')).toBeTruthy();
     expect(s.queryByText('Consistency beats perfection. Keep showing up.')).toBeNull();
-    await fireEvent.press(s.UNSAFE_getByType(require('react-native').TouchableOpacity));
+    await press(s, 'Back');
     expect(mockBack).toHaveBeenCalled();
   });
   it('names a failed weight chart and retains its explicit retry', async () => {

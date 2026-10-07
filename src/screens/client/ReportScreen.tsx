@@ -97,7 +97,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
   return (
     <View style={styles.wrapper}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>My Report</Text>

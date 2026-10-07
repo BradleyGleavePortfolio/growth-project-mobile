@@ -722,24 +722,6 @@ export default function WorkoutScreen() {
           </FadeInView>
         ) : null}
 
-        {/* Weekly Stats */}
-        {historySessions.length > 0 || recentSessions.length > 0 || routines.length > 0 || assignmentsList.length > 0 ? <FadeInView>
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
-              <Text style={styles.statLabel}>This Week</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Text style={styles.statValue}>{routines.length}</Text>
-              <Text style={styles.statLabel}>Routines</Text>
-            </View>
-            {currentUser?.coach_id ? <View style={styles.statCard}>
-              <Text style={styles.statValue}>{pendingAssignments.length}</Text>
-              <Text style={styles.statLabel}>From coach</Text>
-            </View> : null}
-          </View>
-        </FadeInView> : null}
-
         {/* Quick Start */}
         <HapticPressable intent="medium" style={styles.quickStart} onPress={startQuickWorkout}>
           <View style={styles.quickStartLeft}>
@@ -870,6 +852,22 @@ export default function WorkoutScreen() {
           </HapticPressable>
         ) : null}
         {/* Charts follow every training action; empty charts are one sentence. */}
+        {historySessions.length > 0 || recentSessions.length > 0 || routines.length > 0 || assignmentsList.length > 0 ? <FadeInView>
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={[styles.statValue, { color: colors.primary }]} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
+              <Text style={styles.statLabel}>This Week</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{routines.length}</Text>
+              <Text style={styles.statLabel}>Routines</Text>
+            </View>
+            {currentUser?.coach_id ? <View style={styles.statCard}>
+              <Text style={styles.statValue}>{pendingAssignments.length}</Text>
+              <Text style={styles.statLabel}>From coach</Text>
+            </View> : null}
+          </View>
+        </FadeInView> : null}
         <FadeInView delay={80}>
           {weeklyVolume.some((w) => w.volume > 0) ? (
             <View style={styles.chartCard}>
