@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, ScrollView, StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ClientWorkoutViewerScreen from '../ClientWorkoutViewerScreen';
 import WorkoutHistoryEditScreen from '../WorkoutHistoryEditScreen';
@@ -63,7 +63,7 @@ it('keeps every pending/completed assignment route and refresh, without calling 
     await fireEvent.press(view.getByRole('button', { name: `Open workout ${name}` }));
     expect(mockNavigate).toHaveBeenCalledWith('WorkoutAssignmentDetail', { assignmentId: name });
   }
-  await act(async () => { view.UNSAFE_getByType(ScrollView).props.refreshControl.props.onRefresh(); });
+  await act(async () => { view.getByTestId('assigned-workouts-scroll').props.refreshControl.props.onRefresh(); });
   expect(mockRefetch).toHaveBeenCalledTimes(1);
 });
 it('keeps loading and actionable error instructions', async () => {

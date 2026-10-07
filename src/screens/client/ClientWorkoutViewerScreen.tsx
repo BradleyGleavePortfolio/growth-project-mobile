@@ -64,6 +64,7 @@ export default function ClientWorkoutViewerScreen() {
 
   return (
     <ScrollView
+      testID="assigned-workouts-scroll"
       style={styles.screen}
       contentContainerStyle={styles.content}
       refreshControl={
