@@ -1,6 +1,9 @@
 import React from 'react';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
+import { StyleSheet } from 'react-native';
+import { homeCells } from '../../../macros/macroDisplay';
+import { lightTokens, typography } from '../../../theme/tokens';
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
@@ -94,4 +97,33 @@ it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s m
   }
   await act(async () => screen.getByTestId('home-scroll').props.refreshControl.props.onRefresh());
   for (const load of [mockDay.loadDayData, mockDay.loadProfile]) expect(load).toHaveBeenCalledTimes(2);
+});
+
+it.each(['simple', 'full'] as const)('keeps every %s metric in one hairline row with serif tabular figures', async (mode) => {
+  mockMacroMode = mode;
+  await render(<HomeScreen />);
+  await screen.findByLabelText('Log a meal');
+  const row = screen.getByTestId(mode === 'simple' ? 'home-number-grid-simple' : 'home-number-grid');
+  expect(StyleSheet.flatten(row.props.style)).toMatchObject({
+    flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth,
+  });
+  expect(StyleSheet.flatten(row.props.style).flexWrap).not.toBe('wrap');
+  for (const cell of homeCells(mode)) {
+    expect(screen.getByText(cell)).toBeTruthy();
+    expect(StyleSheet.flatten(screen.getByTestId(`home-value-${cell}`).props.style)).toMatchObject({
+      fontFamily: typography.h2.fontFamily, fontVariant: ['tabular-nums'],
+    });
+  }
+  expect(StyleSheet.flatten(screen.getByTestId('home-date').props.style).fontFamily).toBe(typography.eyebrow.fontFamily);
+  expect(StyleSheet.flatten(screen.getByText('One meal logged.').props.style).fontFamily).toBe(typography.h1.fontFamily);
+  expect(StyleSheet.flatten(screen.getByTestId('home-explore-cta').props.style)).toMatchObject({
+    backgroundColor: lightTokens.accent, minHeight: 44,
+  });
+  const home = require('fs').readFileSync(require.resolve('../HomeScreen.tsx'), 'utf8');
+  expect(home).not.toContain('marginTop: 96');
+  const sections = ['<DunningBanner', '<CoachlessHomeSlot', '<PendingInviteBanner', '<PushPermissionCard',
+    '{showProfileNudge ?', '<CoachIntroductionBanner', '<FullMacrosIntroCard', '<TutorialHomeSlot', '<HolisticInsightsTile'];
+  const positions = sections.map((section) => home.indexOf(section));
+  expect(positions.every((position) => position > 0)).toBe(true);
+  expect(positions).toEqual([...positions].sort((a, b) => a - b));
 });
