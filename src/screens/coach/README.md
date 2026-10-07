@@ -4,6 +4,8 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 
 ## Purpose
 
+Meal-plan empty-state directions name the client’s **Meal plan** entry under More, not a Plan tab. After AI meal-plan approval, `ClientDetail` opens its coach-side Plan tab via `initialTab: 'mealplan'`, including on return to an already-mounted client detail.
+
 - Show the coach the state of every client they own: streaks, last log, last check-in, alerts.
 - Let the coach issue invite codes that bind new signups to their account, and revoke codes they no longer want to honour.
 - Talk to clients (per-thread DMs) and ship lightweight nudges (push notifications + in-app banners).
