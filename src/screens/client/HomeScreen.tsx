@@ -23,8 +23,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
 import { typography } from '../../theme/tokens';
@@ -156,6 +157,7 @@ export default function HomeScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
+    selectedDate,
     isLoading,
     loadError,
     loadDayData,
@@ -218,9 +220,14 @@ export default function HomeScreen() {
   // when neither logged data nor a target is present. This is the contract:
   // never render a bare "—" with no path forward — Home always points the
   // user at their next action.
-  const proteinTarget = currentUser?.profile?.protein_target;
-  const carbsTarget   = currentUser?.profile?.carbs_target;
-  const fatTarget     = currentUser?.profile?.fat_target;
+  // Targets come from GET /me/macros/current (the coach's target, else the
+  // server-calculated profile targets), the same source as the Food Log's
+  // goal line. The locally cached profile numbers are only a fallback for
+  // a first paint before that read lands.
+  const macroTargets = useMacroTargets();
+  const proteinTarget = macroTargets?.protein ?? currentUser?.profile?.protein_target;
+  const carbsTarget   = macroTargets?.carbs ?? currentUser?.profile?.carbs_target;
+  const fatTarget     = macroTargets?.fat ?? currentUser?.profile?.fat_target;
 
   const buildMacro = (logged: number | undefined, target: number | undefined) => {
     if (logged && logged > 0) {
@@ -246,7 +253,7 @@ export default function HomeScreen() {
   const fat     = buildMacro(dailyTotals?.fat,     fatTarget);
 
   const macroMode = useMacroDisplayMode(currentUser?.id ?? null);
-  const calorieTarget = currentUser?.profile?.calorie_target;
+  const calorieTarget = macroTargets?.calories ?? currentUser?.profile?.calorie_target;
   const calories = (() => {
     const logged = dailyTotals?.calories;
     if (logged && logged > 0) {
@@ -263,18 +270,29 @@ export default function HomeScreen() {
   })();
   const macroCells = { CALORIES: calories, PROTEIN: protein, CARBS: carbs, FAT: fat };
 
+  // Home always shows today. The day store is shared with the Food Log, so
+  // after the client looks back at an earlier day there, Home reloads today
+  // instead of showing that day's meals and totals under today's date.
   useEffect(() => {
     if (currentUser) {
-      loadDayData(currentUser.id);
+      loadDayData(currentUser.id, getTodayString());
       loadProfile(currentUser.id);
     }
   }, [currentUser?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser && selectedDate && selectedDate !== getTodayString()) {
+        void loadDayData(currentUser.id, getTodayString());
+      }
+    }, [currentUser?.id, selectedDate]),
+  );
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
     setRefreshing(true);
     await Promise.all([
-      loadDayData(currentUser.id),
+      loadDayData(currentUser.id, getTodayString()),
       loadProfile(currentUser.id),
     ]);
     setRefreshing(false);

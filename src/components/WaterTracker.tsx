@@ -59,7 +59,9 @@ export default function WaterTracker({
         ))}
       </View>
 
-      <Text style={styles.glasses}>{glasses} glasses today</Text>
+      <Text style={styles.glasses}>
+        {glasses === 1 ? '1 glass (8 oz)' : `${glasses} glasses (8 oz each)`}
+      </Text>
     </View>
   );
 }
