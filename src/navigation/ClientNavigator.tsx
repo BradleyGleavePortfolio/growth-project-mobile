@@ -49,7 +49,7 @@ import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
-import { workoutLeaveGuard } from '../screens/client/active-workout/leaveGuard';
+import { workoutLeaveGuard } from './workoutLeaveGuard';
 import WorkoutHistoryEditScreen from '../screens/client/WorkoutHistoryEditScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';

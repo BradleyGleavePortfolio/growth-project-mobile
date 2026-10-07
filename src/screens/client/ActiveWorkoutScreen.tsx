@@ -79,7 +79,7 @@ import { completedExercisePayload, moveExercise, newSessionExercise, previousSet
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
-import { setWorkoutLeaveGuard } from './active-workout/leaveGuard';
+import { setWorkoutLeaveGuard } from '../../navigation/workoutLeaveGuard';
 // §2.9 Voice-log confirmation — Roman reads back the most recently completed
 // set in his voice, beside his face (RomanVoiceLogReadback co-locates
 // <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;

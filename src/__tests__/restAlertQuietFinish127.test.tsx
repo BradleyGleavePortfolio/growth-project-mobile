@@ -334,7 +334,7 @@ describe('leaving a live workout never deletes it', () => {
   });
 
   it('a press on another tab asks while the workout is open; nothing logged lets the tab open', async () => {
-    const { workoutLeaveGuard } = jest.requireActual('../screens/client/active-workout/leaveGuard');
+    const { workoutLeaveGuard } = jest.requireActual('../navigation/workoutLeaveGuard');
     alertChoice = 'Keep training';
     mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
     const view = await openScreen();
