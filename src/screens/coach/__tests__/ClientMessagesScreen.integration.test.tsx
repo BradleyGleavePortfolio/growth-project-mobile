@@ -41,6 +41,7 @@ afterAll(() => {
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
     colors: {
       background: '#000',
       surface: '#111',
