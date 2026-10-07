@@ -131,7 +131,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // also reset to its initial shape so we don't briefly render Client B's
   // profile under Client A's selected tab or half-typed nudge.
   useEffect(() => {
-    setActiveTab('summary');
+    setActiveTab(route.params.initialTab ?? 'summary');
+  }, [clientId, route.params.initialTab]);
+
+  useEffect(() => {
     setExpandedWeeks(new Set());
     setShowNudgeModal(false);
     setNudgeTitle('');

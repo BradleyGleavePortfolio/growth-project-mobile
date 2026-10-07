@@ -31,6 +31,7 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: require('../../../theme/tokens').lightTokens,
     colors: {
       background: '#F4F1EA',
       surface: '#FFFFFF',

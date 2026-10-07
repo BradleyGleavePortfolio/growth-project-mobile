@@ -1,7 +1,8 @@
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { SemanticTokens } from '../../theme/tokens';
+import { typography, type SemanticTokens } from '../../theme/tokens';
+import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
 import { disputePauseFacts } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
@@ -59,7 +60,14 @@ export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()
  * payment (S-DUNNING). Renders nothing unless the backend reports an active,
  * unlocked v2 cycle, so it is invisible while FEATURE_DUNNING_V2 is off.
  */
-export function DunningBanner({ surface }: { surface: string }) {
+export function DunningBanner({
+  surface,
+  presentation = 'card',
+}: {
+  surface: string;
+  /** 'section' = Home's hairline look (DES-K2-128); other callers keep the card. */
+  presentation?: 'card' | 'section';
+}) {
   const dunning = useDunning();
   const { semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
@@ -73,6 +81,38 @@ export function DunningBanner({ surface }: { surface: string }) {
   if (!dunning || !status || !status.enabled || status.state !== 'past_due') return null;
   const copy = bannerCopy(status);
   const dispute = isDisputeCycle(status);
+
+  if (presentation === 'section') {
+    return (
+      <QuietSection testID="dunning-banner" accessibilityRole="alert">
+        <QuietOverline>PAYMENT</QuietOverline>
+        <Text style={[styles.sectionTitle, { color: semanticColors.textPrimary }]}>{copy.title}</Text>
+        <Text style={[styles.sectionBody, { color: semanticColors.textPrimary }]}>{copy.body}</Text>
+        <View style={quietActions.row}>
+          {dispute ? null : (
+            <TouchableOpacity
+              style={quietActions.action}
+              onPress={onUpdate}
+              accessibilityRole="button"
+              testID="dunning-banner-update-card"
+            >
+              <Text style={[quietActions.label, { color: semanticColors.accentText }]}>Update card</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={quietActions.action}
+            onPress={dunning.messageCoach}
+            accessibilityRole="button"
+            testID="dunning-banner-message-coach"
+          >
+            <Text style={[quietActions.label, { color: dispute ? semanticColors.accentText : semanticColors.textMuted }]}>
+              Message coach
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </QuietSection>
+    );
+  }
 
   return (
     <View style={styles.wrap} testID="dunning-banner" accessibilityRole="alert">
@@ -125,4 +165,6 @@ const makeStyles = (c: SemanticTokens) =>
     primaryText: { color: c.textOnAccent, fontSize: 13, fontWeight: '600' },
     secondary: { borderWidth: 1, borderColor: c.border, paddingHorizontal: 14, paddingVertical: 9 },
     secondaryText: { color: c.textPrimary, fontSize: 13, fontWeight: '500' },
+    sectionTitle: { ...typography.bodyMd, marginBottom: 4 },
+    sectionBody: { ...typography.bodySmall },
   });

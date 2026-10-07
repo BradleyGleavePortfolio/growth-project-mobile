@@ -22,6 +22,10 @@ import { useBlockedUsersStore, BlockedUser } from '../../store/blockedUsersStore
 import { messagesModerationApi } from '../../api/messagesApi';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
+// The error states offer a Retry button; there is no pull-to-refresh.
+const LOAD_FAILED = 'The latest block list could not be loaded. Check your connection, then tap Retry.';
+const LIST_STALE = 'This list may be out of date. Check your connection, then tap Retry.';
+
 export default function BlockedUsersScreen(): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { colors } = useTheme();
@@ -53,7 +57,7 @@ export default function BlockedUsersScreen(): React.ReactElement {
         await useBlockedUsersStore.getState().addFromServer(res.blocked);
       } catch {
         if (!cancelled) {
-          setFetchError("Couldn't load the latest block list. Pull to retry.");
+          setFetchError(LOAD_FAILED);
         }
       }
       if (!cancelled) setLoading(false);
@@ -80,10 +84,7 @@ export default function BlockedUsersScreen(): React.ReactElement {
               await messagesModerationApi.unblock(user.id);
               await store.unblock(user.id);
             } catch {
-              Alert.alert(
-                'Could not unblock',
-                "Something went wrong. Please try again.",
-              );
+              Alert.alert('Could not unblock', 'Check your connection, then tap Unblock again.');
             } finally {
               setWorking(null);
             }
@@ -99,14 +100,14 @@ export default function BlockedUsersScreen(): React.ReactElement {
       <View style={styles.header}>
         <Pressable
           onPress={() => navigation.goBack()}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="chevron-back" size={26} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </Pressable>
-        <Text style={styles.title}>Blocked Users</Text>
-        <View style={{ width: 26 }} />
+        <Text style={styles.title}>Blocked users</Text>
+        <View style={styles.backBtn} />
       </View>
 
       {loading ? (
@@ -115,7 +116,7 @@ export default function BlockedUsersScreen(): React.ReactElement {
         </View>
       ) : fetchError && store.blocked.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>Couldn't load your block list</Text>
           <Text style={styles.emptyBody}>{fetchError}</Text>
           <Pressable
@@ -123,7 +124,7 @@ export default function BlockedUsersScreen(): React.ReactElement {
             style={({ pressed }) => [
               styles.unblockBtn,
               pressed && styles.unblockBtnPressed,
-              { marginTop: 12 },
+              { marginTop: 8 },
             ]}
             accessibilityRole="button"
             accessibilityLabel="Retry loading block list"
@@ -136,9 +137,20 @@ export default function BlockedUsersScreen(): React.ReactElement {
           data={store.blocked}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.hairline} />}
+          ListHeaderComponent={
+            fetchError ? (
+              <View style={styles.stale} accessibilityLiveRegion="polite">
+                <Text style={styles.emptyBody}>{LIST_STALE}</Text>
+                <Pressable onPress={handleRetry} style={styles.unblockBtn} accessibilityRole="button" accessibilityLabel="Retry loading block list">
+                  <Text style={styles.unblockText}>Retry</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Ionicons name="shield-checkmark-outline" size={36} color={colors.textMuted} />
+              <Ionicons name="shield-checkmark-outline" size={28} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>No blocked users</Text>
               <Text style={styles.emptyBody}>
                 When you block someone from a conversation, they'll appear here.
@@ -197,51 +209,54 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 56,
-      paddingBottom: 12,
-      backgroundColor: colors.surface,
-      borderBottomWidth: 1,
+      paddingHorizontal: 12,
+      paddingTop: 52,
+      paddingBottom: 8,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    title: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-    list: { padding: 16, gap: 8 },
+    backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+    title: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, color: colors.textPrimary },
+    list: { paddingHorizontal: 24, paddingBottom: 48 },
+    hairline: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+    stale: { paddingVertical: 12, gap: 8, alignItems: 'flex-start' },
     loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    empty: { alignItems: 'center', paddingTop: 80, gap: 8, paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-    emptyBody: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
+    empty: { alignItems: 'center', paddingTop: 72, gap: 10, paddingHorizontal: 32 },
+    emptyTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
+    emptyBody: { fontSize: 15, lineHeight: 22, color: colors.textSecondary, textAlign: 'center' },
 
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: colors.border,
-      padding: 12,
+      paddingVertical: 14,
+      gap: 12,
     },
-    rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+    rowLeft: { flexDirection: 'row', alignItems: 'center', gap: 14, flex: 1 },
     avatar: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      backgroundColor: colors.primary,
+      width: 40,
+      height: 40,
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    avatarText: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
-    rowName: { fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
-    rowMeta: { fontSize: 12, color: colors.textMuted },
+    avatarText: { color: colors.textSecondary, fontSize: 14, fontWeight: '500' },
+    rowName: { fontSize: 16, color: colors.textPrimary, fontWeight: '500' },
+    rowMeta: { fontSize: 13, color: colors.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] },
 
     unblockBtn: {
-      paddingVertical: 8,
+      minHeight: 44,
+      minWidth: 88,
+      justifyContent: 'center',
+      alignItems: 'center',
       paddingHorizontal: 14,
-      borderRadius: 8,
-      borderWidth: 1,
+      borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.primary,
     },
     unblockBtnPressed: { opacity: 0.7 },
     unblockBtnDisabled: { opacity: 0.5 },
-    unblockText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+    unblockText: { fontSize: 15, color: colors.primary, fontWeight: '500' },
   });

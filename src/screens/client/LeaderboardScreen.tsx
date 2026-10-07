@@ -3,12 +3,11 @@
  * Phase 11: Migrated to useTheme() semantic tokens for dark-mode support.
  *
  * Displays the combined-score leaderboard for the requesting user's
- * coach roster. Only opted-in peers appear. The requesting user's row
- * is always rendered, highlighted with an oxblood underline.
+ * coach roster. Only opted-in peers appear. A computed self-rank and score
+ * lead the screen; the self row keeps its stable identifier.
  *
  * Design doctrine:
- *   - Bone/ink/oxblood palette from tokens.ts.
- *   - Self-row highlight: sc.accent resolves to #4A0404 (light) / #B43C3C (dark).
+ *   - Semantic theme palette, unfilled rows and hairline separators.
  *   - Cormorant Garamond display, Inter body.
  *   - No emoji, no celebration chrome.
  *   - Numbers over adjectives.
@@ -38,7 +37,7 @@ import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import type { SemanticTokens } from '../../theme/tokens';
+import { typography, type SemanticTokens } from '../../theme/tokens';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
@@ -65,15 +64,14 @@ function ScoreBar({ score, sc }: { score: number; sc: SemanticTokens }) {
 
 /**
  * Renders a single rank row.
- * The self-row (isRequester) uses a distinct style (oxblood underline)
+ * The self-row (isRequester) uses a distinct text weight
  * and a stable testID so UI tests can reliably locate it.
  */
 function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens }) {
   const isMe = entry.isRequester;
   const hasDelta = entry.weekDelta !== null && entry.weekDelta !== 0;
   const deltaSign = (entry.weekDelta ?? 0) > 0 ? '+' : '';
-  // Positive delta = accent; negative delta = accent (oxblood is the accent in both modes)
-  const deltaColor = sc.accent;
+  const deltaColor = sc.textMuted;
 
   const rowStyles = useMemo(
     () => StyleSheet.create({
@@ -86,16 +84,16 @@ function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens })
         borderBottomColor: sc.border,
       },
       rowHighlighted: {
-        borderBottomWidth: 2,
-        borderBottomColor: sc.accent,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: sc.border,
       },
-      rankText: { fontFamily: 'Inter-Medium', fontSize: 14, color: sc.textMuted, width: 32 },
+      rankText: { fontFamily: 'Inter-Medium', fontSize: 14, color: sc.textMuted, width: 32, fontVariant: ['tabular-nums'] },
       nameText: { fontFamily: 'Inter-Regular', fontSize: 15, color: sc.textPrimary, marginBottom: 5 },
       nameTextMe: { fontFamily: 'Inter-SemiBold', color: sc.textPrimary },
       rowMiddle: { flex: 1, marginRight: 12 },
       scoreBlock: { alignItems: 'flex-end', width: 52 },
-      scoreText: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: sc.textPrimary },
-      deltaText: { fontFamily: 'Inter-Regular', fontSize: 11, marginTop: 2 },
+      scoreText: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
+      deltaText: { fontFamily: 'Inter-Regular', fontSize: 13, marginTop: 2, fontVariant: ['tabular-nums'] },
     }),
     [sc],
   );
@@ -126,7 +124,7 @@ function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens })
     </>
   );
 
-  // Self-row: accent underline highlight + stable testID for UI tests.
+  // Self-row: stable testID for UI tests.
   if (isMe) {
     return (
       <View
@@ -167,26 +165,26 @@ function OptInCard({
 
   const cardStyles = useMemo(
     () => StyleSheet.create({
-      card:        { margin: 20, padding: 24, backgroundColor: sc.bgSurface, borderWidth: 0.5, borderColor: sc.border },
-      heading:     { fontFamily: 'Cormorant-SemiBold', fontSize: 22, color: sc.textPrimary, marginBottom: 12 },
+      card:        { margin: 20, paddingVertical: 24, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
+      heading:     { ...typography.h2, color: sc.textPrimary, marginBottom: 12 },
       body:        { fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textMuted, lineHeight: 22, marginBottom: 12 },
       nameInput:   { borderWidth: 1, borderColor: sc.border, padding: 12, fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textPrimary, backgroundColor: sc.bgPrimary, marginBottom: 16, marginTop: 4 },
-      btn:         { backgroundColor: sc.textPrimary, paddingVertical: 14, alignItems: 'center' as const },
-      btnDisabled: { backgroundColor: sc.textMuted },
-      btnText:     { fontFamily: 'Inter-Medium', fontSize: 14, color: sc.bgPrimary, letterSpacing: 0.5 },
+      btn:         { backgroundColor: sc.accent, borderRadius: 4, minHeight: 48, paddingVertical: 14, alignItems: 'center' as const },
+      btnDisabled: { backgroundColor: sc.disabledBg },
+      btnText:     { fontFamily: 'Inter-Medium', fontSize: 14, color: saving ? sc.textOnDisabled : sc.textOnAccent, letterSpacing: 0.5 },
     }),
-    [sc],
+    [sc, saving],
   );
 
   return (
     <View style={cardStyles.card} testID="leaderboard-opt-in-card">
       <Text style={cardStyles.heading}>Join the leaderboard</Text>
       <Text style={cardStyles.body}>
-        Opt in to your coach's leaderboard. You'll show up as soon as you log activity.
+        Opt in to show your display name and combined score on your coach's leaderboard.
       </Text>
       <Text style={cardStyles.body}>
         Your combined score reflects check-in consistency, workouts logged, meals
-        logged, and coach engagement — weight and monetary data are never shared.
+        logged, coach engagement, and check-in streak. Weight and monetary data are not shown here.
       </Text>
       <TextInput
         style={cardStyles.nameInput}
@@ -359,8 +357,11 @@ export default function LeaderboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Leaderboard</Text>
-        {data?.selfRank != null && (
-          <Text style={styles.selfRankLabel}>Your rank: {data.selfRank}</Text>
+        {isOptedIn && data?.selfRank != null && selfEntry && (
+          <View testID="leaderboard-self-hero" style={{ marginTop: 20, gap: 4 }}>
+            <Text style={styles.selfRankLabel}>Your rank: {data.selfRank}</Text>
+            <Text style={styles.heroScore}>{selfEntry.combinedScore} of 100</Text>
+          </View>
         )}
       </View>
 
@@ -382,7 +383,7 @@ export default function LeaderboardScreen() {
           isOptedIn ? (
             <View style={styles.emptyState} testID="leaderboard-empty-opted-in">
               <Text style={styles.emptyText}>
-                No peers have opted in yet. Your score will appear here once others join.
+                No leaderboard entries to show yet.
               </Text>
             </View>
           ) : null
@@ -424,14 +425,13 @@ const makeStyles = (sc: SemanticTokens) =>
     topBarText: { fontFamily: 'Inter-Medium', fontSize: 15 },
     header: {
       paddingHorizontal: 20,
-      paddingTop: 8,
-      paddingBottom: 12,
+      paddingTop: 16,
+      paddingBottom: 24,
       borderBottomWidth: 0.5,
       borderBottomColor: sc.border,
     },
     title: {
-      fontFamily: 'Cormorant-SemiBold',
-      fontSize: 28,
+      ...typography.h1,
       color: sc.textPrimary,
       letterSpacing: 0.2,
     },
@@ -440,7 +440,9 @@ const makeStyles = (sc: SemanticTokens) =>
       fontSize: 13,
       color: sc.textMuted,
       marginTop: 4,
+      fontVariant: ['tabular-nums'],
     },
+    heroScore: { ...typography.display, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
     columnHeaders: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -495,6 +497,9 @@ const makeStyles = (sc: SemanticTokens) =>
       marginBottom: 16,
     },
     retryButton: {
+      minHeight: 48,
+      justifyContent: 'center',
+      borderRadius: 4,
       paddingVertical: 10,
       paddingHorizontal: 24,
       borderWidth: 1,

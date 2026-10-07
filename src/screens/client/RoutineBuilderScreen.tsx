@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,12 +9,15 @@ import {
   Alert,
   Modal,
   FlatList,
+  PanResponder,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
+import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
 import {
@@ -58,6 +61,9 @@ export default function RoutineBuilderScreen() {
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
+  const [pickerStatus, setPickerStatus] = useState<'loading' | 'ready' | 'error'>('ready');
+  const setInputs = useRef<Array<TextInput | null>>([]);
+  const rowBounds = useRef<Array<{ y: number; height: number }>>([]);
 
   // Load existing routine via React Query so the cache is shared with the
   // routines list elsewhere in the app. When the screen is opened in "new"
@@ -66,6 +72,7 @@ export default function RoutineBuilderScreen() {
   const createRoutine = useCreateRoutine();
   const updateRoutine = useUpdateRoutine();
   const deleteRoutine = useDeleteRoutine();
+  const isSaving = createRoutine.isPending || updateRoutine.isPending;
 
   useEffect(() => {
     if (!routineId || !routinesQ.data) return;
@@ -82,9 +89,16 @@ export default function RoutineBuilderScreen() {
     setShowAddModal(true);
     setSearchQuery('');
     setSelectedMuscle('All');
-    const all = await getAllExercises();
-    setAllExercises(all);
-    setFilteredExercises(all);
+    setPickerStatus('loading');
+    setFilteredExercises([]);
+    try {
+      const all = await getAllExercises();
+      setAllExercises(all);
+      setFilteredExercises(all);
+      setPickerStatus('ready');
+    } catch {
+      setPickerStatus('error');
+    }
   };
 
   const filterExercises = (query: string, muscle: string) => {
@@ -145,19 +159,36 @@ export default function RoutineBuilderScreen() {
     });
   };
 
+  const dragExercise = (idx: number) => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onPanResponderRelease: (_event, gesture) => {
+      const row = rowBounds.current[idx];
+      if (!row) return;
+      const center = row.y + row.height / 2 + gesture.dy;
+      const next = rowBounds.current.findIndex((bounds) => center < bounds.y + bounds.height);
+      const target = next === -1 ? exercises.length - 1 : next;
+      setExercises((prev) => {
+        const reordered = [...prev];
+        const [moved] = reordered.splice(idx, 1);
+        reordered.splice(target, 0, moved);
+        return reordered;
+      });
+    },
+  }).panHandlers;
+
   const handleSave = () => {
     if (!name.trim()) {
-      Alert.alert('Missing Name', 'Give your routine a name.');
+      Alert.alert('Routine name needed', 'Give your routine a name.');
       return;
     }
     if (exercises.length === 0) {
-      Alert.alert('No Exercises', 'Add at least one exercise.');
+      Alert.alert('Exercise needed', 'Add at least one exercise.');
       return;
     }
     const payload = buildRoutinePayload(name, exercises);
     const onSuccess = () => navigation.goBack();
     const onError = (err: unknown) => {
-      Alert.alert("Couldn't save routine", errorMessage(err, 'Please try again.'));
+      Alert.alert("Couldn't save routine", errorMessage(err, 'Check your connection and save the routine again.'));
     };
     if (routineId) {
       updateRoutine.mutate({ id: routineId, data: payload }, { onSuccess, onError });
@@ -168,7 +199,7 @@ export default function RoutineBuilderScreen() {
 
   const handleDelete = () => {
     if (!routineId) return;
-    Alert.alert('Delete Routine?', 'This cannot be undone.', [
+    Alert.alert('Delete routine?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -177,7 +208,7 @@ export default function RoutineBuilderScreen() {
           deleteRoutine.mutate(routineId, {
             onSuccess: () => navigation.goBack(),
             onError: (err) => {
-              Alert.alert("Couldn't delete routine", errorMessage(err, 'Please try again.'));
+              Alert.alert("Couldn't delete routine", errorMessage(err, 'Check your connection and delete the routine again.'));
             },
           });
         },
@@ -188,44 +219,53 @@ export default function RoutineBuilderScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+        <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Cancel routine" onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back-outline" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>{routineId ? 'Edit Routine' : 'New Routine'}</Text>
+        <Text style={styles.topTitle}>{routineId ? 'Edit routine' : 'New routine'}</Text>
         {routineId ? (
-          <TouchableOpacity onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={22} color={colors.error} />
+          <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Delete routine" onPress={handleDelete}>
+            <Ionicons name="trash-outline" size={22} color={colors.textMuted} />
           </TouchableOpacity>
         ) : (
-          <View style={{ width: 22 }} />
+          <View style={styles.iconButton} />
         )}
       </View>
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <Text style={styles.overline}>Routine name</Text>
         <TextInput
+          accessibilityLabel="Routine name"
           style={styles.nameInput}
           placeholder="Routine name (e.g. Push Day)"
           placeholderTextColor={colors.textMuted}
           value={name}
           onChangeText={setName}
         />
+        <Text style={styles.overline}>Exercises</Text>
 
         {exercises.map((ex, idx) => (
-          <View key={`${ex.exerciseId}-${idx}`} style={styles.exerciseCard}>
+          <View key={`${ex.exerciseId}-${idx}`} testID={`exercise-row-${idx}`} style={styles.exerciseCard} onLayout={({ nativeEvent }) => { rowBounds.current[idx] = nativeEvent.layout; }}>
             <View style={styles.exerciseTop}>
               <View style={styles.exerciseTopLeft}>
+                <View style={styles.iconButton} accessibilityLabel={`Drag ${ex.exerciseName} to reorder`} {...dragExercise(idx)}>
+                  <Ionicons name="reorder-two-outline" size={18} color={colors.textMuted} />
+                </View>
                 <Text style={styles.exerciseNum}>{idx + 1}</Text>
                 <Text style={styles.exerciseName}>{ex.exerciseName}</Text>
               </View>
               <View style={styles.exerciseActions}>
-                <TouchableOpacity onPress={() => moveExercise(idx, 'up')} disabled={idx === 0}>
+                <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Move ${ex.exerciseName} up`} onPress={() => moveExercise(idx, 'up')} disabled={idx === 0}>
                   <Ionicons name="chevron-up" size={18} color={idx === 0 ? colors.border : colors.textMuted} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => moveExercise(idx, 'down')} disabled={idx === exercises.length - 1}>
+                <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Move ${ex.exerciseName} down`} onPress={() => moveExercise(idx, 'down')} disabled={idx === exercises.length - 1}>
                   <Ionicons name="chevron-down" size={18} color={idx === exercises.length - 1 ? colors.border : colors.textMuted} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => removeExercise(idx)}>
-                  <Ionicons name="close-circle" size={18} color={colors.error} />
+                <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Edit ${ex.exerciseName}, exercise ${idx + 1}`} onPress={() => setInputs.current[idx]?.focus()}>
+                  <Ionicons name="create-outline" size={20} color={colors.textMuted} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel={`Remove ${ex.exerciseName}, exercise ${idx + 1}`} onPress={() => removeExercise(idx)}>
+                  <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -233,6 +273,8 @@ export default function RoutineBuilderScreen() {
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Sets</Text>
                 <TextInput
+                  ref={(input) => { setInputs.current[idx] = input; }}
+                  accessibilityLabel={`Sets for ${ex.exerciseName}, exercise ${idx + 1}`}
                   style={styles.fieldInput}
                   value={String(ex.sets)}
                   onChangeText={(v) => updateExerciseField(idx, 'sets', parseInt(v) || 0)}
@@ -242,6 +284,7 @@ export default function RoutineBuilderScreen() {
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Reps</Text>
                 <TextInput
+                  accessibilityLabel={`Reps for ${ex.exerciseName}, exercise ${idx + 1}`}
                   style={styles.fieldInput}
                   value={String(ex.reps)}
                   onChangeText={(v) => updateExerciseField(idx, 'reps', parseInt(v) || 0)}
@@ -251,6 +294,7 @@ export default function RoutineBuilderScreen() {
               <View style={styles.field}>
                 <Text style={styles.fieldLabel}>Rest (s)</Text>
                 <TextInput
+                  accessibilityLabel={`Rest seconds for ${ex.exerciseName}, exercise ${idx + 1}`}
                   style={styles.fieldInput}
                   value={String(ex.restSec)}
                   onChangeText={(v) => updateExerciseField(idx, 'restSec', parseInt(v) || 0)}
@@ -261,32 +305,33 @@ export default function RoutineBuilderScreen() {
           </View>
         ))}
 
-        <TouchableOpacity style={styles.addBtn} onPress={openAddExercise}>
-          <Ionicons name="add-circle" size={22} color={colors.primary} />
-          <Text style={styles.addBtnText}>Add Exercise</Text>
+        <TouchableOpacity style={styles.addBtn} accessibilityRole="button" accessibilityLabel="Add exercise" onPress={() => { void openAddExercise(); }}>
+          <Ionicons name="add-outline" size={22} color={colors.textPrimary} />
+          <Text style={styles.addBtnText}>Add exercise</Text>
         </TouchableOpacity>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
-          <Text style={styles.saveBtnText}>{routineId ? 'Update Routine' : 'Save Routine'}</Text>
-        </TouchableOpacity>
+        <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy: isSaving }} disabled={isSaving} onPress={handleSave}>
+          <Text style={styles.saveBtnText}>{isSaving ? 'Saving routine…' : 'Save routine'}</Text>
+        </HapticPressable>
       </View>
 
       {/* Exercise Picker Modal */}
-      <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={showAddModal} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+            <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Close exercise picker" onPress={() => setShowAddModal(false)}>
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
-            <Text style={styles.modalTitle}>Add Exercise</Text>
-            <View style={{ width: 24 }} />
+            <Text style={styles.modalTitle}>Add exercise</Text>
+            <View style={styles.iconButton} />
           </View>
 
           <View style={styles.searchBar}>
             <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
+              accessibilityLabel="Search exercises"
               style={styles.searchInput}
               placeholder="Search exercises..."
               placeholderTextColor={colors.textMuted}
@@ -299,6 +344,9 @@ export default function RoutineBuilderScreen() {
             {MUSCLES.map((m) => (
               <TouchableOpacity
                 key={m}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter ${m}`}
+                accessibilityState={{ selected: selectedMuscle === m }}
                 style={[styles.muscleChip, selectedMuscle === m && styles.muscleChipActive]}
                 onPress={() => handleMuscleFilter(m)}
               >
@@ -310,12 +358,15 @@ export default function RoutineBuilderScreen() {
           </ScrollView>
 
           <FlatList
+            keyboardShouldPersistTaps="handled"
             data={filteredExercises}
+            ListEmptyComponent={<Text style={styles.exerciseListMeta}>{pickerStatus === 'loading' ? 'Loading exercises.' : pickerStatus === 'error' ? 'Exercises did not load. Check your connection and try again.' : 'No exercises match. Try another search or muscle group.'}</Text>}
+            ListFooterComponent={pickerStatus === 'error' ? <TouchableOpacity style={styles.addBtn} accessibilityRole="button" accessibilityLabel="Try loading exercises again" onPress={openAddExercise}><Text style={styles.addBtnText}>Try again</Text></TouchableOpacity> : null}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.exerciseList}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.exerciseListItem} onPress={() => addExercise(item)} activeOpacity={0.7}>
-                <View>
+              <TouchableOpacity style={styles.exerciseListItem} accessibilityRole="button" accessibilityLabel={`Add ${item.name}`} onPress={() => addExercise(item)} activeOpacity={0.7}>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.exerciseListName}>{item.name}</Text>
                   <Text style={styles.exerciseListMeta}>
                     {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)} · {item.equipment}
@@ -334,6 +385,8 @@ export default function RoutineBuilderScreen() {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  overline: { ...typography.eyebrow, color: colors.textMuted, marginBottom: 12 },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -341,78 +394,67 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    backgroundColor: colors.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  topTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
-  content: { padding: 20, paddingBottom: 120 },
+  topTitle: { ...typography.h2, color: colors.textPrimary },
+  content: { padding: 24, paddingBottom: 120 },
   nameInput: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 16,
+    ...typography.h1,
     paddingVertical: 14,
-    fontSize: 17,
-    fontWeight: '600',
     color: colors.textPrimary,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    marginBottom: 20,
+    marginBottom: 32,
   },
   exerciseCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    marginBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingVertical: 20,
+    marginBottom: 12,
   },
   exerciseTop: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'stretch',
     marginBottom: 10,
   },
-  exerciseTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  exerciseTopLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   exerciseNum: {
     width: 24,
-    height: 24,
-    borderRadius: 2, // radius.md
-    backgroundColor: colors.primary,
-    color: colors.textOnPrimary,
+    ...typography.bodySmall,
+    color: colors.textMuted,
     fontSize: 13,
-    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
     textAlign: 'center',
     lineHeight: 24,
-    overflow: 'hidden',
   },
-  exerciseName: { fontSize: 15, fontWeight: '500', color: colors.textPrimary, flex: 1 },
-  exerciseActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  exerciseName: { ...typography.bodyMd, color: colors.textPrimary, flex: 1 },
+  exerciseActions: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end' },
   fieldRow: { flexDirection: 'row', gap: 10 },
   field: { flex: 1 },
-  fieldLabel: { fontSize: 11, color: colors.textMuted, marginBottom: 4 },
+  fieldLabel: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, marginBottom: 4 },
   fieldInput: {
-    backgroundColor: colors.background,
-    borderRadius: 0, // radius.sm
+    ...typography.body,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    fontSize: 15,
-    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
     textAlign: 'center',
   },
   addBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 8,
     paddingVertical: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
     marginTop: 4,
   },
-  addBtnText: { fontSize: 15, fontWeight: '500', color: colors.primary },
+  addBtnText: { ...typography.bodyMd, color: colors.textPrimary, textDecorationLine: 'underline' },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -421,7 +463,7 @@ const makeStyles = (colors: ThemeColors) =>
     padding: 20,
     paddingBottom: 36,
     backgroundColor: colors.background,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
   saveBtn: {
@@ -430,7 +472,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 16,
     alignItems: 'center',
   },
-  saveBtnText: { color: colors.textOnPrimary, fontSize: 17, fontWeight: '500' },
+  saveBtnText: { ...typography.bodyMd, color: colors.textOnPrimary },
   // Modal
   modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
@@ -440,48 +482,44 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 20,
     paddingTop: 16,
     paddingBottom: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
+  modalTitle: { ...typography.h2, color: colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
-    borderRadius: 2, // radius.md
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  searchInput: { flex: 1, fontSize: 16, color: colors.textPrimary },
-  muscleFilter: { maxHeight: 44, marginBottom: 8 },
+  searchInput: { ...typography.body, flex: 1, minHeight: 44, color: colors.textPrimary },
+  muscleFilter: { maxHeight: 48, marginBottom: 16 },
   muscleFilterContent: { paddingHorizontal: 20, gap: 8 },
   muscleChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    minHeight: 44,
+    justifyContent: 'center',
   },
-  muscleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  muscleChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  muscleChipTextActive: { color: colors.textOnPrimary },
+  muscleChipActive: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.textPrimary },
+  muscleChipText: { ...typography.bodySmall, color: colors.textSecondary },
+  muscleChipTextActive: { color: colors.textPrimary },
   exerciseList: { paddingHorizontal: 20, paddingBottom: 40 },
   exerciseListItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 14,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  exerciseListName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-  exerciseListMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  exerciseListName: { ...typography.bodyMd, color: colors.textPrimary },
+  exerciseListMeta: { ...typography.bodySmall, color: colors.textMuted, marginTop: 2 },
 
   });

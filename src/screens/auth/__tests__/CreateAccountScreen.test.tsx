@@ -19,8 +19,10 @@ const mockValidate = jest.fn();
 const mockPreview = jest.fn();
 const mockLogin = jest.fn();
 const mockRegister = jest.fn();
+const mockResend = jest.fn();
 jest.mock('../../../services/api', () => ({
   authApi: {
+    resendVerification: (...a: unknown[]) => mockResend(...a),
     getSignupPolicy: (...a: unknown[]) => mockGetSignupPolicy(...a),
     signupWithCode: (...a: unknown[]) => mockSignupWithCode(...a),
     validateInviteCode: (...a: unknown[]) => mockValidate(...a),
@@ -302,6 +304,19 @@ describe('CreateAccountScreen', () => {
     await fireEvent.changeText(utils.getByLabelText('Password'), 'Str0ng!pass');
     await fireEvent.press(utils.getByLabelText('Create account'));
   }
+
+  it('FW-ONB-128 B1: the verify step sends a new link to the stored address', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockSignupWithCode.mockResolvedValue({ data: { requires_verification: true } });
+    mockResend.mockResolvedValue({ data: { message: 'Verification request submitted.' } });
+    const ui = await renderScreen();
+    await fillAndSubmit(ui);
+    expect(await ui.findByText('I verified my email')).toBeTruthy();
+    await fireEvent.press(ui.getByLabelText('Send a new link'));
+    await waitFor(() => expect(mockResend).toHaveBeenCalledWith('pat@example.com'));
+    expect(await ui.findByText(/If an account is waiting for confirmation, a new link is on its way/)).toBeTruthy();
+    expect(ui.getByText('Use a different email')).toBeTruthy();
+  });
 
   it('invite_attached:false routes to the RoleSelection retry step after verification', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });

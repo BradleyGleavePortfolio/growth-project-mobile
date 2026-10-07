@@ -36,9 +36,9 @@ describe('LeaderboardScreen — source guards', () => {
     expect(SCREEN_SRC).toMatch(/testID="leaderboard-self-row"/);
   });
 
-  it('highlights self row with an oxblood underline style', () => {
+  it('keeps a self-row identifier without fixed palette colors', () => {
     expect(SCREEN_SRC).toMatch(/rowHighlighted/);
-    expect(SCREEN_SRC).toMatch(/4A0404/); // oxblood hex
+    expect(SCREEN_SRC).not.toMatch(/#[0-9a-f]{6}/i);
   });
 
   it('uses combinedScore field, not any raw health field', () => {
@@ -49,7 +49,7 @@ describe('LeaderboardScreen — source guards', () => {
 
   it('shows the canonical opt-in empty-state copy', () => {
     expect(SCREEN_SRC).toMatch(
-      /Opt in to your coach's leaderboard\. You'll show up as soon as you log activity\./,
+      /Opt in to show your display name and combined score on your coach's leaderboard\./,
     );
   });
 
