@@ -17,7 +17,9 @@
  *
  * Every call resolves to an outcome and never throws, so callers can treat
  * "not deployed yet" (404 / 503) as a calm, explicit state.
+ * R11-C1 `scope` and `upgrade` (optional client-ai-v5 memory copy) read as null when absent or malformed.
  */
+import { z } from 'zod';
 import api from '../services/api';
 import { supportReferenceOf } from '../utils/correlation';
 
@@ -39,6 +41,18 @@ export interface AiConsentServerCopy {
   sha256?: string;
 }
 
+/** What a live grant covers (backend R11-C1): 'memory' adds Roman's notes and summaries. */
+export type AiConsentScope = 'base' | 'memory';
+
+/** A copy on offer that can be shown and granted: every part present. */
+export interface AiConsentUpgradeCopy {
+  version: string;
+  paragraph: AiConsentCopyPart;
+  box_label: AiConsentCopyPart;
+  /** sha256 (lowercase hex) of `paragraph.text + "\n\n" + box_label.text`; sent as `copy_sha256`. */
+  sha256: string;
+}
+
 /** GET /me/ai-consent (and the grant / withdraw responses). */
 export interface AiConsentStatusResponse {
   purpose?: string;
@@ -53,6 +67,10 @@ export interface AiConsentStatusResponse {
   current_version: string;
   needs_reconsent: boolean;
   copy: AiConsentServerCopy | null;
+  /** Absent or null on servers before R11-C1. */
+  scope?: AiConsentScope | null;
+  /** The optional Roman memory copy offered to a live v4 holder; null when nothing is offered. */
+  upgrade?: AiConsentUpgradeCopy | null;
 }
 
 export interface GrantRomanConsentRequest {
@@ -98,6 +116,30 @@ function copyPart(v: unknown): AiConsentCopyPart | undefined {
     : undefined;
 }
 
+const SCOPES: readonly AiConsentScope[] = ['base', 'memory'];
+const HEX64 = /^[a-fA-F0-9]{64}$/;
+const nonBlank = z.string().refine((t) => t.trim().length > 0);
+const upgradePartSchema = z.object({ text: nonBlank, sha256: z.string().regex(HEX64) });
+const upgradeSchema = z.object({
+  version: z.string().min(1).max(64),
+  paragraph: upgradePartSchema,
+  box_label: upgradePartSchema,
+  sha256: z.string().regex(HEX64),
+});
+
+/** The `upgrade` copy when every part is present and well formed; anything else is null. */
+export function parseUpgrade(v: unknown): AiConsentUpgradeCopy | null {
+  const r = upgradeSchema.safeParse(v);
+  if (!r.success) return null;
+  const { version, paragraph, box_label, sha256 } = r.data;
+  return {
+    version,
+    paragraph: { text: paragraph.text, sha256: paragraph.sha256.toLowerCase() },
+    box_label: { text: box_label.text, sha256: box_label.sha256.toLowerCase() },
+    sha256: sha256.toLowerCase(),
+  };
+}
+
 /** Accept only a readable status body; anything else is "no status". */
 export function parseStatus(body: unknown): AiConsentStatusResponse | null {
   if (!isRecord(body)) return null;
@@ -127,6 +169,8 @@ export function parseStatus(body: unknown): AiConsentStatusResponse | null {
     current_version: body.current_version,
     needs_reconsent: body.needs_reconsent === true || state === 'needs_reconsent',
     copy,
+    scope: SCOPES.find((x) => x === body.scope) ?? null,
+    upgrade: parseUpgrade(body.upgrade),
   };
 }
 

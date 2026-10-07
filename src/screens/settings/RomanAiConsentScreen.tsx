@@ -18,6 +18,9 @@
  * already queued); if it still does not go through, the screen says so.
  * Allow here is a newer choice and clears that pending "no" before it is
  * sent; a confirmed Withdraw here settles it.
+ *
+ * Roman memory (R11-C1): a server `upgrade` (client-ai-v5, live v4 grant, memory on) is a separate
+ * optional choice with the server's text and sha256; null shows nothing. A v5 grant shows the v5 text.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -25,18 +28,25 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { aiConsentApi as defaultApi, AiConsentOutcome, AiConsentStatusResponse } from '../../api/aiConsentApi';
+import {
+  aiConsentApi as defaultApi,
+  AiConsentOutcome,
+  AiConsentStatusResponse,
+  AiConsentUpgradeCopy,
+  GrantRomanConsentRequest,
+} from '../../api/aiConsentApi';
 import {
   AI_LEDGER_NOT_SENT,
   drainAiWithdrawal,
   grantAiChoiceAs,
+  platformTag,
   readAiWithdrawalPending,
   romanGrantBody,
   withdrawAiChoiceAs,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH, SUPPORT_EMAIL } from '../../lib/consultation/copy';
-import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
+import { AI_CONSENT_MEMORY_VERSION, AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { reportUnexpected } from '../../lib/consultation/report';
 import { shortReference } from '../../utils/correlation';
 import { logger } from '../../utils/logger';
@@ -84,7 +94,35 @@ export const ROMAN_AI_COPY = {
   deleteAccount: 'Delete account',
   pendingWithdraw:
     'You switched Roman and AI off during setup, and that is not confirmed yet, so the choice above may still be in place. Tap Withdraw to try again now.',
+  allowedMemoryBody:
+    'Roman and your coach\u2019s AI tools may use your information, processed by Anthropic. Roman may also keep notes and summaries about you, as described above.',
+  memoryHead: 'Notes and summaries',
+  memoryIntro:
+    'Optional. Roman can keep notes and summaries about your training to personalise his replies, under the wording below. Nothing changes unless you allow it.',
+  memoryAllow: 'Allow notes and summaries',
+  confirmMemoryTitle: 'Allow notes and summaries?',
+  memoryChanged:
+    'The wording of this option changed before your choice was saved, so nothing changed. The current wording and choice are shown here.',
 } as const;
+
+/** The server's v5 paragraph for a live client-ai-v5 (memory) grant, or null. */
+function memoryParagraphOf(status: AiConsentStatusResponse): string | null {
+  const c = status.copy;
+  if (status.current_version !== AI_CONSENT_MEMORY_VERSION || c?.version !== AI_CONSENT_MEMORY_VERSION) return null;
+  const text = c.paragraph?.text;
+  return text && text.trim() ? text : null;
+}
+
+/** A live client-ai-v5 grant whose text the server sent (Roman memory allowed). */
+export function isMemoryAllowed(status: AiConsentStatusResponse): boolean {
+  return (
+    status.state === 'granted' &&
+    status.granted === true &&
+    !status.needs_reconsent &&
+    status.version === AI_CONSENT_MEMORY_VERSION &&
+    memoryParagraphOf(status) !== null
+  );
+}
 
 /**
  * What the status means for this build (backend #622 `state`).
@@ -93,12 +131,30 @@ export const ROMAN_AI_COPY = {
  */
 export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoice; withdrawable: boolean } {
   const latestIsGrant = status.state === 'granted' || status.state === 'needs_reconsent';
+  if (isMemoryAllowed(status)) return { choice: 'allowed', withdrawable: true };
   if (status.current_version !== AI_CONSENT_VERSION) return { choice: 'update_app', withdrawable: latestIsGrant };
   if (status.state === 'granted' && status.granted && status.version === AI_CONSENT_VERSION) {
     return { choice: 'allowed', withdrawable: true };
   }
   if (latestIsGrant) return { choice: 'reconsent', withdrawable: true };
   return { choice: 'not_allowed', withdrawable: false };
+}
+
+/**
+ * The Roman memory offer to show: a well-formed client-ai-v5 `upgrade`, and
+ * only on top of a live v4 grant. Anything else (null, another version, no
+ * live v4 grant) shows nothing.
+ */
+export function memoryOfferOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
+  const offer = status.upgrade;
+  if (!offer || offer.version !== AI_CONSENT_MEMORY_VERSION) return null;
+  const liveV4 = choiceOf(status).choice === 'allowed' && status.version === AI_CONSENT_VERSION;
+  return liveV4 ? offer : null;
+}
+
+/** The grant body for the offered copy: its version and the server's sha256 of exactly that text. */
+export function memoryGrantBody(offer: AiConsentUpgradeCopy): GrantRomanConsentRequest {
+  return { version: offer.version, copy_sha256: offer.sha256, platform: platformTag() };
 }
 
 /** The heading: "Allowed" only for a live server grant (C-310-2). */
@@ -190,7 +246,7 @@ export default function RomanAiConsentScreen({
   }, [load]);
 
   const act = useCallback(
-    async (kind: 'allow' | 'withdraw') => {
+    async (kind: 'allow' | 'withdraw', offer: AiConsentUpgradeCopy | null = null) => {
       if (busy) return;
       setBusy(true);
       setNotice(null);
@@ -201,7 +257,9 @@ export default function RomanAiConsentScreen({
       // pending onboarding "no", so it clears that marker at its own turn.
       const out =
         kind === 'allow'
-          ? await grantAiChoiceAs(uid, sessionUserId, () => api.grantRoman(romanGrantBody()))
+          ? await grantAiChoiceAs(uid, sessionUserId, () =>
+              api.grantRoman(offer ? memoryGrantBody(offer) : romanGrantBody()),
+            )
           : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;
       if (out === AI_LEDGER_NOT_SENT) {
@@ -224,7 +282,7 @@ export default function RomanAiConsentScreen({
       if (out.kind === 'version_mismatch') {
         // #622: the 409 carries no version; re-read the current state, then explain.
         await load();
-        if (!stale()) setNotice(ROMAN_AI_COPY.updateApp);
+        if (!stale()) setNotice(offer ? ROMAN_AI_COPY.memoryChanged : ROMAN_AI_COPY.updateApp);
         return;
       }
       if (out.kind === 'unavailable') {
@@ -243,6 +301,11 @@ export default function RomanAiConsentScreen({
     Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, AI_CONSENT_CHECKBOX_LABEL.replace(/^Optional: /, ''), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow') },
+    ]);
+  const confirmMemory = (offer: AiConsentUpgradeCopy) =>
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryTitle, offer.box_label.text.replace(/^Optional: /, ''), [
+      { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
+      { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow', offer) },
     ]);
   const confirmWithdraw = () =>
     Alert.alert(ROMAN_AI_COPY.confirmWithdrawTitle, ROMAN_AI_COPY.confirmWithdrawBody, [
@@ -289,7 +352,9 @@ export default function RomanAiConsentScreen({
     const head = headOf(view.status);
     const line =
       choice === 'allowed'
-        ? ROMAN_AI_COPY.allowedBody
+        ? isMemoryAllowed(view.status)
+          ? ROMAN_AI_COPY.allowedMemoryBody
+          : ROMAN_AI_COPY.allowedBody
         : choice === 'reconsent'
           ? ROMAN_AI_COPY.reconsentBody
           : choice === 'update_app'
@@ -313,6 +378,20 @@ export default function RomanAiConsentScreen({
     );
   }
 
+  /** The optional Roman memory offer: only while the server sends one (never during a pending "no"). */
+  function renderMemoryOffer() {
+    const offer = view.phase === 'ready' && !pendingWithdraw ? memoryOfferOf(view.status) : null;
+    if (!offer) return null;
+    return (
+      <View style={styles.card} testID="roman-ai-memory-offer">
+        <Text style={styles.head} accessibilityRole="header">{ROMAN_AI_COPY.memoryHead}</Text>
+        <Text style={styles.body}>{ROMAN_AI_COPY.memoryIntro}</Text>
+        <Text style={styles.body} testID="roman-ai-memory-paragraph">{offer.paragraph.text}</Text>
+        {button(ROMAN_AI_COPY.memoryAllow, () => confirmMemory(offer), 'roman-ai-memory-allow')}
+      </View>
+    );
+  }
+
   return (
     // C-310-4: excluded from analytics autocapture, so the Allow / Withdraw
     // choice never reaches product analytics.
@@ -331,8 +410,11 @@ export default function RomanAiConsentScreen({
         <View style={styles.backBtn} />
       </View>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.body} testID="roman-ai-paragraph">{AI_CONSENT_PARAGRAPH}</Text>
+        <Text style={styles.body} testID="roman-ai-paragraph">
+          {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) || AI_CONSENT_PARAGRAPH}
+        </Text>
         {renderState()}
+        {renderMemoryOffer()}
         {notice ? (
           <Text style={styles.notice} accessibilityLiveRegion="polite" testID="roman-ai-notice">{notice}</Text>
         ) : null}
