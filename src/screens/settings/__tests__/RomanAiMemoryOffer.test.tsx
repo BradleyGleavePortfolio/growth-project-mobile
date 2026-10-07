@@ -214,6 +214,15 @@ describe('the memory offer (B-R11C-126)', () => {
     ]);
   });
 
+  it('renders the memory offer after Delete account', async () => {
+    const r = await renderScreen(makeApi(V4_WITH_OFFER));
+    await waitFor(() => r.getByTestId('roman-ai-memory-offer'));
+    expect(r.getAllByTestId(/roman-ai-(delete-account|memory-offer)/).map((node) => node.props.testID)).toEqual([
+      'roman-ai-delete-account',
+      'roman-ai-memory-offer',
+    ]);
+  });
+
   it('409 CONSENT_VERSION_MISMATCH on the memory grant re-reads and says the wording changed', async () => {
     const api = makeApi(V4_WITH_OFFER, { kind: 'version_mismatch' });
     const r = await renderScreen(api);
