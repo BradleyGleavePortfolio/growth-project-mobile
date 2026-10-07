@@ -43,7 +43,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 | File | What it does |
 | --- | --- |
-| `ProfileScreen.tsx` | Identity + streak. Reads `usersApi.getFoundingNumber` for the "founding member" badge. |
+| `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
 | `SettingsScreen.tsx` | Sign out, change password, reset onboarding, link to Trust Center. |
 | `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
