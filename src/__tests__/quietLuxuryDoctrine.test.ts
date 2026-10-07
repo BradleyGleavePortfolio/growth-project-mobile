@@ -344,6 +344,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     else {
       expect(s.queryByText(/visible only to you/)).toBeNull();
       if (ownerAccess === true) expect(s.getByText('Workouts and meals are visible to you and Coach Lee.')).toBeTruthy();
+      else expect(s.queryByText(/Workouts.*(?:visible|shared)/)).toBeNull();
     }
   });
   it('refreshes sharing after Profile to Settings to Profile and suppresses stale reassurance during the read', async () => {

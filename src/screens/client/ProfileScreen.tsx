@@ -56,7 +56,7 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
-  const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean } | null>(null);
+  const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean; ownerAccess: boolean } | null>(null);
   useFocusEffect(useCallback(() => {
     setSharing(null);
     const coachId = currentUser?.coach_id;
@@ -71,16 +71,16 @@ export default function ProfileScreen() {
       const workouts = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted === true);
       const meals = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted === true);
       setSharing(ownerAccess === null && (!workouts || !meals) ? null : {
-        coachId, name: coach.data.name || 'your coach', workouts, meals,
+        coachId, name: coach.data.name || 'your coach', workouts, meals, ownerAccess: ownerAccess === true,
       });
     }).catch(() => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load'); });
     return () => { alive = false; };
   }, [currentUser?.id, currentUser?.coach_id]));
-  const privacyCopy = !currentUser ? null : !currentUser.coach_id ? 'Workouts and meals are visible only to you.'
-    : sharing?.coachId !== currentUser.coach_id ? null
+  const privacyCopy = !currentUser?.coach_id || sharing?.coachId !== currentUser.coach_id ? null
+    : sharing.ownerAccess ? `Workouts and meals are visible to you and ${sharing.name}.`
     : sharing.workouts === sharing.meals
-      ? `Workouts and meals are visible ${sharing.workouts ? `to you and ${sharing.name}` : 'only to you'}.`
-      : `Workouts are visible ${sharing.workouts ? `to you and ${sharing.name}` : 'only to you'}. Meals are visible ${sharing.meals ? `to you and ${sharing.name}` : 'only to you'}.`;
+      ? `Workouts and meals are ${sharing.workouts ? 'shared' : 'not shared'} with ${sharing.name}.`
+      : `Workouts are ${sharing.workouts ? 'shared' : 'not shared'} with ${sharing.name}. Meals are ${sharing.meals ? 'shared' : 'not shared'} with ${sharing.name}.`;
 
   const foundingQ = useFoundingNumber();
   const foundingData = foundingQ.data ?? null;
@@ -153,7 +153,7 @@ export default function ProfileScreen() {
         </Text>
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
 
-        {/* Privacy reassurance line */}
+        {/* Current client-coach sharing state */}
         {privacyCopy ? <Text style={styles.privacyLine}>{privacyCopy}</Text> : null}
       </View>
 
