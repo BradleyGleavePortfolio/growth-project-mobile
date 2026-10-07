@@ -437,6 +437,8 @@ Bottom tabs are icons-only (no labels). Four tabs, in order:
 
 The route names (`Home` / `WorkoutTab` / `Log` / `MoreTab`) are what `navigate()` calls and the linking config use; the user-facing labels live only in the accessibility props because the bar is icon-only. See `src/navigation/ClientNavigator.tsx`.
 
+Home's Roman shortcut opens `MoreTab → RomanChat` with `initial: false`, retaining `MoreIndex` underneath on a first visit. Roman chat includes its own labelled 44 pt Back control in the client and coach stacks, including loading and error states. Its conversation-history action and existing routes are unchanged.
+
 ## Theme
 
 `src/theme/index.ts` is the single source of truth for colors, typography,

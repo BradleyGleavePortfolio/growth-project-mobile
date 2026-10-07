@@ -39,6 +39,9 @@ describe('password reset mail readiness', () => {
 
   it('confirms the request, never promises delivery from the anonymous response', async () => {
     const view = await renderRequest();
+    await fireEvent.press(view.getByLabelText('Back'));
+    expect(view.navigation.goBack).toHaveBeenCalledTimes(1);
+    expect(view.getByLabelText('Email')).toHaveStyle({ fontFamily: 'Inter_400Regular', borderWidth: undefined });
     await fireEvent.press(view.getByLabelText('Send reset link'));
 
     await waitFor(() =>
