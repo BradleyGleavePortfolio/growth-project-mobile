@@ -1892,7 +1892,7 @@ export default function CoachWorkoutBuilderScreen() {
             </Pressable>
           ) : null}
         </View>
-      ) : ai.visible ? (
+      ) : ai.visible && (autosaveEnabled || !isEditing) ? (
         <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
           accessibilityState={{ disabled: !autosaveEnabled }} disabled={!autosaveEnabled} onPress={openAi} style={styles.aiBar}>
           <Text style={[typography.body, { color: sc.textMuted }]}>
