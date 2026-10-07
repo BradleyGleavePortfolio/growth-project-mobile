@@ -21,6 +21,12 @@
 
 import React from 'react';
 import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
+// AIB-5: Ask AI status reads 404 on this backend, so the entry stays hidden.
+jest.mock('../api/aiBuilderApi', () => ({
+  ...jest.requireActual('../api/aiBuilderApi'),
+  aiBuilderApi: { getStatus: jest.fn().mockResolvedValue(null) },
+}));
+
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated autosave test')) },
 }));

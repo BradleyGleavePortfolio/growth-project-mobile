@@ -32,6 +32,20 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // import, producing two React copies, a null hook dispatcher, and the
 // "Invalid hook call" at `useMemo`. Keeping a single React also keeps RTL's
 // auto-cleanup `afterEach` intact, so no test leaks an open handle.
+// AIB-5: Ask AI status reads 404 on this backend, so the entry stays hidden.
+const mockAiStatus = jest.fn();
+const mockAiPropose = jest.fn();
+const mockAiApply = jest.fn();
+jest.mock('../api/aiBuilderApi', () => ({
+  ...jest.requireActual('../api/aiBuilderApi'),
+  aiBuilderApi: {
+    getStatus: (...a: unknown[]) => mockAiStatus(...a),
+    propose: (...a: unknown[]) => mockAiPropose(...a),
+    apply: (...a: unknown[]) => mockAiApply(...a),
+    discard: () => Promise.resolve({ status: 'rejected' }),
+  },
+}));
+
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated undo test')) },
 }));
@@ -278,6 +292,7 @@ beforeEach(() => {
   // `clearAllMocks` wipes implementations too, so re-establish the defaults the
   // boundary mocks need between tests.
   mockCurrentPlan = EXISTING_PLAN;
+  mockAiStatus.mockResolvedValue(null);
   mockReadMirror.mockResolvedValue(null);
   mockClearMirrorIfKey.mockResolvedValue(undefined);
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -786,5 +801,104 @@ describe("CoachWorkoutBuilderScreen — history barrier and unknown outcomes (S-
     expect(screen.getByText(/so nothing was undone/)).toBeTruthy();
     expect(screen.queryByLabelText("Check again")).toBeNull();
     expect(screen.getByLabelText("Plan name").props.editable).not.toBe(false);
+  });
+});
+
+describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
+  const STATUS = (state: string) => ({
+    state,
+    create: true,
+    edit: true,
+    credits: { remaining_pct: 50, resets_at: null },
+    label: "AI-suggested, coach-approved",
+  });
+  const AI_PLAN = {
+    ...EXISTING_PLAN,
+    exercises: [{ ...EXISTING_PLAN.exercises[0], sets: 4, reps_or_duration_seconds: 8 }],
+  };
+
+  it("status 404 (current production backend): no Ask AI entry", async () => {
+    setFlag(true);
+    const Screen = loadScreen();
+    const screen = await render(<Screen />);
+    await waitFor(() => expect(mockAiStatus).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByTestId("ai-prompt-bar")).toBeNull();
+    expect(screen.queryByTestId("ai-header-button")).toBeNull();
+  });
+
+  it("status paused: the entry stays visible and the sheet says it is paused", async () => {
+    setFlag(true);
+    mockAiStatus.mockResolvedValue(STATUS("paused"));
+    const Screen = loadScreen();
+    const screen = await render(<Screen />);
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    expect(screen.getByTestId("ai-header-button")).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ai-prompt-bar"));
+    });
+    expect(
+      screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged."),
+    ).toBeTruthy();
+  });
+
+  it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
+    setFlag(true);
+    mockAiStatus.mockResolvedValue(STATUS("on"));
+    mockAiPropose.mockResolvedValue({
+      draft_id: "d1",
+      summary: "1 change.",
+      changes: [
+        {
+          change_id: "c1",
+          kind: "changed",
+          op: {},
+          before: { sets: 3, reps_or_duration_seconds: 10 },
+          after: { sets: 4, reps_or_duration_seconds: 8 },
+          exercise: { id: "bench", name: "Bench press", thumbnail_url: null },
+          reason: "One progression step.",
+          warnings: [],
+        },
+      ],
+      dropped: [],
+      context_used: [],
+      screening_flag: false,
+    });
+    mockAiApply.mockResolvedValue({
+      status: "approved",
+      materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" },
+    });
+    mockRefetch.mockResolvedValue({ data: AI_PLAN, isError: false });
+    const Screen = loadScreen();
+    const screen = await render(<Screen />);
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ai-prompt-bar"));
+    });
+    await act(async () => {
+      fireEvent.changeText(screen.getByTestId("ai-builder-input"), "progress this");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ai-builder-send"));
+    });
+    await waitFor(() => expect(screen.getByTestId("ai-builder-apply")).toBeTruthy());
+    expect(mockAiPropose).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "edit", plan_id: "plan-1", lock_token: undefined }),
+    );
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ai-builder-apply"));
+    });
+    expect(mockAiApply).toHaveBeenCalledWith("d1", ["c1"]);
+    await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
+
+    mockUndoCall.mockResolvedValueOnce({ head_revision_index: 2, lock_token: "abababababababab" });
+    mockRefetch.mockResolvedValueOnce({ data: EXISTING_PLAN, isError: false });
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("ai-toast-undo"));
+    });
+    expect(mockUndoCall).toHaveBeenCalledWith("plan-1", {
+      to_revision_index: 0,
+      expected_head_index: 1,
+    });
   });
 });

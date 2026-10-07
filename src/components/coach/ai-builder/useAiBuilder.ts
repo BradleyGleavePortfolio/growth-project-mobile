@@ -6,7 +6,6 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import { useQuery } from '@tanstack/react-query';
 import {
   aiBuilderApi,
   toAiBuilderError,
@@ -14,6 +13,7 @@ import {
   type AiBuilderInjuryArea,
   type AiBuilderProposal,
   type AiBuilderQuickAction,
+  type AiBuilderStatus,
 } from '../../../api/aiBuilderApi';
 import { AI_STAGES, describeAiBuilderError, WAIT_FOR_SAVE_COPY } from './aiBuilderCopy';
 
@@ -63,16 +63,28 @@ export interface UseAiBuilderArgs {
 }
 
 export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: UseAiBuilderArgs) {
-  const statusQuery = useQuery({
-    queryKey: ['ai-builder-status'],
-    queryFn: () => aiBuilderApi.getStatus(),
-    staleTime: 60_000,
-    retry: false,
-  });
-  // null = route absent (older backend): the ONLY case the entry hides.
-  // A failed status read keeps the entry visible; propose reports the cause.
-  const status = statusQuery.data;
-  const visible = status !== null && !statusQuery.isLoading;
+  // undefined = loading or unreadable (entry stays visible; propose reports
+  // the cause); null = route absent on this backend (404): the ONLY hide case.
+  const [status, setStatus] = useState<AiBuilderStatus | null | undefined>(undefined);
+  const [statusLoaded, setStatusLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => aiBuilderApi.getStatus())
+      .then((s) => {
+        if (!cancelled) setStatus(s);
+      })
+      .catch(() => {
+        if (!cancelled) setStatus(undefined);
+      })
+      .finally(() => {
+        if (!cancelled) setStatusLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  const visible = statusLoaded && status !== null;
 
   const [phase, setPhase] = useState<AiBuilderPhase>('idle');
   const [stage, setStage] = useState(0);
