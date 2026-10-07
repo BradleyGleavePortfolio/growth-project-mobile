@@ -7,6 +7,11 @@ import { useNudges } from '../../../hooks/useApi';
 const mockRead = jest.fn();
 const mockRefresh = jest.fn();
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { __esModule: true, default: (props: { onRefresh: () => void; testID?: string }) => React.createElement(View, props) };
+});
 jest.mock('../../../hooks/useApi', () => ({
   useNudges: jest.fn(),
   useMarkNudgeRead: () => ({ mutate: mockRead }),

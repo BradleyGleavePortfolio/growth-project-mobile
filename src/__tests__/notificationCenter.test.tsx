@@ -17,6 +17,11 @@ import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { routeInAppNotification } from '../services/pushTapRouter';
 jest.mock('../services/pushTapRouter', () => ({ routeInAppNotification: jest.fn(() => false) }));
+jest.mock('react-native/Libraries/Components/RefreshControl/RefreshControl', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return { __esModule: true, default: (props: { onRefresh: () => void; testID?: string }) => React.createElement(View, props) };
+});
 
 // @expo/vector-icons depends on expo-font → expo-asset which is not available
 // in the Jest environment. Provide a lightweight stub that renders nothing.
