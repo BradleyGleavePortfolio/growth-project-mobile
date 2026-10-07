@@ -22,7 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import type { IoniconName } from '../../types/common';
+import { typography } from '../../theme/tokens';
 
 import {
   ApiNudge,
@@ -30,21 +30,10 @@ import {
   useMarkNudgeRead,
 } from '../../hooks/useApi';
 
-function makeTYPE_CONFIG(colors: ThemeColors): Record<string, { icon: string; color: string }> {
-  return {
-  reminder: { icon: 'alarm-outline', color: colors.warning },
-  milestone: { icon: 'document-outline', color: colors.warning },
-  coach: { icon: 'person-outline', color: colors.primary },
-  system: { icon: 'information-circle-outline', color: colors.info },
-  tip: { icon: 'bulb-outline', color: colors.primaryLight },
-};
-}
-
 export default function NotificationsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const TYPE_CONFIG = useMemo(() => makeTYPE_CONFIG(colors), [colors]);
-  const { data: nudges = [], isLoading, isRefetching, refetch } = useNudges(100);
+  const { data: nudges = [], isLoading, isError, isRefetching, refetch } = useNudges(100);
   const markRead = useMarkNudgeRead();
 
   const onRefresh = useCallback(() => {
@@ -86,28 +75,30 @@ export default function NotificationsScreen() {
   const unreadCount = sorted.filter((n) => !n.read_at).length;
 
   const renderItem = ({ item }: { item: ApiNudge }) => {
-    const config = TYPE_CONFIG.coach;
     const isUnread = !item.read_at;
     return (
       <TouchableOpacity
-        style={[styles.notifCard, isUnread && styles.notifCardUnread]}
+        style={styles.notifCard}
+        disabled={!isUnread}
+        accessibilityRole={isUnread ? 'button' : 'text'}
+        accessibilityLabel={`${isUnread ? 'Unread. ' : ''}${item.title || 'From your coach'}. ${item.body}`}
+        accessibilityHint={isUnread ? 'Mark as read' : undefined}
         onPress={() => handlePress(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.iconCircle, { backgroundColor: config.color + '18' }]}>
-          <Ionicons name={config.icon as IoniconName} size={20} color={config.color} />
+        <View style={styles.iconCircle}>
+          <Ionicons name="person-outline" size={20} color={colors.textMuted} accessibilityElementsHidden />
         </View>
         <View style={styles.notifContent}>
           <View style={styles.notifTop}>
             <Text
               style={[styles.notifTitle, isUnread && styles.notifTitleUnread]}
-              numberOfLines={1}
             >
               {item.title || 'From your coach'}
             </Text>
             <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
           </View>
-          <Text style={styles.notifBody} numberOfLines={2}>
+          <Text style={styles.notifBody}>
             {item.body}
           </Text>
         </View>
@@ -123,6 +114,8 @@ export default function NotificationsScreen() {
         {unreadCount > 0 && (
           <TouchableOpacity
             onPress={handleMarkAllRead}
+            style={styles.headerAction}
+            accessibilityRole="button"
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.markAllText}>Mark all read</Text>
@@ -132,7 +125,7 @@ export default function NotificationsScreen() {
 
       {unreadCount > 0 && (
         <View style={styles.unreadBanner}>
-          <Ionicons name="notifications" size={16} color={colors.primary} />
+          <Ionicons name="notifications-outline" size={16} color={colors.primary} accessibilityElementsHidden />
           <Text style={styles.unreadBannerText}>
             {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
           </Text>
@@ -140,6 +133,7 @@ export default function NotificationsScreen() {
       )}
 
       <FlatList
+        testID="nudge-list"
         data={sorted}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
@@ -147,6 +141,7 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            testID="nudge-refresh"
             refreshing={isRefetching}
             onRefresh={onRefresh}
             tintColor={colors.primary}
@@ -157,10 +152,11 @@ export default function NotificationsScreen() {
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>
-              {isLoading ? 'Loading…' : 'No notifications yet'}
+              {isLoading ? 'Loading notifications…' : isError
+                ? 'Could not load notifications. Pull down to try again.' : 'No notifications.'}
             </Text>
             <Text style={styles.emptyText}>
-              Nudges from your coach and reminders will show up here.
+              Pull down to refresh.
             </Text>
           </View>
         }
@@ -180,56 +176,48 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 60,
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '500', color: colors.textPrimary },
-  markAllText: { fontSize: 14, fontWeight: '600', color: colors.primary },
+  title: { ...typography.h1, color: colors.textPrimary },
+  headerAction: { minHeight: 44, justifyContent: 'center' },
+  markAllText: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', color: colors.primary },
   unreadBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 24,
     marginBottom: 12,
-    backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
     paddingVertical: 10,
   },
-  unreadBannerText: { fontSize: 13, fontWeight: '600', color: colors.primary },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  unreadBannerText: { ...typography.bodySmall, fontSize: 13, color: colors.primary, fontVariant: ['tabular-nums'] },
+  listContent: { paddingHorizontal: 24, paddingBottom: 100, flexGrow: 1 },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    marginBottom: 8,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.divider,
+    paddingVertical: 20,
     gap: 12,
   },
-  notifCardUnread: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.primary,
-  },
   iconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 2, // radius.md
+    width: 20,
+    height: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,
   },
   notifContent: { flex: 1, gap: 4 },
   notifTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 6,
   },
-  notifTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, flex: 1, marginRight: 8 },
-  notifTitleUnread: { fontWeight: '500' },
-  notifTime: { fontSize: 11, color: colors.textMuted },
-  notifBody: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+  notifTitle: { ...typography.bodySmall, fontSize: 15, color: colors.textPrimary },
+  notifTitleUnread: { fontFamily: 'Inter_500Medium', fontWeight: '500' },
+  notifTime: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  notifBody: { ...typography.bodySmall, fontSize: 13, color: colors.textSecondary },
   unreadDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
     marginTop: 6,
   },
@@ -238,7 +226,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 80,
     gap: 10,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
-  emptyText: { fontSize: 14, color: colors.textSecondary },
+  emptyTitle: { ...typography.bodyMd, color: colors.textPrimary, textAlign: 'center' },
+  emptyText: { ...typography.bodySmall, color: colors.textSecondary },
 
   });

@@ -47,7 +47,20 @@ import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
 
 export default function HabitsScreen() {
-  const { colors, semanticColors: sc } = useTheme();
+  const { colors: themeColors, semanticColors: sc } = useTheme();
+  // Bridge the existing child props to semantic tokens, not the fixed palette.
+  const colors = useMemo(() => ({
+    ...themeColors,
+    primary: sc.accentText,
+    primaryPale: sc.bgPrimary,
+    background: sc.bgPrimary,
+    surface: sc.bgPrimary,
+    textPrimary: sc.textPrimary,
+    textSecondary: sc.textMuted,
+    textMuted: sc.textMuted,
+    textOnPrimary: sc.textOnAccent,
+    border: sc.border,
+  }), [themeColors, sc]);
   const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
@@ -166,7 +179,7 @@ export default function HabitsScreen() {
       },
       {
         onError: (err) => {
-          Alert.alert("Couldn't update habit", errorMessage(err, 'Please try again.'));
+          Alert.alert("Couldn't update habit", errorMessage(err, 'The habit was not updated. Try again.'));
         },
       },
     );
@@ -174,7 +187,7 @@ export default function HabitsScreen() {
 
   const handleDelete = (habit: HabitView) => {
     Alert.alert(
-      'Delete Habit',
+      'Delete habit',
       `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -184,7 +197,7 @@ export default function HabitsScreen() {
           onPress: () => {
             deleteHabit.mutate(habit.id, {
               onError: (err) => {
-                Alert.alert("Couldn't delete habit", errorMessage(err, 'Please try again.'));
+                Alert.alert("Couldn't delete habit", errorMessage(err, 'The habit was not deleted. Try again.'));
               },
             });
           },
@@ -210,7 +223,7 @@ export default function HabitsScreen() {
           setNewUnit('times');
         },
         onError: (err) => {
-          Alert.alert("Couldn't create habit", errorMessage(err, 'Please try again.'));
+          Alert.alert("Couldn't create habit", errorMessage(err, 'The habit was not created. Try again.'));
         },
       },
     );
@@ -228,19 +241,18 @@ export default function HabitsScreen() {
           setTimeout(() => setCheckInToast(false), 2200);
         },
         onError: (err) => {
-          Alert.alert("Couldn't save check-in", errorMessage(err, 'Please try again.'));
+          Alert.alert("Couldn't save check-in", errorMessage(err, 'The check-in was not saved. Try again.'));
         },
       },
     );
   };
 
   const completedCount = habits.filter((h) => h.log?.completed).length;
-  const completionPct = habits.length > 0 ? Math.round((completedCount / habits.length) * 100) : 0;
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Habits & Check-in</Text>
+        <Text style={styles.title}>Habits & check-in</Text>
         <Text style={styles.subtitle}>
           {new Date(today + 'T00:00:00').toLocaleDateString('en-US', {
             weekday: 'long',
@@ -255,11 +267,13 @@ export default function HabitsScreen() {
         <TouchableOpacity
           style={[styles.tabBtn, tab === 'habits' && styles.tabBtnActive]}
           onPress={() => setTab('habits')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'habits' }}
         >
           <Ionicons
-            name="checkmark-done"
+            name="checkmark-done-outline"
             size={16}
-            color={tab === 'habits' ? colors.textOnPrimary : colors.textSecondary}
+            color={colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'habits' && styles.tabLabelActive]}>
             Habits
@@ -268,18 +282,17 @@ export default function HabitsScreen() {
         <TouchableOpacity
           style={[styles.tabBtn, tab === 'checkin' && styles.tabBtnActive]}
           onPress={() => setTab('checkin')}
+          accessibilityRole="tab"
+          accessibilityState={{ selected: tab === 'checkin' }}
         >
           <Ionicons
-            name="heart"
+            name="heart-outline"
             size={16}
-            color={tab === 'checkin' ? colors.textOnPrimary : colors.textSecondary}
+            color={colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'checkin' && styles.tabLabelActive]}>
-            Daily Check-in
+            Daily check-in
           </Text>
-          {!checkInSaved && (
-            <View style={styles.dotBadge} />
-          )}
         </TouchableOpacity>
       </View>
 
@@ -300,7 +313,7 @@ export default function HabitsScreen() {
             ) : habitsQ.isError || logsQ.isError ? (
               <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
                 <Text style={styles.progressStatLabel}>Habits could not be loaded.</Text>
-                <TouchableOpacity onPress={onRefresh} accessibilityRole="button">
+                <TouchableOpacity style={styles.addBtn} onPress={onRefresh} accessibilityRole="button">
                   <Text style={styles.addBtnText}>Retry habits</Text>
                 </TouchableOpacity>
               </View>
@@ -312,18 +325,11 @@ export default function HabitsScreen() {
               <>
                 {/* Progress */}
                 <View style={styles.progressCard}>
-                  <View style={styles.progressCircle}>
-                    <Text style={styles.progressPct}>{completionPct}%</Text>
-                    <Text style={styles.progressLabel}>Done</Text>
-                  </View>
                   <View style={styles.progressStats}>
                     <Text style={styles.progressStatValue}>
-                      {completedCount}/{habits.length}
+                      {`${completedCount} of ${habits.length} today`}
                     </Text>
-                    <Text style={styles.progressStatLabel}>habits completed</Text>
-                    <View style={styles.progressBar}>
-                      <View style={[styles.progressBarFill, { width: `${completionPct}%` }]} />
-                    </View>
+                    <Text style={styles.progressStatLabel}>habits completed · hold a habit to delete</Text>
                   </View>
                 </View>
                 {/* Habit Cards */}
@@ -341,21 +347,33 @@ export default function HabitsScreen() {
             )}
 
             <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-              <Ionicons name="add-circle" size={22} color={colors.primary} />
-              <Text style={styles.addBtnText}>Add New Habit</Text>
+              <Ionicons name="add-outline" size={22} color={colors.primary} />
+              <Text style={styles.addBtnText}>Add habit</Text>
             </TouchableOpacity>
           </>
+        ) : todayCheckInQ.isLoading ? (
+          <View style={styles.progressCard}>
+            <ActivityIndicator color={sc.accent} accessibilityLabel="Loading check-in" />
+            <Text style={styles.progressStatLabel}>Loading check-in</Text>
+          </View>
+        ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (
+          <View style={styles.checkInCard}>
+            <Text style={styles.progressStatLabel}>Today's check-in could not be loaded.</Text>
+            <TouchableOpacity style={styles.addBtn} onPress={() => todayCheckInQ.refetch()} accessibilityRole="button">
+              <Text style={styles.addBtnText}>Retry check-in</Text>
+            </TouchableOpacity>
+          </View>
         ) : (
           <>
             {checkInToast && (
               <View style={styles.savedBanner} accessibilityLiveRegion="polite">
-                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
                 <Text style={styles.savedBannerText}>Check-in saved</Text>
               </View>
             )}
             {!checkInToast && checkInSaved && (
               <View style={styles.savedBanner}>
-                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
                 <Text style={styles.savedBannerText}>Saved.</Text>
               </View>
             )}
@@ -400,10 +418,10 @@ export default function HabitsScreen() {
               styles={styles}
             />
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.textOnPrimary} />
+            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn} disabled={saveCheckIn.isPending}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={sc.textOnAccent} />
               <Text style={styles.saveBtnText}>
-                {checkInSaved ? 'Update Check-in' : 'Save Check-in'}
+                {saveCheckIn.isPending ? 'Saving check-in' : checkInSaved ? 'Update check-in' : 'Save check-in'}
               </Text>
             </TouchableOpacity>
           </>
