@@ -18,8 +18,13 @@ import * as Haptics from 'expo-haptics';
 import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
-import EmptyState from '../../components/EmptyState';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
+
+function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
+  const { semanticColors: sc } = useTheme();
+  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -36,7 +41,12 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ShoppingListScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: sc } = useTheme();
+  const colors = useMemo(() => ({
+    background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
+    textPrimary: sc.textPrimary, textMuted: sc.textMuted, textOnPrimary: sc.textOnAccent,
+    border: sc.border, success: sc.textMuted, error: sc.textMuted,
+  }), [sc]);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
@@ -151,13 +161,14 @@ export default function ShoppingListScreen() {
   const renderItem = ({ item }: { item: ListItem }) => (
     <View style={[styles.itemRow, item.is_checked && styles.itemRowChecked]}>
       <TouchableOpacity
+        accessibilityRole="checkbox" accessibilityLabel={`${item.is_checked ? 'Uncheck' : 'Check'} ${item.name}`} accessibilityState={{ checked: item.is_checked }}
         style={styles.checkbox}
         onPress={() => handleToggle(item)}
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         <Ionicons
-          name={item.is_checked ? 'checkmark-circle' : 'ellipse-outline'}
+          name={item.is_checked ? 'checkmark-circle-outline' : 'ellipse-outline'}
           size={24}
           color={item.is_checked ? colors.success : colors.textMuted}
         />
@@ -173,6 +184,7 @@ export default function ShoppingListScreen() {
         ) : null}
       </View>
       <TouchableOpacity
+        accessibilityRole="button" accessibilityLabel={`Remove ${item.name}`}
         style={styles.deleteBtn}
         onPress={() => handleDelete(item)}
         activeOpacity={0.7}
@@ -184,19 +196,20 @@ export default function ShoppingListScreen() {
   );
 
   const listData: Array<ListItem | { type: 'header'; label: string; count: number }> = [
+    ...(unchecked.length > 0 ? [{ type: 'header' as const, label: 'To get', count: unchecked.length }] : []),
     ...unchecked,
     ...(checked.length > 0 ? [{ type: 'header' as const, label: 'Checked', count: checked.length }] : []),
     ...checked,
   ];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="grocery-prep-screen">
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Shopping List</Text>
+        <Text style={styles.title}>Shopping list</Text>
         {checked.length > 0 ? (
           <TouchableOpacity
             style={styles.clearBtn}
@@ -208,6 +221,7 @@ export default function ShoppingListScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
+      {!isLoading && !isError && items.length > 0 ? <Text style={styles.summary}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -240,6 +254,7 @@ export default function ShoppingListScreen() {
           />
         </View>
         <TouchableOpacity
+          accessibilityRole="button" accessibilityLabel="Add item"
           style={[styles.addBtn, !newItemName.trim() && styles.addBtnDisabled]}
           onPress={handleAdd}
           disabled={!newItemName.trim() || addMutation.isPending}
@@ -260,11 +275,12 @@ export default function ShoppingListScreen() {
           <Text style={styles.loadingText}>Loading shopping list…</Text>
         </View>
       ) : isError ? (
-        <EmptyState
-          icon="alert-circle-outline"
-          title="Couldn't load list"
-          subtitle="Pull down to try again."
-        />
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Couldn't load shopping list.</Text>
+          <TouchableOpacity onPress={() => refetch()} disabled={isRefetching} style={styles.clearBtn}>
+            <Text style={styles.clearBtnText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
       ) : items.length === 0 ? (
         <FadeInView>
           <EmptyState
@@ -275,12 +291,14 @@ export default function ShoppingListScreen() {
         </FadeInView>
       ) : (
         <FlatList
+          testID="list-scroll"
           data={listData}
           keyExtractor={(item) =>
             'type' in item ? `header-${item.label}` : item.id
           }
           refreshControl={
             <RefreshControl
+              testID="list-refresh"
               refreshing={isRefetching}
               onRefresh={refetch}
               tintColor={colors.primary}
@@ -307,7 +325,7 @@ export default function ShoppingListScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
@@ -318,15 +336,16 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 16,
     gap: 12,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '500', color: colors.textPrimary, flex: 1 },
+  backBtn: { width: 44, height: 44, justifyContent: 'center' },
+  title: { ...typography.h1, color: colors.textPrimary, flex: 1 },
+  summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: colors.error + '15',
+    minHeight: 44, justifyContent: 'center',
     borderRadius: 0, // radius.sm
   },
-  clearBtnText: { fontSize: 13, fontWeight: '500', color: colors.error },
+  clearBtnText: { ...typography.bodySmall, color: colors.textMuted },
 
   addRow: {
     flexDirection: 'row',
@@ -337,6 +356,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   addInputs: { flex: 1, flexDirection: 'row', gap: 6 },
   nameInput: {
+    fontFamily: typography.body.fontFamily,
     flex: 3,
     height: 44,
     backgroundColor: colors.surface,
@@ -348,6 +368,7 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
   },
   qtyInput: {
+    fontFamily: typography.body.fontFamily, fontVariant: ['tabular-nums'],
     flex: 1,
     height: 44,
     backgroundColor: colors.surface,
@@ -360,6 +381,7 @@ const makeStyles = (colors: ThemeColors) =>
     textAlign: 'center',
   },
   unitInput: {
+    fontFamily: typography.body.fontFamily,
     flex: 1,
     height: 44,
     backgroundColor: colors.surface,
@@ -374,14 +396,14 @@ const makeStyles = (colors: ThemeColors) =>
     width: 44,
     height: 44,
     backgroundColor: colors.primary,
-    borderRadius: 22,
+    borderRadius: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addBtnDisabled: { opacity: 0.5 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { fontSize: 15, color: colors.textMuted },
+  loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   listContent: { paddingHorizontal: 16, paddingBottom: 40 },
 
@@ -390,7 +412,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 4,
     marginTop: 8,
   },
-  sectionHeaderText: { fontSize: 13, fontWeight: '500', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionHeaderText: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   itemRow: {
     flexDirection: 'row',
@@ -398,18 +420,18 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     marginBottom: 8,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: 10,
   },
-  itemRowChecked: { opacity: 0.6 },
-  checkbox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  itemRowChecked: { opacity: 1 },
+  checkbox: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   itemContent: { flex: 1 },
-  itemName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  itemName: { ...typography.bodyMd, color: colors.textPrimary },
   itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
-  itemMeta: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
-  deleteBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
+  itemMeta: { ...typography.bodySmall, color: colors.textMuted, marginTop: 1, fontVariant: ['tabular-nums'] },
+  deleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 
   });

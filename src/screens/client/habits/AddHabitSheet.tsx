@@ -30,19 +30,20 @@ export function AddHabitSheet({
   styles: HabitsStyles;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
         <View style={styles.modalContent}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>New Habit</Text>
-            <TouchableOpacity onPress={onClose}>
+            <Text style={styles.modalTitle}>New habit</Text>
+            <TouchableOpacity style={styles.stepperBtn} onPress={onClose} accessibilityRole="button" accessibilityLabel="Close new habit">
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.fieldLabel}>Habit Name</Text>
+          <Text style={styles.fieldLabel}>Habit name</Text>
           <TextInput
             style={styles.fieldInput}
+            accessibilityLabel="Habit name"
             placeholder="e.g. Drink 8 glasses of water"
             placeholderTextColor={colors.textMuted}
             value={newName}
@@ -55,6 +56,7 @@ export function AddHabitSheet({
               <Text style={styles.fieldLabel}>Target</Text>
               <TextInput
                 style={styles.fieldInput}
+                accessibilityLabel="Habit target"
                 placeholder="1"
                 placeholderTextColor={colors.textMuted}
                 value={newTarget}
@@ -66,6 +68,7 @@ export function AddHabitSheet({
               <Text style={styles.fieldLabel}>Unit</Text>
               <TextInput
                 style={styles.fieldInput}
+                accessibilityLabel="Habit unit"
                 placeholder="times"
                 placeholderTextColor={colors.textMuted}
                 value={newUnit}
@@ -79,7 +82,7 @@ export function AddHabitSheet({
             onPress={onAdd}
             disabled={!newName.trim()}
           >
-            <Text style={styles.modalSaveBtnText}>Add Habit</Text>
+            <Text style={[styles.modalSaveBtnText, !newName.trim() && { color: colors.textMuted }]}>Create habit</Text>
           </TouchableOpacity>
         </View>
       </View>

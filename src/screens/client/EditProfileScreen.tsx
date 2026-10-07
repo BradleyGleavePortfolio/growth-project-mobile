@@ -1,6 +1,6 @@
 /**
  * EditProfileScreen — captures the personalization fields that the backend
- * needs in order to produce a credible plan and unlock cold outbound copy.
+ * uses for daily targets and training preferences.
  *
  * Field set is tied to lib/profileCompletion: sex, DOB, target weight, diet
  * preference, weekly workout days, and equipment access. The backend column
@@ -8,11 +8,16 @@
  * yes_occasional / home_gym / no_gym) — UI copy is written so it can later
  * absorb a finer-grained equipment schema without renaming the screen.
  *
- * On save we PUT the fields the user actually changed (snake_case to match
+ * About you, Body and Goal group every existing field on one page.
+ * Hairline inputs show pounds/cm beside values; Save is the only primary
+ * action. Semantic theme colours keep the surface ready for a dark pass.
+ * Back cancels without writing; validation stays beside its own input.
+ *
+ * On save we PUT the populated fields (snake_case to match
  * the backend), update the local user_data cache, and pop back to the
  * previous screen.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -33,7 +38,8 @@ import { profileApi } from '../../services/api';
 import { errorMessage } from '../../types/common';
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { colors, typography, radius, spacing } from '../../theme/tokens';
+import { typography, radius, spacing, SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import {
   getProfileCompletion,
@@ -110,11 +116,11 @@ const ACTIVITY_OPTIONS: {
 
 const GOAL_OPTIONS: { value: PrimaryGoal; label: string; description: string }[] = [
   { value: 'lose_fast',     label: 'Lose weight fast',   description: 'Aggressive deficit (~750 kcal)' },
-  { value: 'lose_moderate', label: 'Lose weight steady', description: 'Sustainable deficit (~500 kcal)' },
+  { value: 'lose_moderate', label: 'Lose weight steady', description: 'Calorie adjustment (~500 kcal deficit)' },
   { value: 'maintain',      label: 'Maintain',           description: 'Hold the line' },
-  { value: 'gain',          label: 'Build muscle',       description: 'Lean surplus (+350 kcal)' },
+  { value: 'gain',          label: 'Build muscle',       description: 'Calorie adjustment (+350 kcal)' },
   { value: 'gain_fast',     label: 'Gain mass',          description: 'Aggressive surplus (+700 kcal)' },
-  { value: 'mobility',      label: 'Mobility & wellness', description: 'Maintenance, no caloric target' },
+  { value: 'mobility',      label: 'Mobility & wellness', description: 'Maintenance calorie target' },
 ];
 
 // Restriction chip set mirrors OnboardingStep6 for parity. Includes "None"
@@ -271,13 +277,20 @@ function tryComputeMacrosFromForm(form: FormState): {
 }
 
 export default function EditProfileScreen() {
+  const { semanticColors: colors } = useTheme();
+  const styles = useStyles();
   const navigation = useNavigation<Nav>();
   const currentUser = useCurrentUser();
   const initial = useMemo(() => profileToForm(currentUser), [currentUser]);
   const [form, setForm] = useState<FormState>(initial);
   const [saving, setSaving] = useState(false);
   const [dobError, setDobError] = useState<string | null>(null);
-  const [weightError, setWeightError] = useState<string | null>(null);
+  const [weightError, setWeightError] = useState<{ field: string; message: string } | null>(null);
+
+  // The user cache resolves after mount; show the saved values once it loads.
+  useEffect(() => {
+    if (currentUser) setForm(initial);
+  }, [currentUser, initial]);
 
   const completion = getProfileCompletion(currentUser);
 
@@ -308,23 +321,23 @@ export default function EditProfileScreen() {
     if (form.dob && !isValidDob(form.dob)) {
       // Phase 11 / Track 3: warning haptic on form validation error
       HapticService.warning();
-      setDobError('Use the format YYYY-MM-DD.');
+      setDobError('Enter a date as YYYY-MM-DD for an age between 13 and 110.');
       return;
     }
     if (form.targetWeight && !isValidTargetWeight(form.targetWeight)) {
       // Phase 11 / Track 3: warning haptic on form validation error
       HapticService.warning();
-      setWeightError('Enter a weight between 50 and 700 lbs.');
+      setWeightError({ field: 'targetWeight', message: 'Enter a weight between 50 and 700 lbs.' });
       return;
     }
     if (form.currentWeight && !isValidCurrentWeightLbs(form.currentWeight)) {
       HapticService.warning();
-      setWeightError('Current weight should be between 60 and 700 lbs.');
+      setWeightError({ field: 'currentWeight', message: 'Enter a current weight between 60 and 700 lbs.' });
       return;
     }
     if (form.heightCm && !isValidHeightCm(form.heightCm)) {
       HapticService.warning();
-      setWeightError('Height should be between 90 and 250 cm.');
+      setWeightError({ field: 'heightCm', message: 'Enter a height between 90 and 250 cm.' });
       return;
     }
     setDobError(null);
@@ -384,7 +397,7 @@ export default function EditProfileScreen() {
       HapticService.error();
       Alert.alert(
         "Couldn't save",
-        errorMessage(err, 'Please try again in a moment.'),
+        errorMessage(err, 'Profile changes were not saved. Check the connection and try again.'),
       );
     } finally {
       setSaving(false);
@@ -422,16 +435,17 @@ export default function EditProfileScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Ionicons name="chevron-back" size={24} color={colors.ink} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.title}>Edit profile</Text>
         <View style={styles.backBtn} />
       </View>
 
       <Text style={styles.lede}>
-        These details shape your plan. Your coach sees them; nothing leaves the app.
+        Update the details used for daily targets and training preferences.
       </Text>
 
+      <Text style={styles.overline}>ABOUT YOU</Text>
       <Section label="Sex">
         <View style={styles.rowChoices}>
           {SEX_OPTIONS.map((opt) => (
@@ -451,7 +465,7 @@ export default function EditProfileScreen() {
           value={form.dob}
           onChangeText={(t) => setField('dob', t)}
           placeholder="1992-04-15"
-          placeholderTextColor={colors.stone}
+          placeholderTextColor={colors.textMuted}
           keyboardType="numbers-and-punctuation"
           autoCapitalize="none"
           autoCorrect={false}
@@ -461,47 +475,60 @@ export default function EditProfileScreen() {
         {dobError ? <Text style={styles.errorText}>{dobError}</Text> : null}
       </Section>
 
-      <Section label="Current weight" hint="Pounds">
-        <TextInput
-          style={[styles.input, weightError ? styles.inputError : null]}
-          value={form.currentWeight}
-          onChangeText={(t) => setField('currentWeight', t.replace(/[^0-9.]/g, ''))}
-          placeholder="180"
-          placeholderTextColor={colors.stone}
-          keyboardType="decimal-pad"
-          accessibilityLabel="Current weight in pounds"
-        />
+      <Text style={styles.overline}>BODY</Text>
+      <Section label="Current weight">
+        <View style={styles.unitRow}>
+          <TextInput
+            style={[styles.input, weightError?.field === 'currentWeight' ? styles.inputError : null]}
+            value={form.currentWeight}
+            onChangeText={(t) => setField('currentWeight', t.replace(/[^0-9.]/g, ''))}
+            placeholder="180"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            accessibilityLabel="Current weight in pounds"
+          />
+          <Text style={styles.unit}>lbs</Text>
+        </View>
+        {weightError?.field === 'currentWeight' ? <Text style={styles.errorText}>{weightError.message}</Text> : null}
       </Section>
 
-      <Section label="Height" hint="Centimetres">
-        <TextInput
-          style={[styles.input, weightError ? styles.inputError : null]}
-          value={form.heightCm}
-          onChangeText={(t) => setField('heightCm', t.replace(/[^0-9]/g, ''))}
-          placeholder="178"
-          placeholderTextColor={colors.stone}
-          keyboardType="number-pad"
-          maxLength={3}
-          accessibilityLabel="Height in centimetres"
-        />
+      <Section label="Height">
+        <View style={styles.unitRow}>
+          <TextInput
+            style={[styles.input, weightError?.field === 'heightCm' ? styles.inputError : null]}
+            value={form.heightCm}
+            onChangeText={(t) => setField('heightCm', t.replace(/[^0-9]/g, ''))}
+            placeholder="178"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            maxLength={3}
+            accessibilityLabel="Height in centimetres"
+          />
+          <Text style={styles.unit}>cm</Text>
+        </View>
+        {weightError?.field === 'heightCm' ? <Text style={styles.errorText}>{weightError.message}</Text> : null}
       </Section>
 
-      <Section label="Target weight" hint="Pounds">
-        <TextInput
-          style={[styles.input, weightError ? styles.inputError : null]}
-          value={form.targetWeight}
-          onChangeText={(t) => setField('targetWeight', t.replace(/[^0-9.]/g, ''))}
-          placeholder="165"
-          placeholderTextColor={colors.stone}
-          keyboardType="decimal-pad"
-          accessibilityLabel="Target weight in pounds"
-        />
-        {weightError ? <Text style={styles.errorText}>{weightError}</Text> : null}
+      <Text style={styles.overline}>GOAL</Text>
+      <Section label="Target weight">
+        <View style={styles.unitRow}>
+          <TextInput
+            style={[styles.input, weightError?.field === 'targetWeight' ? styles.inputError : null]}
+            value={form.targetWeight}
+            onChangeText={(t) => setField('targetWeight', t.replace(/[^0-9.]/g, ''))}
+            placeholder="165"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="decimal-pad"
+            accessibilityLabel="Target weight in pounds"
+          />
+          <Text style={styles.unit}>lbs</Text>
+        </View>
+        {weightError?.field === 'targetWeight' ? <Text style={styles.errorText}>{weightError.message}</Text> : null}
       </Section>
 
       <Section
         label="Activity level"
-        hint="Drives your daily calorie target."
+        hint="Used with body details to calculate daily calorie targets."
       >
         {ACTIVITY_OPTIONS.map((opt) => (
           <SelectRow
@@ -516,7 +543,7 @@ export default function EditProfileScreen() {
 
       <Section
         label="Primary goal"
-        hint="Sets the deficit or surplus on top of your TDEE."
+        hint="Choose a goal for daily calorie targets."
       >
         {GOAL_OPTIONS.map((opt) => (
           <SelectRow
@@ -531,7 +558,7 @@ export default function EditProfileScreen() {
 
       <Section
         label="Allergies and restrictions"
-        hint="The recipe library hides anything that conflicts with these. Pick None if you have none."
+        hint="Record allergies and dietary restrictions. Pick None if you have none."
       >
         <View style={styles.rowChoicesWrap}>
           {RESTRICTION_OPTIONS.map((label) => (
@@ -573,7 +600,7 @@ export default function EditProfileScreen() {
 
       <Section
         label="Equipment access"
-        hint="Used to decide which lifts your plan can prescribe."
+        hint="Record the equipment available for training."
       >
         {GYM_OPTIONS.map((opt) => (
           <SelectRow
@@ -595,14 +622,14 @@ export default function EditProfileScreen() {
         accessibilityLabel="Save profile"
       >
         {saving ? (
-          <ActivityIndicator color={colors.bone} />
+          <ActivityIndicator color={colors.textOnAccent} accessibilityLabel="Saving profile" />
         ) : (
-          <Text style={styles.saveBtnText}>{isComplete ? 'SAVE' : 'SAVE PROGRESS'}</Text>
+          <Text style={styles.saveBtnText}>{isComplete ? 'Save' : 'Save progress'}</Text>
         )}
       </HapticPressable>
 
       <Text style={styles.footnote}>
-        You can revise these any time. Coaches will see the most recent values.
+        You can revise these any time.
       </Text>
     </ScrollView>
   );
@@ -617,6 +644,7 @@ function Section({
   hint?: string;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.section}>
       <Text style={styles.sectionLabel}>{label}</Text>
@@ -635,6 +663,7 @@ function ChoicePill({
   selected: boolean;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <HapticPressable
       intent="light"
@@ -662,6 +691,8 @@ function SelectRow({
   selected: boolean;
   onPress: () => void;
 }) {
+  const { semanticColors: colors } = useTheme();
+  const styles = useStyles();
   return (
     <HapticPressable
       intent="light"
@@ -678,16 +709,21 @@ function SelectRow({
         <Text style={styles.selectRowDescription}>{description}</Text>
       </View>
       {selected ? (
-        <Ionicons name="checkmark" size={20} color={colors.forest} />
+        <Ionicons name="checkmark-outline" size={20} color={colors.accentText} />
       ) : null}
     </HapticPressable>
   );
 }
 
-const styles = StyleSheet.create({
+function useStyles() {
+  const { semanticColors } = useTheme();
+  return useMemo(() => createStyles(semanticColors), [semanticColors]);
+}
+
+const createStyles = (colors: SemanticTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bone,
+    backgroundColor: colors.bgPrimary,
   },
   content: {
     paddingHorizontal: 24,
@@ -701,31 +737,36 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backBtn: {
-    width: 32,
-    height: 32,
+    minWidth: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     ...typography.h2,
-    color: colors.ink,
+    color: colors.textPrimary,
   },
   lede: {
     ...typography.body,
-    color: colors.charcoal,
+    color: colors.textMuted,
     marginBottom: spacing['2xl'],
   },
   section: {
     marginBottom: spacing['2xl'],
   },
-  sectionLabel: {
+  overline: {
     ...typography.eyebrow,
-    color: colors.charcoal,
-    marginBottom: 6,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  sectionLabel: {
+    ...typography.bodySmall,
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
   },
   sectionHint: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.textMuted,
     marginBottom: spacing.md,
   },
   sectionBody: {
@@ -742,74 +783,82 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   pill: {
-    paddingHorizontal: 16,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    borderWidth: 0.5,
-    borderColor: colors.stone,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   pillSelected: {
-    borderColor: colors.forest,
-    borderWidth: 1,
-    backgroundColor: colors.cream,
+    borderColor: colors.accentText,
   },
   pillLabel: {
     ...typography.bodySmall,
-    color: colors.charcoal,
+    color: colors.textMuted,
     fontWeight: '500' as const,
   },
   pillLabelSelected: {
-    color: colors.forest,
+    color: colors.textPrimary,
+  },
+  unitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  unit: {
+    ...typography.bodySmall,
+    color: colors.textMuted,
+    paddingLeft: spacing.md,
+    minWidth: 44,
   },
   input: {
     ...typography.body,
-    color: colors.ink,
-    backgroundColor: colors.cream,
-    borderWidth: 0.5,
-    borderColor: colors.stone,
-    borderRadius: radius.md,
-    paddingHorizontal: 16,
+    color: colors.textPrimary,
+    flexGrow: 1,
+    fontVariant: ['tabular-nums'],
+    minHeight: 48,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     paddingVertical: 14,
   },
   inputError: {
-    borderColor: colors.error,
+    borderColor: colors.textPrimary,
   },
   errorText: {
     ...typography.bodySmall,
-    color: colors.error,
+    color: colors.textPrimary,
     marginTop: 6,
   },
   selectRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    minHeight: 44,
     paddingVertical: 14,
-    borderWidth: 0.5,
-    borderColor: colors.stone,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     marginBottom: 8,
   },
   selectRowSelected: {
-    borderColor: colors.forest,
-    borderWidth: 1,
+    borderColor: colors.accentText,
   },
   selectRowLabel: {
     ...typography.body,
-    color: colors.ink,
+    color: colors.textPrimary,
     fontWeight: '500' as const,
   },
   selectRowLabelSelected: {
-    color: colors.forest,
+    color: colors.textPrimary,
   },
   selectRowDescription: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.textMuted,
     marginTop: 2,
   },
   saveBtn: {
-    backgroundColor: colors.ink,
+    backgroundColor: colors.accent,
+    minHeight: 52,
+    borderRadius: radius.lg,
     paddingVertical: 18,
     alignItems: 'center',
     marginTop: spacing.lg,
@@ -818,14 +867,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveBtnText: {
-    ...typography.eyebrow,
-    color: colors.bone,
+    ...typography.bodyMd,
+    color: colors.textOnAccent,
   },
   footnote: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.lg,
-    fontStyle: 'italic',
   },
 });

@@ -4,10 +4,11 @@
  * bar, the comment list, and an inline comment composer. Reactions and comments
  * are optimistic with rollback (UX gate §7).
  *
- * Empty comments → Roman-voiced empty state with a primary action. Standardized
- * on semanticColors / tokens.ts.
+ * Quiet reading: serif title, Inter post/replies and hairline separators.
+ * Replies distinguish loading, failure and true empty; the empty action focuses
+ * the existing composer. Safety handlers and moderation behaviour stay intact.
  */
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Alert,
   View,
@@ -20,7 +21,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
+import HapticPressable from '../../components/HapticPressable';
+import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   usePostComments,
@@ -33,8 +36,6 @@ import { useQuery } from '@tanstack/react-query';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import {
-  CommunityEmptyState,
-  ThreadHeader,
   ReactionBar,
   ComposerInput,
 } from '../../components/community';
@@ -58,9 +59,10 @@ export default function CommunityThreadScreen(): React.ReactElement {
   const comments = usePostComments(postId);
   const addComment = useAddComment(postId, client?.id ?? '');
   const react = useReactToPost(me.data?.workspace_id ?? '');
+  const composerRef = useRef<ComposerInputHandle>(null);
 
   const data = comments.data ?? [];
-  const isEmpty = !comments.isLoading && (comments.isError || data.length === 0);
+  const isEmpty = !comments.isLoading && !comments.isError && data.length === 0;
 
   return (
     <SafeAreaView
@@ -74,10 +76,10 @@ export default function CommunityThreadScreen(): React.ReactElement {
       >
         <View style={styles.headerRow}>
           <View style={styles.flex}>
-            <ThreadHeader
-              title={post.data?.title ?? 'Post'}
-              testID="community-thread-header"
-            />
+            <Text accessibilityRole="header" testID="community-thread-header"
+              style={[styles.title, { color: semanticColors.textPrimary }]}>
+              {post.data?.title ?? 'Post'}
+            </Text>
           </View>
           {post.data ? (
             <SafetyMenu
@@ -105,19 +107,23 @@ export default function CommunityThreadScreen(): React.ReactElement {
           testID="community-thread-reactions"
         />
 
-        {isEmpty ? (
+        {comments.isLoading || comments.isError ? (
+          <View style={styles.center} accessibilityState={{ busy: comments.isLoading }}>
+            <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>
+              {comments.isLoading ? 'Loading replies…' : 'Replies did not load. Check your connection, then try again.'}
+            </Text>
+            {comments.isError ? <HapticPressable onPress={() => void comments.refetch()}
+              accessibilityRole="button" accessibilityLabel="Try again" testID="community-thread-retry" style={styles.replyAction}>
+              <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
+            </HapticPressable> : null}
+          </View>
+        ) : isEmpty ? (
           <View style={styles.center}>
-            <CommunityEmptyState
-              stem="threadEmpty"
-              firstName={client?.firstName ?? client?.name ?? null}
-              title="No replies yet"
-              actionLabel="Be the first to reply"
-              onAction={() => {
-                /* focus handled by the composer below; the CTA simply scrolls
-                   intent here — the inline composer is always present */
-              }}
-              testID="community-thread-empty"
-            />
+            <Text testID="community-thread-empty" style={[typography.bodySmall, { color: semanticColors.textMuted }]}>No replies yet</Text>
+            <HapticPressable onPress={() => composerRef.current?.focus()} style={styles.replyAction}
+              accessibilityRole="button" accessibilityLabel="Be the first to reply" testID="community-thread-empty-action">
+              <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Be the first to reply</Text>
+            </HapticPressable>
           </View>
         ) : (
           <FlatList
@@ -147,6 +153,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
         )}
 
         <ComposerInput
+          ref={composerRef}
           placeholder="Add a reply"
           maxLength={COMMENT_MAX}
           sending={addComment.isPending}
@@ -173,10 +180,13 @@ export default function CommunityThreadScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center' },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.lg },
+  title: { ...typography.h1, padding: spacing.lg },
+  replyAction: { minHeight: 44, justifyContent: 'center' },
   body: {
-    fontSize: 15,
-    lineHeight: 22,
+    ...typography.body,
+    fontSize: 17,
+    lineHeight: 27,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
@@ -190,8 +200,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   commentBody: {
+    ...typography.body,
     flex: 1,
-    fontSize: 15,
-    lineHeight: 21,
   },
 });

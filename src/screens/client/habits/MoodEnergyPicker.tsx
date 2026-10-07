@@ -45,7 +45,7 @@ export function MoodEnergyPicker({
             >
               <Ionicons name={mood === val ? 'ellipse' : 'ellipse-outline'} size={16}
                 color={mood === val ? colors.primary : colors.textMuted} />
-              <Text style={[styles.ratingLabel, { fontSize: 12, letterSpacing: 0, textTransform: 'none' },
+              <Text style={[styles.ratingLabel, { fontSize: 13, letterSpacing: 0, textTransform: 'none' },
                 mood === val && styles.ratingLabelActive]}>
                 {MOOD_LABELS[val]}
               </Text>
@@ -56,17 +56,20 @@ export function MoodEnergyPicker({
 
       {/* Energy */}
       <View style={styles.checkInCard}>
-        <Text style={styles.checkInLabel}>Energy Level</Text>
+        <Text style={styles.checkInLabel}>Energy level</Text>
         <View style={styles.ratingRow}>
           {[1, 2, 3, 4, 5].map((val) => (
             <TouchableOpacity
               key={val}
               style={[styles.ratingBtn, energy === val && styles.ratingBtnActive]}
               onPress={() => setEnergy(val)}
+              accessibilityRole="radio"
+              accessibilityLabel={ENERGY_LABELS[val]}
+              accessibilityState={{ checked: energy === val }}
             >
               <Ionicons
-                name="flash"
-                size={20}
+                name="flash-outline"
+                size={16}
                 color={energy === val ? colors.primary : colors.textMuted}
               />
               <Text style={[styles.ratingLabel, energy === val && styles.ratingLabelActive]}>
@@ -86,6 +89,8 @@ export function MoodEnergyPicker({
             <View style={styles.stepperRow}>
               <TouchableOpacity
                 style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease sleep hours"
                 onPress={() => setSleepHours((h) => Math.max(0, h - 0.5))}
               >
                 <Ionicons name="remove" size={18} color={colors.textPrimary} />
@@ -93,6 +98,8 @@ export function MoodEnergyPicker({
               <Text style={styles.stepperValue}>{sleepHours}h</Text>
               <TouchableOpacity
                 style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Increase sleep hours"
                 onPress={() => setSleepHours((h) => Math.min(14, h + 0.5))}
               >
                 <Ionicons name="add" size={18} color={colors.textPrimary} />
