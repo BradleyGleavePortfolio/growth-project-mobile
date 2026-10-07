@@ -48,8 +48,8 @@ function packagesConfigCopy(code: string): { title: string; body: string } {
       };
     default:
       return {
-        title: 'Packages coming soon',
-        body: 'Coach packages are not enabled in this environment yet.',
+        title: 'Packages unavailable',
+        body: 'Packages are not available in this version.',
       };
   }
 }
@@ -168,6 +168,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          testID="coach-packages-list"
           data={items}
           keyExtractor={(p) => p.id}
           contentContainerStyle={

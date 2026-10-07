@@ -97,7 +97,7 @@ export default function CheckoutReturnScreen() {
       if (!confirmRes.ok) {
         if (confirmRes.reason === 'not_configured') {
           setError(
-            'Backend not configured — your coach will need to confirm payment manually.',
+            'Payment status could not be checked in this version. Open Membership to check your plan, or contact support.',
           );
         } else {
           setError(confirmRes.message);
@@ -305,8 +305,7 @@ export default function CheckoutReturnScreen() {
         <ActivityIndicator color={semanticColors.accent} size="large" />
         <Text style={styles.title}>Confirming payment…</Text>
         <Text style={styles.body}>
-          Your subscription is being verified with Stripe. This usually takes a
-          few seconds.
+          Checking payment and access status.
         </Text>
       </View>
     );
@@ -316,14 +315,13 @@ export default function CheckoutReturnScreen() {
     return (
       <View style={styles.container}>
         <Ionicons name="alert-circle-outline" size={64} color={tokens.semantic.warning.icon} />
-        <Text style={styles.title}>Payment received — confirmation pending</Text>
+        <Text style={styles.title}>Payment confirmation unavailable</Text>
         <Text style={styles.body}>
-          Stripe accepted the charge, but the app couldn't confirm with the
-          backend yet: {error}
+          The app could not verify this payment. {error}
         </Text>
         <Text style={styles.body}>
-          You'll see access activate within a few minutes. If not, message
-          your coach.
+          Check Membership for the current plan status. Contact support if a
+          charge appears without access.
         </Text>
         <TouchableOpacity style={styles.cta} onPress={goHome} accessibilityRole="button">
           <Text style={styles.ctaText}>Go to home</Text>
@@ -359,8 +357,8 @@ export default function CheckoutReturnScreen() {
           </Text>
           <Text style={styles.body}>
             {packageName
-              ? `Your spot in ${packageName} is confirmed and your coach has been notified. Here's what happens next.`
-              : 'Your subscription is confirmed and your coach has been notified. Here\'s what happens next.'}
+              ? `Your spot in ${packageName} is confirmed. Here's what happens next.`
+              : 'Your subscription is confirmed. Here\'s what happens next.'}
           </Text>
           <TouchableOpacity
             style={styles.cta}
@@ -389,11 +387,11 @@ export default function CheckoutReturnScreen() {
   return (
     <View style={styles.container}>
       <Ionicons name="time-outline" size={64} color={tokens.semantic.warning.icon} />
-      <Text style={styles.title}>Payment received</Text>
+      <Text style={styles.title}>Access not confirmed</Text>
       <Text style={styles.body}>
         {status?.package_name
-          ? `${status.package_name} is being confirmed now. Your coach has been notified and will be in touch shortly.`
-          : 'Your coach has been notified and will be in touch shortly.'}
+          ? `Access to ${status.package_name} is not confirmed yet. Check Membership for the current plan status.`
+          : 'Access is not confirmed yet. Check Membership for the current plan status.'}
       </Text>
       <TouchableOpacity style={styles.cta} onPress={goHome} accessibilityRole="button">
         <Text style={styles.ctaText}>Go to home</Text>
