@@ -240,6 +240,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
         {/* ── Home Modules ─────────────────────────────────────────────────── */}
         <SectionHeader title="Home Screen" />
+        <Text style={styles.preview}>Home choices are stored only; they do not change Home.</Text>
         <View style={styles.card}>
           {allModules.map((mod, idx) => {
             const enabled = prefs.homeModules.includes(mod);
@@ -272,6 +273,17 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
         {/* ── Notifications ─────────────────────────────────────────────────── */}
         <SectionHeader title="Notifications" />
+        <Text style={styles.preview}>This saved cadence does not change notification delivery.</Text>
+        <HapticPressable
+          intent="light"
+          disableAnimation
+          style={styles.row}
+          accessibilityRole="button"
+          accessibilityLabel="Notification settings"
+          onPress={() => navigation.navigate('NotificationSettings')}
+        >
+          <Text style={styles.rowLabel}>Notification settings</Text>
+        </HapticPressable>
         <View style={styles.card}>
           {(['daily', 'weekly', 'off'] as NotificationCadence[]).map((opt, idx, arr) => (
             <View key={opt} style={idx < arr.length - 1 ? styles.rowBorder : undefined}>
@@ -286,6 +298,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
         {/* ── Motivational Tone ─────────────────────────────────────────────── */}
         <SectionHeader title="Motivational Tone" />
+        <Text style={styles.preview}>Tone choices are stored only; they do not change app wording.</Text>
         <View style={styles.card}>
           {(['gentle', 'direct', 'drill'] as MotivationalTone[]).map((opt, idx, arr) => (
             <View key={opt} style={idx < arr.length - 1 ? styles.rowBorder : undefined}>
@@ -301,6 +314,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
         {/* ── Units ─────────────────────────────────────────────────────────── */}
         <SectionHeader title="Units" />
+        <Text style={styles.preview}>Unit choices are stored only; they do not change displayed measurements.</Text>
         <View style={styles.card}>
           <View style={[styles.row, styles.optionRow]}>
             <Text style={styles.rowLabel}>Display units</Text>
@@ -315,6 +329,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
         {/* ── Week Starts On ───────────────────────────────────────────────── */}
         <SectionHeader title="Week Starts On" />
+        <Text style={styles.preview}>Week choices are stored only; they do not change calendar layouts.</Text>
         <View style={styles.card}>
           <View style={[styles.row, styles.optionRow]}>
             <Text style={styles.rowLabel}>First day</Text>

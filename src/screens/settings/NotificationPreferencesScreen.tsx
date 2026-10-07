@@ -86,7 +86,7 @@ const STORAGE_KEY = 'gp_notif_category_prefs';
 const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   coach_direct: { message_push: true, message_inapp: true },
   milestones: { milestone_push: true, milestone_inapp: true },
-  system: { weekly_summary_enabled: true },
+  system: { digest_email: true },
   client_bot: { eat_enabled: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
 };
@@ -163,7 +163,7 @@ const CATEGORIES: CategoryMeta[] = [
     id: 'system',
     noun: 'system notification',
     label: 'System',
-    description: 'Weekly summary email.',
+    description: 'Daily and weekly summary email.',
     icon: 'information-circle-outline',
   },
 ];
@@ -433,7 +433,7 @@ export default function NotificationPreferencesScreen({
         ) : null}
 
         <Text style={styles.footnote}>
-          The System switch controls weekly summary email.
+          The System switch controls daily and weekly summary email.
         </Text>
       </ScrollView>
     </View>

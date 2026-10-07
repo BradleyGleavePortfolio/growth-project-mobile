@@ -132,7 +132,7 @@ a Sentry report (status, machine code, reference only).
 Roman at the client's preferred training time (consultation S2) on their first
 session day and every plan day, in the client's local timezone, at most once a
 day, and not when that day's session is already logged. The switch reads the
-server value on mount, as do all other category switches. Descriptions match each mapped field (messages, meal-reminder preference, recorded milestones and weekly summary email); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
+server value on mount, as do all other category switches. Descriptions match each mapped field (messages, meal-reminder preference, recorded milestones and daily/weekly summary email through `digest_email`); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
 `src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
 time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for

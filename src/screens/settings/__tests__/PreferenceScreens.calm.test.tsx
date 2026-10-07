@@ -69,13 +69,14 @@ it('category copy matches the exact fields and all five actions remain reachable
   const screen = await render(<CategoryScreen navigation={navigation} />);
   await screen.findByLabelText('Workout reminders');
   expect(screen.getByText('Meal reminder preference.')).toBeTruthy();
+  expect(screen.getByText('Daily and weekly summary email.')).toBeTruthy();
   expect(screen.queryByText(/critical billing and security/)).toBeNull();
   const cases: Array<[string, Record<string, boolean>]> = [
     ['Coach Messages', { message_push: false, message_inapp: false }],
     ['Reminders', { eat_enabled: false }],
     ['Workout reminders', { workout_reminder_push: false, workout_reminder_inapp: false }],
     ['Milestones', { milestone_push: false, milestone_inapp: false }],
-    ['System', { weekly_summary_enabled: false }],
+    ['System', { digest_email: false }],
   ];
   for (const [label, patch] of cases) {
     await fireEvent(screen.getByLabelText(label), 'valueChange', false);
@@ -87,7 +88,7 @@ it('category copy matches the exact fields and all five actions remain reachable
 });
 
 it('all category switches show the server values, not a default claim', async () => {
-  getCategories.mockResolvedValue(response({ message_push: false, eat_enabled: false, milestone_push: false, weekly_summary_enabled: false }));
+  getCategories.mockResolvedValue(response({ message_push: false, eat_enabled: false, milestone_push: false, digest_email: false, weekly_summary_enabled: true }));
   const screen = await render(<CategoryScreen navigation={navigation} />);
   for (const label of ['Coach Messages', 'Reminders', 'Milestones', 'System']) {
     expect((await screen.findByLabelText(label)).props.value).toBe(false);
@@ -124,6 +125,15 @@ it('failed channel loading has a working retry and back instead of a blank scree
 
 it('all personalization switches and options still save the exact preference keys', async () => {
   const screen = await render(<AppScreen navigation={navigation} />);
+  for (const notice of [
+    'Home choices are stored only; they do not change Home.',
+    'This saved cadence does not change notification delivery.',
+    'Tone choices are stored only; they do not change app wording.',
+    'Unit choices are stored only; they do not change displayed measurements.',
+    'Week choices are stored only; they do not change calendar layouts.',
+  ]) expect(screen.getByText(notice)).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText('Notification settings'));
+  expect(navigation.navigate).toHaveBeenCalledWith('NotificationSettings');
   for (const toggle of screen.getAllByRole('switch')) expect(StyleSheet.flatten(toggle.props.style).minHeight).toBe(44);
   for (const [mod, label] of [['hero', 'Hero Action'], ['milestone', 'Milestone Card'], ['trustcues', 'Trust Cues'], ['secondary', 'Secondary Tiles'], ['community', 'Community Feed']] as const) {
     await fireEvent(screen.getByLabelText(label), 'valueChange', false);
