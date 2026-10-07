@@ -13,7 +13,10 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { routeInAppNotification } from '../services/pushTapRouter';
+jest.mock('../services/pushTapRouter', () => ({ routeInAppNotification: jest.fn(() => false) }));
 
 // @expo/vector-icons depends on expo-font → expo-asset which is not available
 // in the Jest environment. Provide a lightweight stub that renders nothing.
@@ -204,7 +207,7 @@ describe('NotificationCenterScreen', () => {
     });
 
     // Should not show the empty state.
-    expect(queryByText("You're all caught up.")).toBeNull();
+    expect(queryByText('No notifications.')).toBeNull();
   });
 
   it('shows unread count banner when unread > 0', async () => {
@@ -271,8 +274,51 @@ describe('NotificationCenterScreen', () => {
     const { getByText } = await render(<NotificationCenterScreen />);
 
     await waitFor(() => {
-      expect(getByText("You're all caught up.")).toBeTruthy();
+      expect(getByText('No notifications.')).toBeTruthy();
     });
+  });
+
+  it.each(['coach', 'milestone', 'check_in', 'message', 'build_week', 'system', 'reminder', 'tip'])(
+    'preserves the mark-read and destination action for %s',
+    async (kind) => {
+      const item = { id: kind, kind, title: `${kind} notice`, body: 'Full notification body.',
+        read: false, createdAt: new Date().toISOString(), actionScreen: 'Messages',
+        actionParams: { threadId: kind } };
+      (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValue({ items: [item], nextCursor: null });
+      const ui = await render(<NotificationCenterScreen />);
+      await waitFor(() => expect(ui.getByText(item.title)).toBeTruthy());
+      await fireEvent.press(ui.getByText(item.title));
+      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('Messages', item.actionParams));
+      expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith(kind);
+      expect(routeInAppNotification).toHaveBeenCalledWith('Messages', item.actionParams);
+    },
+  );
+
+  it('keeps back, preferences, refresh and pagination reachable', async () => {
+    (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValueOnce({ items: [], nextCursor: 'page2' })
+      .mockResolvedValue({ items: [], nextCursor: null });
+    const ui = await render(<NotificationCenterScreen />);
+    await waitFor(() => expect(ui.getByText('No notifications.')).toBeTruthy());
+    await fireEvent.press(ui.getByLabelText('Go back'));
+    expect(mockGoBack).toHaveBeenCalled();
+    await fireEvent.press(ui.getByText('Notification preferences'));
+    expect(mockNavigate).toHaveBeenCalledWith('NotificationPreferences');
+    const { FlatList } = jest.requireActual('react-native');
+    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    expect(notificationsApi.fetchNotifications).toHaveBeenCalledWith('page2', 25);
+    await act(async () => ui.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh());
+    expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith(null, 25);
+  });
+
+  it('uses unfilled hairline rows with readable titles and time', async () => {
+    const ui = await render(<NotificationCenterScreen />);
+    await waitFor(() => expect(ui.getByText('Coach note available')).toBeTruthy());
+    const row = ui.getByRole('button', { name: /Unread. Coach note available/ });
+    const style = StyleSheet.flatten(row.props.style);
+    expect(style.backgroundColor).toBeUndefined();
+    expect(style.borderBottomWidth).toBe(StyleSheet.hairlineWidth);
+    expect(StyleSheet.flatten(ui.getByText('Coach note available').props.style).fontSize).toBe(15);
+    expect(ui.getByText('Coach note available').props.numberOfLines).toBeUndefined();
   });
 });
 
