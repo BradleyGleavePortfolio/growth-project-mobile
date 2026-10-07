@@ -209,7 +209,7 @@ function EventCard({ event }: { event: TimelineEvent }) {
       </View>
       <View style={styles.cardBody}>
         <Text style={styles.cardDate} accessibilityElementsHidden>
-          {formatDate(event.at)}
+          {cfg.label} · {formatDate(event.at)}
         </Text>
         <Text style={styles.cardTitle}>{event.title}</Text>
         {event.body ? (
