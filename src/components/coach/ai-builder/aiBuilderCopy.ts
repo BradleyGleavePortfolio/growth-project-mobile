@@ -35,6 +35,7 @@ const ERROR_COPY: Record<Exclude<AiBuilderErrorCode, 'no_credits'>, string> = {
   consent_required: 'This client has not allowed AI to use their data. Edit by hand, or build from a template without client data.',
   stale: 'This workout changed on another screen. Reload it and ask again.',
   no_safe_proposal: 'No safe change found for that request. Try: swap squats for a knee-friendly option.',
+  over_limits: 'Those changes together go past a training limit for this workout. Keep the matching removal too, or untick an addition.',
   paused: PAUSED_COPY,
   not_available: PAUSED_COPY,
   rate_limited: 'That is a lot of requests in an hour. Try again in a few minutes.',

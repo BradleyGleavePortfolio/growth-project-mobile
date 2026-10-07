@@ -101,6 +101,12 @@ async function pressDestructive(label: string, action: () => void | Promise<void
 }
 
 describe('ContactView — block flow', () => {
+  it('shows no Mute switch: it saved nothing, and message alerts are muted from Settings > Notifications', async () => {
+    const { queryByLabelText, queryByText } = await render(<ContactView />);
+    expect(queryByLabelText('Mute conversation')).toBeNull();
+    expect(queryByText('Mute Conversation')).toBeNull();
+  });
+
   it('calls POST /users/:id/block and updates local state on success', async () => {
     mockBlock.mockResolvedValueOnce({ ok: true });
     const { getByLabelText } = await render(<ContactView />);
