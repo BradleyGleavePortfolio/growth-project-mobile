@@ -2,9 +2,9 @@
  * ContactView — iMessage-style "tap the contact" details surface.
  *
  * Routed from the DM screen header (client→coach or coach→client). Shows the
- * other party's avatar, display name, and role, plus per-contact controls:
- *   - Mute conversation (local-only toggle persisted on the contact entry —
- *     server-side mute follows in a backend ticket).
+ * other party's avatar, display name, and role, plus per-contact controls.
+ * (A local-only "Mute conversation" switch was removed: it saved nothing. Message
+ * alerts are muted from Settings > Notifications.)
  *   - Block User — calls /users/{id}/block via messagesModerationApi.block
  *     and adds the contact to the local blocked-users store. On success we
  *     pop back to the previous screen; the messages list defends against any
@@ -19,7 +19,6 @@ import {
   Pressable,
   Alert,
   ActivityIndicator,
-  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -50,7 +49,6 @@ export default function ContactView(): React.ReactElement {
   const currentUser = useCurrentUser();
   const isBlocked = blockStore.isBlocked(contactId);
   const isSelf = !!currentUser?.id && currentUser.id === contactId;
-  const [muted, setMuted] = useState(false);
   const [blocking, setBlocking] = useState(false);
 
   useEffect(() => {
@@ -149,23 +147,6 @@ export default function ContactView(): React.ReactElement {
           </View>
           <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.role}>{formatRole(role)}</Text>
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.row}>
-            <View style={styles.rowMain}>
-              <Ionicons name="notifications-off-outline" size={20} color={colors.textPrimary} />
-              <Text style={styles.rowLabel}>Mute Conversation</Text>
-            </View>
-            <Switch
-              value={muted}
-              onValueChange={(v) => {
-                setMuted(v);
-                HapticService.selection();
-              }}
-              accessibilityLabel="Mute conversation"
-            />
-          </View>
         </View>
 
         <View style={styles.section}>
@@ -278,15 +259,6 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
       paddingVertical: 4,
     },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingVertical: 14,
-      paddingHorizontal: 16,
-    },
-    rowMain: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    rowLabel: { fontSize: 15, color: colors.textPrimary },
 
     dangerBtn: {
       flexDirection: 'row',

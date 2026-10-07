@@ -40,7 +40,7 @@ const RefSchema = z.object({ plan_id: z.string(), revision_index: z.number().int
 const DecideSchema = z.object({ status: z.string(), materialised_ref: z.union([RefSchema, z.string()]).nullable().optional().transform((r) => (typeof r === 'string' ? null : r ?? null)) });
 export type AiBuilderRef = z.infer<typeof DecideSchema>['materialised_ref'];
 
-export type AiBuilderErrorCode = 'not_available' | 'paused' | 'no_credits' | 'consent_required' | 'stale' | 'no_safe_proposal' | 'rate_limited' | 'forbidden' | 'network' | 'server' | 'contract';
+export type AiBuilderErrorCode = 'not_available' | 'paused' | 'no_credits' | 'consent_required' | 'stale' | 'no_safe_proposal' | 'over_limits' | 'rate_limited' | 'forbidden' | 'network' | 'server' | 'contract';
 
 export class AiBuilderError extends Error {
   constructor(public readonly code: AiBuilderErrorCode, public readonly status: number, public readonly resetsAt: string | null = null) {
@@ -64,6 +64,7 @@ export function toAiBuilderError(err: unknown): AiBuilderError {
     return new AiBuilderError('no_credits', status, typeof end === 'string' ? end : null);
   }
   if (code === 'ai_consent_required') return new AiBuilderError('consent_required', status);
+  if (code === 'SELECTION_OVER_LIMITS') return new AiBuilderError('over_limits', status); // b#815: a partial Apply past a training ceiling
   if (code === 'AI_NOT_CONFIGURED') return new AiBuilderError('server', status); // b#809 503: the model did not answer (not the kill switch)
   const byStatus: Record<number, AiBuilderErrorCode> = { 401: 'forbidden', 403: 'forbidden', 404: 'not_available', 409: 'stale', 422: 'no_safe_proposal', 429: 'rate_limited', 503: 'paused' };
   return new AiBuilderError(byStatus[status] ?? 'server', status);

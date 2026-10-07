@@ -59,11 +59,11 @@ describe('aiBuilderApi + copy', () => {
     expect(toAiBuilderError(httpError(402, { code: 'COACH_AI_BUDGET_EXHAUSTED', budget: { period_end: '2026-11-01' } }))).toEqual(expect.objectContaining({ code: 'no_credits', resetsAt: '2026-11-01' }));
     const cases: [number, object, string][] = [
       [403, { code: 'COACH_AI_BUDGET_EXHAUSTED' }, 'no_credits'], [403, { code: 'ai_consent_required' }, 'consent_required'],
-      [409, {}, 'stale'], [422, {}, 'no_safe_proposal'], [429, {}, 'rate_limited'], [503, { code: 'AI_PAUSED' }, 'paused'], [503, { code: 'AI_NOT_CONFIGURED' }, 'server'],
+      [409, {}, 'stale'], [422, {}, 'no_safe_proposal'], [422, { code: 'SELECTION_OVER_LIMITS', message: 'More than 12 hard sets for one muscle in a workout.' }, 'over_limits'], [429, {}, 'rate_limited'], [503, { code: 'AI_PAUSED' }, 'paused'], [503, { code: 'AI_NOT_CONFIGURED' }, 'server'],
     ];
     for (const [status, body, code] of cases) expect(toAiBuilderError(httpError(status, body)).code).toBe(code);
     expect(toAiBuilderError(new Error('socket')).code).toBe('network');
-    for (const c of ['no_credits', 'consent_required', 'stale', 'no_safe_proposal', 'paused', 'rate_limited', 'forbidden', 'network', 'contract', 'server'] as const) {
+    for (const c of ['no_credits', 'consent_required', 'stale', 'no_safe_proposal', 'over_limits', 'paused', 'rate_limited', 'forbidden', 'network', 'contract', 'server'] as const) {
       expect(describeAiBuilderError(c, null)).not.toMatch(/!|\b(I|we|We|my|our)\b|Something went wrong|top up|buy|purchase/);
     }
   });
