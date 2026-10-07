@@ -21,6 +21,7 @@ import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
+import * as Notifications from 'expo-notifications';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme } from '../../theme/ThemeProvider';
 import { workoutBuilderApi } from '../../api/workoutBuilderApi';
@@ -106,6 +107,22 @@ function useOptionalQueryClient() {
 // (name/message/stack). `normalizeError` now lives in ./_completionLogging so
 // the producer and the WorkoutScreen consumer share one normaliser and log an
 // identically-shaped `error` field.
+
+/** DES-R-127: rest-end alert copy. Names the next unlogged set from the exercise just rested on. */
+function restOverMessage(exercises: SessionExercise[], fromExercise: number): string {
+  for (let k = 0; k < exercises.length; k++) {
+    const exercise = exercises[(fromExercise + k) % exercises.length];
+    const setIndex = exercise.sets.findIndex((s) => !s.completed);
+    if (setIndex >= 0) return `Rest over. Next: ${exercise.exerciseName}, set ${setIndex + 1}.`;
+  }
+  return 'Rest over.';
+}
+
+function dropRestAlert(id: string): void {
+  Notifications.cancelScheduledNotificationAsync(id).catch((error: unknown) => {
+    logger.warn('workout.rest-alert.cancel', { error: normalizeError(error) });
+  });
+}
 
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
@@ -483,12 +500,54 @@ export default function ActiveWorkoutScreen() {
     };
   }, [hydrated, sessionExercises, workoutNotes, routineName, exercisesJson, assignmentId, userId]);
 
+  // DES-R-127: one local rest-end alert, set when the app goes to the background during a rest and only
+  // if notification permission is already granted (never prompts). Cancelled on return to the app, Skip,
+  // +30s, a new rest, Finish, Discard and leaving the screen.
+  const restAlertIdRef = useRef<string | null>(null);
+  const restAlertGenRef = useRef(0); // bumped on every cancel
+  const restFromExerciseRef = useRef(0);
+  const sessionExercisesRef = useRef(sessionExercises);
+  useEffect(() => {
+    sessionExercisesRef.current = sessionExercises;
+  }, [sessionExercises]);
+
+  const cancelRestAlert = useCallback(() => {
+    restAlertGenRef.current += 1;
+    if (restAlertIdRef.current) dropRestAlert(restAlertIdRef.current);
+    restAlertIdRef.current = null;
+  }, []);
+
+  const scheduleRestAlert = useCallback(async () => {
+    cancelRestAlert();
+    if (finishingRef.current) return;
+    const gen = restAlertGenRef.current;
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      const seconds = Math.floor((restEndsAtRef.current - Date.now()) / 1000);
+      if (status !== 'granted' || seconds < 1 || gen !== restAlertGenRef.current) return;
+      const id = await Notifications.scheduleNotificationAsync({
+        content: {
+          body: restOverMessage(sessionExercisesRef.current, restFromExerciseRef.current),
+          sound: true,
+          data: { type: 'rest_over' },
+        },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
+      });
+      // Back in the app before the schedule finished: drop it.
+      if (gen === restAlertGenRef.current) restAlertIdRef.current = id;
+      else dropRestAlert(id);
+    } catch (error) {
+      logger.warn('workout.rest-alert.schedule', { error: normalizeError(error) });
+    }
+  }, [cancelRestAlert]);
+
   // Rest timer cleanup.
   useEffect(() => {
     return () => {
       if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      cancelRestAlert();
     };
-  }, []);
+  }, [cancelRestAlert]);
 
   const refreshRest = useCallback(() => {
     const seconds = Math.max(0, Math.ceil((restEndsAtRef.current - Date.now()) / 1000));
@@ -504,14 +563,21 @@ export default function ActiveWorkoutScreen() {
   useEffect(() => {
     if (!restActive) return;
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refreshRest();
+      if (state === 'active') {
+        cancelRestAlert();
+        refreshRest();
+      } else if (state === 'background') {
+        void scheduleRestAlert();
+      }
     });
     return () => subscription.remove();
-  }, [restActive, refreshRest]);
+  }, [restActive, refreshRest, cancelRestAlert, scheduleRestAlert]);
 
-  const startRest = (seconds: number) => {
+  const startRest = (seconds: number, fromExercise = 0) => {
     if (seconds <= 0) return;
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    cancelRestAlert();
+    restFromExerciseRef.current = fromExercise;
     setRestSeconds(seconds);
     setRestActive(true);
     restEndsAtRef.current = Date.now() + seconds * 1000;
@@ -542,7 +608,7 @@ export default function ActiveWorkoutScreen() {
     if (!wasCompleted) {
       // Set just marked complete — start rest timer.
       const rest = sessionExercises[exIdx].restSec ?? 0;
-      startRest(rest);
+      startRest(rest, exIdx);
     } else {
       // Toggling back to incomplete — cancel rest timer.
       if (restActive) {
@@ -707,6 +773,7 @@ export default function ActiveWorkoutScreen() {
           // background-flush path can't write between this tap and the
           // clear completing.
           finishingRef.current = true;
+          cancelRestAlert();
           setSaving(true);
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
@@ -890,8 +957,8 @@ export default function ActiveWorkoutScreen() {
                     });
                   });
                 }
-                // Phase 11 / Track 3: heavy haptic on workout completion
-                HapticService.heavyImpact();
+                // DES-R-127: the finish moment is one success haptic.
+                HapticService.success();
                 // Psych Report #4: Analytics — workout_logged
                 track(AnalyticsEvents.WORKOUT_COMPLETED, {
                   duration_minutes: Math.round(timer / 60),
@@ -990,7 +1057,7 @@ export default function ActiveWorkoutScreen() {
                   Promise.resolve()
                     .then(() => releaseQueuedWorkout(queueKey))
                     .catch(() => undefined);
-                  HapticService.heavyImpact();
+                  HapticService.success();
                   navigation.goBack();
                   Alert.alert(
                     'Saved on this phone',
@@ -1074,6 +1141,7 @@ export default function ActiveWorkoutScreen() {
           // then await the clear so the next mount cannot race a still-
           // in-flight removeItem and read the just-deleted entry back.
           finishingRef.current = true;
+          cancelRestAlert();
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
             persistDebounceRef.current = null;
@@ -1208,7 +1276,7 @@ export default function ActiveWorkoutScreen() {
         <View style={[styles.exerciseCard, { marginTop: 16 }]}>
           <TextInput style={styles.notesInput} value={workoutNotes} onChangeText={setWorkoutNotes} placeholder="Workout notes" accessibilityLabel="Workout notes" placeholderTextColor={colors.textMuted} multiline maxLength={2000} editable={!saving} />
         </View>
-        {completedSets > 0 && <WorkoutFinishSummary summary={summary} styles={styles} historyState={historyState} />}
+        {completedSets > 0 && <WorkoutFinishSummary summary={summary} styles={styles} historyState={historyState} elapsed={formatTime(timer)} />}
       </ScrollView>
 
       {/* Add Exercise Modal */}
@@ -1323,7 +1391,7 @@ export default function ActiveWorkoutScreen() {
             {Math.floor(restSeconds / 60).toString().padStart(2, '0')}
             :{(restSeconds % 60).toString().padStart(2, '0')}
           </Text>
-          <HapticPressable intent="light" style={styles.toolButton} onPress={() => { restEndsAtRef.current += 30_000; refreshRest(); }} accessibilityLabel="Add 30 seconds to rest timer">
+          <HapticPressable intent="light" style={styles.toolButton} onPress={() => { restEndsAtRef.current += 30_000; cancelRestAlert(); refreshRest(); }} accessibilityLabel="Add 30 seconds to rest timer">
             <Text style={styles.restSkip}>+30s</Text>
           </HapticPressable>
           <TouchableOpacity
@@ -1331,6 +1399,7 @@ export default function ActiveWorkoutScreen() {
             onPress={() => {
               if (restIntervalRef.current) clearInterval(restIntervalRef.current);
               restIntervalRef.current = null;
+              cancelRestAlert();
               setRestActive(false);
               HapticService.softImpact();
             }}
