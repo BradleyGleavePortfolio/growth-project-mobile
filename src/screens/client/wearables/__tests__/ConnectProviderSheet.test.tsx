@@ -235,7 +235,7 @@ describe('ConnectProviderSheet — cloud connect failures (Sol B-317-8)', () => 
   it('503 wearables_cloud_disabled says it is not switched on yet', async () => {
     mockStartOauthMutateAsync.mockRejectedValue(httpError(503, { code: 'wearables_cloud_disabled' }));
     await pressOura();
-    await waitFor(() => expect(screen.getByText(/Connecting Oura isn't switched on yet/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/Connecting Oura is not available in this version/)).toBeTruthy());
     expect(mockReport).not.toHaveBeenCalled();
   });
 
@@ -280,7 +280,7 @@ describe('ConnectProviderSheet — S14 history import', () => {
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() =>
-      expect(screen.getByText(/Health data import isn't switched on yet/)).toBeTruthy(),
+      expect(screen.getByText(/Health data import is not available in this version/)).toBeTruthy(),
     );
     expect(onClose).not.toHaveBeenCalled();
     expect(tutorialSignals).toEqual([]);

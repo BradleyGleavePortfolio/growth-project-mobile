@@ -17,12 +17,14 @@ import { featureFlags } from '../../config/featureFlags';
 import { dispatchTutorial, useTutorialStore } from '../../tutorial/tutorialStore';
 import MacroExplanationCard from './MacroExplanationCard';
 import TutorialTarget from './TutorialTarget';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export default function TutorialHomeSlot(): React.ReactElement | null {
   const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const status = useTutorialStore((s) => s.tutorial.status);
   const coachName = useTutorialStore((s) => s.payload?.coach?.display_name ?? null);
+  const coachLinked = !!useCurrentUser()?.coach_id;
   if (!featureFlags.clientTutorial) return null;
   return (
     <View testID="tutorial-home-slot">
@@ -40,7 +42,7 @@ export default function TutorialHomeSlot(): React.ReactElement | null {
         </Pressable>
       ) : null}
       <MacroExplanationCard />
-      <TutorialTarget id="home-message-coach">
+      {coachLinked ? <TutorialTarget id="home-message-coach">
         <Pressable
           onPress={() => navigation.navigate('Messages')}
           accessibilityRole="button"
@@ -61,7 +63,7 @@ export default function TutorialHomeSlot(): React.ReactElement | null {
           </View>
           <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
         </Pressable>
-      </TutorialTarget>
+      </TutorialTarget> : null}
     </View>
   );
 }
