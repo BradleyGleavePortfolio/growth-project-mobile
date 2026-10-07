@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // useAuthStore.signOut() which only cleared tokens as a side effect.
 import { signOut, refreshProfile } from '../../services/authActions';
 import { useSettings } from '../../hooks/useSettings';
+import { readDayOneAnswers, type DayOneCheckInTime } from '../day-one/answers';
 import { profileApi, notificationsApi } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 
@@ -41,6 +42,28 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [checkInChoice, setCheckInChoice] = useState<{
+    userId: string; time: DayOneCheckInTime;
+  } | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const userId = currentUser?.id;
+    setCheckInChoice(null);
+    if (userId) {
+      void readDayOneAnswers(userId).then((answers) => {
+        if (mounted && answers?.checkInTime) {
+          setCheckInChoice({ userId, time: answers.checkInTime });
+        }
+      });
+    }
+    return () => { mounted = false; };
+  }, [currentUser?.id]);
+
+  const checkInTime = checkInChoice?.userId === currentUser?.id ? checkInChoice?.time : null;
+  const checkInLabel = checkInTime
+    ? `${checkInTime.hour % 12 || 12}:${String(checkInTime.minute).padStart(2, '0')} ${checkInTime.hour < 12 ? 'AM' : 'PM'}`
+    : null;
 
   const handleChangePassword = async () => {
     setPasswordError('');
@@ -247,10 +270,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               thumbColor={colors.textOnPrimary}
             />
           </View>
-          {settings.dailyCheckin && (
+          {settings.dailyCheckin && checkInLabel && (
             <View style={styles.row}>
               <Text style={styles.rowLabel}>Check-in Time</Text>
-              <Text style={styles.rowValue}>{settings.checkinHour}:00 AM</Text>
+              <Text style={styles.rowValue}>{checkInLabel}</Text>
             </View>
           )}
           <View style={styles.row}>

@@ -10,7 +10,6 @@ export interface ClientSettings {
   waterGoalOz: number;
   calorieDisplay: 'net' | 'gross';
   dailyCheckin: boolean;
-  checkinHour: number;
   mealReminders: boolean;
   fastingAlerts: boolean;
   weeklySummary: boolean;
@@ -23,7 +22,6 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   waterGoalOz: 100,
   calorieDisplay: 'net',
   dailyCheckin: true,
-  checkinHour: 9,
   mealReminders: true,
   fastingAlerts: false,
   weeklySummary: true,

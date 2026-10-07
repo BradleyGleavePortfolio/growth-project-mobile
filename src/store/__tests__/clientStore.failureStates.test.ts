@@ -74,4 +74,23 @@ describe('client day data failure state', () => {
       loadError: '8 oz of water was not saved. Check the connection, then add it again.',
     });
   });
+
+  it('clears the failed water-add notice when the next water add succeeds', async () => {
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    mockLogWater.mockRejectedValueOnce(new Error('Network Error'));
+    await useClientStore.getState().logWater('client', '', 8);
+    expect(useClientStore.getState().loadError).toContain('was not saved');
+    mockLogWater.mockResolvedValueOnce({ data: {} });
+    await useClientStore.getState().logWater('client', '', 8);
+    expect(useClientStore.getState()).toMatchObject({ waterOz: 28, loadError: null });
+  });
+
+  it('does not clear an unrelated day-read failure after a successful water add', async () => {
+    mockGetFood.mockRejectedValueOnce(new Error('Network Error'));
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    const notice = useClientStore.getState().loadError;
+    mockLogWater.mockResolvedValueOnce({ data: {} });
+    await useClientStore.getState().logWater('client', '', 8);
+    expect(useClientStore.getState().loadError).toBe(notice);
+  });
 });
