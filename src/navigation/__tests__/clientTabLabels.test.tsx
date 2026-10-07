@@ -19,6 +19,7 @@ jest.mock('../../hooks/useCommunity', () => ({ useCommunityBadge: () => ({ total
 jest.mock('../../components/community/UnreadBadge', () => () => null);
 jest.mock('../../components/tutorial/TutorialHost', () => ({ children }: { children: React.ReactNode }) => children);
 jest.mock('../../entitlements/withProtectedScreen', () => ({ withProtectedScreen: (screen: unknown) => screen }));
+jest.mock('../../entitlements/dunning/UpdateCardScreen', () => () => null);
 jest.mock('../../components/community/CommunityTermsGate', () => ({ withCommunityTerms: (screen: unknown) => screen }));
 jest.mock('../../ui/haptics/haptics.service', () => ({ HapticService: { selection: jest.fn() } }));
 jest.mock('@expo/vector-icons', () => ({
@@ -28,7 +29,7 @@ jest.mock('@expo/vector-icons', () => ({
 
 // Shallow only leaf screens; keep the real tab/stack routers and their registrations.
 const navSource = fs.readFileSync(path.join(__dirname, '..', 'ClientNavigator.tsx'), 'utf8');
-for (const match of navSource.matchAll(/^import (?!type\b).* from '(\.\.\/screens\/[^']+)'/gm)) {
+for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/screens\/[^']+)'/gm)) {
   const modulePath = match[1];
   jest.doMock(`../${modulePath}`, () => ({
     __esModule: true, default: () => <Text testID="destination">{modulePath}</Text>,
