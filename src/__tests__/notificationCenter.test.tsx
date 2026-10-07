@@ -278,19 +278,25 @@ describe('NotificationCenterScreen', () => {
     });
   });
 
-  it.each(['coach', 'milestone', 'check_in', 'message', 'build_week', 'system', 'reminder', 'tip'])(
+  it.each([
+    ['coach', 'Notifications'], ['milestone', 'Timeline'], ['check_in', undefined],
+    ['message', 'Messages'], ['build_week', 'MoreIndex'], ['system', undefined],
+    ['reminder', 'WorkoutMain'], ['tip', undefined],
+  ])(
     'preserves the mark-read and destination action for %s',
-    async (kind) => {
+    async (kind, actionScreen) => {
       const item = { id: kind, kind, title: `${kind} notice`, body: 'Full notification body.',
-        read: false, createdAt: new Date().toISOString(), actionScreen: 'Messages',
+        read: false, createdAt: new Date().toISOString(), actionScreen,
         actionParams: { threadId: kind } };
       (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValue({ items: [item], nextCursor: null });
       const ui = await render(<NotificationCenterScreen />);
       await waitFor(() => expect(ui.getByText(item.title)).toBeTruthy());
       await fireEvent.press(ui.getByText(item.title));
-      await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('Messages', item.actionParams));
-      expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith(kind);
-      expect(routeInAppNotification).toHaveBeenCalledWith('Messages', item.actionParams);
+      await waitFor(() => expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith(kind));
+      if (actionScreen) {
+        await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith(actionScreen, item.actionParams));
+        expect(routeInAppNotification).toHaveBeenCalledWith(actionScreen, item.actionParams);
+      } else expect(mockNavigate).not.toHaveBeenCalled();
     },
   );
 
@@ -319,6 +325,33 @@ describe('NotificationCenterScreen', () => {
     expect(style.borderBottomWidth).toBe(StyleSheet.hairlineWidth);
     expect(StyleSheet.flatten(ui.getByText('Coach note available').props.style).fontSize).toBe(15);
     expect(ui.getByText('Coach note available').props.numberOfLines).toBeUndefined();
+  });
+
+  it('stops loading and explains a failed next page without losing rows', async () => {
+    (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValueOnce({ items: [
+      { id: 'read', kind: 'system', title: 'Update', body: 'Details', read: true, createdAt: new Date().toISOString() },
+    ], nextCursor: 'page2' }).mockRejectedValueOnce(new Error('network'));
+    const ui = await render(<NotificationCenterScreen />);
+    await waitFor(() => expect(ui.getByText('Update')).toBeTruthy());
+    const { FlatList } = jest.requireActual('react-native');
+    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    expect(ui.getByText('Could not load more notifications. Pull down to try again.')).toBeTruthy();
+    expect(ui.getByText('Update')).toBeTruthy();
+    expect(ui.queryByLabelText('Loading more notifications')).toBeNull();
+  });
+
+  it('keeps the role-aware router authoritative and read targets navigable', async () => {
+    (routeInAppNotification as jest.Mock).mockReturnValueOnce(true);
+    (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValue({ items: [
+      { id: 'read', kind: 'message', title: 'Message', body: 'Details', read: true,
+        createdAt: new Date().toISOString(), actionScreen: 'Messages' },
+    ], nextCursor: null });
+    const ui = await render(<NotificationCenterScreen />);
+    await waitFor(() => expect(ui.getByText('Message')).toBeTruthy());
+    await fireEvent.press(ui.getByText('Message'));
+    expect(routeInAppNotification).toHaveBeenCalledWith('Messages', undefined);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expect(notificationsApi.markNotificationRead).not.toHaveBeenCalled();
   });
 });
 
