@@ -12,9 +12,15 @@ const mockParentNavigate = jest.fn();
 const mockGetEntitlement = jest.fn();
 const mockGetPackages = jest.fn();
 const mockGetPaymentStatus = jest.fn();
+const mockAttachInviteCode = jest.fn();
 
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
-jest.mock('../lib/userCache', () => ({ readUserCacheSync: () => mockCachedUser }));
+jest.mock('../lib/userCache', () => ({
+  readUserCacheSync: () => mockCachedUser,
+  patchUserCache: async (patch: Partial<CurrentUser>) => {
+    mockCachedUser = { ...mockUser, ...patch };
+  },
+}));
 jest.mock('../config/purchaseSurfaces', () => ({
   ...jest.requireActual('../config/purchaseSurfaces'),
   nonP2PPurchasesHidden: () => mockHidden,
@@ -50,6 +56,7 @@ jest.mock('@react-navigation/native', () => {
 });
 jest.mock('../services/api', () => ({
   __esModule: true, default: { get: jest.fn(async () => ({ data: {} })) },
+  authApi: { attachInviteCode: (code: string) => mockAttachInviteCode(code) },
 }));
 jest.mock('../hooks/usePackagePurchase', () => ({ usePackagePurchase: () => ({
   state: { phase: 'idle', packageId: null }, busy: false,
@@ -69,13 +76,20 @@ import { ProtectedScreen } from '../entitlements/ProtectedScreen';
 import { PaywallSheet, COACH_MANAGED_TITLE, COACH_MANAGED_BODY } from '../entitlements/PaywallSheet';
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
+import { useCoachlessClient } from '../hooks/useCoachlessClient';
+import { pairWithCoach } from '../screens/day-one/api';
+import { claimPendingInviteCode } from '../lib/pendingInviteCode';
 
 const TITLE = 'Join a coach to start logging';
 const BODY = 'Enter the code your coach gave you.';
 const CTA = 'Enter a coach code';
+function CoachlessProbe() {
+  return <Text testID="coachless-probe">{useCoachlessClient() ? 'coachless' : 'connected'}</Text>;
+}
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockAttachInviteCode.mockReset();
   mockUser = { id: 'client-1', email: 'client@example.test', role: 'student' };
   mockCachedUser = null;
   mockHidden = false;
@@ -164,6 +178,23 @@ it('ClientPackages uses the freshly patched coach cache after a code join', asyn
   mockCachedUser = { ...mockUser, coach_id: 'coach-1' };
   await r.rerender(<ClientPackagesScreen />);
   expect(await r.findByText('No self-serve plans yet')).toBeTruthy();
+  expect(r.queryByText(TITLE)).toBeNull();
+});
+
+it.each(['day1', 'pending-invite'])('%s attach clears coachless status and exposes the coach plans', async (path) => {
+  mockAttachInviteCode.mockResolvedValueOnce({ data: { coach_id: 'coach-1' } });
+  const result = await (path === 'day1'
+    ? pairWithCoach('GP-COACH')
+    : claimPendingInviteCode('GP-COACH'));
+  expect(result.ok).toBe(true);
+  expect(mockAttachInviteCode).toHaveBeenCalledWith('GP-COACH');
+  mockGetPackages.mockResolvedValue({ ok: true, data: [{
+    id: 'plan-1', name: 'Coach plan', currency: 'USD', price: 49,
+    type: 'recurring', interval: 'month', trial_days: null, features: [],
+  }] });
+  const r = await render(<><CoachlessProbe /><ClientPackagesScreen /></>);
+  expect(r.getByTestId('coachless-probe').props.children).toBe('connected');
+  expect(await r.findByText('Coach plan')).toBeTruthy();
   expect(r.queryByText(TITLE)).toBeNull();
 });
 
