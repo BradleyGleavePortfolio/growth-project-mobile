@@ -17,8 +17,6 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | --- | --- | --- |
 | `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
-| `ClientWorkoutViewerScreen.tsx` | Assigned workouts | Scheduled-date overlines, serif plan names and hairline exercise rows with catalog names and prescribed sets/reps or seconds/weights, including coach-approved set adjustments. Pending and completed assignments both open `WorkoutAssignmentDetail`; refresh and honest loading/error/empty states remain. Coach names and previous-session numbers are not returned by this list API and are not invented. Start/resume and exercise details stay on the unchanged assignment detail route. |
-| `WorkoutHistoryEditScreen.tsx` | Edit saved workout | One serif workout headline, hairline weight/reps/notes inputs and one forest Save changes action. Cancel retains the discard confirmation; save retains the replace-all payload and workout-query invalidation. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
 | `MoreScreen.tsx` | Profile | Index of every secondary screen. The two top rows are **Guidance** (`AIGuide`) and **Membership** (`Membership`); the rest cover Recipes, Fasting, Community, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, the lists, and the Plan view. There is no floating chat widget — `AIGuide` is reached from this index, not from a global FAB. |
 
@@ -35,11 +33,13 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 | File | What it does |
 | --- | --- |
+| `ClientWorkoutViewerScreen.tsx` | Scheduled-date overlines, serif plan names and hairline exercise rows with catalog names and prescribed sets/reps or seconds/weights, including coach-approved set adjustments. Pending and completed assignments both open `WorkoutAssignmentDetail`; refresh and honest loading/error/empty states remain. Coach names and previous-session numbers are not returned by this list API and are not invented. Start/resume and exercise details stay on the unchanged assignment detail route. |
 | `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned. Reads from BOTH `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical) and merges them so a coach assigning via either path lands on the same screen (P0-1 unification). |
 | `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). The list passes `{ recipeId }` (a serialisable string) when navigating, never the full recipe object — `RecipeDetailScreen` reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById(recipeId)`. This eliminates React Navigation's non-serializable-params warning and keeps state rehydration intact. New recipe-aware screens must follow the same id-only param pattern. |
 | `GroceryListScreen.tsx`, `ShoppingListScreen.tsx`, `PrepGuideScreen.tsx` | List management + weekly prep guide (`listsApi`, `prepGuideApi`). |
 | `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); backend is the source of truth, no intermediate local store. |
 | `HabitsScreen.tsx` | Daily habit check-ins (`habitsApi`). |
+| `WorkoutHistoryEditScreen.tsx` | One serif workout headline, hairline weight/reps/notes inputs and one forest Save changes action. Cancel retains the discard confirmation; save retains the replace-all payload and workout-query invalidation. |
 
 ### Profile, settings, and trust
 
