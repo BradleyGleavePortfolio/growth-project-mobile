@@ -36,20 +36,12 @@ const ProposalSchema = z.object({
 });
 export type AiBuilderProposal = z.infer<typeof ProposalSchema>;
 
-const DecideSchema = z.object({
-  status: z.string(),
-  // lock_token (optional): when present the builder adopts the new head at once
-  // and the header Undo reverts the AI change; when absent it re-reads the plan.
-  materialised_ref: z
-    .object({ plan_id: z.string(), revision_index: z.number().int().min(0), lock_token: z.string().regex(/^[0-9a-f]{16}$/).optional() })
-    .nullable()
-    .optional(),
-});
+// lock_token (optional): present -> the builder adopts the new head and the header Undo reverts the AI change; absent -> re-read.
+const RefSchema = z.object({ plan_id: z.string(), revision_index: z.number().int().min(0), lock_token: z.string().regex(/^[0-9a-f]{16}$/).optional() });
+const DecideSchema = z.object({ status: z.string(), materialised_ref: RefSchema.nullable().optional() });
 export type AiBuilderRef = z.infer<typeof DecideSchema>['materialised_ref'];
 
-export type AiBuilderErrorCode =
-  | 'not_available' | 'paused' | 'no_credits' | 'consent_required' | 'stale'
-  | 'no_safe_proposal' | 'rate_limited' | 'forbidden' | 'network' | 'server' | 'contract';
+export type AiBuilderErrorCode = 'not_available' | 'paused' | 'no_credits' | 'consent_required' | 'stale' | 'no_safe_proposal' | 'rate_limited' | 'forbidden' | 'network' | 'server' | 'contract';
 
 export class AiBuilderError extends Error {
   constructor(public readonly code: AiBuilderErrorCode, public readonly status: number, public readonly resetsAt: string | null = null) {
@@ -59,9 +51,7 @@ export class AiBuilderError extends Error {
   }
 }
 
-function field(data: unknown, key: string): unknown {
-  return data && typeof data === 'object' ? (data as Record<string, unknown>)[key] : undefined;
-}
+const field = (data: unknown, key: string): unknown => (data && typeof data === 'object' ? (data as Record<string, unknown>)[key] : undefined);
 
 /** Map any failure to one bounded code. */
 export function toAiBuilderError(err: unknown): AiBuilderError {
@@ -75,43 +65,24 @@ export function toAiBuilderError(err: unknown): AiBuilderError {
     return new AiBuilderError('no_credits', status, typeof end === 'string' ? end : null);
   }
   if (code === 'ai_consent_required') return new AiBuilderError('consent_required', status);
-  const byStatus: Record<number, AiBuilderErrorCode> = {
-    401: 'forbidden', 403: 'forbidden', 404: 'not_available', 409: 'stale', 422: 'no_safe_proposal', 429: 'rate_limited', 503: 'paused',
-  };
+  const byStatus: Record<number, AiBuilderErrorCode> = { 401: 'forbidden', 403: 'forbidden', 404: 'not_available', 409: 'stale', 422: 'no_safe_proposal', 429: 'rate_limited', 503: 'paused' };
   return new AiBuilderError(byStatus[status] ?? 'server', status);
 }
 
-async function run<T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }>): Promise<T> {
-  try {
-    return schema.parse((await fn()).data);
-  } catch (err) {
-    throw toAiBuilderError(err);
-  }
-}
+const run = <T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }>): Promise<T> =>
+  Promise.resolve().then(fn).then((res) => schema.parse(res.data)).catch((err: unknown) => Promise.reject(toAiBuilderError(err)));
 
-// lock_token is omitted while the builder only holds the bootstrap token; client_id arrives with AIB-6 (client context).
-export interface ProposeBody {
-  mode: 'create' | 'edit'; plan_id: string; lock_token?: string; client_id?: string; instruction: string;
-  quick_action?: AiBuilderQuickAction; injury_area?: AiBuilderInjuryArea;
-}
+// lock_token is omitted until the builder holds a real head token (none yet, or the bootstrap one); client_id arrives with AIB-6 (client context).
+export type ProposeBody = { mode: 'create' | 'edit'; plan_id: string; lock_token?: string; client_id?: string; instruction: string; quick_action?: AiBuilderQuickAction; injury_area?: AiBuilderInjuryArea };
 
 const draftUrl = (id: string) => `/ai/gateway/drafts/${encodeURIComponent(id)}`;
 
 export const aiBuilderApi = {
   /** null = this backend has no Ask AI (404): hide the entry. */
-  getStatus: (): Promise<AiBuilderStatus | null> =>
-    run(StatusSchema, () => api.get('/ai/gateway/workout-builder/status')).catch((err: unknown) => {
-      if (err instanceof AiBuilderError && err.code === 'not_available') return null;
-      throw err;
-    }),
-  propose: (body: ProposeBody) =>
-    run(ProposalSchema, () =>
-      api.post(
-        '/ai/gateway/workout-builder/propose',
-        { ...body, instruction: body.instruction.slice(0, AI_BUILDER_INSTRUCTION_MAX) },
-        { headers: { 'Idempotency-Key': generateIdempotencyKey() } },
-      ),
-    ),
+  getStatus: (): Promise<AiBuilderStatus | null> => run(StatusSchema, () => api.get('/ai/gateway/workout-builder/status'))
+    .catch((err: unknown) => (err instanceof AiBuilderError && err.code === 'not_available' ? null : Promise.reject(err))),
+  propose: (body: ProposeBody) => run(ProposalSchema, () => api.post('/ai/gateway/workout-builder/propose',
+    { ...body, instruction: body.instruction.slice(0, AI_BUILDER_INSTRUCTION_MAX) }, { headers: { 'Idempotency-Key': generateIdempotencyKey() } })),
   apply: (draftId: string, acceptedChangeIds: string[]) =>
     run(DecideSchema, () => api.patch(draftUrl(draftId), { decision: 'approved', accepted_change_ids: acceptedChangeIds })),
   discard: (draftId: string) => run(DecideSchema, () => api.patch(draftUrl(draftId), { decision: 'rejected' })),

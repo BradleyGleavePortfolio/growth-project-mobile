@@ -8,8 +8,7 @@ import {
 } from '../../../api/aiBuilderApi';
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
 import {
-  AI_LABEL, AI_STAGES, applyLabel, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, NOT_CONFIGURED_COPY, noCreditsCopy, PAUSED_COPY,
-  QUICK_ACTIONS, SCREENING_COPY,
+  AI_LABEL, AI_STAGES, applyLabel, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY,
 } from './aiBuilderCopy';
 import type { AiBuilderController } from './useAiBuilder';
 
@@ -58,7 +57,8 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
   const [text, setText] = useState('');
   const [injuryPicker, setInjuryPicker] = useState(false);
   const st = ai.status?.state;
-  const blocked = st === 'paused' ? PAUSED_COPY : st === 'no_credits' ? noCreditsCopy(ai.status?.credits.resets_at ?? null) : st === 'not_configured' ? NOT_CONFIGURED_COPY : null;
+  // paused and not_configured (a server switch, never the coach's account) both read as paused; an unreadable status offers a retry.
+  const blocked = st === 'paused' || st === 'not_configured' ? PAUSED_COPY : st === 'no_credits' ? noCreditsCopy(ai.status?.credits.resets_at ?? null) : ai.statusError;
   const busy = ai.phase === 'thinking' || ai.phase === 'applying';
   const p = ai.proposal;
   const prompt = isBlank ? 'Describe the workout to build' : 'Ask AI to change this workout';
@@ -100,6 +100,12 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
           </View>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: spacing.lg }}>
             {blocked ? line('ai-builder-blocked', blocked) : null}
+            {ai.statusError ? (
+              <HapticPressable intent="light" testID="ai-builder-retry" accessibilityRole="button" accessibilityLabel="Check Ask AI again" accessibilityState={{ disabled: ai.checking }}
+                disabled={ai.checking} onPress={ai.retryStatus} style={[styles.button, styles.outline, { borderColor: sc.border }]}>
+                <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{ai.checking ? 'Checking' : 'Try again'}</Text>
+              </HapticPressable>
+            ) : null}
             {!p && !blocked ? (
               <>
                 <TextInput testID="ai-builder-input" accessibilityLabel={prompt} placeholder={prompt} placeholderTextColor={sc.textMuted} value={text}
