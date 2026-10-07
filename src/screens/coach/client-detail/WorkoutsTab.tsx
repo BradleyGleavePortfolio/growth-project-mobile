@@ -1,18 +1,19 @@
 import React from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ThemeColors } from '../../../theme/ThemeProvider';
+import Svg, { Polyline } from 'react-native-svg';
+import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
 import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
 import { AdjustForClientEntry } from '../../../components/coach/ai-entry/AdjustForClient';
+import { spacing, typography } from '../../../theme/tokens';
 
 export function WorkoutsTab({
   workoutSessions,
   clientName,
   onBuildWithAi,
   onOpenClientCopy,
-  colors,
   styles,
 }: {
   workoutSessions: WorkoutSession[];
@@ -24,7 +25,8 @@ export function WorkoutsTab({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
-  const parseExercises = (json: string): SessionExercise[] => {
+  const { semanticColors: sc } = useTheme();
+  const parseExercises = (json: string): (SessionExercise & { rpe?: number | null })[] => {
     try { return JSON.parse(json); } catch { return []; }
   };
 
@@ -42,8 +44,31 @@ export function WorkoutsTab({
   };
 
   const first = clientName?.trim().split(/\s+/)[0] || 'this client';
+  const body = { ...typography.bodySmall, color: sc.textMuted };
+  const meta = { ...body, fontSize: 13, lineHeight: 20 };
+  const heading = { ...typography.h2, color: sc.textPrimary, fontVariant: ['tabular-nums' as const] };
+  const rule = { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border };
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(now.getDate() - (now.getDay() + 6) % 7);
+  // This input is workout history, not an assignment ledger. No target or missed days are inferred.
+  const weeklyCount = workoutSessions.filter((s) => s.completed && new Date(s.startTime) >= weekStart && new Date(s.startTime) <= now).length;
+  const trajectories = new Map<string, { date: string; weight: number }[]>();
+  workoutSessions.filter((s) => s.completed).forEach((s) => parseExercises(s.exercises).forEach((e) => {
+    const weight = Math.max(0, ...e.sets.filter((set) => set.completed).map((set) => set.weight));
+    if (weight > 0) trajectories.set(e.exerciseName, [...(trajectories.get(e.exerciseName) ?? []), { date: s.startTime, weight }]);
+  }));
+  const strength = [...trajectories.entries()].find(([, points]) => points.length >= 2);
+  const points = strength?.[1].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()) ?? [];
+  const low = Math.min(...points.map((p) => p.weight));
+  const high = Math.max(...points.map((p) => p.weight));
   return (
     <>
+      <View style={[rule, { paddingBottom: spacing.xl, marginBottom: spacing.xl }]}>
+        <Text style={[meta, { letterSpacing: 1, marginBottom: spacing.sm }]}>THIS WEEK</Text>
+        <Text accessibilityRole="header" style={heading}>{`${weeklyCount} shared ${weeklyCount === 1 ? 'workout' : 'workouts'} this week`}</Text>
+      </View>
       {onBuildWithAi ? (
         <Pressable
           testID="workouts-build-with-ai"
@@ -51,18 +76,16 @@ export function WorkoutsTab({
           accessibilityLabel={`Build a program for ${first} with AI`}
           accessibilityHint="Opens the Coach AI program generator. Nothing reaches the client until you approve it."
           onPress={onBuildWithAi}
-          style={[styles.emptyCard, { flexDirection: 'row', justifyContent: 'center', padding: 16, marginBottom: 12 }]}
+          style={{ alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 4, padding: spacing.lg, backgroundColor: sc.accent, marginBottom: spacing.md }}
         >
-          <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
-          <Text style={[styles.emptyText, { color: colors.textPrimary, marginTop: 0 }]}>{`Build a program for ${first} with AI`}</Text>
+          <Text style={[typography.bodyMd, { color: sc.textOnAccent, textAlign: 'center' }]}>{`Build a program for ${first} with AI`}</Text>
         </Pressable>
       ) : null}
       {onOpenClientCopy ? <AdjustForClientEntry firstName={first} onOpened={onOpenClientCopy} /> : null}
-      <Text style={styles.sectionTitle}>Recent Workouts</Text>
+      <Text style={[heading, { marginTop: spacing.lg }]}>Recent workouts</Text>
       {workoutSessions.length === 0 ? (
-        <View style={styles.emptyCard}>
-          <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
-          <Text style={styles.emptyText}>No workout sessions yet</Text>
+        <View style={[rule, { paddingVertical: spacing.xl }]}>
+          <Text style={body}>No shared workout sessions to show</Text>
         </View>
       ) : (
         workoutSessions.map((session) => {
@@ -71,38 +94,36 @@ export function WorkoutsTab({
           const completedSets = exList.reduce((s, e) => s + e.sets.filter((st) => st.completed).length, 0);
           const duration = formatDuration(session);
           return (
-            <View key={session.id} style={styles.sessionCard}>
+            <View key={session.id} testID={`coach-session-${session.id}`} style={[rule, { backgroundColor: sc.bgPrimary, paddingVertical: spacing.xl }]}>
               <View style={styles.sessionTop}>
+                <Ionicons name={session.completed ? 'checkmark-circle-outline' : 'ellipse-outline'} size={24} color={session.completed ? sc.accentText : sc.textMuted} style={{ marginRight: spacing.md }} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.sessionName}>{session.routineName}</Text>
-                  <Text style={styles.sessionDate}>
+                  <Text style={heading}>{session.routineName}</Text>
+                  <Text style={meta}>
                     {new Date(session.startTime).toLocaleDateString()}{duration ? ` · ${duration}` : ''}
                   </Text>
                 </View>
                 {session.completed ? (
-                  <View style={styles.completedBadge}>
-                    <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                    <Text style={styles.completedText}>Done</Text>
-                  </View>
+                  <Text style={meta}>Done</Text>
                 ) : (
-                  <Text style={styles.inProgressText}>In progress</Text>
+                  <Text style={meta}>In progress</Text>
                 )}
               </View>
               {/* Exercise breakdown */}
               <View style={styles.sessionStats}>
                 <View style={styles.sessionStat}>
-                  <Text style={styles.sessionStatValue}>{exList.length}</Text>
-                  <Text style={styles.sessionStatLabel}>Exercises</Text>
+                  <Text style={heading}>{exList.length}</Text>
+                  <Text style={meta}>Exercises</Text>
                 </View>
                 <View style={styles.sessionStat}>
-                  <Text style={styles.sessionStatValue}>{completedSets}/{totalSets}</Text>
-                  <Text style={styles.sessionStatLabel}>Sets</Text>
+                  <Text style={heading}>{completedSets}/{totalSets}</Text>
+                  <Text style={meta}>Sets</Text>
                 </View>
                 <View style={styles.sessionStat}>
-                  <Text style={styles.sessionStatValue}>
+                  <Text style={heading}>
                     {Math.round(exList.reduce((s, e) => s + e.sets.reduce((ss, st) => ss + (st.completed ? st.weight * st.reps : 0), 0), 0))}
                   </Text>
-                  <Text style={styles.sessionStatLabel}>Volume (lbs)</Text>
+                  <Text style={meta}>Volume (lbs)</Text>
                 </View>
               </View>
               {/* FU-WORKLOG2-126: the coach used to see only counts and a
@@ -110,15 +131,16 @@ export function WorkoutsTab({
                   of every set, and the notes the client wrote. */}
               {exList.map((e, i) => (
                 <View key={`${e.exerciseId}-${i}`} style={{ marginTop: i === 0 ? 0 : 8 }} testID={`coach-session-${session.id}-exercise-${i}`}>
-                  <Text style={[styles.sessionExercises, { color: colors.textPrimary }]}>{e.exerciseName}</Text>
-                  <Text style={styles.sessionExercises}>{formatCoachSessionSets(e.sets)}</Text>
+                  <Text style={[body, { color: sc.textPrimary }]}>{e.exerciseName}</Text>
+                  <Text style={body}>{formatCoachSessionSets(e.sets)}</Text>
+                  {typeof e.rpe === 'number' ? <Text style={meta}>{`RPE ${e.rpe}`}</Text> : null}
                   {e.notes ? (
-                    <Text style={styles.sessionExercises}>Client note: {e.notes}</Text>
+                    <Text style={body}>Client note: {e.notes}</Text>
                   ) : null}
                 </View>
               ))}
               {session.notes && session.notes !== session.routineName ? (
-                <Text style={[styles.sessionExercises, { marginTop: 10 }]} testID={`coach-session-${session.id}-note`}>
+                <Text style={[body, { marginTop: spacing.md }]} testID={`coach-session-${session.id}-note`}>
                   Workout note: {session.notes}
                 </Text>
               ) : null}
@@ -126,6 +148,21 @@ export function WorkoutsTab({
           );
         })
       )}
+      {strength ? (
+        <View testID="coach-strength-trajectory" style={{ paddingTop: spacing.xl }}>
+          <Text style={heading}>Strength trajectory</Text>
+          <Text style={meta}>{`${strength[0]} · top recorded load (lb)`}</Text>
+          <View accessible accessibilityRole="image" accessibilityLabel={points.map((p) => `${new Date(p.date).toLocaleDateString()}: ${p.weight} lb`).join(', ')}>
+            <Svg height={80} width="100%" viewBox="0 0 300 80">
+              <Polyline fill="none" stroke={sc.accent} strokeWidth={2} points={points.map((p, i) => `${8 + i * 284 / (points.length - 1)},${68 - (p.weight - low) * 56 / (high - low || 1)}`).join(' ')} />
+            </Svg>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={meta}>{`${new Date(points[0].date).toLocaleDateString()} · ${points[0].weight} lb`}</Text>
+            <Text style={meta}>{`${new Date(points[points.length - 1].date).toLocaleDateString()} · ${points[points.length - 1].weight} lb`}</Text>
+          </View>
+        </View>
+      ) : null}
     </>
   );
 }

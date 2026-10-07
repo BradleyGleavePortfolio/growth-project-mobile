@@ -112,7 +112,7 @@ export default function PackageDetailSurface({
     (pkg.trialDays ? 'Start free trial' : `Pay ${formatCurrencyCents(pkg.priceCents, pkg.currency)}`);
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
+    <ScrollView style={{ backgroundColor: semanticColors.bgPrimary }} contentContainerStyle={styles.content}>
       {isPreview ? (
         <View style={styles.previewBanner} accessibilityRole="text">
           <Ionicons name="eye-outline" size={16} color={semanticColors.textPrimary} />
@@ -124,7 +124,7 @@ export default function PackageDetailSurface({
 
       <View style={styles.coachCard}>
         <View style={styles.avatarPlaceholder}>
-          <Ionicons name="person" size={22} color={semanticColors.textOnAccent} />
+          <Ionicons name="person-outline" size={22} color={semanticColors.textMuted} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.coachLabel}>Coached by</Text>
@@ -141,6 +141,7 @@ export default function PackageDetailSurface({
       {pkg.description ? <Text style={styles.description}>{pkg.description}</Text> : null}
 
       <View style={styles.priceCard}>
+        <Text style={styles.featuresTitle}>How it works</Text>
         <Text style={styles.priceValue}>{formatCurrencyCents(pkg.priceCents, pkg.currency)}</Text>
         <Text style={styles.priceMeta}>{intervalCopy(pkg)}</Text>
         {pkg.trialDays ? (
@@ -181,7 +182,7 @@ export default function PackageDetailSurface({
           <ActivityIndicator color={onAccentColor} />
         ) : (
           <>
-            <Ionicons name="lock-closed" size={16} color={onAccentColor} />
+            <Ionicons name="lock-closed-outline" size={16} color={onAccentColor} />
             <Text style={[styles.payBtnText, isDisabled && styles.payBtnTextDisabled]}>{payLabel}</Text>
           </>
         )}
@@ -205,15 +206,13 @@ export default function PackageDetailSurface({
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    content: { paddingHorizontal: 24, paddingBottom: 40 },
+    content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 40 },
     previewBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: tokens.semantic.warning.bg,
-      borderColor: tokens.semantic.warning.border,
-      borderWidth: 1,
-      borderRadius: tokens.radius.lg,
+      borderBottomColor: semanticColors.border,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       paddingVertical: 10,
       paddingHorizontal: 12,
       marginBottom: 16,
@@ -228,17 +227,15 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     coachCard: {
       flexDirection: 'row',
       gap: 12,
-      backgroundColor: semanticColors.bgSurface,
-      borderRadius: tokens.radius.lg,
-      padding: 14,
-      marginBottom: 18,
+      paddingVertical: 20,
+      marginBottom: 24,
       alignItems: 'flex-start',
     },
     avatarPlaceholder: {
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: semanticColors.accent,
+      backgroundColor: semanticColors.bgPrimary,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -256,7 +253,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       fontWeight: '500',
       color: semanticColors.textPrimary,
     },
-    coachBio: { fontSize: 13, color: semanticColors.textMuted, marginTop: 4, lineHeight: 18 },
+    coachBio: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 4, lineHeight: 18 },
     title: {
       fontFamily: tokens.typography.h1.fontFamily,
       fontSize: 28,
@@ -271,29 +268,30 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginBottom: 18,
     },
     priceCard: {
-      backgroundColor: semanticColors.bgSurface,
-      borderRadius: tokens.radius.lg,
-      padding: 18,
-      marginBottom: 18,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: semanticColors.border,
+      paddingVertical: 24,
+      marginBottom: 8,
     },
     priceValue: {
       fontFamily: tokens.typography.h2.fontFamily,
       fontSize: 32,
+      fontVariant: ['tabular-nums'],
       color: semanticColors.textPrimary,
     },
-    priceMeta: { fontSize: 13, color: semanticColors.textMuted, marginTop: 2 },
-    trialMeta: { fontSize: 13, color: semanticColors.accent, marginTop: 6 },
+    priceMeta: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 2 },
+    trialMeta: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 6 },
     featuresList: { marginBottom: 24 },
     featuresTitle: {
       fontFamily: tokens.typography.eyebrow.fontFamily,
-      fontSize: 12,
+      fontSize: 11,
       color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginBottom: 10,
     },
     featureRow: { flexDirection: 'row', gap: 10, marginBottom: 8, alignItems: 'flex-start' },
-    featureText: { flex: 1, fontSize: 14, color: semanticColors.textPrimary, lineHeight: 20 },
+    featureText: { ...tokens.typography.bodySmall, flex: 1, fontSize: 14, color: semanticColors.textPrimary, lineHeight: 20 },
     payBtn: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -301,7 +299,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       gap: 8,
       backgroundColor: semanticColors.accent,
       paddingVertical: 16,
-      borderRadius: tokens.radius.md,
+      borderRadius: tokens.radius.lg, minHeight: 44,
     },
     // Explicit disabled fill (no parent opacity) so the label keeps AA contrast.
     payBtnDisabled: { backgroundColor: semanticColors.disabledBg },
@@ -314,7 +312,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     payBtnTextDisabled: { color: semanticColors.textOnDisabled },
     fineprint: {
       marginTop: 12,
-      fontSize: 12,
+      ...tokens.typography.bodySmall, fontSize: 13,
       color: semanticColors.textMuted,
       textAlign: 'center',
       lineHeight: 18,

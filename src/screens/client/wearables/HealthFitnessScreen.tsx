@@ -3,7 +3,7 @@
  * (brief §4.1).
  *
  * Layout (≤5 primary chunks above the fold):
- *   1. ThreeRingHero   (Move / Exercise / Stand)
+ *   1. ActivityBars (dated active energy, exercise minutes and steps)
  *   2. HeartCard
  *   3. WorkoutsCard
  *   4. BodyCard
@@ -13,14 +13,12 @@
  * for the client surface — passed in here only for the coach embed).
  *
  * State handling (brief §4.5 / Bradley LAW):
- *   - Loading >150ms → skeleton-of-the-real-layout (the empty rings + faded
+ *   - Loading >150ms → skeleton-of-the-real-layout (empty bars + faded
  *     card frames), NEVER a spinner.
  *   - Total empty (no connected source / zero data) → HealthFitnessEmptyState
- *     (real rings at 0% + connect CTA), NEVER "Coming soon".
- *   - Error with cached data → an inline banner "Showing your last synced data
- *     from <relative>" above the (cached) content.
- *   - Error with no cache → a typed retry card ("Couldn't reach health server.
- *     We'll keep your data safe — try again.").
+ *     (absent values + connect CTA), NEVER "Coming soon".
+ *   - Error with cached data → a factual saved-samples notice.
+ *   - Error with no cache → an actionable connection message and retry.
  *
  * The screen reads its own window (last 30 days, day granularity) and is
  * `clientId`-aware so the coach embed reuses it for a client.
@@ -38,9 +36,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import {
-  colors,
   radius,
-  semantic,
   spacing,
   typography,
 } from '../../../theme/tokens';
@@ -54,25 +50,16 @@ import type {
 } from '../../../api/wearablesSamplesApi';
 import { useReduceMotion } from './components/useReduceMotion';
 import {
-  metricMeta,
   toneForBucket,
-  toneTokens,
 } from './wearablesTheme';
-import { relativeTime } from './relativeTime';
-import { seriesPoints, summariseValue, ringProgress } from './seriesSummary';
-import ThreeRingHero, { type RingDatum } from './cards/ThreeRingHero';
+import { useTheme } from '../../../theme/useTheme';
+import ActivityBars from './cards/ActivityBars';
+import type { ActivityTargets } from './starterGoals';
 import HeartCard from './cards/HeartCard';
 import WorkoutsCard from './cards/WorkoutsCard';
 import BodyCard from './cards/BodyCard';
 import FitnessTrendCard from './cards/FitnessTrendCard';
 import HealthFitnessEmptyState from './empty/HealthFitnessEmptyState';
-
-/** Daily activity goals for the three rings (sensible defaults; CPO-tunable). */
-const RING_GOALS = {
-  activeKcal: 500,
-  exerciseMin: 30,
-  steps: 10000,
-} as const;
 
 const WINDOW_DAYS = 30;
 
@@ -88,6 +75,7 @@ function roundToHour(d: Date): Date {
 }
 
 interface Props {
+  readonly targets?: ActivityTargets;
   /** Coach embed reads a client's data; omitted on the client's own surface. */
   readonly clientId?: string;
   /**
@@ -116,11 +104,12 @@ export default function HealthFitnessScreen({
   clientId,
   aiPanelSlot,
   window: windowProp,
+  targets,
 }: Props) {
+  const { semanticColors: sc } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const reduceMotion = useReduceMotion();
   const tone = toneForBucket('HEALTH_FITNESS');
-  const toneTk = toneTokens(tone);
 
   // Window: last WINDOW_DAYS, day granularity (server aggregates). When a parent
   // (the coach tab) supplies a shared, hour-rounded window we reuse it verbatim
@@ -175,39 +164,6 @@ export default function HealthFitnessScreen({
     [navigation, clientId],
   );
 
-  // Derive ring data from active energy / workout minutes / steps.
-  const rings = useMemo<readonly [RingDatum, RingDatum, RingDatum]>(() => {
-    const activePts = seriesPoints(findSeries(data, 'ACTIVE_ENERGY_KCAL'));
-    const exercisePts = seriesPoints(findSeries(data, 'WORKOUT_DURATION_MIN'));
-    const stepsPts = seriesPoints(findSeries(data, 'STEPS'));
-    // Latest day's value for the ring fill (today vs goal).
-    const latest = (pts: { y: number }[]) =>
-      pts.length === 0 ? null : pts[pts.length - 1].y;
-    return [
-      {
-        progress: ringProgress(latest(activePts), RING_GOALS.activeKcal),
-        color: colors.camel,
-        label: 'Move',
-      },
-      {
-        progress: ringProgress(latest(exercisePts), RING_GOALS.exerciseMin),
-        color: colors.mutedGold,
-        label: 'Exercise',
-      },
-      {
-        progress: ringProgress(latest(stepsPts), RING_GOALS.steps),
-        color: colors.forest,
-        label: 'Stand',
-      },
-    ];
-  }, [data]);
-
-  const centerValue = useMemo(() => {
-    const activePts = seriesPoints(findSeries(data, 'ACTIVE_ENERGY_KCAL'));
-    const value = summariseValue(activePts.slice(-1), 'latest');
-    return value === null ? '—' : metricMeta('ACTIVE_ENERGY_KCAL').format(value, 'kcal');
-  }, [data]);
-
   const hasAnyData = useMemo(
     () => (data?.series ?? []).some((s) => s.sample_count > 0),
     [data],
@@ -221,21 +177,10 @@ export default function HealthFitnessScreen({
         accessibilityLabel="Loading your fitness overview"
       >
         <View style={styles.heroBlock}>
-          <ThreeRingHero
-            rings={[
-              { progress: 0, color: colors.camel, label: 'Move' },
-              { progress: 0, color: colors.mutedGold, label: 'Exercise' },
-              { progress: 0, color: colors.forest, label: 'Stand' },
-            ]}
-            centerValue="—"
-            centerLabel="Active kcal"
-            tone={tone}
-            reduceMotion={reduceMotion}
-            empty={false}
-          />
+          <ActivityBars targets={targets} isLoading />
         </View>
         {[0, 1, 2, 3].map((i) => (
-          <View key={i} style={styles.skeletonCard} accessibilityElementsHidden />
+          <View key={i} style={[styles.skeletonCard, { backgroundColor: sc.border }]} accessibilityElementsHidden />
         ))}
       </ScrollView>
     );
@@ -245,12 +190,12 @@ export default function HealthFitnessScreen({
   if (isError && !data) {
     return (
       <View style={styles.errorWrap}>
-        <Ionicons name="cloud-offline-outline" size={40} color={colors.stone} />
-        <Text style={styles.errorTitle} accessibilityRole="alert">
+        <Ionicons name="cloud-offline-outline" size={40} color={sc.textMuted} />
+        <Text style={[styles.errorTitle, { color: sc.textPrimary }]} accessibilityRole="alert">
           Couldn&apos;t reach health server
         </Text>
-        <Text style={styles.errorBody}>
-          Your data is safe — try again.
+        <Text style={[styles.errorBody, { color: sc.textMuted }]}>
+          Check the connection and try again.
         </Text>
         <Pressable
           onPress={() => void refetch()}
@@ -259,7 +204,7 @@ export default function HealthFitnessScreen({
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
         >
-          <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>Try again</Text>
+          <Text style={[styles.recoveryCtaLabel, { color: sc.accentText }]}>Try again</Text>
         </Pressable>
       </View>
     );
@@ -273,6 +218,7 @@ export default function HealthFitnessScreen({
           tone={tone}
           reduceMotion={reduceMotion}
           onConnect={isCoachEmbed ? undefined : goToConnections}
+          targets={targets}
         />
         {aiPanelSlot}
       </ScrollView>
@@ -280,8 +226,6 @@ export default function HealthFitnessScreen({
   }
 
   // ── Populated overview (with optional stale-data banner) ──
-  const staleSince = isError ? relativeTime(data?.window.to ?? null) : null;
-
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -289,28 +233,21 @@ export default function HealthFitnessScreen({
         <RefreshControl
           refreshing={isRefetching}
           onRefresh={() => void refetch()}
-          tintColor={toneTk.accent}
+          tintColor={sc.accent}
         />
       }
     >
-      {staleSince && (
+      {isError && (
         <View style={styles.staleBanner} accessibilityRole="alert">
-          <Ionicons name="time-outline" size={14} color={semantic.warning.fg} />
-          <Text style={styles.staleText}>
-            Showing your last synced data from {staleSince}
+          <Ionicons name="time-outline" size={14} color={sc.textMuted} />
+          <Text style={[styles.staleText, { color: sc.textMuted }]}>
+            Health data did not refresh. Showing saved samples.
           </Text>
         </View>
       )}
 
       <View style={styles.heroBlock}>
-        <ThreeRingHero
-          rings={rings}
-          centerValue={centerValue}
-          centerLabel="Active kcal"
-          tone={tone}
-          reduceMotion={reduceMotion}
-          empty={false}
-        />
+        <ActivityBars data={data} targets={targets} />
       </View>
 
       <HeartCard
@@ -358,21 +295,18 @@ const styles = StyleSheet.create({
   skeletonCard: {
     height: 96,
     borderRadius: radius.lg,
-    backgroundColor: colors.cream,
     opacity: 0.55,
   },
   staleBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: semantic.warning.bg,
     borderRadius: radius.lg,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
   staleText: {
     ...typography.bodySmall,
-    color: semantic.warning.fg,
     flex: 1,
   },
   errorWrap: {
@@ -384,12 +318,10 @@ const styles = StyleSheet.create({
   },
   errorTitle: {
     ...typography.h3,
-    color: colors.ink,
     marginTop: spacing.sm,
   },
   errorBody: {
     ...typography.body,
-    color: colors.charcoal,
     textAlign: 'center',
   },
   // R1 visual P0 #2: recovery CTAs are real ≥44pt tap targets (Apple HIG),

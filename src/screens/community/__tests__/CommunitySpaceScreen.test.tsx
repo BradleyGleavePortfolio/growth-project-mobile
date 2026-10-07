@@ -59,6 +59,7 @@ jest.mock('../../../components/community', () => {
     PostCard: ({ testID }: { testID?: string }) => <Text testID={testID} />,
   };
 });
+jest.mock('../../../components/community/SafetyMenu', () => () => null);
 
 // ── usePosts — the workspace-scoped feed query (mutable holder) ──────────────
 type PostsState = {
@@ -83,6 +84,7 @@ const mockMe: {
 } = { data: undefined, isLoading: false, isError: false, refetch: jest.fn() };
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => mockMe,
+  isOptimisticId: (id: string) => id.startsWith('optimistic:'),
   usePosts: (workspaceId: string | null | undefined) => {
     mockUsePostsSpy(workspaceId);
     return mockPosts;
@@ -207,7 +209,7 @@ describe.each(['hall', 'cohort'] as const)(
         />,
       );
       expect(screen.getByTestId('community-space-no-workspace')).toBeTruthy();
-      expect(screen.getByText('No cohort yet')).toBeTruthy();
+      expect(screen.getByText('No community space yet')).toBeTruthy();
       expect(screen.queryByText('Be the first to post')).toBeNull();
       expect(screen.queryByTestId('community-space-empty')).toBeNull();
       expect(screen.queryByTestId('community-space-prereq-error')).toBeNull();

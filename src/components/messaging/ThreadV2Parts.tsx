@@ -5,7 +5,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
+import { typography } from '../../theme/tokens';
 import ActionMenu, { type ActionMenuOption } from './ActionMenu';
 import { messageActionOptions, type ThreadV2Fields } from './threadV2';
 import type { useThreadV2 } from '../../hooks/useThreadV2';
@@ -72,7 +73,7 @@ export function ThreadV2Menus(p: ThreadV2MenusProps): React.ReactElement {
 }
 
 export function MuteBell({ muted, onPress }: { muted: boolean | null; onPress: () => void }): React.ReactElement {
-  const { colors } = useTheme();
+  const colors = useThreadColors();
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -80,6 +81,7 @@ export function MuteBell({ muted, onPress }: { muted: boolean | null; onPress: (
       accessibilityRole="button"
       accessibilityLabel={muted ? 'Conversation muted. Change notifications' : 'Mute or unmute this conversation'}
       testID="thread-mute-button"
+      style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}
     >
       <Ionicons name={muted ? 'notifications-off-outline' : 'notifications-outline'} size={22} color={colors.textPrimary} />
     </TouchableOpacity>
@@ -112,7 +114,7 @@ export function pinPreview(m: ThreadMessage): string {
 
 /** The thread's pins (newest first); each tap jumps to the next one in turn. */
 export function PinnedBar({ pins, onOpen }: { pins: ThreadMessage[]; onOpen: (id: string) => void }): React.ReactElement | null {
-  const { colors } = useTheme();
+  const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [index, setIndex] = useState(0);
   useEffect(() => {
@@ -132,7 +134,7 @@ export function PinnedBar({ pins, onOpen }: { pins: ThreadMessage[]; onOpen: (id
       accessibilityLabel={`${label}: ${pinPreview(current)}. Tap to show it in the conversation.`}
       testID="thread-pinned-bar"
     >
-      <Ionicons name="pin" size={14} color={colors.primary} />
+      <Ionicons name="pin-outline" size={18} color={colors.primaryText} />
       <View style={styles.barText}>
         <Text style={styles.barLabel}>{label}</Text>
         <Text style={styles.barPreview} numberOfLines={1}>
@@ -147,7 +149,7 @@ type EditSheetProps = { draft: { id: string; body: string } | null; busy: boolea
 
 /** Edit a sent message (author, 48 hours, text only). */
 function EditMessageSheet({ draft, busy, onSave, onCancel }: EditSheetProps): React.ReactElement | null {
-  const { colors } = useTheme();
+  const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [text, setText] = useState(draft?.body ?? '');
   useEffect(() => setText(draft?.body ?? ''), [draft?.id, draft?.body]);
@@ -179,7 +181,7 @@ function EditMessageSheet({ draft, busy, onSave, onCancel }: EditSheetProps): Re
               accessibilityLabel="Save edit"
               accessibilityState={{ disabled: busy || !text.trim() }}
             >
-              {busy ? <ActivityIndicator size="small" color={colors.textOnPrimary} /> : <Text style={styles.saveText}>Save</Text>}
+              {busy ? <ActivityIndicator size="small" color={colors.textOnDisabled} /> : <Text style={[styles.saveText, !text.trim() && { color: colors.textOnDisabled }]}>Save</Text>}
             </Pressable>
           </View>
         </Pressable>
@@ -188,21 +190,21 @@ function EditMessageSheet({ draft, busy, onSave, onCancel }: EditSheetProps): Re
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: ThreadColors) =>
   StyleSheet.create({
-    bar: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
+    bar: { flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 10, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: colors.background, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
     barText: { flex: 1 },
-    barLabel: { fontSize: 11, fontWeight: '600', color: colors.primary },
-    barPreview: { fontSize: 13, color: colors.textPrimary },
-    backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: colors.surface, borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, paddingBottom: 36, gap: 10 },
-    sheetTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
-    sheetHint: { fontSize: 12, color: colors.textMuted },
-    input: { minHeight: 80, maxHeight: 200, borderWidth: 1, borderColor: colors.border, borderRadius: 8, padding: 10, fontSize: 15, color: colors.textPrimary, textAlignVertical: 'top' },
+    barLabel: { ...typography.eyebrow, color: colors.textMuted },
+    barPreview: { ...typography.bodySmall, fontSize: 13, color: colors.textPrimary },
+    backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+    sheet: { backgroundColor: colors.background, borderTopLeftRadius: 4, borderTopRightRadius: 4, padding: 16, paddingBottom: 36, gap: 10 },
+    sheetTitle: { ...typography.h2, color: colors.textPrimary },
+    sheetHint: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted },
+    input: { ...typography.body, minHeight: 80, maxHeight: 200, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 10, color: colors.textPrimary, textAlignVertical: 'top' },
     actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-    cancel: { paddingHorizontal: 16, paddingVertical: 10 },
-    cancelText: { fontSize: 15, color: colors.textPrimary },
-    save: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 4, backgroundColor: colors.primary, minWidth: 72, alignItems: 'center' },
-    saveOff: { opacity: 0.5 },
-    saveText: { fontSize: 15, fontWeight: '600', color: colors.textOnPrimary },
+    cancel: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10 },
+    cancelText: { ...typography.bodySmall, color: colors.textPrimary },
+    save: { minHeight: 44, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 4, backgroundColor: colors.primary, minWidth: 72, alignItems: 'center' },
+    saveOff: { backgroundColor: colors.disabledBg },
+    saveText: { ...typography.bodyMd, color: colors.textOnPrimary },
   });

@@ -3,8 +3,8 @@
  * Overview (brief §4.5).
  *
  * Bradley LAW (§0.3): this is the SKELETON OF THE REAL LAYOUT, not a spinner
- * and not "Coming soon". It renders the actual three-ring hero at 0% (real
- * rings, just empty) above a value-first prompt and a "Connect a tracker" CTA
+ * and not "Coming soon". It renders three activity bars with absent values
+ * above a value-first prompt and a "Connect a tracker" CTA
  * that routes to the existing ConnectionsScreen. The user sees what the screen
  * WILL look like once a source is connected — the most motivating possible
  * empty state.
@@ -14,15 +14,17 @@ import React from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  colors,
   radius,
   spacing,
   typography,
 } from '../../../../theme/tokens';
-import { toneTokens, type BucketTone } from '../wearablesTheme';
-import ThreeRingHero, { type RingDatum } from '../cards/ThreeRingHero';
+import { type BucketTone } from '../wearablesTheme';
+import { useTheme } from '../../../../theme/useTheme';
+import ActivityBars from '../cards/ActivityBars';
+import type { ActivityTargets } from '../starterGoals';
 
 interface Props {
+  readonly targets?: ActivityTargets;
   readonly tone: BucketTone;
   readonly reduceMotion: boolean;
   /**
@@ -39,46 +41,31 @@ interface Props {
  */
 function connectBody(): string {
   const store = Platform.OS === 'android' ? 'Health Connect' : 'Apple Health';
-  return `Connect ${store} to fill your rings and watch your heart, workouts and body trends come to life.`;
+  return `Connect ${store} to import activity, heart rate, workouts and body measurements.`;
 }
 
 export default function HealthFitnessEmptyState({
-  tone,
-  reduceMotion,
   onConnect,
+  targets,
 }: Props) {
-  const toneTk = toneTokens(tone);
-
-  // Real ring shells at 0% — the empty hero. Colors are the warm H&F triad.
-  const emptyRings: readonly [RingDatum, RingDatum, RingDatum] = [
-    { progress: 0, color: colors.camel, label: 'Move' },
-    { progress: 0, color: colors.mutedGold, label: 'Exercise' },
-    { progress: 0, color: colors.forest, label: 'Stand' },
-  ];
+  const { semanticColors: sc } = useTheme();
 
   return (
     <View style={styles.container}>
-      <ThreeRingHero
-        rings={emptyRings}
-        centerValue="—"
-        centerLabel="Active kcal"
-        tone={tone}
-        reduceMotion={reduceMotion}
-        empty
-      />
+      <ActivityBars targets={targets} />
 
       {onConnect == null ? (
         <>
-          <Text style={styles.title}>No health data from this client yet</Text>
-          <Text style={styles.body}>
+          <Text style={[styles.title, { color: sc.textPrimary }]}>No health data from this client yet</Text>
+          <Text style={[styles.body, { color: sc.textMuted }]}>
             When your client connects Apple Health or Health Connect in the app, their activity,
             heart rate and workouts show here.
           </Text>
         </>
       ) : (
         <>
-          <Text style={styles.title}>See your fitness in one place</Text>
-          <Text style={styles.body}>{connectBody()}</Text>
+          <Text style={[styles.title, { color: sc.textPrimary }]}>See your fitness in one place</Text>
+          <Text style={[styles.body, { color: sc.textMuted }]}>{connectBody()}</Text>
         </>
       )}
 
@@ -89,12 +76,12 @@ export default function HealthFitnessEmptyState({
           accessibilityLabel="Connect a tracker"
           style={({ pressed }) => [
             styles.cta,
-            { backgroundColor: toneTk.accent },
+            { backgroundColor: sc.accent },
             pressed && styles.ctaPressed,
           ]}
         >
-          <Ionicons name="add-circle-outline" size={18} color={colors.bone} />
-          <Text style={styles.ctaText}>Connect a tracker</Text>
+          <Ionicons name="add-circle-outline" size={18} color={sc.textOnAccent} />
+          <Text style={[styles.ctaText, { color: sc.textOnAccent }]}>Connect a tracker</Text>
         </Pressable>
       )}
     </View>
@@ -109,13 +96,11 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h2,
-    color: colors.ink,
     textAlign: 'center',
     marginTop: spacing.xl,
   },
   body: {
     ...typography.body,
-    color: colors.charcoal,
     textAlign: 'center',
     marginTop: spacing.sm,
     maxWidth: 320,
@@ -127,6 +112,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: radius.sm,
+    minHeight: 44,
     marginTop: spacing.xl,
   },
   ctaPressed: {
@@ -134,6 +120,5 @@ const styles = StyleSheet.create({
   },
   ctaText: {
     ...typography.bodyMd,
-    color: colors.bone,
   },
 });
