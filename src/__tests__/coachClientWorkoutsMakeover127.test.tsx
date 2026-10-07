@@ -77,6 +77,19 @@ const screenProps = (navigate: Props['navigation']['navigate'], goBack: Props['n
 beforeEach(() => { jest.clearAllMocks(); jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
 afterEach(() => jest.restoreAllMocks());
 
+it('honors the meal-plan destination on mount and on return to the same client', async () => {
+  const props = screenProps(jest.fn(), jest.fn());
+  const mealProps: Props = { ...props, route: { ...props.route,
+    params: { ...props.route.params, initialTab: 'mealplan' } } };
+  const s = await render(<ClientDetailScreen {...mealProps} />);
+  expect(s.getByText('Plan content')).toBeTruthy();
+  expect(mockDetail.loadServerMealPlans).toHaveBeenCalled();
+  await s.rerender(<ClientDetailScreen {...props} />);
+  expect(s.getByText('Summary content')).toBeTruthy();
+  await s.rerender(<ClientDetailScreen {...mealProps} />);
+  expect(s.getByText('Plan content')).toBeTruthy();
+});
+
 it('uses the honest weekly fallback, hairline rows, and preserves all recorded details', async () => {
   const old = { ...session('old'), startTime: '2025-01-01T12:00:00Z' };
   const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[session('a'), old]} />);

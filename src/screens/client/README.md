@@ -35,6 +35,8 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 
 ### Logging and planning
 
+More → **Meal plan** opens `Plan`; its neutral “View meal plans” description does not promise a weekly plan or assume a coach/assignment exists.
+
 | File | What it does |
 | --- | --- |
 | `ClientMacrosScreen.tsx` | Read-only daily target: Cormorant/tabular calorie hero, monochrome QuietBar rows, fiber, notes and recorded effective date. Current targets use `/me/macros/current`; consumed values use today's `/log/daily` totals, never assumed zero on failure. “Set by” appears only when `/v1/clients/me/coach` matches the target's coach ID; otherwise “Your target”. Pull-to-refresh reloads targets and food totals; native back and simple/full visibility are unchanged. Follows `docs/QUIET_LUXURY_DOCTRINE.md`. |
