@@ -13,10 +13,12 @@ export const QUICK_ACTIONS: Record<AiBuilderQuickAction, { label: string; instru
 };
 
 export const INJURY_AREA_LABELS: Record<AiBuilderInjuryArea, string> = {
-  knee: 'Knee', shoulder: 'Shoulder', lower_back: 'Lower back', hip: 'Hip',
-  elbow_wrist: 'Elbow or wrist', ankle_foot: 'Ankle or foot', upper_back_neck: 'Upper back or neck',
+  knee: 'Knee', shoulder: 'Shoulder', lower_back: 'Lower back', hip: 'Hip', elbow_wrist: 'Elbow or wrist', ankle_foot: 'Ankle or foot', upper_back_neck: 'Upper back or neck',
 };
 export const KIND_LABELS = { added: 'Added', changed: 'Changed', removed: 'Removed', moved: 'Moved', meta: 'Details' } as const;
+export const UNNAMED_CHANGE: Record<string, string> = { moved: 'New order', meta: 'Workout details' }; // b#809 sends exercise: null for these and removes
+const CONTEXT_LABELS: Record<string, string> = { exercise_library: 'your exercise library', current_workout: 'this workout', schedule: 'training days' };
+export const contextLine = (keys: string[]) => `Using ${keys.map((k) => CONTEXT_LABELS[k] ?? k.replace(/_/g, ' ')).join(', ')}`;
 export const PAUSED_COPY = 'Ask AI is paused for maintenance. Your workouts are unchanged.';
 export const SAVE_FIRST_COPY = 'Save this workout first, then Ask AI can change it.';
 export const WAIT_FOR_SAVE_COPY = 'Your last edit is still saving. Ask again in a moment.';

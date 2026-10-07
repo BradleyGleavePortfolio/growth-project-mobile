@@ -1,10 +1,7 @@
 /** useAiBuilder (AIB-5): idle -> thinking (staged reveal) -> review -> applying. Nothing reaches the plan before Apply. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
-import {
-  aiBuilderApi, toAiBuilderError,
-  type AiBuilderInjuryArea, type AiBuilderProposal, type AiBuilderQuickAction, type AiBuilderRef, type AiBuilderStatus,
-} from '../../../api/aiBuilderApi';
+import { aiBuilderApi, toAiBuilderError, type AiBuilderInjuryArea, type AiBuilderProposal, type AiBuilderQuickAction, type AiBuilderRef, type AiBuilderStatus } from '../../../api/aiBuilderApi';
 import { AI_STAGES, describeAiBuilderError, WAIT_FOR_SAVE_COPY } from './aiBuilderCopy';
 
 export type AiHaptic = 'light' | 'medium' | 'success' | 'warning' | 'error' | 'selection';
@@ -106,7 +103,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
   const acceptedIds = proposal ? proposal.changes.filter((c) => kept[c.change_id]).map((c) => c.change_id) : [];
 
   const apply = useCallback(async () => {
-    if (!proposal || phase !== 'review' || acceptedIds.length === 0) return false;
+    if (!proposal?.draft_id || phase !== 'review' || acceptedIds.length === 0) return false;
     setPhase('applying');
     setError(null);
     try {
@@ -128,7 +125,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     setProposal(null);
     setPhase('idle');
     setError(null);
-    if (!proposal) return;
+    if (!proposal?.draft_id) return; // explain writes no draft: nothing to reject
     try {
       await aiBuilderApi.discard(proposal.draft_id);
     } catch {

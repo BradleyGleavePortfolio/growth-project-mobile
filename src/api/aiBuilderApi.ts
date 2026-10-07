@@ -20,25 +20,26 @@ const StatusSchema = z.object({
 export type AiBuilderStatus = z.infer<typeof StatusSchema>;
 
 const n = z.number().nullable().optional();
-const RowSchema = z.object({ sets: n, reps_or_duration_seconds: n, rest_seconds: n, weight_lbs: n }).nullable().optional();
+const RowSchema = z.object({ exercise_external_id: z.string().optional(), sets: n, reps_or_duration_seconds: n, rest_seconds: n, weight_lbs: n }).nullable().optional();
 
 const ChangeSchema = z.object({
   change_id: z.string().min(1), kind: z.enum(['added', 'changed', 'removed', 'moved', 'meta']),
-  op: z.unknown(), // applied server-side by draft id; display only here
+  op: z.unknown(), // applied server-side by draft id; display only here. b#809: exercise is null for remove, reorder and meta.
   before: RowSchema, after: RowSchema, reason: z.string(), warnings: z.array(z.string()),
-  exercise: z.object({ id: z.string(), name: z.string(), thumbnail_url: z.string().nullable() }),
+  exercise: z.object({ id: z.string(), name: z.string(), thumbnail_url: z.string().nullable() }).nullable(),
 });
 export type AiBuilderChange = z.infer<typeof ChangeSchema>;
 
+// b#809: draft_id is null for explain (no draft is written): the sheet shows the summary and Done, with no apply or discard call.
 const ProposalSchema = z.object({
-  draft_id: z.string().min(1), summary: z.string(), changes: z.array(ChangeSchema), dropped: z.array(z.object({ reason: z.string() })),
+  draft_id: z.string().min(1).nullable(), summary: z.string(), changes: z.array(ChangeSchema), dropped: z.array(z.object({ reason: z.string() })),
   context_used: z.array(z.string()), screening_flag: z.boolean(), credits_remaining_pct: z.number().nullable().optional(),
 });
 export type AiBuilderProposal = z.infer<typeof ProposalSchema>;
 
-// lock_token (optional): present -> the builder adopts the new head and the header Undo reverts the AI change; absent -> re-read.
+// Approve replies with the AiActionDraft row: materialised_ref = plan id STRING (main, b#809) -> null, the screen re-reads; a section 3 object -> adopt.
 const RefSchema = z.object({ plan_id: z.string(), revision_index: z.number().int().min(0), lock_token: z.string().regex(/^[0-9a-f]{16}$/).optional() });
-const DecideSchema = z.object({ status: z.string(), materialised_ref: RefSchema.nullable().optional() });
+const DecideSchema = z.object({ status: z.string(), materialised_ref: z.union([RefSchema, z.string()]).nullable().optional().transform((r) => (typeof r === 'string' ? null : r ?? null)) });
 export type AiBuilderRef = z.infer<typeof DecideSchema>['materialised_ref'];
 
 export type AiBuilderErrorCode = 'not_available' | 'paused' | 'no_credits' | 'consent_required' | 'stale' | 'no_safe_proposal' | 'rate_limited' | 'forbidden' | 'network' | 'server' | 'contract';
@@ -65,11 +66,12 @@ export function toAiBuilderError(err: unknown): AiBuilderError {
     return new AiBuilderError('no_credits', status, typeof end === 'string' ? end : null);
   }
   if (code === 'ai_consent_required') return new AiBuilderError('consent_required', status);
+  if (code === 'AI_NOT_CONFIGURED') return new AiBuilderError('server', status); // b#809 503: the model did not answer (not the kill switch)
   const byStatus: Record<number, AiBuilderErrorCode> = { 401: 'forbidden', 403: 'forbidden', 404: 'not_available', 409: 'stale', 422: 'no_safe_proposal', 429: 'rate_limited', 503: 'paused' };
   return new AiBuilderError(byStatus[status] ?? 'server', status);
 }
 
-const run = <T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }>): Promise<T> =>
+const run = <T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, fn: () => Promise<{ data: unknown }>): Promise<T> =>
   Promise.resolve().then(fn).then((res) => schema.parse(res.data)).catch((err: unknown) => Promise.reject(toAiBuilderError(err)));
 
 // lock_token is omitted until the builder holds a real head token (none yet, or the bootstrap one); client_id arrives with AIB-6 (client context).
