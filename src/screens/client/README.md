@@ -1,6 +1,6 @@
 # Client screens
 
-Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Every secondary screen lives inside the `MoreStack` reached from the Profile tab — there is no global floating chat widget; the dedicated AI surface is `AIGuideScreen` and is reached from the **Guidance** row on `MoreScreen`.
+Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with labelled Home, Train, Food and You tabs, plus flag-gated Calendar and Community tabs (six in launch builds). Food is a single screen; the other tabs wrap nested navigators. The More index lives in `MoreStack`, reached from You, with cross-tab shortcuts to habits and exercises. There is no global floating chat widget; the dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
-| `MoreScreen.tsx` | Profile | Index of every secondary screen. The two top rows are **Guidance** (`AIGuide`) and **Membership** (`Membership`); the rest cover Recipes, Fasting, Community, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, the lists, and the Plan view. There is no floating chat widget — `AIGuide` is reached from this index, not from a global FAB. |
+| `MoreScreen.tsx` | More | Hairline-separated groups: Your plan, Guidance and community, Food and preparation, Health and devices, Account, Learning. Every existing row remains a one-tap destination; order within each group follows the previous menu. Roman stays flag-gated; tutorial builds put health first, otherwise health follows plan. Neutral descriptions do not assume a coach, plan, targets, video or connected device. Cormorant title, Inter rows and semantic theme colors replace filled cards. Roman retains its existing avatar and wearable rows retain tutorial targets. Reachability tests cover every action with flags on/off, iOS/Android and semantic light/dark palettes. Six client tabs are unchanged. |
 
 ### AI Guide and messaging
 
@@ -27,7 +27,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | `AIGuideScreen.tsx` | Chat with the assistant. Registered on the More stack as `AIGuide` and reachable from the **Guidance** row on `MoreScreen`. Sends only the user message + short history; the backend attaches structured context, persona, and guardrails. Uses `aiApi.getStructuredContext` once on mount to display "what your coach has shared" — purely informational, never assembled into a prompt by the client. Persists locally via `db/chatDb.ts`. |
 | `MembershipScreen.tsx` | Access surface. Shows account state, coach identity, member-since date, founding-member badge if applicable, and an in-app **MESSAGE YOUR COACH** action that routes to the Home stack's `Messages` screen. Suitable for external Stripe / coach-managed access — there is no in-app billing chrome on the client side. Reads `usersApi.getFoundingNumber()` and `aiApi.getStructuredContext()` only. |
 | `MessagesScreen.tsx` | One-on-one messages with the assigned coach. REST round-trip through `messagesApi`; a Supabase Realtime broadcast channel pings a refetch on new messages. 60 s fallback poll covers WebSocket drops. |
-| `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`). |
+| `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`): unfilled hairline rows, full 15 pt titles / 13 pt bodies and relative times, unread dot/weight, mark-read/all and refresh preserved. Empty, loading and request-failure states are distinct. |
 
 ### Logging and planning
 
@@ -43,7 +43,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 | File | What it does |
 | --- | --- |
-| `ProfileScreen.tsx` | Identity + streak. Reads `usersApi.getFoundingNumber` for the "founding member" badge. |
+| `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
 | `SettingsScreen.tsx` | Sign out, change password, reset onboarding, link to Trust Center. |
 | `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
