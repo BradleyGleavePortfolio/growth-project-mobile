@@ -172,11 +172,11 @@ const MORE_ITEMS: MoreItem[] = [
   },
   {
     icon: 'apps-outline',
-    label: 'Widgets',
-    description: 'Widget setup and options',
+    label: 'Shortcuts',
+    description: 'Quick log and start a fast',
     section: 'Account',
     target: { type: 'stack', screen: 'Widgets' },
-    a11yHint: 'Opens widgets configuration',
+    a11yHint: 'Opens shortcuts',
   },
   {
     icon: 'cart-outline',

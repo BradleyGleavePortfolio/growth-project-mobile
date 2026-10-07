@@ -23,7 +23,7 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   calorieDisplay: 'net',
   dailyCheckin: true,
   mealReminders: true,
-  fastingAlerts: false,
+  fastingAlerts: true,
   weeklySummary: true,
   hapticsEnabled: true,
 };

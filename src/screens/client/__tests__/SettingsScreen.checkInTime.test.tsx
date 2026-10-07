@@ -17,7 +17,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 jest.mock('../../../services/api', () => ({
   profileApi: { update: jest.fn(async () => ({})) },
-  notificationsApi: { updatePreferences: jest.fn(async () => ({})) },
+  notificationsApi: { updatePreferences: jest.fn(async () => ({})), getPreferences: jest.fn(async () => ({ data: {} })) },
 }));
 jest.mock('../../../services/authActions', () => ({
   signOut: jest.fn(), refreshProfile: jest.fn(),
@@ -50,7 +50,7 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
     for (const [label, route] of [
       ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
       ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
-      ['Roman and AI', 'RomanAiConsent'], ['Blocked Users', 'BlockedUsers'],
+      ['Roman and AI', 'RomanAiConsent'], ['Blocked users', 'BlockedUsers'],
       ['Request my data export', 'DataExport'],
     ]) {
       await fireEvent.press(view.getByLabelText(label));
@@ -63,34 +63,34 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
       await fireEvent.press(steps[index]);
       expect(profileApi.update).toHaveBeenLastCalledWith(payload);
     }
-    const keys = ['dailyCheckin', 'mealReminders', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
-    const labels = ['Daily Check-in', 'Meal Reminders', 'Fasting Alerts', 'Weekly Summary', 'Haptics enabled'];
+    const keys = ['dailyCheckin', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
+    const labels = ['Check-in reminders', 'Fasting alerts', 'Summary emails', 'Haptics enabled'];
     for (let index = 0; index < keys.length; index += 1) {
       const toggle = view.getByLabelText(labels[index]), value = !toggle.props.value;
       await fireEvent(toggle, 'valueChange', value);
       await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)[keys[index]]).toBe(value));
     }
-    expect(notificationsApi.updatePreferences).toHaveBeenCalledTimes(4);
+    expect(notificationsApi.updatePreferences).toHaveBeenCalledTimes(3);
   });
 
   it('preserves password, reset and sign-out controls without real account writes', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     const view = await render(<SettingsScreen navigation={navigation} />);
-    await fireEvent.press(view.getByText('Change Password'));
+    await fireEvent.press(view.getByText('Change password'));
     await fireEvent.press(view.getByLabelText('Close'));
-    await fireEvent.press(view.getByText('Change Password'));
-    await fireEvent.changeText(view.getByLabelText('New password'), 'test-password');
-    await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'test-password');
+    await fireEvent.press(view.getByText('Change password'));
+    await fireEvent.changeText(view.getByLabelText('New password'), 'Test-passw0rd');
+    await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'Test-passw0rd');
     await fireEvent.press(view.getByLabelText('Update password'));
-    expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
-    await fireEvent.press(view.getByText('Reset Onboarding'));
-    expect(alert).toHaveBeenLastCalledWith('Reset Onboarding', expect.any(String), expect.any(Array));
+    expect(updateSupabasePassword).toHaveBeenCalledWith('Test-passw0rd');
+    await fireEvent.press(view.getByText('Redo profile setup'));
+    expect(alert).toHaveBeenLastCalledWith('Redo profile setup', expect.any(String), expect.any(Array));
     const resetButtons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
-    await resetButtons.find((button) => button.text === 'Reset')!.onPress!();
+    await resetButtons.find((button) => button.text === 'Redo setup')!.onPress!();
     expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
-    await fireEvent.press(view.getByText('Sign Out'));
+    await fireEvent.press(view.getByText('Sign out'));
     const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
-    buttons.find((button) => button.text === 'Sign Out')!.onPress!();
+    buttons.find((button) => button.text === 'Sign out')!.onPress!();
     expect(signOut).toHaveBeenCalled();
     alert.mockRestore();
   });
@@ -122,7 +122,7 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
   it('hides the row when this account has no saved choice, even if another does', async () => {
     await keepDayOneAnswers({ checkInTime: { hour: 7, minute: 30 } }, 'client-b');
     await render(<SettingsScreen navigation={navigation} />);
-    await waitFor(() => expect(screen.queryByText('Check-in Time')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('Check-in time')).toBeNull());
     expect(screen.queryByText('9:00 AM')).toBeNull();
   });
 

@@ -33,6 +33,43 @@ import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { typography, withAlpha } from '../../theme/tokens';
 import SettingsSection from './settings/SettingsSection';
+import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
+
+// Same rules and wording as ResetPasswordScreen checkPassword and sign-up
+// (backend RegisterDto); first failure only. m#504 edits ResetPasswordScreen,
+// so its copy is not imported from there yet.
+function newPasswordProblem(value: string): string | null {
+  if (value.length < 8) return 'At least 8 characters.';
+  if (!/[A-Z]/.test(value)) return 'At least one uppercase letter.';
+  if (!/[0-9]/.test(value)) return 'At least one number.';
+  if (!/[^A-Za-z0-9]/.test(value)) return 'At least one special character.';
+  return null;
+}
+
+// Switches saved on the server: each says what it controls and writes the
+// columns the backend really reads (digest.service.ts reads digest_email;
+// the missed check-in nudge reads nudge_missed_checkin_*). The old
+// daily_checkin_enabled / weekly_summary_enabled columns are mirrored only.
+type ServerSwitchKey = 'dailyCheckin' | 'weeklySummary';
+const SERVER_SWITCHES: Record<ServerSwitchKey, {
+  noun: string;
+  read: (row: Record<string, unknown>) => boolean;
+  patch: (on: boolean) => Record<string, boolean>;
+}> = {
+  dailyCheckin: {
+    noun: 'check-in reminder',
+    read: (row) => row.nudge_missed_checkin_push !== false || row.nudge_missed_checkin_inapp !== false,
+    patch: (on) => (on
+      ? { nudge_missed_checkin_push: true, nudge_missed_checkin_inapp: true, daily_checkin_enabled: true }
+      : { nudge_missed_checkin_push: false, nudge_missed_checkin_inapp: false,
+        nudge_missed_checkin_email: false, daily_checkin_enabled: false }),
+  },
+  weeklySummary: {
+    noun: 'summary email',
+    read: (row) => row.digest_email !== false,
+    patch: (on) => ({ digest_email: on, weekly_summary_enabled: on }),
+  },
+};
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors, appearanceOverride, setAppearanceOverride } = useTheme();
@@ -48,6 +85,29 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   const [checkInChoice, setCheckInChoice] = useState<{
     userId: string; time: DayOneCheckInTime;
   } | null>(null);
+  const [serverSwitches, setServerSwitches] = useState<Partial<Record<ServerSwitchKey, boolean>>>({});
+  const [notificationError, setNotificationError] = useState('');
+
+  // The switches show the saved server values, not this phone's defaults.
+  useEffect(() => {
+    let live = true;
+    notificationsApi.getPreferences()
+      .then((res: { data?: unknown }) => {
+        const row = res?.data;
+        if (!live || !row || typeof row !== 'object') return;
+        const saved = row as Record<string, unknown>;
+        // A switch changed before this read finished keeps the newer choice.
+        setServerSwitches((current) => ({
+          dailyCheckin: SERVER_SWITCHES.dailyCheckin.read(saved),
+          weeklySummary: SERVER_SWITCHES.weeklySummary.read(saved),
+          ...current,
+        }));
+      })
+      .catch((err: unknown) => {
+        console.warn('SettingsScreen: notification preferences did not load', errorMessage(err));
+      });
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -70,8 +130,9 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
   const handleChangePassword = async () => {
     setPasswordError('');
-    if (newPassword.length < 8) {
-      setPasswordError('Password must be at least 8 characters.');
+    const problem = newPasswordProblem(newPassword);
+    if (problem) {
+      setPasswordError(problem);
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -93,10 +154,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   };
 
   const handleResetOnboarding = () => {
-    Alert.alert('Reset Onboarding', 'This will restart your profile setup. Continue?', [
+    Alert.alert('Redo profile setup', 'Answer the setup questions again. Your targets update from the new answers; your logs and coach plans are kept.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Reset',
+        text: 'Redo setup',
         style: 'destructive',
         onPress: async () => {
           warningTap();
@@ -113,10 +174,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: 'Sign out',
         style: 'destructive',
         onPress: () => {
           warningTap();
@@ -147,12 +208,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     }
   };
 
-  // Map client setting keys to backend notification preference fields
+  // Fasting alerts are scheduled on this phone (utils/notifications.ts reads
+  // the local setting); fasting_enabled is a server mirror nothing reads.
   const NOTIFICATION_KEY_MAP: Partial<Record<keyof import('../../hooks/useSettings').ClientSettings, string>> = {
-    dailyCheckin: 'daily_checkin_enabled',
-    mealReminders: 'eat_enabled',
     fastingAlerts: 'fasting_enabled',
-    weeklySummary: 'weekly_summary_enabled',
   };
 
   const handleNotificationToggle = <K extends keyof import('../../hooks/useSettings').ClientSettings>(
@@ -169,6 +228,39 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         });
     }
   };
+
+  const serverSwitchOn = (key: ServerSwitchKey) => serverSwitches[key] ?? settings[key];
+
+  // A failed save puts the switch back and says so (FW-ACCOUNT U9).
+  const handleServerToggle = async (key: ServerSwitchKey, value: boolean) => {
+    const previous = serverSwitchOn(key);
+    setNotificationError('');
+    setServerSwitches((current) => ({ ...current, [key]: value }));
+    try {
+      await notificationsApi.updatePreferences(SERVER_SWITCHES[key].patch(value));
+      updateSetting(key, value);
+    } catch (err: unknown) {
+      setServerSwitches((current) => ({ ...current, [key]: previous }));
+      setNotificationError(preferenceSaveFailureOf(err, SERVER_SWITCHES[key].noun).message);
+    }
+  };
+
+  const renderSwitch = (label: string, description: string, value: boolean, onChange: (v: boolean) => void) => (
+    <View style={styles.row}>
+      <View style={styles.switchText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowHint}>{description}</Text>
+      </View>
+      <Switch
+        accessibilityLabel={label}
+        accessibilityHint={description}
+        value={value}
+        onValueChange={onChange}
+        trackColor={{ false: colors.border, true: colors.primary }}
+        thumbColor={colors.textOnPrimary}
+      />
+    </View>
+  );
 
   const stepMeals = (delta: number) => {
     const next = Math.min(6, Math.max(2, settings.mealsPerDay + delta));
@@ -210,7 +302,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowValueMuted}>{currentUser?.email}</Text>
           </View>
           <HapticPressable intent="light" style={styles.row} onPress={() => setShowPasswordModal(true)}>
-            <Text style={styles.rowLabel}>Change Password</Text>
+            <Text style={styles.rowLabel}>Change password</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
           {/* Appearance remains on this screen, with light rendering for launch. */}
@@ -251,7 +343,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </View>
           <BiometricUnlockSetting />
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
-            <Text style={styles.rowLabel}>Reset Onboarding</Text>
+            <Text style={styles.rowLabel}>Redo profile setup</Text>
             <Ionicons name="refresh-outline" size={18} color={colors.warning} />
           </HapticPressable>
           {/* Settings > Account > Delete account (D2 contract wording). */}
@@ -269,13 +361,13 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </HapticPressable>
           <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
             <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            <Text style={styles.signOutText}>Sign Out</Text>
+            <Text style={styles.signOutText}>Sign out</Text>
           </HapticPressable>
         </SettingsSection>
 
         <SettingsSection title="Training and food" id="training-food">
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Meals Per Day</Text>
+            <Text style={styles.rowLabel}>Meals per day</Text>
             <View style={styles.stepper}>
               <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn} accessibilityLabel="Decrease meals per day">
                 <Ionicons name="remove" size={18} color={colors.textPrimary} />
@@ -287,7 +379,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Water Goal (fl oz)</Text>
+            <Text style={styles.rowLabel}>Water goal (fl oz)</Text>
             <View style={styles.stepper}>
               <HapticPressable intent="light" onPress={() => stepWater(-10)} style={styles.stepBtn} accessibilityLabel="Decrease water goal">
                 <Ionicons name="remove" size={18} color={colors.textPrimary} />
@@ -302,56 +394,26 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
         {/* Notifications */}
         <SettingsSection title="Notifications" id="notifications">
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Daily Check-in</Text>
-            <Switch
-              accessibilityLabel="Daily Check-in"
-              value={settings.dailyCheckin}
-              onValueChange={(v) => handleNotificationToggle('dailyCheckin', v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textOnPrimary}
-            />
-          </View>
-          {settings.dailyCheckin && checkInLabel && (
+          {renderSwitch('Check-in reminders', 'A reminder after two days without a check-in.',
+            serverSwitchOn('dailyCheckin'), (v) => { void handleServerToggle('dailyCheckin', v); })}
+          {checkInLabel ? (
             <View style={styles.row}>
-              <Text style={styles.rowLabel}>Check-in Time</Text>
+              <View style={styles.switchText}>
+                <Text style={styles.rowLabel}>Check-in time</Text>
+                <Text style={styles.rowHint}>The time you plan to check in each day.</Text>
+              </View>
               <Text style={styles.rowValue}>{checkInLabel}</Text>
             </View>
-          )}
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Meal Reminders</Text>
-            <Switch
-              accessibilityLabel="Meal Reminders"
-              value={settings.mealReminders}
-              onValueChange={(v) => handleNotificationToggle('mealReminders', v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textOnPrimary}
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Fasting Alerts</Text>
-            <Switch
-              accessibilityLabel="Fasting Alerts"
-              value={settings.fastingAlerts}
-              onValueChange={(v) => handleNotificationToggle('fastingAlerts', v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textOnPrimary}
-            />
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Weekly Summary</Text>
-            <Switch
-              accessibilityLabel="Weekly Summary"
-              value={settings.weeklySummary}
-              onValueChange={(v) => handleNotificationToggle('weeklySummary', v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textOnPrimary}
-            />
-          </View>
+          ) : null}
+          {renderSwitch('Fasting alerts', 'A notification on this phone when your fasting window ends.',
+            settings.fastingAlerts, (v) => handleNotificationToggle('fastingAlerts', v))}
+          {renderSwitch('Summary emails', 'Progress summaries sent to your email.',
+            serverSwitchOn('weeklySummary'), (v) => { void handleServerToggle('weeklySummary', v); })}
+          {notificationError ? (
+            <Text style={styles.saveError} accessibilityLiveRegion="polite">{notificationError}</Text>
+          ) : null}
           {/* Audit P1: surface the canonical NotificationPreferences screen
-              from Settings. The local Notifications switches above only
-              control the legacy useSettings flags; full channel + quiet-hour
-              control lives here. */}
+              from Settings; full channel + quiet-hour control lives here. */}
           <HapticPressable
             intent="light"
             style={styles.row}
@@ -407,12 +469,12 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             style={styles.row}
             onPress={() => navigation.navigate('BlockedUsers')}
             accessibilityRole="button"
-            accessibilityLabel="Blocked Users"
+            accessibilityLabel="Blocked users"
             accessibilityHint="View and manage the users you've blocked"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <Ionicons name="ban-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Blocked Users</Text>
+              <Text style={styles.rowLabel}>Blocked users</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
@@ -485,7 +547,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Change Password</Text>
+              <Text style={styles.modalTitle}>Change password</Text>
               <HapticPressable
                 intent="light"
                 onPress={() => {
@@ -502,7 +564,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <TextInput
               style={styles.input}
-              placeholder="New password (min 8 chars)"
+              placeholder="New password"
               placeholderTextColor={colors.textMuted}
               secureTextEntry
               value={newPassword}
@@ -520,6 +582,9 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               accessibilityLabel="Confirm new password"
               textContentType="newPassword"
             />
+            <Text style={[styles.rowHint, { marginTop: 10 }]}>
+              At least 8 characters, with an uppercase letter, a number and a special character.
+            </Text>
             {passwordError ? (
               <Text
                 style={{ color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
@@ -536,7 +601,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               accessibilityRole="button"
               accessibilityLabel="Update password"
             >
-              <Text style={styles.saveBtnText}>{passwordBusy ? 'Updating…' : 'Update Password'}</Text>
+              <Text style={styles.saveBtnText}>{passwordBusy ? 'Updating…' : 'Update password'}</Text>
             </HapticPressable>
           </View>
         </View>
@@ -605,6 +670,22 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
+  },
+  switchText: {
+    flex: 1,
+    paddingRight: 12,
+    gap: 2,
+  },
+  rowHint: {
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  saveError: {
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.textPrimary,
+    paddingVertical: 12,
   },
   rowValueMuted: {
     ...typography.bodySmall,
