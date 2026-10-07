@@ -100,7 +100,7 @@ jest.mock("../screens/client/wearables/components/useReduceMotion", () => ({
 const mockGoBack = jest.fn();
 const mockReplace = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
-let mockRouteParams: { planId?: string; openAi?: boolean } = { planId: "plan-1" }; // AIB-FINISH-127: new-workout cases
+let mockRouteParams: { planId?: string; openAi?: boolean; clientId?: string; clientName?: string } = { planId: "plan-1" }; // AIB-FINISH-127: new-workout cases
 jest.mock("@react-navigation/native", () => ({
   __esModule: true,
   useRoute: () => ({ name: "CoachWorkoutBuilder", params: mockRouteParams }),
@@ -188,6 +188,7 @@ jest.mock("../hooks/useWorkoutBuilder", () => ({
     mutateAsync: mockSetExercisesMutateAsync,
     isPending: false,
   }),
+  useAssignWorkoutPlan: () => ({ mutateAsync: jest.fn(), isPending: false }), // AIB-FINISH-127 job 6 ClientCopyBar
 }));
 
 jest.mock("../hooks/useExerciseLibrary", () => ({
@@ -875,7 +876,7 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
 describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 U3)", () => {
   const ON = { state: "on", create: true, edit: true, credits: { remaining_pct: 50, resets_at: null }, label: "AI-suggested, coach-approved" };
   const press = (screen: Screen, id: string) => act(async () => { await fireEvent.press(screen.getByTestId(id)); });
-  const mountNew = async (params: { planId?: string; openAi?: boolean }, status: object = ON) => {
+  const mountNew = async (params: typeof mockRouteParams, status: object = ON) => {
     [setFlag(true), (mockRouteParams = params), mockAiStatus.mockResolvedValue(status), mockCreateMutateAsync.mockResolvedValue({ id: "new-1" })];
     if (!params.planId) mockCurrentPlan = undefined;
     const Screen = loadScreen();
@@ -922,5 +923,15 @@ describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 
     await mountNew({ openAi: true });
     await waitFor(() => reopened());
     expect(mockCreateMutateAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it("job 6: a client's copy opens in Ask AI with the client's copy bar, and propose carries client_id", async () => {
+    mockAiPropose.mockResolvedValue({ draft_id: "d1", summary: "0 changes.", dropped: [], context_used: [], screening_flag: false, changes: [] });
+    const screen = await mountNew({ planId: "plan-1", openAi: true, clientId: "client-1", clientName: "Sam Lee" });
+    await waitFor(() => expect(screen.getByTestId("ai-builder-input")).toBeTruthy());
+    expect(screen.getByText(/^Sam's copy\./)).toBeTruthy();
+    await act(async () => { await fireEvent.changeText(screen.getByTestId("ai-builder-input"), "fit this to Sam"); });
+    await press(screen, "ai-builder-send");
+    expect(mockAiPropose).toHaveBeenCalledWith(expect.objectContaining({ plan_id: "plan-1", client_id: "client-1" }));
   });
 });

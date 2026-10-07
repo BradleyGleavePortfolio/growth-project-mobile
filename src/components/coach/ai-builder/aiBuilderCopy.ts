@@ -20,7 +20,14 @@ export const INJURY_AREA_LABELS: Record<AiBuilderInjuryArea, string> = {
 export const KIND_LABELS = { added: 'Added', changed: 'Changed', removed: 'Removed', moved: 'Moved', meta: 'Details' } as const;
 export const UNNAMED_CHANGE: Record<string, string> = { moved: 'New order', meta: 'Workout details' }; // b#809 sends exercise: null for these and removes
 const CONTEXT_LABELS: Record<string, string> = { exercise_library: 'your exercise library', current_workout: 'this workout', schedule: 'training days' };
-export const contextLine = (keys: string[]) => `Using ${keys.map((k) => CONTEXT_LABELS[k] ?? k.replace(/_/g, ' ')).join(', ')}`;
+const CLIENT_KEYS = ['goal', 'experience', 'equipment', 'schedule', 'health_screening', 'injuries'];
+const label = (k: string) => CONTEXT_LABELS[k] ?? k.replace(/_/g, ' ');
+/** Job 6: with a client attached, the client's answers read as theirs ("Sam's goal, equipment"). */
+export const contextLine = (keys: string[], client?: string) => {
+  const theirs = client ? keys.filter((k) => CLIENT_KEYS.includes(k)).map(label) : [];
+  const own = keys.filter((k) => !client || !CLIENT_KEYS.includes(k)).map(label);
+  return `Using ${[...own, ...(theirs.length ? [`${client}'s ${theirs.join(', ')}`] : [])].join(', ')}`;
+};
 export const PAUSED_COPY = 'Ask AI is paused for maintenance. Your workouts are unchanged.';
 // U3 (AIB-FINISH-127): Ask AI on a new workout saves it first (name left blank -> NEW_WORKOUT_NAME), then opens the sheet.
 export const NEW_WORKOUT_PROMPT = 'Describe the workout to build';

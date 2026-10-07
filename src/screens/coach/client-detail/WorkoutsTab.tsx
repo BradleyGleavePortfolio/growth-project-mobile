@@ -5,11 +5,13 @@ import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
 import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
+import { AdjustForClientEntry } from '../../../components/coach/ai-entry/AdjustForClient';
 
 export function WorkoutsTab({
   workoutSessions,
   clientName,
   onBuildWithAi,
+  onOpenClientCopy,
   colors,
   styles,
 }: {
@@ -17,6 +19,8 @@ export function WorkoutsTab({
   /** AIB-6: "Build a program with AI" opens the existing per-client generator (AIWorkoutDraft review). */
   clientName?: string;
   onBuildWithAi?: () => void;
+  /** AIB-FINISH-127 job 6: "Adjust a saved workout for <first name>" opens the client's copy in the builder with Ask AI. */
+  onOpenClientCopy?: (planId: string) => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -53,6 +57,7 @@ export function WorkoutsTab({
           <Text style={[styles.emptyText, { color: colors.textPrimary, marginTop: 0 }]}>{`Build a program for ${first} with AI`}</Text>
         </Pressable>
       ) : null}
+      {onOpenClientCopy ? <AdjustForClientEntry firstName={first} onOpened={onOpenClientCopy} /> : null}
       <Text style={styles.sectionTitle}>Recent Workouts</Text>
       {workoutSessions.length === 0 ? (
         <View style={styles.emptyCard}>
