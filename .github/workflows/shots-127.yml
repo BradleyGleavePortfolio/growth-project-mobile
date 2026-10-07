@@ -1,0 +1,181 @@
+name: App Store screenshots (SHOTS-127)
+
+# Throwaway CI branch only. Never merge; no EAS, signing or store submission.
+on:
+  push:
+    branches: [ci/SHOTS-127-1]
+  workflow_dispatch:
+    inputs:
+      include_signed_in:
+        description: Capture seeded review accounts (otherwise signed-out milestone only)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  APP_SHA: 5e3e9398e09449cbdc876ace788e9ca3df8d8087
+  CI: "1"
+  EXPO_NO_DOTENV: "1"
+  EXPO_NO_TELEMETRY: "1"
+  SENTRY_DISABLE_AUTO_UPLOAD: "true"
+  SENTRY_ALLOW_FAILURE: "true"
+  MAESTRO_CLI_NO_ANALYTICS: "true"
+  MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: "true"
+  MAESTRO_DISABLE_UPDATE_CHECK: "true"
+  MAESTRO_DRIVER_STARTUP_TIMEOUT: "600000"
+  MAESTRO_VERSION: 2.11.0
+  INCLUDE_SIGNED_IN: ${{ github.event.inputs.include_signed_in || 'false' }}
+  EXPO_PUBLIC_API_URL: https://api.trygrowthproject.com/api
+  EXPO_PUBLIC_SUPABASE_URL: https://rpyfdsgxxltzutgqeouk.supabase.co
+  # Public anon key, identical to APK-126; never a service-role credential.
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0
+
+jobs:
+  screenshots:
+    runs-on: macos-15
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+
+      - name: Prove application source is unchanged from mobile main
+        run: |
+          test "$(git rev-parse HEAD^)" = "$APP_SHA"
+          test -z "$(git diff --name-only "$APP_SHA" HEAD -- . ':!.github')"
+          echo "Application SHA: $APP_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pipeline SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22.13
+          cache: npm
+
+      - name: Select Xcode 26.3 and record simulator toolchain
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+          xcodebuild -version
+          xcrun simctl list runtimes
+
+      - name: Install exact lockfile
+        run: npm ci
+
+      - name: Load the inherited eas.json clinic environment
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const builds = require('./eas.json').build;
+          function profile(name) {
+            const p = builds[name];
+            return { ...(p.extends ? profile(p.extends) : {}), ...(p.env || {}) };
+          }
+          const env = { ...profile('clinic'), EAS_BUILD_PROFILE: 'clinic', NODE_ENV: 'production' };
+          fs.appendFileSync(process.env.GITHUB_ENV,
+            Object.entries(env).map(([key, value]) => `${key}=${value}`).join('\n') + '\n');
+          NODE
+
+      - name: Reuse the exact unsigned simulator app on later capture runs
+        id: simulator-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/tgp-build/Build/Products/Release-iphonesimulator
+          key: shots127-xcode26.3-${{ runner.arch }}-${{ env.APP_SHA }}-${{ hashFiles('package-lock.json', 'eas.json') }}
+
+      - name: Generate iOS project (no dependency changes)
+        if: steps.simulator-cache.outputs.cache-hit != 'true'
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Pin simulator to embedded current-main bundle (no OTA swap)
+        if: steps.simulator-cache.outputs.cache-hit != 'true'
+        run: |
+          plist=$(find ios -name Expo.plist -not -path '*/Pods/*' | head -1)
+          test -n "$plist"
+          /usr/libexec/PlistBuddy -c 'Set :EXUpdatesEnabled false' "$plist"
+
+      - name: Install CocoaPods
+        if: steps.simulator-cache.outputs.cache-hit != 'true'
+        working-directory: ios
+        run: pod install
+
+      - name: Build simulator Release (no signing)
+        if: steps.simulator-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' | head -1)
+          test -n "$workspace"
+          # The workspace lists pod/library schemes too; build the app, not
+          # the alphabetically first dependency (which emits no .app).
+          scheme=$(basename "$workspace" .xcworkspace)
+          test -n "$scheme"
+          xcodebuild -workspace "$workspace" -scheme "$scheme" \
+            -configuration Release -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/tgp-build" -jobs 3 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=YES ARCHS="$(uname -m)" \
+            > "$RUNNER_TEMP/xcodebuild.log" 2>&1 || {
+              tail -100 "$RUNNER_TEMP/xcodebuild.log"; exit 1;
+            }
+          echo "Release simulator build complete; signing disabled." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Locate unsigned simulator app
+        run: |
+          app=$(find "$RUNNER_TEMP/tgp-build/Build/Products/Release-iphonesimulator" \
+            -maxdepth 1 -name '*.app' | head -1)
+          test -n "$app"
+          echo "SIMULATOR_APP=$app" >> "$GITHUB_ENV"
+          echo "Unsigned simulator app: $(basename "$app")"
+          test -f "$app/main.jsbundle"
+
+      - name: Preserve built app even if a later capture needs repair
+        if: steps.simulator-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/tgp-build/Build/Products/Release-iphonesimulator
+          key: shots127-xcode26.3-${{ runner.arch }}-${{ env.APP_SHA }}-${{ hashFiles('package-lock.json', 'eas.json') }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install pinned Maestro CLI (local simulator, not cloud)
+        run: |
+          curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-$MAESTRO_VERSION/maestro.zip" \
+            -o "$RUNNER_TEMP/maestro.zip"
+          curl -fsSL "https://github.com/mobile-dev-inc/Maestro/releases/download/cli-$MAESTRO_VERSION/checksums_sha256.txt" \
+            -o "$RUNNER_TEMP/maestro-checksums.txt"
+          (cd "$RUNNER_TEMP" && awk '/maestro.zip$/' maestro-checksums.txt | shasum -a 256 -c -)
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Capture both native sizes
+        id: capture
+        timeout-minutes: 50
+        env:
+          REVIEW_CLIENT_EMAIL: ${{ secrets.REVIEW_CLIENT_EMAIL }}
+          REVIEW_CLIENT_PASSWORD: ${{ secrets.REVIEW_CLIENT_PASSWORD }}
+          REVIEW_COACH_EMAIL: ${{ secrets.REVIEW_COACH_EMAIL }}
+          REVIEW_COACH_PASSWORD: ${{ secrets.REVIEW_COACH_PASSWORD }}
+        run: bash .github/shots127/capture.sh
+
+      - name: Upload native 6.9-inch PNG set
+        if: always() && steps.capture.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tgp-appstore-6.9-${{ env.APP_SHA }}-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: out/ios-6.9/
+
+      - name: Upload native 6.5-inch PNG set
+        if: always() && steps.capture.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tgp-appstore-6.5-${{ env.APP_SHA }}-${{ github.run_id }}
+          retention-days: 7
+          if-no-files-found: error
+          path: out/ios-6.5/

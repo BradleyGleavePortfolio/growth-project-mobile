@@ -1,0 +1,19 @@
+appId: com.growthproject.app
+---
+- runFlow: assigned-workout.yaml
+- tapOn:
+    id: "assignment-start"
+- extendedWaitUntil:
+    visible:
+      id: "set-weight-0-0"
+    timeout: 60000
+- tapOn:
+    id: "set-weight-0-0"
+- inputText: "60"
+- tapOn:
+    id: "set-reps-0-0"
+- inputText: "10"
+- hideKeyboard
+- assertVisible:
+    id: "finish-workout"
+# Never tap Finish: this preview stays on-device, no workout is submitted.

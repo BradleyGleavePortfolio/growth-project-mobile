@@ -1,0 +1,10 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Profile and more"
+- tapOn: "Progress"
+- extendedWaitUntil:
+    visible: "View progress report"
+    timeout: 60000
+- assertNotVisible:
+    id: "progress-weight-chart-error"
