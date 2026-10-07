@@ -87,7 +87,9 @@ export default function PushPermissionCard({
       testID="push-permission-card"
     >
       <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>STAY IN TOUCH</Text>
-      <Text style={{ ...typography.body, color: sc.textPrimary }}>{BODY_COPY[audience]}</Text>
+      <Text style={{ ...typography.body, color: sc.textPrimary }}>{audience === 'client' && !user.coach_id
+        ? 'Turn on notifications for reminders you set in the app.'
+        : BODY_COPY[audience]}</Text>
       <View style={styles.actions}>
         <Pressable
           onPress={enable}

@@ -36,7 +36,7 @@ describe('PushPermissionCard (deferred OS prompt)', () => {
     mockGetPerms.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
     const { findByTestId, getByText, getByLabelText } = await render(<PushPermissionCard />);
     await findByTestId('push-permission-card');
-    expect(getByText(linked ? /plan updates from your coach/ : /community messages/)).toBeTruthy();
+    expect(getByText(linked ? /plan updates from your coach/ : /reminders you set in the app/)).toBeTruthy();
     expect(getByLabelText('Turn on notifications')).toBeTruthy();
     expect(getByLabelText('Not now')).toBeTruthy();
   });
