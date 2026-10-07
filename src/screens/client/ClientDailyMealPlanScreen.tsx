@@ -21,7 +21,7 @@
  * `materialised_ref`, not a date. Delivered assignments start on delivery
  * day with no end, so the plan is among today's active assignments; the
  * screen shows exactly that assignment instead of the newest one. If it is
- * no longer active, an honest "ended" state replaces another plan.
+ * absent, an honest unavailable state replaces another plan.
  *
  * When no assignment is active for the chosen day we render an honest
  * empty state — no fabricated suggestions, no "ask your coach" CTA
@@ -45,6 +45,8 @@ import {
   type SlotLabel,
 } from '../../api/mealTemplatesApi';
 import { useMealPlanToday } from '../../hooks/useMealTemplates';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import HapticPressable from '../../components/HapticPressable';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -109,33 +111,42 @@ export default function ClientDailyMealPlanScreen() {
       contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
+          testID="daily-meal-plan-refresh"
           refreshing={isRefetching}
           onRefresh={onRefresh}
           tintColor={sc.accent}
         />
       }
     >
-      <Text style={[typography.h2, { color: sc.textPrimary }]}>
+      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>{dateParam ?? 'MEAL PLAN'}</Text>
+      <Text style={[typography.h1, { color: sc.textPrimary }]}>
         {dateParam || assignmentId ? 'Meal plan' : "Today's meals"}
       </Text>
 
       {isLoading ? (
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Loading...
-        </Text>
+        <SkeletonScreen count={3} />
       ) : isError ? (
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Could not load today's plan. Pull to retry.
-        </Text>
+        <View style={styles.card} accessibilityLiveRegion="polite">
+          <Text style={[typography.body, { color: sc.textMuted }]}>
+            Could not load this meal plan. Pull to retry.
+          </Text>
+          <HapticPressable onPress={onRefresh} disabled={isRefetching} accessibilityRole="button"
+            accessibilityLabel="Try again" style={styles.retry}>
+            <Text style={[typography.bodySmall, { color: sc.textOnAccent }]}>Try again</Text>
+          </HapticPressable>
+        </View>
       ) : !active && assignmentId ? (
-        <EndedState styles={styles} sc={sc} />
+        <UnavailableState styles={styles} sc={sc} />
       ) : !active ? (
         <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
       ) : (
         <>
-          <Text style={[typography.bodySmall, { color: sc.accent }]}>
+          <Text style={[typography.h2, { color: sc.textPrimary }]}>
             {active.daily_meal_plan.name}
           </Text>
+          {active.daily_meal_plan.notes ? (
+            <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{active.daily_meal_plan.notes}</Text>
+          ) : null}
           {groups.map((g) => (
             <SlotGroup key={g.label} label={g.label} slots={g.slots} sc={sc} styles={styles} />
           ))}
@@ -166,7 +177,7 @@ function SlotGroup({
           <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>
             {s.meal_template.name}
           </Text>
-          <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
+          <Text style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
             {s.meal_template.calories_kcal} kcal • P {s.meal_template.protein_g}g • C{' '}
             {s.meal_template.carbs_g}g • F {s.meal_template.fats_g}g
           </Text>
@@ -181,12 +192,12 @@ function SlotGroup({
   );
 }
 
-function EndedState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
+function UnavailableState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
   return (
     <View style={styles.card} testID="meal-plan-ended">
-      <Text style={[typography.h3, { color: sc.textPrimary }]}>This plan has ended</Text>
+      <Text style={[typography.h4, { color: sc.textPrimary }]}>This plan is not available for this day</Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
-        {'This meal plan no longer covers today. Message your coach if it should still be running.'}
+        {'This assignment is not in the active meal plans for the selected day.'}
       </Text>
     </View>
   );
@@ -203,13 +214,13 @@ function EmptyState({
 }) {
   return (
     <View style={styles.card}>
-      <Text style={[typography.h3, { color: sc.textPrimary }]}>
+      <Text style={[typography.h4, { color: sc.textPrimary }]}>
         {dateOverride ? 'No plan for this day' : 'No plan for today'}
       </Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
         {dateOverride
-          ? 'Your coach has not assigned a meal plan that covers this day. Once they do, the slot list will appear here.'
-          : 'Your coach has not assigned a meal plan that covers today. Once they do, the slot list will appear here.'}
+          ? 'No meal plan is assigned for this day.'
+          : 'No meal plan is assigned for today.'}
       </Text>
     </View>
   );
@@ -231,15 +242,16 @@ type Styles = ReturnType<typeof makeStyles>;
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    content: { padding: spacing.lg, gap: spacing.md },
+    content: { padding: spacing.lg, paddingBottom: spacing['3xl'], gap: spacing.lg },
     card: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 12,
-      padding: spacing.lg,
+      paddingVertical: spacing.lg,
       gap: spacing.sm,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
     },
-    slotRow: { gap: spacing.xs, paddingVertical: spacing.xs },
+    slotRow: { gap: spacing.xs, paddingVertical: spacing.md,
+      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
+    retry: { minHeight: 44, paddingHorizontal: spacing.lg, alignSelf: 'flex-start',
+      justifyContent: 'center', borderRadius: 4, backgroundColor: sc.accent },
   });
 }

@@ -12,8 +12,9 @@ import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { Shadow } from '../../constants/theme';
+import { typography, type SemanticTokens } from '../../theme/tokens';
 import FadeInView from '../../components/FadeInView';
+import HapticPressable from '../../components/HapticPressable';
 import { mealPlansApi } from '../../services/api';
 import {
   mealTemplatesApi,
@@ -21,8 +22,8 @@ import {
   type DailyMealPlanAssignmentWithPlan,
   type SlotLabel,
 } from '../../api/mealTemplatesApi';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { errorMessage, type JsonRecord } from '../../types/common';
+import { useTheme } from '../../theme/ThemeProvider';
+import { type JsonRecord } from '../../types/common';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 //
@@ -76,15 +77,6 @@ interface MealPlan {
 }
 
 const TIME_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
-
-function timeIcon(tod?: string | null): string {
-  const t = (tod || '').toLowerCase();
-  if (t.startsWith('break')) return 'AM';
-  if (t.startsWith('lunch')) return 'MID';
-  if (t.startsWith('din')) return 'PM';
-  if (t.startsWith('snack')) return '+';
-  return '·';
-}
 
 function groupItems(items: MealItem[]): { key: string; label: string; rows: MealItem[] }[] {
   if (!Array.isArray(items) || items.length === 0) return [];
@@ -190,12 +182,11 @@ function todayAssignmentsToPlans(today: ClientTodayResponse): MealPlan[] {
   const sorted = [...today.assignments].sort((a, b) =>
     a.starts_on < b.starts_on ? 1 : a.starts_on > b.starts_on ? -1 : 0,
   );
-  return sorted.map((assignment) => assignmentToMealPlan(assignment, today.date));
+  return sorted.map((assignment) => assignmentToMealPlan(assignment));
 }
 
 function assignmentToMealPlan(
   assignment: DailyMealPlanAssignmentWithPlan,
-  forDate: string,
 ): MealPlan {
   const slotToTimeOfDay = (slot: SlotLabel): string => {
     switch (slot) {
@@ -223,12 +214,12 @@ function assignmentToMealPlan(
     notes: assignment.daily_meal_plan.notes,
     items,
     days: null,
-    created_at: forDate,
+    created_at: assignment.daily_meal_plan.created_at,
   };
 }
 
 export default function PlanScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [plans, setPlans] = useState<MealPlan[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -263,7 +254,7 @@ export default function PlanScreen() {
           legacyRes.reason,
           todayRes.reason,
         );
-        setError(errorMessage(legacyRes.reason, 'Could not load your meal plans.'));
+        setError('Could not load your meal plans. Pull to retry.');
         if (plans === null) setPlans([]);
       } else {
         if (legacyRes.status === 'rejected') {
@@ -320,44 +311,43 @@ export default function PlanScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl testID="meal-plan-refresh" refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.accent} colors={[colors.accent]} />
         }
       >
         <FadeInView>
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Your Meal Plan</Text>
-              <Text style={styles.subtitle}>
-                {hasPlans ? 'Assigned by your coach' : 'Nothing here yet'}
-              </Text>
+              <Text style={styles.subtitle}>MEAL PLAN</Text>
+              <Text style={styles.title}>Your meal plan</Text>
             </View>
           </View>
         </FadeInView>
 
-        {error && hasPlans && (
+        {error && (
           <View style={styles.errorBanner} accessibilityLiveRegion="polite">
-            <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.textMuted} />
             <Text style={styles.errorText}>{error}</Text>
+            <HapticPressable onPress={onRefresh} disabled={refreshing} accessibilityRole="button"
+              accessibilityLabel="Try again" style={styles.retry}>
+              <Text style={styles.retryText}>Try again</Text>
+            </HapticPressable>
           </View>
         )}
 
         {!hasPlans ? (
-          <FadeInView>
+          !error && <FadeInView>
             <View style={styles.emptyCard}>
-              <View style={styles.emptyIconCircle}>
-                <Ionicons name="restaurant-outline" size={32} color={colors.primary} />
-              </View>
               <Text style={styles.emptyTitle}>
-                Your coach hasn't assigned a meal plan yet.
+                No meal plans to show.
               </Text>
               <Text style={styles.emptyBody}>
-                Ask your coach in Messages — they can create one for you and it'll show up here automatically.
+                Pull to check for assigned meals.
               </Text>
             </View>
           </FadeInView>
         ) : (
           <View style={styles.planList}>
-            {plans!.map((plan) => {
+            {plans!.map((plan, index) => {
               // H2: prefer structured per-day rendering when days[] is available.
               const hasDays = Array.isArray(plan.days) && plan.days.length > 0;
               const groups = hasDays ? [] : groupItems(plan.items);
@@ -367,15 +357,17 @@ export default function PlanScreen() {
               const totalProtein = hasDays
                 ? 0
                 : plan.items.reduce((s, it) => s + (Number(it.protein) || 0), 0);
+              const hasTotalCals = totalCals > 0 && plan.items.every((it) => it.calories != null);
+              const hasTotalProtein = totalProtein > 0 && plan.items.every((it) => it.protein != null);
               return (
                 <FadeInView key={plan.id}>
                   <View style={styles.planCard}>
                     <View style={styles.planHeader}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.planTitle}>{plan.title}</Text>
+                        <Text style={index === 0 ? styles.planHero : styles.planTitle}>{plan.title}</Text>
                         {plan.created_at && (
                           <Text style={styles.planMeta}>
-                            Assigned {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            Created {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </Text>
                         )}
                         {hasDays && (
@@ -416,7 +408,7 @@ export default function PlanScreen() {
                           {dayData.meals.map((meal, mIdx) => (
                             <View key={mIdx} style={styles.group}>
                               <Text style={styles.groupLabel}>
-                                {timeIcon(meal.slot)} {meal.slot.toUpperCase()}
+                                {meal.slot.toUpperCase()}
                               </Text>
                               {meal.items.map((it, iIdx) => (
                                 <View key={iIdx} style={styles.itemRow}>
@@ -448,14 +440,14 @@ export default function PlanScreen() {
                         {groups.map((g) => (
                           <View key={g.key} style={styles.group}>
                             <Text style={styles.groupLabel}>
-                              {timeIcon(g.key)} {g.label.toUpperCase()}
+                              {g.label.toUpperCase()}
                             </Text>
                             {g.rows.map((it, idx) => (
                               <View key={idx} style={styles.itemRow}>
                                 <View style={{ flex: 1 }}>
                                   <Text style={styles.itemName}>{it.name || '—'}</Text>
                                   {it.notes ? (
-                                    <Text style={styles.itemNotes} numberOfLines={2}>
+                                    <Text style={styles.itemNotes}>
                                       {it.notes}
                                     </Text>
                                   ) : null}
@@ -473,13 +465,13 @@ export default function PlanScreen() {
                           </View>
                         ))}
 
-                        {(totalCals > 0 || totalProtein > 0) && (
+                        {(hasTotalCals || hasTotalProtein) && (
                           <View style={styles.totalsRow}>
                             <Text style={styles.totalsLabel}>Daily total</Text>
                             <Text style={styles.totalsValue}>
-                              {totalCals > 0 ? `${Math.round(totalCals)} kcal` : ''}
-                              {totalCals > 0 && totalProtein > 0 ? ' · ' : ''}
-                              {totalProtein > 0 ? `${Math.round(totalProtein)}g protein` : ''}
+                              {hasTotalCals ? `${Math.round(totalCals)} kcal` : ''}
+                              {hasTotalCals && hasTotalProtein ? ' · ' : ''}
+                              {hasTotalProtein ? `${Math.round(totalProtein)}g protein` : ''}
                             </Text>
                           </View>
                         )}
@@ -496,15 +488,15 @@ export default function PlanScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   centered: {
     flex: 1,
@@ -523,75 +515,62 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 16,
   },
   title: {
-    fontSize: 26,
-    fontWeight: '500',
+    ...typography.h1,
     color: colors.textPrimary,
-    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 13,
+    ...typography.eyebrow,
     color: colors.textMuted,
-    marginTop: 4,
+    marginBottom: 12,
   },
   errorBanner: {
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 10,
     borderRadius: 4, // radius.lg
-    backgroundColor: colors.noticeCriticalBg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
   errorText: {
+    ...typography.bodySmall,
     flex: 1,
-    fontSize: 12,
-    color: colors.noticeCriticalText,
+    color: colors.textMuted,
   },
   emptyCard: {
     marginHorizontal: 20,
     marginTop: 40,
     padding: 24,
-    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
-    borderWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     alignItems: 'center',
     gap: 12,
-    ...Shadow.small,
-  },
-  emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.primaryPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
   },
   emptyTitle: {
-    fontSize: 16,
+    ...typography.h2,
     fontWeight: '500',
     color: colors.textPrimary,
     textAlign: 'center',
   },
   emptyBody: {
+    ...typography.bodySmall,
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 19,
   },
   planList: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 32,
   },
   planCard: {
-    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
-    padding: 16,
-    borderWidth: 1,
+    paddingVertical: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    ...Shadow.small,
   },
   planHeader: {
     flexDirection: 'row',
@@ -600,72 +579,75 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 8,
   },
   planTitle: {
-    fontSize: 18,
+    ...typography.h4,
     fontWeight: '500',
     color: colors.textPrimary,
   },
+  planHero: { ...typography.h2, color: colors.textPrimary },
   planMeta: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.textMuted,
     marginTop: 2,
   },
   notesBox: {
-    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
-    padding: 10,
+    paddingVertical: 10,
     marginTop: 4,
     marginBottom: 12,
   },
   notesText: {
+    ...typography.bodySmall,
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 19,
   },
   group: {
     marginTop: 12,
   },
   groupLabel: {
-    fontSize: 12,
+    ...typography.eyebrow,
     fontWeight: '500',
-    color: colors.textSecondary,
+    color: colors.textMuted,
     marginBottom: 6,
-    letterSpacing: 0.5,
   },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     gap: 10,
   },
   itemName: {
-    fontSize: 14,
+    ...typography.bodyMd,
     fontWeight: '500',
     color: colors.textPrimary,
   },
   itemNotes: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.textMuted,
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 22,
   },
   itemMacros: {
     alignItems: 'flex-end',
     gap: 2,
   },
   itemCal: {
-    fontSize: 12,
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
     fontWeight: '500',
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   itemProtein: {
-    fontSize: 11,
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
     fontWeight: '500',
-    color: colors.primary,
+    color: colors.textMuted,
   },
   emptyItemsText: {
+    ...typography.bodySmall,
     fontSize: 13,
     color: colors.textMuted,
     paddingVertical: 10,
@@ -679,23 +661,24 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 4,
   },
   totalsLabel: {
-    fontSize: 12,
+    ...typography.eyebrow,
     color: colors.textMuted,
     fontWeight: '500',
-    letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   totalsValue: {
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
     fontSize: 13,
     fontWeight: '500',
     color: colors.textPrimary,
   },
   // H2: per-day section styles
   daySection: {
-    marginTop: 14,
-    borderTopWidth: 1,
+    marginTop: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
-    paddingTop: 10,
+    paddingTop: 20,
   },
   dayHeaderRow: {
     flexDirection: 'row',
@@ -704,15 +687,16 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 4,
   },
   dayLabel: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 16,
+    ...typography.h4,
     fontWeight: '500',
     color: colors.textPrimary,
   },
   dayTotals: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    color: colors.textSecondary,
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
+    color: colors.textMuted,
   },
-
+  retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16,
+    borderRadius: 4, backgroundColor: colors.accent },
+  retryText: { ...typography.bodySmall, color: colors.textOnAccent },
   });
