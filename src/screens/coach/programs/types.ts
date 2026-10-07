@@ -17,7 +17,7 @@ export type ProgramsStackParamList = {
   ProgramAssign: { programId: string };
   ProgramPackages: { programId: string };
   ProgramHistory: { programId: string };
-  CoachWorkoutBuilder: { planId?: string } | undefined;
+  CoachWorkoutBuilder: { planId?: string; openAi?: boolean } | undefined;
   SupportInbox: undefined;
 };
 

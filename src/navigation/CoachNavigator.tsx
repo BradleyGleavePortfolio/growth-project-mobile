@@ -194,7 +194,7 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
-  CoachWorkoutBuilder:  { planId?: string } | undefined;
+  CoachWorkoutBuilder:  { planId?: string; openAi?: boolean } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
   /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */

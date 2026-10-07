@@ -6,7 +6,7 @@ import CoachExerciseName from '../workout-builder/CoachExerciseName';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 import { AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction } from '../../../api/aiBuilderApi';
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
-import { AI_LABEL, AI_STAGES, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY, UNNAMED_CHANGE } from './aiBuilderCopy';
+import { AI_LABEL, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY, UNNAMED_CHANGE } from './aiBuilderCopy';
 import type { AiBuilderController } from './useAiBuilder';
 import { AI_SPRING, AI_STAGGER_MS } from './AiFunLayer';
 
@@ -144,12 +144,12 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
             ) : null}
             {ai.phase === 'thinking' ? (
               <View testID="ai-builder-thinking" accessibilityLiveRegion="polite" style={styles.stages}>
-                {AI_STAGES.map((label, i) => (
+                {ai.stages.map((label, i) => (
                   <Text key={label} style={[typography.body, { color: i <= ai.stage ? sc.textPrimary : sc.textMuted }]}>
                     {i < ai.stage ? `Done: ${label}` : label}
                   </Text>
                 ))}
-                <ActivityIndicator color={sc.accentText} accessibilityLabel={AI_STAGES[ai.stage]} />
+                <ActivityIndicator color={sc.accentText} accessibilityLabel={ai.stages[ai.stage]} />
               </View>
             ) : null}
             {ai.error ? line('ai-builder-error', ai.error, true) : null}
