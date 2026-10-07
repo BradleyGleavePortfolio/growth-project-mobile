@@ -323,7 +323,7 @@ function PurchaseUnpackContent({
           <Ionicons name="hourglass-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>Nothing released yet.</Text>
           <Text style={styles.emptyBody}>
-            {`Items appear here when ${coachName || 'your coach'} releases them.`}
+            {coachName ? `Items appear here when ${coachName} releases them.` : 'Items appear here when they are released.'}
           </Text>
         </View>
         <View style={styles.footerCtas}>

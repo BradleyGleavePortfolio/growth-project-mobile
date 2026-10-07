@@ -103,6 +103,14 @@ it('shows a neutral purchase empty state and keeps Done and refresh', async () =
   await s.getByTestId('purchase-unpack-empty').props.refreshControl.props.onRefresh();
   expect(require('../api/clientPaymentsApi').clientPaymentsApi.getPurchaseDrops).toHaveBeenCalledTimes(2);
 });
+it('does not invent a coach when the purchase coach name is unavailable', async () => {
+  require('../services/api').default.get.mockRejectedValueOnce(new Error('offline'));
+  const s = await render(React.createElement(PurchaseUnpackScreen));
+  await waitFor(() => expect(s.getByText('Nothing released yet.')).toBeTruthy());
+  expect(s.getByText('Items appear here when they are released.')).toBeTruthy();
+  expect(s.queryByText(/your coach|notification each time/)).toBeNull();
+  await fireEvent.press(s.getByTestId('purchase-unpack-done')); expect(mockNavigate).toHaveBeenLastCalledWith('Home');
+});
 it.each(['not_configured', 'error'])('keeps purchase fallback Done and real Retry: %s', async (reason) => {
   mockDrops = { ok: false, reason, message: 'The included items did not load.' };
   const s = await render(React.createElement(PurchaseUnpackScreen));
@@ -190,20 +198,21 @@ it('does not promise import enablement and keeps pairing Copy/Cancel/Review/Retr
   await fireEvent.press(s.getByTestId('pairing-retry')); expect(mockRetry).toHaveBeenCalled();
 });
 it.each([
-  [true, true, 'Workouts and meals are visible to you and Coach Lee.'],
-  [false, false, 'Workouts and meals are visible only to you.'],
-  [true, false, 'Workouts are visible to you and Coach Lee. Meals are visible only to you.'],
-  [false, true, 'Workouts are visible only to you. Meals are visible to you and Coach Lee.'],
+  [true, true, 'Workouts and meals are shared with Coach Lee.'],
+  [false, false, 'Workouts and meals are not shared with Coach Lee.'],
+  [true, false, 'Workouts are shared with Coach Lee. Meals are not shared with Coach Lee.'],
+  [false, true, 'Workouts are not shared with Coach Lee. Meals are shared with Coach Lee.'],
 ])('matches each confirmed coach-sharing state (%s/%s)', async (workouts, meals, copy) => {
   mockUser.coach_id = 'coach'; mockConsent = [Boolean(workouts), Boolean(meals)];
   const s = await render(React.createElement(ProfileScreen));
   await act(async () => { jest.requireMock('@react-navigation/native').useFocusEffect.mock.calls.at(-1)?.[0](); });
   await waitFor(() => expect(s.getByText(String(copy))).toBeTruthy());
+  expect(s.queryByText(/only to you/)).toBeNull();
 });
 it('does not invent privacy reassurance while sharing state is unavailable', async () => {
   mockUser.coach_id = 'coach';
   require('../services/api').default.get.mockRejectedValueOnce(new Error('offline'));
   const s = await render(React.createElement(ProfileScreen));
   await act(async () => { jest.requireMock('@react-navigation/native').useFocusEffect.mock.calls.at(-1)?.[0](); });
-  expect(s.queryByText(/Workouts.*visible/)).toBeNull();
+  expect(s.queryByText(/Workouts.*(?:visible|shared)/)).toBeNull();
 });
