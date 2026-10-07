@@ -3,10 +3,34 @@
  * Plain words, no emoji, no exclamation marks (TGP copy rules).
  */
 import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
-import type { SchedulingSessionStatus } from '../../../api/schedulingApi';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import type { CoachingSession, SchedulingSessionStatus } from '../../../api/schedulingApi';
+import HapticPressable from '../../../components/HapticPressable';
+import { formatDayLabel, formatRange } from '../../../calendar/calendarTime';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { radius, spacing, typography } from '../../../theme/tokens';
+
+export function useOpenMessages(): () => void {
+  const nav = useNavigation<NavigationProp<ParamListBase>>();
+  return () => nav.navigate('Home', { screen: 'Messages' });
+}
+
+export function SessionTime({ session }: { session: CoachingSession }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View style={styles.sessionTime}>
+      <Text style={[styles.dateHero, { color: sc.textPrimary }]}>{formatDayLabel(new Date(session.start_at))}</Text>
+      <Text style={[styles.timeHero, { color: sc.textPrimary }]} testID="calendar-time-hero">
+        {formatRange(session.start_at, session.end_at)}
+      </Text>
+    </View>
+  );
+}
+
+export function sessionLength(s: CoachingSession): string {
+  return `${Math.round((Date.parse(s.end_at) - Date.parse(s.start_at)) / 60_000)} minutes.`;
+}
 
 export function statusLabel(status: SchedulingSessionStatus): string {
   switch (status) {
@@ -57,7 +81,7 @@ export function Card({
   testID?: string;
 }) {
   const { semanticColors: sc } = useTheme();
-  const style = [styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }];
+  const style = [styles.card, { borderColor: sc.border }];
   if (!onPress) {
     return (
       <View style={style} testID={testID}>
@@ -66,7 +90,7 @@ export function Card({
     );
   }
   return (
-    <Pressable
+    <HapticPressable disableAnimation
       onPress={onPress}
       style={({ pressed }) => [style, pressed ? styles.pressed : null]}
       accessibilityRole="button"
@@ -75,7 +99,7 @@ export function Card({
       testID={testID}
     >
       {children}
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -97,7 +121,7 @@ export function PrimaryButton({
   const { semanticColors: sc } = useTheme();
   const off = disabled || busy;
   return (
-    <Pressable
+    <HapticPressable disableAnimation
       onPress={off ? undefined : onPress}
       disabled={off}
       accessibilityRole="button"
@@ -114,7 +138,7 @@ export function PrimaryButton({
           {label}
         </Text>
       )}
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -133,18 +157,18 @@ export function SecondaryButton({
 }) {
   const { semanticColors: sc } = useTheme();
   return (
-    <Pressable
+    <HapticPressable disableAnimation
       onPress={disabled ? undefined : onPress}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!disabled }}
-      style={[styles.secondary, { borderColor: sc.textPrimary, opacity: disabled ? 0.5 : 1 }]}
+      style={[styles.secondary, { opacity: disabled ? 0.5 : 1 }]}
       testID={testID}
     >
       <Text style={[styles.secondaryText, { color: sc.textPrimary }]}>{label}</Text>
-    </Pressable>
+    </HapticPressable>
   );
 }
 
@@ -177,7 +201,7 @@ export function Title({ children }: { children: React.ReactNode }) {
 
 export const calendarStyles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
+  content: { padding: spacing.xl, paddingBottom: spacing['3xl'] },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   gap: { height: spacing.md },
   /** Body-small text for inline support fallbacks (matches Note). */
@@ -185,18 +209,17 @@ export const calendarStyles = StyleSheet.create({
 });
 
 const styles = StyleSheet.create({
-  section: { marginTop: spacing.xl },
+  section: { marginTop: spacing['2xl'] },
   sectionTitle: { ...typography.caption, textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.sm },
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 48,
+    paddingVertical: spacing.lg,
   },
   pressed: { opacity: 0.7 },
   primary: {
     minHeight: 48,
-    borderRadius: radius.sm,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -205,15 +228,15 @@ const styles = StyleSheet.create({
   primaryText: { ...typography.bodyMd },
   secondary: {
     minHeight: 48,
-    borderRadius: radius.sm,
-    borderWidth: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
   },
   secondaryText: { ...typography.bodyMd },
   note: { ...typography.bodySmall, marginTop: spacing.sm },
   body: { ...typography.body },
   title: { ...typography.h2, marginBottom: spacing.sm },
+  sessionTime: { marginVertical: spacing.lg },
+  dateHero: { ...typography.h2, fontVariant: ['tabular-nums'] },
+  timeHero: { ...typography.h1, fontVariant: ['tabular-nums'], marginTop: spacing.sm },
 });
