@@ -2,11 +2,10 @@
  * ClientWorkoutViewerScreen — list of the client's workout
  * assignments, with the next-up assignment surfaced prominently.
  *
- * Reads /assignments/me. Pure read; the "mark complete" mutation
- * lives on a future detail screen (out of Sprint B-2 scope).
+ * Reads /assignments/me. Opening a row preserves the assignment detail
+ * route, where the client starts or resumes the workout.
  *
- * Empty state: an honest message when the coach has not assigned a
- * workout yet. No fabricated suggestions.
+ * Empty state: no assignment data, without assuming a coach relationship.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -25,10 +24,12 @@ import {
 } from '@react-navigation/native';
 import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
+import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
+import { overlayRomanAdjustedSets } from '../../utils/workout/romanAdjustedSets';
 
 export default function ClientWorkoutViewerScreen() {
   const { semanticColors: sc } = useTheme();
@@ -51,7 +52,7 @@ export default function ClientWorkoutViewerScreen() {
       );
   }, [data]);
 
-  const upcoming = sorted.filter((a) => !a.completed_at);
+  const pending = sorted.filter((a) => !a.completed_at);
   const completed = sorted.filter((a) => !!a.completed_at);
 
   const handleOpenAssignment = useCallback(
@@ -91,18 +92,17 @@ export default function ClientWorkoutViewerScreen() {
             No workouts assigned
           </Text>
           <Text style={[typography.body, { color: sc.textMuted }]}>
-            Your coach has not assigned a workout yet. Once they do, the
-            schedule will appear here.
+            Assigned workouts appear here when available.
           </Text>
         </View>
       ) : (
         <>
-          {upcoming.length > 0 ? (
+          {pending.length > 0 ? (
             <>
               <Text style={[typography.eyebrow, { color: sc.textMuted }]}>
-                Upcoming
+                To complete
               </Text>
-              {upcoming.map((a) => (
+              {pending.map((a) => (
                 <AssignmentCard
                   key={a.id}
                   a={a}
@@ -130,7 +130,6 @@ export default function ClientWorkoutViewerScreen() {
                   a={a}
                   styles={styles}
                   sc={sc}
-                  faded
                   onPress={() => handleOpenAssignment(a)}
                 />
               ))}
@@ -146,48 +145,60 @@ function AssignmentCard({
   a,
   styles,
   sc,
-  faded,
   onPress,
 }: {
   a: ClientWorkoutAssignmentWithPlan;
   styles: Styles;
   sc: SemanticTokens;
-  faded?: boolean;
   onPress: () => void;
 }) {
   const plan = a.workout_plan;
+  const exerciseIds = useMemo(() => plan.exercises.map((e) => e.exercise_external_id), [plan.exercises]);
+  const { names } = useExerciseNames(exerciseIds);
+  const prescribed = overlayRomanAdjustedSets(plan.exercises, a.roman_adjusted_sets).exercises
+    .sort((left, right) => left.order - right.order);
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        faded ? { opacity: 0.6 } : null,
         pressed ? { opacity: 0.85 } : null,
       ]}
       accessibilityRole="button"
       accessibilityLabel={`Open workout ${plan.name}`}
     >
+      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>
+        {formatScheduled(a.scheduled_for)}
+      </Text>
       <View style={styles.headerRow}>
         <Text style={[typography.h3, { color: sc.textPrimary }]}>
           {plan.name}
         </Text>
-        <Text style={[typography.bodySmall, { color: sc.accent }]}>
-          {formatPlanType(plan.type)}
-        </Text>
       </View>
       <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-        {formatScheduled(a.scheduled_for)}
+        {formatPlanType(plan.type)}
         {plan.duration_estimate_minutes
           ? ` • about ${plan.duration_estimate_minutes} min`
           : ''}
         {' • '}
         {plan.exercises.length} exercise{plan.exercises.length === 1 ? '' : 's'}
       </Text>
-      {a.post_rpe !== null ? (
+      {a.completed_at && a.post_rpe !== null ? (
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
           Completed RPE {a.post_rpe}
         </Text>
       ) : null}
+      {prescribed.map((exercise, index) => (
+        <View key={exercise.id} style={styles.exerciseRow}>
+          <Text style={[typography.bodySmall, { color: sc.textPrimary }]}>
+            {names[exercise.exercise_external_id] || `Exercise ${index + 1}`}
+          </Text>
+          <Text style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
+            {exercise.sets} sets × {exercise.reps_or_duration_seconds} reps / sec
+            {exercise.weight_lbs !== null ? ` · ${exercise.weight_lbs} lb prescribed` : ''}
+          </Text>
+        </View>
+      ))}
     </Pressable>
   );
 }
@@ -207,19 +218,22 @@ type Styles = ReturnType<typeof makeStyles>;
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    content: { padding: spacing.lg, gap: spacing.sm },
+    content: { padding: spacing.xl, paddingBottom: spacing['3xl'], gap: spacing.lg },
     card: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 12,
-      padding: spacing.lg,
-      gap: spacing.xs,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
+      minHeight: 44,
+      paddingVertical: spacing.lg,
+      gap: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: sc.border,
     },
     headerRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'baseline',
+      alignItems: 'flex-start',
+    },
+    exerciseRow: {
+      paddingTop: spacing.md,
+      marginTop: spacing.xs,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: sc.border,
     },
   });
 }
