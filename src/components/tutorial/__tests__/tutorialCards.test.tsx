@@ -25,6 +25,8 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({
   },
 }));
 const mockNavigate = jest.fn();
+const mockUser = { id: 'u1', coach_id: 'c1' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockParentNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
@@ -68,6 +70,7 @@ beforeEach(async () => {
   __resetTutorialStoreForTests();
   __resetMacroDisplayStoreForTests();
   mockFlags.clientTutorial = true;
+  mockUser.coach_id = 'c1';
   mockNavigate.mockClear();
   mockParentNavigate.mockClear();
   seen.length = 0;
@@ -170,6 +173,18 @@ describe('PlanExplanationCard', () => {
 });
 
 describe('TutorialHomeSlot', () => {
+  it('omits only the dead coach-thread row for a coachless client, keeping macros and resume', async () => {
+    mockUser.coach_id = '';
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial(PAYLOAD);
+    dispatchTutorial({ type: 'PAUSE' });
+    await render(<TutorialHomeSlot />);
+    expect(screen.queryByTestId('home-message-coach')).toBeNull();
+    expect(screen.getByTestId('macro-explanation-toggle')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('tutorial-reoffer'));
+    expect(useTutorialStore.getState().tutorial.status).toBe('active');
+  });
+
   it('renders nothing with the flag off', async () => {
     mockFlags.clientTutorial = false;
     await render(<TutorialHomeSlot />);

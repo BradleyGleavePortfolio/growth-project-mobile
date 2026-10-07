@@ -1,11 +1,11 @@
 /**
  * CommunityTodayScreen — the "today" object (product plan §2.6): the universal
  * home for what's happening for the calling client today. Aggregates the
- * coach's one post / one event / one prompt + the client's cohort context.
+ * pinned post / event / challenge + the client's cohort context.
  *
  * Entry point for the Community tab. When the client has no membership or no
- * today content, we render a Roman-voiced empty state with a PRIMARY ACTION
- * (no spinner-only states, UX HARD gate). Standardized on semanticColors.
+ * today content, we render a factual empty state with an available action.
+ * Standardized on semanticColors and typography tokens.
  */
 import React from 'react';
 import { Text, View, StyleSheet, ScrollView } from 'react-native';
@@ -13,11 +13,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityToday } from '../../hooks/useCommunity';
 import HapticPressable from '../../components/HapticPressable';
-import { CommunityEmptyState } from '../../components/community';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { featureFlags } from '../../config/featureFlags';
 import type { CommunityNav } from './communityNavTypes';
 
@@ -36,6 +36,11 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
   const today = useCommunityToday();
 
   const data = today.data;
+  const dateTitle = (
+    <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
+      {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+    </Text>
+  );
   const isEmpty =
     !today.isLoading &&
     !today.isError &&
@@ -82,6 +87,18 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
       goToHall();
     }
   };
+  const hallLabel = featureFlags.communityHall
+    ? 'Visit the Hall'
+    : featureFlags.communityDm ? 'Messages' : hasCoach ? 'Send your coach a message' : undefined;
+
+  if (today.isLoading) {
+    return (
+      <View testID="community-today-screen" accessibilityLabel="Loading community Today"
+        accessibilityState={{ busy: true }} style={{ flex: 1, backgroundColor: semanticColors.bgPrimary }}>
+        <SkeletonScreen count={3} />
+      </View>
+    );
+  }
 
   // A `useCommunityToday` LOAD FAILURE must render a calm retryable error,
   // never the "nothing waiting today" / "visit the Hall" onboarding empty state
@@ -95,6 +112,7 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
         style={{ backgroundColor: semanticColors.bgPrimary }}
         testID="community-today-screen"
       >
+        {dateTitle}
         <View style={styles.errorBox} testID="community-today-error">
           <Ionicons
             name="alert-circle-outline"
@@ -110,9 +128,9 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
             accessibilityRole="button"
             accessibilityLabel="Try again"
             testID="community-today-retry"
-            style={[styles.retry, { borderColor: semanticColors.accent }]}
+            style={[styles.retry, { backgroundColor: semanticColors.accent }]}
           >
-            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+            <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>
               Try again
             </Text>
           </HapticPressable>
@@ -121,7 +139,7 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
     );
   }
 
-  // Empty state: friendly Roman copy + a primary action (never a bare spinner).
+  // Empty state describes only this successful Today response.
   if (isEmpty) {
     const noMembership = data?.empty_reason === 'no_membership';
     return (
@@ -130,18 +148,18 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
         style={{ backgroundColor: semanticColors.bgPrimary }}
         testID="community-today-screen"
       >
-        <CommunityEmptyState
-          stem={noMembership ? 'noCohorts' : 'todayEmpty'}
-          firstName={client?.firstName ?? client?.name ?? null}
-          title={noMembership ? 'No cohort yet' : 'Nothing waiting today'}
+        {dateTitle}
+        <TodayEmptyState
+          body={noMembership ? 'A community space is not available for this account.' : 'No posts, events or challenges are shown here.'}
+          title={noMembership ? 'No cohort yet' : 'No updates in Today'}
           actionLabel={
             noMembership
               ? hasCoach
                 ? 'Send your coach a message'
                 : undefined
-              : 'Visit the Hall'
+              : hallLabel
           }
-          onAction={noMembership ? (hasCoach ? goToMessages : undefined) : goToHall}
+          onAction={noMembership ? (hasCoach ? goToMessages : undefined) : (hallLabel ? goToHall : undefined)}
           testID="community-today-empty"
         />
       </ScrollView>
@@ -154,13 +172,11 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
       style={{ backgroundColor: semanticColors.bgPrimary }}
       testID="community-today-screen"
     >
-      <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
-        Today
-      </Text>
+      {dateTitle}
+      {data?.cohort ? <CardLabel color={semanticColors.textMuted}>Your spaces</CardLabel> : null}
 
       {data?.cohort ? (
         <Card
-          color={semanticColors.bgSurface}
           border={semanticColors.border}
           onPress={() =>
             navigation.navigate('CommunitySpace', {
@@ -180,9 +196,9 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
         </Card>
       ) : null}
 
+      {data?.pinned_post ? <CardLabel color={semanticColors.textMuted}>Today</CardLabel> : null}
       {data?.pinned_post ? (
         <Card
-          color={semanticColors.bgSurface}
           border={semanticColors.border}
           onPress={() =>
             navigation.navigate('CommunityThread', {
@@ -191,16 +207,16 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
           }
           testID="community-today-pinned"
         >
-          <CardLabel color={semanticColors.textMuted}>From your coach</CardLabel>
-          <CardTitle color={semanticColors.textPrimary}>
+          <CardLabel color={semanticColors.textMuted}>Pinned post</CardLabel>
+          <CardTitle color={semanticColors.textPrimary} numberOfLines={2}>
             {data.pinned_post.title}
           </CardTitle>
         </Card>
       ) : null}
 
+      {data?.event ? <CardLabel color={semanticColors.textMuted}>Events</CardLabel> : null}
       {data?.event ? (
         <Card
-          color={semanticColors.bgSurface}
           border={semanticColors.border}
           onPress={() => goToEvent(data.event!.id)}
           testID="community-today-event"
@@ -209,12 +225,12 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
           <CardTitle color={semanticColors.textPrimary}>
             {data.event.title}
           </CardTitle>
+          <CardMeta color={semanticColors.textMuted}>{new Date(data.event.starts_at).toLocaleString()}</CardMeta>
         </Card>
       ) : null}
 
       {data?.challenge ? (
         <Card
-          color={semanticColors.bgSurface}
           border={semanticColors.border}
           onPress={() => goToChallenge(data.challenge!.id)}
           testID="community-today-challenge"
@@ -223,7 +239,15 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
           <CardTitle color={semanticColors.textPrimary}>
             {data.challenge.title}
           </CardTitle>
+          <CardMeta color={semanticColors.textMuted}>Ends {new Date(data.challenge.ends_at).toLocaleDateString()}</CardMeta>
         </Card>
+      ) : null}
+      {data?.feature_flag_state === 'enabled' && data.empty_reason !== 'no_membership' && featureFlags.communityHall ? (
+        <HapticPressable intent="medium" accessibilityRole="button" accessibilityLabel="New post"
+          testID="community-today-compose" onPress={() => navigation.navigate('CommunityComposer', { mode: 'post' })}
+          style={[styles.retry, { backgroundColor: semanticColors.accent }]}>
+          <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>New post</Text>
+        </HapticPressable>
       ) : null}
     </ScrollView>
   );
@@ -233,13 +257,11 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
 
 function Card({
   children,
-  color,
   border,
   onPress,
   testID,
 }: {
   children: React.ReactNode;
-  color: string;
   border: string;
   onPress: () => void;
   testID?: string;
@@ -250,10 +272,29 @@ function Card({
       onPress={onPress}
       accessibilityRole="button"
       testID={testID}
-      style={[styles.card, { backgroundColor: color, borderColor: border }]}
+      style={[styles.card, { borderColor: border }]}
     >
       {children}
     </HapticPressable>
+  );
+}
+
+function TodayEmptyState({ title, body, actionLabel, onAction, testID }: {
+  title: string; body: string; actionLabel?: string; onAction?: () => void; testID: string;
+}): React.ReactElement {
+  const { semanticColors } = useTheme();
+  return (
+    <View style={styles.errorBox} testID={testID}>
+      <Text style={[typography.h2, { color: semanticColors.textPrimary }]}>{title}</Text>
+      <Text style={[styles.muted, { color: semanticColors.textMuted }]}>{body}</Text>
+      {actionLabel && onAction ? (
+        <HapticPressable intent="medium" accessibilityRole="button" accessibilityLabel={actionLabel}
+          testID={`${testID}-action`} onPress={onAction}
+          style={[styles.retry, { backgroundColor: semanticColors.accent }]}>
+          <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>{actionLabel}</Text>
+        </HapticPressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -269,11 +310,13 @@ function CardLabel({
 function CardTitle({
   children,
   color,
+  numberOfLines,
 }: {
   children: React.ReactNode;
   color: string;
+  numberOfLines?: number;
 }): React.ReactElement {
-  return <Text style={[styles.cardTitle, { color }]}>{children}</Text>;
+  return <Text numberOfLines={numberOfLines} style={[styles.cardTitle, { color }]}>{children}</Text>;
 }
 function CardMeta({
   children,
@@ -287,53 +330,48 @@ function CardMeta({
 
 const styles = StyleSheet.create({
   content: {
-    padding: spacing.lg,
+    padding: spacing.xl,
     gap: spacing.md,
   },
   center: {
     flexGrow: 1,
-    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing['3xl'],
   },
   errorBox: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing['3xl'],
   },
-  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  muted: { ...typography.bodySmall, textAlign: 'center' },
   retry: {
     marginTop: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
     justifyContent: 'center',
   },
-  retryLabel: { fontSize: 14, fontWeight: '600' },
+  retryLabel: { ...typography.bodyMd },
   heading: {
-    fontSize: 24,
-    fontWeight: '600',
+    ...typography.h1,
     marginBottom: spacing.sm,
   },
   card: {
     minHeight: 48,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     gap: spacing.xs,
   },
   cardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    ...typography.eyebrow,
   },
   cardTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyMd,
   },
   cardMeta: {
-    fontSize: 13,
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
   },
 });

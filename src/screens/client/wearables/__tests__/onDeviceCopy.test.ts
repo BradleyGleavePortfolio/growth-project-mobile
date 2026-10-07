@@ -227,7 +227,7 @@ describe('Sol B-317-8: cloudConnectFailureMessage', () => {
     [401, {}, 'login', /session has ended/],
     [403, {}, 'none', /client account only/],
     [429, {}, 'connect', /Too many tries/],
-    [503, { code: 'wearables_cloud_disabled' }, 'none', /isn't switched on yet/],
+    [503, { code: 'wearables_cloud_disabled' }, 'none', /is not available in this version/],
   ])('status %p maps to its own copy, never to Sentry', (status, data, action, re) => {
     const err = status === null ? networkError() : httpError(status as number, data);
     const m = cloudConnectFailureMessage(err, 'Oura');
