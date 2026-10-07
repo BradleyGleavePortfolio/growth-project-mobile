@@ -1,0 +1,10 @@
+appId: com.growthproject.app
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "The Growth Project"
+    timeout: 60000
+- assertVisible: "Get started"
+- assertVisible: "Log in"

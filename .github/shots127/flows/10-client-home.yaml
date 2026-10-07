@@ -1,0 +1,9 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- extendedWaitUntil:
+    visible:
+      id: "home-number-grid.*"
+    timeout: 60000
+- assertNotVisible:
+    id: "home-day-data-error"

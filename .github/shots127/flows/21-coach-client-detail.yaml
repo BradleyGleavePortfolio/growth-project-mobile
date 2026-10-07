@@ -1,0 +1,10 @@
+appId: com.growthproject.app
+---
+- runFlow: 20-coach-clients.yaml
+- tapOn:
+    id: "client-row-.*"
+    index: 0
+- extendedWaitUntil:
+    visible: "Archive client"
+    timeout: 60000
+# Never tap Archive, assign, save or an AI generation control.

@@ -1,0 +1,15 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Log food"
+- extendedWaitUntil:
+    visible: "Food Log"
+    timeout: 60000
+- assertVisible: "Breakfast"
+- assertVisible:
+    id: "daily-summary-full"
+- assertVisible: "Protein"
+- assertVisible: "Carbs"
+- assertVisible: "Fat"
+- assertNotVisible:
+    id: "log-day-data-error"

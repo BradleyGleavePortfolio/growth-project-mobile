@@ -1,0 +1,9 @@
+appId: com.growthproject.app
+---
+- runFlow: coach-root.yaml
+- tapOn: "Programs"
+- extendedWaitUntil:
+    visible: "New program"
+    timeout: 60000
+- assertVisible: "New workout"
+- assertNotVisible: "Loading programs"
