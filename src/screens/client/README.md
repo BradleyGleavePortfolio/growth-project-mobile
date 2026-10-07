@@ -1,6 +1,6 @@
 # Client screens
 
-Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Every secondary screen lives inside the `MoreStack` reached from the Profile tab — there is no global floating chat widget; the dedicated AI surface is `AIGuideScreen` and is reached from the **Guidance** row on `MoreScreen`.
+Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with labelled Home, Train, Food and You tabs, plus flag-gated Calendar and Community tabs (six in launch builds). Food is a single screen; the other tabs wrap nested navigators. The More index lives in `MoreStack`, reached from You, with cross-tab shortcuts to habits and exercises. There is no global floating chat widget; the dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
 
 ## Purpose
 
@@ -18,7 +18,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
-| `MoreScreen.tsx` | Profile | Index of every secondary screen. The two top rows are **Guidance** (`AIGuide`) and **Membership** (`Membership`); the rest cover Recipes, Fasting, Community, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, the lists, and the Plan view. There is no floating chat widget — `AIGuide` is reached from this index, not from a global FAB. |
+| `MoreScreen.tsx` | More | Hairline-separated groups: Your plan, Guidance and community, Food and preparation, Health and devices, Account, Learning. Every existing row remains a one-tap destination; order within each group follows the previous menu. Roman stays flag-gated; tutorial builds put health first, otherwise health follows plan. Neutral descriptions do not assume a coach, plan, targets, video or connected device. Cormorant title, Inter rows and semantic theme colors replace filled cards. Roman retains its existing avatar and wearable rows retain tutorial targets. Reachability tests cover every action with flags on/off, iOS/Android and semantic light/dark palettes. Six client tabs are unchanged. |
 
 ### AI Guide and messaging
 

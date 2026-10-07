@@ -20,6 +20,7 @@ const mockFlags: Record<string, boolean> = {
   romanChat: false,
   clientTutorial: false,
 };
+let mockSemanticColors: import("../../../theme/tokens").SemanticTokens = require("../../../theme/tokens").lightTokens;
 jest.mock("../../../config/featureFlags", () => ({
   featureFlags: new Proxy(
     {},
@@ -33,7 +34,7 @@ jest.mock("../../../config/healthConnect", () => ({
 jest.mock("../../../theme/ThemeProvider", () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => "#000000" }),
-    semanticColors: new Proxy({}, { get: () => "#000000" }),
+    semanticColors: mockSemanticColors,
   }),
 }));
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -49,8 +50,9 @@ jest.mock("../../../components/HapticPressable", () => {
   return Pressable;
 });
 
-import { Platform } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import MoreScreen, { PLAN_MORE_ITEMS } from "../MoreScreen";
+import { darkTokens, lightTokens } from "../../../theme/tokens";
 
 const NAV = fs.readFileSync(
   path.join(__dirname, "..", "..", "..", "navigation", "ClientNavigator.tsx"),
@@ -129,7 +131,7 @@ describe("More: your plan rows (S-REACH)", () => {
     await render(<MoreScreen />);
     const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
     expect(labels[0]).toBe("Roman");
-    expect(labels[1]).toBe("Meal plan");
+    expect(labels.slice(0, 3)).toEqual(["Roman", "Guidance", "Community"]);
   });
 });
 
@@ -189,5 +191,89 @@ describe("More: Health and sleep / Connected devices (AUDIT-11-125)", () => {
     mockFlags.clientTutorial = true;
     await render(<MoreScreen />);
     expect(labels().slice(0, 3)).toEqual(["Health and sleep", "Connected devices", "Roman"]);
+  });
+});
+
+describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
+  const originalOS = Platform.OS;
+  const stackRows = [
+    ["Meal plan", "Plan"], ["Macro targets", "ClientMacros"], ["Progress", "Progress"],
+    ["Timeline", "Timeline"], ["Guidance", "AIGuide"], ["Membership", "Membership"],
+    ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
+    ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
+    ["Learn", "Learn"], ["Widgets", "Widgets"], ["Grocery list", "GroceryList"],
+    ["Shopping list", "ShoppingList"], ["Prep guide", "PrepGuide"],
+  ];
+  afterEach(() => {
+    Object.defineProperty(Platform, "OS", { configurable: true, value: originalOS });
+    mockSemanticColors = lightTokens;
+  });
+
+  it.each([
+    ["android", false, false, false], ["android", true, false, false],
+    ["android", false, false, true], ["android", true, false, true],
+    ["android", false, true, false], ["android", true, true, false],
+    ["ios", false, false, false], ["ios", true, false, false],
+  ])("preserves all actions: %s Roman=%s tutorial=%s health=%s", async (os, roman, tutorial, health) => {
+    jest.clearAllMocks();
+    Object.defineProperty(Platform, "OS", { configurable: true, value: os });
+    mockFlags.romanChat = Boolean(roman);
+    mockFlags.clientTutorial = Boolean(tutorial);
+    mockHealthConnectBuild = Boolean(health);
+    await render(<MoreScreen />);
+    const wearableRows = tutorial || health || os === "ios"
+      ? [["Health and sleep", "Health"], ["Connected devices", "Connections"]] : [];
+    const rows = [...stackRows, ...wearableRows, ...(roman ? [["Roman", "RomanChat"]] : [])];
+    expect(screen.getAllByRole("button")).toHaveLength(rows.length + 2);
+    for (const [label, route] of rows) {
+      expect(stackRoutes("MoreStackNav")).toContain(route);
+      await fireEvent.press(screen.getByLabelText(label));
+      expect(mockNavigate).toHaveBeenLastCalledWith(route);
+    }
+    for (const [label, tab, route] of [
+      ["Habits and check-in", "Home", "Habits"],
+      ["Exercise library", "WorkoutTab", "ExerciseLibrary"],
+    ]) {
+      await fireEvent.press(screen.getByLabelText(label));
+      expect(mockParentNavigate).toHaveBeenLastCalledWith(tab, { screen: route, initial: false });
+    }
+    expect(screen.queryByLabelText("Roman") !== null).toBe(Boolean(roman));
+    expect(screen.queryByLabelText("Connected devices") !== null).toBe(wearableRows.length > 0);
+    expect(screen.getAllByRole("header").map((h) => h.props.children)).toEqual([
+      "More", ...(tutorial ? ["Health and devices"] : []),
+      ...(roman ? ["Guidance and community"] : []), "Your plan",
+      ...(!tutorial && wearableRows.length ? ["Health and devices"] : []),
+      ...(!roman ? ["Guidance and community"] : []), "Food and preparation", "Account", "Learning",
+    ]);
+    const healthLabels = wearableRows.map(([label]) => label);
+    const guidanceLabels = [...(roman ? ["Roman"] : []), "Guidance", "Community"];
+    expect(screen.getAllByRole("button").map((b) => b.props.accessibilityLabel)).toEqual([
+      ...(tutorial ? healthLabels : []), ...(roman ? guidanceLabels : []),
+      "Meal plan", "Macro targets", "Progress", "Habits and check-in", "Timeline",
+      "Exercise library", "Membership", "Report", ...(!tutorial ? healthLabels : []),
+      ...(!roman ? guidanceLabels : []), "Recipes", "Fasting", "Grocery list",
+      "Shopping list", "Prep guide", "Profile", "Settings", "Widgets", "Learn",
+    ]);
+  });
+
+  it("does not assume a coach, assigned plan, targets or video", async () => {
+    await render(<MoreScreen />);
+    for (const copy of ["View meal plans", "View daily calorie and nutrient targets",
+      "Browse exercise instructions", "Open AI guidance", "View timeline entries",
+      "Membership and access details", "Widget setup and options", "View meal preparation guidance",
+      "View weight trends and daily totals"]) {
+      expect(screen.getByText(copy)).toBeTruthy();
+    }
+    expect(screen.getByLabelText("Guidance").props.accessibilityHint).toBe("Opens AI guidance");
+  });
+
+  it.each([lightTokens, darkTokens])("uses semantic colors and comfortable unboxed rows", async (palette) => {
+    mockSemanticColors = palette;
+    await render(<MoreScreen />);
+    expect(screen.getByText("More")).toHaveStyle({ fontFamily: "CormorantGaramond_400Regular", color: palette.textPrimary });
+    expect(screen.getByText("Your plan")).toHaveStyle({ fontFamily: "Inter_500Medium", color: palette.textMuted });
+    expect(screen.getByText("Meal plan")).toHaveStyle({ fontFamily: "Inter_500Medium", fontSize: 16 });
+    expect(screen.getByLabelText("Meal plan")).toHaveStyle({ minHeight: 72, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border });
+    expect(screen.getByLabelText("Meal plan")).not.toHaveStyle({ backgroundColor: palette.bgSurface });
   });
 });
