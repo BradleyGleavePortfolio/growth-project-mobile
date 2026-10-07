@@ -86,6 +86,10 @@ import {
 } from './workoutBuilderAutosaveDiff';
 import { describeAutosaveRefusal } from './workoutBuilderAccess';
 import CoachExerciseName from '../../components/coach/workout-builder/CoachExerciseName';
+import AiBuilderSheet from '../../components/coach/ai-builder/AiBuilderSheet';
+import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
+import type { AiBuilderDecision } from '../../api/aiBuilderApi';
+import { appliedToast, SAVE_FIRST_COPY } from '../../components/coach/ai-builder/aiBuilderCopy';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -1497,6 +1501,75 @@ export default function CoachWorkoutBuilderScreen() {
     }
   }, [sendHistoryRequest, settleHistoryHead, setHistoryGate]);
 
+  // AIB-5 Ask AI. Before a proposal: land pending edits and send the head's
+  // lock token (omitted while it is still the bootstrap placeholder). After an
+  // apply: adopt the server head the draft produced, so the header Undo
+  // reverts the AI change like any manual edit; without a token, re-read the
+  // plan through the edited-elsewhere path.
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiToast, setAiToast] = useState<{ text: string; undo: boolean } | null>(null);
+  const aiPrepare = useCallback(async () => {
+    if (!autosaveEnabled || historyGateRef.current) return { ok: false };
+    await autosave.flush();
+    if (autosaveHasPendingRef.current) return { ok: false };
+    const token = autosave.readHead().lockToken;
+    return { ok: true, lockToken: token === AUTOSAVE_BOOTSTRAP_LOCK_TOKEN ? undefined : token };
+  }, [autosaveEnabled, autosave]);
+  const aiOnApplied = useCallback(
+    async (ref: AiBuilderDecision['materialised_ref'], count: number) => {
+      const before = autosave.readHead().index;
+      const token = ref?.lock_token;
+      const head = ref?.revision_index;
+      const fresh = token ? await refetchPlan().catch(() => null) : null;
+      const plan = fresh && !fresh.isError ? fresh.data : undefined;
+      const adopted =
+        !!plan && !!token && head !== undefined &&
+        autosave.adoptServerHead({
+          headRevisionIndex: head,
+          lockToken: token,
+          serverCopy: buildServerWorkingCopy(plan.exercises, { name: plan.name ?? '', type: plan.type ?? 'strength' }),
+        });
+      if (!plan || !adopted) {
+        runReplayRefetch();
+        setAiToast({ text: appliedToast(count), undo: false });
+        return;
+      }
+      setUndoStack([...undoStackRef.current, before]);
+      setRedoStack([]);
+      deletedKeysRef.current.clear();
+      deletedSignaturesRef.current.clear();
+      setName(plan.name ?? '');
+      setType(plan.type ?? 'strength');
+      setRows(
+        plan.exercises.map((e) => ({
+          clientId: clientIdForServerRow(e.id),
+          row_id: e.id,
+          exercise_external_id: e.exercise_external_id,
+          display_name: e.exercise_external_id,
+          sets: e.sets,
+          reps_or_duration_seconds: e.reps_or_duration_seconds,
+          rest_seconds: e.rest_seconds,
+          weight_lbs: e.weight_lbs,
+          superset_group_id: e.superset_group_id,
+          notes: e.notes,
+        })),
+      );
+      setAiToast({ text: appliedToast(count), undo: true });
+    },
+    [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
+  );
+  const ai = useAiBuilder({ planId, isBlank: rows.length === 0, prepare: aiPrepare, onApplied: aiOnApplied });
+  useEffect(() => {
+    if (!aiToast) return undefined;
+    const t = setTimeout(() => setAiToast(null), 10_000);
+    return () => clearTimeout(t);
+  }, [aiToast]);
+  const openAi = useCallback(() => {
+    if (!autosaveEnabled) return;
+    fireAiHaptic('light');
+    setAiOpen(true);
+  }, [autosaveEnabled]);
+
   const historyBlocked =
     editorLocked ||
     autosave.replayInFlight ||
@@ -1535,6 +1608,17 @@ export default function CoachWorkoutBuilderScreen() {
               refused={!!autosave.refusal}
               onPress={onPillPress}
             />
+          ) : null}
+          {ai.visible && autosaveEnabled ? (
+            <Pressable
+              testID="ai-header-button"
+              accessibilityRole="button"
+              accessibilityLabel="Ask AI to change this workout"
+              onPress={openAi}
+              style={styles.historyButton}
+            >
+              <Text style={[typography.caption, { color: sc.textPrimary }]}>Ask AI</Text>
+            </Pressable>
           ) : null}
         </View>
         {autosaveEnabled ? (
@@ -1825,6 +1909,42 @@ export default function CoachWorkoutBuilderScreen() {
           </Text>
         </Pressable>
       </ScrollView>
+      {aiToast ? (
+        <View testID="ai-applied-toast" accessibilityLiveRegion="polite" style={styles.aiBar}>
+          <Text style={[typography.body, { color: sc.textPrimary, flex: 1 }]}>{aiToast.text}</Text>
+          {aiToast.undo ? (
+            <Pressable
+              testID="ai-toast-undo"
+              accessibilityRole="button"
+              accessibilityLabel="Undo the AI change"
+              disabled={historyBlocked}
+              onPress={() => {
+                fireAiHaptic('medium');
+                setAiToast(null);
+                void runHistoryStep('undo');
+              }}
+              style={styles.historyButton}
+            >
+              <Text style={[typography.caption, { color: sc.textPrimary }]}>Undo</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : ai.visible ? (
+        <Pressable
+          testID="ai-prompt-bar"
+          accessibilityRole="button"
+          accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
+          accessibilityState={{ disabled: !autosaveEnabled }}
+          disabled={!autosaveEnabled}
+          onPress={openAi}
+          style={styles.aiBar}
+        >
+          <Text style={[typography.body, { color: sc.textMuted }]}>
+            {!autosaveEnabled ? SAVE_FIRST_COPY : rows.length === 0 ? 'Describe the workout to build' : 'Ask AI to change this workout'}
+          </Text>
+        </Pressable>
+      ) : null}
+      <AiBuilderSheet open={aiOpen} onClose={() => setAiOpen(false)} ai={ai} isBlank={rows.length === 0} sc={sc} />
     </KeyboardAvoidingView>
   );
 }
@@ -1877,6 +1997,19 @@ function makeStyles(sc: SemanticTokens) {
     },
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
     historyRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
+    aiBar: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 52,
+      marginHorizontal: spacing.lg,
+      marginBottom: spacing.md,
+      paddingHorizontal: spacing.md,
+      borderWidth: 1,
+      borderRadius: 14,
+      borderColor: sc.border,
+      backgroundColor: sc.bgSurface,
+    },
     historyButton: {
       minHeight: 44,
       minWidth: 64,
