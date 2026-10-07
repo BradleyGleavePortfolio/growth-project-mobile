@@ -43,10 +43,10 @@ beforeEach(() => {
 });
 
 describe('WeekAiSheet', () => {
-  it('asks once per filled day in day order, groups cards by day, and applies only kept ids per day', async () => {
+  it('asks once per filled day in day order, groups cards by day, and keeps each day\'s choices apart (ids restart at c0)', async () => {
     mockApi.post
-      .mockResolvedValueOnce({ data: proposal(0, ['a1', 'a2']) })
-      .mockResolvedValueOnce({ data: proposal(3, ['b1']) });
+      .mockResolvedValueOnce({ data: proposal(0, ['c0']) })
+      .mockResolvedValueOnce({ data: proposal(3, ['c0', 'c1']) });
     const onApplied = jest.fn();
     const onClose = jest.fn();
     const s = await render(
@@ -55,16 +55,21 @@ describe('WeekAiSheet', () => {
     await waitFor(() => expect(s.getByTestId('week-ai-apply')).toBeTruthy());
     expect(mockApi.post.mock.calls.map((c) => c[1].plan_id)).toEqual(['plan-0', 'plan-3']);
     expect(mockApi.post.mock.calls[0][1]).toEqual(expect.objectContaining({ mode: 'edit', quick_action: 'progress' }));
-    expect(s.getByTestId('week-ai-day-0')).toHaveTextContent(/Lift a1/);
-    expect(s.getByTestId('week-ai-day-3')).toHaveTextContent(/Lift b1/);
+    expect(s.getByTestId('week-ai-day-0')).toHaveTextContent(/Lift c0/);
+    expect(s.getByTestId('week-ai-day-3')).toHaveTextContent(/Lift c1/);
     expect(s.getByText('Apply 3 changes')).toBeTruthy();
 
-    await act(async () => { fireEvent(s.getByTestId('week-ai-keep-b1'), 'valueChange', false); });
-    expect(s.getByText('Apply 2 changes')).toBeTruthy();
+    // Monday's c0 off must leave Thursday's c0 on.
+    await act(async () => { fireEvent(s.getByTestId('week-ai-keep-plan-0:c0'), 'valueChange', false); });
+    expect(s.getByTestId('week-ai-keep-plan-0:c0').props.value).toBe(false);
+    expect(s.getByTestId('week-ai-keep-plan-3:c0').props.value).toBe(true);
+    await act(async () => { fireEvent(s.getByTestId('week-ai-keep-plan-3:c1'), 'valueChange', false); });
+    expect(s.getByText('Apply 1 change')).toBeTruthy();
     await press(s, 'week-ai-apply');
-    expect(mockApi.patch).toHaveBeenCalledWith('/ai/gateway/drafts/draft-0', { decision: 'approved', accepted_change_ids: ['a1', 'a2'] });
-    expect(mockApi.patch).toHaveBeenCalledWith('/ai/gateway/drafts/draft-3', { decision: 'rejected' });
-    expect(onApplied).toHaveBeenCalledWith(2, 1);
+    expect(mockApi.patch).toHaveBeenCalledWith('/ai/gateway/drafts/draft-0', { decision: 'rejected' });
+    expect(mockApi.patch).toHaveBeenCalledWith('/ai/gateway/drafts/draft-3', { decision: 'approved', accepted_change_ids: ['c0'] });
+    expect(mockApi.patch).toHaveBeenCalledTimes(2);
+    expect(onApplied).toHaveBeenCalledWith(1, 1);
     expect(onClose).toHaveBeenCalled();
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
   });

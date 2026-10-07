@@ -50,6 +50,9 @@ async function quietDiscard(draftId: string): Promise<void> {
   }
 }
 
+/** Change ids restart at c0 in every proposal (b#809), so a keep choice is keyed by the day's plan as well; approve still gets bare ids. */
+const selKey = (day: ProgramDay, changeId: string) => `${day.plan_id}:${changeId}`;
+
 const dayTitle = (d: ProgramDay) => `${DAY_LABELS[d.day_index] ?? `Day ${d.day_index + 1}`}: ${d.name}`;
 
 export default function WeekAiSheet({ action, week, days, status, onClose, onApplied }: Props) {
@@ -88,7 +91,7 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
         if (!live.current) return; // closed mid-run: unapplied drafts expire server-side, no plan changed
         setAnswered(out.length);
       }
-      const ids = out.flatMap((r) => r.proposal?.changes.map((c) => c.change_id) ?? []);
+      const ids = out.flatMap((r) => r.proposal?.changes.map((c) => selKey(r.day, c.change_id)) ?? []);
       setResults(out);
       setKept(Object.fromEntries(ids.map((id) => [id, true])));
       setPhase('review');
@@ -100,7 +103,7 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
   }, []);
 
   const pending = results.filter((r) => r.proposal);
-  const accepted = (r: DayResult) => r.proposal?.changes.filter((c) => kept[c.change_id]).map((c) => c.change_id) ?? [];
+  const accepted = (r: DayResult) => r.proposal?.changes.filter((c) => kept[selKey(r.day, c.change_id)]).map((c) => c.change_id) ?? [];
   const n = pending.reduce((sum, r) => sum + accepted(r).length, 0);
 
   const discardAll = (list: DayResult[]) => list.forEach((r) => r.proposal?.draft_id && void quietDiscard(r.proposal.draft_id));
@@ -183,8 +186,8 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
                 {r.error ? <Text style={[typography.caption, { color: sc.textMuted }]}>{r.error}</Text> : null}
                 {r.proposal ? <Text style={[typography.caption, { color: sc.textMuted }]}>{r.proposal.summary}</Text> : null}
                 {r.proposal?.changes.map((c, i) => (
-                  <WeekChangeRow key={c.change_id} change={c} kept={!!kept[c.change_id]} delay={reduceMotion ? 0 : (di * 3 + i) * 60}
-                    reduceMotion={reduceMotion} onToggle={toggle} />
+                  <WeekChangeRow key={c.change_id} id={selKey(r.day, c.change_id)} change={c} kept={!!kept[selKey(r.day, c.change_id)]}
+                    delay={reduceMotion ? 0 : (di * 3 + i) * 60} reduceMotion={reduceMotion} onToggle={toggle} />
                 ))}
                 {r.proposal?.dropped.length ? (
                   <Text style={[typography.caption, { color: sc.textMuted }]}>{droppedLine(r.proposal.dropped.length, r.proposal.dropped[0]?.reason ?? null)}</Text>
@@ -212,8 +215,8 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
   );
 }
 
-type RowProps = { change: AiBuilderChange; kept: boolean; delay: number; reduceMotion: boolean; onToggle: (id: string) => void };
-function WeekChangeRow({ change, kept, delay, reduceMotion, onToggle }: RowProps) {
+type RowProps = { id: string; change: AiBuilderChange; kept: boolean; delay: number; reduceMotion: boolean; onToggle: (id: string) => void };
+function WeekChangeRow({ id, change, kept, delay, reduceMotion, onToggle }: RowProps) {
   const { semanticColors: sc } = useTheme();
   const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
@@ -228,11 +231,11 @@ function WeekChangeRow({ change, kept, delay, reduceMotion, onToggle }: RowProps
   const after = formatRow(change.after);
   const delta = before && after ? `${before} -> ${after}` : after || before;
   return (
-    <Animated.View testID={`week-ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }]}>
+    <Animated.View testID={`week-ai-change-${id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: sc.accentText, borderColor: sc.accentText }]}>{kind}</Text>
         {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
-        <Switch testID={`week-ai-keep-${change.change_id}`} value={kept} onValueChange={() => onToggle(change.change_id)}
+        <Switch testID={`week-ai-keep-${id}`} value={kept} onValueChange={() => onToggle(id)}
           accessibilityLabel={`Keep this change: ${kind} ${name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
       </View>
       {delta ? <Text style={[typography.body, { color: sc.textPrimary }]}>{delta}</Text> : null}

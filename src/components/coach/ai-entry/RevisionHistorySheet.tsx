@@ -7,6 +7,7 @@ import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
 import { listWorkoutRevisions, type WorkoutRevision } from '../../../api/workoutRevisionsApi';
 import { AI_LABEL } from '../ai-builder/aiBuilderCopy';
+import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 
 export const HISTORY_COPY = {
   unavailable: 'History is not available for this workout yet. Undo still steps back through recent changes.',
@@ -31,6 +32,7 @@ function when(iso: string): string {
 type Props = { planId: string; onClose: () => void; sc: SemanticTokens };
 
 export default function RevisionHistorySheet({ planId, onClose, sc }: Props) {
+  const reduceMotion = useReduceMotion();
   const [state, setState] = useState<{ items?: WorkoutRevision[] | null; failed?: boolean }>({});
   const load = useCallback(() => {
     let live = true;
@@ -49,7 +51,7 @@ export default function RevisionHistorySheet({ planId, onClose, sc }: Props) {
     <Text testID={testID} style={[typography.body, { color: sc.textMuted, marginVertical: spacing.sm }]}>{body}</Text>
   );
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible transparent animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={onClose}>
       <View style={[styles.backdrop, { backgroundColor: sc.overlay }]}>
         <View testID="revision-history-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border }]}>
           <View style={styles.row}>
