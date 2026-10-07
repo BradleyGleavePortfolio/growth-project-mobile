@@ -34,6 +34,9 @@ jest.mock('../services/api', () => ({
   default: { get: (...a: unknown[]) => mockGet(...a), post: (...a: unknown[]) => mockPost(...a) },
 }));
 jest.mock('../services/sentry', () => ({ captureError: jest.fn() }));
+jest.mock('../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => ({ id: 'client-plans', role: 'student', coach_id: 'coach-1' }),
+}));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 const mockCreateCheckoutSession = jest.fn();
 jest.mock('../api/clientPaymentsApi', () => {
