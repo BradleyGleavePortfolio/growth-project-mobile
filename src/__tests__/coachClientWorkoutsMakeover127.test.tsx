@@ -10,8 +10,11 @@ import { testColors } from '../screens/client/wearables/recoveryTestColors';
 jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
 jest.mock('react-native', () => {
   const actual = jest.requireActual('react-native');
-  return { ...actual, RefreshControl: ({ onRefresh, children }: { onRefresh: () => void; children?: React.ReactNode }) =>
-    jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Refresh client', onRefresh }, children) };
+  // Preserve lazy native getters instead of evaluating unrelated native modules.
+  return Object.defineProperties({}, { ...Object.getOwnPropertyDescriptors(actual),
+    RefreshControl: { enumerable: true, value: ({ onRefresh, children }: { onRefresh: () => void; children?: React.ReactNode }) =>
+      jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Refresh client', onRefresh }, children) },
+  });
 });
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({
   colors: jest.requireActual('../screens/client/wearables/recoveryTestColors').testColors,
