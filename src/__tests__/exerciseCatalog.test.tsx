@@ -107,6 +107,7 @@ import type {
   ExerciseDetail,
   ExerciseListResponse,
 } from '../types/exerciseCatalog';
+import type { WorkoutStackParamList } from '../navigation/ClientNavigator';
 
 const mockedGet = api.get as jest.Mock;
 let mockVideoStatusListener: (event: { status: string }) => void;
@@ -226,6 +227,7 @@ async function renderInNav(Screen: any, params?: unknown) {
 
 // The client library lists GET /exercises/search (the ExerciseDB proxy the
 // coach builder uses); the /exercise-catalog table is empty in production.
+const LibraryStack = createNativeStackNavigator<WorkoutStackParamList>();
 const LIBRARY_LIST = {
   items: [{
     id: '0025', name: 'barbell bench press', bodyPart: 'chest', target: 'pectorals',
@@ -282,10 +284,10 @@ describe('ExerciseLibraryScreen', () => {
       .mockResolvedValueOnce(ok(LIBRARY_LIST.items[0]));
     const screen = await render(
       <NavigationContainer>
-        <Stack.Navigator>
-          <Stack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} />
-          <Stack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
-        </Stack.Navigator>
+        <LibraryStack.Navigator>
+          <LibraryStack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} />
+          <LibraryStack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
+        </LibraryStack.Navigator>
       </NavigationContainer>,
     );
     await fireEvent.press(await screen.findByRole('button', { name: 'Open Barbell bench press' }));
