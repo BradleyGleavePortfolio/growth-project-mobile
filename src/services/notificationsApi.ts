@@ -272,6 +272,7 @@ function appKindFor(kind: string): NotificationKind {
 }
 
 function defaultTitleFor(kind: string): string {
+  if (kind === 'workout_assigned') return 'New workout';
   if (kind.startsWith('booking_reminder')) return 'Session reminder';
   if (kind.startsWith('booking_')) return 'Calendar update';
   return 'Update';
@@ -298,7 +299,9 @@ function stringParams(raw: unknown): Record<string, string> | undefined {
 export function inboxScreenForKind(kind: string): string | undefined {
   if (kind.startsWith('community_')) return 'Community';
   if (kind.startsWith('message')) return 'Messages';
-  if (kind === 'workout_reminder') return 'WorkoutMain';
+  // FU-WORKLOG-126: "Your coach assigned a new workout." opens Workouts,
+  // where the From your coach card is (the row used to do nothing).
+  if (kind === 'workout_reminder' || kind === 'workout_assigned') return 'WorkoutMain';
   if (kind === 'drip_released') return 'Deliverables';
   return undefined;
 }

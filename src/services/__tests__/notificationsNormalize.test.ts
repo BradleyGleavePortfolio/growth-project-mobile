@@ -60,4 +60,17 @@ describe('normalizeNotification (S-SCHED-2 live rows)', () => {
     expect(row('drip_released')?.actionScreen).toBe('Deliverables');
     expect(row('coach_alert')?.actionScreen).toBeUndefined();
   });
+
+  it('FU-WORKLOG-126: a coach-assigned workout row is titled and opens Workouts', () => {
+    const n = normalizeNotification({
+      id: 'wa-1',
+      kind: 'workout_assigned',
+      body: 'Your coach assigned a new workout.',
+      payload: { assignmentId: 'a-1', workoutPlanId: 'p-1' },
+      read_at: null,
+      created_at: '2027-03-01T10:00:00.000Z',
+    });
+    expect(n?.title).toBe('New workout');
+    expect(n?.actionScreen).toBe('WorkoutMain');
+  });
 });

@@ -224,6 +224,8 @@ export default function ActiveWorkoutScreen() {
         restSec: re.restSec,
         workoutPlanExerciseId: re.workoutPlanExerciseId,
         muscleGroup: re.muscleGroup,
+        // FU-WORKLOG-126: the coach's cue stays visible mid-workout.
+        ...(re.coachNote ? { coachNote: re.coachNote } : {}),
       }));
     } catch (err) {
       // Best-effort parse of the routine JSON on screen mount. An empty
