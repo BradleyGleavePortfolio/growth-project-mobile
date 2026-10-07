@@ -1,5 +1,5 @@
 import React from 'react';
-import { Animated, Text, StyleSheet, Modal } from 'react-native';
+import { Animated, StyleSheet } from 'react-native';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 import MealSectionCard from '../MealSectionCard';
 import FoodSearchView from '../FoodSearchView';
@@ -19,7 +19,7 @@ const log: FoodLog = { ...food, foodName: food.name, id: 'log', userId: 'user', 
 const action = jest.fn();
 const search = { searchQuery: '', onSearchChange: jest.fn(), onClearSearch: jest.fn(), onRetrySearch: jest.fn(), searching: false, showSlowMessage: false, searchError: null, searchResults: [], didYouMean: [], recentTab: 'recent' as const, onRecentTabChange: jest.fn(), recentFoods: [food], frequentFoods: [food], onSelectFood: jest.fn(), onEnterManualMode: jest.fn() };
 const press = (label: string, handler: jest.Mock, ...args: unknown[]) => { fireEvent.press(screen.getByText(label)); expect(handler).toHaveBeenLastCalledWith(...args); };
-const fonts = () => expect(screen.UNSAFE_getAllByType(Text).every((text) => { const s = StyleSheet.flatten(text.props.style); return s.fontFamily === 'Inter_400Regular' && s.fontSize >= 13; })).toBe(true);
+const fonts = () => expect(screen.getAllByText(/./).every((text) => { const s = StyleSheet.flatten(text.props.style); return s.fontFamily === 'Inter_400Regular' && s.fontSize >= 13; })).toBe(true);
 beforeEach(() => { jest.clearAllMocks(); mockReduced = false; });
 it('preserves meal add, tap-to-edit and long-press-to-delete', async () => {
   const add = jest.fn(), edit = jest.fn();
@@ -37,9 +37,9 @@ it('preserves search, clear, both tabs, food selection, repeat and manual entry'
   press('Oats', search.onSelectFood, food); });
 it('preserves portion input, unit, log and cancel with the same macro values', async () => {
   const confirm = jest.fn(), cancel = jest.fn(), unit = jest.fn();
-  await render(<QuantityPickerModal visible selectedFood={{ ...food, nutrient_basis: 'PER_100G', serving_size_grams: 100, supports_volume_units: true, cup_grams: 100, tbsp_grams: 10, tsp_grams: 5 }} quantityInput="1" selectedUnit="serving" onQuantityChange={action} onUnitChange={unit} onConfirm={confirm} onCancel={cancel} />);
+  const props = { visible: true, selectedFood: { ...food, nutrient_basis: 'PER_100G' as const, serving_size_grams: 100, supports_volume_units: true, cup_grams: 100, tbsp_grams: 10, tsp_grams: 5 }, quantityInput: '1', selectedUnit: 'serving', onQuantityChange: action, onUnitChange: unit, onConfirm: confirm, onCancel: cancel }; await render(<QuantityPickerModal {...props} />);
   fireEvent.changeText(screen.getByLabelText('Food quantity'), '2'); expect(action).toHaveBeenLastCalledWith('2');
-  for (const label of ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp']) press(label, unit, label); press('Log Food', confirm); press('Cancel', cancel); cancel.mockClear(); fireEvent(screen.UNSAFE_getByType(Modal), 'requestClose'); expect(cancel).toHaveBeenCalled(); fonts();
+  for (const label of ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp']) press(label, unit, label); press('Log Food', confirm); press('Cancel', cancel); cancel.mockClear(); QuantityPickerModal(props).props.onRequestClose(); expect(cancel).toHaveBeenCalled(); fonts();
   for (const value of ['300', '12g', '54g', '6g']) expect(screen.getByText(value)).toBeTruthy(); });
 it('preserves all water quick-add amounts and displayed quantities', async () => {
   await render(<WaterTracker currentOz={8} onAdd={action} />);
