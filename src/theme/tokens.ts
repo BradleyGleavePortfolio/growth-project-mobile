@@ -316,7 +316,7 @@ export interface SemanticTokens {
   textPrimary: string;
   /** Secondary / supporting text */
   textMuted: string;
-  /** Primary brand accent — oxblood lifted in dark for AA contrast */
+  /** Primary brand accent — forest in light; retained dark fill is AA-safe */
   accent: string;
   /**
    * Accent color for ACCENT-TINTED TEXT/ICONS rendered ON a screen/surface
@@ -327,8 +327,8 @@ export interface SemanticTokens {
    * #1C1A18 (AA FAIL for body-sized text). This lifted rose clears AA on BOTH
    * dark backgrounds (WCAG 2.1, verified in theme/__tests__/contrastTokens.test):
    *   dark:  #E07373 on #121110 ~ 6.17:1  PASS  |  on #1C1A18 ~ 5.68:1  PASS
-   * Light mode keeps the oxblood #4A0404, which is already deep enough to clear
-   * AA as text on the bone/cream backgrounds.
+   * Light mode uses the existing forest #2C4A36, which clears AA as text on
+   * bone #F5EFE4 (~8.57:1) and surface #FFFDF8 (~9.65:1).
    * Use `accent` for FILLS (CTA backgrounds, progress fills, borders) and
    * `accentText` for accent-colored FOREGROUND text/icons on a bg/surface.
    */
@@ -338,11 +338,11 @@ export interface SemanticTokens {
    * primary CTA). Warm near-white so it never reads as a hard #FFF on the
    * old-money palette. Contrast on accent (computed, WCAG 2.1 relative
    * luminance — verified in contrast_check.py / scopedTokenGate test):
-   *   light: #FBF7F0 on #4A0404 (oxblood)        ~ 15.01:1  PASS (AA body + large)
+   *   light: #FBF7F0 on #2C4A36 (forest)         ~  9.19:1  PASS (AA body + large)
    *   dark:  #FBF7F0 on #B43C3C (oxblood lifted) ~  5.38:1  PASS (AA body + large)
    * NOTE: a dark ink on the lifted dark accent only reaches ~3.10:1 (even
    * pure black tops out at ~3.65:1), so the dark on-accent MUST be the warm
-   * near-white too — both modes use light text on the oxblood CTA.
+   * near-white too — both modes use light text on their primary CTA fill.
    */
   textOnAccent: string;
   /**
@@ -377,12 +377,11 @@ export const lightTokens: SemanticTokens = {
   // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
   // light backgrounds: ~4.92:1 on cream #F5EFE4, ~5.54:1 on surface #FFFDF8.
   textMuted:   '#6B675F',
-  accent:      '#4A0404',  // oxblood
-  // Accent-tinted FOREGROUND text/icons on bone/cream backgrounds. Oxblood is
-  // already deep enough to clear AA as text on light: ~14.6:1 on #F5EFE4,
-  // ~15.9:1 on #FFFDF8 (verified in contrastTokens test).
-  accentText:  '#4A0404',
-  textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~15.01:1)
+  accent:      colors.forest,
+  // One forest accent for both CTA fills and foreground text/icons. Clears
+  // AA on page (~8.57:1) and surface (~9.65:1); see contrastTokens test.
+  accentText:  colors.forest,
+  textOnAccent:'#FBF7F0',  // warm near-white on forest (~9.19:1)
   // Disabled CTA: warm taupe fill + dark warm ink. ~5.90:1 (AA PASS) so a
   // disabled/current-plan button label stays legible without parent opacity.
   disabledBg:     '#E0D9CE',
