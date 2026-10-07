@@ -10,10 +10,10 @@ import { signOut } from '../../../../services/authActions';
 import { updateSupabasePassword } from '../../../../utils/supabaseAuth';
 import { setBiometricOptIn } from '../../../../hooks/useBiometricGate';
 import { dispatchTutorial } from '../../../../tutorial/tutorialStore';
-import { featureFlags } from '../../../../config/featureFlags';
 
 const mockUpdateSetting = jest.fn();
 const mockParentNavigate = jest.fn();
+let mockRomanEnabled = true;
 jest.mock('../../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'settings-client', name: 'Alex', email: 'alex@example.com' }),
 }));
@@ -50,20 +50,22 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ getParent: () => ({ navigate: mockParentNavigate }) }),
 }));
 jest.mock('../../../../config/featureFlags', () => ({
-  featureFlags: { consultationOnboarding: true, romanChat: true, clientTutorial: true },
+  featureFlags: { get consultationOnboarding() { return mockRomanEnabled; },
+    get romanChat() { return mockRomanEnabled; }, clientTutorial: true },
 }));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) =>
     require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
 }));
 
-const navigationStub = { goBack: jest.fn(), navigate: jest.fn() };
+const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
+  goBack: jest.fn(), navigate: jest.fn(),
+};
 const navigation = navigationStub as NavigationProp<ParamListBase>;
 beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
-  featureFlags.consultationOnboarding = true;
-  featureFlags.romanChat = true;
+  mockRomanEnabled = true;
 });
 
 it('uses a serif heading, flat themed sections and accessible 44-point controls', async () => {
@@ -156,8 +158,7 @@ it('keeps password inputs, close, validation, save and confirmed reset/sign-out 
 });
 
 it('keeps the existing Roman consent visibility gate', async () => {
-  featureFlags.consultationOnboarding = false;
-  featureFlags.romanChat = false;
+  mockRomanEnabled = false;
   const view = await render(<SettingsScreen navigation={navigation} />);
   expect(view.queryByTestId('settings-roman-ai')).toBeNull();
   expect(view.getByTestId('settings-coach-sharing')).toBeTruthy();
