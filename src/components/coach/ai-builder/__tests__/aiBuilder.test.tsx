@@ -15,11 +15,8 @@ jest.mock('../../../../services/api', () => ({
   default: { get: (...a: unknown[]) => mockApi.get(...a), post: (...a: unknown[]) => mockApi.post(...a), patch: (...a: unknown[]) => mockApi.patch(...a) },
 }));
 jest.mock('expo-haptics', () => ({
-  impactAsync: jest.fn(() => Promise.resolve()),
-  selectionAsync: jest.fn(() => Promise.resolve()),
-  notificationAsync: jest.fn(() => Promise.resolve()),
-  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
-  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
+  impactAsync: jest.fn(async () => undefined), selectionAsync: jest.fn(async () => undefined), notificationAsync: jest.fn(async () => undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' }, NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
 }));
 let mockReduceMotion = false;
 jest.mock('../../../../screens/client/wearables/components/useReduceMotion', () => ({ useReduceMotion: () => mockReduceMotion }));
@@ -30,15 +27,11 @@ const change = (id: string, kind: string, name: string, extra: object) => ({
   change_id: id, kind, op: {}, exercise: { id: name, name, thumbnail_url: null }, reason: `Reason ${id}.`, warnings: [], ...extra,
 });
 const PROPOSAL = {
-  draft_id: 'draft-1',
-  summary: '2 changes. Knee-friendly swaps.',
+  draft_id: 'draft-1', summary: '2 changes. Knee-friendly swaps.', dropped: [{ reason: 'not in your exercise library.' }], context_used: ['goal'], screening_flag: false,
   changes: [
     change('c1', 'changed', 'Goblet squat', { before: { sets: 3, reps_or_duration_seconds: 8, weight_lbs: 135 }, after: { sets: 3, reps_or_duration_seconds: 10, weight_lbs: 115 } }),
     change('c2', 'added', 'Glute bridge', { after: { sets: 2, reps_or_duration_seconds: 12 }, warnings: ['Loads the hip.'] }),
   ],
-  dropped: [{ reason: 'not in your exercise library.' }],
-  context_used: ['goal', 'equipment'],
-  screening_flag: false,
 };
 
 const mockPrepare = jest.fn();
@@ -56,11 +49,8 @@ async function proposeFromInput(s: Screen) {
 const proposeCall = (fields: object) => expect(mockApi.post).toHaveBeenCalledWith('/ai/gateway/workout-builder/propose', expect.objectContaining(fields), expect.anything());
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockReduceMotion = false;
+  [jest.clearAllMocks(), (mockReduceMotion = false), mockOnApplied.mockResolvedValue(undefined), mockApi.get.mockResolvedValue({ data: STATUS_ON })];
   mockPrepare.mockResolvedValue({ ok: true, lockToken: 'abcdefabcdefabcd' });
-  mockOnApplied.mockResolvedValue(undefined);
-  mockApi.get.mockResolvedValue({ data: STATUS_ON });
 });
 
 describe('aiBuilderApi + copy', () => {
@@ -114,8 +104,7 @@ describe('AiBuilderSheet + useAiBuilder', () => {
   });
 
   it('Discard rejects the draft with a warning haptic', async () => {
-    mockApi.post.mockResolvedValueOnce({ data: PROPOSAL });
-    mockApi.patch.mockResolvedValueOnce({ data: { status: 'rejected' } });
+    [mockApi.post.mockResolvedValueOnce({ data: PROPOSAL }), mockApi.patch.mockResolvedValueOnce({ data: { status: 'rejected' } })];
     const s = await render(<Harness />);
     await proposeFromInput(s);
     await waitFor(() => expect(s.getByTestId('ai-builder-discard')).toBeTruthy());

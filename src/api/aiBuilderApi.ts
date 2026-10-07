@@ -1,10 +1,6 @@
 /**
- * aiBuilderApi — zod-parsed client for Ask AI in the workout builder (AIB-5).
- * Contract: AI_MASTER_BUILDER_PLAN.md PART 2 section 3 (tgp-agent-context).
- *   GET   /ai/gateway/workout-builder/status   (AIB-4; 404 on older backends -> entry hidden)
- *   POST  /ai/gateway/workout-builder/propose  (AIB-2)
- *   PATCH /ai/gateway/drafts/:id               (existing; AIB-2 adds accepted_change_ids)
- * Every refusal maps to one bounded code so the sheet shows a specific line.
+ * aiBuilderApi — zod-parsed Ask AI client (AIB-5; contract: AI_MASTER_BUILDER_PLAN.md PART 2 section 3). GET status (AIB-4;
+ * 404 on older backends -> entry hidden), POST propose (AIB-2), PATCH drafts/:id (accepted_change_ids). One code per refusal.
  */
 import { z } from 'zod';
 import axios from 'axios';
@@ -18,11 +14,8 @@ export const AI_BUILDER_INJURY_AREAS = ['knee', 'shoulder', 'lower_back', 'hip',
 export type AiBuilderInjuryArea = (typeof AI_BUILDER_INJURY_AREAS)[number];
 
 const StatusSchema = z.object({
-  state: z.enum(['on', 'paused', 'no_credits', 'not_configured']),
-  create: z.boolean(),
-  edit: z.boolean(),
+  state: z.enum(['on', 'paused', 'no_credits', 'not_configured']), create: z.boolean(), edit: z.boolean(), label: z.string(),
   credits: z.object({ remaining_pct: z.number().nullable(), resets_at: z.string().nullable() }),
-  label: z.string(),
 });
 export type AiBuilderStatus = z.infer<typeof StatusSchema>;
 
@@ -30,25 +23,16 @@ const n = z.number().nullable().optional();
 const RowSchema = z.object({ sets: n, reps_or_duration_seconds: n, rest_seconds: n, weight_lbs: n }).nullable().optional();
 
 const ChangeSchema = z.object({
-  change_id: z.string().min(1),
-  kind: z.enum(['added', 'changed', 'removed', 'moved', 'meta']),
+  change_id: z.string().min(1), kind: z.enum(['added', 'changed', 'removed', 'moved', 'meta']),
   op: z.unknown(), // applied server-side by draft id; display only here
-  before: RowSchema,
-  after: RowSchema,
+  before: RowSchema, after: RowSchema, reason: z.string(), warnings: z.array(z.string()),
   exercise: z.object({ id: z.string(), name: z.string(), thumbnail_url: z.string().nullable() }),
-  reason: z.string(),
-  warnings: z.array(z.string()),
 });
 export type AiBuilderChange = z.infer<typeof ChangeSchema>;
 
 const ProposalSchema = z.object({
-  draft_id: z.string().min(1),
-  summary: z.string(),
-  changes: z.array(ChangeSchema),
-  dropped: z.array(z.object({ reason: z.string() })),
-  context_used: z.array(z.string()),
-  screening_flag: z.boolean(),
-  credits_remaining_pct: z.number().nullable().optional(),
+  draft_id: z.string().min(1), summary: z.string(), changes: z.array(ChangeSchema), dropped: z.array(z.object({ reason: z.string() })),
+  context_used: z.array(z.string()), screening_flag: z.boolean(), credits_remaining_pct: z.number().nullable().optional(),
 });
 export type AiBuilderProposal = z.infer<typeof ProposalSchema>;
 
@@ -108,8 +92,8 @@ async function run<T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }>
 export interface ProposeBody {
   mode: 'create' | 'edit';
   plan_id: string;
-  lock_token?: string;
-  client_id?: string;
+  lock_token?: string; // omitted while the builder only holds the bootstrap token
+  client_id?: string; // AIB-6 (client context); absent = template/library work, no client data
   instruction: string;
   quick_action?: AiBuilderQuickAction;
   injury_area?: AiBuilderInjuryArea;

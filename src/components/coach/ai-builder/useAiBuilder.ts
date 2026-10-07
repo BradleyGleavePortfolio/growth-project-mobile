@@ -11,22 +11,19 @@ import {
 import { AI_STAGES, describeAiBuilderError, WAIT_FOR_SAVE_COPY } from './aiBuilderCopy';
 
 export type AiHaptic = 'light' | 'medium' | 'success' | 'warning' | 'error' | 'selection';
-const { Light, Medium } = Haptics.ImpactFeedbackStyle;
-const { Success, Warning, Error: Err } = Haptics.NotificationFeedbackType;
 
 /** Haptics are decoration: an unsupported device (web, simulator) must never break a tap. */
 export function fireAiHaptic(kind: AiHaptic): void {
-  try {
-    const p =
-      kind === 'selection' ? Haptics.selectionAsync()
-      : kind === 'light' || kind === 'medium' ? Haptics.impactAsync(kind === 'light' ? Light : Medium)
-      : Haptics.notificationAsync(kind === 'success' ? Success : kind === 'warning' ? Warning : Err);
-    void p.catch(() => {
-      /* no haptic engine on this device */
-    });
-  } catch {
-    /* expo-haptics unavailable */
-  }
+  void (async () => {
+    try {
+      const { ImpactFeedbackStyle: I, NotificationFeedbackType: N } = Haptics;
+      await (kind === 'selection' ? Haptics.selectionAsync()
+        : kind === 'light' || kind === 'medium' ? Haptics.impactAsync(kind === 'light' ? I.Light : I.Medium)
+        : Haptics.notificationAsync(kind === 'success' ? N.Success : kind === 'warning' ? N.Warning : N.Error));
+    } catch {
+      // No haptic engine on this device: nothing to do.
+    }
+  })();
 }
 
 export const AI_STAGE_MS = 700;
@@ -35,14 +32,11 @@ const AI_CARD_TICKS_MAX = 5;
 export interface UseAiBuilderArgs {
   planId: string | undefined;
   isBlank: boolean;
-  clientId?: string;
-  /** Land pending autosave edits; ok=false while an edit is still unsaved. */
-  prepare: () => Promise<{ ok: boolean; lockToken?: string }>;
-  /** Fold the server copy into the screen after an apply. */
-  onApplied: (ref: AiBuilderRef, count: number) => void | Promise<void>;
+  prepare: () => Promise<{ ok: boolean; lockToken?: string }>; // land pending edits; ok=false while one is unsaved
+  onApplied: (ref: AiBuilderRef, count: number) => void | Promise<void>; // fold the server copy into the screen
 }
 
-export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: UseAiBuilderArgs) {
+export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuilderArgs) {
   // undefined = loading or unreadable (entry stays visible; propose reports the cause);
   // null = route absent on this backend (404): the ONLY hide case.
   const [status, setStatus] = useState<AiBuilderStatus | null | undefined>(undefined);
@@ -53,9 +47,7 @@ export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: 
       .then(() => aiBuilderApi.getStatus())
       .then((s) => live && setStatus(s), () => live && setStatus(undefined))
       .finally(() => live && setStatusLoaded(true));
-    return () => {
-      live = false;
-    };
+    return () => void (live = false);
   }, []);
 
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'review' | 'applying'>('idle');
@@ -64,16 +56,13 @@ export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: 
   const [kept, setKept] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stopStages = useCallback(() => {
-    if (timer.current) clearInterval(timer.current);
-    timer.current = null;
-  }, []);
+  const stopStages = useCallback(() => void (timer.current && clearInterval(timer.current)), []);
   useEffect(() => stopStages, [stopStages]);
 
   const fail = useCallback((err: unknown) => {
     const e = toAiBuilderError(err);
-    setError(describeAiBuilderError(e.code, e.resetsAt));
     fireAiHaptic('error');
+    setError(describeAiBuilderError(e.code, e.resetsAt));
   }, []);
 
   const propose = useCallback(
@@ -90,17 +79,11 @@ export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: 
         const ready = await prepare();
         if (!ready.ok) {
           setError(WAIT_FOR_SAVE_COPY);
-          setPhase('idle');
-          return;
+          return setPhase('idle');
         }
         const res = await aiBuilderApi.propose({
-          mode: isBlank ? 'create' : 'edit',
-          plan_id: planId,
-          lock_token: ready.lockToken,
-          client_id: clientId,
-          instruction: args.instruction.trim(),
-          quick_action: args.quickAction,
-          injury_area: args.injuryArea,
+          mode: isBlank ? 'create' : 'edit', plan_id: planId, lock_token: ready.lockToken,
+          instruction: args.instruction.trim(), quick_action: args.quickAction, injury_area: args.injuryArea,
         });
         setProposal(res);
         setKept(Object.fromEntries(res.changes.map((c) => [c.change_id, true])));
@@ -113,7 +96,7 @@ export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: 
         stopStages();
       }
     },
-    [planId, phase, prepare, isBlank, clientId, stopStages, fail],
+    [planId, phase, prepare, isBlank, stopStages, fail],
   );
 
   const toggle = useCallback((changeId: string) => {
@@ -145,15 +128,14 @@ export function useAiBuilder({ planId, isBlank, clientId, prepare, onApplied }: 
 
   const discard = useCallback(async () => {
     fireAiHaptic('warning');
-    const draft = proposal;
     setProposal(null);
     setPhase('idle');
     setError(null);
-    if (!draft) return;
+    if (!proposal) return;
     try {
-      await aiBuilderApi.discard(draft.draft_id);
+      await aiBuilderApi.discard(proposal.draft_id);
     } catch {
-      // The draft stays pending server-side and expires; the plan is unchanged.
+      // A failed reject leaves the draft pending server-side (it expires); the plan is unchanged either way.
     }
   }, [proposal]);
 

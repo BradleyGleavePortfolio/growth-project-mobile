@@ -1501,11 +1501,8 @@ export default function CoachWorkoutBuilderScreen() {
     }
   }, [sendHistoryRequest, settleHistoryHead, setHistoryGate]);
 
-  // AIB-5 Ask AI. Before a proposal: land pending edits and send the head's
-  // lock token (omitted while it is still the bootstrap placeholder). After an
-  // apply: adopt the server head the draft produced, so the header Undo
-  // reverts the AI change like any manual edit; without a token, re-read the
-  // plan through the edited-elsewhere path.
+  // AIB-5 Ask AI: land pending edits before a proposal; after an apply adopt the server head (the header Undo
+  // reverts the AI change like a manual edit), or without a lock token re-read via the edited-elsewhere path.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiToast, setAiToast] = useState<{ text: string; undo: boolean } | null>(null);
   const aiPrepare = useCallback(async () => {
@@ -1522,42 +1519,34 @@ export default function CoachWorkoutBuilderScreen() {
       const head = ref?.revision_index;
       const fresh = token ? await refetchPlan().catch(() => null) : null;
       const plan = fresh && !fresh.isError ? fresh.data : undefined;
-      const adopted =
-        !!plan && !!token && head !== undefined &&
-        autosave.adoptServerHead({
-          headRevisionIndex: head,
-          lockToken: token,
-          serverCopy: buildServerWorkingCopy(plan.exercises, { name: plan.name ?? '', type: plan.type ?? 'strength' }),
-        });
-      if (!plan || !adopted) {
-        runReplayRefetch();
-        setAiToast({ text: appliedToast(count), undo: false });
-        return;
-      }
+      const meta = { name: plan?.name ?? '', type: plan?.type ?? 'strength' };
+      const adopted = !!plan && !!token && head !== undefined &&
+        autosave.adoptServerHead({ headRevisionIndex: head, lockToken: token, serverCopy: buildServerWorkingCopy(plan.exercises, meta) });
+      setAiToast({ text: appliedToast(count), undo: adopted });
+      if (!plan || !adopted) return runReplayRefetch();
       setUndoStack([...undoStackRef.current, before]);
       setRedoStack([]);
       deletedKeysRef.current.clear();
       deletedSignaturesRef.current.clear();
-      setName(plan.name ?? '');
-      setType(plan.type ?? 'strength');
+      setName(meta.name);
+      setType(meta.type);
       setRows(plan.exercises.map((e) => ({
         clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id,
         display_name: e.exercise_external_id, sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds,
         rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes,
       })));
-      setAiToast({ text: appliedToast(count), undo: true });
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
   );
   const ai = useAiBuilder({ planId, isBlank: rows.length === 0, prepare: aiPrepare, onApplied: aiOnApplied });
   useEffect(() => {
-    if (!aiToast) return undefined;
-    const t = setTimeout(() => setAiToast(null), 10_000);
+    const t = aiToast ? setTimeout(() => setAiToast(null), 10_000) : undefined;
     return () => clearTimeout(t);
   }, [aiToast]);
   const openAi = useCallback(() => {
-    if (autosaveEnabled) setAiOpen(true);
-    if (autosaveEnabled) fireAiHaptic('light');
+    if (!autosaveEnabled) return;
+    fireAiHaptic('light');
+    setAiOpen(true);
   }, [autosaveEnabled]);
 
   const historyBlocked =

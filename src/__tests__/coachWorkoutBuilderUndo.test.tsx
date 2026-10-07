@@ -808,37 +808,35 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
   const STATUS = (state: string) => ({ state, create: true, edit: true, credits: { remaining_pct: 50, resets_at: null }, label: "AI-suggested, coach-approved" });
   const press = (screen: Screen, id: string) => act(async () => { await fireEvent.press(screen.getByTestId(id)); });
 
-  it("status 404 (current production backend): no Ask AI entry", async () => {
+  const mount = async (status: object | null) => {
     setFlag(true);
+    mockAiStatus.mockResolvedValue(status);
     const Screen = loadScreen();
-    const screen = await render(<Screen />);
+    return render(<Screen />);
+  };
+
+  it("status 404 (current production backend): no Ask AI entry", async () => {
+    const screen = await mount(null);
     await waitFor(() => expect(mockAiStatus).toHaveBeenCalled());
     await act(async () => {});
-    expect(screen.queryByTestId("ai-prompt-bar")).toBeNull();
-    expect(screen.queryByTestId("ai-header-button")).toBeNull();
+    expect(screen.queryByTestId("ai-prompt-bar") ?? screen.queryByTestId("ai-header-button")).toBeNull();
   });
 
   it("status paused: the entry stays visible and the sheet says it is paused", async () => {
-    setFlag(true);
-    mockAiStatus.mockResolvedValue(STATUS("paused"));
-    const Screen = loadScreen();
-    const screen = await render(<Screen />);
+    const screen = await mount(STATUS("paused"));
     await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
     await press(screen, "ai-prompt-bar");
     expect(screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged.")).toBeTruthy();
   });
 
   it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
-    setFlag(true);
-    mockAiStatus.mockResolvedValue(STATUS("on"));
     mockAiPropose.mockResolvedValue({
       draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false,
       changes: [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise: { id: "bench", name: "Bench press", thumbnail_url: null }, reason: "One step.", warnings: [] }],
     });
     mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" } });
     mockRefetch.mockResolvedValue({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false });
-    const Screen = loadScreen();
-    const screen = await render(<Screen />);
+    const screen = await mount(STATUS("on"));
     await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
     await press(screen, "ai-prompt-bar");
     await act(async () => { await fireEvent.changeText(screen.getByTestId("ai-builder-input"), "progress this"); });
