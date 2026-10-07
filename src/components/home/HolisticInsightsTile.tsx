@@ -7,10 +7,8 @@
  *                             with a small "View all" affordance the
  *                             caller wires to navigation. Up to 3
  *                             insights total, but the tile shows 1.
- *   - 'insufficient_data'   — honest empty-state copy from envelope.notes
- *                             (or a built-in fallback).
- *   - 'finance_unavailable' — same as above but using the finance-
- *                             specific copy from the backend.
+ *   - 'insufficient_data'   — hidden.
+ *   - 'finance_unavailable' — hidden.
  *
  * The tile is read-only. No mutations, no navigation prop required;
  * the caller passes an optional `onPress` to wire navigation to the
@@ -25,7 +23,6 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type {
   HolisticInsight,
-  HolisticInsightsEnvelope,
 } from '../../api/holisticInsightsApi';
 import { useHolisticInsights } from '../../hooks/useHolisticInsights';
 import { spacing, typography } from '../../theme/tokens';
@@ -49,18 +46,8 @@ export default function HolisticInsightsTile({
 
   // Loading + error states are intentionally quiet — the tile lives on
   // a home screen and should not flash a spinner block. Render nothing
-  // while loading; render a low-key message on error.
-  if (isLoading) return null;
-  if (isError || !data) {
-    return (
-      <Tile sc={sc} styles={styles} onPress={onPress}>
-        <Eyebrow sc={sc}>Holistic insights</Eyebrow>
-        <Text style={[typography.body, { color: sc.textMuted }]}>
-          Insights are temporarily unavailable.
-        </Text>
-      </Tile>
-    );
-  }
+  // when loading, unavailable, or without a verified insight.
+  if (isLoading || isError || !data || data.status !== 'ok' || data.insights.length === 0) return null;
 
   if (data.status === 'ok' && data.insights.length > 0) {
     return (
@@ -76,12 +63,7 @@ export default function HolisticInsightsTile({
     );
   }
 
-  return (
-    <Tile sc={sc} styles={styles} onPress={onPress}>
-      <Eyebrow sc={sc}>Holistic insights</Eyebrow>
-      <EmptyNote envelope={data} sc={sc} />
-    </Tile>
-  );
+  return null;
 }
 
 function Tile({
@@ -143,25 +125,6 @@ function TopInsight({
         weeks
       </Text>
     </View>
-  );
-}
-
-function EmptyNote({
-  envelope,
-  sc,
-}: {
-  envelope: HolisticInsightsEnvelope;
-  sc: SemanticTokens;
-}) {
-  const note =
-    envelope.notes[0] ??
-    (envelope.status === 'finance_unavailable'
-      ? 'Your finance pillar is not connected yet.'
-      : 'Keep logging — patterns will appear here as they emerge.');
-  return (
-    <Text style={[typography.body, { color: sc.textMuted }]} numberOfLines={3}>
-      {note}
-    </Text>
   );
 }
 
