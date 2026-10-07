@@ -24,15 +24,16 @@ function mockTheme() {
 }
 jest.mock('../../../theme/useTheme', () => mockTheme());
 jest.mock('../../../theme/ThemeProvider', () => mockTheme());
-jest.mock('../../../config/featureFlags', () => ({ featureFlags: { communityTab: true } }));
+const mockFlags = { communityTab: true, communityHall: true, communityCohorts: true, communityChallenges: true, communityDm: true, communitySearch: true, communityClassroom: true };
+jest.mock('../../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
 jest.mock('../../../hooks/useCommunity', () => ({
   useCommunityMe: () => ({ data: { workspace_id: 'ws-1' }, isLoading: false, isError: false }),
   useCommunityBadge: () => ({ total: 0, cohortMessages: 0, dmMessages: 0, mentions: 0 }),
 }));
 jest.mock('../CommunityTodayScreen', () => () => null);
-jest.mock('../CommunitySpaceScreen', () => () => null);
-jest.mock('../CommunityDmListScreen', () => () => null);
-jest.mock('../CommunityChallengesScreen', () => () => null);
+jest.mock('../CommunitySpaceScreen', () => ({ space }: { space: string }) => require('react').createElement(require('react-native').View, { testID: `embedded-${space}` }));
+jest.mock('../CommunityDmListScreen', () => () => require('react').createElement(require('react-native').View, { testID: 'embedded-dms' }));
+jest.mock('../CommunityChallengesScreen', () => () => require('react').createElement(require('react-native').View, { testID: 'embedded-challenges' }));
 const mockGetLeaderboard = jest.fn();
 jest.mock('../../../services/leaderboardApi', () => ({ getLeaderboard: () => mockGetLeaderboard() }));
 
@@ -45,6 +46,19 @@ beforeEach(() => {
 });
 
 describe('Community tab: leaderboard entry point', () => {
+  it('keeps every segment and shell destination reachable', async () => {
+    mockUser.current = { id: 'me-1', coach_id: 'coach-1' };
+    const { getByTestId } = await render(<CommunityTabScreen />);
+    for (const [tab, target] of [['hall', 'hall'], ['cohorts', 'cohort'], ['challenges', 'challenges'], ['dms', 'dms']]) {
+      await fireEvent.press(getByTestId(`space-tab-${tab}`));
+      expect(getByTestId(`embedded-${target}`)).toBeTruthy();
+    }
+    await fireEvent.press(getByTestId('space-tab-today'));
+    for (const [id, route] of [['find', 'CommunityFind'], ['classroom', 'CommunityClassroom'], ['safety', 'CommunitySafety'], ['leaderboard', 'Leaderboard']]) {
+      await fireEvent.press(getByTestId(`community-${id}-link`));
+      expect(mockNavigate).toHaveBeenLastCalledWith(route);
+    }
+  });
   it('opens Leaderboard on the Community stack for a client with a coach', async () => {
     mockUser.current = { id: 'me-1', coach_id: 'coach-1' };
     const { getByTestId } = await render(<CommunityTabScreen />);
