@@ -29,7 +29,7 @@ import {
   type TextInputContentSizeChangeEventData,
 } from 'react-native';
 import { ROMAN_MESSAGE_MAX_LENGTH } from '../../api/romanApi';
-import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { colors, lightTokens, radius, spacing, typography } from '../../theme/tokens';
 
 /** Single-line input floor (matches the 48dp touch target). */
 const COMPOSER_MIN_HEIGHT = 48;
@@ -99,7 +99,7 @@ export default function RomanComposer({
           scrollEnabled={inputScrollEnabled}
           editable={!disabled && !sending}
           placeholder="Message Roman"
-          placeholderTextColor={colors.stone}
+          placeholderTextColor={lightTokens.textMuted}
           multiline
           maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
           accessibilityLabel="Message Roman"
@@ -117,7 +117,7 @@ export default function RomanComposer({
           {sending ? (
             <ActivityIndicator color={colors.bone} testID="roman-composer-spinner" />
           ) : (
-            <Text style={styles.sendLabel}>Send</Text>
+            <Text style={[styles.sendLabel, !canSend && styles.sendLabelDisabled]} accessible={false}>→</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -127,10 +127,10 @@ export default function RomanComposer({
 
 const styles = StyleSheet.create({
   container: {
-    borderTopWidth: 0.5,
-    borderTopColor: colors.stone,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: lightTokens.border,
     backgroundColor: colors.bone,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     gap: spacing.xs,
@@ -145,26 +145,28 @@ const styles = StyleSheet.create({
     minHeight: COMPOSER_MIN_HEIGHT,
     ...typography.body,
     color: colors.ink,
-    backgroundColor: colors.cream,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 0,
     paddingVertical: spacing.md,
   },
   sendButton: {
-    minWidth: 48,
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
+    width: 48,
+    height: 48,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.forest,
-    borderRadius: radius.lg,
+    borderRadius: radius.sm,
   },
   sendButtonDisabled: {
-    backgroundColor: colors.stone,
+    backgroundColor: lightTokens.disabledBg,
   },
   sendLabel: {
-    ...typography.bodyMd,
+    ...typography.body,
+    fontSize: 24,
+    lineHeight: 30,
     color: colors.bone,
+  },
+  sendLabelDisabled: {
+    color: lightTokens.textOnDisabled,
   },
   capNote: {
     ...typography.bodySmall,

@@ -4,7 +4,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
 import type { UseRomanChatResult } from '../../../screens/roman/useRomanChat';
 import { colors, radius, typography } from '../../../theme/tokens';
-import { ROMAN_INTERRUPTED_NOTE } from '../romanVoice';
+import { ROMAN_INTERRUPTED_NOTE, romanPoolEmpty, romanRateLimited } from '../romanVoice';
 
 const mockUseRomanChat = jest.fn();
 const mockNavigate = jest.fn();
@@ -79,6 +79,10 @@ it('renders editorial Roman and right-aligned YOU turns without filled bubbles',
   const assistant = StyleSheet.flatten(r.getByLabelText('Roman said: Recovery guidance.').props.style);
   expect(assistant.fontFamily).toBe(typography.h3.fontFamily);
   expect(assistant.fontSize).toBe(20);
+  expect(StyleSheet.flatten(r.getByText('Roman').props.style).fontFamily).toBe(typography.h1.fontFamily);
+  for (const label of ['Roman said: Recovery guidance.', 'You said: Explain that.']) {
+    expect(StyleSheet.flatten(r.getByLabelText(label).parent?.props.style)?.backgroundColor).toBeUndefined();
+  }
   expect(StyleSheet.flatten(r.getByLabelText('You said: Explain that.').props.style).textAlign).toBe('right');
   for (const id of ['a', 'u']) {
     const row = r.getByTestId(`roman-message-${id}`);
@@ -123,6 +127,7 @@ it('keeps a hairline Inter input, square forest send and sending/length guards',
   state.sending = true;
   await r.rerender(<RomanChatScreen />);
   expect(r.getByTestId('roman-typing')).toBeTruthy();
+  expect(r.getByTestId('roman-composer-spinner')).toBeTruthy();
   expect(r.getByTestId('roman-composer-input').props.editable).toBe(false);
 });
 
@@ -143,6 +148,7 @@ it.each(['rateLimited', 'poolEmpty'] as const)('%s keeps the composer and no fut
   state.sendError = { kind, message: 'limited', retryAfterSeconds: 5 };
   const r = await render(<RomanChatScreen />);
   expect(r.getByTestId('roman-send-error')).toBeTruthy();
+  expect(r.getByText(kind === 'poolEmpty' ? romanPoolEmpty('client') : romanRateLimited(5))).toBeTruthy();
   expect(r.queryByTestId('roman-send-retry')).toBeNull();
   expect(r.getByTestId('roman-composer')).toBeTruthy();
 });
@@ -174,4 +180,16 @@ it('keeps consent open/close/grant, coach retry, support and reference copy', as
   expect(mockSupport).toHaveBeenCalledTimes(1);
   await fireEvent.press(r.getByTestId('roman-ai-refusal-copy-reference'));
   expect(jest.requireMock('expo-clipboard').setStringAsync).toHaveBeenCalledWith('ref-123');
+});
+
+it('never automatically repeats an already-stored consent-refused turn', async () => {
+  state.sendError = { kind: 'aiRefused', message: 'off', turnStored: true,
+    refusal: { kind: 'consent_required' } };
+  const r = await render(<RomanChatScreen surface="coach" />);
+  await fireEvent.press(r.getByTestId('roman-ai-refusal-retry'));
+  expect(state.clearSendError).toHaveBeenCalledTimes(1);
+  expect(state.send).not.toHaveBeenCalled();
+  state.sendError = null;
+  await r.rerender(<RomanChatScreen surface="coach" />);
+  expect(r.getByTestId('roman-ask-again')).toBeTruthy();
 });
