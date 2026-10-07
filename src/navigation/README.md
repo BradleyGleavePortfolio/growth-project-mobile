@@ -23,6 +23,8 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 ## Data flow
 
+`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts' | 'mealplan'`. Omission opens Summary; AI meal-plan approval requests `mealplan`, and route updates also select that tab on an already-mounted screen.
+
 ```
 App.tsx mounts RootNavigator
    │

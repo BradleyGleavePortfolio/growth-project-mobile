@@ -334,8 +334,8 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
       cta: 'Retry',
     },
     unavailable: {
-      title: 'Import isn’t available yet',
-      message: 'Data import isn’t enabled on your account right now. Please check back soon.',
+      title: 'Import unavailable',
+      message: 'Data import is not enabled on this account.',
       cta: null,
     },
     cancelled: {

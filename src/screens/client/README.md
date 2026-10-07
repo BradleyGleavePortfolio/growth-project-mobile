@@ -26,9 +26,12 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | File | What it does |
 | --- | --- |
 | `AIGuideScreen.tsx` | Chat with the assistant. Registered on the More stack as `AIGuide` and reachable from the **Guidance** row on `MoreScreen`. Sends only the user message + short history; the backend attaches structured context, persona, and guardrails. Uses `aiApi.getStructuredContext` once on mount to display "what your coach has shared" — purely informational, never assembled into a prompt by the client. Persists locally via `db/chatDb.ts`. |
-| `MembershipScreen.tsx` | Access surface. Shows account state, coach identity, member-since date, founding-member badge if applicable, and an in-app **MESSAGE YOUR COACH** action that routes to the Home stack's `Messages` screen. Suitable for external Stripe / coach-managed access — there is no in-app billing chrome on the client side. Reads `usersApi.getFoundingNumber()` and `aiApi.getStructuredContext()` only. |
+| `CheckoutReturnScreen.tsx` | Checkout verification, cancellation and access state. Failed verification does not claim a payment was received; pending access does not promise coach contact or notification. The backend's conditional first-ever-payment notification does not support a per-purchase notification claim. Existing Home, plans and purchase-unpack routes remain. |
+| `MembershipScreen.tsx` | Access surface. Shows account state, coach identity, member-since date, founding-member badge if applicable, and an in-app **MESSAGE YOUR COACH** action that routes to the Home stack's `Messages` screen. Coach-managed inactive copy describes the invite condition, without predicting coach activity. Suitable for external Stripe / coach-managed access — there is no in-app billing chrome on the client side. Reads `usersApi.getFoundingNumber()` and `aiApi.getStructuredContext()` only. |
 | `MessagesScreen.tsx` | One-on-one messages with the assigned coach. Bone page, hairline date dividers, Inter message rows and grouped 13 pt timestamps; square forest send control. Shared `MessageBubble` / `ThreadV2Parts` resolve semantic theme colours. Coach names never imply online presence. REST round-trip through `messagesApi`; a Supabase Realtime broadcast channel pings a refetch on new messages. 60 s fallback poll covers WebSocket drops. Sending, reply/copy/report, contact/block, pins, mute, editing, deletion, failed-send retry, older messages, coach-code and support paths remain unchanged. |
 | `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`): unfilled hairline rows, full 15 pt titles / 13 pt bodies and relative times, unread dot/weight, mark-read/all and refresh preserved. Empty, loading and request-failure states are distinct. |
+| `PrivateCommunityHubScreen.tsx` | Private rooms, recent posts and refresh. Empty copy describes invitations, not future coach activity. The unbuilt voice-note advertisement is removed; no working room/post action is removed. |
+| `PurchaseUnpackScreen.tsx` | Receipt, released/upcoming items and next recurring charge. Empty copy names the coach only after a successful read; otherwise it says items appear when released, without guessing a coach or promising notifications. Reads `/v1/clients/me/coach` for the name. Done, retry, refresh, item destinations and the deliverables list retain their existing handlers. |
 
 ### Calendar
 
@@ -38,6 +41,8 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 `wearables/HealthFitnessScreen.tsx` uses `cards/ActivityBars.tsx` instead of activity rings in loaded, loading and empty states. Each QuietBar shows the latest actual daily value and its sample date; completed missing samples show an absent value, not zero, while initial queries say “Loading samples”. `wearables/starterGoals.ts` is the sole fallback: 5,000 steps, 20 exercise minutes and 250 active kcal, visibly labelled “Starter goal”. Explicit typed coach/client targets override each fallback. The current API exposes no activity-target storage or goal editor, so no edit button is shown. Heart, Workouts, Body and Steps detail routes, refresh/retry, AI slot and Connections CTA remain; coach embeds stay read-only.
 
 ### Logging and planning
+
+More → **Meal plan** opens `Plan`; its neutral “View meal plans” description does not promise a weekly plan or assume a coach/assignment exists.
 
 | File | What it does |
 | --- | --- |
