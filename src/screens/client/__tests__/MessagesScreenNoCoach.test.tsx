@@ -5,7 +5,7 @@
  * "use it when you sign up", which a signed-up client cannot do.
  */
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { CoachCodeSheetProps } from '../../../components/coachless/CoachCodeSheet';
 
 jest.mock('../../../theme/ThemeProvider', () => ({
@@ -101,9 +101,14 @@ describe('client MessagesScreen with no coach', () => {
     await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
     expect(utils.getByTestId('mock-coach-code-sheet')).toBeTruthy();
     mockList.mockResolvedValue({ data: [] });
-    // Only display fields are read by the screen; the sheet owns redemption.
-    const attached = { coach: { id: 'coach-2', name: 'Coach Two' } };
-    await fireEvent(utils.getByTestId('mock-coach-code-sheet'), 'attached', attached);
+    await act(async () => mockSheetProps.onAttached({
+      status: 'attached',
+      already_attached: false,
+      coach: { id: 'coach-2', name: 'Coach Two', photo_url: null, business_name: null, bio: null },
+      next: { featured_package: null, packages_available: 0 },
+      grant: null,
+      replayed: false,
+    }));
     await waitFor(() => expect(utils.queryByText('No coach connected')).toBeNull());
     expect(utils.getByTestId('mock-coach-code-sheet')).toBeTruthy();
   });
@@ -120,7 +125,7 @@ describe('client MessagesScreen with no coach', () => {
     const utils = await render(<MessagesScreen />);
     await utils.findByText('No coach connected');
     await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
-    mockSheetProps.onChoosePlan(null);
+    await act(async () => mockSheetProps.onChoosePlan(null));
     expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages' });
   });
 });

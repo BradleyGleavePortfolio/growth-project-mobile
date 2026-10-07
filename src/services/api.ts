@@ -796,9 +796,7 @@ export const coachApi = {
   // ── Invite code redeemer drilldown ─────────────────────────────────────
   // Backend contract: GET /coach/invite-codes/:id/redeemers returns the
   // accounts that signed up using a specific invite code, sorted newest
-  // first. 404 from the endpoint means the backend hasn't shipped the
-  // route yet — the screen renders an honest "not available" state rather
-  // than a fabricated list.
+  // first. The route is live; a 404 means the invite code was not found.
   getInviteCodeRedeemers: (
     inviteCodeId: string,
   ) =>

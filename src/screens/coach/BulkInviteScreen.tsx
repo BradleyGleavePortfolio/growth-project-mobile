@@ -159,7 +159,7 @@ export default function BulkInviteScreen() {
       setMessage('');
     } catch (err) {
       console.error('BulkInviteScreen: bulk send failed', errorMessage(err));
-      Alert.alert('Could not send invites', 'Please try again.');
+      Alert.alert('Could not send invites', 'Your email list is still here. Check your connection and try sending the invites again.');
     } finally {
       setSubmitting(false);
     }

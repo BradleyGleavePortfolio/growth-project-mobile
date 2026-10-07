@@ -102,10 +102,8 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
   // Map client setting keys to backend profile fields
   const PROFILE_KEY_MAP: Partial<Record<keyof import('../../hooks/useSettings').ClientSettings, string>> = {
-    unit: 'weight_unit',
     mealsPerDay: 'meals_per_day',
     waterGoalOz: 'water_goal_oz',
-    calorieDisplay: 'calorie_display',
   };
 
   const handleProfileSettingUpdate = <K extends keyof import('../../hooks/useSettings').ClientSettings>(
@@ -212,21 +210,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         <Text style={styles.sectionLabel}>Nutrition Preferences</Text>
         <View style={styles.card}>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Units</Text>
-            <View style={styles.segmented}>
-              {(['lbs', 'kg'] as const).map((u) => (
-                <HapticPressable
-                  key={u}
-                  intent="light"
-                  style={[styles.segBtn, settings.unit === u && styles.segBtnActive]}
-                  onPress={() => handleProfileSettingUpdate('unit', u)}
-                >
-                  <Text style={[styles.segText, settings.unit === u && styles.segTextActive]}>{u}</Text>
-                </HapticPressable>
-              ))}
-            </View>
-          </View>
-          <View style={styles.row}>
             <Text style={styles.rowLabel}>Meals Per Day</Text>
             <View style={styles.stepper}>
               <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn}>
@@ -248,23 +231,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               <HapticPressable intent="light" onPress={() => stepWater(10)} style={styles.stepBtn}>
                 <Ionicons name="add" size={18} color={colors.textPrimary} />
               </HapticPressable>
-            </View>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Calorie Display</Text>
-            <View style={styles.segmented}>
-              {(['net', 'gross'] as const).map((c) => (
-                <HapticPressable
-                  key={c}
-                  intent="light"
-                  style={[styles.segBtn, settings.calorieDisplay === c && styles.segBtnActive]}
-                  onPress={() => handleProfileSettingUpdate('calorieDisplay', c)}
-                >
-                  <Text style={[styles.segText, settings.calorieDisplay === c && styles.segTextActive]}>
-                    {c.charAt(0).toUpperCase() + c.slice(1)}
-                  </Text>
-                </HapticPressable>
-              ))}
             </View>
           </View>
         </View>
@@ -804,4 +770,3 @@ const makeStyles = (colors: ThemeColors) =>
   },
 
   });
-
