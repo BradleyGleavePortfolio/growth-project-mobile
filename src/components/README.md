@@ -60,7 +60,8 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 
 | File | What it does |
 | --- | --- |
-| `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
+| `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
+| `WaterTracker.tsx` | Theme-coloured hairline progress and three quick-add actions. The unchanged 100 oz reference is labelled “Starter goal”; changed Settings goals and explicit targets retain their values. Metric (`kg`) settings show approximate ml totals, the equivalent glass size, and 250/350/500 ml buttons. Imperial 8/12/16 oz buttons and the ounce callback contract stay unchanged; metric callbacks convert back to ounces so the store writes the selected ml. Covered by `__tests__/WaterTracker.goal.test.tsx`. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 | `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
@@ -147,7 +148,8 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 
 | File | What it does |
 | --- | --- |
-| `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
+| `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
+| `WaterTracker.tsx` | See the WaterTracker contract above: starter-reference label, unit-aware totals/progress and three working quick-add actions, with the existing ounce callback preserved. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 
