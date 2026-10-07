@@ -5,19 +5,21 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi } from '../../services/api';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { lightTokens, type SemanticTokens } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
 };
 
 export default function ForgotPasswordScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors = lightTokens } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -60,7 +62,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       {/* Round 3: a11y labels on back, email input, reset CTA */}
       <TouchableOpacity
         style={styles.backButton}
@@ -74,18 +76,18 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">
-          {submitted ? 'Reset request submitted' : 'Reset Password'}
+          {submitted ? 'Reset request submitted' : 'Reset password'}
         </Text>
         <Text style={styles.subtitle}>
           {submitted
             ? 'Check your inbox and spam folder'
-            : "Enter your email to get a reset link"}
+            : "Enter your email to request a reset link"}
         </Text>
       </View>
 
       {submitted ? (
         <View style={styles.successContainer} accessible accessibilityRole="alert">
-          <Ionicons name="checkmark-circle" size={64} color={colors.primary} />
+          <Ionicons name="checkmark-circle-outline" size={32} color={colors.textMuted} />
           <Text style={styles.successText}>
             The request for {email.trim()} was submitted. For account privacy,
             this screen cannot confirm whether an email was sent. If no reset
@@ -105,7 +107,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Back to login"
           >
-            <Text style={styles.backToLoginText}>Back to Login</Text>
+            <Text style={styles.backToLoginText}>Back to login</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -143,25 +145,26 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
             accessibilityLabel="Send reset link"
             accessibilityState={{ disabled: loading, busy: loading }}
           >
-            <Text style={styles.resetButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
+            <Text style={styles.resetButtonText}>{loading ? 'Submitting...' : 'Send reset link'}</Text>
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   container: {
-    flex: 1,
-    backgroundColor: colors.background,
+    flexGrow: 1,
+    backgroundColor: colors.bgPrimary,
     paddingHorizontal: 24,
     paddingTop: 60,
+    paddingBottom: 40,
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     marginBottom: 24,
   },
@@ -182,7 +185,7 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 16,
     lineHeight: 26,
     letterSpacing: -0.16,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   form: {
     gap: 24,
@@ -191,32 +194,34 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 8,
   },
   label: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
     fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.textMuted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    backgroundColor: colors.bgPrimary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: 2, // radius.md
     padding: 16,
     fontSize: 16,
+    fontFamily: 'Inter_400Regular',
     color: colors.textPrimary,
   },
   resetButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     borderRadius: 2, // radius.md
     alignItems: 'center',
   },
   resetButtonText: {
     fontFamily: 'Inter_600SemiBold',
-    color: colors.textOnPrimary,
+    color: colors.textOnAccent,
     fontSize: 14,
     fontWeight: '600',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   successContainer: {
     alignItems: 'center',
@@ -224,7 +229,8 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 40,
   },
   successText: {
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    color: colors.textPrimary,
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
@@ -232,15 +238,19 @@ const makeStyles = (colors: ThemeColors) =>
   },
   backToLogin: {
     marginTop: 20,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   backToLoginText: {
-    color: colors.primary,
+    fontFamily: 'Inter_500Medium',
+    color: colors.accent,
     fontSize: 16,
     fontWeight: '600',
   },
   errorText: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: colors.error,
+    color: colors.textPrimary,
     marginTop: 4,
   },
 
