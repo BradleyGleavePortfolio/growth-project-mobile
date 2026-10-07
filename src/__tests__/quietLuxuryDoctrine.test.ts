@@ -183,3 +183,142 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+// Render the touched client surfaces: truthful text must not cut working actions.
+import React from 'react';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+const mockNavigate = jest.fn();
+const mockBack = jest.fn();
+let mockUser: import('../hooks/useCurrentUser').CurrentUser = { id: 'client', email: 'client@example.test' };
+let mockAssignments: Array<{ id: string; completed_at: null; workout_plan: { name: string } }> = [];
+let mockRoutines: Array<{ id: string; name: string; exercises: []; is_template: boolean }> = [];
+let mockSessions: Array<{ id: string; date: string; workout_name: string; exercises: [] }> = [];
+let mockWeights: Array<{ id: string; date: string; weight_lbs: number }> = [];
+jest.mock('../theme/ThemeProvider', () => ({
+  useTheme: () => ({
+    colors: require('../constants/colors').default,
+    tokens: require('../theme/tokens').default,
+    semanticColors: require('../theme/tokens').lightTokens,
+  }),
+}));
+jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate, goBack: mockBack, getParent: () => ({ navigate: mockNavigate }) }),
+  useRoute: () => ({ params: {} }), useFocusEffect: jest.fn(),
+}));
+jest.mock('../services/api', () => ({
+  __esModule: true,
+  default: { get: jest.fn(async (url: string) => ({ data: url.includes('consent') ? {
+    coach_id: 'coach', consents: [{ scope: 'fitness.workouts', granted: true }, { scope: 'fitness.food_macros', granted: false }],
+  } : { id: 'coach', name: 'Coach Lee' } })) },
+  workoutApi: {
+    getRoutines: jest.fn(async () => ({ data: mockRoutines })),
+    getAll: jest.fn(async () => ({ data: mockSessions })), getVolume: jest.fn(async () => ({ data: [] })),
+    deleteWorkout: jest.fn(async () => ({})),
+  },
+  weightApi: { getHistory: jest.fn(async () => ({ data: { logs: mockWeights } })), log: jest.fn(async () => ({})) },
+  logApi: { getDaily: jest.fn(async () => ({ data: {} })) },
+}));
+jest.mock('../hooks/useWorkoutBuilder', () => ({
+  useMyWorkoutAssignments: () => ({ data: mockAssignments, refetch: jest.fn(async () => ({})) }),
+}));
+jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
+jest.mock('../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
+jest.mock('../services/authActions', () => ({ signOut: jest.fn() }));
+jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
+jest.mock('../config/featureFlags', () => ({ featureFlags: {} }));
+jest.mock('../components/FadeInView', () => ({ children }: { children: import('react').ReactNode }) => children);
+jest.mock('../components/tutorial/PlanExplanationCard', () => () => null);
+jest.mock('../components/workout/WorkoutSyncCards', () => () => null);
+jest.mock('../components/community/MilestoneCabinet', () => () => null);
+jest.mock('../screens/client/progress/ProgressChartCard', () => () => null);
+import WorkoutScreen from '../screens/client/WorkoutScreen';
+import ProgressScreen from '../screens/client/ProgressScreen';
+import ProfileScreen from '../screens/client/ProfileScreen';
+import ReportScreen from '../screens/client/ReportScreen';
+const press = async (s: Awaited<ReturnType<typeof render>>, label: string) => fireEvent.press(s.getByLabelText(label));
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockUser = { id: 'client', email: 'client@example.test' };
+  mockAssignments = []; mockRoutines = []; mockSessions = []; mockWeights = [];
+});
+describe('Truthful client copy and routes/actions parity', () => {
+  it('puts Quick Workout, routines and history before both collapsed charts on day one', async () => {
+    const s = await render(React.createElement(WorkoutScreen));
+    await waitFor(() => expect(s.getByText('No routines yet')).toBeTruthy());
+    expect(s.queryByText('From coach')).toBeNull();
+    const tree = JSON.stringify(s.toJSON());
+    expect(tree.indexOf('Quick Workout')).toBeLessThan(tree.indexOf('My Routines'));
+    expect(tree.indexOf('Recent Workouts')).toBeLessThan(tree.indexOf('Complete workouts to see volume data'));
+    await fireEvent.press(s.getByText('Quick Workout'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
+    await fireEvent.press(s.getByText('Create a routine'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('RoutineBuilder');
+    for (const [label, route] of [['Exercise library', 'ExerciseLibrary'], ['Coach guidelines', 'CoachGuidelines']]) {
+      await press(s, label); expect(mockNavigate).toHaveBeenLastCalledWith(route);
+    }
+  });
+  it('keeps assigned, routine, edit, delete, older history and refresh actions', async () => {
+    mockUser.coach_id = 'coach';
+    mockAssignments = [{ id: 'assigned', completed_at: null, workout_plan: { name: 'Strength' } }];
+    mockRoutines = [{ id: 'routine', name: 'Full body', exercises: [], is_template: false }];
+    mockSessions = [{ id: 'session', date: '2026-10-06', workout_name: 'Logged session', exercises: [] }];
+    const s = await render(React.createElement(WorkoutScreen));
+    await waitFor(() => expect(s.getByText('Full body')).toBeTruthy());
+    await press(s, 'Open assigned workout: Strength');
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assigned' } });
+    await fireEvent.press(s.getByText('Full body'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineId: 'routine', routineName: 'Full body', exercises: '[]' });
+    await press(s, 'Edit routine Full body'); expect(mockNavigate).toHaveBeenLastCalledWith('RoutineBuilder', { routineId: 'routine' });
+    await press(s, 'Edit workout Logged session');
+    expect(mockNavigate).toHaveBeenLastCalledWith('WorkoutHistoryEdit', { workout: JSON.stringify(mockSessions[0]) });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await press(s, 'Delete workout Logged session'); expect(alert).toHaveBeenCalledWith('Delete this workout?', expect.any(String), expect.any(Array));
+    alert.mockRestore();
+    expect(s.getByTestId('workout-scroll').props.refreshControl.props.onRefresh).toEqual(expect.any(Function));
+  });
+  it.each([['today gap', [0, 1, 3], '2'], ['today not logged', [1, 2, 3], '3'], ['look-back limit', Array.from({ length: 60 }, (_, i) => i), '60+']])(
+    'names the weigh-in run and preserves share, Report, periods and weight logging: %s', async (_case, offsets, count) => {
+      mockWeights = (offsets as number[]).map((offset) => {
+        const d = new Date(); d.setDate(d.getDate() - offset);
+        return { id: String(offset), date: require('../utils/date').bucketDateLocal(d), weight_lbs: 180 };
+      });
+      const s = await render(React.createElement(ProgressScreen));
+      await waitFor(() => expect(s.getByText(`${count} days in a row with a weigh-in`)).toBeTruthy());
+      if (count !== '2') {
+        await press(s, `Share ${count} days in a row with a weigh-in`);
+        expect(mockNavigate).toHaveBeenLastCalledWith('ShareCard', { milestone: { variant: 'streak', value: count, label: 'days in a row with a weigh-in' } });
+      }
+      await press(s, 'View progress report'); expect(mockNavigate).toHaveBeenLastCalledWith('Report');
+      for (const period of ['7D', '30D', '90D', 'All']) await press(s, `Show ${period} period`);
+      await press(s, 'Log weight');
+      await fireEvent.changeText(s.getByLabelText('Enter weight in pounds'), '179');
+      await fireEvent.changeText(s.getByLabelText('Enter optional notes'), 'Morning');
+      await press(s, 'Save weight log entry');
+      expect(require('../services/api').weightApi.log).toHaveBeenCalledWith(expect.objectContaining({ weight_lbs: 179, notes: 'Morning' }));
+      await press(s, 'Log weight'); await press(s, 'Close log weight modal');
+    },
+  );
+  it('keeps every Profile route and names only granted sharing scopes', async () => {
+    const s = await render(React.createElement(ProfileScreen));
+    expect(s.queryByText('Day 7 of 30.')).toBeNull();
+    expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy();
+    for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Widgets', 'Widgets'], ['Learn', 'Learn'], ['Edit personal info', 'EditProfile']]) {
+      await press(s, label); expect(mockNavigate).toHaveBeenLastCalledWith(route);
+    }
+    for (const row of s.getAllByLabelText(/Tap to edit/)) {
+      await fireEvent.press(row); expect(mockNavigate).toHaveBeenLastCalledWith('EditProfile');
+    }
+    mockUser = { ...mockUser, coach_id: 'coach' };
+    await s.rerender(React.createElement(ProfileScreen));
+    await waitFor(() => expect(s.getByText('Workouts are visible to you and Coach Lee. Meals are visible only to you.')).toBeTruthy());
+  });
+  it('labels canned report advice as general and keeps Back', async () => {
+    const s = await render(React.createElement(ReportScreen, { navigation: { goBack: mockBack } } as React.ComponentProps<typeof ReportScreen>));
+    expect(s.getByText('General guidance for General Fitness')).toBeTruthy();
+    expect(s.queryByText('Consistency beats perfection. Keep showing up.')).toBeNull();
+    await fireEvent.press(s.UNSAFE_getByType(require('react-native').TouchableOpacity));
+    expect(mockBack).toHaveBeenCalled();
+  });
+});
