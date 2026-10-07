@@ -9,11 +9,12 @@ import { profileApi, notificationsApi } from '../../../../services/api';
 import { signOut } from '../../../../services/authActions';
 import { updateSupabasePassword } from '../../../../utils/supabaseAuth';
 import { setBiometricOptIn } from '../../../../hooks/useBiometricGate';
-import { dispatchTutorial } from '../../../../tutorial/tutorialStore';
+import { dispatchTutorial, startClientTutorial } from '../../../../tutorial/tutorialStore';
 
 const mockUpdateSetting = jest.fn();
 const mockParentNavigate = jest.fn();
 let mockRomanEnabled = true;
+let mockTutorialStatus = 'paused';
 jest.mock('../../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'settings-client', name: 'Alex', email: 'alex@example.com' }),
 }));
@@ -44,7 +45,7 @@ jest.mock('expo-local-authentication', () => ({
   authenticateAsync: jest.fn(async () => ({ success: true })),
 }), { virtual: true });
 jest.mock('../../../../tutorial/tutorialStore', () => ({
-  useTutorialStore: () => 'paused', dispatchTutorial: jest.fn(), startClientTutorial: jest.fn(),
+  useTutorialStore: () => mockTutorialStatus, dispatchTutorial: jest.fn(), startClientTutorial: jest.fn(),
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ getParent: () => ({ navigate: mockParentNavigate }) }),
@@ -66,6 +67,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockRomanEnabled = true;
+  mockTutorialStatus = 'paused';
 });
 
 it('uses a serif heading, flat themed sections and accessible 44-point controls', async () => {
@@ -129,9 +131,18 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
   expect(view.queryByLabelText('Dark')).toBeNull();
   await fireEvent(await view.findByLabelText('Biometric unlock'), 'valueChange', true);
   expect(setBiometricOptIn).toHaveBeenCalledWith(true);
+  await fireEvent(view.getByLabelText('Biometric unlock'), 'valueChange', false);
+  expect(setBiometricOptIn).toHaveBeenLastCalledWith(false);
   await fireEvent.press(view.getByLabelText('Resume the tour'));
   expect(dispatchTutorial).toHaveBeenCalledWith({ type: 'RESUME' });
   expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'HomeMain' });
+  mockTutorialStatus = 'completed';
+  await view.rerender(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
+  await fireEvent.press(view.getByLabelText('Take the tour again'));
+  expect(startClientTutorial).toHaveBeenCalledWith(null, { restart: true });
+  mockTutorialStatus = 'active';
+  await view.rerender(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
+  expect(view.getByLabelText('The tour is in progress').props.accessibilityState.disabled).toBe(true);
 });
 
 it('keeps password inputs, close, validation, save and confirmed reset/sign-out handlers', async () => {
