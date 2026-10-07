@@ -3,7 +3,8 @@
  * feed for either the Hall (workspace-wide announcements + cohort posts) or a
  * Cohort. The Lab/Hall is a POST feed, not a chat (§2.3).
  *
- * Empty state uses Roman voice + a primary action ("Be the first to post").
+ * Quiet space: serif name, factual description and unfilled hairline post rows.
+ * Empty states use neutral copy and one forest action, without avatar chrome.
  * A feed with posts carries a "New post" button above the list, so the
  * composer stays reachable after the first post (AUDIT-10-125 B-2).
  * Tapping a post opens its thread. Standardized on semanticColors / tokens.ts.
@@ -34,10 +35,9 @@ import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useCommunityMe, usePosts } from '../../hooks/useCommunity';
-import { CommunityEmptyState, PostCard } from '../../components/community';
+import { useCommunityMe, usePosts, isOptimisticId } from '../../hooks/useCommunity';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import VoiceNotesSection from '../../components/community/VoiceNotesSection';
 import { featureFlags } from '../../config/featureFlags';
@@ -208,10 +208,9 @@ export default function CommunitySpaceScreen({
     return (
       <Container>
         <View style={styles.center} testID="community-space-screen">
-          <CommunityEmptyState
-            stem="noCohorts"
-            firstName={client?.firstName ?? client?.name ?? null}
-            title="No cohort yet"
+          <SpaceEmpty
+            title="No community space yet"
+            description="No community space is available."
             actionLabel={client?.coach_id ? 'Send your coach a message' : undefined}
             onAction={client?.coach_id ? messageCoach : undefined}
             testID="community-space-no-workspace"
@@ -254,12 +253,15 @@ export default function CommunitySpaceScreen({
 
   return (
     <Container>
+      <View style={styles.heading}>
+        <Text style={[typography.eyebrow, { color: semanticColors.textMuted }]}>Community</Text>
+        <Text accessibilityRole="header" style={[typography.h1, { color: semanticColors.textPrimary }]}>{space === 'hall' ? 'Hall' : 'Cohort'}</Text>
+        <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Community posts.</Text>
+      </View>
       {isEmpty ? (
         <View style={styles.center} testID="community-space-screen">
           {voiceSection}
-          <CommunityEmptyState
-            stem={space === 'cohort' ? 'cohortEmpty' : 'hallEmpty'}
-            firstName={client?.firstName ?? client?.name ?? null}
+          <SpaceEmpty
             title={space === 'cohort' ? 'No cohort posts yet' : 'The Hall is quiet'}
             actionLabel="Be the first to post"
             onAction={compose}
@@ -271,6 +273,9 @@ export default function CommunitySpaceScreen({
           testID="community-space-screen"
           data={data}
           keyExtractor={(p) => p.id}
+          ListEmptyComponent={posts.isLoading ? <View style={styles.center} accessibilityState={{ busy: true }}>
+            <ActivityIndicator color={semanticColors.accent} accessibilityLabel="Loading posts" />
+          </View> : null}
           ListHeaderComponent={
             <>
               {voiceSection}
@@ -280,20 +285,26 @@ export default function CommunitySpaceScreen({
                 accessibilityRole="button"
                 accessibilityLabel="Write a new post"
                 testID="community-space-new-post"
-                style={[styles.newPost, { borderColor: semanticColors.accent }]}
+                style={[styles.newPost, { backgroundColor: semanticColors.accent }]}
               >
-                <Ionicons name="create-outline" size={18} color={semanticColors.accentText} />
-                <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+                <Ionicons name="create-outline" size={18} color={semanticColors.textOnAccent} />
+                <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>
                   New post
                 </Text>
               </HapticPressable>
             </>
           }
           renderItem={({ item }) => (
-            <PostCard
-              post={item}
-              onPress={openThread}
-              accessory={
+            <View style={[styles.postRow, { borderBottomColor: semanticColors.border }]}>
+              <HapticPressable onPress={() => openThread(item)} disabled={isOptimisticId(item.id)}
+                accessibilityRole="button" accessibilityLabel={`Open post ${item.title ?? 'Untitled post'}`}
+                testID={`post-card-${item.id}`} style={styles.postContent}>
+                {item.pinned ? <Ionicons name="pin-outline" size={16} color={semanticColors.textMuted} /> : null}
+                <Text style={[typography.bodyMd, { color: semanticColors.textPrimary }]} numberOfLines={2}>{item.title ?? 'Untitled post'}</Text>
+                {item.body ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]} numberOfLines={3}>{item.body.slice(0, 140)}</Text> : null}
+                <Text style={[typography.eyebrow, { color: semanticColors.textMuted }]}>{isOptimisticId(item.id) ? 'Sending…' : item.scope === 'hall' ? 'Hall' : 'Cohort'}</Text>
+              </HapticPressable>
+              {!isOptimisticId(item.id) ? (
                 <SafetyMenu
                   targetType="post"
                   targetId={item.id}
@@ -302,9 +313,8 @@ export default function CommunitySpaceScreen({
                   viewerCoachId={client?.coach_id}
                   testID={`post-safety-${item.id}`}
                 />
-              }
-              testID={`post-card-${item.id}`}
-            />
+              ) : null}
+            </View>
           )}
           contentContainerStyle={styles.list}
           style={{ backgroundColor: semanticColors.bgPrimary }}
@@ -312,6 +322,21 @@ export default function CommunitySpaceScreen({
       )}
     </Container>
   );
+}
+
+function SpaceEmpty({ title, description, actionLabel, onAction, testID }: {
+  title: string; description?: string; actionLabel?: string; onAction?: () => void; testID: string;
+}): React.ReactElement {
+  const { semanticColors } = useTheme();
+  return <View testID={testID} style={styles.empty}>
+    <Text style={[typography.h2, { color: semanticColors.textPrimary }]}>{title}</Text>
+    {description ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>{description}</Text> : null}
+    {actionLabel && onAction ? <HapticPressable onPress={onAction} accessibilityRole="button"
+      accessibilityLabel={actionLabel} testID={`${testID}-action`}
+      style={[styles.newPost, { backgroundColor: semanticColors.accent }]}>
+      <Text style={[typography.bodyMd, { color: semanticColors.textOnAccent }]}>{actionLabel}</Text>
+    </HapticPressable> : null}
+  </View>;
 }
 
 const styles = StyleSheet.create({
@@ -323,17 +348,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
   },
-  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  heading: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xs },
+  empty: { alignItems: 'center', gap: spacing.md },
+  postRow: { flexDirection: 'row', alignItems: 'flex-start', marginHorizontal: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth },
+  postContent: { flex: 1, minHeight: 48, paddingVertical: spacing.lg, gap: spacing.sm },
+  muted: { ...typography.bodySmall, textAlign: 'center' },
   retry: {
     marginTop: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
     justifyContent: 'center',
   },
-  retryLabel: { fontSize: 14, fontWeight: '600' },
+  retryLabel: { ...typography.bodyMd },
   list: { paddingVertical: 8 },
   newPost: {
     flexDirection: 'row',
@@ -342,8 +371,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     paddingHorizontal: spacing.lg,
     minHeight: 44,
   },

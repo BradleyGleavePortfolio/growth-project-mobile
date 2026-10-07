@@ -5,9 +5,9 @@
  *   - { mode: 'dm', recipientId }         → open/seed a DM and send the first line
  *
  * Posts use useCreatePost (optimistic insert + rollback); DMs use useSendDm.
- * On a successful post we surface the Roman `postPublished` line, then pop back
- * to the feed. Length caps mirror the backend DTOs and are enforced before the
- * round-trip. Standardized on semanticColors / tokens.ts.
+ * Bone page, serif heading, Inter hairline inputs and one forest Post/Send action.
+ * Counts mirror real DTO limits; factual post confirmation returns within 300ms.
+ * Length caps, post/DM mutations and moderation draft preservation are unchanged.
  */
 import React, { useState } from 'react';
 import {
@@ -24,15 +24,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   useCreatePost,
   useSendDm,
   useCommunityMe,
 } from '../../hooks/useCommunity';
-import { ThreadHeader } from '../../components/community';
-import { romanCopy } from '../../components/community/romanVoice';
 import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
@@ -54,7 +52,6 @@ export default function CommunityComposerScreen(): React.ReactElement {
   // yet sees a pointer to their coach instead of a Post button that fails.
   const hasWorkspace = workspaceId.length > 0;
   const noWorkspace = !me.isLoading && !me.isError && !hasWorkspace;
-  const firstName = client?.firstName ?? client?.name ?? null;
 
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -93,9 +90,8 @@ export default function CommunityComposerScreen(): React.ReactElement {
       { title: trimmedTitle, body: trimmedBody },
       {
         onSuccess: () => {
-          setConfirmation(romanCopy('postPublished', { firstName }));
-          // Brief Roman confirmation, then return to the feed.
-          setTimeout(() => navigation.goBack(), 900);
+          setConfirmation('Post published.');
+          setTimeout(() => navigation.goBack(), 300);
         },
         onError: showSendError,
       },
@@ -112,16 +108,24 @@ export default function CommunityComposerScreen(): React.ReactElement {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ThreadHeader
-          title={mode === 'dm' ? 'New message' : 'New post'}
-          testID="community-composer-header"
-        />
+        <Text accessibilityRole="header" testID="community-composer-header"
+          style={[styles.heading, { color: semanticColors.textPrimary }]}>
+          {mode === 'dm' ? 'New message' : 'New post'}
+        </Text>
 
         <ScrollView
           style={styles.flex}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
         >
+          {me.isLoading ? <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Loading community space…</Text> : null}
+          {me.isError ? <View>
+            <Text style={[typography.bodySmall, { color: semanticColors.textMuted }]}>Community space did not load. Check your connection, then try again.</Text>
+            <HapticPressable onPress={() => void me.refetch()} accessibilityRole="button" accessibilityLabel="Try again"
+              testID="community-composer-retry" style={styles.retry}>
+              <Text style={[typography.bodySmall, { color: semanticColors.accentText }]}>Try again</Text>
+            </HapticPressable>
+          </View> : null}
           {mode === 'post' ? (
             <TextInput
               value={title}
@@ -158,14 +162,17 @@ export default function CommunityComposerScreen(): React.ReactElement {
               },
             ]}
           />
+          <Text style={[styles.count, { color: semanticColors.textMuted }]} accessibilityLabel="Body character count">
+            {body.length} / {bodyMax}
+          </Text>
 
           {noWorkspace ? (
             <Text
               style={[styles.confirmation, { color: semanticColors.textMuted }]}
               testID="community-composer-no-workspace"
             >
-              Your coach has not opened a community space yet, so this cannot be shared. Message
-              your coach from Home instead.
+              No community space is available, so this cannot be shared.
+              {client?.coach_id ? ' Message your coach from Home instead.' : ''}
             </Text>
           ) : null}
 
@@ -183,7 +190,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
           style={[
             styles.footer,
             {
-              backgroundColor: semanticColors.bgSurface,
+              backgroundColor: semanticColors.bgPrimary,
               borderTopColor: semanticColors.border,
             },
           ]}
@@ -193,7 +200,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
             onPress={submit}
             disabled={!canSubmit}
             accessibilityRole="button"
-            accessibilityLabel={mode === 'dm' ? 'Send message' : 'Publish post'}
+            accessibilityLabel={mode === 'dm' ? 'Send message' : 'Post'}
             accessibilityState={{ disabled: !canSubmit }}
             testID="community-composer-submit"
             style={[
@@ -215,7 +222,7 @@ export default function CommunityComposerScreen(): React.ReactElement {
                 },
               ]}
             >
-              {mode === 'dm' ? 'Send' : 'Publish'}
+              {mode === 'dm' ? 'Send' : 'Post'}
             </Text>
           </HapticPressable>
         </View>
@@ -227,31 +234,28 @@ export default function CommunityComposerScreen(): React.ReactElement {
 const styles = StyleSheet.create({
   safe: { flex: 1 },
   flex: { flex: 1 },
+  heading: { ...typography.h1, padding: spacing.lg, paddingBottom: spacing.sm },
+  count: { ...typography.bodySmall, fontVariant: ['tabular-nums'], textAlign: 'right' },
+  retry: { minHeight: 44, justifyContent: 'center' },
   content: {
     padding: spacing.lg,
     gap: spacing.md,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '600',
-    paddingHorizontal: spacing.md,
+    ...typography.bodyMd,
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   body: {
     minHeight: 160,
-    fontSize: 15,
-    lineHeight: 22,
+    ...typography.body,
+    fontSize: 17,
     textAlignVertical: 'top',
-    paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   confirmation: {
-    fontSize: 14,
-    lineHeight: 20,
+    ...typography.bodySmall,
   },
   footer: {
     paddingHorizontal: spacing.lg,
@@ -260,12 +264,11 @@ const styles = StyleSheet.create({
   },
   submit: {
     minHeight: 48,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
   submitLabel: {
-    fontSize: 15,
-    fontWeight: '600',
+    ...typography.bodyMd,
   },
 });
