@@ -2,6 +2,7 @@ import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
+import { StyleSheet } from 'react-native';
 
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
@@ -15,6 +16,8 @@ const mockUser = jest.fn();
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser() }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 3 }));
 const mockGet = jest.fn();
+const mockRomanChat = jest.fn(() => false);
+jest.mock('../../../config/featureFlags', () => ({ featureFlags: { get romanChat() { return mockRomanChat(); } } }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u: string) => mockGet(u) } }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: new Proxy({}, { get: () => '#000000' }), colors: new Proxy({}, { get: () => '#000000' }) }),
@@ -27,7 +30,26 @@ jest.mock('@expo/vector-icons', () => ({
 import HomeHeaderActions, { messageCoachLabel } from '../HomeHeaderActions';
 
 describe('HomeHeaderActions', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => { jest.clearAllMocks(); mockRomanChat.mockReturnValue(false); });
+
+  it.each([false, true])('adds the Roman shortcut only when chat is enabled: %s', async (enabled) => {
+    mockRomanChat.mockReturnValue(enabled);
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    if (!enabled) {
+      expect(view.queryByTestId('home-roman-chat')).toBeNull();
+      return;
+    }
+    const avatar = StyleSheet.flatten(view.getByTestId('home-roman-avatar').props.style);
+    expect(avatar).toMatchObject({ width: 32, height: 32 });
+    expect(StyleSheet.flatten(view.getByTestId('home-roman-chat').props.style)).toMatchObject({ width: 44, height: 44 });
+    await fireEvent.press(view.getByLabelText('Chat with Roman'));
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat' });
+    await fireEvent.press(view.getByTestId('home-message-coach'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('Messages');
+    await fireEvent.press(view.getByTestId('home-notification-bell'));
+    expect(mockNavigate).toHaveBeenLastCalledWith('NotificationCenter');
+  });
 
   it('keeps both outline header actions at 24 pt', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: null });
