@@ -19,7 +19,7 @@
  * Allow here is a newer choice and clears that pending "no" before it is
  * sent; a confirmed Withdraw here settles it.
  *
- * Roman memory (R11-C1): a server `upgrade` (client-ai-v5, live v4 grant, memory on) is a separate
+ * Roman memory (R11-C1): a server `upgrade` (client-ai-v5, live v4 grant, `memory_on`) is a separate
  * optional choice with the server's text and sha256; null shows nothing. A v5 grant shows the v5 text.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -33,7 +33,6 @@ import {
   AiConsentOutcome,
   AiConsentStatusResponse,
   AiConsentUpgradeCopy,
-  GrantRomanConsentRequest,
 } from '../../api/aiConsentApi';
 import {
   AI_LEDGER_NOT_SENT,
@@ -141,20 +140,16 @@ export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoi
 }
 
 /**
- * The Roman memory offer to show: a well-formed client-ai-v5 `upgrade`, and
- * only on top of a live v4 grant. Anything else (null, another version, no
- * live v4 grant) shows nothing.
+ * The Roman memory offer to show: a well-formed client-ai-v5 `upgrade` from a
+ * server that says Roman memory is on (`memory_on`; the 10-06 server sent
+ * `upgrade` to every v4 holder without it), only on top of a live v4 grant.
+ * Anything else shows nothing.
  */
 export function memoryOfferOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
   const offer = status.upgrade;
-  if (!offer || offer.version !== AI_CONSENT_MEMORY_VERSION) return null;
+  if (status.memory_on !== true || !offer || offer.version !== AI_CONSENT_MEMORY_VERSION) return null;
   const liveV4 = choiceOf(status).choice === 'allowed' && status.version === AI_CONSENT_VERSION;
   return liveV4 ? offer : null;
-}
-
-/** The grant body for the offered copy: its version and the server's sha256 of exactly that text. */
-export function memoryGrantBody(offer: AiConsentUpgradeCopy): GrantRomanConsentRequest {
-  return { version: offer.version, copy_sha256: offer.sha256, platform: platformTag() };
 }
 
 /** The heading: "Allowed" only for a live server grant (C-310-2). */
@@ -258,7 +253,8 @@ export default function RomanAiConsentScreen({
       const out =
         kind === 'allow'
           ? await grantAiChoiceAs(uid, sessionUserId, () =>
-              api.grantRoman(offer ? memoryGrantBody(offer) : romanGrantBody()),
+              // The offered copy: its version and the server's sha256 of exactly the text shown.
+              api.grantRoman(offer ? { version: offer.version, copy_sha256: offer.sha256, platform: platformTag() } : romanGrantBody()),
             )
           : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;

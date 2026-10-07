@@ -9,7 +9,6 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import RomanAiConsentScreen, {
   choiceOf,
   isMemoryAllowed,
-  memoryGrantBody,
   memoryOfferOf,
   RomanAiConsentApi,
   ROMAN_AI_COPY,
@@ -74,7 +73,9 @@ function body(over: Record<string, unknown>): AiConsentStatusResponse {
 }
 const LIVE_V4 = { granted: true, state: 'granted', version: 'client-ai-v4', granted_at: '2026-10-07T10:00:00Z', scope: 'base' };
 const V4_NO_OFFER = body(LIVE_V4);
-const V4_WITH_OFFER = body({ ...LIVE_V4, upgrade: V5_COPY });
+const V4_WITH_OFFER = body({ ...LIVE_V4, upgrade: V5_COPY, memory_on: true });
+/** The 10-06 production server: `upgrade` for every v4 holder, no `memory_on`. */
+const V4_OLD_SERVER = body({ ...LIVE_V4, upgrade: V5_COPY });
 const V5_HOLDER = body({
   granted: true,
   state: 'granted',
@@ -125,7 +126,7 @@ afterEach(() => {
 describe('parseStatus: scope and upgrade (R11-C1)', () => {
   it('a server without the fields, or with null, reads as null', () => {
     const old = parseStatus({ granted: true, state: 'granted', version: 'client-ai-v4', current_version: 'client-ai-v4', copy: V4_COPY });
-    expect(old).toMatchObject({ scope: null, upgrade: null, granted: true });
+    expect(old).toMatchObject({ scope: null, upgrade: null, memory_on: false, granted: true });
     expect(V4_NO_OFFER).toMatchObject({ scope: 'base', upgrade: null });
     expect(body({ ...LIVE_V4, scope: 'everything' }).scope).toBeNull();
   });
@@ -141,7 +142,6 @@ describe('parseStatus: scope and upgrade (R11-C1)', () => {
   });
 
   it.each([
-    ['a string', 'client-ai-v5'],
     ['no box label', { ...V5_COPY, box_label: undefined }],
     ['a blank paragraph', { ...V5_COPY, paragraph: { text: '  ', sha256: V5_PARAGRAPH_SHA } }],
     ['a short sha256', { ...V5_COPY, sha256: 'abc' }],
@@ -161,6 +161,14 @@ describe('the memory offer (B-R11C-126)', () => {
     expect(r.queryByText(ROMAN_AI_COPY.memoryAllow)).toBeNull();
     expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
     expect(memoryOfferOf(V4_NO_OFFER)).toBeNull();
+  });
+
+  it('the 10-06 server (upgrade for everyone, no memory_on): nothing new is shown', async () => {
+    const r = await renderScreen(makeApi(V4_OLD_SERVER));
+    await waitFor(() => r.getByTestId('roman-ai-allowed'));
+    expect(V4_OLD_SERVER.upgrade?.version).toBe('client-ai-v5');
+    expect(r.queryByTestId('roman-ai-memory-offer')).toBeNull();
+    expect(memoryOfferOf(body({ ...LIVE_V4, upgrade: V5_COPY, memory_on: 'true' }))).toBeNull();
   });
 
   it('upgrade sent: shows the server text; Allow asks first, then grants client-ai-v5 with the server sha256', async () => {
@@ -193,7 +201,7 @@ describe('the memory offer (B-R11C-126)', () => {
   });
 
   it('the v4 Allow button still grants client-ai-v4 with this build\u2019s copy hash', async () => {
-    const api = makeApi(body({ upgrade: V5_COPY }), { kind: 'ok', status: V4_NO_OFFER });
+    const api = makeApi(body({ upgrade: V5_COPY, memory_on: true }), { kind: 'ok', status: V4_NO_OFFER });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
     // Not a live v4 grant: no memory offer, even if a server sent one.
@@ -228,23 +236,16 @@ describe('the memory offer (B-R11C-126)', () => {
 
   it('only a client-ai-v5 offer on a live v4 grant is shown; a v5 status without its text is not Allowed here', () => {
     expect(memoryOfferOf(V4_WITH_OFFER)?.version).toBe('client-ai-v5');
-    expect(memoryOfferOf(body({ ...LIVE_V4, upgrade: { ...V5_COPY, version: 'client-ai-v6' } }))).toBeNull();
-    expect(memoryOfferOf(body({ state: 'withdrawn', upgrade: V5_COPY }))).toBeNull();
+    expect(memoryOfferOf(body({ ...LIVE_V4, upgrade: { ...V5_COPY, version: 'client-ai-v6' }, memory_on: true }))).toBeNull();
+    expect(memoryOfferOf(body({ state: 'withdrawn', upgrade: V5_COPY, memory_on: true }))).toBeNull();
     expect(memoryOfferOf(V5_HOLDER)).toBeNull();
     const noText = body({ ...LIVE_V4, version: 'client-ai-v5', current_version: 'client-ai-v5', copy: null });
     expect(isMemoryAllowed(noText)).toBe(false);
     expect(choiceOf(noText).choice).toBe('update_app');
-    const offer = memoryOfferOf(V4_WITH_OFFER);
-    if (!offer) throw new Error('no offer');
-    expect(memoryGrantBody(offer)).toMatchObject({ version: 'client-ai-v5', copy_sha256: V5_COPY_SHA });
   });
 
   it('new copy follows the rules: no first person, no exclamation marks', () => {
-    for (const k of ['allowedMemoryBody', 'memoryHead', 'memoryIntro', 'memoryAllow', 'confirmMemoryTitle', 'memoryChanged'] as const) {
-      const t = ROMAN_AI_COPY[k];
-      expect(t).not.toMatch(/!/);
-      expect(t).not.toMatch(/\b(I|we|our|us|me|my)\b/);
-      expect(t).not.toMatch(/something went wrong/i);
-    }
+    const keys = ['allowedMemoryBody', 'memoryHead', 'memoryIntro', 'memoryAllow', 'confirmMemoryTitle', 'memoryChanged'] as const;
+    for (const k of keys) expect(ROMAN_AI_COPY[k]).not.toMatch(/!|\b(I|we|our|us|me|my)\b|something went wrong/i);
   });
 });

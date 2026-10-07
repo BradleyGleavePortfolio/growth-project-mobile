@@ -17,7 +17,8 @@
  *
  * Every call resolves to an outcome and never throws, so callers can treat
  * "not deployed yet" (404 / 503) as a calm, explicit state.
- * R11-C1 `scope` and `upgrade` (optional client-ai-v5 memory copy) read as null when absent or malformed.
+ * R11-C1 `scope` and `upgrade` (optional client-ai-v5 memory copy) read as null when absent or malformed;
+ * `memory_on` reads false unless exactly true.
  */
 import { z } from 'zod';
 import api from '../services/api';
@@ -71,6 +72,8 @@ export interface AiConsentStatusResponse {
   scope?: AiConsentScope | null;
   /** The optional Roman memory copy offered to a live v4 holder; null when nothing is offered. */
   upgrade?: AiConsentUpgradeCopy | null;
+  /** True only from a server that offers `upgrade` while Roman memory is on (older servers omit it). */
+  memory_on?: boolean;
 }
 
 export interface GrantRomanConsentRequest {
@@ -171,6 +174,7 @@ export function parseStatus(body: unknown): AiConsentStatusResponse | null {
     copy,
     scope: SCOPES.find((x) => x === body.scope) ?? null,
     upgrade: parseUpgrade(body.upgrade),
+    memory_on: body.memory_on === true,
   };
 }
 
