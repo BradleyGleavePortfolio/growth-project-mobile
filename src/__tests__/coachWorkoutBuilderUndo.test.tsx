@@ -815,21 +815,16 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     expect(screen.queryByTestId("ai-prompt-bar") ?? screen.queryByTestId("ai-header-button")).toBeNull();
   });
 
-  it.each(["paused", "not_configured"])("status %s: the entry stays visible; a tap shows the paused copy and proposes nothing", async (state) => {
-    const screen = await mount(STATUS(state));
+  it.each([
+    ["paused", STATUS("paused"), /^Ask AI is paused for maintenance\. Your workouts are unchanged\.$/], ["not_configured", STATUS("not_configured"), /^Ask AI is paused/],
+    ["unreadable (network), with a retry", new Error("socket"), /^No connection\./],
+  ])("status %s: the entry stays visible; a tap shows its copy and proposes nothing", async (_label, status, copy) => {
+    const screen = await mount(status);
     await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
     await press(screen, "ai-prompt-bar");
-    expect(screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged.")).toBeTruthy();
-    expect(screen.queryByTestId("ai-builder-input")).toBeNull();
-    expect(mockAiPropose).not.toHaveBeenCalled();
-  });
-
-  it("status unreadable (network): the entry stays visible and the sheet offers a retry", async () => {
-    const screen = await mount(new Error("socket"));
-    await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
-    await press(screen, "ai-header-button");
-    expect(screen.getByTestId("ai-builder-retry")).toBeTruthy();
-    expect(mockAiPropose).not.toHaveBeenCalled();
+    expect(screen.getByTestId("ai-builder-blocked").props.children).toMatch(copy);
+    [expect(screen.queryByTestId("ai-builder-input")).toBeNull(), expect(mockAiPropose).not.toHaveBeenCalled()];
+    if (status instanceof Error) expect(screen.getByTestId("ai-builder-retry")).toBeTruthy();
   });
 
   it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {

@@ -62,7 +62,7 @@ describe('aiBuilderApi + copy', () => {
     expect(toAiBuilderError(httpError(402, { code: 'COACH_AI_BUDGET_EXHAUSTED', budget: { period_end: '2026-11-01' } }))).toEqual(expect.objectContaining({ code: 'no_credits', resetsAt: '2026-11-01' }));
     const cases: [number, object, string][] = [
       [403, { code: 'COACH_AI_BUDGET_EXHAUSTED' }, 'no_credits'], [403, { code: 'ai_consent_required' }, 'consent_required'],
-      [409, {}, 'stale'], [422, {}, 'no_safe_proposal'], [429, {}, 'rate_limited'], [503, { code: 'AI_PAUSED' }, 'paused'],
+      [409, {}, 'stale'], [422, {}, 'no_safe_proposal'], [429, {}, 'rate_limited'], [503, { code: 'AI_PAUSED' }, 'paused'], [503, { code: 'AI_NOT_CONFIGURED' }, 'server'],
     ];
     for (const [status, body, code] of cases) expect(toAiBuilderError(httpError(status, body)).code).toBe(code);
     expect(toAiBuilderError(new Error('socket')).code).toBe('network');
@@ -104,8 +104,8 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
   });
 
-  it('chips: light haptic + quick action; the injury chip asks for the area first', async () => {
-    mockApi.post.mockResolvedValue({ data: { ...PROPOSAL, changes: [], summary: 'Upper body push, 6 exercises.' } });
+  it('chips: light haptic + quick action; the injury chip asks for the area first; explain (b#809 draft_id null) ends with Done, no draft call', async () => {
+    mockApi.post.mockResolvedValue({ data: { ...PROPOSAL, draft_id: null, changes: [], summary: 'Upper body push, 6 exercises.' } });
     const s = await render(<Harness />);
     await waitFor(() => expect(s.getByTestId('ai-chip-deload')).toBeTruthy());
     expect(s.queryByTestId('ai-injury-knee')).toBeNull();
@@ -114,6 +114,21 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(Haptics.impactAsync).toHaveBeenCalledWith('light');
     proposeCall({ quick_action: 'swap_for_injury', injury_area: 'knee' });
     await waitFor(() => expect(s.getByText('Upper body push, 6 exercises.')).toBeTruthy());
+    await press(s, 'ai-builder-discard');
+    expect(mockApi.patch).not.toHaveBeenCalled();
+  });
+
+  it('b#809 shapes: remove/reorder/meta with exercise null render; the approve row (materialised_ref = plan id) re-reads, no error', async () => {
+    const before = { client_ref: 'r0', exercise_external_id: 'seed:back-squat', sets: 3, reps_or_duration_seconds: 8, rest_seconds: 90, weight_lbs: null, superset_group_id: null, notes: null };
+    const changes = [change('c0', 'removed', '', { exercise: null, before, after: null }), ...['moved', 'meta'].map((k, i) => change(`c${i + 1}`, k, '', { exercise: null, before: null, after: null }))];
+    mockApi.post.mockResolvedValueOnce({ data: { ...PROPOSAL, changes, context_used: ['exercise_library', 'current_workout'], credits_remaining_pct: null } });
+    mockApi.patch.mockResolvedValueOnce({ data: { id: 'draft-1', capability: 'draft.edit_workout_plan', status: 'approved', materialised_ref: 'plan-1', payload: { diff: [] }, decided_at: '2026-10-07T01:00:00.000Z' } });
+    const s = await render(<Harness />);
+    await proposeFromInput(s);
+    await waitFor(() => expect(s.getByTestId('ai-builder-review')).toBeTruthy());
+    for (const t of ['seed:back-squat', 'New order', 'Workout details', 'Using your exercise library, this workout', 'Apply 3 changes']) expect(s.getByText(t)).toBeTruthy();
+    await press(s, 'ai-builder-apply');
+    [expect(mockOnApplied).toHaveBeenCalledWith(null, 3), expect(s.queryByTestId('ai-builder-error')).toBeNull()];
   });
 
   it.each([

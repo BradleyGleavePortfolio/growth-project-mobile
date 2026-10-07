@@ -2,14 +2,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
+import CoachExerciseName from '../workout-builder/CoachExerciseName';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
-import {
-  AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction,
-} from '../../../api/aiBuilderApi';
+import { AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction } from '../../../api/aiBuilderApi';
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
-import {
-  AI_LABEL, AI_STAGES, applyLabel, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY,
-} from './aiBuilderCopy';
+import { AI_LABEL, AI_STAGES, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY, UNNAMED_CHANGE } from './aiBuilderCopy';
 import type { AiBuilderController } from './useAiBuilder';
 
 type Props = { open: boolean; onClose: () => void; ai: AiBuilderController; isBlank: boolean; sc: SemanticTokens };
@@ -24,6 +21,9 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
   }, [anim, index, reduceMotion]);
 
   const kind = KIND_LABELS[change.kind];
+  const removedId = change.exercise ? null : change.before?.exercise_external_id; // resolved by name like the builder rows
+  const name = change.exercise?.name ?? UNNAMED_CHANGE[change.kind] ?? 'Exercise';
+  const titleStyle = [typography.bodyMd, styles.grow, { color: sc.textPrimary }, change.kind === 'removed' && styles.strike];
   const before = formatRow(change.before);
   const after = formatRow(change.after);
   const delta = before && after ? `${before} -> ${after}` : after || before;
@@ -34,11 +34,9 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
     <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }, slide]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: badge, borderColor: badge }]}>{kind}</Text>
-        <Text numberOfLines={2} style={[typography.bodyMd, styles.grow, { color: sc.textPrimary }, change.kind === 'removed' && styles.strike]}>
-          {change.exercise.name}
-        </Text>
+        {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
         <Switch testID={`ai-keep-${change.change_id}`} value={kept} onValueChange={() => onToggle(change.change_id)}
-          accessibilityLabel={`Keep this change: ${kind} ${change.exercise.name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
+          accessibilityLabel={`Keep this change: ${kind} ${name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
       </View>
       {delta ? <Text style={[typography.body, { color: sc.textPrimary }]}>{delta}</Text> : null}
       <Text style={[typography.caption, { color: sc.textMuted }]}>{change.reason}</Text>
@@ -143,7 +141,7 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
             {p ? (
               <View testID="ai-builder-review">
                 <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{p.summary}</Text>
-                {p.context_used.length ? <Text style={[typography.caption, { color: sc.textMuted }]}>{`Using ${p.context_used.join(', ')}`}</Text> : null}
+                {p.context_used.length ? <Text style={[typography.caption, { color: sc.textMuted }]}>{contextLine(p.context_used)}</Text> : null}
                 {p.screening_flag ? line('ai-builder-screening', SCREENING_COPY, true) : null}
                 {p.changes.map((c, i) => (
                   <ChangeCard key={c.change_id} change={c} index={i} kept={!!ai.kept[c.change_id]} reduceMotion={reduceMotion} onToggle={ai.toggle} sc={sc} />
@@ -178,16 +176,13 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
   sheet: { maxHeight: '88%', minHeight: '50%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
-  grow: { flex: 1 },
+  grow: { flex: 1 }, outline: { borderWidth: 1 }, strike: { textDecorationLine: 'line-through' }, wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   input: { borderWidth: 1, borderRadius: 12, padding: spacing.md, minHeight: 72, marginBottom: spacing.sm, textAlignVertical: 'top' },
   chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap' },
   button: { borderRadius: 12, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
-  outline: { borderWidth: 1 },
   stages: { gap: spacing.xs, marginVertical: spacing.md },
   alert: { borderLeftWidth: 3, paddingLeft: spacing.sm, marginVertical: spacing.sm },
   card: { borderWidth: 1, borderRadius: 12, padding: spacing.md, marginBottom: spacing.sm, gap: spacing.xs },
   badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  strike: { textDecorationLine: 'line-through' },
   warning: { borderLeftWidth: 3, paddingLeft: spacing.sm },
 });
