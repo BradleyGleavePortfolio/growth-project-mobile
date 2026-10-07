@@ -60,13 +60,17 @@ jest.mock('../../../components/coachless/CoachCodeSheet', () => {
 
 const mockParentNavigate = jest.fn();
 const mockGoBack = jest.fn();
+const mockSetParams = jest.fn();
+let mockRouteParams: { openCoachCode?: boolean } | undefined;
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
+    useRoute: () => ({ key: 'messages', name: 'Messages', params: mockRouteParams }),
     useNavigation: () => ({
       goBack: mockGoBack,
       navigate: jest.fn(),
+      setParams: mockSetParams,
       getParent: () => ({ navigate: mockParentNavigate }),
     }),
     useFocusEffect: (cb: () => void | (() => void)) => {
@@ -81,6 +85,7 @@ import MessagesScreen from '../MessagesScreen';
 describe('client MessagesScreen with no coach', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockRouteParams = undefined;
     mockCoachlessEnabled = true;
     mockList.mockRejectedValue({ response: { status: 409, data: { code: 'NO_COACH_ASSIGNED' } } });
   });
@@ -92,6 +97,13 @@ describe('client MessagesScreen with no coach', () => {
     expect(utils.queryByText(/No coach yet/)).toBeNull();
     await fireEvent.press(utils.getByTestId('messages-no-coach-support'));
     expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox' });
+  });
+
+  it('the logging-gate route opens the existing sheet without a second tap', async () => {
+    mockRouteParams = { openCoachCode: true };
+    const utils = await render(<MessagesScreen />);
+    expect(await utils.findByTestId('mock-coach-code-sheet')).toBeTruthy();
+    expect(mockSetParams).toHaveBeenCalledWith({ openCoachCode: undefined });
   });
 
   it('opens the existing code sheet and refreshes the thread after connecting', async () => {
