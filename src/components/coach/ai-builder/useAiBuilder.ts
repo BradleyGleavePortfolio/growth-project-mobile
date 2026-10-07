@@ -1,7 +1,4 @@
-/**
- * useAiBuilder — Ask AI state (AIB-5): idle -> thinking (staged reveal) -> review (cards) -> applying.
- * Nothing reaches the plan until the coach taps Apply; Discard rejects the draft on the server.
- */
+/** useAiBuilder (AIB-5): idle -> thinking (staged reveal) -> review -> applying. Nothing reaches the plan before Apply. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import {
@@ -26,8 +23,7 @@ export function fireAiHaptic(kind: AiHaptic): void {
   })();
 }
 
-export const AI_STAGE_MS = 700;
-const AI_CARD_TICKS_MAX = 5;
+const AI_STAGE_MS = 700; // staged reveal step; card ticks capped at 5 per reveal
 
 export interface UseAiBuilderArgs {
   planId: string | undefined;
@@ -37,16 +33,13 @@ export interface UseAiBuilderArgs {
 }
 
 export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuilderArgs) {
-  // undefined = loading or unreadable (entry stays visible; propose reports the cause);
-  // null = route absent on this backend (404): the ONLY hide case.
-  const [status, setStatus] = useState<AiBuilderStatus | null | undefined>(undefined);
-  const [statusLoaded, setStatusLoaded] = useState(false);
+  // value undefined = unreadable (entry stays visible; propose reports the cause); null = route absent (404): the ONLY hide case.
+  const [status, setStatus] = useState<{ loaded: boolean; value?: AiBuilderStatus | null }>({ loaded: false });
   useEffect(() => {
     let live = true;
     Promise.resolve()
       .then(() => aiBuilderApi.getStatus())
-      .then((s) => live && setStatus(s), () => live && setStatus(undefined))
-      .finally(() => live && setStatusLoaded(true));
+      .then((value) => live && setStatus({ loaded: true, value }), () => live && setStatus({ loaded: true }));
     return () => void (live = false);
   }, []);
 
@@ -88,7 +81,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
         setProposal(res);
         setKept(Object.fromEntries(res.changes.map((c) => [c.change_id, true])));
         setPhase('review');
-        res.changes.slice(0, AI_CARD_TICKS_MAX).forEach((_, i) => setTimeout(() => fireAiHaptic('light'), i * 60));
+        res.changes.slice(0, 5).forEach((_, i) => setTimeout(() => fireAiHaptic('light'), i * 60));
       } catch (err) {
         fail(err);
         setPhase('idle');
@@ -100,11 +93,9 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
   );
 
   const toggle = useCallback((changeId: string) => {
-    setKept((cur) => {
-      fireAiHaptic(cur[changeId] ? 'warning' : 'selection');
-      return { ...cur, [changeId]: !cur[changeId] };
-    });
-  }, []);
+    fireAiHaptic(kept[changeId] ? 'warning' : 'selection');
+    setKept((cur) => ({ ...cur, [changeId]: !cur[changeId] }));
+  }, [kept]);
 
   const acceptedIds = proposal ? proposal.changes.filter((c) => kept[c.change_id]).map((c) => c.change_id) : [];
 
@@ -139,7 +130,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     }
   }, [proposal]);
 
-  return { visible: statusLoaded && status !== null, status: status ?? null, phase, stage, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
+  return { visible: status.loaded && status.value !== null, status: status.value ?? null, phase, stage, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
 }
 
 export type AiBuilderController = ReturnType<typeof useAiBuilder>;

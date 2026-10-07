@@ -1,27 +1,56 @@
-/**
- * Ask AI sheet (AIB-5): prompt, quick-action chips, staged reveal, change cards with keep
- * toggles, Apply N / Discard. Every state has its own line. Reduce Motion: fade, no stagger.
- */
-import React, { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+/** Ask AI sheet (AIB-5): prompt, chips, staged reveal, change cards with keep toggles, Apply N / Discard. Reduce Motion: fade, no stagger. */
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 import {
-  AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderInjuryArea, type AiBuilderQuickAction,
+  AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction,
 } from '../../../api/aiBuilderApi';
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
 import {
-  AI_LABEL, AI_STAGES, applyLabel, droppedLine, INJURY_AREA_LABELS, NOT_CONFIGURED_COPY, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY,
+  AI_LABEL, AI_STAGES, applyLabel, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, NOT_CONFIGURED_COPY, noCreditsCopy, PAUSED_COPY,
+  QUICK_ACTIONS, SCREENING_COPY,
 } from './aiBuilderCopy';
-import ChangeCard from './ChangeCard';
 import type { AiBuilderController } from './useAiBuilder';
 
-interface Props {
-  open: boolean;
-  onClose: () => void;
-  ai: AiBuilderController;
-  isBlank: boolean;
-  sc: SemanticTokens;
+type Props = { open: boolean; onClose: () => void; ai: AiBuilderController; isBlank: boolean; sc: SemanticTokens };
+
+/** One change: kind badge (text plus colour, never colour alone), before -> after, reason, warnings, keep switch; 60 ms stagger. */
+type CardProps = { change: AiBuilderChange; index: number; kept: boolean; reduceMotion: boolean; onToggle: (id: string) => void; sc: SemanticTokens };
+function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardProps) {
+  const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduceMotion) return anim.setValue(1);
+    Animated.timing(anim, { toValue: 1, duration: 220, delay: index * 60, useNativeDriver: true }).start();
+  }, [anim, index, reduceMotion]);
+
+  const kind = KIND_LABELS[change.kind];
+  const before = formatRow(change.before);
+  const after = formatRow(change.after);
+  const delta = before && after ? `${before} -> ${after}` : after || before;
+  const badge = change.kind === 'removed' ? sc.textMuted : change.kind === 'added' ? sc.accent : sc.accentText;
+  const slide = reduceMotion ? null : { transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] };
+
+  return (
+    <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }, slide]}>
+      <View style={styles.row}>
+        <Text style={[typography.caption, styles.badge, { color: badge, borderColor: badge }]}>{kind}</Text>
+        <Text numberOfLines={2} style={[typography.bodyMd, styles.grow, { color: sc.textPrimary }, change.kind === 'removed' && styles.strike]}>
+          {change.exercise.name}
+        </Text>
+        <Switch testID={`ai-keep-${change.change_id}`} value={kept} onValueChange={() => onToggle(change.change_id)}
+          accessibilityLabel={`Keep this change: ${kind} ${change.exercise.name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
+      </View>
+      {delta ? <Text style={[typography.body, { color: sc.textPrimary }]}>{delta}</Text> : null}
+      <Text style={[typography.caption, { color: sc.textMuted }]}>{change.reason}</Text>
+      {change.warnings.map((w) => (
+        <Text key={w} accessibilityRole="alert" style={[typography.caption, styles.warning, { color: sc.textPrimary, borderColor: sc.accentText }]}>
+          {`Warning: ${w}`}
+        </Text>
+      ))}
+      {!kept ? <Text style={[typography.caption, { color: sc.textMuted }]}>Not applied.</Text> : null}
+    </Animated.View>
+  );
 }
 
 export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props) {
@@ -151,4 +180,8 @@ const styles = StyleSheet.create({
   outline: { borderWidth: 1 },
   stages: { gap: spacing.xs, marginVertical: spacing.md },
   alert: { borderLeftWidth: 3, paddingLeft: spacing.sm, marginVertical: spacing.sm },
+  card: { borderWidth: 1, borderRadius: 12, padding: spacing.md, marginBottom: spacing.sm, gap: spacing.xs },
+  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  strike: { textDecorationLine: 'line-through' },
+  warning: { borderLeftWidth: 3, paddingLeft: spacing.sm },
 });

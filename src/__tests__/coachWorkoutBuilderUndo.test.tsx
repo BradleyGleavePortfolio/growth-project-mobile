@@ -830,10 +830,9 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
   });
 
   it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
-    mockAiPropose.mockResolvedValue({
-      draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false,
-      changes: [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise: { id: "bench", name: "Bench press", thumbnail_url: null }, reason: "One step.", warnings: [] }],
-    });
+    const exercise = { id: "bench", name: "Bench press", thumbnail_url: null };
+    const changes = [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise, reason: "One step.", warnings: [] }];
+    mockAiPropose.mockResolvedValue({ draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false, changes });
     mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" } });
     mockRefetch.mockResolvedValue({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false });
     const screen = await mount(STATUS("on"));

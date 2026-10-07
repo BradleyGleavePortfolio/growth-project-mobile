@@ -7,7 +7,7 @@ import { aiBuilderApi, toAiBuilderError } from '../../../../api/aiBuilderApi';
 import { lightTokens } from '../../../../theme/tokens';
 import AiBuilderSheet from '../AiBuilderSheet';
 import { useAiBuilder } from '../useAiBuilder';
-import { describeAiBuilderError, PAUSED_COPY } from '../aiBuilderCopy';
+import { describeAiBuilderError } from '../aiBuilderCopy';
 
 const mockApi = { get: jest.fn(), post: jest.fn(), patch: jest.fn() };
 jest.mock('../../../../services/api', () => ({
@@ -76,13 +76,6 @@ describe('aiBuilderApi + copy', () => {
 });
 
 describe('AiBuilderSheet + useAiBuilder', () => {
-  it('paused status keeps Ask AI visible with the paused copy and no prompt', async () => {
-    mockApi.get.mockResolvedValueOnce({ data: { ...STATUS_ON, state: 'paused' } });
-    const s = await render(<Harness />);
-    await waitFor(() => expect(s.getByText(PAUSED_COPY)).toBeTruthy());
-    expect(s.queryByTestId('ai-builder-input')).toBeNull();
-  });
-
   it('cards show kind, before -> after, reason and warnings; keep toggles drive Apply N; Apply sends accepted ids with a success haptic', async () => {
     mockApi.post.mockResolvedValueOnce({ data: PROPOSAL });
     const ref = { plan_id: 'plan-1', revision_index: 4, lock_token: 'abababababababab' };

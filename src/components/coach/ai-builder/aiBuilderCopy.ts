@@ -3,7 +3,6 @@ import type { AiBuilderErrorCode, AiBuilderInjuryArea, AiBuilderQuickAction } fr
 
 export const AI_LABEL = 'AI-suggested, coach-approved';
 export const AI_STAGES = ['Reading the workout', 'Checking limits and injuries', 'Choosing from your exercise library'] as const;
-
 export const QUICK_ACTIONS: Record<AiBuilderQuickAction, { label: string; instruction: string }> = {
   swap_for_injury: { label: 'Swap for injury', instruction: 'Swap exercises that load the selected area for safer options.' },
   progress: { label: 'Progress', instruction: 'Progress this workout by one step.' },
@@ -17,9 +16,7 @@ export const INJURY_AREA_LABELS: Record<AiBuilderInjuryArea, string> = {
   knee: 'Knee', shoulder: 'Shoulder', lower_back: 'Lower back', hip: 'Hip',
   elbow_wrist: 'Elbow or wrist', ankle_foot: 'Ankle or foot', upper_back_neck: 'Upper back or neck',
 };
-
 export const KIND_LABELS = { added: 'Added', changed: 'Changed', removed: 'Removed', moved: 'Moved', meta: 'Details' } as const;
-
 export const PAUSED_COPY = 'Ask AI is paused for maintenance. Your workouts are unchanged.';
 export const NOT_CONFIGURED_COPY = 'Ask AI is not set up on this account yet. Your workouts are unchanged.';
 export const SAVE_FIRST_COPY = 'Save this workout first, then Ask AI can change it.';

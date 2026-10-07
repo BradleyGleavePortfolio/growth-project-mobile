@@ -89,28 +89,21 @@ async function run<T>(schema: z.ZodType<T>, fn: () => Promise<{ data: unknown }>
   }
 }
 
+// lock_token is omitted while the builder only holds the bootstrap token; client_id arrives with AIB-6 (client context).
 export interface ProposeBody {
-  mode: 'create' | 'edit';
-  plan_id: string;
-  lock_token?: string; // omitted while the builder only holds the bootstrap token
-  client_id?: string; // AIB-6 (client context); absent = template/library work, no client data
-  instruction: string;
-  quick_action?: AiBuilderQuickAction;
-  injury_area?: AiBuilderInjuryArea;
+  mode: 'create' | 'edit'; plan_id: string; lock_token?: string; client_id?: string; instruction: string;
+  quick_action?: AiBuilderQuickAction; injury_area?: AiBuilderInjuryArea;
 }
 
 const draftUrl = (id: string) => `/ai/gateway/drafts/${encodeURIComponent(id)}`;
 
 export const aiBuilderApi = {
   /** null = this backend has no Ask AI (404): hide the entry. */
-  async getStatus(): Promise<AiBuilderStatus | null> {
-    try {
-      return await run(StatusSchema, () => api.get('/ai/gateway/workout-builder/status'));
-    } catch (err) {
+  getStatus: (): Promise<AiBuilderStatus | null> =>
+    run(StatusSchema, () => api.get('/ai/gateway/workout-builder/status')).catch((err: unknown) => {
       if (err instanceof AiBuilderError && err.code === 'not_available') return null;
       throw err;
-    }
-  },
+    }),
   propose: (body: ProposeBody) =>
     run(ProposalSchema, () =>
       api.post(
