@@ -13,8 +13,8 @@ import {
   aiBuilderApi, toAiBuilderError, type AiBuilderChange, type AiBuilderErrorCode, type AiBuilderProposal, type AiBuilderStatus,
 } from '../../../api/aiBuilderApi';
 import {
-  AI_LABEL, AI_STAGES, applyLabel, describeAiBuilderError, droppedLine, formatRow, KIND_LABELS, NOT_CONFIGURED_COPY, noCreditsCopy,
-  PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY,
+  AI_LABEL, AI_STAGES, applyLabel, describeAiBuilderError, droppedLine, formatRow, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS,
+  SCREENING_COPY,
 } from '../ai-builder/aiBuilderCopy';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
 
@@ -33,11 +33,11 @@ type Props = {
   onClose: () => void; onApplied: (changes: number, days: number) => void;
 };
 
+/** Same rule as the builder sheet: paused and not_configured (a server switch) read as paused. */
 export function blockedCopy(status: AiBuilderStatus | null): string | null {
   const st = status?.state;
-  if (st === 'paused') return PAUSED_COPY;
-  if (st === 'no_credits') return noCreditsCopy(status?.credits.resets_at ?? null);
-  return st === 'not_configured' ? NOT_CONFIGURED_COPY : null;
+  if (st === 'paused' || st === 'not_configured') return PAUSED_COPY;
+  return st === 'no_credits' ? noCreditsCopy(status?.credits.resets_at ?? null) : null;
 }
 
 /** A failed reject leaves the draft pending server-side (it expires); no plan changes either way. */
