@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { registerForPushNotifications } from '../../services/pushNotifications';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 import { t, tList } from './i18n/strings';
 import StepHeader from './StepHeader';
@@ -32,6 +33,7 @@ type Props = {
 };
 
 export default function NotificationsScreen({ navigation }: Props) {
+  const currentUser = useCurrentUser();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -85,7 +87,7 @@ export default function NotificationsScreen({ navigation }: Props) {
         </View>
         <View style={styles.copy}>
           <Text style={styles.headline} accessibilityRole="header">
-            {t('notifications.title')}
+            {t(currentUser?.coach_id ? 'notifications.title' : 'notifications.titleUnpaired')}
           </Text>
           <Text style={styles.subtitle}>{t('notifications.subtitle')}</Text>
         </View>
