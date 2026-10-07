@@ -3,6 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { lightTokens as sc } from '../../../theme/tokens';
 import type { SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 
@@ -50,6 +51,9 @@ function NumericCell({
   sanitize,
   parse,
   onChangeValue,
+  onBlankChange,
+  placeholder,
+  showZero = false,
   style,
   placeholderTextColor,
   keyboardType,
@@ -60,16 +64,23 @@ function NumericCell({
   sanitize: (raw: string) => string;
   parse: (text: string) => number;
   onChangeValue: (v: number) => void;
+  onBlankChange: (blank: boolean) => void;
+  placeholder: string;
+  showZero?: boolean;
   style: React.ComponentProps<typeof TextInput>['style'];
   placeholderTextColor: string;
   keyboardType: 'decimal-pad' | 'number-pad';
   accessibilityLabel: string;
   testID?: string;
 }) {
-  const [text, setText] = useState(value > 0 ? String(value) : '');
+  const [text, setText] = useState(value > 0 || showZero ? String(value) : '');
   useEffect(() => {
-    setText((cur) => (parse(cur) === value ? cur : value > 0 ? String(value) : ''));
-  }, [value, parse]);
+    setText((cur) => {
+      if (parse(cur) === value && !(cur === '' && showZero)) return cur;
+      return value > 0 || showZero ? String(value) : '';
+    });
+  }, [value, parse, showZero]);
+  useEffect(() => { onBlankChange(text === ''); }, [text, onBlankChange]);
   return (
     <TextInput
       style={style}
@@ -80,7 +91,7 @@ function NumericCell({
         onChangeValue(parse(next));
       }}
       keyboardType={keyboardType}
-      placeholder="0"
+      placeholder={placeholder}
       placeholderTextColor={placeholderTextColor}
       selectTextOnFocus
       accessibilityLabel={accessibilityLabel}
@@ -112,8 +123,10 @@ export function SetLogger({
   editable?: boolean;
   hideCompletion?: boolean;
 }) {
+  // An explicitly typed zero is an entry, not a blank ghost to replace.
+  const [weightBlank, setWeightBlank] = useState(set.weight <= 0);
+  const [repsBlank, setRepsBlank] = useState(set.reps <= 0);
   return (
-    <View>
     <View style={[styles.setRow, set.completed && styles.setRowCompleted]} pointerEvents={editable ? 'auto' : 'none'}>
       <Text style={[styles.setText, { width: 36 }]}>{setIdx + 1}</Text>
       <NumericCell
@@ -122,8 +135,11 @@ export function SetLogger({
         sanitize={sanitizeWeightText}
         parse={parseWeightText}
         onChangeValue={(v) => onUpdate(exIdx, setIdx, 'weight', v)}
+        onBlankChange={setWeightBlank}
+        placeholder={String(previous?.weight ?? 0)}
+        showZero={set.completed && previous?.weight === 0}
         keyboardType="decimal-pad"
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={sc.textMuted}
         accessibilityLabel={`Set ${setIdx + 1} weight in pounds`}
         testID={`set-weight-${exIdx}-${setIdx}`}
       />
@@ -133,15 +149,24 @@ export function SetLogger({
         sanitize={sanitizeRepsText}
         parse={parseRepsText}
         onChangeValue={(v) => onUpdate(exIdx, setIdx, 'reps', v)}
+        onBlankChange={setRepsBlank}
+        placeholder={String(previous?.reps ?? 0)}
         keyboardType="number-pad"
-        placeholderTextColor={colors.textMuted}
+        placeholderTextColor={sc.textMuted}
         accessibilityLabel={`Set ${setIdx + 1} reps`}
         testID={`set-reps-${exIdx}-${setIdx}`}
       />
       {!hideCompletion && <HapticPressable
         intent="medium"
         style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
-        onPress={() => onToggleComplete(exIdx, setIdx)}
+        disabled={!editable}
+        onPress={() => {
+          if (!set.completed && previous) {
+            if (weightBlank) onUpdate(exIdx, setIdx, 'weight', previous.weight);
+            if (repsBlank) onUpdate(exIdx, setIdx, 'reps', previous.reps);
+          }
+          onToggleComplete(exIdx, setIdx);
+        }}
         hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: set.completed }}
@@ -150,8 +175,7 @@ export function SetLogger({
       >
         <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />
       </HapticPressable>}
-    </View>
-    {previous && <HapticPressable
+    {previous ? <HapticPressable
       intent="light"
       disabled={set.completed || !editable}
       style={styles.previousSet}
@@ -162,8 +186,9 @@ export function SetLogger({
         onUpdate(exIdx, setIdx, 'reps', previous.reps);
       }}
     >
-      <Text style={styles.previousSetText}>Last time: {previous.weight > 0 ? `${previous.weight} lb × ` : ''}{previous.reps} reps{set.completed ? '' : ' · Use'}</Text>
-    </HapticPressable>}
+      <Text style={styles.previousSetLabel}>Previous</Text>
+      <Text style={styles.previousSetValue}>{previous.weight} × {previous.reps}</Text>
+    </HapticPressable> : <View style={styles.previousSet} />}
     </View>
   );
 }
