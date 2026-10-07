@@ -99,6 +99,7 @@ function makeProps() {
     navigation: { navigate, goBack } as never,
     route: { params: { shareToken: 'abc-123_DEF' } } as never,
     _navigate: navigate,
+    _goBack: goBack,
   };
 }
 
@@ -120,7 +121,7 @@ describe('PackageCheckoutScreen — buyer flow', () => {
     const back = getByLabelText('Go back');
     expect(StyleSheet.flatten(back.props.style).width).toBe(44);
     await fireEvent.press(back);
-    expect(props.navigation.goBack).toHaveBeenCalledTimes(1);
+    expect(props._goBack).toHaveBeenCalledTimes(1);
   });
 
   it('sells the renewing plan through subscription-intent and the native PaymentSheet (no webview)', async () => {
