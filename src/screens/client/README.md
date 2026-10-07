@@ -29,6 +29,10 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | `MessagesScreen.tsx` | One-on-one messages with the assigned coach. REST round-trip through `messagesApi`; a Supabase Realtime broadcast channel pings a refetch on new messages. 60 s fallback poll covers WebSocket drops. |
 | `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`). |
 
+### Calendar
+
+`calendar/CalendarHomeScreen.tsx` leads with the earliest live session: client-local date and time, coach, duration and status. Join or Call opens a real link during the existing join window; an empty schedule with an available appointment offers one forest booking action. Welcome calls, all appointment types, later/past sessions, paging, refresh, messages and support remain reachable. `CalendarSessionScreen.tsx` retains recap, device-calendar export, reschedule, cancel and rebooking. Missing links say “Call link not added yet.” Cancel still notifies the coach through the backend booking emitter. Shared `calendarUi.tsx` uses theme colours, transparent hairline rows, Inter supporting text, tabular serif times and 48-point haptic controls without animation.
+
 ### Logging and planning
 
 | File | What it does |

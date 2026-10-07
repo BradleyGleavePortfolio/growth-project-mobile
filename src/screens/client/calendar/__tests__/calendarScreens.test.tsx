@@ -7,7 +7,7 @@
  * manual phone-calendar copy removal, recap shown).
  */
 import React from 'react';
-import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Alert, Linking, StyleSheet } from 'react-native';
 import type { CoachingSession, SessionType } from '../../../../api/schedulingApi';
@@ -587,10 +587,10 @@ describe('DES-AF calendar hierarchy, truthful states and action parity', () => {
     const n = nav();
     const r = await renderQ(<CalendarHomeScreen {...homeProps(n)} />);
     await waitFor(() => expect(r.getByTestId('calendar-next-session')).toBeTruthy());
-    expect(r.getByTestId('calendar-next-session').findByProps({ testID: 'calendar-session-next' })).toBeTruthy();
+    expect(within(r.getByTestId('calendar-next-session')).getByTestId('calendar-session-next')).toBeTruthy();
     expect(r.getAllByText('With Bradley. 20 minutes.').length).toBeGreaterThan(0);
-    const text = r.toJSON();
-    expect(JSON.stringify(text).indexOf('Next session')).toBeLessThan(JSON.stringify(text).indexOf('Your coach'));
+    const headings = r.getAllByRole('header').map((node) => node.props.children);
+    expect(headings.indexOf('Next session')).toBeLessThan(headings.indexOf('Your coach'));
     for (const id of ['next', 'later', 'past']) {
       await fireEvent.press(r.getByTestId(id === 'past' ? 'calendar-past-past' : `calendar-session-${id}`));
       expect(n.navigate).toHaveBeenCalledWith('CalendarSession', { sessionId: id });
