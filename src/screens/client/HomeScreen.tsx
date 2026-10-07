@@ -358,6 +358,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            testID="home-refresh-control"
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={sc.textPrimary}

@@ -1,5 +1,4 @@
 import React from 'react';
-import { RefreshControl } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 const mockNavigate = jest.fn();
@@ -93,7 +92,6 @@ it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s m
     await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
   }
-  await fireEvent(screen.UNSAFE_getByType(RefreshControl), 'refresh');
-  expect(mockDay.loadDayData).toHaveBeenCalledTimes(2);
-  expect(mockDay.loadProfile).toHaveBeenCalledTimes(2);
+  await fireEvent(screen.getByTestId('home-refresh-control'), 'refresh');
+  for (const load of [mockDay.loadDayData, mockDay.loadProfile]) expect(load).toHaveBeenCalledTimes(2);
 });
