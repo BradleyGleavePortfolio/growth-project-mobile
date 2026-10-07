@@ -858,6 +858,7 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
   it("apply with a head token adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
     const screen = await applyOnce({ plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" }, Promise.resolve({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false }));
     await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
+    expect(screen.getByTestId("ai-momentum-line").props.children).toMatch(/ 1 change applied with Ask AI this session\.$/);
     expect(screen.getByLabelText("Plan name").props.value).toBe("AI push day");
 
     mockUndoCall.mockResolvedValueOnce({ head_revision_index: 2, lock_token: "abababababababab" });

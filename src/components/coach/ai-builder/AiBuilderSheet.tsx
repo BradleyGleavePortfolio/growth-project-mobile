@@ -1,4 +1,4 @@
-/** Ask AI sheet (AIB-5): prompt, chips, staged reveal, change cards with keep toggles, Apply N / Discard. Reduce Motion: fade, no stagger. */
+/** Ask AI sheet (AIB-5): prompt, chips, staged reveal, change cards with keep toggles, Apply N / Discard. Cards spring in on a stagger; Reduce Motion: no springs, no stagger. */
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import HapticPressable from '../../HapticPressable';
@@ -8,17 +8,25 @@ import { AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_A
 import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
 import { AI_LABEL, AI_STAGES, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY, UNNAMED_CHANGE } from './aiBuilderCopy';
 import type { AiBuilderController } from './useAiBuilder';
+import { AI_SPRING, AI_STAGGER_MS } from './AiFunLayer';
 
 type Props = { open: boolean; onClose: () => void; ai: AiBuilderController; isBlank: boolean; sc: SemanticTokens };
 
-/** One change: kind badge (text plus colour, never colour alone), before -> after, reason, warnings, keep switch; 60 ms stagger. */
+/** One change: kind badge (text plus colour, never colour alone), before -> after, reason, warnings, keep switch; springs in on a 60 ms stagger. */
 type CardProps = { change: AiBuilderChange; index: number; kept: boolean; reduceMotion: boolean; onToggle: (id: string) => void; sc: SemanticTokens };
 function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardProps) {
   const anim = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
+  const dim = useRef(new Animated.Value(kept ? 1 : 0.55)).current;
+  const toggled = useRef(false); // the first render already shows the right dim
   useEffect(() => {
     if (reduceMotion) return anim.setValue(1);
-    Animated.timing(anim, { toValue: 1, duration: 220, delay: index * 60, useNativeDriver: true }).start();
+    Animated.spring(anim, { ...AI_SPRING, toValue: 1, delay: index * AI_STAGGER_MS }).start(); // staged reveal: each card springs in on its beat
   }, [anim, index, reduceMotion]);
+  useEffect(() => {
+    if (!toggled.current) return void (toggled.current = true);
+    if (reduceMotion) return dim.setValue(kept ? 1 : 0.55); // "Not applied." says it in text either way
+    Animated.spring(dim, { ...AI_SPRING, toValue: kept ? 1 : 0.55 }).start();
+  }, [dim, kept, reduceMotion]);
 
   const kind = KIND_LABELS[change.kind];
   const removedId = change.exercise ? null : change.before?.exercise_external_id; // resolved by name like the builder rows
@@ -28,10 +36,11 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
   const after = formatRow(change.after);
   const delta = before && after ? `${before} -> ${after}` : after || before;
   const badge = change.kind === 'removed' ? sc.textMuted : change.kind === 'added' ? sc.accent : sc.accentText;
-  const slide = reduceMotion ? null : { transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }] };
+  const opacity = Animated.multiply(anim.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolate: 'clamp' }), dim);
+  const slide = reduceMotion ? null : { transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }, { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] };
 
   return (
-    <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }, slide]}>
+    <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity }, slide]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: badge, borderColor: badge }]}>{kind}</Text>
         {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
@@ -62,6 +71,15 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
   const prompt = isBlank ? 'Describe the workout to build' : 'Ask AI to change this workout';
   const canSend = !busy && !!text.trim();
   const n = ai.acceptedIds.length;
+  const pop = useRef(new Animated.Value(1)).current; // the Apply count pops when a keep toggle changes it
+  const last = useRef({ p, n });
+  useEffect(() => {
+    const prev = last.current;
+    last.current = { p, n };
+    if (prev.p !== p || prev.n === n || reduceMotion) return;
+    pop.setValue(1.05);
+    Animated.spring(pop, { ...AI_SPRING, toValue: 1 }).start();
+  }, [n, p, pop, reduceMotion]);
 
   const send = (quickAction?: AiBuilderQuickAction, injuryArea?: AiBuilderInjuryArea) => {
     const instruction = text.trim() || (quickAction ? QUICK_ACTIONS[quickAction].instruction : '');
@@ -153,11 +171,13 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
                     <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{p.changes.length ? 'Discard' : 'Done'}</Text>
                   </Pressable>
                   {p.changes.length ? (
-                    <Pressable testID="ai-builder-apply" accessibilityRole="button" accessibilityLabel={applyLabel(n)} accessibilityState={{ disabled: busy || !n }}
-                      disabled={busy || !n} onPress={() => void ai.apply().then((ok) => ok && onClose())}
-                      style={[styles.button, styles.grow, { backgroundColor: n ? sc.accent : sc.disabledBg }]}>
-                      <Text style={[typography.bodyMd, { color: n ? sc.textOnAccent : sc.textOnDisabled }]}>{ai.phase === 'applying' ? 'Applying' : applyLabel(n)}</Text>
-                    </Pressable>
+                    <Animated.View style={[styles.grow, { transform: [{ scale: pop }] }]}>
+                      <Pressable testID="ai-builder-apply" accessibilityRole="button" accessibilityLabel={applyLabel(n)} accessibilityState={{ disabled: busy || !n }}
+                        disabled={busy || !n} onPress={() => void ai.apply().then((ok) => ok && onClose())}
+                        style={[styles.button, { backgroundColor: n ? sc.accent : sc.disabledBg }]}>
+                        <Text style={[typography.bodyMd, { color: n ? sc.textOnAccent : sc.textOnDisabled }]}>{ai.phase === 'applying' ? 'Applying' : applyLabel(n)}</Text>
+                      </Pressable>
+                    </Animated.View>
                   ) : null}
                 </View>
               </View>
