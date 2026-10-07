@@ -590,11 +590,11 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     expect(queryByText('Request failed with status code 502')).toBeNull();
   });
 
-  it('renders the "Your coach is setting things up" empty state when both lists are empty', async () => {
+  it('renders the "Nothing released yet." empty state when both lists are empty', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
     const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-empty')).toBeTruthy());
-    expect(getByText('Your coach is setting things up')).toBeTruthy();
+    expect(getByText('Nothing released yet.')).toBeTruthy();
   });
 
   it('pull-to-refresh refetches getPurchaseDrops', async () => {

@@ -55,7 +55,7 @@ export default function HolisticInsightsTile({
         <Eyebrow sc={sc}>Holistic insights</Eyebrow>
         <TopInsight insight={data.insights[0] as HolisticInsight} sc={sc} />
         {data.insights.length > 1 ? (
-          <Text style={[typography.bodySmall, { color: sc.accent }]}>
+          <Text style={[typography.bodySmall, { color: onPress ? sc.accentText : sc.textMuted }]}>
             {data.insights.length - 1} more
           </Text>
         ) : null}
@@ -80,6 +80,7 @@ function Tile({
   if (onPress) {
     return (
       <TouchableOpacity
+        testID="holistic-insights-tile"
         style={styles.card}
         onPress={onPress}
         activeOpacity={0.85}
@@ -90,7 +91,7 @@ function Tile({
       </TouchableOpacity>
     );
   }
-  return <View style={[styles.card, { borderColor: sc.border }]}>{children}</View>;
+  return <View testID="holistic-insights-tile" style={[styles.card, { borderColor: sc.border }]}>{children}</View>;
 }
 
 function Eyebrow({
@@ -137,12 +138,12 @@ type Styles = ReturnType<typeof makeStyles>;
 
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
+    // DES-K2-128: one hairline above, no box, fill or radius (A23 section).
     card: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 12,
-      padding: spacing.lg,
+      paddingVertical: 18,
+      marginBottom: 24,
       gap: spacing.sm,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
     },
   });

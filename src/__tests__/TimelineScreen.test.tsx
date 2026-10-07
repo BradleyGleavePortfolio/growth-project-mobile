@@ -127,7 +127,7 @@ describe('TimelineScreen', () => {
     await waitFor(() => {
       expect(
         getByText(
-          'Your transformation timeline starts the day you log your first weight.',
+          'No entries match these filters.',
         ),
       ).toBeTruthy();
     });
@@ -190,6 +190,20 @@ describe('TimelineScreen', () => {
       const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1][0];
       expect(lastCall?.lanes).toBeUndefined();
     });
+  });
+
+  it('preserves every lane filter, real event dates and cursor paging', async () => {
+    mockFetch.mockResolvedValue({ ...FULL_RESPONSE, nextCursor: 'next-page' });
+    const screen = await renderScreen();
+    expect(await screen.findByLabelText('Wins lane: 7-day check-in streak reached. 8 Oct 2025')).toBeTruthy();
+    for (const [label, lane] of [['Wins', 'win'], ['Coach', 'coach'], ['Friction', 'friction']]) {
+      await fireEvent.press(screen.getByText('All'));
+      await fireEvent.press(screen.getByText(label));
+      expect(mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[0]?.lanes).toEqual([lane]);
+    }
+    mockFetch.mockResolvedValue(EMPTY_RESPONSE);
+    await fireEvent(screen.getByLabelText('Transformation timeline'), 'endReached');
+    expect(mockFetch.mock.calls[mockFetch.mock.calls.length - 1]?.[0]?.cursor).toBe('next-page');
   });
 
   // ── Pull to refresh ────────────────────────────────────────────────────────

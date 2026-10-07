@@ -14,7 +14,7 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { typography, radius } from '../../theme/tokens';
+import { typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import { emitTutorialSignal } from '../../tutorial/tutorialEvents';
@@ -63,7 +63,7 @@ export function MacroExplanationCardView({
     : `${fmt(macros.calories)} calories a day. Protein ${fmt(macros.protein_g)} grams, carbs ${fmt(macros.carbs_g)} grams, fat ${fmt(macros.fat_g)} grams.`;
   return (
     <View
-      style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
+      style={[styles.card, { borderColor: sc.border }]}
       testID="macro-explanation-card"
       accessible={false}
     >
@@ -120,26 +120,25 @@ export default function MacroExplanationCard(): React.ReactElement | null {
 }
 
 const styles = StyleSheet.create({
+  // DES-K2-128: one hairline above, no box or fill (A23 section).
   card: {
-    borderWidth: 0.5,
-    borderRadius: radius.lg,
-    paddingHorizontal: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 18,
     paddingBottom: 6,
     marginBottom: 24,
   },
   eyebrow: { ...typography.eyebrow },
   calRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 10 },
-  cal: { ...typography.h1 },
+  cal: { ...typography.h2, fontVariant: ['tabular-nums'] },
   unit: { ...typography.caption, marginLeft: 6 },
   grid: { flexDirection: 'row', marginTop: 14 },
   cell: { flex: 1 },
   cellLabel: { ...typography.eyebrow },
-  cellValue: { ...typography.h3, marginTop: 6 },
+  cellValue: { ...typography.h3, marginTop: 6, fontVariant: ['tabular-nums'] },
   disclosure: {
     minHeight: 44,
     marginTop: 14,
-    borderTopWidth: 0.5,
+    borderTopWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',

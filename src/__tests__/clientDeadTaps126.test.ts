@@ -38,8 +38,8 @@ describe('client taps that used to do nothing (AUD-E2E-CLIENT-126)', () => {
 
   it('the System switch describes what it actually turns off', () => {
     const src = read('screens/settings/NotificationPreferencesScreen.tsx');
-    expect(src).toContain("system: { weekly_summary_enabled: true }");
-    expect(src).toContain("description: 'Weekly summary email.'");
+    expect(src).toContain("system: { digest_email: true }");
+    expect(src).toContain("description: 'Daily and weekly summary email.'");
     expect(src).not.toContain('App updates, billing, and critical alerts.');
   });
 

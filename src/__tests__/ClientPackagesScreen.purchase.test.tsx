@@ -120,6 +120,14 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
 });
 
+it.each([false, true])('names the refund team and the existing support path (renewing plan: %s)', async (hasPlan) => {
+  plans = hasPlan ? [PLAN] : [];
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  expect(r.getByText(/Refunds are issued by The Growth Project team; to ask, go to You > Settings > Support\./)).toBeTruthy();
+  expect(r.queryByText(/refunds are handled by your coach/i)).toBeNull();
+});
+
 it('shows the plan terms and sells the renewing plan in the native PaymentSheet', async () => {
   const r = await render(<ClientPackagesScreen />);
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());

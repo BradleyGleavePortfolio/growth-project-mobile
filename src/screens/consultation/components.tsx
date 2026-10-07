@@ -1,7 +1,7 @@
 /**
  * Consultation building blocks: frame, progress, rows, chips, wheels,
  * checkbox, buttons and Roman's line. Tokens only (theme/tokens), weights
- * 400/500, radius 4 or less (pills on chips only), and every control carries
+ * 400/500, radius 4 or less, and every control carries
  * an accessibility role, label and state.
  */
 import React, { useContext, useEffect, useMemo, useRef } from 'react';
@@ -20,7 +20,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { colors, lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import type { SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import type { ChapterProgress, OptionDef } from '../../lib/consultation/types';
@@ -30,20 +32,32 @@ import { CHAPTER_NAMES } from '../../lib/consultation/definitions';
 /** Step motion: 280ms decelerate (approved prototype decision C-D7). */
 export const STEP_MS = 280;
 
-export const palette = {
-  bg: colors.bone,
-  surface: lightTokens.bgSurface,
-  ink: colors.ink,
-  charcoal: colors.charcoal,
-  muted: lightTokens.textMuted,
-  border: lightTokens.border,
-  accent: colors.forest,
-  onAccent: colors.bone,
-  disabledBg: lightTokens.disabledBg,
-  onDisabled: lightTokens.textOnDisabled,
-  hair: colors.camel,
-  stone: colors.stone,
-};
+const semanticPalette = (tokens: SemanticTokens) => ({
+  bg: tokens.bgPrimary,
+  surface: tokens.bgPrimary,
+  ink: tokens.textPrimary,
+  charcoal: tokens.textPrimary,
+  muted: tokens.textMuted,
+  border: tokens.border,
+  accent: tokens.accent,
+  accentText: tokens.accentText,
+  onAccent: tokens.textOnAccent,
+  disabledBg: tokens.disabledBg,
+  onDisabled: tokens.textOnDisabled,
+  hair: tokens.border,
+  stone: tokens.textMuted,
+});
+
+/** Compatibility exports for the untouched question and flow modules. */
+export const palette = semanticPalette(lightTokens);
+
+export function useConsultationStyles() {
+  const { semanticColors } = useTheme();
+  return useMemo(() => {
+    const activePalette = semanticPalette(semanticColors);
+    return { palette: activePalette, s: createStyles(activePalette) };
+  }, [semanticColors]);
+}
 
 // ─── Motion ──────────────────────────────────────────────────────────────────
 
@@ -79,6 +93,7 @@ export function FadeIn({
 // ─── Text pieces ─────────────────────────────────────────────────────────────
 
 export function Eyebrow({ children, testID }: { children: React.ReactNode; testID?: string }) {
+  const { s } = useConsultationStyles();
   return (
     <Text style={s.eyebrow} testID={testID}>
       {children}
@@ -87,6 +102,7 @@ export function Eyebrow({ children, testID }: { children: React.ReactNode; testI
 }
 
 export function RomanLine({ text, size = 28 }: { text: string; size?: number }) {
+  const { s } = useConsultationStyles();
   return (
     <View style={s.romanLine} accessible accessibilityLabel={`Roman says: ${text}`}>
       <RomanAvatar crop="neutral" size={size} />
@@ -110,6 +126,7 @@ export function PrimaryButton({
   testID?: string;
   hint?: string;
 }) {
+  const { s } = useConsultationStyles();
   return (
     <Pressable
       onPress={disabled ? undefined : onPress}
@@ -140,6 +157,7 @@ export function TextLink({
   /** "link" for a control that leaves the app (opens a web page). */
   role?: 'button' | 'link';
 }) {
+  const { s } = useConsultationStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -157,6 +175,7 @@ export function TextLink({
 // ─── Frame ───────────────────────────────────────────────────────────────────
 
 export function ProgressBar({ progress }: { progress: ChapterProgress }) {
+  const { s } = useConsultationStyles();
   const segs = progressSegments(progress);
   const name = CHAPTER_NAMES[progress.chapter];
   return (
@@ -224,6 +243,7 @@ export function useConsultInsets() {
 }
 
 export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
+  const { s, palette } = useConsultationStyles();
   const insets = useConsultInsets();
   return (
     <View
@@ -254,6 +274,7 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
             accessibilityHint="Saves your answers so you can continue later"
             hitSlop={10}
             testID="consult-finish-later"
+            style={s.finishButton}
           >
             <Text style={s.finishText}>{pauseLabel ? 'Pause' : 'Finish later'}</Text>
           </Pressable>
@@ -299,6 +320,7 @@ export function QuestionHeader({
   long?: boolean;
   why?: string;
 }) {
+  const { s } = useConsultationStyles();
   return (
     <View>
       <View style={s.eyerow}>
@@ -330,6 +352,7 @@ export function OptionRow({
   tall?: boolean;
   testID?: string;
 }) {
+  const { s } = useConsultationStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -365,6 +388,7 @@ export function Chip({
   capped?: boolean;
   testID?: string;
 }) {
+  const { s, palette } = useConsultationStyles();
   return (
     <Pressable
       onPress={onPress}
@@ -377,7 +401,7 @@ export function Chip({
       <Text style={[big ? s.chipBigText : s.chipText, selected && s.chipTextSel, capped && !selected && s.chipCapped]}>
         {option.label}
       </Text>
-      {selected ? <Ionicons name="checkmark" size={14} color={palette.onAccent} style={s.chipCheck} /> : null}
+      {selected ? <Ionicons name="checkmark" size={14} color={palette.accentText} style={s.chipCheck} /> : null}
     </Pressable>
   );
 }
@@ -398,6 +422,7 @@ export function Checkbox({
   disabled?: boolean;
   hint?: string;
 }) {
+  const { s, palette } = useConsultationStyles();
   return (
     <Pressable
       onPress={disabled ? undefined : onToggle}
@@ -432,6 +457,7 @@ export function LabeledInput({
   multiline?: boolean;
   testID?: string;
 }) {
+  const { s, palette } = useConsultationStyles();
   return (
     <View style={s.inputWrap}>
       <Text style={s.flabel}>{label}</Text>
@@ -457,6 +483,7 @@ export function UnitTabs({
   unit: 'imperial' | 'metric';
   onChange: (u: 'imperial' | 'metric') => void;
 }) {
+  const { s } = useConsultationStyles();
   return (
     <View style={s.tabs} accessibilityRole="tablist">
       {(['imperial', 'metric'] as const).map((u) => (
@@ -495,6 +522,7 @@ export function Wheel<T extends string | number>({
   format?: (v: T) => string;
   testID?: string;
 }) {
+  const { s } = useConsultationStyles();
   const ref = useRef<ScrollView>(null);
   const idx = Math.max(0, values.indexOf(value));
   const fmt = useMemo(() => format ?? ((v: T) => String(v)), [format]);
@@ -549,7 +577,7 @@ export function Wheel<T extends string | number>({
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-export const s = StyleSheet.create({
+const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
   topbar: {
     flexDirection: 'row',
@@ -561,6 +589,7 @@ export const s = StyleSheet.create({
   },
   iconBtn: { width: 44, height: 44, justifyContent: 'center' },
   finishText: { ...typography.bodySmall, color: palette.muted },
+  finishButton: { minHeight: 44, justifyContent: 'center' },
   progress: { flexDirection: 'row', gap: 4, paddingHorizontal: spacing.xl, marginTop: spacing.xs },
   seg: { flex: 1, height: 2, backgroundColor: palette.border, overflow: 'hidden' },
   segFill: { height: 2, backgroundColor: palette.accent },
@@ -569,21 +598,17 @@ export const s = StyleSheet.create({
   footerSpacer: { height: 34 },
   eyerow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { ...typography.eyebrow, color: palette.muted },
-  timeLeft: { ...typography.caption, letterSpacing: 0, color: palette.muted },
-  sub: { ...typography.caption, letterSpacing: 0, color: palette.muted, marginTop: 6 },
+  timeLeft: { ...typography.bodySmall, color: palette.muted },
+  sub: { ...typography.bodySmall, color: palette.muted, marginTop: 6 },
   romanLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginTop: spacing.lg },
   romanText: {
     flex: 1,
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontStyle: 'italic',
-    fontWeight: '400',
-    fontSize: 19,
-    lineHeight: 26,
+    ...typography.body,
     color: palette.charcoal,
   },
   h1: { ...typography.h1, color: palette.ink },
-  h2: { ...typography.h2, color: palette.ink },
-  display: { ...typography.display, color: palette.ink },
+  h2: { ...typography.h2, color: palette.ink, fontVariant: ['tabular-nums'] },
+  display: { ...typography.display, color: palette.ink, fontVariant: ['tabular-nums'] },
   h3: { ...typography.h3, color: palette.ink },
   body: { ...typography.body, color: palette.ink },
   small: { ...typography.bodySmall, color: palette.ink },
@@ -596,11 +621,10 @@ export const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     minHeight: 56,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: 0,
     paddingVertical: spacing.md,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: palette.border,
-    borderRadius: radius.lg,
     backgroundColor: palette.surface,
   },
   rowTall: { minHeight: 72 },
@@ -612,7 +636,7 @@ export const s = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: radius.pill,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.stone,
     alignItems: 'center',
     justifyContent: 'center',
@@ -625,19 +649,19 @@ export const s = StyleSheet.create({
     alignItems: 'center',
     minHeight: 44,
     paddingHorizontal: spacing.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.border,
-    borderRadius: radius.pill,
+    borderRadius: radius.lg,
     backgroundColor: palette.surface,
   },
   chipBig: { minHeight: 56, minWidth: 72, justifyContent: 'center' },
-  chipSel: { backgroundColor: palette.accent, borderColor: palette.accent },
+  chipSel: { borderColor: palette.accent },
   chipText: { ...typography.bodySmall, color: palette.ink },
-  chipBigText: { ...typography.h3, color: palette.ink },
-  chipTextSel: { color: palette.onAccent },
+  chipBigText: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
+  chipTextSel: { color: palette.accentText },
   chipCapped: { color: palette.muted },
   chipCheck: { marginLeft: 6 },
-  capNote: { ...typography.caption, letterSpacing: 0, color: palette.muted, marginTop: spacing.sm },
+  capNote: { ...typography.bodySmall, color: palette.muted, marginTop: spacing.sm },
   softNote: { ...typography.bodySmall, color: palette.charcoal, marginTop: spacing.md },
   errorNote: { ...typography.bodySmall, color: palette.charcoal, marginTop: spacing.md },
   checkRow: {
@@ -664,7 +688,7 @@ export const s = StyleSheet.create({
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
   inputWrap: { marginTop: spacing.lg },
-  flabel: { ...typography.caption, letterSpacing: 0, color: palette.charcoal, marginBottom: 6 },
+  flabel: { ...typography.bodySmall, color: palette.charcoal, marginBottom: 6 },
   field: {
     ...typography.body,
     color: palette.ink,
@@ -678,7 +702,7 @@ export const s = StyleSheet.create({
   },
   fieldMulti: { minHeight: 72, textAlignVertical: 'top' },
   tabs: { flexDirection: 'row', borderWidth: 1, borderColor: palette.border, borderRadius: radius.lg, marginBottom: spacing.lg },
-  tab: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   tabOn: { backgroundColor: palette.accent },
   tabText: { ...typography.bodySmall, color: palette.ink },
   tabTextOn: { color: palette.onAccent },
@@ -696,8 +720,8 @@ export const s = StyleSheet.create({
     borderColor: palette.border,
   },
   wheelRow: { height: ROW_H, alignItems: 'center', justifyContent: 'center' },
-  wheelText: { ...typography.body, color: palette.muted },
-  wheelTextOn: { ...typography.bodyMd, color: palette.ink },
+  wheelText: { ...typography.body, fontVariant: ['tabular-nums'], color: palette.muted },
+  wheelTextOn: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
   cta: {
     minHeight: 52,
     alignItems: 'center',
@@ -711,7 +735,7 @@ export const s = StyleSheet.create({
   ctaTextDisabled: { color: palette.onDisabled },
   link: { alignSelf: 'center', paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
   linkText: { ...typography.bodySmall, color: palette.muted },
-  linkAccent: { color: palette.accent },
+  linkAccent: { color: palette.accentText },
   pressed: { opacity: 0.85 },
   checkDisabled: { opacity: 0.6 },
   hair: { height: 1, backgroundColor: palette.border, marginVertical: spacing.xl },
@@ -723,3 +747,5 @@ export const s = StyleSheet.create({
     borderBottomColor: palette.border,
   },
 });
+
+export const s = createStyles(palette);
