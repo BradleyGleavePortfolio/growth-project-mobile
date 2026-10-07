@@ -1,7 +1,5 @@
-/**
- * aiBuilderApi — zod-parsed Ask AI client (AIB-5; contract: AI_MASTER_BUILDER_PLAN.md PART 2 section 3). GET status (AIB-4;
- * 404 on older backends -> entry hidden), POST propose (AIB-2), PATCH drafts/:id (accepted_change_ids). One code per refusal.
- */
+// aiBuilderApi (AIB-5; AI_MASTER_BUILDER_PLAN.md section 3), zod-parsed: GET status (404 on older backends -> entry hidden),
+// POST propose (AIB-2), PATCH drafts/:id (accepted_change_ids). One code per refusal.
 import { z } from 'zod';
 import axios from 'axios';
 import api from '../services/api';
