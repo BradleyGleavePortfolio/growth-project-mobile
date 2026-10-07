@@ -88,7 +88,7 @@ it('keeps existing order, both reorder directions, remove and update reachable',
   await fireEvent(screen.getByTestId('exercise-row-0'), 'layout', { nativeEvent: { layout: { y: 0, height: 200 } } });
   await fireEvent(screen.getByTestId('exercise-row-1'), 'layout', { nativeEvent: { layout: { y: 200, height: 200 } } });
   await act(async () => drag.mock.calls[drag.mock.calls.length - 2][0].onPanResponderRelease?.({} as GestureResponderEvent,
-    { stateID: 0, moveX: 0, moveY: 250, x0: 0, y0: 0, dx: 0, dy: 250, vx: 0, vy: 0, numberActiveTouches: 0 }));
+    { stateID: 0, moveX: 0, moveY: 250, x0: 0, y0: 0, dx: 0, dy: 250, vx: 0, vy: 0, numberActiveTouches: 0, _accountsForMovesUpTo: 0 }));
   expect(screen.getByLabelText('Sets for Row, exercise 1').props.value).toBe('4');
   await press('Move Bench press up');
   drag.mockRestore();
