@@ -80,7 +80,7 @@ export interface AIBudgetTutorialModalProps {
 
 /** Roman's coach-method learning (playbook refresh) is paid from the AI pool. */
 const ROMAN_LEARNING_LINE =
-  'When Roman learns your coaching method, each refresh uses a few cents of credit, at most four times a day.';
+  'When Roman learns your coaching method, each refresh uses a few cents of credit. Refreshes run a few times a day, only when something new was added.';
 
 type Card = {
   title: string;

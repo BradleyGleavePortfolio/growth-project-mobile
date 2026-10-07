@@ -173,7 +173,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
   it.each([false, true])(
     'card 1 says Roman learning the coaching method uses credits (purchasesHidden=%s)',
     async (purchasesHidden) => {
-      const { getByText } = await render(
+      const { getByText, queryByText } = await render(
         <AIBudgetTutorialModal
           visible
           budget={budget}
@@ -184,9 +184,12 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
       );
       expect(
         getByText(
-          /When Roman learns your coaching method, each refresh uses a few cents of credit, at most four times a day\./,
+          /When Roman learns your coaching method, each refresh uses a few cents of credit\. Refreshes run a few times a day, only when something new was added\./,
         ),
       ).toBeTruthy();
+      // FIX-RC-128 B1: the backend also refreshes after every restart, so
+      // the card must not promise a hard daily maximum.
+      expect(queryByText(/at most/)).toBeNull();
     },
   );
 });
