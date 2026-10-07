@@ -71,10 +71,12 @@ jest.mock('../screens/client/active-workout/ExerciseCard', () => {
   const R = jest.requireActual('react');
   const RN = jest.requireActual('react-native');
   return {
-    ExerciseCard: ({ exercise, exIdx, onToggleSetComplete }: {
+    ExerciseCard: ({ exercise, exIdx, onToggleSetComplete, onUpdateSet }: {
       exercise: { exerciseName: string; sets: unknown[] }; exIdx: number; onToggleSetComplete: (e: number, s: number) => void;
+      onUpdateSet: (e: number, s: number, field: 'reps', value: number) => void;
     }) => R.createElement(RN.View, null, R.createElement(RN.Text, null, exercise.exerciseName),
-      ...exercise.sets.map((_s, s) => R.createElement(RN.Pressable, { key: String(s), testID: `tick-${exIdx}-${s}`, onPress: () => onToggleSetComplete(exIdx, s) }))),
+      ...exercise.sets.map((_s, s) => R.createElement(RN.Pressable, { key: String(s), testID: `tick-${exIdx}-${s}`, onPress: () => onToggleSetComplete(exIdx, s) })),
+      ...exercise.sets.map((_s, s) => R.createElement(RN.Pressable, { key: `r${s}`, testID: `reps12-${exIdx}-${s}`, onPress: () => onUpdateSet(exIdx, s, 'reps', 12) }))),
   };
 });
 
@@ -331,6 +333,45 @@ describe('leaving a live workout never deletes it', () => {
     expect(preventDefault).toHaveBeenCalled();
     expect(alerts[0].title).toBe('Log this workout?');
     expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  // m#521 Sol B: notes or edited sets typed before the first ticked set are the client's work.
+  const FRESH = { routineName: 'Push Day', exercises: JSON.stringify([{ exerciseId: 'ex-1', exerciseName: 'Bench Press', sets: 2, reps: 8, restSec: 90, weightLbs: 135 }]) };
+  const storage = () => jest.requireMock('../storage/activeWorkoutSession') as { saveActiveWorkoutSession: jest.Mock; clearActiveWorkoutSession: jest.Mock };
+  const leaveBy = async (how: 'Leave' | 'Back', view: Awaited<ReturnType<typeof openScreen>>) => {
+    if (how === 'Leave') await press(view.getByLabelText('Leave workout'));
+    else await act(async () => { mockBeforeRemove!({ preventDefault: jest.fn(), data: { action: { type: 'GO_BACK' } } }); await flush(); });
+    expect(how === 'Leave' ? mockGoBack : mockDispatch).toHaveBeenCalledTimes(1);
+  };
+  it.each(['Leave', 'Back'] as const)('%s with notes and an edited set but no ticked set keeps the draft, and reopening brings it back', async (how) => {
+    mockRouteParams = FRESH;
+    mockLoadSession.mockResolvedValue(null);
+    const view = await openScreen();
+    await act(async () => { fireEvent.changeText(view.getByLabelText('Workout notes'), 'Left shoulder tight'); await flush(); });
+    await press(view.getByTestId('reps12-0-1'));
+    await leaveBy(how, view);
+    expect(alerts).toEqual([]);
+    expect(storage().clearActiveWorkoutSession).not.toHaveBeenCalled();
+    const draft = storage().saveActiveWorkoutSession.mock.calls.at(-1)?.[1];
+    expect(draft.workoutNotes).toBe('Left shoulder tight');
+    expect(draft.sessionExercises[0].sets.map((x: { reps: number }) => x.reps)).toEqual([8, 12]);
+    await view.unmount();
+    mockLoadSession.mockResolvedValue({ isStale: false, session: { version: 1, updatedAtMs: Date.now(), ...draft } });
+    const again = await openScreen();
+    expect(again.getByLabelText('Workout notes').props.value).toBe('Left shoulder tight');
+    expect(again.getByText('0 of 2 sets completed')).toBeTruthy();
+  });
+  it.each(['Leave', 'Back'] as const)('%s right after opening, with nothing entered, still releases the empty session', async (how) => {
+    mockRouteParams = FRESH;
+    mockLoadSession.mockResolvedValue(null);
+    const view = await openScreen();
+    await leaveBy(how, view);
+    expect(alerts).toEqual([]);
+    expect(storage().clearActiveWorkoutSession).toHaveBeenCalledWith('c1');
+  });
+  it('the live workout turns off the iOS swipe-back that native-stack cannot hold for the question (m#521 Opus B1)', () => {
+    const nav = fs.readFileSync(path.join(__dirname, '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
+    expect(nav).toMatch(/<WorkoutStackNav\.Screen name="ActiveWorkout"\s+component=\{ProtectedActiveWorkoutScreen\} options=\{\{ gestureEnabled: false \}\} \/>/);
   });
 
   it('a press on another tab asks while the workout is open; nothing logged lets the tab open', async () => {

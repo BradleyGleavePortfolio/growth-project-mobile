@@ -447,7 +447,10 @@ function WorkoutStackNavigator() {
       }}
     >
       <WorkoutStackNav.Screen name="WorkoutMain"     component={ProtectedWorkoutScreen} />
-      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} />
+      {/* m#521 Opus B1: native-stack cannot hold the iOS swipe-back for the leave question
+          (beforeRemove runs after UIKit has popped), so the live workout leaves by its Leave
+          chevron, Android back or a tab press, which all ask first. */}
+      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} options={{ gestureEnabled: false }} />
       <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />

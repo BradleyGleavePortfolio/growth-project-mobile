@@ -1083,8 +1083,10 @@ export default function ActiveWorkoutScreen() {
 
   // TRAIN-GATE-128 (owner 15:03 10-07): leaving a live workout never deletes
   // it. With sets logged, the client is asked to log the workout or keep
-  // training. With nothing logged there is nothing to save: leaving the
-  // screen releases the empty session; a tab switch keeps it open.
+  // training. With nothing entered (no ticked set, no notes, no edits) there
+  // is nothing to save: leaving the screen releases the empty session; a
+  // draft with notes or edits is kept for the next open; a tab switch keeps
+  // it open.
   const releaseEmptySession = async () => {
       // Nothing was logged in this session, so there is nothing to keep:
       // drop the empty persisted copy so the next workout opens clean.
@@ -1129,7 +1131,13 @@ export default function ActiveWorkoutScreen() {
     }
     const logged = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
     if (logged === 0) {
-      if (!releaseIfEmpty) {
+      // m#521 Sol B: notes, edited sets or added exercises are the client's
+      // work before the first ticked set; only a session exactly as it opened
+      // is released. Anything else is written now and reopens next time.
+      const untouched =
+        !workoutNotes.trim() && JSON.stringify(sessionExercises) === JSON.stringify(defaultSessionExercises);
+      if (!releaseIfEmpty || !untouched) {
+        flushPendingPersist();
         leave();
         return;
       }
