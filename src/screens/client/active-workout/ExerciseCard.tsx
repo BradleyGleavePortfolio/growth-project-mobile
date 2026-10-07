@@ -73,6 +73,13 @@ export function ExerciseCard({
           </HapticPressable>
         </View>
       </View>
+      {/* FU-WORKLOG-126: the coach's note used to show only on the screen
+          before Start, never while the client was doing the sets. */}
+      {exercise.coachNote ? (
+        <Text style={[styles.previousSetText, { marginTop: 4 }]} testID={`coach-note-${exIdx}`}>
+          Coach note: {exercise.coachNote}
+        </Text>
+      ) : null}
       {onMove && <View style={styles.exerciseTools}>
         <HapticPressable intent="light" style={styles.toolButton} disabled={exIdx === 0} onPress={() => onMove(exIdx, -1)} accessibilityLabel={`Move ${exercise.exerciseName} up`}>
           <Ionicons name="arrow-up" size={18} color={exIdx === 0 ? colors.textMuted : colors.primary} />
@@ -88,7 +95,7 @@ export function ExerciseCard({
           <Text style={[styles.addSetText, exercise.restSec !== seconds && { color: colors.textMuted }]}>{seconds}s</Text>
         </HapticPressable>)}
       </View>}
-      {onChangeRest && ![60, 90, 120].includes(exercise.restSec ?? 0) && <Text style={styles.previousSetText}>Rest: {exercise.restSec ?? 0}s · Coach target</Text>}
+      {onChangeRest && ![60, 90, 120].includes(exercise.restSec ?? 0) && <Text style={styles.previousSetText}>Rest: {exercise.restSec ?? 0}s · From the plan</Text>}
 
       {/* Set Headers */}
       <View style={styles.setHeaderRow}>

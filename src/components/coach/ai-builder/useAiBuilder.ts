@@ -65,11 +65,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     async (args: { instruction: string; quickAction?: AiBuilderQuickAction; injuryArea?: AiBuilderInjuryArea }) => {
       if (!planId || phase === 'thinking' || phase === 'applying') return;
       fireAiHaptic('medium');
-      setError(null);
-      setProposal(null);
-      setPhase('thinking');
-      setStage(0);
-      stopStages();
+      setError(null); setProposal(null); setPhase('thinking'); setStage(0); stopStages();
       timer.current = setInterval(() => setStage((s) => Math.min(s + 1, AI_STAGES.length - 1)), AI_STAGE_MS);
       try {
         const ready = await prepare();
@@ -122,9 +118,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
 
   const discard = useCallback(async () => {
     fireAiHaptic('warning');
-    setProposal(null);
-    setPhase('idle');
-    setError(null);
+    setProposal(null); setPhase('idle'); setError(null);
     if (!proposal?.draft_id) return; // explain writes no draft: nothing to reject
     try {
       await aiBuilderApi.discard(proposal.draft_id);

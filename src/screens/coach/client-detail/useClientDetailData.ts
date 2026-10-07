@@ -11,7 +11,7 @@ import {
   type WeekSummary,
   type WorkoutSession,
 } from './types';
-import { mapCoachWorkoutSessions } from '../../../utils/workout/workoutLogging';
+import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
@@ -183,7 +183,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           type: 'workout',
           // WorkoutSession rows carry workout_name (no name / completed_at).
           title: s.workout_name || s.name || 'Workout',
-          subtitle: s.completed_at ? `Completed` : 'Logged',
+          // FU-WORKLOG2-126: what was done, not "Logged" on every row.
+          subtitle: workoutTimelineSubtitle(s),
           date: s.created_at || s.date,
           icon: 'barbell',
           iconColor: colors.primaryDark, // Round 3: hex → token (workout event icon)
@@ -203,6 +204,11 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           date: String(c.date || '').slice(0, 10) + 'T09:00:00',
           icon: 'chatbubble-ellipses',
           iconColor: colors.primary,
+          checkIn: {
+            id: String(c.id),
+            coachId: typeof c.coach_id === 'string' ? c.coach_id : null,
+            reviewed: c.reviewed_by_coach === true,
+          },
         });
       }
 
@@ -213,6 +219,19 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       console.error('ClientDetailScreen: loadTimeline failed', err);
     }
   }, [clientId, colors]);
+
+  // Coach marks one check-in reviewed. The Timeline row flips to "Reviewed"
+  // and the Clients list "N to review" count drops on its next load.
+  const markCheckInReviewed = useCallback(async (checkInId: string) => {
+    await coachApi.markCheckInReviewed(clientId, checkInId);
+    setTimeline((prev) =>
+      prev.map((e) =>
+        e.checkIn && e.checkIn.id === checkInId
+          ? { ...e, checkIn: { ...e.checkIn, reviewed: true } }
+          : e,
+      ),
+    );
+  }, [clientId]);
 
   // ── Weekly Summary ────────────────────────────────────────────────────────────
   const loadWeeklySummaries = useCallback(async (selectedDays: 7 | 30 | 90) => {
@@ -351,6 +370,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     loadServerMealPlans,
     loadTimeline,
     loadWeeklySummaries,
+    markCheckInReviewed,
   };
 }
 

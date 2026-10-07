@@ -34,6 +34,7 @@ import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 import { COACH_RECOVERY_GATE_KEY, ROLE_SELECTION_OWNER_KEY } from '../lib/roleSelectionGate';
+import { DAY1_ANSWERS_KEY_PREFIX } from '../screens/day-one/answers';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = [
@@ -186,6 +187,8 @@ const USER_SCOPED_PREFIXES: ScopedPrefix[] = [
   { prefix: 'coach.revenue_sharing_', storage: 'prefs' },
   { prefix: 'onboarding.lean_q5_draft:', storage: 'prefs' },
   { prefix: 'onboarding.lean_q6_draft:', storage: 'prefs' },
+  // Day-1 goals and chosen check-in time (B-441-1), kept per account.
+  { prefix: DAY1_ANSWERS_KEY_PREFIX, storage: 'prefs' },
   { prefix: 'coach.wizard.step_2_invite_code:', storage: 'prefs' },
   // PII-bearing message thread cache (Hunt #2). cacheStorage instance.
   { prefix: 'messages_thread_client:', storage: 'cache' },

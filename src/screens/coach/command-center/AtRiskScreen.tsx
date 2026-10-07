@@ -112,8 +112,8 @@ export default function AtRiskScreen({ onSelectClient }: Props) {
           <View style={styles.emptyWrapper}>
             <Text style={styles.emptyTitle}>No at-risk clients</Text>
             <Text style={styles.emptyBody}>
-              All 0.3+ risk-score clients will appear here. Check back after the
-              nightly PTM score run.
+              Clients who start missing check-ins, workouts or logs appear here.
+              Risk levels update every night.
             </Text>
           </View>
         }

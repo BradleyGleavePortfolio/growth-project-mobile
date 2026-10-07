@@ -98,6 +98,9 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
   const [recentFoods, setRecentFoods] = useState<SearchResult[]>([]);
   const [frequentFoods, setFrequentFoods] = useState<SearchResult[]>([]);
   const [lastMeals, setLastMeals] = useState<Partial<Record<MealType, PastMeal>>>({});
+  // True when no day of the week could be read (offline or server down).
+  // The lists from the last successful read stay usable, including offline.
+  const [browseUnavailable, setBrowseUnavailable] = useState(false);
 
   const loadBrowseFoods = useCallback(async () => {
     if (!currentUserId) return;
@@ -109,6 +112,11 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
         dateStrings.push(addDays(selectedDate, -i));
       }
       const settled = await Promise.allSettled(dateStrings.map((ds) => logApi.getDaily(ds)));
+      if (settled.every((result) => result.status === 'rejected')) {
+        setBrowseUnavailable(true);
+        return;
+      }
+      setBrowseUnavailable(false);
 
       const recent: SearchResult[] = [];
       const recentSeen = new Set<string>();
@@ -159,9 +167,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
       setLastMeals(meals);
     } catch (err) {
       console.error('useFoodBrowse: loadBrowseFoods failed', err);
-      setRecentFoods([]);
-      setFrequentFoods([]);
-      setLastMeals({});
+      setBrowseUnavailable(true);
     }
   }, [currentUserId, selectedDate]);
 
@@ -171,6 +177,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
     recentFoods,
     frequentFoods,
     lastMeals,
+    browseUnavailable,
     loadBrowseFoods,
     loadRecentFoods: loadBrowseFoods,
     loadFrequentFoods: loadBrowseFoods,

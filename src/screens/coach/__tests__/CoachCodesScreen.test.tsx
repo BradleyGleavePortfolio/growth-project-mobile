@@ -127,6 +127,12 @@ describe('CoachCodesScreen', () => {
     expect(queryByTestId('coach-code-joined-GP-LINK22')).toBeNull();
   });
 
+  it('opens emailed-invite delivery history separately from code signups', async () => {
+    const { getByTestId } = await renderEntry();
+    await fireEvent.press(getByTestId('coach-codes-emailed-invites'));
+    expect(nav.navigate).toHaveBeenCalledWith('CoachInvites');
+  });
+
   it('turns a leaked code off after confirmation', async () => {
     api.revoke.mockResolvedValue({ code: { ...ROW, status: 'revoked', revoked_at: '2026-10-05T20:00:00Z' }, replayed: false });
     const alert = jest.spyOn(Alert, 'alert');
@@ -191,4 +197,3 @@ describe('CoachCodesScreen', () => {
     await waitFor(() => expect(Sharing.shareAsync).toHaveBeenCalledWith('file:///tmp/qr.png', expect.objectContaining({ mimeType: 'image/png' })));
   });
 });
-

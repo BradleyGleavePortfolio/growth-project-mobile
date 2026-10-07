@@ -8,9 +8,14 @@
  *  - C-325-3: requests and the agenda come from the server status filter,
  *    paged on (start_at, id).
  *  - B-325-1: the coach can save a phone number as the call link.
+ *  - U-04-3: ended sessions still confirmed are listed under Past sessions
+ *    with Mark complete / Mark missed.
+ *  - U-04-4: inbox times read "Wed, Oct 7 · 9:00–9:30 AM"; Confirm shows a
+ *    success line that is not error-coloured.
  */
 import React from 'react';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { CoachingSession, SessionType } from '../../../api/schedulingApi';
 
@@ -33,6 +38,8 @@ jest.mock('../../../api/schedulingApi', () => {
       declineSession: jest.fn(),
       attachManualVideoLink: jest.fn(),
       cancelSession: jest.fn(),
+      completeSession: jest.fn(),
+      markNoShow: jest.fn(),
       getAvailability: jest.fn(),
       setAvailability: jest.fn(),
     },
@@ -43,7 +50,8 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 }));
 
 import { schedulingApi } from '../../../api/schedulingApi';
-import { COACH_CODE_MESSAGES } from '../../../calendar/schedulingErrors';
+import { COACH_CODE_MESSAGES, COACH_INTENT_CODE_MESSAGES } from '../../../calendar/schedulingErrors';
+import { formatSessionSpan } from '../../../calendar/calendarTime';
 import CoachAppointmentTypesScreen from '../CoachAppointmentTypesScreen';
 import CoachTimeOffScreen from '../CoachTimeOffScreen';
 import CoachBookingInboxScreen from '../CoachBookingInboxScreen';
@@ -82,11 +90,13 @@ function renderQ(node: React.ReactElement) {
   return render(<QueryClientProvider client={qc}>{node}</QueryClientProvider>);
 }
 
-/** listMySessions answers by the status filter the screen asks for. */
+/** listMySessions answers by the scope and status filter the screen asks for. */
 function serveByStatus(rows: CoachingSession[]) {
   api.listMySessions.mockImplementation(async (_limit, opts) => {
     const wanted = opts?.status;
-    return wanted ? rows.filter((r) => wanted.includes(r.status)) : rows;
+    const past = opts?.scope === 'past';
+    const inScope = rows.filter((r) => (Date.parse(r.end_at) <= Date.now()) === past);
+    return wanted ? inScope.filter((r) => wanted.includes(r.status)) : inScope;
   });
 }
 
@@ -166,6 +176,71 @@ describe('CoachBookingInboxScreen (S-SCHED-3)', () => {
     serveByStatus([session({ id: 's2', status: 'scheduled', video_url: 'tel:+1 425 555 0100', meeting_link_status: 'ready', client_name: 'Jamie' })]);
     const r = await renderQ(<CoachBookingInboxScreen />);
     await waitFor(() => expect(r.getByText('Confirmed with Jamie. Phone call on +1 425 555 0100.')).toBeTruthy());
+  });
+});
+
+describe('CoachBookingInboxScreen past sessions and times (U-04-3, U-04-4)', () => {
+  const ended = session({
+    id: 'past-1', status: 'scheduled', start_at: '2026-01-05T17:00:00.000Z', end_at: '2026-01-05T17:20:00.000Z', client_name: 'Jamie',
+  });
+
+  it('lists ended sessions still marked confirmed under Past sessions and marks one complete', async () => {
+    serveByStatus([ended]);
+    api.completeSession.mockResolvedValue({ ...ended, status: 'completed' });
+    const r = await renderQ(<CoachBookingInboxScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-ended-past-1')).toBeTruthy());
+    expect(api.listMySessions).toHaveBeenCalledWith(20, { scope: 'past', status: ['scheduled'], before: undefined, beforeId: undefined });
+    expect(r.queryByTestId('coach-agenda-past-1')).toBeNull();
+    expect(r.getByText(formatSessionSpan(ended.start_at, ended.end_at))).toBeTruthy();
+    await fireEvent.press(r.getByTestId('coach-complete-past-1'));
+    await waitFor(() => expect(api.completeSession).toHaveBeenCalledWith('past-1', undefined));
+    await waitFor(() =>
+      expect(r.getByText('Marked complete. Quick Q/A Call shows as completed in Calendar for Jamie.')).toBeTruthy(),
+    );
+  });
+
+  it('Mark missed asks first, then sends the start time on the card', async () => {
+    serveByStatus([ended]);
+    api.markNoShow.mockResolvedValue({ ...ended, status: 'no_show' });
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation((_title, _msg, buttons) => {
+      buttons?.find((b) => b.style === 'destructive')?.onPress?.();
+    });
+    const r = await renderQ(<CoachBookingInboxScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-no-show-past-1')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('coach-no-show-past-1'));
+    expect(alert).toHaveBeenCalledWith('Mark this session missed?', expect.stringMatching(/Jamie did not join/), expect.any(Array));
+    await waitFor(() => expect(api.markNoShow).toHaveBeenCalledWith('past-1', { expected_start_at: ended.start_at }));
+    await waitFor(() => expect(r.getByText('Marked missed. Quick Q/A Call shows as missed in Calendar for Jamie.')).toBeTruthy());
+    alert.mockRestore();
+  });
+
+  it('an outcome on a session closed elsewhere reads coach copy, not a generic error', async () => {
+    serveByStatus([ended]);
+    api.completeSession.mockRejectedValue(coded(409, 'SESSION_STATE_CHANGED'));
+    const r = await renderQ(<CoachBookingInboxScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-complete-past-1')).toBeTruthy());
+    await fireEvent.press(r.getByTestId('coach-complete-past-1'));
+    const expected = COACH_INTENT_CODE_MESSAGES.complete?.SESSION_STATE_CHANGED ?? 'missing';
+    await waitFor(() => expect(r.getByText(expected)).toBeTruthy());
+  });
+
+  it('no ended sessions -> a calm empty line', async () => {
+    serveByStatus([session()]);
+    const r = await renderQ(<CoachBookingInboxScreen />);
+    await waitFor(() => expect(r.getByTestId('coach-ended-empty')).toBeTruthy());
+  });
+
+  it('request times read weekday, date and range; Confirm shows a success line', async () => {
+    const rq = session();
+    serveByStatus([rq]);
+    api.approveSession.mockResolvedValue({ ...rq, status: 'scheduled' });
+    const r = await renderQ(<CoachBookingInboxScreen />);
+    await waitFor(() => expect(r.getByLabelText('Confirm session Quick Q/A Call')).toBeTruthy());
+    expect(r.getByText(formatSessionSpan(rq.start_at, rq.end_at))).toBeTruthy();
+    expect(r.queryByText(/\d{1,2}\/\d{1,2}\/\d{4}/)).toBeNull();
+    await fireEvent.press(r.getByLabelText('Confirm session Quick Q/A Call'));
+    await waitFor(() => expect(r.getByTestId('coach-request-message')).toBeTruthy());
+    expect(r.getByTestId('coach-request-message').props.children).toMatch(/^Confirmed\. Quick Q\/A Call is now under Upcoming sessions/);
   });
 });
 

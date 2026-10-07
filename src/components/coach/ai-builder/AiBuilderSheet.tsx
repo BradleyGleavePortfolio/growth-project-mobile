@@ -69,10 +69,7 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
     setInjuryPicker(false);
     void ai.propose({ instruction, quickAction, injuryArea });
   };
-  const close = () => {
-    if (p) void ai.discard();
-    onClose();
-  };
+  const close = () => { if (p) void ai.discard(); onClose(); };
   const chip = (key: string, label: string, a11y: string, onPress: () => void) => (
     <HapticPressable key={key} intent="light" testID={key} accessibilityRole="button" accessibilityLabel={a11y} accessibilityState={{ disabled: busy }}
       disabled={busy} onPress={onPress} style={[styles.chip, { borderColor: sc.border }]}>

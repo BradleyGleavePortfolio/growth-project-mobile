@@ -329,6 +329,10 @@ describe('signOut', () => {
       JSON.stringify({ weight: 170 }),
     );
     await prefsStorage.set(`coach.wizard.step_2_invite_code:${userId}`, 'ABC123');
+    await prefsStorage.set(
+      `onboarding.day1_answers:${userId}`,
+      JSON.stringify({ goals: ['mental_health'], checkInTime: { hour: 7, minute: 0 } }),
+    );
     await cacheStorage.set(
       `messages_thread_client:${userId}`,
       JSON.stringify([{ id: 'm1', text: 'hi' }]),
@@ -382,6 +386,9 @@ describe('signOut', () => {
     ).toBeUndefined();
     expect(
       await prefsStorage.getStringAsync(`coach.wizard.step_2_invite_code:${userId}`),
+    ).toBeUndefined();
+    expect(
+      await prefsStorage.getStringAsync(`onboarding.day1_answers:${userId}`),
     ).toBeUndefined();
     expect(
       await cacheStorage.getStringAsync(`messages_thread_client:${userId}`),

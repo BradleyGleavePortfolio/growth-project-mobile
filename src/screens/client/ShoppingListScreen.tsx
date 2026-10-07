@@ -70,7 +70,7 @@ export default function ShoppingListScreen() {
       Keyboard.dismiss();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    onError: () => Alert.alert('Error', 'Could not add item. Please try again.'),
+    onError: () => Alert.alert('Could not add shopping item', 'Your item is still in the form. Check your connection and tap Add again.'),
   });
 
   const toggleMutation = useMutation({
@@ -112,7 +112,7 @@ export default function ShoppingListScreen() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    onError: () => Alert.alert('Error', 'Could not clear checked items.'),
+    onError: () => Alert.alert('Could not clear shopping items', 'Checked items could not be removed. Refresh the shopping list before clearing them again.'),
   });
 
   const handleAdd = useCallback(() => {

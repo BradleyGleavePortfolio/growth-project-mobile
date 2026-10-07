@@ -202,11 +202,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       const date = get().selectedDate;
       await waterApi.log({ amount_ml: amountMl, date });
     } catch (err) {
-      // Revert optimistic bump on failure. We don't Alert here because
-      // WaterTracker's UI shows the revert instantly; logging for telemetry
-      // preserves visibility into transient failures.
+      // Revert the optimistic bump and say so: a number that silently goes
+      // back down reads as a glitch, not as "this was not saved".
       logger.error('ClientStore', 'logWater failed', err);
-      set((state) => ({ waterOz: Math.max(0, state.waterOz - amountOz) }));
+      set((state) => ({
+        waterOz: Math.max(0, state.waterOz - amountOz),
+        loadError: `${amountOz} oz of water was not saved. Check the connection, then add it again.`,
+      }));
     }
   },
 }));
