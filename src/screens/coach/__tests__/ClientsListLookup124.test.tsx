@@ -339,7 +339,9 @@ describe('DES-O-127: honest landing and action parity', () => {
     expect(navigate).toHaveBeenCalledWith('InviteCodes');
     await fireEvent.press(screen.getByTestId('clients-risk-pill'));
     expect(navigate).toHaveBeenCalledWith('RiskBoard');
-    await fireEvent.changeText(screen.getByTestId('clients-search'), 'missing');
+    const search = screen.getByTestId('clients-search');
+    expect(search.props.clearButtonMode).toBe('while-editing');
+    await fireEvent.changeText(search, 'missing');
     expect(screen.getByTestId('clients-count').props.children).toBe('0 of 1 active client');
     await fireEvent.press(await screen.findByText('Clear search'));
     expect(useCoachStore.getState().searchQuery).toBe('');

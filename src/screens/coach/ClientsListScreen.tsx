@@ -107,6 +107,7 @@ export default function ClientsListScreen({ navigation }: Props) {
   const total = clients.length;
   const countLine = rosterCountLine(shownClients, total, filterStatus, searching);
   const countKnown = !isLoading && !loadError;
+  const quietInvite = countKnown && shownClients.length === 0 && (searching || filterStatus !== 'archived');
   const dateLine = new Date().toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric',
   });
@@ -221,14 +222,14 @@ export default function ClientsListScreen({ navigation }: Props) {
           <HapticPressable
             intent="light"
             onPress={goToInviteCodes}
-            style={styles.invitePill}
+            style={[styles.invitePill, quietInvite && styles.secondaryInvite]}
             accessibilityRole="button"
             accessibilityLabel="Invite codes"
             accessibilityHint="Opens the invite-codes screen so you can add a client"
             testID="clients-invite-pill"
           >
-            <Ionicons name="person-add-outline" size={16} color={colors.textOnPrimary} />
-            <Text style={styles.invitePillText}>Invite</Text>
+            <Ionicons name="person-add-outline" size={16} color={quietInvite ? colors.primary : colors.textOnPrimary} />
+            <Text style={[styles.invitePillText, quietInvite && styles.riskPillText]}>Invite</Text>
           </HapticPressable>
         </View>
         <Text style={styles.hero} testID="clients-hero">{countKnown ? total : '—'}</Text>
@@ -423,6 +424,9 @@ const makeStyles = (colors: ThemeColors) =>
   },
   riskPillText: {
     color: colors.primary,
+  },
+  secondaryInvite: {
+    backgroundColor: colors.background,
   },
   invitePillText: {
     ...typography.bodyMd,
