@@ -6,7 +6,6 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
-import { RefreshControl } from 'react-native';
 import { typography } from '../../../theme/tokens';
 
 let mockData: Record<string, unknown> | null = null;
@@ -16,6 +15,13 @@ let mockLog: { data: Record<string, number> | null; isError: boolean; isLoading:
 };
 const mockRefetch = jest.fn();
 const mockLogRefetch = jest.fn();
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return Object.defineProperties({}, { ...Object.getOwnPropertyDescriptors(actual),
+    RefreshControl: { enumerable: true, value: ({ onRefresh }: { onRefresh: () => void }) =>
+      jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Refresh macros', onRefresh }) },
+  });
+});
 jest.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: mockCoach }) }));
 jest.mock('../../../hooks/useApi', () => ({ useTodayLog: () => ({ ...mockLog, refetch: mockLogRefetch }) }));
 jest.mock('../../../hooks/useMacros', () => ({
@@ -74,7 +80,7 @@ describe('ClientMacrosScreen display mode', () => {
     expect(await screen.findByTestId('macros-simple-note')).toBeTruthy();
     expect(screen.getByText('1789')).toBeTruthy();
     expect(screen.getByText('Protein')).toBeTruthy();
-    expect(screen.getByText('150g')).toBeTruthy();
+    expect(screen.getByText('50g eaten / 150g target')).toBeTruthy();
     expect(screen.queryByText('Carbs')).toBeNull();
     expect(screen.queryByText('Fats')).toBeNull();
     expect(screen.queryByText('185g')).toBeNull();
@@ -107,7 +113,7 @@ describe('ClientMacrosScreen display mode', () => {
     expect(screen.getByText("Today's food totals did not load. Pull to retry.")).toBeTruthy();
     expect(screen.getByText('150g target')).toBeTruthy();
     expect(screen.queryByText(/0g eaten|0 kcal eaten/)).toBeNull();
-    await fireEvent(s.UNSAFE_getByType(RefreshControl), 'refresh');
+    await fireEvent(s.getByLabelText('Refresh macros'), 'refresh');
     expect(mockRefetch).toHaveBeenCalled();
     expect(mockLogRefetch).toHaveBeenCalled();
   });
@@ -123,5 +129,26 @@ describe('ClientMacrosScreen display mode', () => {
     expect(screen.getByText('No targets yet')).toBeTruthy();
     expect(screen.getByText('Daily targets appear here when set.')).toBeTruthy();
     expect(screen.queryByText(/Your coach has not/)).toBeNull();
+  });
+
+  it('does not attribute a previous coach target to the current coach', async () => {
+    mockData = { ...TARGET, notes: 'Recorded note.' };
+    mockCoach = { id: 'c2', name: 'Taylor Reed' };
+    await render(<ClientMacrosScreen />);
+    expect(screen.getByText('Your target')).toBeTruthy();
+    expect(screen.getByText('Target note')).toBeTruthy();
+    expect(screen.queryByText(/Set by/)).toBeNull();
+  });
+
+  it('says over target in words and distinguishes loading totals from zero', async () => {
+    mockData = { ...TARGET };
+    mockLog.data = { total_protein_g: 175, total_carbs_g: 200, total_fat_g: 55 };
+    const s = await render(<ClientMacrosScreen />);
+    expect(screen.getByText('175g eaten / 150g target · 25g over target')).toBeTruthy();
+    mockLog = { data: null, isError: false, isLoading: true };
+    await s.rerender(<ClientMacrosScreen />);
+    expect(screen.getByText("Loading today's food totals...")).toBeTruthy();
+    expect(screen.getByText('150g target')).toBeTruthy();
+    expect(screen.queryByText(/0g eaten/)).toBeNull();
   });
 });

@@ -28,7 +28,6 @@ import type { MacroTarget } from '../../api/macrosApi';
 import { useCurrentMacrosForSelf } from '../../hooks/useMacros';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
-  SIMPLE_VIEW_NOTE,
   targetCells,
   type MacroDisplayMode,
 } from '../../macros/macroDisplay';
@@ -36,6 +35,11 @@ import { reportMacroDisplay, useMacroDisplayMode } from '../../macros/macroDispl
 import { typography, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
+import { useQuery } from '@tanstack/react-query';
+import api from '../../services/api';
+import { useTodayLog } from '../../hooks/useApi';
+import { getTodayString } from '../../utils/date';
+import QuietBar from '../../ui/progress/QuietBar';
 
 export default function ClientMacrosScreen() {
   const { semanticColors: sc } = useTheme();
@@ -44,13 +48,23 @@ export default function ClientMacrosScreen() {
     useCurrentMacrosForSelf();
   const currentUser = useCurrentUser();
   const mode = useMacroDisplayMode(currentUser?.id ?? null);
+  const daily = useTodayLog(getTodayString());
+  const coach = useQuery({
+    queryKey: ['macro-target-coach', currentUser?.id],
+    queryFn: async () => (await api.get<{ id: string; name: string }>('/v1/clients/me/coach')).data,
+    enabled: !!currentUser?.id && !!data?.coach_id,
+  });
+  const totals = !daily.isError && daily.data && typeof daily.data === 'object'
+    ? daily.data as Record<string, unknown> : null;
+  const consumed = (key: string) => { const value = totals?.[key]; return typeof value === 'number' ? value : null; };
   useEffect(() => {
     if (data) reportMacroDisplay(data);
   }, [data]);
 
   const onRefresh = useCallback(() => {
     void refetch();
-  }, [refetch]);
+    void daily.refetch();
+  }, [refetch, daily.refetch]);
 
   return (
     <ScrollView
@@ -58,7 +72,7 @@ export default function ClientMacrosScreen() {
       contentContainerStyle={styles.content}
       refreshControl={
         <RefreshControl
-          refreshing={isRefetching}
+          refreshing={isRefetching || daily.isRefetching}
           onRefresh={onRefresh}
           tintColor={sc.accent}
         />
@@ -70,14 +84,20 @@ export default function ClientMacrosScreen() {
 
       {isLoading ? (
         <Text style={[typography.body, { color: sc.textMuted }]}>
-          Loading...
+          Loading daily targets...
         </Text>
       ) : isError ? (
         <Text style={[typography.body, { color: sc.textMuted }]}>
           Could not load your targets right now. Pull to retry.
         </Text>
       ) : data ? (
-        <TargetCard target={data} mode={mode} styles={styles} sc={sc} />
+        <>
+          <TargetCard target={data} mode={mode} styles={styles} sc={sc}
+            coachName={data.coach_id === coach.data?.id ? coach.data?.name.trim().split(/\s+/)[0] : undefined}
+            eaten={{ calories: consumed('total_calories'), protein: consumed('total_protein_g'), carbs: consumed('total_carbs_g'), fat: consumed('total_fat_g'), fiber: null }} />
+          {daily.isError ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Today's food totals did not load. Pull to retry.</Text>
+            : daily.isLoading ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Loading today's food totals...</Text> : null}
+        </>
       ) : (
         <EmptyState styles={styles} sc={sc} />
       )}
@@ -92,11 +112,15 @@ function TargetCard({
   mode = 'full',
   styles,
   sc,
+  coachName,
+  eaten,
 }: {
   target: MacroTarget;
   mode?: MacroDisplayMode;
   styles: Styles;
   sc: SemanticTokens;
+  coachName?: string;
+  eaten: Record<'calories' | 'protein' | 'carbs' | 'fat' | 'fiber', number | null>;
 }) {
   const values = {
     protein: target.protein_g,
@@ -104,22 +128,25 @@ function TargetCard({
     fat: target.fats_g,
     fiber: target.fiber_g,
   };
+  const effective = formatDate(target.effective_from);
   return (
     <View style={styles.card}>
+      <Text style={[typography.eyebrow, { color: sc.textMuted }]}>{coachName ? `Set by ${coachName}` : 'Your target'}</Text>
       <View>
-        <Text style={[typography.display, { color: sc.textPrimary }]}>
+        <Text style={[typography.display, { color: sc.textPrimary, fontVariant: ['tabular-nums'] }]}>
           {target.calories_kcal}
         </Text>
         <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
           kcal per day
         </Text>
+        {eaten.calories != null ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{`${Math.round(eaten.calories)} kcal eaten today`}</Text> : null}
       </View>
 
       <View style={styles.hairline} />
 
       <View style={styles.macroGrid}>
         {targetCells(mode).map((k) => (
-          <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} sc={sc} />
+          <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} current={eaten[k]} sc={sc} />
         ))}
       </View>
 
@@ -128,7 +155,7 @@ function TargetCard({
           style={[typography.bodySmall, { color: sc.textMuted }]}
           testID="macros-simple-note"
         >
-          {SIMPLE_VIEW_NOTE}
+          Only calories and protein are shown in this view.
         </Text>
       ) : null}
 
@@ -140,7 +167,7 @@ function TargetCard({
               { color: sc.textMuted, marginBottom: spacing.xs },
             ]}
           >
-            Note from your coach
+            {coachName ? 'Note from your coach' : 'Target note'}
           </Text>
           <Text style={[typography.body, { color: sc.textPrimary }]}>
             {target.notes}
@@ -148,9 +175,7 @@ function TargetCard({
         </View>
       ) : null}
 
-      <Text style={[typography.bodySmall, { color: sc.accent }]}>
-        Effective {formatDate(target.effective_from)}
-      </Text>
+      {effective ? <Text style={[typography.bodySmall, { color: sc.textMuted }]}>Effective {effective}</Text> : null}
     </View>
   );
 }
@@ -159,13 +184,20 @@ function MacroCell({
   label,
   value,
   sc,
+  current,
 }: {
   label: string;
   value: number | null;
   sc: SemanticTokens;
+  current: number | null;
 }) {
+  if (label !== 'Fiber') {
+    const over = current != null && value != null && current > value ? ` · ${Math.round(current - value)}g over target` : '';
+    return <QuietBar label={label} current={current ?? 0} target={current != null && value != null ? value : undefined}
+      value={current != null ? `${Math.round(current)}g eaten / ${value}g target${over}` : `${value}g target`} />;
+  }
   return (
-    <View style={{ flexBasis: '47%', flexGrow: 1, paddingVertical: spacing.sm }}>
+    <View style={{ paddingVertical: spacing.sm }}>
       <Text
         style={[
           typography.bodySmall,
@@ -174,7 +206,7 @@ function MacroCell({
       >
         {label}
       </Text>
-      <Text style={[typography.h3, { color: sc.textPrimary }]}>
+      <Text style={[typography.body, { color: sc.textPrimary, fontVariant: ['tabular-nums'] }]}>
         {value === null ? '—' : `${value}g`}
       </Text>
     </View>
@@ -188,16 +220,16 @@ function EmptyState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
         No targets yet
       </Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
-        Your coach has not set macros for you yet. Once they do you will
-        see your daily kcal, protein, carbs, fats, and fiber here.
+        Daily targets appear here when set.
       </Text>
     </View>
   );
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string | null): string | null {
+  if (!iso) return null;
   const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return 'recently';
+  if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString(undefined, {
     year: 'numeric',
     month: 'short',
@@ -212,17 +244,15 @@ function makeStyles(sc: SemanticTokens) {
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { padding: spacing.lg, gap: spacing.lg },
     card: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 12,
-      padding: spacing.lg,
+      paddingVertical: spacing.lg,
       gap: spacing.lg,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
     },
     hairline: {
       height: StyleSheet.hairlineWidth,
       backgroundColor: sc.border,
     },
-    macroGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+    macroGrid: { gap: spacing.lg },
   });
 }

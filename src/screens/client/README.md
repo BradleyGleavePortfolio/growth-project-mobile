@@ -34,6 +34,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | File | What it does |
 | --- | --- |
 | `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned. Reads from BOTH `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical) and merges them so a coach assigning via either path lands on the same screen (P0-1 unification). |
+| `ClientMacrosScreen.tsx` | Read-only daily target: Cormorant/tabular calorie hero, monochrome QuietBar rows, fiber, notes and recorded effective date. Current targets use `/me/macros/current`; consumed values use today's `/log/daily` totals, never assumed zero on failure. “Set by” appears only when `/v1/clients/me/coach` matches the target's coach ID; otherwise “Your target”. Pull-to-refresh reloads targets and food totals; native back and simple/full visibility are unchanged. Follows `docs/QUIET_LUXURY_DOCTRINE.md`. |
 | `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). The list passes `{ recipeId }` (a serialisable string) when navigating, never the full recipe object — `RecipeDetailScreen` reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById(recipeId)`. This eliminates React Navigation's non-serializable-params warning and keeps state rehydration intact. New recipe-aware screens must follow the same id-only param pattern. |
 | `GroceryListScreen.tsx`, `ShoppingListScreen.tsx`, `PrepGuideScreen.tsx` | List management + weekly prep guide (`listsApi`, `prepGuideApi`). |
 | `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); backend is the source of truth, no intermediate local store. |
@@ -72,7 +73,7 @@ Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy
 | --- | --- |
 | `HomeScreen.tsx` | Number grid shows Calories, Protein and Water. Once the simple week ends, `FullMacrosIntroCard` (Roman, once, dismissible, persisted) introduces carbohydrate and fat. |
 | `LogScreen.tsx` | Summary bar shows Eaten, Remaining and Protein. Food entries show protein only. |
-| `ClientMacrosScreen.tsx` | Calories and Protein, plus one quiet note that carbohydrate and fat join after the first week. |
+| `ClientMacrosScreen.tsx` | Calories and Protein, plus a neutral note naming the current view; no claim about what a client needs. |
 
 Rules and persistence: `src/macros/README.md`.
 | `wearables/ConnectProviderSheet.tsx` | Emits the tutorial `wearable_connected` signal on an on-device grant or OAuth success. |
