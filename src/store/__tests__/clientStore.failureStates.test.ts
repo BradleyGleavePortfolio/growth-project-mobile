@@ -37,6 +37,40 @@ describe('client day data failure state', () => {
     });
   });
 
+  it('clears the previous day immediately when a different date is selected', async () => {
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    useClientStore.getState().setSelectedDate('2026-10-05');
+    expect(useClientStore.getState()).toMatchObject({
+      selectedDate: '2026-10-05', foodLogs: [], waterOz: 0, hasLoadedDay: false,
+      dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, loadError: null,
+    });
+    mockGetFood.mockRejectedValueOnce(new Error('Network Error'));
+    await useClientStore.getState().loadDayData('client');
+    expect(useClientStore.getState()).toMatchObject({
+      selectedDate: '2026-10-05', foodLogs: [], waterOz: 0,
+      hasLoadedDay: false, isLoading: false, loadError: expect.any(String),
+      dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
+    });
+  });
+
+  it('retains a loaded day when its date is selected again', async () => {
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    useClientStore.getState().setSelectedDate('2026-10-06');
+    expect(useClientStore.getState()).toMatchObject({
+      hasLoadedDay: true, waterOz: 20, dailyTotals: { calories: 420 },
+    });
+  });
+
+  it('clears stale water before a new day whose water read fails', async () => {
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    mockGetWater.mockRejectedValueOnce(new Error('Network Error'));
+    await useClientStore.getState().loadDayData('client', '2026-10-05');
+    expect(useClientStore.getState()).toMatchObject({
+      selectedDate: '2026-10-05', hasLoadedDay: true, waterOz: 0,
+      loadError: 'Water data could not refresh. Check your connection and try again.',
+    });
+  });
+
   it('keeps previously displayed data on failure and clears the notice after a successful retry', async () => {
     await useClientStore.getState().loadDayData('client', '2026-10-06');
     mockGetFood.mockRejectedValueOnce(new Error('Request failed with status code 503'));

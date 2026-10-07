@@ -26,7 +26,7 @@ describe('portion preview matches the saved quantity parser', () => {
   it('cannot log an empty quantity as an unseen one-serving default', async () => {
     await render(<QuantityPickerModal {...props} quantityInput="" />);
     expect(screen.getByText(/Enter a quantity greater than zero/)).toBeTruthy();
-    fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 

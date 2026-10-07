@@ -33,7 +33,7 @@ const mockDays: Record<string, unknown[]> = {
 };
 
 const mockStore = {
-  selectedDate: mockToday, foodLogs: [],
+  selectedDate: mockToday, foodLogs: [], hasLoadedDay: true,
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, waterOz: 0,
   setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
   removeFoodLogLocally: jest.fn(),
@@ -64,14 +64,14 @@ beforeEach(() => {
 async function logFromRecent(name: string) {
   await render(<LogScreen />);
   await act(async () => {
-    fireEvent.press(screen.getAllByText('Add Food')[0]);
+    fireEvent.press(screen.getAllByText('Add food')[0]);
   });
   await waitFor(() => expect(screen.getByText(name)).toBeTruthy());
   await act(async () => {
     fireEvent.press(screen.getByText(name));
   });
   await act(async () => {
-    fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
   });
   await waitFor(() => expect(logApi.logFood).toHaveBeenCalledTimes(1));
   return jest.mocked(logApi.logFood).mock.calls[0][0];
