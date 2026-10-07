@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { useSettings } from '../hooks/useSettings';
+import { useTheme } from '../theme/useTheme';
+import { QuietText as Text } from '../ui/progress/QuietBar';
 
 interface WaterTrackerProps {
   currentOz: number;
@@ -18,6 +20,7 @@ export default function WaterTracker({
   onAdd,
 }: WaterTrackerProps) {
   const { settings } = useSettings();
+  const styles = makeStyles(useTheme().semanticColors);
   const targetOz = targetOzProp ?? settings.waterGoalOz;
   const progress = Math.min(currentOz / targetOz, 1);
   const glasses = Math.floor(currentOz / 8);
@@ -27,7 +30,7 @@ export default function WaterTracker({
     <View style={styles.card}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Ionicons name="water" size={20} color={Colors.water} />
+          <Ionicons name="water-outline" size={20} color={Colors.primary} />
           <Text style={styles.title}>Water</Text>
         </View>
         <Text style={styles.total}>
@@ -69,11 +72,11 @@ export default function WaterTracker({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
+    paddingVertical: 16,
     gap: 12,
   },
   header: {
@@ -94,18 +97,17 @@ const styles = StyleSheet.create({
   total: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: sc.textMuted,
   },
   progressTrack: {
-    height: 8,
-    backgroundColor: Colors.border,
-    borderRadius: 4,
+    height: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.water,
-    borderRadius: 4,
+    backgroundColor: Colors.primary,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -113,21 +115,20 @@ const styles = StyleSheet.create({
   },
   addButton: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    minHeight: 44,
     paddingVertical: 10,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   addButtonText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.water,
+    color: Colors.primary,
   },
   glasses: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     textAlign: 'center',
   },
 });

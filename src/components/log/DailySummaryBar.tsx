@@ -1,6 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Radius, Spacing, colors } from '../../theme/index';
+import { View, StyleSheet } from 'react-native';
+import { Colors, Spacing } from '../../theme/index';
+import { useTheme } from '../../theme/useTheme';
+import QuietBar, { QuietText as Text } from '../../ui/progress/QuietBar';
 import type { MacroDisplayMode } from '../../macros/macroDisplay';
 
 interface DailyTotals {
@@ -28,6 +30,8 @@ export default function DailySummaryBar({
   mode = 'full',
 }: Props) {
   const simple = mode === 'simple';
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   return (
     <View
       style={styles.summaryBar}
@@ -35,73 +39,43 @@ export default function DailySummaryBar({
     >
       <View style={styles.summaryItem}>
         <Text style={styles.summaryValue}>
-          {Math.round(dailyTotals.calories)}
+          {Math.round(remaining == null ? dailyTotals.calories : Math.abs(remaining))}
         </Text>
-        <Text style={styles.summaryLabel}>Eaten (kcal)</Text>
-        {targets ? <Text style={styles.summaryLabel}>{targets.calories} goal</Text> : null}
+        <Text style={styles.summaryLabel}>{remaining == null ? 'Calories eaten · No target' : remaining < 0 ? 'Calories over target' : 'Calories left'}</Text>
+        {remaining != null || targets ? <Text style={styles.summaryLabel}>
+          {targets ? `of ${targets.calories} · ` : ''}{Math.round(dailyTotals.calories)} eaten
+        </Text> : null}
       </View>
-      <View style={styles.summaryDivider} />
-      <View style={styles.summaryItem}>
-        <Text style={[styles.summaryValue, { color: Colors.primary }]}>
-          {remaining == null ? '—' : Math.round(Math.abs(remaining))}
-        </Text>
-        <Text style={styles.summaryLabel}>{remaining == null ? 'No target' : remaining < 0 ? 'Over target' : 'Remaining'}</Text>
-      </View>
-      <View style={styles.summaryDivider} />
-      <View style={styles.summaryItem}>
-        <Text style={[styles.summaryValue, { color: Colors.orange }]}>
-          {Math.round(dailyTotals.protein)}g
-        </Text>
-        <Text style={styles.summaryLabel}>Protein</Text>
-        {targets ? <Text style={styles.summaryLabel}>{targets.protein}g goal</Text> : null}
-      </View>
-      {simple ? null : (
-        <>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: Colors.gold }]}>
-              {Math.round(dailyTotals.carbs)}g
-            </Text>
-            <Text style={styles.summaryLabel}>Carbs</Text>
-            {targets ? <Text style={styles.summaryLabel}>{targets.carbs}g goal</Text> : null}
-          </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: colors.data.habit }]}>
-              {Math.round(dailyTotals.fat)}g
-            </Text>
-            <Text style={styles.summaryLabel}>Fat</Text>
-            {targets ? <Text style={styles.summaryLabel}>{targets.fat}g goal</Text> : null}
-          </View>
-        </>
-      )}
+      {(simple ? ['protein'] as const : ['protein', 'carbs', 'fat'] as const).map((key) => {
+        const eaten = Math.round(dailyTotals[key]);
+        const target = targets?.[key];
+        const over = target != null && eaten > target ? ` · ${Math.round(eaten - target)} g over` : '';
+        return <QuietBar key={key} label={key[0].toUpperCase() + key.slice(1)} current={dailyTotals[key]} target={target}
+          value={`${eaten}g${target != null ? ` / ${target}g goal` : ''}${over}`} />;
+      })}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   summaryBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
+    gap: 16,
     marginHorizontal: Spacing.lg,
-    borderRadius: Radius.md,
     paddingVertical: 14,
-    paddingHorizontal: 8,
     marginBottom: 20,
   },
   summaryItem: {
-    flex: 1,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   summaryValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.dark,
+    fontSize: 44,
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontVariant: ['tabular-nums'],
+    color: sc.textPrimary,
   },
   summaryLabel: {
-    fontSize: 10,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 2,
   },
   summaryDivider: {
