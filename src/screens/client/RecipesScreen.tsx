@@ -20,7 +20,8 @@ import { recipesApi, profileApi } from '../../services/api';
 
 import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { typography, SemanticTokens } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 
@@ -48,23 +49,22 @@ interface Recipe {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function MacroBadge({ label, value, color }: { label: string; value: number; color: string }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  return (
-    <View style={[styles.macroBadge, { backgroundColor: color + '20' }]}>
-      <Text style={[styles.macroBadgeValue, { color }]}>{Math.round(value)}g</Text>
-      <Text style={[styles.macroBadgeLabel, { color: color + 'AA' }]}>{label}</Text>
-    </View>
-  );
-}
-
 function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const totalTime = recipe.prep_time_min + recipe.cook_time_min;
+  const totalTime = Number.isFinite(recipe.prep_time_min) && Number.isFinite(recipe.cook_time_min)
+    ? recipe.prep_time_min + recipe.cook_time_min : null;
+  const nutrition = [
+    Number.isFinite(recipe.calories) ? `${Math.round(recipe.calories)} kcal` : '',
+    Number.isFinite(recipe.protein) ? `${Math.round(recipe.protein)} g protein` : '',
+  ].filter(Boolean).join(' · ');
+  const otherMacros = [
+    Number.isFinite(recipe.carbs) ? `${Math.round(recipe.carbs)} g carbs` : '',
+    Number.isFinite(recipe.fat) ? `${Math.round(recipe.fat)} g fat` : '',
+  ].filter(Boolean).join(' · ');
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
+    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}
+      accessibilityRole="button" accessibilityLabel={`Open ${recipe.title}`}>
       {recipe.image_url ? (
         <View style={styles.cardImageWrap}>
           <Image
@@ -72,38 +72,25 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
             style={styles.cardImage}
             resizeMode="cover"
           />
-          <View style={styles.caloriesBadge}>
-            <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
-          </View>
         </View>
-      ) : (
-        <View style={styles.cardImagePlaceholder}>
-          <Ionicons name="restaurant-outline" size={32} color={colors.primary + '80'} />
-          <View style={styles.caloriesBadge}>
-            <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
-          </View>
-        </View>
-      )}
+      ) : null}
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle} numberOfLines={2}>{recipe.title}</Text>
         {recipe.description ? (
           <Text style={styles.cardDesc} numberOfLines={2}>{recipe.description}</Text>
         ) : null}
         <View style={styles.cardMeta}>
-          <View style={styles.cardMetaItem}>
+          {totalTime !== null && <View style={styles.cardMetaItem}>
             <Ionicons name="time-outline" size={13} color={colors.textMuted} />
             <Text style={styles.cardMetaText}>{totalTime} min</Text>
-          </View>
-          <View style={styles.cardMetaItem}>
+          </View>}
+          {Number.isFinite(recipe.servings) && <View style={styles.cardMetaItem}>
             <Ionicons name="people-outline" size={13} color={colors.textMuted} />
             <Text style={styles.cardMetaText}>{recipe.servings} servings</Text>
-          </View>
+          </View>}
         </View>
-        <View style={styles.macroRow}>
-          <MacroBadge label="P" value={recipe.protein} color={colors.protein} />
-          <MacroBadge label="C" value={recipe.carbs} color={colors.carbs} />
-          <MacroBadge label="F" value={recipe.fat} color={colors.fat} />
-        </View>
+        {nutrition ? <Text style={styles.cardMetaText}>{nutrition} per serving</Text> : null}
+        {otherMacros ? <Text style={styles.cardMetaText}>{otherMacros} per serving</Text> : null}
         {recipe.tags.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsRow}>
             {recipe.tags.slice(0, 4).map((tag) => (
@@ -126,7 +113,7 @@ const ALL_TAGS = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipesScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
@@ -242,7 +229,8 @@ export default function RecipesScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}
+          accessibilityRole="button" accessibilityLabel="Go back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Recipes</Text>
@@ -275,6 +263,8 @@ export default function RecipesScreen() {
             style={[styles.tagFilter, activeTag === tag && styles.tagFilterActive]}
             onPress={() => setActiveTag(tag)}
             activeOpacity={0.7}
+            accessibilityRole="button" accessibilityLabel={tag}
+            accessibilityState={{ selected: activeTag === tag }}
           >
             <Text style={[styles.tagFilterText, activeTag === tag && styles.tagFilterTextActive]}>
               {tag}
@@ -290,11 +280,12 @@ export default function RecipesScreen() {
           mount-in animation. */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.accent} />
           <Text style={styles.loadingText}>Loading recipes…</Text>
         </View>
       ) : (
         <FlatList<Recipe>
+          testID="recipes-list"
           style={styles.list}
           contentContainerStyle={styles.listContent}
           data={filtered}
@@ -309,7 +300,7 @@ export default function RecipesScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor={colors.primary}
+              tintColor={colors.accent}
             />
           }
           ListEmptyComponent={
@@ -326,7 +317,7 @@ export default function RecipesScreen() {
                 subtitle={
                   search || activeTag !== 'All'
                     ? 'Try a different search or filter.'
-                    : 'Recipes added by your coach will appear here.'
+                    : 'Recipes available to this account appear here.'
                 }
               />
             )
@@ -346,9 +337,9 @@ export default function RecipesScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -357,63 +348,62 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 16,
     gap: 12,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '500', color: colors.textPrimary },
+  backBtn: { width: 44, height: 44, justifyContent: 'center' },
+  title: { ...typography.h1, color: colors.textPrimary },
 
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgPrimary,
     borderRadius: 2, // radius.md
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 14,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     height: 44,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary, height: 44 },
+  searchInput: { ...typography.body, flex: 1, color: colors.textPrimary, height: 44 },
 
   tagFilterRow: { maxHeight: 44, marginBottom: 8 },
   tagFilterContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
   tagFilter: {
     paddingHorizontal: 14,
-    paddingVertical: 6,
+    minHeight: 44,
+    justifyContent: 'center',
     borderRadius: 4, // radius.lg
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    backgroundColor: colors.bgPrimary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   tagFilterActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    borderColor: colors.textPrimary,
   },
-  tagFilterText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  tagFilterTextActive: { color: colors.textOnPrimary },
+  tagFilterText: { ...typography.bodySmall, color: colors.textMuted },
+  tagFilterTextActive: { color: colors.textPrimary },
 
   list: { flex: 1 },
-  listContent: { padding: 16, gap: 14, paddingBottom: 40 },
+  listContent: { paddingHorizontal: 24, paddingBottom: 40 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { fontSize: 15, color: colors.textMuted },
+  loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
+    backgroundColor: colors.bgPrimary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     overflow: 'hidden',
   },
   cardImagePlaceholder: {
     height: 120,
-    backgroundColor: colors.primaryPale,
+    backgroundColor: colors.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardImageWrap: {
     height: 160,
-    backgroundColor: colors.primaryPale,
+    backgroundColor: colors.bgPrimary,
   },
   cardImage: {
     width: '100%',
@@ -423,18 +413,17 @@ const makeStyles = (colors: ThemeColors) =>
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  caloriesBadgeText: { fontSize: 12, fontWeight: '500', color: colors.textOnPrimary },
-  cardBody: { padding: 14, gap: 6 },
-  cardTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
-  cardDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
-  cardMeta: { flexDirection: 'row', gap: 14, marginTop: 2 },
+  cardBody: { paddingVertical: 20, gap: 6 },
+  cardTitle: { ...typography.bodyMd, color: colors.textPrimary },
+  cardDesc: { ...typography.bodySmall, color: colors.textMuted },
+  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardMetaText: { fontSize: 12, color: colors.textMuted },
+  cardMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
   macroRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   macroBadge: {
     flexDirection: 'row',
@@ -444,16 +433,14 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  macroBadgeValue: { fontSize: 12, fontWeight: '500' },
-  macroBadgeLabel: { fontSize: 11, fontWeight: '600' },
   tagsRow: { marginTop: 6 },
   tag: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.bgPrimary,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4, // radius.lg
     marginRight: 6,
   },
-  tagText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  tagText: { ...typography.bodySmall, color: colors.textMuted },
 
   });
