@@ -214,7 +214,7 @@ export function connectFailureMessage(err: unknown, name: string): OnDeviceMessa
 
 /** Lane off (FEATURE_WEARABLES_INGEST_POST): nothing to retry yet. */
 export const INGEST_DISABLED_COPY =
-  "Health data import isn't switched on yet. Your coach will let you know when it is ready.";
+  'Health data import is not available in this version.';
 
 /** Server row connected, no local authorization on this phone (Opus B-317-5). */
 export function notSyncingHereCopy(name: string): string {
@@ -401,7 +401,7 @@ export function cloudConnectFailureMessage(err: unknown, name: string): OnDevice
     }
     if (status === 503 && code === 'wearables_cloud_disabled') {
       return {
-        text: `Connecting ${name} isn't switched on yet. Your coach will let you know when it is ready.`,
+        text: `Connecting ${name} is not available in this version.`,
         action: 'none',
       };
     }
