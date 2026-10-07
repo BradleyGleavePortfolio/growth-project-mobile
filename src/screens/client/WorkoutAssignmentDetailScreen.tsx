@@ -100,18 +100,16 @@ export default function WorkoutAssignmentDetailScreen() {
       exercises: JSON.stringify(exercises),
       assignmentId: data.id,
     };
-    // W-4 fix: this screen lives in MoreStack; `ActiveWorkout` lives in
-    // WorkoutStack. A plain `navigation.navigate('ActiveWorkout', ...)`
-    // throws "screen not found" under React Navigation v7 because the
-    // target is not registered in the current navigator. Jump up to the
-    // tab navigator and re-enter the Workout tab targeting the right
-    // nested screen. Fallback to the local navigator only if the parent
-    // chain isn't mounted yet (defensive — should not happen in practice).
-    const tabNav = navigation.getParent()?.getParent?.();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parentAny = tabNav as any;
-    if (parentAny?.navigate) {
-      parentAny.navigate('WorkoutTab', {
+    // This screen lives in MoreStack; `ActiveWorkout` lives in WorkoutStack.
+    // MoreStack's parent is the client tab navigator (ClientNavigator renders
+    // the tabs directly under the NavigationContainer, with no root stack), so
+    // one getParent() reaches the tabs. The old two-level lookup was always
+    // undefined in the app, and the MoreStack fallback below is silently dropped
+    // by React Navigation in production, so Start did nothing.
+    const tabNav = navigation.getParent();
+    if (tabNav) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (tabNav as any).navigate('WorkoutTab', {
         screen: 'ActiveWorkout',
         params,
       });

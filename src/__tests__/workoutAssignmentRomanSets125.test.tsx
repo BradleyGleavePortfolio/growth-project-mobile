@@ -14,14 +14,17 @@ jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: (...a: unknown[]) => mockGetById(...a) },
 }));
 
+// mockNavigate is the client tab navigator (MoreStack's only parent);
+// mockStackNavigate is MoreStack itself, which cannot reach ActiveWorkout.
 const mockNavigate = jest.fn();
+const mockStackNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
     useNavigation: () => ({
-      navigate: mockNavigate,
-      getParent: () => ({ getParent: () => ({ navigate: mockNavigate }) }),
+      navigate: mockStackNavigate,
+      getParent: () => ({ navigate: mockNavigate }),
     }),
     useRoute: () => ({ params: { assignmentId: 'asg-1' } }),
   };
@@ -64,12 +67,18 @@ async function openAndStart() {
   expect(await screen.findByText('Start workout')).toBeTruthy();
   await fireEvent.press(screen.getByText('Start workout'));
   expect(mockNavigate).toHaveBeenCalledTimes(1);
+  expect(mockStackNavigate).not.toHaveBeenCalled();
+  expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab', {
+    screen: 'ActiveWorkout',
+    params: expect.objectContaining({ assignmentId: 'asg-1', routineId: 'plan-1' }),
+  });
   const started = JSON.parse(mockNavigate.mock.calls[0][1].params.exercises) as Array<{ sets: number }>;
   return { screen, startedSets: started.map((e) => e.sets) };
 }
 
 beforeEach(() => {
   mockNavigate.mockReset();
+  mockStackNavigate.mockReset();
   mockGetById.mockReset();
   mockGetById.mockImplementation((id: string) => Promise.resolve({ data: { id, name: id === 'row' ? 'Barbell Row' : 'Bench Press' } }));
 });

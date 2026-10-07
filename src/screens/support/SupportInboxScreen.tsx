@@ -166,8 +166,8 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
         />
 
         <Text style={styles.note}>
-          Support is separate from Coach AI and the Client Bot. A human
-          operator will respond during business hours.
+          Support is separate from Roman. A person from the support team
+          replies during business hours.
         </Text>
       </View>
     </View>

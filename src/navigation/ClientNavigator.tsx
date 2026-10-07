@@ -193,6 +193,8 @@ export type HomeStackParamList = {
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */
   NotificationPreferences: undefined;
+  /** Coach contact card opened from the client Messages thread header. */
+  ContactView: MoreStackParamList['ContactView'];
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -287,6 +289,8 @@ export type MoreStackParamList = {
   ShareCard: { milestone: ShareCardMilestone };
   /** Phase 11 — Notification category preferences. Entry: Settings > Notifications > Categories. */
   NotificationPreferences: undefined;
+  /** Full notification settings (Mute all) opened from client Settings. */
+  NotificationSettings: undefined;
   /** Phase 11 Track 9 — Crisp support inbox. */
   SupportInbox:      undefined;
   /** Sprint B-2 — client-facing read surfaces over Sprint B v2 backend. */
@@ -413,6 +417,8 @@ function HomeStackNavigator() {
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} options={backOnlyHeader()} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
+      {/* The Messages header opens the coach contact card (Mute, Block User). */}
+      <HomeStackNav.Screen name="ContactView"           component={ContactView} />
       {/* Phase 9 — Notification center screens */}
       <HomeStackNav.Screen
         name="NotificationCenter"
@@ -536,6 +542,12 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
+      {/* Full notification settings (Mute all, per-category switches) for client Settings. */}
+      <MoreStackNav.Screen
+        name="NotificationSettings"
+        component={NotificationPreferencesScreen}
+        options={{ headerShown: false }}
+      />
       {/* Phase 11 Track 9 — Support Inbox */}
       <MoreStackNav.Screen name="SupportInbox"      component={SupportInboxScreen} />
       {/* Sprint B-2 final wave — client read surfaces. The screens
