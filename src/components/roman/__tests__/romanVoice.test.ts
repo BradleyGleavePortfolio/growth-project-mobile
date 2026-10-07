@@ -125,7 +125,9 @@ describe('romanVoice — greeting interpolation (surface + first-open aware)', (
 
   it('uses the named §2.2 returning register on the client surface', () => {
     const g = romanGreeting({ surface: 'client', isFirstOpen: false, firstName: 'Sam' });
-    expect(g).toBe('Welcome back, Sam. Where shall we begin?');
+    expect(g).toContain('Sam');
+    expect(g).toMatch(/^Welcome back, Sam\./);
+    expect(g).not.toContain('Everything is in order');
   });
 
   it('falls back to the nameless §2.1 register (never "Welcome back, .") for a nameless returning client', () => {

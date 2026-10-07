@@ -2,7 +2,6 @@ import React from 'react';
 import { RefreshControl } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
-
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
@@ -37,7 +36,6 @@ jest.mock('../../../components/tutorial/TutorialHomeSlot', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/PendingInviteBanner', () => () => null);
 import HomeScreen from '../HomeScreen';
-
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1';
@@ -45,14 +43,11 @@ beforeEach(() => {
   mockAssignments.mockResolvedValue([]);
   mockActive.mockResolvedValue(null);
 });
-
 it('keeps Messages registered on Home and reachable from More/Membership', () => {
   const read = (file: string) => require('fs').readFileSync(require.resolve(file), 'utf8');
-  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Messages"');
-  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Membership"');
+  expect(read('../../../navigation/ClientNavigator.tsx')).toMatch(/name="Messages"[\s\S]*name="Membership"/);
   expect(read('../MembershipScreen.tsx')).toContain("parent.navigate('Home', { screen: 'Messages' })");
 });
-
 it.each([
   ['assigned', 'One meal logged. Foundations is ready.', 'Start Foundations', 'WorkoutTab'],
   ['active', 'One meal logged. A workout is in progress.', 'Resume workout', 'WorkoutTab'],
@@ -77,7 +72,6 @@ it.each([
   expect(mockNavigate).toHaveBeenCalledWith(destination);
   expect(screen.queryByText(/One workout to go|Explore the app/)).toBeNull();
 });
-
 it.each([false, true])('profile copy reflects coach plan presence: %s', async (hasPlan) => {
   mockAssignments.mockResolvedValue(hasPlan ? [{ completed_at: 'done', workout_plan: { name: 'Foundations' } }] : []);
   await render(<HomeScreen />);
@@ -86,7 +80,6 @@ it.each([false, true])('profile copy reflects coach plan presence: %s', async (h
   await fireEvent.press(screen.getByLabelText(/^Complete your profile/));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
 });
-
 it.each([0, 24])('keeps coachless Messages, notifications, macro logging and refresh; water is %s oz', async (oz) => {
   mockUser.coach_id = '';
   mockDay.waterOz = oz;

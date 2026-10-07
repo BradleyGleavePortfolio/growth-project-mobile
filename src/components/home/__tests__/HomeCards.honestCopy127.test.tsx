@@ -11,16 +11,13 @@ jest.mock('../../../storage/mmkv', () => ({ prefsStorage: { getStringAsync: asyn
 jest.mock('../../../hooks/useHolisticInsights', () => ({ useHolisticInsights: () => mockInsights }));
 import CoachIntroductionBanner from '../CoachIntroductionBanner';
 import HolisticInsightsTile from '../HolisticInsightsTile';
-
 it.each(['coachless', '404'])('no invented coach promise: %s', async (state) => {
   mockUser.coach_id = state === 'coachless' ? '' : 'c1';
   mockGet.mockRejectedValue({ response: { status: 404 } });
   await render(<CoachIntroductionBanner />);
   expect(screen.queryByText(/Your coach will assign/)).toBeNull();
-  expect(screen.queryByTestId('waiting-for-coach-banner')).toBeNull();
-  expect(screen.queryByTestId('coach-intro-not-found')).toBeNull();
+  expect(screen.queryByTestId(/waiting-for-coach-banner|coach-intro-not-found/)).toBeNull();
 });
-
 it('retains the real coach introduction and per-user dismiss action', async () => {
   mockUser.coach_id = 'c1';
   mockGet.mockResolvedValue({ data: { id: 'c1', name: 'Bradley' } });
@@ -29,14 +26,12 @@ it('retains the real coach introduction and per-user dismiss action', async () =
   expect(mockSet).toHaveBeenCalledWith('home.coach_intro_banner_dismissed:u1', 'true');
   expect(screen.queryByTestId('coach-intro-banner')).toBeNull();
 });
-
 it.each(['empty', 'insufficient_data', 'finance_unavailable', 'error'])('hides nonessential insights: %s', async (state) => {
   mockInsights.isError = state === 'error';
   mockInsights.data = { status: state === 'empty' || state === 'error' ? 'ok' : state, insights: [], notes: [] };
   await render(<HolisticInsightsTile />);
   expect(screen.queryByText('Holistic insights')).toBeNull();
 });
-
 it('keeps verified insight detail and its optional action', async () => {
   mockInsights.isError = false;
   mockInsights.data = { status: 'ok', insights: [{ text: 'Logged pattern', correlation: 0.5, weeks: 3 }], notes: [] };

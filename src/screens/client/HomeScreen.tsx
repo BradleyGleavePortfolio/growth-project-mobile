@@ -53,6 +53,7 @@ import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { homeCells, type HomeCell } from '../../macros/macroDisplay';
 import { workoutApi } from '../../services/api';
 import { workoutBuilderApi } from '../../api/workoutBuilderApi';
+import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -88,8 +89,7 @@ function buildDateAsPoetry(date: Date): string {
 
 // ─── Progress line ────────────────────────────────────────────────────────────
 
-function buildProgressLine(mealsLogged: number, workoutDone: boolean): string {
-  if (mealsLogged === 0 && !workoutDone) return 'A clean slate.';
+function buildProgressLine(mealsLogged: number, workoutDone: boolean, planName: string | null, inProgress: boolean): string {
 
   const parts: string[] = [];
 
@@ -98,10 +98,12 @@ function buildProgressLine(mealsLogged: number, workoutDone: boolean): string {
   else if (mealsLogged === 3) parts.push('Three meals logged.');
   else if (mealsLogged > 3) parts.push(`${mealsLogged} meals logged.`);
 
-  if (workoutDone) {
+  if (inProgress) {
+    parts.push('A workout is in progress.');
+  } else if (workoutDone) {
     parts.push('Workout complete.');
-  } else {
-    parts.push('One workout to go.');
+  } else if (planName) {
+    parts.push(`${planName} is ready.`);
   }
 
   return parts.join(' ');
@@ -182,29 +184,36 @@ export default function HomeScreen() {
   // "workout complete" copy. Falling back to `false` on network error so
   // the home line never claims a workout was done when we couldn't verify.
   const [workoutDone, setWorkoutDone] = useState<boolean>(false);
+  const [pendingPlanName, setPendingPlanName] = useState<string | null>(null);
+  const [hasCoachPlan, setHasCoachPlan] = useState(false);
+  const [workoutInProgress, setWorkoutInProgress] = useState(false);
   // History or a pending coach assignment makes Continue useful. Only show
   // Explore once both reads confirm empty; a failed read keeps workouts reachable.
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let cancelled = false;
     if (!currentUser) return;
     setWorkoutExists('loading');
     (async () => {
       try {
-        const [history, assignments] = await Promise.allSettled([
+        const [history, assignments, active] = await Promise.allSettled([
           workoutApi.getAll(5),
           workoutBuilderApi.listMyAssignments(),
+          loadActiveWorkoutSession(currentUser.id),
         ]);
         const rows = history.status === 'fulfilled'
           ? (history.value.data as WorkoutRowLike[] | undefined) || []
           : [];
         const done = isWorkoutDoneToday(rows, getTodayString());
-        const hasPendingAssignment = assignments.status === 'fulfilled'
-          && assignments.value.some((assignment) => !assignment.completed_at);
+        const pending = assignments.status === 'fulfilled'
+          ? assignments.value.find((assignment) => !assignment.completed_at) : undefined;
         if (!cancelled) {
           setWorkoutDone(done);
+          setPendingPlanName(pending?.workout_plan?.name?.trim() || null);
+          setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
+          setWorkoutInProgress(active.status === 'fulfilled' && !!active.value);
           setWorkoutExists(
-            rows.length > 0 || hasPendingAssignment
+            rows.length > 0 || !!pending
             || history.status === 'rejected' || assignments.status === 'rejected',
           );
         }
@@ -219,13 +228,14 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, refreshing]);
+  }, [currentUser?.id, refreshing]));
 
   const datePoetry = buildDateAsPoetry(today);
-  const progressLine = buildProgressLine(mealsLogged, workoutDone);
+  const progressLine = buildProgressLine(mealsLogged, workoutDone, pendingPlanName, workoutInProgress);
+  const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
 
-  // Water in litres
-  const waterL = waterOz > 0 ? `${(waterOz * 0.0295735).toFixed(1)}L` : '0.0L';
+  // Same unit and logged value as the Food Log.
+  const waterValue = `${waterOz} oz`;
 
   // Macro display: prefer logged value; fall back to "0 of {target}g" when a
   // coach/onboarding target exists; fall back to a "Log to see" prompt only
@@ -386,7 +396,7 @@ export default function HomeScreen() {
               FINISH YOUR PROFILE
             </Text>
             <Text style={{ ...typography.body, color: sc.textPrimary }}>
-              {`Add ${missingSummary} so your plan reflects you.`}
+              {hasCoachPlan ? `Add ${missingSummary} so your plan reflects you.` : `Add ${missingSummary} to set daily targets.`}
             </Text>
             <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6 }}>
               {`${completion.percentComplete}% complete`}
@@ -433,22 +443,22 @@ export default function HomeScreen() {
             })}
             onPress={onContinue}
             accessibilityRole="button"
-            accessibilityLabel="Continue"
-            accessibilityHint="Opens your workout tracker"
+            accessibilityLabel={workoutLabel}
+            accessibilityHint="Opens Train"
             testID="home-continue-cta"
           >
-            <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>CONTINUE</Text>
+            <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>{workoutLabel}</Text>
           </Pressable>
         ) : (
           // No workout assigned yet — soft explore link instead of disabled CTA
           <Pressable
             onPress={() => navigation.navigate('Log')}
             accessibilityRole="button"
-            accessibilityLabel="Explore the app"
+            accessibilityLabel="Log a meal"
             testID="home-explore-cta"
             style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, alignSelf: 'flex-start' })}
           >
-            <Text style={{ ...typography.body, color: sc.textMuted }}>Explore the app →</Text>
+            <Text style={{ ...typography.body, color: sc.textMuted }}>Log a meal →</Text>
           </Pressable>
         )}
 
@@ -459,7 +469,7 @@ export default function HomeScreen() {
           testID={macroMode === 'simple' ? 'home-number-grid-simple' : 'home-number-grid'}
         >
           {homeCells(macroMode).map((cell: HomeCell) => {
-            if (cell === 'WATER') return <NumberCell key={cell} label="WATER" value={waterL} />;
+            if (cell === 'WATER') return <NumberCell key={cell} label="WATER" value={waterValue} />;
             const m = macroCells[cell];
             const word = cell.toLowerCase();
             const title = word.charAt(0).toUpperCase() + word.slice(1);
