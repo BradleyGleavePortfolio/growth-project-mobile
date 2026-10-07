@@ -636,6 +636,9 @@ export const authApi = {
     api.get('/auth/me'),
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
+  // FW-ONB-128 B1: public, enumeration-safe; same answer for any address.
+  resendVerification: (email: string) =>
+    api.post<{ message: string }>('/auth/resend-verification', { email }),
   validateInviteCode: (code: string) =>
     api.post<InvitePreview>('/auth/validate-invite-code', { code }),
   // Public preview — read-only, no PII; surfaces coach branding before signup.
