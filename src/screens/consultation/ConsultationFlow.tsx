@@ -55,18 +55,20 @@ import {
   conflictCodeOf,
   httpStatusOf,
 } from '../../api/consultationApi';
-import { aiConsentApi, isLiveGrant } from '../../api/aiConsentApi';
+import { aiConsentApi, type AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import {
   clearAiWithdrawalPending,
+  isLiveRomanGrant,
   runAiMarkerStep,
   grantRomanWithRetry,
   markAiWithdrawalPending,
   readAiWithdrawalPending,
+  romanBox2MemoryCopyOf,
+  romanGrantBody,
   runAiLedgerWrite,
   withdrawRomanWithRetry,
 } from '../../lib/consultation/aiConsent';
 import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
-import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -268,6 +270,9 @@ export default function ConsultationFlow({
   /** Counts loads (and user switches): a step from an earlier load never adopts into this one. */
   const aiLoadEpoch = useRef(0);
   const [aiShown, setAiShown] = useState(false);
+  /** R11-C2B: the server's client-ai-v5 copy box 2 shows and grants, or null for the pinned v4 text. */
+  const [aiMemory, setAiMemory] = useState<AiConsentUpgradeCopy | null>(null);
+  const aiMemoryRef = useRef<AiConsentUpgradeCopy | null>(null);
   /** A wanted withdrawal is not confirmed yet: P0 says so under box 2. */
   const [aiUnconfirmed, setAiUnconfirmed] = useState(false);
   /** Each box 2 notice is shown once per load, however often a retry fails. */
@@ -662,7 +667,9 @@ export default function ConsultationFlow({
       const out = await api.getRomanConsent();
       if (!aiLive(gen)) return;
       if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
-        setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION), true);
+        aiMemoryRef.current = romanBox2MemoryCopyOf(out.status);
+        setAiMemory(aiMemoryRef.current);
+        setAiConfirmed(isLiveRomanGrant(out.status), true);
         reconcileAi(gen);
       }
     } catch {
@@ -711,7 +718,11 @@ export default function ConsultationFlow({
           // Each attempt, the retry included, needs the same signed-in user
           // and yes still being the latest choice (B-310-5).
           const result = await runAiLedgerWrite(() =>
-            grantRomanWithRetry(api.grantRomanConsent, () => aiLive(gen) && aiWant.current === true),
+            grantRomanWithRetry(
+              api.grantRomanConsent,
+              () => aiLive(gen) && aiWant.current === true,
+              () => romanGrantBody(aiMemoryRef.current),
+            ),
           );
           if (!aiLive(gen)) return;
           if (result === 'granted') {
@@ -1172,7 +1183,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory }}
       />
     );
   }

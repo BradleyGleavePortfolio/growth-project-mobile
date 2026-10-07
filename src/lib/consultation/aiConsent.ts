@@ -10,9 +10,16 @@
  */
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { AiConsentOutcome, GrantRomanConsentRequest } from '../../api/aiConsentApi';
-import { AI_CONSENT_COPY_SHA256 } from './copy';
-import { AI_CONSENT_VERSION } from './consentVersion';
+import {
+  isLiveGrant,
+  parseUpgrade,
+  type AiConsentOutcome,
+  type AiConsentStatusResponse,
+  type AiConsentUpgradeCopy,
+  type GrantRomanConsentRequest,
+} from '../../api/aiConsentApi';
+import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_MEMORY_COPY_SHA256 } from './copy';
+import { AI_CONSENT_MEMORY_VERSION, AI_CONSENT_VERSION } from './consentVersion';
 
 /**
  * - `granted`: the ledger confirmed the grant.
@@ -43,9 +50,43 @@ export function platformTag(): 'ios' | 'android' | 'web' {
   return Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
 }
 
-/** The exact grant body for the box 2 text this build displays. */
-export function romanGrantBody(): GrantRomanConsentRequest {
+/**
+ * The exact grant body for the box 2 text on screen: the server's client-ai-v5 copy when it is shown
+ * (R11-C2B), otherwise this build's pinned client-ai-v4 text.
+ */
+export function romanGrantBody(memory: AiConsentUpgradeCopy | null = null): GrantRomanConsentRequest {
+  if (memory) return { version: memory.version, copy_sha256: memory.sha256, platform: platformTag() };
   return { version: AI_CONSENT_VERSION, copy_sha256: AI_CONSENT_COPY_SHA256, platform: platformTag() };
+}
+
+/** A live Roman grant of either copy this build knows (client-ai-v4, or client-ai-v5 with memory). */
+export function isLiveRomanGrant(status: AiConsentStatusResponse | null | undefined): boolean {
+  return isLiveGrant(status, AI_CONSENT_VERSION) || isLiveGrant(status, AI_CONSENT_MEMORY_VERSION);
+}
+
+/** A well-formed client-ai-v5 copy with the pinned sha256 and this build's box 2 label, else null. */
+export function pinnedMemoryCopy(copy: unknown): AiConsentUpgradeCopy | null {
+  const c = parseUpgrade(copy);
+  return c &&
+    c.version === AI_CONSENT_MEMORY_VERSION &&
+    c.sha256 === AI_CONSENT_MEMORY_COPY_SHA256 &&
+    c.box_label.text === AI_CONSENT_CHECKBOX_LABEL
+    ? c
+    : null;
+}
+
+/**
+ * R11-C2B (owner 10-07 10:18, Roman memory on by default): the client-ai-v5 copy box 2 shows, and its
+ * one tick grants, or null for today's pinned v4 text. A live v5 holder sees the v5 text they allowed;
+ * a live v4 holder sees the v4 text they allowed (they get v5 the next time they accept); anyone else
+ * sees the server's `memory_copy` while it says Roman memory is on. The current production server
+ * sends no `memory_copy`, so this is null there.
+ */
+export function romanBox2MemoryCopyOf(status: AiConsentStatusResponse | null | undefined): AiConsentUpgradeCopy | null {
+  if (!status) return null;
+  if (isLiveGrant(status, AI_CONSENT_MEMORY_VERSION)) return pinnedMemoryCopy(status.copy);
+  if (status.memory_on !== true || isLiveGrant(status, AI_CONSENT_VERSION)) return null;
+  return pinnedMemoryCopy(status.memory_copy);
 }
 
 /**
@@ -64,6 +105,8 @@ export async function grantRomanWithRetry(
   grant: (body: GrantRomanConsentRequest) => Promise<AiConsentOutcome>,
   /** Checked before each attempt: false stops (a newer choice, or another user signed in). */
   canContinue: () => boolean = () => true,
+  /** The body for the text on screen at each attempt (R11-C2B: v5 while box 2 shows it). */
+  body: () => GrantRomanConsentRequest = () => romanGrantBody(),
 ): Promise<RomanGrantResult> {
   let ambiguous = false;
   const settle = (r: RomanGrantResult): RomanGrantResult => (ambiguous ? 'unconfirmed' : r);
@@ -71,7 +114,7 @@ export async function grantRomanWithRetry(
     if (!canContinue()) return settle('failed');
     let out: AiConsentOutcome;
     try {
-      out = await grant(romanGrantBody());
+      out = await grant(body());
     } catch {
       out = { kind: 'error', status: null };
     }

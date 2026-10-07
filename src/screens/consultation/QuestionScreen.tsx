@@ -6,6 +6,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
 import { PRIVACY_POLICY_URL } from '../../config/env';
+import type { AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import type {
   AnswerValue,
   Answers,
@@ -32,8 +33,10 @@ import {
   CONSENT_CHECKBOX_LABEL,
   CONSENT_COPY_SHA256,
   CONSENT_FOOTER,
+  CONSENT_MEMORY_COPY_SHA256,
   CONSENT_PARAGRAPHS,
   CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_MEMORY_COPY_VERSION,
   P8_COPY,
 } from '../../lib/consultation/copy';
 import {
@@ -80,6 +83,9 @@ export interface QuestionScreenProps {
    * it is not confirmed rather than that it is off. `aiUnknown`: the saved
    * choice could not be read in time (C-310-9): P0 says so and where to
    * check it; box 2 stays optional and untouched sends nothing.
+   * `aiMemory` (R11-C2B): the server's client-ai-v5 copy box 2 shows instead
+   * of the pinned v4 paragraph (same label, same tick, still unticked by
+   * default); the P0 record then names consult-consent-v4.
    */
   consent?: {
     error: 'version_mismatch' | null;
@@ -87,6 +93,7 @@ export interface QuestionScreenProps {
     aiReady?: boolean;
     aiUnconfirmed?: boolean;
     aiUnknown?: boolean;
+    aiMemory?: AiConsentUpgradeCopy | null;
   };
 }
 
@@ -482,16 +489,17 @@ function ConsentBody(props: BodyProps) {
     if (!aiTouched.current) setAiChecked(aiShown);
   }, [aiShown]);
   const error = state?.error ?? null;
+  const aiMemory = state?.aiMemory ?? null;
   const consent = useMemo<ConsentAnswer>(
     () => ({
       agreed: true,
-      copy_version: CONSULT_CONSENT_COPY_VERSION,
+      copy_version: aiMemory ? CONSULT_CONSENT_MEMORY_COPY_VERSION : CONSULT_CONSENT_COPY_VERSION,
       agreed_at: new Date().toISOString(),
-      text_sha256: CONSENT_COPY_SHA256,
+      text_sha256: aiMemory ? CONSENT_MEMORY_COPY_SHA256 : CONSENT_COPY_SHA256,
     }),
-    // agreed_at is taken when box 1 is ticked.
+    // agreed_at is taken when box 1 is ticked; the version follows the box 2 text shown.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [checked],
+    [checked, aiMemory],
   );
   const blocked = error === 'version_mismatch';
   return (
@@ -517,7 +525,9 @@ function ConsentBody(props: BodyProps) {
         label={CONSENT_CHECKBOX_LABEL}
         testID="consent-checkbox"
       />
-      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">{AI_CONSENT_PARAGRAPH}</Text>
+      <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">
+        {aiMemory ? aiMemory.paragraph.text : AI_CONSENT_PARAGRAPH}
+      </Text>
       <Checkbox
         checked={aiChecked}
         onToggle={() => {
