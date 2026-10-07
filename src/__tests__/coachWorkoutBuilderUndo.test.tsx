@@ -32,6 +32,12 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // import, producing two React copies, a null hook dispatcher, and the
 // "Invalid hook call" at `useMemo`. Keeping a single React also keeps RTL's
 // auto-cleanup `afterEach` intact, so no test leaks an open handle.
+// AIB-5: Ask AI status reads 404 on this backend, so the entry stays hidden.
+const [mockAiStatus, mockAiPropose, mockAiApply] = [jest.fn(), jest.fn(), jest.fn()];
+jest.mock('../api/aiBuilderApi', () => ({ ...jest.requireActual('../api/aiBuilderApi'), aiBuilderApi: {
+  getStatus: (...a: unknown[]) => mockAiStatus(...a), propose: (...a: unknown[]) => mockAiPropose(...a), apply: (...a: unknown[]) => mockAiApply(...a), discard: () => Promise.resolve({ status: 'rejected' }),
+} }));
+
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated undo test')) },
 }));
@@ -278,6 +284,7 @@ beforeEach(() => {
   // `clearAllMocks` wipes implementations too, so re-establish the defaults the
   // boundary mocks need between tests.
   mockCurrentPlan = EXISTING_PLAN;
+  mockAiStatus.mockResolvedValue(null);
   mockReadMirror.mockResolvedValue(null);
   mockClearMirrorIfKey.mockResolvedValue(undefined);
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -786,5 +793,76 @@ describe("CoachWorkoutBuilderScreen — history barrier and unknown outcomes (S-
     expect(screen.getByText(/so nothing was undone/)).toBeTruthy();
     expect(screen.queryByLabelText("Check again")).toBeNull();
     expect(screen.getByLabelText("Plan name").props.editable).not.toBe(false);
+  });
+});
+
+describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
+  const STATUS = (state: string) => ({ state, create: true, edit: true, credits: { remaining_pct: 50, resets_at: null }, label: "AI-suggested, coach-approved" });
+  const press = (screen: Screen, id: string) => act(async () => { await fireEvent.press(screen.getByTestId(id)); });
+
+  const mount = async (status: object | null) => {
+    setFlag(true);
+    if (status instanceof Error) mockAiStatus.mockRejectedValue(status);
+    else mockAiStatus.mockResolvedValue(status);
+    const Screen = loadScreen();
+    return render(<Screen />);
+  };
+
+  it("status 404 (current production backend): no Ask AI entry", async () => {
+    const screen = await mount(null);
+    await waitFor(() => expect(mockAiStatus).toHaveBeenCalled());
+    await act(async () => {});
+    expect(screen.queryByTestId("ai-prompt-bar") ?? screen.queryByTestId("ai-header-button")).toBeNull();
+  });
+
+  it.each([
+    ["paused", STATUS("paused"), /^Ask AI is paused for maintenance\. Your workouts are unchanged\.$/], ["not_configured", STATUS("not_configured"), /^Ask AI is paused/],
+    ["unreadable (network), with a retry", new Error("socket"), /^No connection\./],
+  ])("status %s: the entry stays visible; a tap shows its copy and proposes nothing", async (_label, status, copy) => {
+    const screen = await mount(status);
+    await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
+    await press(screen, "ai-prompt-bar");
+    expect(screen.getByTestId("ai-builder-blocked").props.children).toMatch(copy);
+    [expect(screen.queryByTestId("ai-builder-input")).toBeNull(), expect(mockAiPropose).not.toHaveBeenCalled()];
+    if (status instanceof Error) expect(screen.getByTestId("ai-builder-retry")).toBeTruthy();
+  });
+
+  const applyOnce = async (ref: object | null, refetched: Promise<unknown>) => { // ref as aiBuilderApi hands it over (b#809's plan id -> null)
+    const exercise = { id: "bench", name: "Bench press", thumbnail_url: null };
+    const changes = [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise, reason: "One step.", warnings: [] }];
+    mockAiPropose.mockResolvedValue({ draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false, changes });
+    [mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: ref }), mockRefetch.mockReturnValue(refetched)];
+    const screen = await mount(STATUS("on"));
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    await press(screen, "ai-prompt-bar");
+    await act(async () => { await fireEvent.changeText(screen.getByTestId("ai-builder-input"), "progress this"); });
+    await press(screen, "ai-builder-send");
+    await waitFor(() => expect(screen.getByTestId("ai-builder-apply")).toBeTruthy());
+    expect(mockAiPropose).toHaveBeenCalledWith(expect.objectContaining({ mode: "edit", plan_id: "plan-1", lock_token: undefined }));
+    await press(screen, "ai-builder-apply");
+    expect(mockAiApply).toHaveBeenCalledWith("d1", ["c1"]);
+    return screen;
+  };
+
+  it("b#809 plan id reply: the fresh plan from the awaited GET is adopted (never the cached copy) and Save stays usable", async () => {
+    let deliver!: (v: unknown) => void;
+    const screen = await applyOnce(null, new Promise((resolve) => { deliver = resolve; }));
+    const fresh = { ...EXISTING_PLAN, exercises: EXISTING_PLAN.exercises.map((row) => ({ ...row, sets: 4 })) };
+    await act(async () => { [(mockCurrentPlan = fresh), deliver({ data: fresh, isError: false })]; }); // the cached plan stays until here
+    await waitFor(() => expect(screen.getByLabelText("Sets").props.value).toBe("4"));
+    [expect(screen.getByText("Applied 1 change.")).toBeTruthy(), expect(screen.queryByTestId("ai-toast-undo")).toBeNull()];
+    await act(async () => { fireEvent.press(screen.getByLabelText("Save changes")); });
+    expect(mockSetExercisesMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ rows: [expect.objectContaining({ exercise_external_id: "bench", sets: 4 })] }));
+  });
+
+  it("apply with a head token adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
+    const screen = await applyOnce({ plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" }, Promise.resolve({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false }));
+    await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
+    expect(screen.getByLabelText("Plan name").props.value).toBe("AI push day");
+
+    mockUndoCall.mockResolvedValueOnce({ head_revision_index: 2, lock_token: "abababababababab" });
+    mockRefetch.mockResolvedValueOnce({ data: EXISTING_PLAN, isError: false });
+    await press(screen, "ai-toast-undo");
+    expect(mockUndoCall).toHaveBeenCalledWith("plan-1", { to_revision_index: 0, expected_head_index: 1 });
   });
 });
