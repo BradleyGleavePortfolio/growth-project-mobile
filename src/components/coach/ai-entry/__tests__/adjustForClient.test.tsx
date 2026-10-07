@@ -111,17 +111,14 @@ describe('Ask AI on the client copy', () => {
   };
 
   it('sends client_id, says the client limits are checked, and names the context as the client\'s', async () => {
-    mockApi.post.mockReturnValueOnce(new Promise(() => undefined));
-    const thinking = await render(<Harness prepare={async () => ({ ok: true })} />);
-    await send(thinking);
-    expect(thinking.getByText(/Checking limits and injuries$/)).toBeTruthy();
-    expect(mockApi.post).toHaveBeenCalledWith('/ai/gateway/workout-builder/propose', expect.objectContaining({ client_id: 'client-1', plan_id: 'copy-1', mode: 'edit' }), expect.anything());
-    thinking.unmount();
-
-    mockApi.post.mockResolvedValueOnce({ data: { draft_id: 'd1', summary: '0 changes.', dropped: [], context_used: ['exercise_library', 'goal', 'injuries'], screening_flag: false, changes: [] } });
-    const review = await render(<Harness prepare={async () => ({ ok: true })} />);
-    await send(review);
-    await waitFor(() => expect(review.getByText("Using your exercise library, Sam's goal, injuries")).toBeTruthy());
+    let finish!: (v: unknown) => void;
+    mockApi.post.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; })); // held in the thinking state, released below
+    const s = await render(<Harness prepare={async () => ({ ok: true })} />);
+    await send(s);
+    await waitFor(() => expect(mockApi.post).toHaveBeenCalledWith('/ai/gateway/workout-builder/propose', expect.objectContaining({ client_id: 'client-1', plan_id: 'copy-1', mode: 'edit' }), expect.anything()));
+    expect(s.getByText(/Checking limits and injuries$/)).toBeTruthy();
+    await act(async () => { finish({ data: { draft_id: 'd1', summary: '0 changes.', dropped: [], context_used: ['exercise_library', 'goal', 'injuries'], screening_flag: false, changes: [] } }); });
+    await waitFor(() => expect(s.getByText("Using your exercise library, Sam's goal, injuries")).toBeTruthy());
   });
 });
 
