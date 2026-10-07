@@ -21,7 +21,10 @@ jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.f
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
 
-const navigation = { goBack: jest.fn(), navigate: jest.fn() } as NavigationProp<ParamListBase>;
+const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
+  goBack: jest.fn(), navigate: jest.fn(),
+};
+const navigation = navigationStub as NavigationProp<ParamListBase>;
 
 beforeEach(async () => {
   mockUserId = 'client-a';
