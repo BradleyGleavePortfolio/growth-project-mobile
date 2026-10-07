@@ -19,6 +19,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -27,12 +28,11 @@ import {
 } from 'react-native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { writePendingInviteCode } from '../../lib/pendingInviteCode';
 import { t } from './i18n/strings';
 import { pairWithCoach, type DayOneError } from './api';
-import StepHeader from './StepHeader';
+import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { writeResumeState } from './resume';
@@ -66,7 +66,7 @@ function errorCopy(e: DayOneError): string {
 }
 
 export default function CoachPairingScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const prefillCode = route.params?.prefillCode?.trim() ?? '';
@@ -115,21 +115,12 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.inner}>
+        <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
           <View style={styles.copy}>
             <Text style={styles.headline} accessibilityRole="header">
               {t('coachPairing.title')}
             </Text>
-            <Text style={styles.subtitle}>{t('coachPairing.subtitle')}</Text>
           </View>
-
-          {fromDeepLink ? (
-            <View style={styles.deepLinkBanner} accessibilityRole="alert">
-              <Text style={styles.deepLinkBannerText}>
-                {t('coachPairing.deepLinkBanner')}
-              </Text>
-            </View>
-          ) : null}
 
           <View style={styles.field}>
             <Text style={styles.label}>{t('coachPairing.inputLabel')}</Text>
@@ -188,17 +179,17 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
               </TouchableOpacity>
             ) : null}
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     flex: { flex: 1 },
-    inner: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
+    inner: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
     copy: { marginBottom: 28 },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
@@ -208,39 +199,19 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textPrimary,
       marginBottom: 8,
     },
-    subtitle: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.textSecondary,
-    },
-    deepLinkBanner: {
-      backgroundColor: colors.primaryPale,
-      borderRadius: 4,
-      paddingVertical: 12,
-      paddingHorizontal: 14,
-      marginBottom: 20,
-    },
-    deepLinkBannerText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 13,
-      color: colors.primary,
-    },
     field: { marginBottom: 24 },
     label: {
       fontFamily: 'Inter_500Medium',
       fontSize: 11,
       letterSpacing: 1.98,
       textTransform: 'uppercase',
-      color: colors.primary,
+      color: colors.textMuted,
       marginBottom: 8,
     },
     input: {
-      borderWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
-      borderRadius: 2,
-      paddingHorizontal: 16,
+      minHeight: 56,
       paddingVertical: 14,
       fontFamily: 'Inter_500Medium',
       fontSize: 18,
@@ -258,18 +229,18 @@ const makeStyles = (colors: ThemeColors) =>
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
-      borderRadius: 2,
+      minHeight: 56,
+      borderRadius: 4,
       alignItems: 'center',
     },
     ctaDisabled: { opacity: 0.4 },
     ctaText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
     skipBtn: {
+      minHeight: 44,
       alignSelf: 'center',
       paddingVertical: 12,
       paddingHorizontal: 20,

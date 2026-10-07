@@ -6,7 +6,7 @@
  * authenticated dashboard.
  *
  * Quiet-luxury doctrine: no celebrations, no trophy chrome, no particle
- * burst. The screen is a single fade-in of the check badge plus the copy
+ * burst. The screen is a single fade-in of the welcome
  * block, same restraint as MilestoneList. Animation respects Reduce Motion
  * (snaps to final state).
  */
@@ -17,22 +17,21 @@ import {
   ActivityIndicator,
   Animated,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { patchUserCache } from '../../lib/userCache';
 import { t } from './i18n/strings';
 import { completeDayOne } from './api';
-import StepHeader from './StepHeader';
+import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import {
   clearResumeState,
   enqueuePending,
@@ -48,7 +47,7 @@ type Props = {
 };
 
 export default function ReadyScreen(_props: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const user = useCurrentUser();
   const firstName = user?.firstName?.trim();
@@ -149,20 +148,11 @@ export default function ReadyScreen(_props: Props) {
   return (
     <SafeAreaView style={styles.container} testID="day-one-ready">
       <StepHeader step={6} />
-      <View style={styles.inner}>
+      <ScrollView contentContainerStyle={styles.inner}>
         <Animated.View style={[styles.center, { opacity }]}>
-          <View
-            style={styles.badge}
-            accessibilityRole="image"
-            accessibilityLabel={t('ready.badgeA11y')}
-          >
-            <Ionicons name="checkmark" size={32} color={colors.textOnPrimary} />
-          </View>
           <Text style={styles.headline} accessibilityRole="header">
             {headline}
           </Text>
-          <View style={styles.divider} />
-          <Text style={styles.subtitle}>{t('ready.subtitle')}</Text>
         </Animated.View>
 
         {retryError ? (
@@ -174,6 +164,7 @@ export default function ReadyScreen(_props: Props) {
             <Text style={styles.errorTitle}>{t('common.saveFailed.title')}</Text>
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
             <TouchableOpacity
+              style={styles.secondaryAction}
               onPress={handleFinishOffline}
               accessibilityRole="button"
               accessibilityLabel={t('common.saveLater')}
@@ -200,25 +191,16 @@ export default function ReadyScreen(_props: Props) {
             <Text style={styles.ctaText}>{t('ready.cta')}</Text>
           )}
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    inner: { flex: 1, paddingHorizontal: 24, paddingBottom: 32 },
+    inner: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 32 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-    badge: {
-      width: 64,
-      height: 64,
-      borderRadius: 32,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 24,
-    },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 30,
@@ -229,24 +211,10 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 16,
       marginBottom: 16,
     },
-    divider: {
-      width: 32,
-      height: 1,
-      backgroundColor: colors.border,
-      marginBottom: 16,
-    },
-    subtitle: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      lineHeight: 22,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      paddingHorizontal: 12,
-    },
     errorBanner: {
-      backgroundColor: colors.noticeCriticalBg,
-      borderRadius: 4,
-      padding: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: 14,
       marginBottom: 12,
     },
     errorTitle: {
@@ -269,18 +237,18 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.noticeCriticalAccent,
       opacity: 0.85,
     },
+    secondaryAction: { minHeight: 44, justifyContent: 'center' },
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
-      borderRadius: 2,
+      minHeight: 56,
+      borderRadius: 4,
       alignItems: 'center',
     },
     ctaDisabled: { opacity: 0.4 },
     ctaText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
   });

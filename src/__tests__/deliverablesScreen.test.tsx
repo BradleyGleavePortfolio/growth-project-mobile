@@ -39,6 +39,14 @@ function readSrc(rel: string): string {
 
 import { __test as DeliverablesTest } from '../screens/client/DeliverablesScreen';
 import type { ScheduledDropView } from '../api/clientPaymentsApi';
+import { StyleSheet } from 'react-native';
+import { DropRow } from '../screens/client/deliverables/dropRow';
+import { openPurchasedMedia } from '../screens/client/deliverables/openPurchasedMedia';
+import tokens from '../theme/tokens';
+
+jest.mock('../screens/client/deliverables/openPurchasedMedia', () => ({
+  openPurchasedMedia: jest.fn(),
+}));
 
 const baseDrop = (overrides: Partial<ScheduledDropView> = {}): ScheduledDropView => ({
   id: 'drop_x',
@@ -136,6 +144,30 @@ describe('tappability per asset_type', () => {
 });
 
 describe('upcoming caption fallbacks', () => {
+  it('does not promise timing without a date or trigger', () => {
+    expect(DeliverablesTest.upcomingCaption(baseDrop())).toBe('Not unlocked yet.');
+  });
+
+  it('does not invite a tap on delivered content that cannot open', async () => {
+    const { queryByText, getByTestId } = await render(
+      <DropRow drop={baseDrop({ status: 'fired' })} variant="delivered" onPress={jest.fn()} />,
+    );
+    expect(queryByText('Tap to open')).toBeNull();
+    expect(getByTestId('drop-row-drop_x').props.onPress).toBeUndefined();
+  });
+
+  it('renders unfilled hairline rows and readable Inter details', async () => {
+    const { getByText } = await render(
+      <DropRow drop={baseDrop()} variant="upcoming" onPress={jest.fn()} />,
+    );
+    const title = getByText('Sample');
+    const rowStyle = StyleSheet.flatten(title.parent?.parent?.props.style);
+    expect(rowStyle).toMatchObject({ borderBottomWidth: StyleSheet.hairlineWidth });
+    expect(rowStyle.backgroundColor).toBeUndefined();
+    expect(StyleSheet.flatten(title.props.style).fontFamily).toMatch(/^Inter_/);
+    expect(StyleSheet.flatten(getByText('Not unlocked yet.').props.style).fontSize).toBeGreaterThanOrEqual(13);
+  });
+
   it('uses display_caption for on_completion', () => {
     const c = DeliverablesTest.upcomingCaption(
       baseDrop({
@@ -285,6 +317,8 @@ describe('navigation wiring — Deliverables', () => {
 
 const mockNavigate = jest.fn();
 const mockParentNavigate = jest.fn();
+const mockGoBack = jest.fn();
+let mockDarkMode = false;
 
 let mockRouteParams: { purchaseId: string; packageName?: string } = {
   purchaseId: 'purchase_42',
@@ -294,6 +328,7 @@ let mockRouteParams: { purchaseId: string; packageName?: string } = {
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
+    goBack: mockGoBack,
     getParent: () => ({ navigate: mockParentNavigate }),
   }),
   useRoute: () => ({ params: mockRouteParams }),
@@ -326,7 +361,7 @@ jest.mock('../theme/ThemeProvider', () => {
     useTheme: () => ({
       colors,
       tokens: realTokens,
-      semanticColors: realTokens.lightTokens,
+      semanticColors: mockDarkMode ? realTokens.darkTokens : realTokens.lightTokens,
       tierColors: {
         accentBorder: realTokens.colors.forest,
         accentBg: 'rgba(44,74,54,0.06)',
@@ -359,6 +394,9 @@ describe('DeliverablesScreen — RTL mount', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
     mockParentNavigate.mockReset();
+    mockGoBack.mockReset();
+    mockDarkMode = false;
+    jest.mocked(openPurchasedMedia).mockClear();
     mockGetPurchaseDrops.mockReset();
     mockRouteParams = { purchaseId: 'purchase_42', packageName: '1:1 Coaching' };
   });
@@ -427,7 +465,8 @@ describe('DeliverablesScreen — RTL mount', () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
     const { getByTestId, getByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
-    expect(getByText('No deliverables yet')).toBeTruthy();
+    expect(getByText('No content listed')).toBeTruthy();
+    expect(getByText('No content is listed for this purchase.')).toBeTruthy();
   });
 
   it('renders the error state with a Retry button when the request fails (no raw axios message)', async () => {
@@ -452,13 +491,14 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('renders the empty (not error) state when the endpoint is not configured (501)', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
-    const { getByTestId, queryByTestId } = await render(<DeliverablesScreen />);
+    const { getByTestId, queryByTestId, getByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
     // PR-15B audit P2-1: 501 is the ONLY path to the calm empty state
     // for this envelope — the companion 404 test below asserts the
     // error banner. The two must remain distinguishable downstream of
     // `getPurchaseDrops`.
     expect(queryByTestId('deliverables-error')).toBeNull();
+    expect(getByText('Content list unavailable')).toBeTruthy();
   });
 
   it('renders the error (not empty) state for a real transport failure that maps to error (PR-15B audit P2-1)', async () => {
@@ -632,5 +672,59 @@ describe('DeliverablesScreen — RTL mount', () => {
       await refreshControl.props.onRefresh();
     });
     expect(mockGetPurchaseDrops).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['workout_plan', 'meal_plan', 'pdf', 'video'] as const)(
+    'preserves the delivered %s action and complete coach caption',
+    async (asset_type) => {
+      const caption = 'Coach-authored instructions remain visible without another tap.';
+      mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [
+        baseDrop({ status: 'fired', asset_type, materialised_ref: 'assignment_2', display_caption: caption }),
+      ] });
+      const { getByTestId, getByText } = await render(<DeliverablesScreen />);
+      await waitFor(() => expect(getByTestId('drop-row-drop_x')).toBeTruthy());
+      expect(getByText(caption).props.numberOfLines).toBeUndefined();
+      await fireEvent.press(getByTestId('drop-row-drop_x'));
+      if (asset_type === 'pdf' || asset_type === 'video') {
+        expect(openPurchasedMedia).toHaveBeenCalledWith('prog_1');
+      } else {
+        expect(mockNavigate).toHaveBeenCalledWith(
+          asset_type === 'meal_plan' ? 'ClientDailyMealPlan' : 'WorkoutAssignmentDetail',
+          { assignmentId: 'assignment_2' },
+        );
+      }
+    },
+  );
+
+  it('retry really reloads; upcoming items stay non-tappable and follow delivered items', async () => {
+    mockGetPurchaseDrops.mockResolvedValueOnce({ ok: false, reason: 'error' })
+      .mockResolvedValue({ ok: true, data: [
+        baseDrop({ id: 'upcoming' }),
+        baseDrop({ id: 'delivered', status: 'fired', materialised_ref: 'assignment_1' }),
+      ] });
+    const { getByTestId, getAllByTestId, queryByText } = await render(<DeliverablesScreen />);
+    await waitFor(() => expect(getByTestId('deliverables-retry')).toBeTruthy());
+    await fireEvent.press(getByTestId('deliverables-retry'));
+    await waitFor(() => expect(getByTestId('drop-row-upcoming')).toBeTruthy());
+    expect(getAllByTestId(/^drop-row-/).map(row => row.props.testID)).toEqual([
+      'drop-row-delivered', 'drop-row-upcoming',
+    ]);
+    expect(getByTestId('drop-row-upcoming').props.onPress).toBeUndefined();
+    expect(mockGetPurchaseDrops).toHaveBeenCalledTimes(2);
+    expect(queryByText('Unlocks soon')).toBeNull();
+  });
+
+  it.each([false, true])('keeps back reachable and uses the semantic palette (dark=%s)', async (dark) => {
+    mockDarkMode = dark;
+    mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [baseDrop()] });
+    const { getByTestId, getByText, queryByText } = await render(<DeliverablesScreen />);
+    await waitFor(() => expect(getByTestId('deliverables-list')).toBeTruthy());
+    const palette = tokens[dark ? 'darkTokens' : 'lightTokens'];
+    expect(StyleSheet.flatten(getByTestId('deliverables-list').props.style).backgroundColor).toBe(palette.bgPrimary);
+    expect(StyleSheet.flatten(getByText('Sample').props.style).color).toBe(palette.textMuted);
+    expect(StyleSheet.flatten(getByText('1:1 Coaching • Deliverables').props.style).fontFamily).toMatch(/^Cormorant/);
+    expect(queryByText(/Tap a delivered item/)).toBeNull();
+    await fireEvent.press(getByTestId('deliverables-back'));
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 });

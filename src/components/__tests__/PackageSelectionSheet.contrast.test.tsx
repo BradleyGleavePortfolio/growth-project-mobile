@@ -8,6 +8,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { lightTokens, darkTokens } from '../../theme/tokens';
 
 let mockScheme: 'light' | 'dark' = 'light';
 jest.mock('../../theme/ThemeProvider', () => {
@@ -53,12 +54,32 @@ it.each(['light', 'dark'] as const)('B-343-5 %s: selected card terms are at leas
   mockState = { phase: 'idle' };
   const r = await render(<Sheet visible onDismiss={jest.fn()} onPaymentSuccess={jest.fn()} />);
   await waitFor(() => expect(r.getByTestId('package-card-p-1')).toBeTruthy());
+  const sc = scheme === 'dark' ? darkTokens : lightTokens;
+  expect(StyleSheet.flatten(r.getByTestId('select-plan-btn').props.style).backgroundColor).toBe(sc.disabledBg);
+  expect(StyleSheet.flatten(r.getByText('Select this plan').props.style).color).toBe(sc.textOnDisabled);
   await fireEvent.press(r.getByTestId('package-card-p-1'));
   const card = StyleSheet.flatten(r.getByTestId('package-card-p-1').props.style);
   const fg = luminance(StyleSheet.flatten(r.getByTestId('plan-terms-first-charge').props.style).color);
   const bg = luminance(card.backgroundColor);
   expect((Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05)).toBeGreaterThanOrEqual(4.5);
-  expect(card.borderWidth).toBe(2);
+  expect(card.borderTopWidth).toBe(2);
+  expect(StyleSheet.flatten(r.getByText('Synthetic recurring').props.style).fontFamily).toMatch(/^Cormorant/);
+  expect(StyleSheet.flatten(r.getAllByText('$49.00 a month')[0].props.style).fontVariant).toEqual(['tabular-nums']);
+  expect(StyleSheet.flatten(r.getByTestId('select-plan-btn').props.style).minHeight).toBe(44);
+});
+
+it('keeps radio selection, Skip and native sheet dismissal available', async () => {
+  mockScheme = 'light';
+  mockState = { phase: 'idle' };
+  const onDismiss = jest.fn();
+  const r = await render(<Sheet visible onDismiss={onDismiss} onPaymentSuccess={jest.fn()} />);
+  await waitFor(() => expect(r.getByRole('radio')).toBeTruthy());
+  await fireEvent.press(r.getByRole('radio'));
+  expect(r.getByRole('radio').props.accessibilityState.selected).toBe(true);
+  await fireEvent.press(r.getByTestId('skip-package-btn'));
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  await fireEvent(r.getByRole('radio'), 'requestClose');
+  expect(onDismiss).toHaveBeenCalledTimes(2);
 });
 
 it('B-343-1 (Opus): an unclear one-time result is shown as checking', async () => {

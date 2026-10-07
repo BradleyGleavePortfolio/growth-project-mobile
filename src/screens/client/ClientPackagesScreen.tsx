@@ -68,7 +68,7 @@ import {
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
 import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
-import tokens, { type SemanticTokens, type Tokens } from '../../theme/tokens';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { usePackagePurchase } from '../../hooks/usePackagePurchase';
@@ -145,9 +145,10 @@ function DunningBanner({
   onUpdateCard: () => void;
   styles: ReturnType<typeof makeStyles>;
 }) {
+  const { semanticColors } = useTheme();
   return (
     <View style={styles.dunningBanner}>
-      <Ionicons name="warning" size={18} color={tokens.neutral[0]} />
+      <Ionicons name="warning-outline" size={18} color={semanticColors.textPrimary} />
       <View style={{ flex: 1 }}>
         <Text style={styles.dunningText}>{dunning.summary}</Text>
         {dunning.grace_until ? (
@@ -170,11 +171,8 @@ function DunningBanner({
 }
 
 export default function ClientPackagesScreen() {
-  const { semanticColors } = useTheme();
-  // `tokens` is the static design-token module (mode-agnostic) imported at the
-  // top of this file, so it does not need to come from the theme context and
-  // is referenceable from module-scope sub-components (e.g. DunningBanner).
-  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const noCoach = useCoachlessClient();
 
@@ -577,7 +575,7 @@ export default function ClientPackagesScreen() {
         )
       ) : packages.reason === 'error' ? (
         <TouchableOpacity onPress={load} style={styles.errorBanner}>
-          <Ionicons name="alert-circle-outline" size={18} color={tokens.neutral[0]} />
+          <Ionicons name="alert-circle-outline" size={18} color={semanticColors.textPrimary} />
           <Text style={styles.errorBannerText}>{packages.message} Tap to retry.</Text>
         </TouchableOpacity>
       ) : null}
@@ -594,7 +592,7 @@ export default function ClientPackagesScreen() {
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
-    content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
+    content: { paddingHorizontal: 24, paddingTop: 56, paddingBottom: 40 },
     center: {
       flex: 1,
       alignItems: 'center',
@@ -602,58 +600,60 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       backgroundColor: semanticColors.bgPrimary,
     },
     backBtn: { width: 44, height: 44, justifyContent: 'center', marginLeft: -10, marginTop: -12 },
-    header: { fontSize: 28, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 4 },
+    header: { ...tokens.typography.h1, color: semanticColors.textPrimary, marginBottom: 12 },
     subheader: {
+      ...tokens.typography.bodySmall,
       fontSize: 13,
       color: semanticColors.textMuted,
       lineHeight: 18,
-      marginBottom: 16,
+      marginBottom: 24,
     },
     dunningBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: tokens.colors.error,
+      backgroundColor: semanticColors.bgPrimary,
       padding: 12,
-      borderRadius: 8,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semanticColors.border,
       marginBottom: 16,
     },
-    dunningText: { color: tokens.neutral[0], fontSize: 13, fontWeight: '500' },
-    dunningSub: { color: tokens.neutral[0], fontSize: 11, opacity: 0.85, marginTop: 2 },
+    dunningText: { ...tokens.typography.bodySmall, color: semanticColors.textPrimary, fontSize: 13 },
+    dunningSub: { ...tokens.typography.bodySmall, color: semanticColors.textMuted, fontSize: 13, marginTop: 4 },
     dunningBtn: {
-      backgroundColor: tokens.neutral[0],
+      minHeight: 44, justifyContent: 'center',
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: 6,
+      borderRadius: tokens.radius.lg,
     },
-    dunningBtnText: { color: tokens.colors.error, fontWeight: '600', fontSize: 12 },
+    dunningBtnText: { ...tokens.typography.bodyMd, color: semanticColors.accentText, fontSize: 13 },
     currentPlanCard: {
-      backgroundColor: semanticColors.bgSurface,
-      borderRadius: 12,
-      padding: 14,
-      borderWidth: 1,
+      paddingVertical: 24,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
       marginBottom: 16,
     },
     currentPlanLabel: {
+      ...tokens.typography.eyebrow,
       fontSize: 11,
       color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.4,
       marginBottom: 4,
     },
-    currentPlanName: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary },
-    currentPlanSub: { fontSize: 12, color: semanticColors.textMuted, marginTop: 2 },
+    currentPlanName: { ...tokens.typography.h2, color: semanticColors.textPrimary },
+    currentPlanSub: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 8 },
     currentPlanCta: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: 12,
+      minHeight: 44,
       paddingTop: 12,
       borderTopWidth: 1,
       borderTopColor: semanticColors.border,
     },
     currentPlanCtaText: {
+      ...tokens.typography.bodyMd,
       fontSize: 14,
       color: semanticColors.accent,
       fontWeight: '600',
@@ -662,16 +662,17 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: tokens.colors.error,
+      backgroundColor: semanticColors.bgPrimary,
       paddingVertical: 10,
       paddingHorizontal: 12,
-      borderRadius: 8,
+      minHeight: 44, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: semanticColors.border,
       marginBottom: 12,
     },
-    errorBannerText: { color: tokens.neutral[0], fontSize: 13, flex: 1 },
+    errorBannerText: { ...tokens.typography.bodySmall, color: semanticColors.textPrimary, fontSize: 13, flex: 1 },
     gate: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 16 },
-    gateTitle: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary, marginTop: 12 },
+    gateTitle: { ...tokens.typography.h2, color: semanticColors.textPrimary, marginTop: 12 },
     gateBody: {
+      ...tokens.typography.bodySmall,
       fontSize: 14,
       color: semanticColors.textMuted,
       textAlign: 'center',
@@ -681,51 +682,47 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     cta: {
       marginTop: 20,
       backgroundColor: semanticColors.accent,
-      borderRadius: 10,
+      borderRadius: tokens.radius.lg, minHeight: 44, justifyContent: 'center',
       paddingHorizontal: 20,
       paddingVertical: 12,
     },
-    ctaText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    ctaText: { ...tokens.typography.bodyMd, color: semanticColors.textOnAccent, fontSize: 14 },
     pkgCard: {
-      backgroundColor: semanticColors.bgSurface,
-      borderRadius: 12,
-      padding: 16,
-      borderWidth: 1,
+      paddingVertical: 24,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
       marginBottom: 12,
     },
     pkgHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    pkgName: { fontSize: 17, fontWeight: '600', color: semanticColors.textPrimary, flex: 1 },
+    pkgName: { ...tokens.typography.h2, color: semanticColors.textPrimary, flex: 1 },
     currentPill: {
-      backgroundColor: tokens.brand[50],
       paddingHorizontal: 10,
       paddingVertical: 3,
-      borderRadius: 999,
     },
-    currentPillText: { color: semanticColors.accent, fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-    pkgPrice: { fontSize: 22, fontWeight: '600', color: semanticColors.textPrimary, marginTop: 6 },
-    pkgDesc: { fontSize: 13, color: semanticColors.textMuted, marginTop: 8, lineHeight: 18 },
+    currentPillText: { ...tokens.typography.eyebrow, color: semanticColors.textMuted },
+    pkgPrice: { ...tokens.typography.h2, fontVariant: ['tabular-nums'], color: semanticColors.textPrimary, marginTop: 6 },
+    pkgDesc: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 8, lineHeight: 18 },
     pkgFeatures: { marginTop: 10, gap: 6 },
     pkgFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    pkgFeatureText: { fontSize: 13, color: semanticColors.textPrimary, flex: 1 },
+    pkgFeatureText: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textPrimary, flex: 1 },
     buyBtn: {
       marginTop: 14,
       backgroundColor: semanticColors.accent,
       paddingVertical: 12,
-      borderRadius: 8,
+      borderRadius: tokens.radius.lg, minHeight: 44, justifyContent: 'center',
       alignItems: 'center',
     },
     // Explicit disabled fill + label tokens (no parent opacity). The previous
     // opacity-on-textMuted treatment composited to ~2.05–2.24:1 for the 14px
     // semibold label; disabledBg + textOnDisabled clear AA in both modes.
     buyBtnDisabled: { backgroundColor: semanticColors.disabledBg },
-    buyBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    buyBtnText: { ...tokens.typography.bodyMd, color: semanticColors.textOnAccent, fontSize: 14 },
     buyBtnTextDisabled: { color: semanticColors.textOnDisabled },
     fineprint: {
-      fontSize: 11,
+      ...tokens.typography.bodySmall, fontSize: 13,
       color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 20,
-      lineHeight: 16,
+      lineHeight: 20,
     },
   });

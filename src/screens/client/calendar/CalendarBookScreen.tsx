@@ -21,6 +21,10 @@
  * later times / Show earlier times step through the coach's booking window
  * (booking_window_days on the open-slots reply); an older backend that does
  * not send it keeps the first 14 days only.
+ *
+ * Quiet booking: day overlines, 44-point text slots, forest selection and
+ * one time-labelled action. Paging, refresh, messages, device-calendar copies
+ * and session-detail routes remain available. Missing links are facts, not promises.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
@@ -66,11 +70,11 @@ export const MOVED_PHONE_COPY_NOTE =
 export function bookedMessage(session: CoachingSession, coachName: string, moved: boolean): string {
   const copyNote = moved ? ` ${MOVED_PHONE_COPY_NOTE}` : '';
   if (session.status === 'requested') {
-    return `Requested, waiting for your coach. Check Calendar to see when ${coachName} confirms.${copyNote}`;
+    return `Requested, waiting for your coach. Check Calendar for ${coachName}'s response.${copyNote}`;
   }
   if (session.status === 'pending_provider') return `Your time is reserved. The call link is being prepared. Open Calendar to check its status.${copyNote}`;
   const base = moved ? `Moved. ${coachName} has the new time.` : `Booked. ${coachName} will see it in the booking inbox.`;
-  const linkNote = session.meeting_link_status === 'pending' ? ` ${coachName} will add the call link before it starts.` : '';
+  const linkNote = session.meeting_link_status === 'pending' ? ' Call link not added yet.' : '';
   return `${base}${linkNote}${copyNote}`;
 }
 
@@ -283,7 +287,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
         <Title>{done.status === 'requested' ? 'Requested' : params.rescheduleSessionId ? 'Moved' : 'Booked'}</Title>
         <Body>{bookedMessage(done, coachName, !!params.rescheduleSessionId)}</Body>
         <Note text={`${formatWhen(done.start_at, clientTz)}. ${formatRange(done.start_at, done.end_at, clientTz)}.`} />
-        {done.status === 'scheduled' ? <SecondaryButton label="Add to my calendar" onPress={() => void addToPhone(done)} testID="calendar-add-phone" /> : null}
+        {done.status === 'scheduled' ? <SecondaryButton label="Add to phone calendar" onPress={() => void addToPhone(done)} testID="calendar-add-phone" /> : null}
         {phoneMsg ? <Note text={phoneMsg} testID="calendar-phone-msg" /> : null}
         <PrimaryButton
           label="Done"
@@ -303,7 +307,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
         <Body>
           {upcomingId && startAt
             ? welcomeInfo.active_session_status === 'requested'
-              ? `You asked for ${formatWhen(startAt, clientTz)}. ${coachName} will confirm it.`
+              ? `You asked for ${formatWhen(startAt, clientTz)}. Waiting for ${coachName} to confirm.`
               : `It is booked for ${formatWhen(startAt, clientTz)}.`
             : `You have had your welcome call with ${coachName}. Book other sessions from Calendar.`}
         </Body>
@@ -378,7 +382,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
       })()}
       {days.map((d) => (
         <View key={d.key} style={styles.day}>
-          <Text style={[styles.dayLabel, { color: sc.textPrimary }]} accessibilityRole="header">
+          <Text style={[styles.dayLabel, { color: sc.textMuted }]} accessibilityRole="header">
             {d.label}
           </Text>
           <View style={styles.slotWrap}>
@@ -400,11 +404,11 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
                   accessibilityLabel={`${d.label}, ${formatTime(new Date(s.start_at), clientTz)} ${zoneAbbrev(new Date(s.start_at), clientTz)}${coachClock ? `, ${coachClock}` : ''}`}
                   style={[
                     styles.slot,
-                    { borderColor: sc.textPrimary, backgroundColor: sel ? sc.textPrimary : 'transparent' },
+                    { borderColor: sel ? sc.accent : sc.border, backgroundColor: sel ? sc.accent : sc.bgPrimary },
                   ]}
                   testID={`calendar-slot-${s.start_at}`}
                 >
-                  <Text style={[styles.slotText, { color: sel ? sc.bgPrimary : sc.textPrimary }]}>
+                  <Text style={[styles.slotText, { color: sel ? sc.textOnAccent : sc.textPrimary }]}>
                     {repeatedClock ? `${clock} ${zoneAbbrev(new Date(s.start_at), clientTz)}` : clock}
                   </Text>
                 </Pressable>
@@ -421,7 +425,7 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
             return c ? <Note text={c} /> : null;
           })()}
           <PrimaryButton
-            label={params.rescheduleSessionId ? 'Move to this time' : type.auto_approve ? 'Book this time' : 'Request this time'}
+            label={`${params.rescheduleSessionId ? 'Move to' : type.auto_approve ? 'Book' : 'Request'} ${formatTime(new Date(picked.start_at), clientTz)}`}
             onPress={submit}
             busy={busy}
             disabled={verifyBooking}
@@ -440,18 +444,18 @@ export default function CalendarBookScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  day: { marginTop: spacing.lg },
-  dayLabel: { ...typography.bodyMd, marginBottom: spacing.sm },
+  day: { marginTop: spacing.xl },
+  dayLabel: { ...typography.eyebrow, fontSize: 13, lineHeight: 20, marginBottom: spacing.sm },
   slotWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   slot: {
     minHeight: 44,
     minWidth: 88,
-    borderWidth: 1,
-    borderRadius: radius.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
   },
-  slotText: { ...typography.body },
+  slotText: { ...typography.body, fontVariant: ['tabular-nums'] },
   confirm: { marginTop: spacing.xl, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: spacing.lg },
 });

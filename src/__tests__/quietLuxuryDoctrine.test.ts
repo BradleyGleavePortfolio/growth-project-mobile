@@ -86,8 +86,9 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
 
   it('does not contain "Coming Soon" / "In Development" / "Planned" placeholder copy', () => {
     const offenders: string[] = [];
-    const re = /["'`](?:Coming Soon|Coming soon|In Development|in development)["'`]/;
+    const re = /coming\s+soon|["'`](?:in development)["'`]/i;
     for (const file of FILES) {
+      if (/\/__tests__\/|\.(?:test|spec)\./.test(file)) continue;
       const src = stripComments(fs.readFileSync(file, 'utf8'));
       if (re.test(src)) offenders.push(path.relative(ROOT, file));
     }
