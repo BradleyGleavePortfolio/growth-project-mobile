@@ -8,7 +8,7 @@
  * downstream write is not corrupted with empty ids.
  */
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -27,6 +27,8 @@ import {
   ParamListBase,
 } from '@react-navigation/native';
 import { useMyWorkoutAssignment } from '../../hooks/useWorkoutBuilder';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
 import { spacing, typography } from '../../theme/tokens';
@@ -51,6 +53,32 @@ export default function WorkoutAssignmentDetailScreen() {
   const { assignmentId } = route.params;
   const { data, isLoading, isError, refetch, isRefetching } =
     useMyWorkoutAssignment(assignmentId);
+  const userId = useCurrentUser()?.id;
+  const [canResume, setCanResume] = useState(false);
+
+  // Read the existing session on entry and when returning from the live workout.
+  // This changes the label only; ActiveWorkout still owns resume and persistence.
+  useEffect(() => {
+    let cancelled = false;
+    const checkResume = async () => {
+      setCanResume(false);
+      if (!userId) return;
+      try {
+        const saved = await loadActiveWorkoutSession(userId);
+        if (!cancelled) {
+          setCanResume(saved?.session.assignmentId === assignmentId);
+        }
+      } catch {
+        if (!cancelled) setCanResume(false);
+      }
+    };
+    void checkResume();
+    const unsubscribe = navigation.addListener?.('focus', () => { void checkResume(); });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [navigation, userId, assignmentId]);
 
   const onRefresh = useCallback(() => {
     void refetch();
@@ -148,6 +176,7 @@ export default function WorkoutAssignmentDetailScreen() {
   const plan = data.workout_plan;
   const sorted = [...overlay.exercises].sort((a, b) => a.order - b.order);
   const isCompleted = !!data.completed_at;
+  const actionLabel = canResume ? 'Resume workout' : 'Start workout';
 
   return (
     <ScrollView
@@ -217,13 +246,13 @@ export default function WorkoutAssignmentDetailScreen() {
           disabled={namesLoading}
           accessibilityRole="button"
           accessibilityState={{ disabled: namesLoading, busy: namesLoading }}
-          accessibilityLabel={namesLoading ? 'Loading exercise names' : `Start workout ${plan.name}`}
+          accessibilityLabel={namesLoading ? 'Loading exercise names' : `${actionLabel} ${plan.name}`}
           testID="assignment-start"
         >
           {namesLoading ? (
             <ActivityIndicator color={sc.bgPrimary} />
           ) : (
-            <Text style={styles.startBtnText}>Start workout</Text>
+            <Text style={styles.startBtnText}>{actionLabel}</Text>
           )}
         </HapticPressable>
       )}
