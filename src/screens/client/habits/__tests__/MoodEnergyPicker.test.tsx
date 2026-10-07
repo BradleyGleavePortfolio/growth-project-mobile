@@ -23,7 +23,7 @@ it('keeps every check-in action with a single readable word per mood choice', as
   for (let value = 1; value <= 5; value += 1) {
     const label = view.getByText(MOOD_LABELS[value]);
     expect(label.props.style).toEqual(expect.arrayContaining([expect.objectContaining({
-      fontSize: 12, textTransform: 'none', letterSpacing: 0,
+      fontSize: 13, textTransform: 'none', letterSpacing: 0,
     })]));
     await fireEvent.press(label);
     expect(setMood).toHaveBeenLastCalledWith(value);

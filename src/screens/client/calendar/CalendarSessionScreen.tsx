@@ -13,13 +13,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { resolveCallLink, resolveClientTimezone, type CallLink, type CoachingSession } from '../../../api/schedulingApi';
 import { useMyCoaches } from '../../../hooks/useCalendar';
 import { useCancelSession, useSession } from '../../../hooks/useScheduling';
-import { coachTimeLabel, formatRange, formatWhen } from '../../../calendar/calendarTime';
+import { coachTimeLabel } from '../../../calendar/calendarTime';
 import { addSessionToPhoneCalendar, phoneCalendarResultMessage } from '../../../calendar/phoneCalendar';
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { useOpenMessages } from './CalendarHomeScreen';
-import { Body, Note, PrimaryButton, SecondaryButton, Section, Title, calendarStyles, statusLabel } from './calendarUi';
+import { Body, Note, PrimaryButton, SecondaryButton, Section, SessionTime, Title, calendarStyles, sessionLength, statusLabel, useOpenMessages } from './calendarUi';
 
 type Props = NativeStackScreenProps<CalendarStackParamList, 'CalendarSession'>;
 
@@ -72,13 +71,10 @@ export async function openCallLink(link: CallLink, coachName: string): Promise<s
 }
 
 /** Calm, specific call-link line for the client, or null when not needed. */
-export function clientLinkLine(s: CoachingSession, coachName: string, hasLink: boolean): string | null {
-  if (s.status === 'requested') return `The call link appears here once ${coachName} confirms.`;
+export function clientLinkLine(s: CoachingSession, _coachName: string, hasLink: boolean): string | null {
   // pending_provider already reads "call link is being prepared".
-  if (s.status !== 'scheduled') return null;
-  if (hasLink) return null;
-  const pending = s.meeting_link_status === undefined || s.meeting_link_status === 'pending';
-  return pending ? `${coachName} will add the call link before the session. You do not need to do anything.` : null;
+  if (s.status !== 'scheduled' && s.status !== 'requested') return null;
+  return hasLink ? null : 'Call link not added yet.';
 }
 
 export default function CalendarSessionScreen({ route, navigation }: Props) {
@@ -113,7 +109,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
       </View>,
     );
   }
-  if (q.isLoading) return wrap(<Note text="Loading." />);
+  if (q.isLoading) return wrap(<Note text="Loading this session." />);
   if (!q.data) {
     return wrap(
       <View testID="calendar-session-missing">
@@ -169,9 +165,10 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
     <View>
       <Title>{s.title}</Title>
       <Body testID="calendar-session-status">{statusLabel(s.status)}</Body>
-      <Note text={`${formatWhen(s.start_at, clientTz)}. ${formatRange(s.start_at, s.end_at, clientTz)}.`} />
+      <SessionTime session={s} />
       {coachClock ? <Note text={coachClock} /> : null}
       <Note text={`With ${coachName}.`} />
+      <Note text={sessionLength(s)} />
 
       {canJoin(s, now) && link ? (
         <PrimaryButton
@@ -194,7 +191,7 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
       {linkLine ? <Note text={linkLine} testID="calendar-session-link-pending" /> : null}
 
       {live && s.status === 'scheduled' ? (
-        <SecondaryButton label="Add to my calendar" onPress={() => void onAdd()} testID="calendar-add-phone" />
+        <SecondaryButton label="Add to calendar" onPress={() => void onAdd()} testID="calendar-add-phone" />
       ) : null}
       {live && !changeable ? (
         <Note
