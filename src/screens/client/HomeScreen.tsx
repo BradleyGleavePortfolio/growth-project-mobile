@@ -52,6 +52,7 @@ import FullMacrosIntroCard from '../../components/home/FullMacrosIntroCard';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { homeCells, type HomeCell } from '../../macros/macroDisplay';
 import { workoutApi } from '../../services/api';
+import { workoutBuilderApi } from '../../api/workoutBuilderApi';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -181,20 +182,31 @@ export default function HomeScreen() {
   // "workout complete" copy. Falling back to `false` on network error so
   // the home line never claims a workout was done when we couldn't verify.
   const [workoutDone, setWorkoutDone] = useState<boolean>(false);
-  // Task 9: workoutExists drives conditional CTA.
-  // 'loading' while fetching, true when rows exist, false when empty/error.
+  // History or a pending coach assignment makes Continue useful. Only show
+  // Explore once both reads confirm empty; a failed read keeps workouts reachable.
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
   useEffect(() => {
     let cancelled = false;
     if (!currentUser) return;
+    setWorkoutExists('loading');
     (async () => {
       try {
-        const res = await workoutApi.getAll(5);
-        const rows = (res.data as WorkoutRowLike[] | undefined) || [];
+        const [history, assignments] = await Promise.allSettled([
+          workoutApi.getAll(5),
+          workoutBuilderApi.listMyAssignments(),
+        ]);
+        const rows = history.status === 'fulfilled'
+          ? (history.value.data as WorkoutRowLike[] | undefined) || []
+          : [];
         const done = isWorkoutDoneToday(rows, getTodayString());
+        const hasPendingAssignment = assignments.status === 'fulfilled'
+          && assignments.value.some((assignment) => !assignment.completed_at);
         if (!cancelled) {
           setWorkoutDone(done);
-          setWorkoutExists(rows.length > 0);
+          setWorkoutExists(
+            rows.length > 0 || hasPendingAssignment
+            || history.status === 'rejected' || assignments.status === 'rejected',
+          );
         }
       } catch {
         if (!cancelled) {
