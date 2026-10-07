@@ -113,7 +113,7 @@ export default function HomeHeaderActions() {
       </Pressable>
       {featureFlags.romanChat ? (
         <Pressable
-          onPress={() => navigation.navigate('MoreTab', { screen: 'RomanChat' })}
+          onPress={() => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false })}
           accessibilityRole="button"
           accessibilityLabel="Chat with Roman"
           testID="home-roman-chat"

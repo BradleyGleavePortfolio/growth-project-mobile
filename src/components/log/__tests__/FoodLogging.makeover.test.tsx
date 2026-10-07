@@ -9,7 +9,7 @@ import DaySelector from '../../DaySelector';
 import QuietBar from '../../../ui/progress/QuietBar';
 import type { FoodLog } from '../../../types';
 jest.mock('../../FoodImage', () => ({ __esModule: true, default: () => null })); jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('../../../hooks/useSettings', () => ({ useSettings: () => ({ settings: { waterGoalOz: 64 } }) }));
+jest.mock('../../../hooks/useSettings', () => ({ ...jest.requireActual('../../../hooks/useSettings'), useSettings: () => ({ settings: { waterGoalOz: 64 } }) }));
 jest.mock('../../../theme/useTheme', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens }) }));
 let mockReduced = false;
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => mockReduced }));

@@ -24,9 +24,11 @@ describe('auth WelcomeScreen', () => {
     expect(utils.queryByText(/invitation only/i)).toBeNull();
     expect(utils.queryByText(/request access/i)).toBeNull();
     expect(utils.queryByLabelText('Request access by email')).toBeNull();
-    await fireEvent.press(utils.getByLabelText('Get started'));
+    expect(utils.getByText('Sign in or create an account.')).toBeTruthy();
+    expect(utils.getByText('Sign in')).toHaveStyle({ textTransform: undefined });
+    await fireEvent.press(utils.getByLabelText('Create account'));
     expect(nav.navigate).toHaveBeenCalledWith('CreateAccount');
-    await fireEvent.press(utils.getByLabelText('Log in'));
+    await fireEvent.press(utils.getByLabelText('Sign in'));
     expect(nav.navigate).toHaveBeenCalledWith('Login');
     expect(openURL).not.toHaveBeenCalled();
   });

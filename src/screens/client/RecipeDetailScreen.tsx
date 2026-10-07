@@ -17,7 +17,8 @@ import { recipesApi } from '../../services/api';
 import { errorStatus } from '../../types/common';
 
 import FadeInView from '../../components/FadeInView';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { typography, SemanticTokens } from '../../theme/tokens';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe {
@@ -39,47 +40,51 @@ interface Recipe {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-function MacroCard({ label, value, unit, color }: {
-  label: string; value: number; unit: string; color: string;
+function MacroCard({ label, value, unit }: {
+  label: string; value: number; unit: string;
 }) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  if (!Number.isFinite(value)) return null;
   return (
-    <View style={[styles.macroCard, { backgroundColor: color + '15' }]}>
-      <Text style={[styles.macroValue, { color }]}>{Math.round(value)}{unit}</Text>
-      <Text style={[styles.macroLabel, { color: color + 'BB' }]}>{label}</Text>
+    <View style={styles.macroCard}>
+      <Text style={styles.macroValue}>{Math.round(value)} {unit}</Text>
+      <Text style={styles.macroLabel}>{label}</Text>
     </View>
   );
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipeDetailScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<{ RecipeDetail: { recipeId: string } }, 'RecipeDetail'>>();
   const recipeId = route.params?.recipeId;
   const queryClient = useQueryClient();
 
-  // Cache-first read: if the user navigated from RecipesScreen (the list
-  // query), we'll already have the recipe in cache and paint synchronously.
-  // Otherwise, we fetch by id and fall back to first paint loading state.
+  // Cache-first paint: a recipe opened from the list paints from the list
+  // cache, but that cache has no `isSaved`, so it counts as already stale and
+  // GET /recipes/:id always runs once to supply the saved state.
   const initialFromCache = (() => {
     const list = queryClient.getQueryData<Recipe[]>(['recipes']);
     return list?.find((r) => r.id === recipeId);
   })();
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Recipe>({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<Recipe>({
     queryKey: ['recipe', recipeId],
     queryFn: () => recipesApi.getById(recipeId).then((r) => r.data as Recipe),
     enabled: !!recipeId,
     initialData: initialFromCache,
+    initialDataUpdatedAt: 0,
     staleTime: 5 * 60 * 1000,
   });
 
   const recipe = data;
 
-  const [isSaved, setIsSaved] = useState<boolean>(recipe?.isSaved ?? false);
+  // undefined = the server has not said yet; the bookmark waits for it.
+  const [isSaved, setIsSaved] = useState<boolean | undefined>(recipe?.isSaved);
+  const savedPending = isSaved === undefined && isFetching;
   const [saving, setSaving] = useState(false);
 
   // Keep local saved-state in sync if the underlying record refreshes.
@@ -87,25 +92,25 @@ export default function RecipeDetailScreen() {
     if (recipe?.isSaved !== undefined) setIsSaved(recipe.isSaved);
   }, [recipe?.isSaved]);
 
-  const totalTime = (recipe?.prep_time_min ?? 0) + (recipe?.cook_time_min ?? 0);
+  const totalTime = Number.isFinite(recipe?.prep_time_min) && Number.isFinite(recipe?.cook_time_min)
+    ? (recipe?.prep_time_min ?? 0) + (recipe?.cook_time_min ?? 0) : null;
 
   const handleToggleSave = useCallback(async () => {
     if (saving || !recipe) return;
     setSaving(true);
     try {
-      if (isSaved) {
-        await recipesApi.unsave(recipe.id);
-        setIsSaved(false);
-      } else {
-        await recipesApi.save(recipe.id);
-        setIsSaved(true);
-      }
+      const next = !isSaved;
+      await (next ? recipesApi.save(recipe.id) : recipesApi.unsave(recipe.id));
+      setIsSaved(next);
+      // Reopening this recipe and the Saved filter both show the new state.
+      queryClient.setQueryData<Recipe>(['recipe', recipe.id], (old) => (old ? { ...old, isSaved: next } : old));
+      void queryClient.invalidateQueries({ queryKey: ['recipes', 'saved'] });
     } catch {
       Alert.alert('Could not update saved recipe', 'The saved-recipe change could not be confirmed. Check your connection and tap the bookmark again.');
     } finally {
       setSaving(false);
     }
-  }, [isSaved, saving, recipe]);
+  }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
     return <SkeletonScreen count={6} />;
@@ -138,21 +143,8 @@ export default function RecipeDetailScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero banner — recipe image if the API returned one, otherwise the
-          neutral primaryPale placeholder with the restaurant glyph. */}
+      {/* Keep a stored image; without one, the title carries the screen. */}
       <View style={styles.hero}>
-        {recipe.image_url ? (
-          <Image
-            source={{ uri: recipe.image_url }}
-            style={styles.heroImage}
-            resizeMode="cover"
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <View style={styles.heroIcon}>
-            <Ionicons name="restaurant" size={56} color={colors.primary} />
-          </View>
-        )}
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
@@ -165,39 +157,41 @@ export default function RecipeDetailScreen() {
           style={styles.saveBtn}
           onPress={handleToggleSave}
           activeOpacity={0.8}
-          disabled={saving}
+          disabled={saving || savedPending}
           accessibilityRole="button"
-          accessibilityLabel={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
+          accessibilityLabel={savedPending ? 'Checking saved recipes' : isSaved ? 'Remove from saved recipes' : 'Save recipe'}
+          accessibilityState={{ selected: isSaved === true, busy: saving || savedPending, disabled: saving || savedPending }}
         >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.primary} />
+          {saving || savedPending ? (
+            <ActivityIndicator size="small" color={colors.textOnAccent} />
           ) : (
             <Ionicons
-              name={isSaved ? 'bookmark' : 'bookmark-outline'}
+              name={isSaved ? 'checkmark-outline' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? colors.primary : colors.textSecondary}
+              color={colors.textOnAccent}
             />
           )}
         </TouchableOpacity>
       </View>
 
-      <FadeInView>
+      <FadeInView duration={250}>
         <View style={styles.section}>
           {/* Title & meta */}
           <Text style={styles.recipeTitle}>{recipe.title}</Text>
+          {recipe.image_url ? <Image source={{ uri: recipe.image_url }} style={styles.heroImage} resizeMode="cover" accessibilityIgnoresInvertColors /> : null}
           {recipe.description ? (
             <Text style={styles.recipeDesc}>{recipe.description}</Text>
           ) : null}
 
           <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
+            {totalTime !== null && <View style={styles.metaItem}>
               <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Text style={styles.metaText}>{totalTime} min total</Text>
-            </View>
-            <View style={styles.metaItem}>
+            </View>}
+            {Number.isFinite(recipe.servings) && <View style={styles.metaItem}>
               <Ionicons name="restaurant-outline" size={16} color={colors.textMuted} />
               <Text style={styles.metaText}>{recipe.servings} servings</Text>
-            </View>
+            </View>}
             {recipe.prep_time_min > 0 && (
               <View style={styles.metaItem}>
                 <Ionicons name="cut-outline" size={16} color={colors.textMuted} />
@@ -220,22 +214,22 @@ export default function RecipeDetailScreen() {
       </FadeInView>
 
       {/* Macro breakdown */}
-      <FadeInView delay={60}>
+      <FadeInView duration={250}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Nutrition (per serving)</Text>
+          <Text style={styles.sectionTitle}>PER SERVING</Text>
           <View style={styles.macroGrid}>
-            <MacroCard label="Calories" value={recipe.calories} unit="kcal" color={colors.accent} />
-            <MacroCard label="Protein" value={recipe.protein} unit="g" color={colors.protein} />
-            <MacroCard label="Carbs" value={recipe.carbs} unit="g" color={colors.carbs} />
-            <MacroCard label="Fat" value={recipe.fat} unit="g" color={colors.fat} />
+            <MacroCard label="Calories" value={recipe.calories} unit="kcal" />
+            <MacroCard label="Protein" value={recipe.protein} unit="g" />
+            <MacroCard label="Carbs" value={recipe.carbs} unit="g" />
+            <MacroCard label="Fat" value={recipe.fat} unit="g" />
           </View>
         </View>
       </FadeInView>
 
       {/* Ingredients */}
-      <FadeInView delay={100}>
+      <FadeInView duration={250}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ingredients</Text>
+          <Text style={styles.sectionTitle}>INGREDIENTS</Text>
           {recipe.ingredients.map((ingredient, i) => (
             <View key={i} style={styles.listItem}>
               <View style={styles.bullet} />
@@ -246,9 +240,9 @@ export default function RecipeDetailScreen() {
       </FadeInView>
 
       {/* Instructions */}
-      <FadeInView delay={140}>
+      <FadeInView duration={250}>
         <View style={[styles.section, styles.lastSection]}>
-          <Text style={styles.sectionTitle}>Instructions</Text>
+          <Text style={styles.sectionTitle}>METHOD</Text>
           {recipe.instructions.map((step, i) => (
             <View key={i} style={styles.stepItem}>
               <View style={styles.stepNumber}>
@@ -264,33 +258,31 @@ export default function RecipeDetailScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
   content: { paddingBottom: 60 },
 
   hero: {
-    height: 200,
-    backgroundColor: colors.primaryPale,
+    height: 104,
+    backgroundColor: colors.bgPrimary,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     overflow: 'hidden',
   },
   heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    width: '100%',
+    height: 200,
+    borderRadius: 4,
   },
   heroIcon: { opacity: 0.8 },
   backBtn: {
     position: 'absolute',
     top: 56,
     left: 20,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     zIndex: 10,
   },
@@ -302,82 +294,76 @@ const makeStyles = (colors: ThemeColors) =>
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 22,
-    borderWidth: 1,
+    backgroundColor: colors.accent,
+    borderRadius: 4,
     borderColor: colors.border,
     zIndex: 10,
   },
 
   section: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    marginHorizontal: 16,
-    marginTop: 14,
-    padding: 18,
-    borderWidth: 1,
+    backgroundColor: colors.bgPrimary,
+    marginHorizontal: 24,
+    paddingVertical: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: 10,
   },
   lastSection: { marginBottom: 0 },
 
-  recipeTitle: { fontSize: 22, fontWeight: '500', color: colors.textPrimary, lineHeight: 28 },
-  recipeDesc: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+  recipeTitle: { ...typography.h1, color: colors.textPrimary },
+  recipeDesc: { ...typography.bodySmall, color: colors.textMuted },
 
   metaRow: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 2 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 13, color: colors.textMuted },
+  metaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: {
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: colors.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  tagText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
+  tagText: { ...typography.bodySmall, color: colors.textMuted },
 
-  sectionTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  sectionTitle: { ...typography.eyebrow, color: colors.textMuted },
 
   macroGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   macroCard: {
     flex: 1,
     minWidth: '40%',
-    borderRadius: 2, // radius.md
-    padding: 14,
-    alignItems: 'center',
+    paddingVertical: 12,
     gap: 2,
   },
-  macroValue: { fontSize: 20, fontWeight: '500' },
-  macroLabel: { fontSize: 12, fontWeight: '600' },
+  macroValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  macroLabel: { ...typography.bodySmall, color: colors.textMuted },
 
   listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   bullet: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     marginTop: 7,
     flexShrink: 0,
   },
-  listItemText: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 22 },
+  listItemText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
   stepItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNumber: {
     width: 28,
     height: 28,
     borderRadius: 4, // radius.lg
-    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 1,
   },
-  stepNumberText: { fontSize: 13, fontWeight: '500', color: colors.textOnPrimary },
-  stepText: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 22 },
+  stepNumberText: { ...typography.body, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  stepText: { ...typography.body, flex: 1, color: colors.textPrimary },
 
-  errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontSize: 16, color: colors.textSecondary },
-  errorLink: { fontSize: 15, color: colors.primary, fontWeight: '600' },
+  errorContainer: { flex: 1, backgroundColor: colors.bgPrimary, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  errorText: { ...typography.body, color: colors.textMuted },
+  errorLink: { ...typography.bodyMd, minHeight: 44, paddingVertical: 10, color: colors.accent },
 
   });

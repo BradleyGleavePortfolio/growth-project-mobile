@@ -44,7 +44,7 @@ describe('HomeHeaderActions', () => {
     expect(avatar).toMatchObject({ width: 32, height: 32 });
     expect(StyleSheet.flatten(view.getByTestId('home-roman-chat').props.style)).toMatchObject({ width: 44, height: 44 });
     await fireEvent.press(view.getByLabelText('Chat with Roman'));
-    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat' });
+    expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'RomanChat', initial: false });
     await fireEvent.press(view.getByTestId('home-message-coach'));
     expect(mockNavigate).toHaveBeenLastCalledWith('Messages');
     await fireEvent.press(view.getByTestId('home-notification-bell'));
