@@ -13,9 +13,9 @@ let mockColorScheme: 'light' | 'dark' = 'dark';
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: require('../../../theme/tokens')[`${mockColorScheme}Tokens`] }),
 }));
-jest.mock('../../../api/exerciseCatalog', () => ({ exerciseCatalogApi: { list: jest.fn() } }));
+jest.mock('../../../api/exerciseCatalog', () => ({ exerciseCatalogApi: { browse: jest.fn() } }));
 
-const list = jest.mocked(exerciseCatalogApi.list);
+const list = jest.mocked(exerciseCatalogApi.browse);
 const Stack = createNativeStackNavigator<WorkoutStackParamList>();
 const renderLibrary = () => render(
   <NavigationContainer><Stack.Navigator><Stack.Screen name="ExerciseLibrary"
