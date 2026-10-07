@@ -41,10 +41,10 @@ export default function DailySummaryBar({
         <Text style={styles.summaryValue}>
           {Math.round(remaining == null ? dailyTotals.calories : Math.abs(remaining))}
         </Text>
-        <Text style={styles.summaryLabel}>{remaining == null ? 'Calories eaten · No target' : remaining < 0 ? 'Calories over target' : 'Calories left'}</Text>
+        <Text style={styles.summaryLabel}>{remaining == null ? 'Calories eaten' : remaining < 0 ? 'Calories over target' : 'Calories left'}</Text>
         {remaining != null || targets ? <Text style={styles.summaryLabel}>
           {targets ? `of ${targets.calories} · ` : ''}{Math.round(dailyTotals.calories)} eaten
-        </Text> : null}
+        </Text> : <Text style={styles.summaryLabel}>No target</Text>}
       </View>
       {(simple ? ['protein'] as const : ['protein', 'carbs', 'fat'] as const).map((key) => {
         const eaten = Math.round(dailyTotals[key]);

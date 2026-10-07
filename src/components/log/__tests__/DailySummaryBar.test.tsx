@@ -30,7 +30,7 @@ describe('DailySummaryBar', () => {
 
   it('does not invent a calorie target when no target is available', async () => {
     await render(<DailySummaryBar dailyTotals={TOTALS} remaining={null} />);
-    expect(screen.getByText('Calories eaten · No target')).toBeTruthy();
+    expect(screen.getByText('Calories eaten')).toBeTruthy();
     expect(screen.getByText('900')).toBeTruthy();
     expect(screen.queryByText('Calories left')).toBeNull();
   });
