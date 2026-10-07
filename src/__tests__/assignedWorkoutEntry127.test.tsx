@@ -116,6 +116,12 @@ describe('U-V1-5: assigned workout entry from Home', () => {
     expect(await screen.findByTestId('home-explore-cta')).toBeTruthy();
   });
 
+  it('finds a pending assignment after a completed assignment', async () => {
+    mockListAssignments.mockResolvedValue([{ ...PLAN, completed_at: 'completed' }, PLAN]);
+    const screen = await render(<HomeScreen />);
+    expect(await screen.findByTestId('home-continue-cta')).toBeTruthy();
+  });
+
   it('still offers Continue when there is workout history and no assignment', async () => {
     mockGetAll.mockResolvedValue({ data: [{ date: '2026-01-01' }] });
     const screen = await render(<HomeScreen />);
