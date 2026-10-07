@@ -14,9 +14,10 @@ import {
 } from '../../../api/aiBuilderApi';
 import {
   AI_LABEL, AI_STAGES, applyLabel, describeAiBuilderError, droppedLine, formatRow, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS,
-  SCREENING_COPY,
+  SCREENING_COPY, UNNAMED_CHANGE,
 } from '../ai-builder/aiBuilderCopy';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
+import CoachExerciseName from '../workout-builder/CoachExerciseName';
 
 export type WeekAiAction = 'progress' | 'deload';
 export const WEEK_AI_TITLES: Record<WeekAiAction, string> = {
@@ -102,7 +103,7 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
   const accepted = (r: DayResult) => r.proposal?.changes.filter((c) => kept[c.change_id]).map((c) => c.change_id) ?? [];
   const n = pending.reduce((sum, r) => sum + accepted(r).length, 0);
 
-  const discardAll = (list: DayResult[]) => list.forEach((r) => r.proposal && void quietDiscard(r.proposal.draft_id));
+  const discardAll = (list: DayResult[]) => list.forEach((r) => r.proposal?.draft_id && void quietDiscard(r.proposal.draft_id));
   const close = () => {
     if (phase === 'applying') return;
     if (pending.length) fireAiHaptic('warning');
@@ -123,13 +124,14 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
     const left: DayResult[] = [];
     for (const r of pending) {
       const ids = accepted(r);
-      if (!r.proposal) continue;
+      const draftId = r.proposal?.draft_id;
+      if (!draftId) continue; // explain-only replies write no draft; week actions never send explain
       try {
         if (!ids.length) {
-          await quietDiscard(r.proposal.draft_id);
+          await quietDiscard(draftId);
           continue;
         }
-        await aiBuilderApi.apply(r.proposal.draft_id, ids);
+        await aiBuilderApi.apply(draftId, ids);
         changes += ids.length;
         applied += 1;
       } catch (err) {
@@ -219,6 +221,9 @@ function WeekChangeRow({ change, kept, delay, reduceMotion, onToggle }: RowProps
     Animated.timing(anim, { toValue: 1, duration: 220, delay, useNativeDriver: true }).start();
   }, [anim, delay, reduceMotion]);
   const kind = KIND_LABELS[change.kind];
+  const removedId = change.exercise ? null : change.before?.exercise_external_id; // b#809: exercise is null for remove/reorder/meta
+  const name = change.exercise?.name ?? UNNAMED_CHANGE[change.kind] ?? 'Exercise';
+  const titleStyle = [typography.bodyMd, styles.grow, { color: sc.textPrimary }, change.kind === 'removed' && styles.strike];
   const before = formatRow(change.before);
   const after = formatRow(change.after);
   const delta = before && after ? `${before} -> ${after}` : after || before;
@@ -226,11 +231,9 @@ function WeekChangeRow({ change, kept, delay, reduceMotion, onToggle }: RowProps
     <Animated.View testID={`week-ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: sc.accentText, borderColor: sc.accentText }]}>{kind}</Text>
-        <Text numberOfLines={2} style={[typography.bodyMd, styles.grow, { color: sc.textPrimary }, change.kind === 'removed' && styles.strike]}>
-          {change.exercise.name}
-        </Text>
+        {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
         <Switch testID={`week-ai-keep-${change.change_id}`} value={kept} onValueChange={() => onToggle(change.change_id)}
-          accessibilityLabel={`Keep this change: ${kind} ${change.exercise.name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
+          accessibilityLabel={`Keep this change: ${kind} ${name}${delta ? `, ${delta}` : ''}. ${change.reason}`} />
       </View>
       {delta ? <Text style={[typography.body, { color: sc.textPrimary }]}>{delta}</Text> : null}
       <Text style={[typography.caption, { color: sc.textMuted }]}>{change.reason}</Text>
