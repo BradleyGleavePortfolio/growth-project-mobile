@@ -220,4 +220,33 @@ describe('Day1WinScreen — RTL mount', () => {
       expect(onComplete).toHaveBeenCalledTimes(1);
     });
   });
+
+  // FU-FIRSTRUN-126 (AUDIT-01-125 U-01-3): the win is recorded the moment a
+  // card is tapped, before anything is logged, and the check-in card lands on
+  // the habit list (there is no client check-in screen). The copy says what
+  // the tap does and never assumes a coach.
+  it('the check-in card says it opens the habits, with no coach wording', async () => {
+    const { getByText, queryByText } = await render(<Day1WinScreen onComplete={jest.fn()} />);
+    expect(getByText("Check off today's habits")).toBeTruthy();
+    expect(queryByText('Submit your first check-in')).toBeNull();
+    expect(queryByText(/your coach/)).toBeNull();
+  });
+
+  it('the completion view calls the tapped card a first step, not a data point', async () => {
+    mockComplete.mockResolvedValueOnce({
+      data: {
+        completedAt: '2026-05-07T12:00:00.000Z',
+        aiMessage: 'Logging your first meal starts your nutrition baseline.',
+      },
+    });
+    const { getByTestId, getByText, queryByText } = await render(
+      <Day1WinScreen onComplete={jest.fn()} />,
+    );
+    await fireEvent.press(getByTestId('day1win-card-first_meal'));
+    await waitFor(() => {
+      expect(getByTestId('day1win-complete-view')).toBeTruthy();
+    });
+    expect(getByText('YOUR FIRST STEP')).toBeTruthy();
+    expect(queryByText('YOUR FIRST DATA POINT')).toBeNull();
+  });
 });

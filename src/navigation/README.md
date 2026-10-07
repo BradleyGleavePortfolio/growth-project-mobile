@@ -189,10 +189,10 @@ Welcome → CoachPairing → Goals → Notifications → CheckInTime → Ready
 | --- | --- | --- | --- |
 | `Welcome` | Brand fade, greet by first name | none (cover) | n/a |
 | `CoachPairing` | Pair via invite code (manual or deep-link prefill) | `POST /auth/attach-invite-code` | Yes — unless arrived via deep link |
-| `Goals` | Multi-select coaching goals | `PUT /profile { day_one_goals: [...] }` | Yes |
+| `Goals` | Multi-select coaching goals | on device only (Day-1 draft); the backend has no goals field | Yes |
 | `Notifications` | Permission ask with value-prop context | `PATCH /users/me/preferences { notif_permission_state }` | Yes — denial does NOT block |
-| `CheckInTime` | Pick daily check-in (default 9:00 AM local) | `PUT /profile + PATCH /notifications/preferences { daily_checkin_time }` | Yes |
-| `Ready` | Terminal screen, calls `completeDayOne()` + `authEvents.emit()` | `PUT /profile { day_one_completed: true }` | n/a |
+| `CheckInTime` | Pick daily check-in (default 9:00 AM local) | time on device only; device zone via `PUT /notifications/timezone` (fallback `PATCH /notifications/preferences { timezone }`) | Yes |
+| `Ready` | Terminal screen, calls `completeDayOne()` + `authEvents.emit()` | `PUT /profile { onboarding_completed: true }` | n/a |
 
 All step persistence runs through `src/screens/day-one/api.ts`, which applies
 exponential-backoff retry with jitter for transient failures and classifies
