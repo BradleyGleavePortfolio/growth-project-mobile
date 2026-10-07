@@ -136,7 +136,7 @@ describe('BulkInviteScreen — RTL', () => {
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
     const args = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
     expect(args[0]).toBe('Could not send invites');
-    expect(args[1]).toBe('Please try again.');
+    expect(args[1]).toBe('Your email list is still here. Check your connection and try sending the invites again.');
     // Never leak the raw error string. Alert.alert only receives the safe
     // title + message; no extra args carry the underlying error.
     expect(args.length).toBeLessThanOrEqual(2);

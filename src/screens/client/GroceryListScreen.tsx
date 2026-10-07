@@ -71,7 +71,7 @@ export default function GroceryListScreen() {
       Keyboard.dismiss();
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     },
-    onError: () => Alert.alert('Error', 'Could not add item. Please try again.'),
+    onError: () => Alert.alert('Could not add grocery item', 'Your item is still in the form. Check your connection and tap Add again.'),
   });
 
   const toggleMutation = useMutation({
@@ -113,7 +113,7 @@ export default function GroceryListScreen() {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
-    onError: () => Alert.alert('Error', 'Could not clear checked items.'),
+    onError: () => Alert.alert('Could not clear grocery items', 'Checked items could not be removed. Refresh the grocery list before clearing them again.'),
   });
 
   const handleAdd = useCallback(() => {

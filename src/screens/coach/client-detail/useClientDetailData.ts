@@ -203,6 +203,11 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           date: String(c.date || '').slice(0, 10) + 'T09:00:00',
           icon: 'chatbubble-ellipses',
           iconColor: colors.primary,
+          checkIn: {
+            id: String(c.id),
+            coachId: typeof c.coach_id === 'string' ? c.coach_id : null,
+            reviewed: c.reviewed_by_coach === true,
+          },
         });
       }
 
@@ -213,6 +218,19 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       console.error('ClientDetailScreen: loadTimeline failed', err);
     }
   }, [clientId, colors]);
+
+  // Coach marks one check-in reviewed. The Timeline row flips to "Reviewed"
+  // and the Clients list "N to review" count drops on its next load.
+  const markCheckInReviewed = useCallback(async (checkInId: string) => {
+    await coachApi.markCheckInReviewed(clientId, checkInId);
+    setTimeline((prev) =>
+      prev.map((e) =>
+        e.checkIn && e.checkIn.id === checkInId
+          ? { ...e, checkIn: { ...e.checkIn, reviewed: true } }
+          : e,
+      ),
+    );
+  }, [clientId]);
 
   // ── Weekly Summary ────────────────────────────────────────────────────────────
   const loadWeeklySummaries = useCallback(async (selectedDays: 7 | 30 | 90) => {
@@ -351,6 +369,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     loadServerMealPlans,
     loadTimeline,
     loadWeeklySummaries,
+    markCheckInReviewed,
   };
 }
 

@@ -14,7 +14,6 @@
 //   - Zero-churn streak badge (Duolingo-style gamification)
 //   - All-time peak RPCM record indicator
 //   - "Next milestone" nudge card
-//   - LTV:CAC placeholder (shows LTV, notes CAC requires manual input)
 //   - Skeleton loading state
 //   - Pull-to-refresh
 //
@@ -554,6 +553,10 @@ function LtvContent({
   const mrr = metrics.mrr_cents / 100;
   const mrrFormatted = metrics.mrr_label;
   const hasRevenue = metrics.mrr_cents > 0;
+  // FU-CHECKIN-126 (U-A13-6): with no active client and no
+  // cancellation, churn and retention have no base; the server sends 0% and
+  // 100%, which read as real results. Show a dash instead.
+  const noRetentionBase = metrics.active_client_count === 0 && metrics.churn_rate_pct === 0;
 
   return (
     <View>
@@ -637,15 +640,21 @@ function LtvContent({
         />
         <StatRow
           label="Churn rate"
-          value={`${metrics.churn_rate_pct}%`}
-          hint="Recurring clients canceled this month"
+          value={noRetentionBase ? '—' : `${metrics.churn_rate_pct}%`}
+          hint={
+            noRetentionBase
+              ? 'Shows once a client has an active package'
+              : 'Recurring clients canceled this month'
+          }
         />
         <StatRow
           label={metrics.nrr_is_stub ? 'Net Revenue Retention (est.)' : 'Net Revenue Retention'}
-          value={`${metrics.net_revenue_retention_pct}%`}
+          value={noRetentionBase ? '—' : `${metrics.net_revenue_retention_pct}%`}
           hint={
-            metrics.nrr_is_stub
-              ? 'Approximated from churn rate — connect billing for an exact figure'
+            noRetentionBase
+              ? 'Shows once a client has an active package'
+              : metrics.nrr_is_stub
+              ? 'Estimated from this month’s cancellations; upgrades and downgrades are not counted'
               : metrics.net_revenue_retention_pct >= 100
               ? 'Expansion > churn — strong'
               : 'Below 100% — churn is outpacing growth'
@@ -668,11 +677,6 @@ function LtvContent({
           label="Projected annual revenue"
           value={metrics.projected_annual_revenue_label}
           hint="Current MRR × 12 (flat projection)"
-        />
-        <StatRow
-          label="LTV:CAC ratio"
-          value="—"
-          hint="Add your CAC in Settings to unlock this"
         />
       </View>
 
@@ -697,14 +701,6 @@ function LtvContent({
           </Text>
         </View>
       )}
-
-      {/* ── CAC placeholder note ──────────────────────────────────────── */}
-      <View style={styles.cacNote}>
-        <Text style={styles.cacNoteText}>
-          LTV:CAC requires your client acquisition cost.{' '}
-          <Text style={styles.cacNoteLink}>Add CAC in Settings →</Text>
-        </Text>
-      </View>
     </View>
   );
 }
@@ -800,19 +796,6 @@ const styles = StyleSheet.create({
     color: colors.bone,
   },
 
-  // CAC note
-  cacNote: {
-    marginBottom: spacing.xl,
-  },
-  cacNoteText: {
-    ...typography.caption,
-    color: colors.stone,
-    lineHeight: 16,
-  },
-  cacNoteLink: {
-    color: colors.forest,
-    fontWeight: '500',
-  },
   // Estimate disclaimer banner — shown when any metric is approximate.
   estimateDisclaimer: {
     backgroundColor: colors.camel + '33', // 20% opacity camel

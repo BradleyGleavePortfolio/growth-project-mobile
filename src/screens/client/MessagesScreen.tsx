@@ -18,6 +18,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { messagesApi, profileApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -75,6 +77,7 @@ export default function MessagesScreen() {
   const textOnPrimaryFaint = colors.textOnPrimary + '80';
   const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>();
   const currentUser = useCurrentUser();
+  const { flags } = useFeatureFlags();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
@@ -83,6 +86,7 @@ export default function MessagesScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [noCoach, setNoCoach] = useState(false);
+  const [showCoachCode, setShowCoachCode] = useState(false);
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
   // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
@@ -441,12 +445,30 @@ export default function MessagesScreen() {
     [messages, blockedIds],
   );
 
+  // Keep the sheet mounted while the thread reloads so its welcome and next
+  // step remain visible after the existing sheet connects the account.
+  const coachCodeSheet = showCoachCode ? (
+    <CoachCodeSheet
+      key="coach-code-sheet"
+      visible
+      onClose={() => setShowCoachCode(false)}
+      onAttached={(result) => {
+        setCoachName(result.coach.name);
+        setCoachId(result.coach.id);
+        void load();
+      }}
+      onChoosePlan={() => navigation.getParent()?.navigate('MoreTab', { screen: 'ClientPackages' })}
+      onMessageCoach={() => void load()}
+    />
+  ) : null;
+
   // Render skeleton while messages are loading OR while we are still waiting
   // on the initial server block-list hydration. The latter is critical: if we
   // rendered cached messages before GET /users/blocks resolved, a user blocked
   // on another device could briefly appear before being filtered out.
   if ((loading && visibleMessages.length === 0) || !serverHydrationComplete) {
     return (
+      <>
       <View style={styles.container}>
         <View style={styles.chatHeader}>
           <TouchableOpacity
@@ -472,11 +494,14 @@ export default function MessagesScreen() {
           </View>
         </View>
       </View>
+      {coachCodeSheet}
+      </>
     );
   }
 
   if (noCoach) {
     return (
+      <>
       <View style={styles.noCoachContainer}>
         <View style={styles.noCoachHeader}>
           <TouchableOpacity
@@ -497,9 +522,21 @@ export default function MessagesScreen() {
               state. This screen says what is missing and offers a working
               next step instead of a sign-up-time instruction. */}
           <Text style={styles.noCoachText}>
-            You are not connected to a coach yet, so there is no one to message here. If you have a
-            code from a coach, contact support to get connected.
+            {flags.coachless_home
+              ? 'Enter a coach code to connect and start messaging. Need help finding a coach? Contact support.'
+              : 'You are not connected to a coach yet, so there is no one to message here. Contact support for help finding a coach.'}
           </Text>
+          {flags.coachless_home && (
+            <TouchableOpacity
+              onPress={() => setShowCoachCode(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Enter a coach code"
+              testID="messages-no-coach-code"
+              style={styles.noCoachAction}
+            >
+              <Text style={styles.noCoachActionText}>Enter a coach code</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             onPress={() => navigation.getParent()?.navigate('MoreTab', { screen: 'SupportInbox' })}
             accessibilityRole="button"
@@ -511,6 +548,8 @@ export default function MessagesScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      {coachCodeSheet}
+      </>
     );
   }
 
@@ -525,6 +564,7 @@ export default function MessagesScreen() {
   visibleMessages.forEach((m) => parentLookup.set(m.id, m));
 
   return (
+    <>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -753,6 +793,8 @@ export default function MessagesScreen() {
         onClose={() => setReportTarget(null)}
       />
     </KeyboardAvoidingView>
+    {coachCodeSheet}
+    </>
   );
 }
 

@@ -10,8 +10,7 @@
  * Backend contract: `coachApi.getInviteCodeRedeemers` →
  * GET /coach/invite-codes/:id/redeemers
  *
- * If the backend hasn't shipped the route yet (404 / 501), the screen
- * renders an honest "not available" state instead of an empty list.
+ * A missing code and a failed history request have separate states.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -27,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { RouteProp } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { coachApi } from '../../services/api';
+import { errorStatus } from '../../types/common';
 
 interface Redeemer {
   user_id: string;
@@ -52,8 +52,8 @@ interface Props {
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'ok'; redeemers: Redeemer[] }
-  | { kind: 'not_available' }
-  | { kind: 'error'; message: string };
+  | { kind: 'missing' }
+  | { kind: 'error' };
 
 export default function InviteCodeRedeemersScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
@@ -68,15 +68,7 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
       const redeemers = (res.data?.redeemers ?? []) as Redeemer[];
       setState({ kind: 'ok', redeemers });
     } catch (err) {
-      const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 404 || status === 501) {
-        setState({ kind: 'not_available' });
-      } else {
-        setState({
-          kind: 'error',
-          message: (err as { message?: string })?.message ?? 'Failed to load.',
-        });
-      }
+      setState({ kind: errorStatus(err) === 404 ? 'missing' : 'error' });
     }
   }, [inviteCodeId]);
 
@@ -96,7 +88,7 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
           <Ionicons name="arrow-back" size={22} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
-          <Text style={styles.topTitle}>Redeemers</Text>
+          <Text style={styles.topTitle}>Who joined</Text>
           <Text style={styles.subTitle}>{code}</Text>
         </View>
         <View style={styles.backBtn} />
@@ -110,17 +102,16 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
 
       {state.kind === 'error' && (
         <TouchableOpacity onPress={load} accessibilityRole="button" accessibilityLabel="Retry">
-          <Text style={styles.errorText}>{state.message} Tap to retry.</Text>
+          <Text style={styles.errorText}>Could not load who joined. Check your connection, then tap to retry.</Text>
         </TouchableOpacity>
       )}
 
-      {state.kind === 'not_available' && (
+      {state.kind === 'missing' && (
         <View style={styles.empty}>
-          <Ionicons name="construct-outline" size={36} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Redeemer history coming soon</Text>
+          <Ionicons name="link-outline" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>Invite code unavailable</Text>
           <Text style={styles.emptyBody}>
-            The backend route for redeemer history isn't live yet. You can still
-            see redemption totals on the previous screen.
+            This invite code could not be found. Go back to Codes and refresh the list.
           </Text>
         </View>
       )}
@@ -128,7 +119,7 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
       {state.kind === 'ok' && state.redeemers.length === 0 && (
         <View style={styles.empty}>
           <Ionicons name="people-outline" size={36} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>No redeemers yet</Text>
+          <Text style={styles.emptyTitle}>No clients joined yet</Text>
           <Text style={styles.emptyBody}>
             Once a client signs up with this code they'll appear here.
           </Text>

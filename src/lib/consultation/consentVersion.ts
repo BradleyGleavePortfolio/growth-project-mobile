@@ -39,6 +39,13 @@ export const CONSENT_TITLE = 'Before we start';
  */
 export const AI_CONSENT_VERSION = 'client-ai-v4' as const;
 
+/**
+ * Optional Roman memory permission (backend R11-C1, owner D1 10-06). The app holds no text for it: the
+ * server sends it as `upgrade` only while Roman memory is on, and Settings > Privacy > Roman and AI shows
+ * that text and grants this version with the server's sha256. First consent stays AI_CONSENT_VERSION.
+ */
+export const AI_CONSENT_MEMORY_VERSION = 'client-ai-v5' as const;
+
 /** Personal-training waiver version that box 1 records (via the intake). */
 export const WAIVER_VERSION = 'pt-waiver-v1' as const;
 

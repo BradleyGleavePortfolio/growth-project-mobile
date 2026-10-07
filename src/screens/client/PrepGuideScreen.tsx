@@ -103,7 +103,7 @@ export default function PrepGuideScreen() {
       );
     },
     onError: () =>
-      Alert.alert('Error', 'Could not add ingredients to grocery list. Please try again.'),
+      Alert.alert('Could not add all ingredients', 'Some ingredients may already be in the grocery list. Open the list to check before adding them again.'),
   });
 
   const handleAddToGrocery = useCallback(() => {

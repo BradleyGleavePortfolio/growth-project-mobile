@@ -1,8 +1,8 @@
 // Coach Command Center — Overview screen.
 //
 // The landing screen for coaches. Shows KPI tiles for the current roster:
-// active clients, check-in rate, open alerts, at-risk count, win streaks,
-// unread messages, and pending actions.
+// active clients, check-in rate, at-risk count, win streaks, unread
+// messages, and open alerts (the Action Queue).
 //
 // State machine:
 //   idle → loading → (data | error)
@@ -154,14 +154,6 @@ export default function OverviewScreen({
           testID="command-center-kpi-checkin-rate"
           style={styles.tileFlex}
         />
-        <View style={styles.tileSpacer} />
-        <KpiTile
-          label="Open alerts"
-          value={d?.open_alerts ?? '—'}
-          valueColor={d && d.open_alerts > 0 ? colors.error : colors.forest}
-          testID="command-center-kpi-open-alerts"
-          style={styles.tileFlex}
-        />
       </View>
 
       {/* At-risk + win streaks */}
@@ -211,17 +203,21 @@ export default function OverviewScreen({
           />
         </TouchableOpacity>
         <View style={styles.tileSpacer} />
+        {/* FU-CHECKIN-126 (U-A13-5): the Action Queue lists open alerts, so
+            the tile that opens it shows that same number. The old "Pending
+            actions" tile counted every unreviewed check-in ever, a number
+            the Action Queue never showed. */}
         <TouchableOpacity
           style={styles.tileFlex}
           onPress={onNavigateToActionQueue}
           accessibilityRole="button"
-          accessibilityLabel={`${d?.pending_actions ?? 0} actions pending. View action queue.`}
-          testID="command-center-kpi-pending-actions"
+          accessibilityLabel={`${d?.open_alerts ?? 0} open alerts. View action queue.`}
+          testID="command-center-kpi-open-alerts"
         >
           <KpiTile
-            label="Pending actions"
-            value={d?.pending_actions ?? '—'}
-            valueColor={d && d.pending_actions > 0 ? colors.mutedGold : colors.stone}
+            label="Open alerts"
+            value={d?.open_alerts ?? '—'}
+            valueColor={d && d.open_alerts > 0 ? colors.error : colors.forest}
           />
         </TouchableOpacity>
       </View>

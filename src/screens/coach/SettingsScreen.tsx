@@ -616,22 +616,6 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>Time Off</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
-        <View style={styles.divider} />
-        {/* Legacy single-invite generator. The new email-pipeline Bulk
-            invite + Invites & email rows live under Client Management. */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => {
-            mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBulkInvite' });
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Open legacy bulk invite generator"
-        >
-          <Ionicons name="people-circle-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Invite Codes (bulk)</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
       </View>
 
       <BillingSection

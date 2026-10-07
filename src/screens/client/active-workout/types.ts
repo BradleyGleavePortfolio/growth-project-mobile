@@ -7,6 +7,8 @@ export interface SessionExercise {
   /** Server MuscleGroup value saved with the workout (defaults to full_body). */
   muscleGroup?: string;
   notes?: string;
+  /** The coach's note on a coach-assigned exercise, shown while training. */
+  coachNote?: string;
 }
 
 export interface SessionSet {
@@ -26,6 +28,8 @@ export interface RoutineExercise {
   weightLbs?: number;
   /** Server MuscleGroup value for routine exercises. */
   muscleGroup?: string;
+  /** The coach's note on a coach-assigned exercise. */
+  coachNote?: string;
 }
 
 export interface Exercise {

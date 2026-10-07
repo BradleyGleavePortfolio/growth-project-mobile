@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   Alert,
+  AppState,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -336,6 +337,26 @@ export default function WorkoutScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // FU-WORKLOG-126: workouts in the last 7 days, counted from the 50-workout
+  // window the chart reads. The "This Week" tile used to count only the 5
+  // most recent workouts, so a 6th session in a week still showed 5.
+  const [weekSessionCount, setWeekSessionCount] = useState<number | null>(null);
+
+  // FU-WORKLOG-126: coach-assigned workouts. This tab stays mounted, and the
+  // query only refetched after a finished assigned workout, so a workout the
+  // coach assigned later never appeared here (not on return to the tab, not
+  // on pull-to-refresh, not after reopening the app) until a full restart.
+  // Called here, before any early return (Rules of Hooks).
+  const assignmentsQuery = useMyWorkoutAssignments();
+  const refetchAssignmentsRef = useRef(assignmentsQuery.refetch);
+  refetchAssignmentsRef.current = assignmentsQuery.refetch;
+  const refreshAssignments = useCallback(async () => {
+    try {
+      await refetchAssignmentsRef.current?.();
+    } catch (err) {
+      logger.warn('WorkoutScreen', 'assignments refetch failed', err);
+    }
+  }, []);
 
   // Number of weeks shown in the volume chart.
   const CHART_WEEKS = 8;
@@ -365,6 +386,8 @@ export default function WorkoutScreen() {
         (s: ApiSession) => new Date(s.date) >= chartWindowStart,
       );
       const now = new Date();
+      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      setWeekSessionCount(allSessions.filter((s) => new Date(s.date) >= weekAgo).length);
       const weeks: WeeklyVolume[] = [];
       for (let w = CHART_WEEKS - 1; w >= 0; w--) {
         const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
@@ -423,16 +446,33 @@ export default function WorkoutScreen() {
   // which reads as "it did not save". The first focus is covered by the
   // mount load above.
   const hasFocusedOnceRef = useRef(false);
+  const isFocusedRef = useRef(false);
   useFocusEffect(
     useCallback(() => {
+      isFocusedRef.current = true;
+      const onBlur = () => {
+        isFocusedRef.current = false;
+      };
       if (!hasFocusedOnceRef.current) {
         hasFocusedOnceRef.current = true;
-        return undefined;
+        return onBlur;
       }
       loadData();
-      return undefined;
-    }, [loadData]),
+      void refreshAssignments();
+      return onBlur;
+    }, [loadData, refreshAssignments]),
   );
+
+  // FU-WORKLOG-126: reopening the app on this tab shows what the coach
+  // assigned (and what synced) while the app was in the background.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'active' || !isFocusedRef.current) return;
+      loadData();
+      void refreshAssignments();
+    });
+    return () => sub.remove();
+  }, [loadData, refreshAssignments]);
 
   // §2.8 one-shot "just completed" signal. Set ONLY when ActiveWorkoutScreen
   // returns here with route param `justCompletedId` (the durable server id of
@@ -463,9 +503,9 @@ export default function WorkoutScreen() {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData();
+    await Promise.all([loadData(), refreshAssignments()]);
     setRefreshing(false);
-  }, [loadData]);
+  }, [loadData, refreshAssignments]);
 
   const formatDuration = (minutes: number): string => {
     if (!minutes) return '0 min';
@@ -532,10 +572,8 @@ export default function WorkoutScreen() {
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes
   // through the tab navigator into MoreTab's ClientWorkoutViewer because
-  // both the list and detail screens live in MoreStack.
-  // NOTE: hook must be called unconditionally before any conditional returns
-  // (Rules of Hooks).
-  const assignmentsQuery = useMyWorkoutAssignments();
+  // both the list and detail screens live in MoreStack. The query itself is
+  // created at the top of the component (FU-WORKLOG-126).
   const assignmentsList: Array<{
     id: string;
     completed_at: string | null;
@@ -601,6 +639,7 @@ export default function WorkoutScreen() {
   return (
     <View style={styles.container}>
       <ScrollView
+        testID="workout-scroll"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
@@ -678,7 +717,7 @@ export default function WorkoutScreen() {
         <FadeInView>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]}>{weekSessions.length}</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
               <Text style={styles.statLabel}>This Week</Text>
             </View>
             <View style={styles.statCard}>

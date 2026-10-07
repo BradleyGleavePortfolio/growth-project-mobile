@@ -80,7 +80,7 @@ export const COACH_CODE_MESSAGES: Readonly<Record<string, string>> = {
  * card offers that works is Decline (backend approvalTooLate; a requested
  * session cannot be completed or marked no-show).
  */
-export type CoachSchedulingIntent = 'approve' | 'decline' | 'cancel' | 'save_link';
+export type CoachSchedulingIntent = 'approve' | 'decline' | 'cancel' | 'save_link' | 'complete' | 'no_show';
 
 export const COACH_INTENT_CODE_MESSAGES: Readonly<
   Partial<Record<CoachSchedulingIntent, Readonly<Record<string, string>>>>
@@ -88,6 +88,16 @@ export const COACH_INTENT_CODE_MESSAGES: Readonly<
   approve: {
     SESSION_STARTED:
       'The requested time has already passed, so it can no longer be confirmed. Tap Decline on this request so your client can choose another time.',
+  },
+  // U-04-3: SESSION_STATE_CHANGED / SESSION_NOT_ACTIVE on the outcome buttons
+  // mean the session was already closed or has not started yet.
+  complete: {
+    SESSION_NOT_ACTIVE: 'This session has not started yet. Mark it complete after it starts.',
+    SESSION_STATE_CHANGED: 'This session was already closed or cancelled. Refresh the inbox to see where it stands now.',
+  },
+  no_show: {
+    SESSION_NOT_ACTIVE: 'This session has not started yet. You can mark it missed once the start time has passed.',
+    SESSION_STATE_CHANGED: 'This session was already closed or cancelled. Refresh the inbox to see where it stands now.',
   },
 };
 
