@@ -25,7 +25,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 
 import { track } from '../../lib/analytics';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import {
   usePreferences,
@@ -36,6 +36,15 @@ import {
   type FirstDayOfWeek,
 } from '../../hooks/usePreferences';
 
+function usePreferenceColors() {
+  const { semanticColors: sc } = useTheme();
+  return useMemo(() => ({
+    background: sc.bgPrimary, surface: sc.bgPrimary, surfaceElevated: sc.bgPrimary,
+    border: sc.border, primary: sc.accent, textOnPrimary: sc.textOnAccent,
+    textPrimary: sc.textPrimary, textSecondary: sc.textMuted,
+  }), [sc]);
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const HOME_MODULE_LABELS: Record<HomeModule, string> = {
@@ -44,6 +53,11 @@ const HOME_MODULE_LABELS: Record<HomeModule, string> = {
   trustcues: 'Trust Cues',
   secondary: 'Secondary Tiles',
   community: 'Community Feed',
+};
+const HOME_MODULE_DESCRIPTIONS: Record<HomeModule, string> = {
+  hero: 'Primary action preference.', milestone: 'Milestone display preference.',
+  trustcues: 'Sharing information preference.', secondary: 'Shortcut display preference.',
+  community: 'Community display preference.',
 };
 
 const TONE_COPY: Record<MotivationalTone, { label: string; preview: string }> = {
@@ -75,7 +89,7 @@ interface SectionHeaderProps {
   title: string;
 }
 function SectionHeader({ title }: SectionHeaderProps) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>;
 }
@@ -87,7 +101,7 @@ interface RadioRowProps {
   preview?: string;
 }
 function RadioRow({ label, selected, onPress, preview }: RadioRowProps) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <HapticPressable
@@ -123,7 +137,7 @@ function SegmentControl<T extends string | number>({
   label,
   onSelect,
 }: SegmentControlProps<T>) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.segmented}>
@@ -152,7 +166,7 @@ function SegmentControl<T extends string | number>({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PreferencesScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { prefs, isLoading, isSaving, updatePrefs } = usePreferences();
 
@@ -221,7 +235,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.intro}>
-          Control how the app works for you. Changes save automatically.
+          Choose and save preferences.
         </Text>
 
         {/* ── Home Modules ─────────────────────────────────────────────────── */}
@@ -237,8 +251,12 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
                   idx < allModules.length - 1 && styles.rowBorder,
                 ]}
               >
-                <Text style={styles.rowLabel}>{HOME_MODULE_LABELS[mod]}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>{HOME_MODULE_LABELS[mod].charAt(0) + HOME_MODULE_LABELS[mod].slice(1).toLowerCase()}</Text>
+                  <Text style={styles.preview}>{HOME_MODULE_DESCRIPTIONS[mod]}</Text>
+                </View>
                 <Switch
+                  style={{ minHeight: 44 }}
                   value={enabled}
                   onValueChange={(v) => toggleModule(mod, v)}
                   trackColor={{ false: colors.border, true: colors.primary }}
@@ -284,7 +302,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
         {/* ── Units ─────────────────────────────────────────────────────────── */}
         <SectionHeader title="Units" />
         <View style={styles.card}>
-          <View style={[styles.row, { justifyContent: 'space-between' }]}>
+          <View style={[styles.row, styles.optionRow]}>
             <Text style={styles.rowLabel}>Display units</Text>
             <SegmentControl<Units>
               options={['metric', 'imperial']}
@@ -298,7 +316,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
         {/* ── Week Starts On ───────────────────────────────────────────────── */}
         <SectionHeader title="Week Starts On" />
         <View style={styles.card}>
-          <View style={[styles.row, { justifyContent: 'space-between' }]}>
+          <View style={[styles.row, styles.optionRow]}>
             <Text style={styles.rowLabel}>First day</Text>
             <SegmentControl<FirstDayOfWeek>
               options={[0, 1, 6]}
@@ -317,7 +335,7 @@ export default function PreferencesScreen({ navigation }: { navigation: Navigati
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: ReturnType<typeof usePreferenceColors>) =>
   StyleSheet.create({
   container: {
     flex: 1,
@@ -338,14 +356,15 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   topTitle: {
-    fontSize: 18,
-    fontWeight: '500',
+    flex: 1, textAlign: 'center',
+    fontSize: 28,
+    fontFamily: 'CormorantGaramond_400Regular',
     color: colors.textPrimary,
   },
   content: {
@@ -354,16 +373,17 @@ const makeStyles = (colors: ThemeColors) =>
   },
   intro: {
     fontSize: 14,
+    fontFamily: 'Inter_400Regular',
     color: colors.textSecondary,
     marginBottom: 20,
     marginTop: 4,
     lineHeight: 20,
   },
   sectionLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 11,
+    fontFamily: 'Inter_500Medium',
     color: colors.textSecondary,
-    letterSpacing: 0.6,
+    letterSpacing: 1.8,
     marginBottom: 8,
     marginTop: 24,
   },
@@ -376,20 +396,23 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 14,
   },
+  optionRow: { flexDirection: 'column', alignItems: 'stretch', gap: 12 },
   rowBorder: {
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   rowLabel: {
     fontSize: 15,
+    fontFamily: 'Inter_500Medium',
     color: colors.textPrimary,
     flex: 1,
   },
   preview: {
-    fontSize: 12,
+    fontSize: 13,
+    fontFamily: 'Inter_400Regular',
     color: colors.textSecondary,
     fontStyle: 'italic',
     marginTop: 2,
@@ -425,6 +448,8 @@ const makeStyles = (colors: ThemeColors) =>
     overflow: 'hidden',
   },
   segBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
@@ -433,7 +458,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   segText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
     color: colors.textSecondary,
   },
   segTextActive: {

@@ -37,7 +37,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { IoniconName } from '../../types/common';
 import { notificationsApi } from '../../services/api';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
@@ -46,6 +47,15 @@ import { mediumTap } from '../../utils/haptics';
 import { readUserCacheSync } from '../../lib/userCache';
 import { preferenceSaveFailureOf, PreferenceSaveFailure } from './notificationPreferenceErrors';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+
+function usePreferenceColors() {
+  const { semanticColors: sc } = useTheme();
+  return useMemo(() => ({
+    background: sc.bgPrimary, surface: sc.bgPrimary, border: sc.border,
+    primary: sc.accent, white: sc.textOnAccent, textPrimary: sc.textPrimary,
+    textSecondary: sc.textMuted, textMuted: sc.textMuted,
+  }), [sc]);
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,7 +125,7 @@ interface CategoryMeta {
   id: NotifCategory;
   label: string;
   description: string;
-  icon: string;
+  icon: IoniconName;
   /** The setting in plain words, used in a failure message. */
   noun: string;
 }
@@ -124,15 +134,15 @@ const CATEGORIES: CategoryMeta[] = [
   {
     id: 'coach_direct',
     noun: 'coach message',
-    label: 'Coach Messages',
-    description: 'Direct messages and session reminders from your coach.',
+    label: 'Coach messages',
+    description: 'Direct message push and in-app alerts.',
     icon: 'person-circle-outline',
   },
   {
     id: 'client_bot',
     noun: 'reminder',
     label: 'Reminders',
-    description: 'Meal, water, and daily check-in nudges.',
+    description: 'Meal reminder preference.',
     icon: 'alarm-outline',
   },
   {
@@ -146,7 +156,7 @@ const CATEGORIES: CategoryMeta[] = [
     id: 'milestones',
     noun: 'milestone',
     label: 'Milestones',
-    description: 'Streak extensions and personal records.',
+    description: 'Recorded milestone alerts.',
     icon: 'ribbon-outline',
   },
   {
@@ -183,7 +193,7 @@ export default function NotificationPreferencesScreen({
   /** Injectable for tests; defaults to the signed-in account's cached role. */
   role?: () => string | null;
 }) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const categories = useMemo(() => categoriesForRole(role()), [role]);
 
@@ -225,8 +235,10 @@ export default function NotificationPreferencesScreen({
       let next: CategoryPrefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
       try {
         const res = await notificationsApi.getPreferences();
-        const server = workoutRemindersFromServer(res?.data);
-        if (server !== null) next = { ...next, workout_reminders: server };
+        for (const category of CATEGORIES) {
+          const server = serverValueOf(category.id, res?.data);
+          if (server !== null) next = { ...next, [category.id]: server };
+        }
       } catch {
         // Offline or older backend: keep the locally stored value.
       }
@@ -314,7 +326,7 @@ export default function NotificationPreferencesScreen({
         >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
-        <Text style={styles.topTitle}>Notification Categories</Text>
+        <Text style={styles.topTitle}>Notification categories</Text>
         <View style={styles.backBtn} />
       </View>
 
@@ -323,11 +335,10 @@ export default function NotificationPreferencesScreen({
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.intro}>
-          Control which types of notifications you receive. Coach messages are
-          always important; reminders can be silenced without affecting your
-          coach relationship.
+          Choose which alerts to receive.
         </Text>
 
+        <Text style={styles.overline}>Categories</Text>
         <View style={styles.card}>
           {categories.map((cat, idx) => (
             <View
@@ -336,7 +347,7 @@ export default function NotificationPreferencesScreen({
             >
               <View style={styles.rowLeft}>
                 <Ionicons
-                  name={cat.icon as never}
+                  name={cat.icon}
                   size={20}
                   color={prefs[cat.id] ? colors.primary : colors.textMuted}
                   style={styles.rowIcon}
@@ -347,13 +358,14 @@ export default function NotificationPreferencesScreen({
                 </View>
               </View>
               <Switch
+                style={{ minHeight: 44 }}
                 value={prefs[cat.id]}
                 onValueChange={(v) => handleToggle(cat.id, v)}
                 disabled={pending.has(cat.id)}
                 trackColor={{ false: colors.border, true: colors.primary }}
                 thumbColor={colors.white}
                 accessibilityRole="switch"
-                accessibilityLabel={cat.label}
+                accessibilityLabel={cat.id === 'coach_direct' ? 'Coach Messages' : cat.label}
                 accessibilityState={{ checked: prefs[cat.id], disabled: pending.has(cat.id), busy: pending.has(cat.id) }}
               />
             </View>
@@ -421,8 +433,7 @@ export default function NotificationPreferencesScreen({
         ) : null}
 
         <Text style={styles.footnote}>
-          System notifications cannot be fully disabled — critical billing and
-          security alerts will still be delivered regardless of this setting.
+          The System switch controls weekly summary email.
         </Text>
       </ScrollView>
     </View>
@@ -431,7 +442,7 @@ export default function NotificationPreferencesScreen({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: ReturnType<typeof usePreferenceColors>) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -455,14 +466,15 @@ function makeStyles(colors: ThemeColors) {
       borderBottomColor: colors.border,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       justifyContent: 'center',
       alignItems: 'center',
     },
     topTitle: {
-      fontSize: 16,
-      fontFamily: 'Inter_600SemiBold',
+      flex: 1, textAlign: 'center',
+      fontSize: 26,
+      fontFamily: 'CormorantGaramond_400Regular',
       color: colors.textPrimary,
     },
     content: {
@@ -474,7 +486,7 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'flex-start',
       marginTop: 12,
       padding: 12,
-      borderRadius: 12,
+      borderRadius: 4,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -517,18 +529,16 @@ function makeStyles(colors: ThemeColors) {
     },
     card: {
       backgroundColor: colors.surface,
-      borderRadius: 12,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
       overflow: 'hidden',
       marginBottom: 16,
     },
+    overline: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 1.8, textTransform: 'uppercase', color: colors.textMuted, marginBottom: 8 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingVertical: 14,
-      paddingHorizontal: 16,
+      paddingHorizontal: 0,
     },
     rowDivider: {
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -554,13 +564,13 @@ function makeStyles(colors: ThemeColors) {
       marginBottom: 2,
     },
     rowDesc: {
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: 'Inter_400Regular',
       color: colors.textMuted,
       lineHeight: 18,
     },
     footnote: {
-      fontSize: 12,
+      fontSize: 13,
       fontFamily: 'Inter_400Regular',
       color: colors.textMuted,
       lineHeight: 18,

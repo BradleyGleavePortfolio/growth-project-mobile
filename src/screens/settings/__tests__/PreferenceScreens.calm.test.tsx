@@ -1,0 +1,150 @@
+import React from 'react';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import CategoryScreen from '../NotificationPreferencesScreen';
+import ChannelScreen from '../../notifications/NotificationPreferencesScreen';
+import AppScreen from '../../client/PreferencesScreen';
+import { DEFAULT_PREFERENCES } from '../../../hooks/usePreferences';
+import { notificationsApi } from '../../../services/api';
+import { fetchNotificationPreferences, saveNotificationPreferences, preferencesFromBackend } from '../../../services/notificationsApi';
+import { darkTokens, lightTokens } from '../../../theme/tokens';
+
+let mockPalette = lightTokens;
+const mockBack = jest.fn(), mockUpdateApp = jest.fn();
+let mockPrefs = { ...DEFAULT_PREFERENCES };
+jest.mock('../../../theme/ThemeProvider', () => ({
+  useTheme: () => ({ semanticColors: mockPalette, colors: require('../../../constants/colors').default }),
+}));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack }) }));
+jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => null }));
+jest.mock('../../../utils/haptics', () => ({ mediumTap: jest.fn() }));
+jest.mock('../../../components/HapticPressable', () => ({ __esModule: true, default: require('react-native').Pressable }));
+jest.mock('../../../components/support/SupportEmailFallback', () => ({
+  SupportEmailFallback: () => null, useSupportEmail: () => ({ open: jest.fn() }),
+}));
+jest.mock('../../../services/api', () => ({ notificationsApi: { getPreferences: jest.fn(), updatePreferences: jest.fn() } }));
+jest.mock('../../../services/notificationsApi', () => ({
+  ...jest.requireActual('../../../services/notificationsApi'),
+  fetchNotificationPreferences: jest.fn(), saveNotificationPreferences: jest.fn(),
+}));
+jest.mock('../../../hooks/usePreferences', () => ({
+  ...jest.requireActual('../../../hooks/usePreferences'),
+  usePreferences: () => ({ prefs: mockPrefs, isLoading: false, isSaving: false, updatePrefs: mockUpdateApp }),
+}));
+const navigation = { goBack: mockBack } as Parameters<typeof AppScreen>[0]['navigation'];
+const getCategories = jest.mocked(notificationsApi.getPreferences);
+const patchCategories = jest.mocked(notificationsApi.updatePreferences);
+const getChannels = jest.mocked(fetchNotificationPreferences);
+const patchChannels = jest.mocked(saveNotificationPreferences);
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPalette = lightTokens;
+  mockPrefs = { ...DEFAULT_PREFERENCES };
+  getCategories.mockResolvedValue({ data: {} });
+  patchCategories.mockResolvedValue({ data: {} });
+  getChannels.mockResolvedValue(preferencesFromBackend({}));
+  patchChannels.mockImplementation(async (patch) => {
+    const next = preferencesFromBackend({});
+    if (patch.muteAll !== undefined) next.muteAll = patch.muteAll;
+    for (const kind of Object.keys(patch.channels ?? {}) as Array<keyof typeof next.channels>) {
+      next.channels[kind] = { ...next.channels[kind], ...patch.channels?.[kind] };
+    }
+    return next;
+  });
+});
+
+it('category copy matches the exact fields and all five actions remain reachable', async () => {
+  const screen = await render(<CategoryScreen navigation={navigation} />);
+  await screen.findByLabelText('Workout reminders');
+  expect(screen.getByText('Meal reminder preference.')).toBeTruthy();
+  expect(screen.queryByText(/critical billing and security/)).toBeNull();
+  const cases: Array<[string, Record<string, boolean>]> = [
+    ['Coach Messages', { message_push: false, message_inapp: false }],
+    ['Reminders', { eat_enabled: false }],
+    ['Workout reminders', { workout_reminder_push: false, workout_reminder_inapp: false }],
+    ['Milestones', { milestone_push: false, milestone_inapp: false }],
+    ['System', { weekly_summary_enabled: false }],
+  ];
+  for (const [label, patch] of cases) {
+    await fireEvent(screen.getByLabelText(label), 'valueChange', false);
+    await waitFor(() => expect(patchCategories).toHaveBeenLastCalledWith(patch));
+    await waitFor(() => expect(screen.getByLabelText(label).props.disabled).toBe(false));
+  }
+  await fireEvent.press(screen.getByLabelText('Go back'));
+  expect(mockBack).toHaveBeenCalled();
+});
+
+it('all category switches show the server values, not a default claim', async () => {
+  getCategories.mockResolvedValue({ data: { message_push: false, eat_enabled: false, milestone_push: false, weekly_summary_enabled: false } });
+  const screen = await render(<CategoryScreen navigation={navigation} />);
+  for (const label of ['Coach Messages', 'Reminders', 'Milestones', 'System']) {
+    expect((await screen.findByLabelText(label)).props.value).toBe(false);
+  }
+});
+
+it('every mapped kind retains push, in-app and email actions; mute and back remain', async () => {
+  const screen = await render(<ChannelScreen />);
+  await screen.findByLabelText('Mute all notifications');
+  expect(screen.getByTestId('quiet-hours-fixed')).toBeTruthy();
+  for (const [kind, label] of [['message', 'Direct messages'], ['build_week', 'Build week gates'], ['milestone', 'Milestones'], ['check_in', 'Check-in reminders']] as const) {
+    for (const [channel, text] of [['push', 'Push'], ['in_app', 'In-app'], ['email', 'Email']] as const) {
+      await fireEvent(screen.getByLabelText(`${label} via ${text}`), 'valueChange', false);
+      await waitFor(() => expect(patchChannels).toHaveBeenLastCalledWith({ channels: { [kind]: { [channel]: false } } }));
+      await waitFor(() => expect(screen.getByLabelText('Mute all notifications').props.disabled).toBe(false));
+    }
+  }
+  await fireEvent(screen.getByLabelText('Mute all notifications'), 'valueChange', true);
+  await waitFor(() => expect(patchChannels).toHaveBeenLastCalledWith({ muteAll: true }));
+  await waitFor(() => expect(screen.getByLabelText('Direct messages via Push').props.disabled).toBe(true));
+  await fireEvent.press(screen.getByLabelText('Go back'));
+  expect(mockBack).toHaveBeenCalled();
+});
+
+it('failed channel loading has a working retry and back instead of a blank screen', async () => {
+  getChannels.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(preferencesFromBackend({}));
+  const screen = await render(<ChannelScreen />);
+  await fireEvent.press(await screen.findByLabelText('Go back'));
+  expect(mockBack).toHaveBeenCalled();
+  await fireEvent.press(await screen.findByLabelText('Try again'));
+  expect(await screen.findByLabelText('Mute all notifications')).toBeTruthy();
+  expect(getChannels).toHaveBeenCalledTimes(2);
+});
+
+it('all personalization switches and options still save the exact preference keys', async () => {
+  const screen = await render(<AppScreen navigation={navigation} />);
+  for (const toggle of screen.getAllByRole('switch')) expect(StyleSheet.flatten(toggle.props.style).minHeight).toBe(44);
+  for (const [mod, label] of [['hero', 'Hero Action'], ['milestone', 'Milestone Card'], ['trustcues', 'Trust Cues'], ['secondary', 'Secondary Tiles'], ['community', 'Community Feed']] as const) {
+    await fireEvent(screen.getByLabelText(label), 'valueChange', false);
+    expect(mockUpdateApp).toHaveBeenLastCalledWith({ homeModules: mockPrefs.homeModules.filter((m) => m !== mod) });
+  }
+  for (const [key, values, labels] of [
+    ['notificationCadence', ['daily', 'weekly', 'off'], ['Daily', 'Weekly', 'Off']],
+    ['motivationalTone', ['gentle', 'direct', 'drill'], ['Gentle', 'Direct', 'Drill']],
+    ['units', ['metric', 'imperial'], ['Metric', 'Imperial']],
+    ['firstDayOfWeek', [0, 1, 6], ['Sunday', 'Monday', 'Saturday']],
+  ] as const) {
+    for (const [i, label] of labels.entries()) {
+      await fireEvent.press(screen.getByLabelText(label));
+      expect(mockUpdateApp).toHaveBeenLastCalledWith({ [key]: values[i] });
+    }
+  }
+  await fireEvent.press(screen.getByLabelText('Go back'));
+  expect(mockBack).toHaveBeenCalled();
+});
+
+it.each([lightTokens, darkTokens])('uses the active semantic palette on all three screens', async (palette) => {
+  mockPalette = palette;
+  for (const Screen of [CategoryScreen, AppScreen]) {
+    const screen = await render(<Screen navigation={navigation} />);
+    const title = await screen.findByText(Screen === CategoryScreen ? 'Notification categories' : 'Personalization');
+    expect(StyleSheet.flatten(title.props.style).color).toBe(palette.textPrimary);
+    expect(StyleSheet.flatten(title.props.style).fontFamily).toBe('CormorantGaramond_400Regular');
+    await screen.unmount();
+  }
+  const screen = await render(<ChannelScreen />);
+  const title = await screen.findByText('Notification settings');
+  expect(StyleSheet.flatten(title.props.style).color).toBe(palette.textPrimary);
+  await act(async () => {});
+});

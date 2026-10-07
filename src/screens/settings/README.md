@@ -119,7 +119,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
 Client Settings > Notifications shows per-category switches (coach messages,
-reminders, workout reminders, milestones, system). Each switch PATCHes
+reminders, workout reminders, milestones, system). Unfilled hairline rows use semantic-theme colours, 13 pt descriptions and 44 pt controls under a quiet category overline. Each switch PATCHes
 `/notifications/preferences` with the mapped backend fields and rolls back on
 failure. A failed save shows an inline notice that names the setting and says
 what to do next, by status (`notificationPreferenceErrors.ts`): no response =
@@ -132,7 +132,7 @@ a Sentry report (status, machine code, reference only).
 Roman at the client's preferred training time (consultation S2) on their first
 session day and every plan day, in the client's local timezone, at most once a
 day, and not when that day's session is already logged. The switch reads the
-server value on mount. The device timezone is synced to the backend by
+server value on mount, as do all other category switches. Descriptions match each mapped field (messages, meal-reminder preference, recorded milestones and weekly summary email); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
 `src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
 time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for

@@ -50,7 +50,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | --- | --- |
 | `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
 | `SettingsScreen.tsx` | Seven visible groups on one screen, no added taps: Account, Training and food, Notifications, Privacy and data, Roman, Support, About. Every existing row/control stays; see [settings/README.md](settings/README.md). |
-| `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
+| `PreferencesScreen.tsx` | Personalisation choices persisted via `preferencesApi`. Semantic-theme page, unfilled hairline groups, Cormorant title, Inter labels and 44 pt options. Home-module switches, cadence, tone samples, units, week-start choices and back remain reachable; wording describes saved preferences, not an unsupported promise that every surface consumes them. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
 | `EducationScreen.tsx` | Lesson library (`lessonsApi`). |
