@@ -87,6 +87,7 @@ import {
   type CoachSignupMethod,
 } from '../../lib/coachSignupAttempt';
 import { lightTokens, typography, type SemanticTokens } from '../../theme/tokens';
+import ResendVerificationLink from './ResendVerificationLink';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -107,7 +108,7 @@ type Step = 'policy' | 'role' | 'register' | 'verify' | 'coach-unavailable';
 //    attempt ended unconfirmed; the earlier attempt may have created it
 //    (Log in, Contact support).
 //  - 'signup_pending': 409 `signup_pending` from backend #597 (Reset
-//    password, Back). There is no resend endpoint, so no resend button.
+//    password, Back). The verify step offers Send a new link (FW-ONB-128).
 type SignupIssue = 'email_exists' | 'email_exists_after_coach' | 'signup_pending';
 
 // #306 r3 (Sol B1-R2 / Opus C1): what the coach-unavailable step may say.
@@ -968,6 +969,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               <Text style={styles.verifyButtonText}>I verified my email</Text>
             )}
           </TouchableOpacity>
+
+          <ResendVerificationLink
+            email={email}
+            onContactSupport={() => navigation.navigate('SupportInbox')}
+          />
 
           <TouchableOpacity onPress={() => setStep('register')} style={styles.backLink}>
             <Text style={styles.backLinkText}>Use a different email</Text>
