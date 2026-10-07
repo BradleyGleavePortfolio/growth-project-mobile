@@ -6,6 +6,7 @@ const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
 const mockActive = jest.fn();
+let mockMacroMode = 'full';
 const mockUser = { id: 'u1', coach_id: 'c1', profile: {} };
 const mockDay = { foodLogs: [{ mealType: 'lunch' }], dailyTotals: {}, waterOz: 24,
   loadDayData: jest.fn(), loadProfile: jest.fn(), isLoading: false, loadError: null };
@@ -13,7 +14,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
-jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
+jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => mockMacroMode }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
   useFocusEffect: (cb: () => void) => jest.requireActual('react').useEffect(cb, [cb]),
@@ -38,7 +39,7 @@ jest.mock('../../../components/PendingInviteBanner', () => () => null);
 import HomeScreen from '../HomeScreen';
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUser.coach_id = 'c1';
+  mockUser.coach_id = 'c1'; mockMacroMode = 'full';
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([]);
   mockActive.mockResolvedValue(null);
@@ -81,14 +82,14 @@ it.each([false, true])('profile copy reflects coach plan presence: %s', async (h
   await fireEvent.press(screen.getByLabelText(/^Complete your profile/));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
 });
-it.each([0, 24])('keeps coachless Messages, notifications, macro logging and refresh; water is %s oz', async (oz) => {
-  mockUser.coach_id = '';
+it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s mode with %s oz', async (mode, oz) => {
+  mockUser.coach_id = ''; mockMacroMode = mode;
   mockDay.waterOz = oz;
   await render(<HomeScreen />);
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(`${oz} oz`)).toBeTruthy();
   for (const [label, destination] of [['home-message-coach', 'Messages'], ['home-notification-bell', 'NotificationCenter'],
-    ['Log a meal to see your protein', 'Log'], ['Log a meal to see your carbs', 'Log'], ['Log a meal to see your fat', 'Log']]) {
+    ['Log a meal to see your protein', 'Log'], [mode === 'simple' ? 'Log a meal to see your calories' : 'Log a meal to see your carbs', 'Log'], ...(mode === 'full' ? [['Log a meal to see your fat', 'Log']] : [])]) {
     await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
   }
