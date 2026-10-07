@@ -1,5 +1,5 @@
 /**
- * Day-1 step 3 — Goal selection. Multi-select chips, persist on advance.
+ * Day-1 step 3 — Goal selection. Multi-select hairline rows, persist on advance.
  * Skip allowed (the spec carves out goals + check-in as skip-eligible).
  * On network failure, we render an inline retry banner instead of an Alert
  * — keeps the brand-feel guarantee (Rule 8).
@@ -17,10 +17,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
-import StepHeader from './StepHeader';
+import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import { saveGoals, type GoalKey } from './api';
 import { enqueuePending, readResumeState, writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
@@ -47,7 +46,7 @@ const GOALS: GoalRow[] = [
 ];
 
 export default function GoalsScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [selected, setSelected] = useState<Set<GoalKey>>(new Set());
@@ -165,6 +164,7 @@ export default function GoalsScreen({ navigation }: Props) {
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
             <View style={styles.errorActions}>
               <TouchableOpacity
+                style={styles.secondaryAction}
                 onPress={handleContinue}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.retry')}
@@ -173,6 +173,7 @@ export default function GoalsScreen({ navigation }: Props) {
                 <Text style={styles.errorCta}>{t('common.retry')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                style={styles.secondaryAction}
                 onPress={handleContinueOffline}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.saveLater')}
@@ -216,10 +217,10 @@ export default function GoalsScreen({ navigation }: Props) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    inner: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
+    inner: { flex: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
     copy: { marginBottom: 20 },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
@@ -236,22 +237,17 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textSecondary,
     },
     scroll: { flex: 1 },
-    scrollContent: { gap: 12, paddingBottom: 16 },
+    scrollContent: { paddingBottom: 16 },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 4,
       paddingVertical: 16,
-      paddingHorizontal: 16,
       gap: 14,
     },
     rowSelected: {
       borderColor: colors.primary,
-      borderWidth: 1.5,
-      backgroundColor: colors.primaryPale,
     },
     iconWrap: {
       width: 36,
@@ -261,22 +257,22 @@ const makeStyles = (colors: ThemeColors) =>
     },
     rowText: { flex: 1, gap: 2 },
     rowLabel: {
-      fontFamily: 'CormorantGaramond_500Medium',
-      fontSize: 20,
-      letterSpacing: 0.4,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 16,
+      lineHeight: 24,
       color: colors.textPrimary,
     },
     rowLabelOn: { color: colors.primary },
     rowSub: {
       fontFamily: 'Inter_400Regular',
-      fontSize: 12,
-      lineHeight: 17,
+      fontSize: 13,
+      lineHeight: 19,
       color: colors.textSecondary,
     },
     check: {
       width: 22,
       height: 22,
-      borderRadius: 11,
+      borderRadius: 4,
       borderWidth: 1.5,
       borderColor: colors.border,
       alignItems: 'center',
@@ -287,9 +283,9 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.primary,
     },
     errorBanner: {
-      backgroundColor: colors.noticeCriticalBg,
-      borderRadius: 4,
-      padding: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: 14,
       marginTop: 8,
     },
     errorTitle: {
@@ -308,11 +304,10 @@ const makeStyles = (colors: ThemeColors) =>
     errorCta: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 13,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.noticeCriticalAccent,
     },
-    errorActions: { gap: 10 },
+    errorActions: { gap: 4 },
+    secondaryAction: { minHeight: 44, justifyContent: 'center' },
     errorCtaSecondary: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
@@ -324,18 +319,17 @@ const makeStyles = (colors: ThemeColors) =>
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
-      borderRadius: 2,
+      minHeight: 56,
+      borderRadius: 4,
       alignItems: 'center',
     },
     ctaDisabled: { opacity: 0.4 },
     ctaText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
-    skipBtn: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
+    skipBtn: { minHeight: 44, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
     skipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,

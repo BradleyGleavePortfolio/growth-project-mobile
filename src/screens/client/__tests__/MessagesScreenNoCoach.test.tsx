@@ -9,7 +9,8 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { CoachCodeSheetProps } from '../../../components/coachless/CoachCodeSheet';
 
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }),
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
   ThemeColors: {},
 }));
 jest.mock('../../../storage/mmkv', () => ({

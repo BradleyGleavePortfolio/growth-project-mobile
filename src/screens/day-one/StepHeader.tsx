@@ -16,10 +16,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { t } from './i18n/strings';
 
 export const DAY_ONE_TOTAL_STEPS = 6;
+
+/** Shared semantic palette; the provider's legacy flat colors are fixed light. */
+export function useDayOneColors() {
+  const { semanticColors: sc } = useTheme();
+  return {
+    background: sc.bgPrimary, primary: sc.accent, textOnPrimary: sc.textOnAccent,
+    textPrimary: sc.textPrimary, textSecondary: sc.textMuted, textMuted: sc.textMuted,
+    border: sc.border, error: sc.textPrimary, noticeCriticalText: sc.textPrimary,
+    noticeCriticalAccent: sc.accentText,
+  };
+}
+export type DayOneColors = ReturnType<typeof useDayOneColors>;
 
 interface Props {
   /** 1-indexed current step. Pass 0 to hide both bar and back button (Welcome). */
@@ -28,7 +40,7 @@ interface Props {
 }
 
 export default function StepHeader({ step, onBack }: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -90,17 +102,17 @@ export default function StepHeader({ step, onBack }: Props) {
         )}
         <View style={styles.spacer} />
         <Text style={styles.stepText} testID="day-one-step-text">
-          {`${step}/${DAY_ONE_TOTAL_STEPS}`}
+          {t('common.progressLabel', { current: step, total: DAY_ONE_TOTAL_STEPS })}
         </Text>
       </View>
-      <View style={styles.track}>
+      <View style={styles.track} testID="day-one-progress-track">
         <Animated.View style={[styles.fill, { width }]} testID="day-one-progress-fill" />
       </View>
     </View>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     wrap: {
       paddingHorizontal: 24,
@@ -109,24 +121,26 @@ const makeStyles = (colors: ThemeColors) =>
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      height: 40,
+      minHeight: 44,
       marginBottom: 8,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       justifyContent: 'center',
       alignItems: 'flex-start',
     },
     spacer: { flex: 1 },
     stepText: {
       fontFamily: 'Inter_500Medium',
-      fontSize: 12,
+      fontSize: 11,
       letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      fontVariant: ['tabular-nums'],
       color: colors.textMuted,
     },
     track: {
-      height: 3,
+      height: StyleSheet.hairlineWidth,
       backgroundColor: colors.border,
       borderRadius: 2,
       overflow: 'hidden',

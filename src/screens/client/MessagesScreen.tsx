@@ -22,7 +22,8 @@ import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useThreadColors, type ThreadColors } from '../../components/messaging/thread/useThreadColors';
+import { typography } from '../../theme/tokens';
 import { errorStatus, errorCode } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
 import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
@@ -71,10 +72,10 @@ export function cacheKeyFor(userId: string): string {
 }
 
 export default function MessagesScreen() {
-  const { colors } = useTheme();
+  const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';
-  const textOnPrimaryFaint = colors.textOnPrimary + '80';
+  const textOnPrimaryDim = colors.textMuted;
+  const textOnPrimaryFaint = colors.textMuted;
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
   const route = useRoute<RouteProp<HomeStackParamList, 'Messages'>>();
   const currentUser = useCurrentUser();
@@ -188,7 +189,7 @@ export default function MessagesScreen() {
         setMessages([]);
       } else {
         console.error('client MessagesScreen: load failed', err);
-        setError('Could not load messages. Pull to retry.');
+        setError('Messages could not be loaded. Tap to try again.');
       }
       return [];
     } finally {
@@ -430,7 +431,7 @@ export default function MessagesScreen() {
       setReportTarget(null);
       Alert.alert(
         'Reported',
-        'The safety team reviews reports within 24 hours. Thank you for keeping the community safe.',
+        'Your report has been submitted.',
       );
     },
     [reportTarget],
@@ -482,10 +483,11 @@ export default function MessagesScreen() {
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             accessibilityRole="button"
             accessibilityLabel="Go back"
+            style={styles.backBtn}
           >
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.chatHeaderName}>{coachName || 'Your Coach'}</Text>
+          <Text style={styles.chatHeaderName}>Messages</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.skeletonContainer}>
@@ -538,9 +540,9 @@ export default function MessagesScreen() {
               accessibilityRole="button"
               accessibilityLabel="Enter a coach code"
               testID="messages-no-coach-code"
-              style={styles.noCoachAction}
+              style={[styles.noCoachAction, styles.noCoachPrimary]}
             >
-              <Text style={styles.noCoachActionText}>Enter a coach code</Text>
+              <Text style={[styles.noCoachActionText, styles.noCoachPrimaryText]}>Enter a coach code</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity
@@ -548,9 +550,9 @@ export default function MessagesScreen() {
             accessibilityRole="button"
             accessibilityLabel="Contact support"
             testID="messages-no-coach-support"
-            style={styles.noCoachAction}
+            style={[styles.noCoachAction, flags.coachless_home ? undefined : styles.noCoachPrimary]}
           >
-            <Text style={styles.noCoachActionText}>Contact support</Text>
+            <Text style={[styles.noCoachActionText, !flags.coachless_home && styles.noCoachPrimaryText]}>Contact support</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -582,19 +584,21 @@ export default function MessagesScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
           accessibilityLabel="Go back"
+          style={styles.backBtn}
         >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={openContactView}
-          accessibilityRole="button"
-          accessibilityLabel={`View ${coachName || 'coach'} contact details`}
+          disabled={!coachId}
+          accessibilityRole={coachId ? 'button' : undefined}
+          accessibilityState={{ disabled: !coachId }}
+          accessibilityLabel={coachId ? `View ${coachName || 'coach'} contact details` : coachName || 'Your Coach'}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           style={styles.chatHeaderCenter}
         >
-          {coachName ? <View style={styles.onlineDot} /> : null}
           <Text style={styles.chatHeaderName}>{coachName || 'Your Coach'}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          {coachId ? <Ionicons name="chevron-forward" size={16} color={colors.textMuted} /> : null}
         </TouchableOpacity>
         {thread.enabled ? <MuteBell muted={thread.muted} onPress={() => setMuteMenu(true)} /> : <View style={{ width: 24 }} />}
       </View>
@@ -604,7 +608,7 @@ export default function MessagesScreen() {
       ) : null}
 
       {error ? (
-        <TouchableOpacity style={styles.errorBanner} onPress={load}>
+        <TouchableOpacity style={styles.errorBanner} onPress={load} accessibilityRole="button" accessibilityLabel="Retry loading messages">
           <Text style={styles.errorBannerText}>{error}</Text>
         </TouchableOpacity>
       ) : null}
@@ -639,12 +643,12 @@ export default function MessagesScreen() {
               disabled={loadingOlder}
               accessibilityRole="button"
               accessibilityLabel="Load older messages"
-              style={{ paddingVertical: 12, alignItems: 'center' }}
+              style={{ minHeight: 44, paddingVertical: 12, alignItems: 'center' }}
             >
               {loadingOlder ? (
                 <View style={styles.loadingOlderDot} />
               ) : (
-                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>
+                <Text style={{ ...typography.bodySmall, color: colors.primaryText, fontSize: 13 }}>
                   Load older
                 </Text>
               )}
@@ -652,13 +656,17 @@ export default function MessagesScreen() {
           ) : null
         }
         ListEmptyComponent={
-          <View style={styles.chatEmpty}>
+          !error ? <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>Start a conversation with your coach</Text>
-          </View>
+          </View> : null
         }
         renderItem={({ item, index }) => {
           const isMe = item.sender_role === 'client';
+          const next = visibleMessages[index + 1];
+          const showTimestamp = !next || next.sender_role !== item.sender_role ||
+            new Date(next.created_at).toDateString() !== new Date(item.created_at).toDateString() ||
+            new Date(next.created_at).getTime() - new Date(item.created_at).getTime() > 5 * 60 * 1000;
           const showDateSep =
             index === 0 ||
             new Date(item.created_at).toDateString() !==
@@ -679,7 +687,7 @@ export default function MessagesScreen() {
               receiptNode = (
                 <View style={styles.receiptRow}>
                   <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
-                  <Text style={styles.receiptTextPending}>Sending</Text>
+                  <Text style={styles.receiptTextPending}>Not sent</Text>
                 </View>
               );
             } else if (item.read_at) {
@@ -715,6 +723,7 @@ export default function MessagesScreen() {
             <View>
               {showDateSep && (
                 <View style={styles.dateSep}>
+                  <View style={styles.dateLine} />
                   <Text style={styles.dateSepText}>
                     {new Date(item.created_at).toLocaleDateString('en-US', {
                       weekday: 'short',
@@ -722,12 +731,14 @@ export default function MessagesScreen() {
                       day: 'numeric',
                     })}
                   </Text>
+                  <View style={styles.dateLine} />
                 </View>
               )}
               <MessageBubble
                 message={bubbleMsg}
                 isMe={isMe}
                 receipt={receiptNode}
+                showTimestamp={showTimestamp}
                 onLongPress={handleLongPress}
               />
             </View>
@@ -754,11 +765,12 @@ export default function MessagesScreen() {
           disabled={!inputText.trim() || sending}
           accessibilityRole="button"
           accessibilityLabel="Send message"
+          accessibilityState={{ disabled: !inputText.trim() || sending, busy: sending }}
         >
           <Ionicons
-            name="send"
+            name="send-outline"
             size={20}
-            color={inputText.trim() && !sending ? colors.textOnPrimary : colors.textMuted}
+            color={inputText.trim() && !sending ? colors.textOnPrimary : colors.textOnDisabled}
           />
         </TouchableOpacity>
       </View>
@@ -859,9 +871,9 @@ function mergeById(existing: Message[], incoming: Message[]): Message[] {
   );
 }
 
-const makeStyles = (colors: ThemeColors) => {
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';
-  const textOnPrimaryFaint = colors.textOnPrimary + '80';
+const makeStyles = (colors: ThreadColors) => {
+  const textOnPrimaryDim = colors.textMuted;
+  const textOnPrimaryFaint = colors.textMuted;
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   noCoachContainer: { flex: 1, backgroundColor: colors.background },
@@ -873,23 +885,25 @@ const makeStyles = (colors: ThemeColors) => {
     paddingTop: 56,
     paddingBottom: 12,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   noCoachTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 20, lineHeight: 24, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
   noCoachBody: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 12 },
   noCoachHeadline: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
-  noCoachText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20 },
+  noCoachText: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
   noCoachAction: {
     marginTop: 16,
     minHeight: 44,
     paddingHorizontal: 20,
     justifyContent: 'center',
-    borderRadius: 12,
-    borderWidth: 1,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.primary,
   },
-  noCoachActionText: { fontSize: 15, color: colors.primary, fontWeight: '600' },
-  errorBanner: { backgroundColor: colors.error + '22', paddingVertical: 8, paddingHorizontal: 16 },
-  errorBannerText: { color: colors.error, fontSize: 13, textAlign: 'center' },
+  noCoachActionText: { ...typography.bodyMd, color: colors.primaryText },
+  noCoachPrimary: { backgroundColor: colors.primary },
+  noCoachPrimaryText: { color: colors.textOnPrimary },
+  errorBanner: { minHeight: 44, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border, paddingVertical: 8, paddingHorizontal: 16 },
+  errorBannerText: { ...typography.bodySmall, color: colors.textMuted, fontSize: 13, textAlign: 'center' },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -898,26 +912,21 @@ const makeStyles = (colors: ThemeColors) => {
     paddingTop: 56,
     paddingBottom: 12,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   chatHeaderCenter: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  chatHeaderName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', letterSpacing: 0.2, color: colors.textPrimary },
+  chatHeaderName: { ...typography.h2, color: colors.textPrimary },
   skeletonContainer: { flex: 1, padding: 16 },
   skeletonRow: { marginBottom: 12 },
   skeletonBubble: {
     height: 44,
-    borderRadius: 12,
+    borderRadius: 4,
     backgroundColor: colors.border,
     opacity: 0.5,
   },
@@ -930,9 +939,10 @@ const makeStyles = (colors: ThemeColors) => {
   },
   chatList: { padding: 16, paddingBottom: 8 },
   chatEmpty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  chatEmptyText: { fontSize: 14, color: colors.textMuted },
-  dateSep: { alignItems: 'center', marginVertical: 16 },
-  dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
+  chatEmptyText: { ...typography.bodySmall, color: colors.textMuted },
+  dateSep: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  dateLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  dateSepText: { ...typography.eyebrow, color: colors.textMuted, paddingHorizontal: 12 },
   receiptRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -941,11 +951,11 @@ const makeStyles = (colors: ThemeColors) => {
     marginTop: 2,
   },
   receiptText: {
-    fontSize: 10,
+    ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryDim,
   },
   receiptTextPending: {
-    fontSize: 10,
+    ...typography.bodySmall, fontSize: 13,
     color: textOnPrimaryFaint,
   },
   inputBar: {
@@ -955,7 +965,7 @@ const makeStyles = (colors: ThemeColors) => {
     paddingVertical: 12,
     paddingBottom: 36,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     gap: 10,
   },
@@ -963,23 +973,21 @@ const makeStyles = (colors: ThemeColors) => {
     flex: 1,
     backgroundColor: colors.background,
     borderRadius: 2,
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     paddingVertical: 12,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 15,
+    ...typography.body,
     color: colors.textPrimary,
     maxHeight: 100,
-    borderWidth: 1,
-    borderColor: colors.border,
+    minHeight: 44,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 4,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnDisabled: { backgroundColor: colors.surface },
+  sendBtnDisabled: { backgroundColor: colors.disabledBg },
   });
 };
