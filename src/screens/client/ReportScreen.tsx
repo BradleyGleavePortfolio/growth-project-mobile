@@ -97,7 +97,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
   return (
     <View style={styles.wrapper}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>My Report</Text>
@@ -175,13 +175,13 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
 
         {/* Training Focus */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Training Focus</Text>
+          <Text style={styles.sectionTitle}>General guidance for {goalLabel}</Text>
           <Text style={styles.goalBadge}>{goalLabel}</Text>
           <Text style={styles.bodyText}>
             {currentUser?.profile?.primary_goal?.includes('lose')
               ? 'Focus on maintaining a caloric deficit while keeping protein high to preserve lean mass. Prioritize compound movements and HIIT cardio.'
               : currentUser?.profile?.primary_goal?.includes('gain')
-              ? 'Keep surplus calories clean and progressive overload on compound lifts. Rest days are growth days — sleep 7-9 hours.'
+              ? 'Keep surplus calories clean and progressive overload on compound lifts. Rest days are growth days. Sleep 7-9 hours.'
               : 'Maintain consistent nutrition habits and stay active. Focus on movement quality and recovery.'}
           </Text>
         </View>
@@ -190,7 +190,6 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         <View style={styles.footer}>
           <View style={styles.footerDot} />
           <Text style={styles.footerTitle}>The Growth Project</Text>
-          <Text style={styles.footerSub}>Consistency beats perfection. Keep showing up.</Text>
         </View>
       </ScrollView>
     </View>

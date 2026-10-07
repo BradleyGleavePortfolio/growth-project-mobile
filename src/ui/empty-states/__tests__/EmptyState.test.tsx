@@ -157,9 +157,9 @@ describe('EmptyState — base component', () => {
 // ─── Variant: EmptyStateNoWorkouts ────────────────────────────────────────────
 
 describe('EmptyStateNoWorkouts', () => {
-  it('renders "No workouts yet" headline', async () => {
+  it('renders "No routines yet" headline', async () => {
     const { getByTestId } = await render(<EmptyStateNoWorkouts />);
-    expect(getByTestId('empty-state-headline').props.children).toBe('No workouts yet');
+    expect(getByTestId('empty-state-headline').props.children).toBe('No routines yet');
   });
 
   it('does not render a CTA (client cannot self-assign)', async () => {
