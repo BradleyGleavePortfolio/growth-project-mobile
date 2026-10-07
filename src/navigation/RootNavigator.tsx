@@ -28,7 +28,7 @@ import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
 import { Colors } from '../constants/colors';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
-import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
+import { useFoodLogQueueSync } from '../hooks/useFoodLogQueueSync';
 import { isScreenshotMode } from '../screenshots';
 // v1-5 Community tab deep-link gate. The CommunityTab link is registered ONLY
 // when featureFlags.communityTab is true; when the flag is OFF the spread below
@@ -626,15 +626,15 @@ export default function RootNavigator() {
     };
   }, [authState, pendingAcceptUrl, pendingResetUrl]);
 
-  // Flush the offline food-log queue whenever the network comes back online.
-  // Only fires on the offline → online transition; repeated online events are
-  // no-ops because the queue is empty. Fire-and-forget; flush logs its own errors.
+  // Foods saved offline are sent at sign-in / cold start, when the network
+  // returns and when the app returns to the foreground; the day on screen
+  // then reloads so they appear (useFoodLogQueueSync).
   const network = useNetworkStatus();
+  useFoodLogQueueSync(authState === 'student', isEffectivelyOnline(network));
   const wasOnlineRef = useRef<boolean>(true);
   useEffect(() => {
     const online = isEffectivelyOnline(network);
     if (online && !wasOnlineRef.current) {
-      flushFoodLogQueue().catch((err) => logger.warn('RootNavigator', 'flushFoodLogQueue failed', err));
       // W-2 fix: also reconcile the workout-log sync queue when we cross
       // offline → online. Without this, pending rows written while the app
       // was offline stay 'pending' forever because the only call site for

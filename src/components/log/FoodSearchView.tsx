@@ -31,6 +31,8 @@ interface Props {
   onRecentTabChange: (tab: 'recent' | 'frequent') => void;
   recentFoods: SearchResult[];
   frequentFoods: SearchResult[];
+  // No day of the week could be read: an empty list is not "nothing logged".
+  browseUnavailable?: boolean;
 
   onSelectFood: (food: SearchResult) => void;
   onEnterManualMode: () => void;
@@ -80,6 +82,7 @@ export default function FoodSearchView({
   onRecentTabChange,
   recentFoods,
   frequentFoods,
+  browseUnavailable,
   onSelectFood,
   onEnterManualMode,
   repeatMeal,
@@ -209,8 +212,17 @@ export default function FoodSearchView({
             </Text>
           ) : searchQuery.length < 2 && browseList.length === 0 ? (
             <View style={styles.emptyStateContainer}>
-              <Text style={styles.emptyStateTitle}>{recentTab === 'recent' ? 'No foods logged in the last 7 days' : 'No frequent foods yet'}</Text>
-              <Text style={styles.emptyStateSubtitle}>Search for a food above or enter its label details manually.</Text>
+              {browseUnavailable ? (
+                <>
+                  <Text style={styles.emptyStateTitle}>Recent foods could not load</Text>
+                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Enter Manually to save this food now.</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.emptyStateTitle}>{recentTab === 'recent' ? 'No foods logged in the last 7 days' : 'No frequent foods yet'}</Text>
+                  <Text style={styles.emptyStateSubtitle}>Search for a food above or enter its label details manually.</Text>
+                </>
+              )}
             </View>
           ) : showEmpty ? (
             <View style={styles.emptyStateContainer}>
