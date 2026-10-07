@@ -107,7 +107,7 @@ describe('HomeHeaderActions', () => {
   it('HomeScreen mounts the actions and the deferred push card; ClientNavigator has no dead headerRight bell', () => {
     const home = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'screens', 'client', 'HomeScreen.tsx'), 'utf8');
     expect(home).toMatch(/<HomeHeaderActions \/>/);
-    expect(home).toMatch(/<PushPermissionCard \/>/);
+    expect(home).toMatch(/<PushPermissionCard presentation="section" \/>/);
     const nav = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
     expect(nav).not.toMatch(/headerRight: \(\) =>/);
   });
