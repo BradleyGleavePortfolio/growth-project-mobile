@@ -67,6 +67,7 @@ More → **Meal plan** opens `Plan`; its neutral “View meal plans” descripti
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
 | `EducationScreen.tsx` | Lesson library (`lessonsApi`). |
 | `CommunityScreen.tsx` | Founders' circle leaderboard / wins (`communityApi`). |
+| `LeaderboardScreen.tsx` / `LeaderboardSettingsScreen.tsx` | Coach-roster opt-in rankings. Computed self-rank and score lead an unfilled hairline list; settings use semantic theme colours, a forest save action and 13 pt supporting text. Back, settings, optional display name, opt-in/out, name saving and sticky self row are unchanged. Copy describes this leaderboard rather than promising future privacy or immediate activity updates. Render parity: `src/__tests__/leaderboardRedo.test.tsx`. |
 | `ProgressScreen.tsx` | Weight chart + macro adherence (`weightApi`, `logApi.getWeekly`). |
 | `CoachGuidelinesScreen.tsx` | Read-only render of guidelines the coach posted. |
 

@@ -155,6 +155,32 @@ beforeEach(() => {
   });
 });
 
+it('shows a rank only from an opted-in self row and keeps opt-out reachable', async () => {
+  api.getChallenge.mockResolvedValue({ challenge: challenge({ leaderboard_enabled: true }), participation: participation({ leaderboard_opted_in: true }) });
+  api.getLeaderboard.mockResolvedValue({ available: true, opted_in: true, rows: [{ user_id: 'me-1', rank: 2, progress_value: 25000, is_self: true }], next_cursor: null });
+  await renderScreen();
+  await waitFor(() => expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1', { limit: 20 }));
+  expect(await screen.findByTestId('community-challenge-self-rank')).toHaveTextContent('Your rank: 2');
+  await fireEvent.press(screen.getByTestId('community-challenge-optout'));
+  expect(api.setLeaderboardOptIn).toHaveBeenCalledWith('ch-1', false);
+});
+it('does not invent a first-place ranking or praise when the board is empty', async () => {
+  api.getChallenge.mockResolvedValue({ challenge: challenge({ leaderboard_enabled: true }), participation: participation({ leaderboard_opted_in: true }) });
+  await renderScreen();
+  expect(await screen.findByText('No shared progress to show yet.')).toBeTruthy();
+  expect(screen.queryByTestId('community-challenge-self-rank')).toBeNull();
+});
+it('keeps Log progress, sheet close and non-sharing choice reachable', async () => {
+  api.getChallenge.mockResolvedValue({ challenge: challenge({ leaderboard_enabled: true }), participation: participation() });
+  await renderScreen();
+  await fireEvent.press(await screen.findByTestId('community-challenge-keep-private'));
+  expect(api.setLeaderboardOptIn).toHaveBeenCalledWith('ch-1', false);
+  await fireEvent.press(screen.getByTestId('community-challenge-primary-action'));
+  expect(screen.getByTestId('community-challenge-progress-sheet')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('community-challenge-progress-sheet-close'));
+  expect(screen.queryByTestId('community-challenge-progress-sheet-close')).toBeNull();
+});
+
 describe('CommunityChallengeDetailScreen — flag off', () => {
   it('renders a neutral not-available state and never touches the API', async () => {
     flags.communityChallenges = false;
@@ -192,6 +218,7 @@ describe('CommunityChallengeDetailScreen — not joined', () => {
     await renderScreen();
 
     expect(await screen.findByText('Join this challenge')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-progress-track')).toBeNull();
     expect(
       screen.getByText('Join to start logging your progress.'),
     ).toBeTruthy();
