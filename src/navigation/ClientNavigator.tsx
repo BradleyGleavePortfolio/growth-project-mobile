@@ -42,6 +42,7 @@ import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import RomanAiConsentScreen from '../screens/settings/RomanAiConsentScreen';
+import CoachSharingScreen from '../screens/settings/CoachSharingScreen';
 import RomanConversationsScreen, { type RomanConversationParams } from '../screens/settings/RomanConversationsScreen';
 import RomanConversationScreen from '../screens/settings/RomanConversationScreen';
 import ReportScreen from '../screens/client/ReportScreen';
@@ -265,6 +266,8 @@ export type MoreStackParamList = {
   DeleteAccount: undefined;
   /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
+  /** B-SHARE-126: Settings > Privacy > Coach sharing (four toggles). */
+  CoachSharing: undefined;
   /** Your conversations with Roman: list, open, delete (backend #635). Not behind the Roman chat flag. */
   RomanConversations: undefined;
   RomanConversation: RomanConversationParams;
@@ -496,6 +499,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="RomanAiConsent" component={RomanAiConsentScreen} />
+      <MoreStackNav.Screen name="CoachSharing" component={CoachSharingScreen} options={backOnlyHeader('Coach sharing')} />
       {/* Roman chat history (backend #635): always registered, like the backend
           routes, so finding and deleting chats never depends on the chat flag. */}
       <MoreStackNav.Screen name="RomanConversations" component={RomanConversationsScreen} />

@@ -12,6 +12,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
+import { CoachSharingPrompt } from '../components/coachSharing/CoachSharingCard';
 import CoachNavigator from './CoachNavigator';
 import CoachWizardNavigator from './CoachWizardNavigator';
 // OnboardingNavigator (legacy 10-step) is intentionally imported but not
@@ -1057,6 +1058,9 @@ export default function RootNavigator() {
             subscribeToRouteChanges={subscribeToRouteChanges}
           >
             <ClientNavigator />
+            {/* B-SHARE-126: ask once to share logs with a linked coach. Not
+                in the package_prompt branch, so it never stacks on that sheet. */}
+            <CoachSharingPrompt userId={sessionUserId} />
           </DunningLockoutProvider>
         </EntitlementProvider>
       )}

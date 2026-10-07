@@ -7,7 +7,9 @@
  *   2. Join: POST /coachless/coach-code/redeem with an Idempotency-Key. One
  *      key per code; a retry of the same code reuses it (a lost answer
  *      replays the same result), a different code gets a new key.
- *   3. Welcome moment from the redeem answer: the coach, then the next step:
+ *   3. Coach sharing (B-SHARE-126): when the client has made no choice for
+ *      this coach yet, CoachSharingCard asks first (Share / Not now).
+ *   4. Welcome moment from the redeem answer: the coach, then the next step:
  *      an active plan from the code (Done), the featured plan through the
  *      Day 1 plan sheet (Choose a plan), or a message to the coach when the
  *      coach sells no plan in the app or the code's free plan waits for the
@@ -44,6 +46,9 @@ import {
   type RedeemResult,
 } from '../../api/coachlessApi';
 import { grantState, keepsIdempotencyKey, refusalLine } from './coachlessCopy';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { coachToAskAbout } from '../../api/coachSharingApi';
+import CoachSharingCard from '../coachSharing/CoachSharingCard';
 
 export const CHECK_DEBOUNCE_MS = 400;
 
@@ -93,6 +98,8 @@ export default function CoachCodeSheet({
   const [joining, setJoining] = useState(false);
   const [joinFailure, setJoinFailure] = useState<CoachlessFailure | null>(null);
   const [welcome, setWelcome] = useState<RedeemResult | null>(null);
+  const [askShare, setAskShare] = useState(false);
+  const userId = useCurrentUser()?.id ?? null;
   const keyRef = useRef<{ code: string; key: string } | null>(null);
   const checkSeq = useRef(0);
 
@@ -150,6 +157,8 @@ export default function CoachCodeSheet({
         logger.warn('CoachCodeSheet', 'entitlement refresh after redeem failed', e),
       );
       track('coachless_code_redeemed', { already_attached: result.already_attached });
+      // Never rejects; a failed read skips the step (asked on a later launch).
+      setAskShare(userId ? (await coachToAskAbout(userId, result.coach.id)) !== null : false);
       setWelcome(result);
       onAttached(result);
     } catch (err) {
@@ -160,11 +169,12 @@ export default function CoachCodeSheet({
     } finally {
       setJoining(false);
     }
-  }, [code, joining, onAttached, refreshEntitlement]);
+  }, [code, joining, onAttached, refreshEntitlement, userId]);
 
   const close = useCallback(() => {
     if (joining) return;
     setWelcome(null);
+    setAskShare(false);
     setJoinFailure(null);
     onClose();
   }, [joining, onClose]);
@@ -180,7 +190,14 @@ export default function CoachCodeSheet({
         keyboardShouldPersistTaps="handled"
         testID="coach-code-sheet"
       >
-        {welcome ? (
+        {welcome && askShare ? (
+          <CoachSharingCard
+            coachId={welcome.coach.id}
+            coachName={welcome.coach.name}
+            userId={userId}
+            onDone={() => setAskShare(false)}
+          />
+        ) : welcome ? (
           <Welcome
             result={welcome}
             onDone={close}
