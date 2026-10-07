@@ -1,16 +1,6 @@
 /**
- * HomeScreen — Wave 3: Luxury hero rewrite.
- * Phase 11: Migrated to useTheme() semantic tokens for dark-mode support.
- *
- * One thought. Bone background, editorial serif date headline,
- * charcoal progress line, ink "CONTINUE" CTA, hairline rule,
- * 2×2 number grid below the fold.
- *
- * Removed from home: streak banner, calorie ring, macro bar,
- * day selector, community win, trust cue row, identity badge,
- * milestone tiles, weekly volume card, habits section, quick-access grid.
- *
- * The brief: "Home is one thought, not eleven."
+ * HomeScreen — today's verified summary, one primary action and a hairline
+ * metric row. Existing Home sections retain their order and handlers.
  */
 
 import React, { useEffect, useCallback, useState } from 'react';
@@ -21,6 +11,7 @@ import {
   ScrollView,
   SafeAreaView,
   RefreshControl,
+  StyleSheet,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -122,15 +113,15 @@ interface NumberCellProps {
 function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberCellProps) {
   const { semanticColors: sc } = useTheme();
   const Inner = (
-    <View style={{ width: '100%', paddingVertical: 20 }}>
+    <View style={{ width: '100%', paddingVertical: 20, paddingHorizontal: 4 }}>
       <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
         {label}
       </Text>
-      <Text style={{ ...typography.h2, color: sc.textPrimary }}>
+      <Text testID={`home-value-${label}`} style={{ ...typography.h2, color: sc.textPrimary, fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
       {hint ? (
-        <Text style={{ ...typography.caption, color: sc.textMuted, marginTop: 4 }}>
+        <Text style={{ ...typography.bodySmall, fontSize: 13, color: sc.textMuted, marginTop: 4 }}>
           {hint}
         </Text>
       ) : null}
@@ -142,13 +133,13 @@ function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberC
         onPress={onPress}
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel ?? `${label}: ${value}`}
-        style={({ pressed }) => ({ width: '50%', opacity: pressed ? 0.7 : 1 })}
+        style={({ pressed }) => ({ flex: 1, minWidth: 0, minHeight: 44, opacity: pressed ? 0.7 : 1 })}
       >
         {Inner}
       </Pressable>
     );
   }
-  return <View style={{ width: '50%' }}>{Inner}</View>;
+  return <View style={{ flex: 1, minWidth: 0 }}>{Inner}</View>;
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -355,7 +346,7 @@ export default function HomeScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
       <ScrollView
         testID="home-scroll"
-        contentContainerStyle={{ paddingHorizontal: 32, paddingTop: 64, paddingBottom: 96 }}
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 24, paddingBottom: 48 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -375,54 +366,15 @@ export default function HomeScreen() {
             testID="home-day-data-error"
           />
         ) : null}
-        <DunningBanner surface="HomeScreen" />
-        <CoachlessHomeSlot />
-        <PendingInviteBanner />
-        <PushPermissionCard />
-        {showProfileNudge ? (
-          <Pressable
-            onPress={goToEditProfile}
-            accessibilityRole="button"
-            accessibilityLabel={`Complete your profile. Missing ${missingSummary}.`}
-            style={({ pressed }) => ({
-              borderWidth: 0.5,
-              borderColor: sc.border,
-              backgroundColor: sc.bgSurface,
-              paddingHorizontal: 20,
-              paddingVertical: 18,
-              marginBottom: 24,
-              opacity: pressed ? 0.85 : 1,
-            })}
-          >
-            <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
-              FINISH YOUR PROFILE
-            </Text>
-            <Text style={{ ...typography.body, color: sc.textPrimary }}>
-              {hasCoachPlan ? `Add ${missingSummary} so your plan reflects you.` : `Add ${missingSummary} to set daily targets.`}
-            </Text>
-            <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6 }}>
-              {`${completion.percentComplete}% complete`}
-            </Text>
-          </Pressable>
-        ) : null}
-
         {/* Hero */}
-        <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 24 }}>
-          THE GROWTH PROJECT
-        </Text>
-        <Text style={{ ...typography.h1, color: sc.textPrimary, marginBottom: 20 }}>
+        <Text testID="home-date" style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 16 }}>
           {datePoetry}
         </Text>
-        <Text style={{ ...typography.body, color: sc.textMuted, marginBottom: 56 }}>
-          {progressLine}
-        </Text>
-
-        {/* Coach introduction banner — shown once, dismissible */}
-        <CoachIntroductionBanner />
-
-        <FullMacrosIntroCard carbsG={carbsTarget} fatG={fatTarget} />
-
-        <TutorialHomeSlot />
+        {progressLine ? (
+          <Text style={{ ...typography.h1, color: sc.textPrimary, marginBottom: 24 }}>
+            {progressLine}
+          </Text>
+        ) : null}
 
         {/* Single CTA — conditional on whether workouts exist */}
         {workoutExists === 'loading' ? (
@@ -438,8 +390,11 @@ export default function HomeScreen() {
         ) : workoutExists ? (
           <Pressable
             style={({ pressed }) => ({
-              backgroundColor: sc.textPrimary,
-              paddingVertical: 20,
+              backgroundColor: sc.accent,
+              minHeight: 44,
+              borderRadius: 4,
+              paddingVertical: 16,
+              paddingHorizontal: 16,
               alignItems: 'center',
               opacity: pressed ? 0.85 : 1,
             })}
@@ -449,25 +404,30 @@ export default function HomeScreen() {
             accessibilityHint="Opens Train"
             testID="home-continue-cta"
           >
-            <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>{workoutLabel}</Text>
+            <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>{workoutLabel}</Text>
           </Pressable>
         ) : (
-          // No workout assigned yet — soft explore link instead of disabled CTA
+          // Without a workout, food logging is the primary action.
           <Pressable
             onPress={() => navigation.navigate('Log')}
             accessibilityRole="button"
             accessibilityLabel="Log a meal"
             testID="home-explore-cta"
-            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, alignSelf: 'flex-start' })}
+            style={({ pressed }) => ({
+              backgroundColor: sc.accent, minHeight: 44, borderRadius: 4,
+              paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', opacity: pressed ? 0.85 : 1,
+            })}
           >
-            <Text style={{ ...typography.body, color: sc.textMuted }}>Log a meal →</Text>
+            <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>Log a meal →</Text>
           </Pressable>
         )}
 
-        {/* Below-fold rule + 2×2 numbers grid */}
-        <View style={{ height: 1, backgroundColor: sc.border, marginTop: 96, marginBottom: 32 }} />
+        {/* All current metrics in one row, without the former 96 pt gap. */}
         <View
-          style={{ flexDirection: 'row', flexWrap: 'wrap' }}
+          style={{
+            flexDirection: 'row', borderTopWidth: StyleSheet.hairlineWidth,
+            borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border, marginTop: 24, marginBottom: 24,
+          }}
           testID={macroMode === 'simple' ? 'home-number-grid-simple' : 'home-number-grid'}
         >
           {homeCells(macroMode).map((cell: HomeCell) => {
@@ -491,10 +451,39 @@ export default function HomeScreen() {
             );
           })}
         </View>
-        {/* Sprint B-2 — cross-pillar holistic insights tile. Rendered
-            below the macro numbers; quietly returns null while loading
-            and renders honest empty-state copy when there is not yet
-            enough data or the finance pillar is unavailable. */}
+        {/* Supporting sections keep their original relative order. */}
+        <DunningBanner surface="HomeScreen" />
+        <CoachlessHomeSlot />
+        <PendingInviteBanner />
+        <PushPermissionCard />
+        {showProfileNudge ? (
+          <Pressable
+            onPress={goToEditProfile}
+            accessibilityRole="button"
+            accessibilityLabel={`Complete your profile. Missing ${missingSummary}.`}
+            style={({ pressed }) => ({
+              borderTopWidth: StyleSheet.hairlineWidth,
+              borderColor: sc.border,
+              paddingVertical: 18,
+              minHeight: 44,
+              marginBottom: 24,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
+              FINISH YOUR PROFILE
+            </Text>
+            <Text style={{ ...typography.body, color: sc.textPrimary }}>
+              {hasCoachPlan ? `Add ${missingSummary} so your plan reflects you.` : `Add ${missingSummary} to set daily targets.`}
+            </Text>
+            <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6, fontVariant: ['tabular-nums'] }}>
+              {`${completion.percentComplete}% complete`}
+            </Text>
+          </Pressable>
+        ) : null}
+        <CoachIntroductionBanner />
+        <FullMacrosIntroCard carbsG={carbsTarget} fatG={fatTarget} />
+        <TutorialHomeSlot />
         <HolisticInsightsTile />
       </ScrollView>
     </SafeAreaView>

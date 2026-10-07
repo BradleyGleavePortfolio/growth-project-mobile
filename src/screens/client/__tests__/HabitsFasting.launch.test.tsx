@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -7,6 +7,10 @@ const mockGetHabits = jest.fn();
 const mockGetLogs = jest.fn();
 const mockCreateHabit = jest.fn();
 const mockLogHabit = jest.fn();
+const mockDeleteHabit = jest.fn();
+const mockSaveCheckIn = jest.fn();
+const mockGetCheckIns = jest.fn();
+let mockSemanticColors: typeof import('../../../theme/tokens').lightTokens;
 const mockGetHistory = jest.fn();
 const mockStartFast = jest.fn();
 const mockEndFast = jest.fn();
@@ -18,9 +22,9 @@ jest.mock('../../../services/api', () => ({
     getLogs: (...args: unknown[]) => mockGetLogs(...args),
     create: (...args: unknown[]) => mockCreateHabit(...args),
     logHabit: (...args: unknown[]) => mockLogHabit(...args),
-    delete: jest.fn(async () => undefined),
+    delete: (...args: unknown[]) => mockDeleteHabit(...args),
   },
-  checkInsApi: { list: jest.fn(async () => ({ data: [] })) },
+  checkInsApi: { list: (...args: unknown[]) => mockGetCheckIns(...args), save: (...args: unknown[]) => mockSaveCheckIn(...args) },
   fastingApi: {
     getHistory: (...args: unknown[]) => mockGetHistory(...args),
     start: (...args: unknown[]) => mockStartFast(...args),
@@ -31,7 +35,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: require('../../../constants/colors').default,
-    semanticColors: require('../../../theme/tokens').lightTokens,
+    semanticColors: mockSemanticColors,
   }),
 }));
 jest.mock('../../../utils/date', () => ({
@@ -58,6 +62,7 @@ jest.mock('../../../components/FadeInView', () => {
 });
 
 import HabitsScreen from '../HabitsScreen';
+import { makeStyles } from '../habits/styles';
 import FastingScreen from '../FastingScreen';
 import type { ApiHabitLog } from '../../../hooks/useApi';
 
@@ -66,6 +71,7 @@ let logs: ApiHabitLog[];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockSemanticColors = require('../../../theme/tokens').lightTokens;
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
@@ -86,6 +92,9 @@ beforeEach(() => {
     return { data: logs[0] };
   });
   mockCreateHabit.mockResolvedValue({ data: { id: 'new-habit' } });
+  mockDeleteHabit.mockResolvedValue({ data: {} });
+  mockSaveCheckIn.mockResolvedValue({ data: {} });
+  mockGetCheckIns.mockResolvedValue({ data: [] });
   mockGetHistory.mockResolvedValue({ data: [] });
   mockStartFast.mockResolvedValue({ data: {} });
   mockEndFast.mockResolvedValue({ data: {} });
@@ -104,11 +113,13 @@ describe('Habits — production DTO, check-off and server history', () => {
   it('adds a habit using only fields accepted by the production CreateHabitDto', async () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
-    await fireEvent.press(screen.getByText('Add New Habit'));
+    await fireEvent.press(screen.getByText('Add habit'));
     await fireEvent.changeText(screen.getByPlaceholderText('e.g. Drink 8 glasses of water'), 'Walk daily');
-    await fireEvent.press(screen.getByText('Add Habit'));
+    await fireEvent.changeText(screen.getByLabelText('Habit target'), '3');
+    await fireEvent.changeText(screen.getByLabelText('Habit unit'), 'times');
+    await fireEvent.press(screen.getByText('Create habit'));
     await waitFor(() => expect(mockCreateHabit).toHaveBeenCalledWith({
-      name: 'Walk daily', category: 'custom', target_value: 1, unit: 'times',
+      name: 'Walk daily', category: 'custom', target_value: 3, unit: 'times',
     }));
     expect(screen.queryByText('Icon')).toBeNull();
     expect(screen.queryByText('Color')).toBeNull();
@@ -117,14 +128,17 @@ describe('Habits — production DTO, check-off and server history', () => {
   it('check-off shows the saved quantity, and undo persists zero and clears today', async () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    expect(screen.getByText('0 of 1 today')).toBeTruthy();
     await fireEvent.press(screen.getByText('Drink water'));
     await waitFor(() => expect(screen.getByText('8/8 glasses')).toBeTruthy());
+    expect(screen.getByText('1 of 1 today')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: true, value: 8,
     });
     expect(screen.getByTestId('habit-week-water-2').props.accessibilityLabel).toContain('completed');
     await fireEvent.press(screen.getByText('Drink water'));
     await waitFor(() => expect(screen.getByText('0/8 glasses')).toBeTruthy());
+    expect(screen.getByText('0 of 1 today')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: false, value: 0,
     });
@@ -152,6 +166,85 @@ describe('Habits — production DTO, check-off and server history', () => {
     mockGetHabits.mockResolvedValue({ data: [] });
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('No habits yet. Add a daily habit to start tracking.')).toBeTruthy());
+  });
+
+  it('keeps add/dismiss, long-press deletion, check-in editing/saving and tab return reachable', async () => {
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    let scroll = screen.getByText('Drink water').parent;
+    while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
+    expect(scroll?.props.refreshControl).toBeTruthy();
+    await act(async () => scroll?.props.refreshControl.props.onRefresh());
+    expect(mockGetHabits.mock.calls.length).toBeGreaterThan(1);
+    expect(mockGetLogs.mock.calls.length).toBeGreaterThan(1);
+    expect(mockGetCheckIns.mock.calls.length).toBeGreaterThan(1);
+    await fireEvent.press(screen.getByText('Add habit'));
+    await fireEvent.press(screen.getByLabelText('Close new habit'));
+    expect(screen.queryByText('New habit')).toBeNull();
+    await fireEvent(screen.getByText('Drink water'), 'longPress');
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.some((button) => button.text === 'Cancel')).toBe(true);
+    const deletion = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Delete');
+    await act(async () => { deletion?.onPress?.(); });
+    await waitFor(() => expect(mockDeleteHabit).toHaveBeenCalledWith('water'));
+    await fireEvent.press(screen.getByText('Daily check-in'));
+    expect(screen.queryByText('Saved.')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Great'));
+    await fireEvent.press(screen.getByLabelText('High'));
+    await fireEvent.press(screen.getByLabelText('Increase sleep hours'));
+    await fireEvent.press(screen.getByLabelText('Decrease sleep hours'));
+    await fireEvent.changeText(screen.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Rested');
+    await fireEvent.press(screen.getByText('Save check-in'));
+    await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(expect.objectContaining({
+      mood: 5, energy: 4, sleep_hours: 7, notes: 'Rested',
+    })));
+    await fireEvent.press(screen.getByText('Habits'));
+    expect(screen.getByText('Drink water')).toBeTruthy();
+  });
+
+  it('hydrates a saved check-in and keeps update reachable', async () => {
+    mockGetCheckIns.mockResolvedValue({ data: [{ date: '2026-10-07', mood: 2, energy: 1, sleep_hours: 6, notes: 'Tired' }] });
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Daily check-in'));
+    expect(screen.getByText('Saved.')).toBeTruthy();
+    expect(screen.getByLabelText('Bad').props.accessibilityState.checked).toBe(true);
+    await fireEvent.press(screen.getByText('Update check-in'));
+    await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(expect.objectContaining({ mood: 2, energy: 1, sleep_hours: 6, notes: 'Tired' })));
+  });
+
+  it('offers retry instead of an invented check-in when its read fails', async () => {
+    mockGetCheckIns.mockRejectedValueOnce(new Error('Offline'));
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Daily check-in'));
+    expect(screen.getByText("Today's check-in could not be loaded.")).toBeTruthy();
+    expect(screen.queryByText('Save check-in')).toBeNull();
+    await fireEvent.press(screen.getByText('Retry check-in'));
+    await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
+  });
+
+  it('shows loading instead of guessed counts or an editable check-in before reads resolve', async () => {
+    mockGetHabits.mockReturnValue(new Promise(() => {}));
+    mockGetCheckIns.mockReturnValue(new Promise(() => {}));
+    const screen = await renderHabits();
+    expect(screen.getByText('Loading habits')).toBeTruthy();
+    expect(screen.queryByText('0 of 1 today')).toBeNull();
+    await fireEvent.press(screen.getByText('Daily check-in'));
+    expect(screen.getByText('Loading check-in')).toBeTruthy();
+    expect(screen.queryByText('Save check-in')).toBeNull();
+  });
+
+  it('uses semantic colours and keeps the outlined check at 44 pt for a future dark palette', async () => {
+    mockSemanticColors = require('../../../theme/tokens').darkTokens;
+    const styles = makeStyles(require('../../../constants/colors').default, mockSemanticColors);
+    expect(styles.checkCircle).toMatchObject({ width: 44, height: 44 });
+    expect(styles.stepperBtn).toMatchObject({ width: 44, height: 44 });
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    expect(StyleSheet.flatten(screen.getByText('Drink water').props.style).color).toBe(mockSemanticColors.textPrimary);
+    expect(StyleSheet.flatten(screen.getByText('Add habit').props.style).color).toBe(mockSemanticColors.accentText);
+    await fireEvent.press(screen.getByText('Daily check-in'));
+    expect(StyleSheet.flatten(screen.getByText('Save check-in').props.style).color).toBe(mockSemanticColors.textOnAccent);
   });
 });
 
