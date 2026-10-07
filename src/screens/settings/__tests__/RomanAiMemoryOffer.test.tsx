@@ -1,8 +1,10 @@
 /**
  * Settings > Privacy > Roman and AI: Roman memory on by default (R11-C2B, owner 2026-10-07 10:18).
  * A "Roman's memory" switch at the very bottom: ON for a client-ai-v5 grant; off grants client-ai-v4
- * (Roman stays allowed, the server deletes the notes); on re-grants the server's v5 copy and sha256.
+ * (Roman stays allowed); on re-grants the server's v5 copy and sha256.
  * Allow grants v5 while the server offers it, otherwise v4 exactly.
+ * R11-C2C (owner 2026-10-07 11:46): Roman's notes are deleted only with the account. No line says
+ * that turning memory off deletes them, and there is no control that deletes notes.
  */
 import React from 'react';
 import { Alert, AlertButton, Platform } from 'react-native';
@@ -177,7 +179,7 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     expect(choiceOf(V5_HOLDER)).toEqual({ choice: 'allowed', withdrawable: true });
   });
 
-  it('switch off asks first, then grants client-ai-v4 (Roman stays allowed) and says the notes are deleted', async () => {
+  it('switch off asks first, then grants client-ai-v4 (Roman stays allowed); nothing says the notes are deleted', async () => {
     const api = makeApi(V5_HOLDER, { kind: 'ok', status: V4_MEMORY_COPY });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-memory-row'));
@@ -187,6 +189,8 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     // Cancel (or dismissing the alert) sends nothing.
     expect(lastAlert().buttons.map((b) => b.text)).toEqual([ROMAN_AI_COPY.cancel, ROMAN_AI_COPY.memoryOff]);
     expect(lastAlert().buttons[0].onPress).toBeUndefined();
+    // Turning memory off keeps the notes: not a destructive action (R11-C2C).
+    expect(lastAlert().buttons[1].style).toBeUndefined();
     expect(api.grantRoman).not.toHaveBeenCalled();
     expect(api.withdrawRoman).not.toHaveBeenCalled();
 
@@ -199,6 +203,9 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     expect(memorySwitch(r).props.value).toBe(false);
     expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
     expect(r.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(lastAlert().message).not.toMatch(/delet/i);
+    expect(r.getByTestId('roman-ai-notice').props.children).not.toMatch(/delet/i);
+    expect(r.queryByTestId(/notes?-delete|delete-notes?/)).toBeNull();
   });
 
   it.each([
@@ -291,8 +298,21 @@ describe('copy', () => {
   it('the owner wording, no first person, no exclamation marks', () => {
     expect(ROMAN_AI_COPY.memoryLabel).toBe('Roman\u2019s memory');
     expect(ROMAN_AI_COPY.memoryHelper).toBe(
-      'Roman keeps notes from chats and logs to give answers that fit. Turn off to stop and delete them.',
+      'Roman keeps notes from chats and logs to give answers that fit. Turning this off stops Roman from using them. Notes are deleted when the account is deleted.',
     );
+  });
+
+  it('R11-C2C: true on every backend; turning memory off never claims to delete or to keep the notes', () => {
+    expect(ROMAN_AI_COPY.confirmMemoryOffBody).toBe(
+      'Roman stops keeping and using notes about you. Roman and AI stay allowed. You can turn it on again at any time.',
+    );
+    expect(ROMAN_AI_COPY.memoryOffDone).toBe('Roman\u2019s memory is off. Roman no longer uses his notes about you.');
+    for (const k of ['confirmMemoryOffTitle', 'confirmMemoryOffBody', 'memoryOff', 'memoryOffDone'] as const) {
+      expect(ROMAN_AI_COPY[k]).not.toMatch(/delet|eras|remov|kept|keeps them/i);
+    }
+    // The only deletion line is account deletion.
+    expect(ROMAN_AI_COPY.memoryHelper.match(/delet\w*[^.]*\./gi)).toEqual(['deleted when the account is deleted.']);
+    expect(Object.keys(ROMAN_AI_COPY).filter((k) => /delete.*note|note.*delete/i.test(k))).toEqual([]);
     const keys = [
       'allowedMemoryBody',
       'memoryLabel',
