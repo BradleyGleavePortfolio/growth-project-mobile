@@ -3,14 +3,11 @@
  *
  * Logic:
  * - MMKV 'home.coach_intro_banner_dismissed' === 'true' → return null
- * - user.coach_id absent → show WaitingForCoachBanner
+ * - user.coach_id absent → render nothing
  * - user.coach_id present → fetch /v1/clients/me/coach, show coach name/avatar
- * - On 404 → show "Your coach will assign your first workout soon." (no dismiss)
+ * - On 404 → render nothing
  * - Skeleton while fetching (height 64 row, no ActivityIndicator)
  *
- * WaitingForCoachBanner:
- * - MMKV 'home.waiting_banner_dismissed' === 'true' → return null
- * - Dismissible, writes key on dismiss
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -31,7 +28,6 @@ import api from '../../services/api';
 // the previous client's banner-dismissed state.
 
 const INTRO_DISMISSED_KEY_BASE = 'home.coach_intro_banner_dismissed';
-const WAITING_DISMISSED_KEY_BASE = 'home.waiting_banner_dismissed';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,53 +35,6 @@ interface CoachProfile {
   id: string;
   name: string;
   avatar_url?: string | null;
-}
-
-// ─── WaitingForCoachBanner ────────────────────────────────────────────────────
-
-function WaitingForCoachBanner() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
-  const currentUser = useCurrentUser();
-  const waitingKey = useMemo(
-    () => (currentUser?.id ? `${WAITING_DISMISSED_KEY_BASE}:${currentUser.id}` : null),
-    [currentUser?.id],
-  );
-
-  const [dismissed, setDismissed] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    if (!waitingKey) return;
-    prefsStorage.getStringAsync(waitingKey).then((val) => {
-      setDismissed(val === 'true');
-    }).catch(() => setDismissed(false));
-  }, [waitingKey]);
-
-  const handleDismiss = useCallback(() => {
-    if (waitingKey) {
-      prefsStorage.set(waitingKey, 'true').catch(() => {});
-    }
-    setDismissed(true);
-  }, [waitingKey]);
-
-  if (dismissed !== false) return null;
-
-  return (
-    <View style={styles.banner} testID="waiting-for-coach-banner">
-      <Text style={styles.bannerText}>
-        Your coach will assign your first workout. For now, explore the app.
-      </Text>
-      <TouchableOpacity
-        onPress={handleDismiss}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss waiting for coach banner"
-        testID="waiting-banner-dismiss"
-      >
-        <Text style={styles.dismissText}>×</Text>
-      </TouchableOpacity>
-    </View>
-  );
 }
 
 // ─── CoachIntroductionBanner ──────────────────────────────────────────────────
@@ -115,7 +64,7 @@ export default function CoachIntroductionBanner() {
   useEffect(() => {
     if (dismissed !== false) return;
     const coachId = currentUser?.coach_id;
-    if (!coachId) return; // no coach → WaitingForCoachBanner handles
+    if (!coachId) return;
 
     let cancelled = false;
     setLoadState('loading');
@@ -148,25 +97,11 @@ export default function CoachIntroductionBanner() {
 
   const coachId = currentUser?.coach_id;
 
-  // No coach assigned → show waiting banner
-  if (!coachId) {
-    return <WaitingForCoachBanner />;
-  }
+  if (!coachId) return null;
 
   // Loading skeleton
   if (loadState === 'loading') {
     return <View style={styles.skeleton} testID="coach-intro-skeleton" />;
-  }
-
-  // 404 — informational only, no dismiss
-  if (loadState === 'not_found') {
-    return (
-      <View style={styles.banner} testID="coach-intro-not-found">
-        <Text style={styles.bannerText}>
-          Your coach will assign your first workout soon.
-        </Text>
-      </View>
-    );
   }
 
   // Loaded

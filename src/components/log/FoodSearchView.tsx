@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TextInput,
   FlatList,
@@ -11,6 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, colors } from '../../theme/index';
+import { useTheme } from '../../theme/useTheme';
+import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
 import { SearchResult } from '../../utils/log/types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
@@ -52,6 +53,7 @@ function logNote(item: SearchResult): string | null {
 }
 
 function FoodThumb({ item }: { item: SearchResult }) {
+  const styles = makeStyles(useTheme().semanticColors);
   if (item.image_url) {
     return (
       <Image
@@ -90,6 +92,8 @@ export default function FoodSearchView({
   onRepeatMeal,
   saving,
 }: Props) {
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;
   const showEmpty =
@@ -100,11 +104,11 @@ export default function FoodSearchView({
   return (
     <View style={styles.modalBody}>
       <View style={styles.searchBar}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} />
+        <Ionicons name="search" size={18} color={sc.textMuted} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search foods..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={sc.textMuted}
           value={searchQuery}
           onChangeText={onSearchChange}
           autoFocus
@@ -112,7 +116,7 @@ export default function FoodSearchView({
         {searching && <ActivityIndicator size="small" color={Colors.primary} />}
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
-            <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+            <Ionicons name="close-circle" size={18} color={sc.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -176,7 +180,7 @@ export default function FoodSearchView({
       {didYouMean.length > 0 && (
         <View style={styles.didYouMeanContainer}>
           <View style={styles.didYouMeanHeaderRow}>
-            <Ionicons name="bulb-outline" size={16} color={Colors.gold} />
+            <Ionicons name="bulb-outline" size={16} color={sc.textMuted} />
             <Text style={styles.didYouMeanHeaderText}>Did you mean…?</Text>
           </View>
           {didYouMean.map((item, idx) => (
@@ -226,16 +230,16 @@ export default function FoodSearchView({
             </View>
           ) : showEmpty ? (
             <View style={styles.emptyStateContainer}>
-              <Ionicons name="search-outline" size={36} color={Colors.textMuted} />
+              <Ionicons name="search-outline" size={36} color={sc.textMuted} />
               <Text style={styles.emptyStateTitle}>{searchError ? 'Search unavailable' : 'No results found'}</Text>
               <Text style={styles.emptyStateSubtitle}>
                 {searchError ? 'Check the connection and retry, or enter food details manually below.' : 'Try a simpler name, check spelling, or log it manually below.'}
               </Text>
               <TouchableOpacity
-                style={{ backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
+                style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
                 onPress={onRetrySearch}
               >
-                <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 14 }}>Retry Search</Text>
+                <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: 14 }}>Try again</Text>
               </TouchableOpacity>
             </View>
           ) : null
@@ -280,20 +284,19 @@ export default function FoodSearchView({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   repeatCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 12,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
     gap: 12,
   },
   repeatText: { flex: 1 },
   repeatTitle: { fontSize: 14, fontWeight: '600', color: Colors.dark },
-  repeatSubtitle: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  repeatSubtitle: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
   repeatButton: {
     minHeight: 44,
     minWidth: 88,
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   repeatButtonText: { color: Colors.white, fontWeight: '600', fontSize: 14 },
-  logNote: { fontSize: 12, color: Colors.primary, marginTop: 2 },
+  logNote: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
   clearButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   modalBody: {
     flex: 1,
@@ -312,18 +315,17 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 12,
-    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   searchInput: {
+    minHeight: 44, fontFamily: 'Inter_400Regular',
     flex: 1,
     fontSize: 16,
     color: Colors.dark,
@@ -352,7 +354,7 @@ const styles = StyleSheet.create({
   },
   slowSearchText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: sc.textMuted,
     fontStyle: 'italic',
   },
   tabRow: {
@@ -366,30 +368,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   tabChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    borderBottomColor: Colors.primary,
   },
   tabChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textMuted,
+    color: sc.textMuted,
   },
   tabChipTextActive: {
-    color: Colors.white,
+    color: Colors.primary,
   },
   didYouMeanContainer: {
     marginHorizontal: 20,
     marginBottom: 10,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
     overflow: 'hidden',
   },
   didYouMeanHeaderRow: {
@@ -397,21 +392,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     padding: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   didYouMeanHeaderText: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.gold,
+    color: sc.textMuted,
   },
   didYouMeanItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   emptyStateContainer: {
     alignItems: 'center',
@@ -427,7 +422,7 @@ const styles = StyleSheet.create({
   },
   emptyStateSubtitle: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: sc.textMuted,
     textAlign: 'center',
     lineHeight: 19,
   },
@@ -438,7 +433,7 @@ const styles = StyleSheet.create({
   listHeader: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: sc.textMuted,
     marginBottom: 8,
     marginTop: 4,
   },
@@ -452,8 +447,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   searchResultLeft: {
     flex: 1,
@@ -465,13 +460,13 @@ const styles = StyleSheet.create({
     color: Colors.dark,
   },
   searchResultBrand: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 1,
   },
   searchResultMacros: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 2,
   },
   searchResultCals: {
@@ -487,10 +482,8 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     marginHorizontal: 20,
     marginBottom: 20,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   manualButtonText: {
     fontSize: 15,

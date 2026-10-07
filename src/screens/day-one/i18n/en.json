@@ -17,7 +17,7 @@
   "welcome": {
     "greetingWithName": "Welcome, {firstName}",
     "greetingFallback": "Welcome",
-    "subtitle": "Your coaching journey starts now. Let's set you up in under 60 seconds.",
+    "subtitle": "Setup takes 6 short steps.",
     "cta": "Get started",
     "logoA11y": "The Growth Project logo"
   },
@@ -26,8 +26,8 @@
     "subtitle": "Enter the invite code your coach sent you to pair instantly.",
     "inputLabel": "Invite code",
     "inputPlaceholder": "e.g. TGP-7XQ9",
-    "submit": "Pair with my coach",
-    "skip": "I don't have a code yet",
+    "submit": "Pair with coach",
+    "skip": "Continue without a code",
     "deepLinkBanner": "Pairing with the invite from your link…",
     "errors": {
       "notRecognized": "Invite code not recognized. Double-check with your coach.",
@@ -36,7 +36,7 @@
       "maxUses": "This code has been used up. Ask your coach for a new one.",
       "coachUnavailable": "Your coach is not taking new clients in the app right now. Let them know, then try the code again.",
       "alreadyPaired": "Your account is already connected to a different coach. Contact support to switch coaches.",
-      "network": "Couldn't reach our servers. Check your connection and try again.",
+      "network": "Couldn't connect. Check the connection and try again.",
       "tooShort": "Codes are at least 4 characters."
     },
     "successToast": "Paired with your coach"
@@ -57,9 +57,10 @@
   },
   "notifications": {
     "title": "Stay close to your coach",
-    "subtitle": "Coach messages, session reminders and progress milestones. Choose what arrives in Settings.",
+    "titleUnpaired": "Reminders and messages",
+    "subtitle": "Messages and reminders for booked sessions. Choose what arrives in Settings.",
     "bullets": [
-      "Coach replies the moment they arrive",
+      "New messages",
       "Reminders before booked sessions",
       "Every alert can be turned off in Settings"
     ],
@@ -69,7 +70,7 @@
   },
   "checkInTime": {
     "title": "Pick your daily check-in",
-    "subtitle": "Choose the time of day you plan to check in. Mornings work best for most.",
+    "subtitle": "Choose the time of day you plan to check in.",
     "defaultLabel": "Default: 9:00 AM",
     "continue": "Save check-in time",
     "skip": "Skip for now",
@@ -82,7 +83,7 @@
     "title": "Welcome to TGP, {firstName}.",
     "titleFallback": "Welcome to TGP.",
     "subtitle": "Your setup is done. The work starts now.",
-    "cta": "Open my dashboard",
+    "cta": "Open Home",
     "badgeA11y": "Onboarding complete"
   }
 }

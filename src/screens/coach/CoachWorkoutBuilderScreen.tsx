@@ -15,10 +15,8 @@
  * drag-and-drop dependency. Sets, reps_or_duration_seconds, rest, and
  * notes are inline numeric inputs.
  *
- * Palette note: uses `sc.accent` from useTheme(). On Body pillar this
- * resolves to forest (#2C4A36). Oxblood (#4A0404) is reserved for the
- * Finance pillar per src/theme/tokens.ts line 48. PR #130's coach
- * screens follow the same convention; we mirror it here.
+ * Palette note: every color comes from useTheme() semantic tokens, including
+ * the primary action's accent fill and its on-accent label.
  *
  * MWB-4 (autosave, flag `EXPO_PUBLIC_FF_MWB_AUTOSAVE`, default OFF): when the
  * flag is ON the screen ALSO mounts a Google-Docs-style autosave — a debounced
@@ -32,6 +30,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { RouteProp, useNavigation, useRoute, type ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -346,6 +345,8 @@ export default function CoachWorkoutBuilderScreen() {
       notes: e.notes,
     })),
   );
+  // The outline edit action focuses an already-visible field, never hides it.
+  const setsInputRefs = useRef(new Map<string, TextInput>());
 
   // MWB-4 #237 (D-045): clientIds of rows the coach has removed. A row deleted
   // BEFORE its server row_id was adopted produces NO remove_exercise op (the
@@ -1604,7 +1605,7 @@ export default function CoachWorkoutBuilderScreen() {
     >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={[typography.h2, { color: sc.textPrimary }]}>
+          <Text style={[typography.h1, styles.title, { color: sc.textPrimary }]}>
             {isEditing ? 'Edit workout plan' : 'New workout plan'}
           </Text>
           {/* Save-state pill: only when autosave is active. Flag-off (or a
@@ -1761,14 +1762,14 @@ export default function CoachWorkoutBuilderScreen() {
               }}
               style={[
                 styles.typeChip,
-                { borderColor: sc.textMuted },
-                type === t && { backgroundColor: sc.accent, borderColor: sc.accent },
+                { borderColor: type === t ? sc.textPrimary : sc.border },
+                type === t && styles.typeSelected,
               ]}
             >
               <Text
                 style={[
                   typography.body,
-                  { color: type === t ? sc.bgPrimary : sc.textPrimary },
+                  { color: sc.textPrimary },
                 ]}
               >
                 {t}
@@ -1810,49 +1811,67 @@ export default function CoachWorkoutBuilderScreen() {
               style={[styles.rowCard, { borderColor: sc.border }]}
             >
               <View style={styles.rowHeader}>
-                <CoachExerciseName
-                  id={row.exercise_external_id}
-                  fallback={row.display_name}
-                  prefix={`${idx + 1}. `}
-                  style={[typography.body, { color: sc.textPrimary, flex: 1 }]}
-                />
+                <View style={styles.rowIdentity}>
+                  {/* Reorder marker, not a drag target: the arrows below move rows. */}
+                  <Ionicons name="reorder-three-outline" size={20} color={sc.textMuted} accessible={false} />
+                  <CoachExerciseName
+                    id={row.exercise_external_id}
+                    fallback={row.display_name}
+                    prefix={`${idx + 1}. `}
+                    style={[typography.bodyMd, { color: sc.textPrimary, flex: 1 }]}
+                  />
+                </View>
                 <View style={styles.rowControls}>
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel="Move exercise up"
+                    accessibilityState={{ disabled: editorLocked || idx === 0 }}
                     onPress={() => moveRow(idx, -1)}
                     disabled={editorLocked || idx === 0}
-                    style={styles.controlBtn}
+                    style={[styles.controlBtn, (editorLocked || idx === 0) && styles.historyButtonDisabled]}
                   >
-                    <Text style={[typography.body, { color: sc.textPrimary }]}>
-                      Up
-                    </Text>
+                    <Ionicons name="chevron-up-outline" size={20} color={sc.textPrimary} />
                   </Pressable>
                   <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel="Move exercise down"
+                    accessibilityState={{ disabled: editorLocked || idx === rows.length - 1 }}
                     onPress={() => moveRow(idx, 1)}
                     disabled={editorLocked || idx === rows.length - 1}
-                    style={styles.controlBtn}
+                    style={[styles.controlBtn, (editorLocked || idx === rows.length - 1) && styles.historyButtonDisabled]}
                   >
-                    <Text style={[typography.body, { color: sc.textPrimary }]}>
-                      Down
-                    </Text>
+                    <Ionicons name="chevron-down-outline" size={20} color={sc.textPrimary} />
                   </Pressable>
                   <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Edit exercise"
+                    accessibilityHint="Focuses sets. Reps and rest remain below."
+                    accessibilityState={{ disabled: editorLocked }}
+                    disabled={editorLocked}
+                    onPress={() => setsInputRefs.current.get(row.clientId)?.focus()}
+                    style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
+                  >
+                    <Ionicons name="create-outline" size={20} color={sc.textPrimary} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
                     accessibilityLabel="Remove exercise"
                     accessibilityState={{ disabled: editorLocked }}
                     disabled={editorLocked}
                     onPress={() => removeRow(idx)}
-                    style={styles.controlBtn}
+                    style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
-                    <Text style={[typography.body, { color: sc.textMuted }]}>
-                      Remove
-                    </Text>
+                    <Ionicons name="trash-outline" size={20} color={sc.textMuted} />
                   </Pressable>
                 </View>
               </View>
               <View style={styles.rowInputs}>
                 <NumberField
                   label="Sets"
+                  inputRef={(input) => {
+                    if (input) setsInputRefs.current.set(row.clientId, input);
+                    else setsInputRefs.current.delete(row.clientId);
+                  }}
                   editable={!editorLocked}
                   value={row.sets}
                   onChange={(v) => updateRow(idx, { sets: v })}
@@ -1899,14 +1918,17 @@ export default function CoachWorkoutBuilderScreen() {
                 onPress={() => addExercise(ex)}
                 style={[styles.searchHit, { borderColor: sc.border }]}
               >
-                <Text style={[typography.body, { color: sc.textPrimary }]}>
-                  {ex.name}
-                </Text>
-                {ex.bodyPart ? (
-                  <Text style={[typography.caption, { color: sc.textMuted }]}>
-                    {ex.bodyPart}
+                <View style={{ flex: 1 }}>
+                  <Text style={[typography.body, { color: sc.textPrimary }]}>
+                    {ex.name}
                   </Text>
-                ) : null}
+                  {ex.bodyPart ? (
+                    <Text style={[typography.caption, { color: sc.textMuted, fontSize: 13 }]}>
+                      {ex.bodyPart}
+                    </Text>
+                  ) : null}
+                </View>
+                <Ionicons name="add-outline" size={22} color={sc.textPrimary} accessible={false} />
               </Pressable>
             ))}
           </View>
@@ -1921,10 +1943,10 @@ export default function CoachWorkoutBuilderScreen() {
           }}
           style={[
             styles.saveBtn,
-            { backgroundColor: canSave ? sc.accent : sc.border },
+            { backgroundColor: canSave ? sc.accent : sc.disabledBg },
           ]}
         >
-          <Text style={[typography.h4, { color: sc.bgPrimary }]}>
+          <Text style={[typography.h4, { color: canSave ? sc.textOnAccent : sc.textOnDisabled }]}>
             {createMut.isPending || updateMut.isPending || setExercisesMut.isPending
               ? 'Saving...'
               : isEditing
@@ -1958,12 +1980,14 @@ function NumberField(props: {
   onChange: (n: number) => void;
   sc: SemanticTokens;
   editable?: boolean;
+  inputRef?: (input: TextInput | null) => void;
 }) {
-  const { label, value, onChange, sc, editable = true } = props;
+  const { label, value, onChange, sc, editable = true, inputRef } = props;
   return (
     <View style={{ flex: 1 }}>
-      <Text style={[typography.caption, { color: sc.textMuted }]}>{label}</Text>
+      <Text style={[typography.caption, { color: sc.textMuted, fontSize: 13 }]}>{label}</Text>
       <TextInput
+        ref={inputRef}
         accessibilityLabel={label}
         value={String(value)}
         editable={editable}
@@ -1972,15 +1996,14 @@ function NumberField(props: {
           onChange(Number.isFinite(parsed) ? parsed : 0);
         }}
         keyboardType="number-pad"
-        style={{
-          borderWidth: 1,
+        style={[typography.body, {
+          borderBottomWidth: StyleSheet.hairlineWidth,
           borderColor: sc.border,
-          borderRadius: 6,
-          paddingHorizontal: spacing.sm,
+          minHeight: 44,
           paddingVertical: spacing.xs,
           color: sc.textPrimary,
-          marginRight: spacing.xs,
-        }}
+          fontVariant: ['tabular-nums'],
+        }]}
         maxLength={4}
       />
     </View>
@@ -1993,69 +2016,73 @@ function makeStyles(sc: SemanticTokens) {
     content: { padding: spacing.lg, paddingBottom: spacing["2xl"] },
     headerRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
+      flexWrap: 'wrap',
       alignItems: 'center',
       gap: spacing.sm,
-      marginBottom: spacing.xs,
+      marginBottom: spacing.lg,
     },
-    label: { marginTop: spacing.md, marginBottom: spacing.xs },
+    title: { width: '100%', marginBottom: spacing.sm },
+    label: { marginTop: spacing.xl, marginBottom: spacing.sm, fontSize: 13, textTransform: 'uppercase' },
     historyRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
     aiBar: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 52, marginHorizontal: spacing.lg, marginBottom: spacing.md,
-      paddingHorizontal: spacing.md, borderWidth: 1, borderRadius: 14, borderColor: sc.border, backgroundColor: sc.bgSurface,
+      paddingHorizontal: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
     },
     historyButton: {
       minHeight: 44,
       minWidth: 64,
-      paddingHorizontal: spacing.md,
-      borderWidth: 1,
-      borderColor: sc.border,
-      borderRadius: 8,
+      paddingHorizontal: spacing.sm,
       alignItems: 'center',
       justifyContent: 'center',
     },
     historyButtonDisabled: { opacity: 0.5 },
     input: {
-      borderWidth: 1,
+      ...typography.body,
+      minHeight: 48,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
-      borderRadius: 8,
-      paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       color: sc.textPrimary,
     },
     typeRow: { flexDirection: 'row', gap: spacing.sm },
     typeChip: {
-      borderWidth: 1,
-      borderRadius: 999,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs,
+      flex: 1,
+      minHeight: 44,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
+    typeSelected: { borderBottomWidth: 2 },
     sectionHeading: { marginTop: spacing.xl, marginBottom: spacing.sm },
     rowCard: {
-      borderWidth: 1,
-      borderRadius: 10,
-      padding: spacing.md,
-      marginBottom: spacing.md,
-    },
-    rowHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
+      borderTopWidth: StyleSheet.hairlineWidth,
+      paddingVertical: spacing.lg,
       marginBottom: spacing.sm,
     },
-    rowControls: { flexDirection: 'row', gap: spacing.sm },
-    controlBtn: { paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+    rowHeader: {
+      gap: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    rowIdentity: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
+    rowControls: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
+    controlBtn: {
+      minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
+      borderRadius: 4, alignItems: 'center', justifyContent: 'center',
+    },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
     searchResults: { marginTop: spacing.sm },
     searchHit: {
-      borderWidth: 1,
-      borderRadius: 8,
-      padding: spacing.sm,
-      marginBottom: spacing.xs,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 52,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      paddingVertical: spacing.sm,
     },
     saveBtn: {
       marginTop: spacing.xl,
-      borderRadius: 12,
+      borderRadius: 4,
+      minHeight: 52,
       paddingVertical: spacing.md,
       alignItems: 'center',
     },
