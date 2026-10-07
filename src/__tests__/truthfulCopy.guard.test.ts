@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert, FlatList, Share } from 'react-native';
+import { Alert, Share } from 'react-native';
 const ROOT = path.resolve(__dirname, '..');
 function shipped(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -65,7 +65,7 @@ jest.mock('../api/packagesApi', () => ({ coachPackagesApi: {
   unpublish: jest.fn(async () => ({ data: mockPackage })),
   archive: jest.fn(async () => ({ data: mockPackage })),
 } }));
-const mockPackage = {
+const mockPackage: import('../api/packagesApi').CoachPackage = {
   id: 'package', coachUserId: 'client', title: 'Strength', description: 'Training', priceCents: 9900,
   currency: 'usd', billingInterval: 'monthly', intervalCount: 1, trialDays: null, features: [],
   status: 'active', shareToken: null, subscriberCount: 0, monthlyRevenueCents: 0,
@@ -133,10 +133,10 @@ it('keeps private rooms/posts and refresh, removing only a false voice-note plac
   expect(s.getByLabelText('Pull to refresh community').props.onRefresh).toEqual(expect.any(Function));
 });
 it('labels unavailable packages honestly and retains Back and refresh', async () => {
-  const s = await render(React.createElement(CoachPackagesListScreen, { navigation: mockNav } as React.ComponentProps<typeof CoachPackagesListScreen>));
+  const s = await render(React.createElement(CoachPackagesListScreen, { navigation: jest.requireMock('@react-navigation/native').useNavigation() }));
   await waitFor(() => expect(s.getByText('Packages are not available in this version.')).toBeTruthy());
   await fireEvent.press(s.getByLabelText('Go back')); expect(mockBack).toHaveBeenCalled();
-  expect(s.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh).toEqual(expect.any(Function));
+  expect(s.getByTestId('coach-packages-list').props.refreshControl.props.onRefresh).toEqual(expect.any(Function));
 });
 it('keeps real package editing, preview and navigation, not a dead share row', async () => {
   const s = await render(React.createElement(CoachPackageEditScreen, {
@@ -163,7 +163,7 @@ it('retains real package sharing and the create/open-package routes', async () =
   } as React.ComponentProps<typeof CoachPackageEditScreen>));
   await fireEvent.press(s.getByLabelText('Share package link')); expect(Share.share).toHaveBeenCalled();
   require('../api/packagesApi').coachPackagesApi.list.mockResolvedValueOnce({ data: [mockPackage] });
-  const list = await render(React.createElement(CoachPackagesListScreen, { navigation: mockNav } as React.ComponentProps<typeof CoachPackagesListScreen>));
+  const list = await render(React.createElement(CoachPackagesListScreen, { navigation: jest.requireMock('@react-navigation/native').useNavigation() }));
   await waitFor(() => expect(list.getByLabelText('Edit Strength')).toBeTruthy());
   await fireEvent.press(list.getByLabelText('Create package')); expect(mockNavigate).toHaveBeenLastCalledWith('CoachPackageEdit', { packageId: null });
   await fireEvent.press(list.getByLabelText('Edit Strength')); expect(mockNavigate).toHaveBeenLastCalledWith('CoachPackageEdit', { packageId: 'package', initialPackage: mockPackage });

@@ -168,6 +168,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          testID="coach-packages-list"
           data={items}
           keyExtractor={(p) => p.id}
           contentContainerStyle={
