@@ -457,26 +457,27 @@ describe('Settings entry and route', () => {
   const root = path.resolve(__dirname, '../../..');
   const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  it('section and row labels match the approved copy: Settings > Privacy, Settings > Account > Delete account', () => {
+  it('keeps approved Account deletion copy and the regrouped Privacy and data / Roman headings', () => {
     const settings = read('screens/client/SettingsScreen.tsx');
-    expect(settings).toMatch(/<Text style=\{styles\.sectionLabel\}>Privacy<\/Text>/);
+    expect(settings).toContain('<SettingsSection title="Privacy and data" id="privacy">');
     expect(settings).not.toMatch(/Data & Privacy/);
     expect(settings).not.toMatch(/Delete my account/);
-    // The Delete account row sits in the Account section (before the next section label).
-    const account = settings.indexOf('<Text style={styles.sectionLabel}>Account</Text>');
+    // The Delete account row remains inside Account, before the next group.
+    const account = settings.indexOf('<SettingsSection title="Account" id="account">');
     const del = settings.indexOf('>Delete account</Text>');
-    const next = settings.indexOf('<Text style={styles.sectionLabel}>', account + 1);
+    const next = settings.indexOf('<SettingsSection', account + 1);
     expect(account).toBeGreaterThan(-1);
     expect(del).toBeGreaterThan(account);
     expect(del).toBeLessThan(next);
-    // Roman and AI sits in the Privacy section.
-    const privacy = settings.indexOf('<Text style={styles.sectionLabel}>Privacy</Text>');
-    expect(settings.indexOf("navigate('RomanAiConsent')")).toBeGreaterThan(privacy);
+    // Roman and AI is still one tap away, now in the dedicated Roman group.
+    const roman = settings.indexOf('<SettingsSection title="Roman" id="roman">');
+    expect(roman).toBeGreaterThan(-1);
+    expect(settings.indexOf("navigate('RomanAiConsent')")).toBeGreaterThan(roman);
     expect(ROMAN_AI_COPY.accountLine).toMatch(/Settings > Account > Delete account\.$/);
     expect(ROMAN_AI_COPY.deleteAccount).toBe('Delete account');
   });
 
-  it('the Privacy row opens RomanAiConsent, only in builds where the choice exists', () => {
+  it('the Roman row opens RomanAiConsent, only in builds where the choice exists', () => {
     const settings = read('screens/client/SettingsScreen.tsx');
     const gate = settings.search(/\{featureFlags\.consultationOnboarding \|\| featureFlags\.romanChat \? \(/);
     const row = settings.search(/navigation\.navigate\('RomanAiConsent'\)/);

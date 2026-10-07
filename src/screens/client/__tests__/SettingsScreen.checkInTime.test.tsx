@@ -24,7 +24,7 @@ jest.mock('../../../services/authActions', () => ({
 }));
 jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn(async () => ({ ok: true })) }));
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
-jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
+jest.mock('../settings/ClientTutorialSetting', () => () => null);
 jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { consultationOnboarding: true, romanChat: true } }));
 jest.mock('@expo/vector-icons', () => ({
@@ -64,8 +64,9 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
       expect(profileApi.update).toHaveBeenLastCalledWith(payload);
     }
     const keys = ['dailyCheckin', 'mealReminders', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
+    const labels = ['Daily Check-in', 'Meal Reminders', 'Fasting Alerts', 'Weekly Summary', 'Haptics enabled'];
     for (let index = 0; index < keys.length; index += 1) {
-      const toggle = view.getAllByRole('switch')[index], value = !toggle.props.value;
+      const toggle = view.getByLabelText(labels[index]), value = !toggle.props.value;
       await fireEvent(toggle, 'valueChange', value);
       await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)[keys[index]]).toBe(value));
     }
