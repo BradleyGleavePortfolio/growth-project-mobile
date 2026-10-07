@@ -8,6 +8,8 @@ Settings-area screens for The Growth Project mobile app.
 
 `DeleteAccountScreen.tsx` — GDPR right-to-erasure flow (Phase 10).
 
+Look (DES-BB-127): bone page, hairline sections instead of cream cards, Cormorant for the title and the deletion date; flow, re-auth and wording unchanged.
+
 **Purpose**
 
 In-app account deletion for both roles (Apple App Review 5.1.1(v); GDPR Art. 17; Washington My Health My Data Act right to deletion). Deletion can be completed entirely in the app: no email step, no contacting support.
@@ -141,6 +143,8 @@ coach and owner accounts.
 ### DataExportScreen
 
 `DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.
+
+Look (DES-BB-127): hairline status sections instead of boxes, one forest primary button, Cormorant <= 500; states and copy unchanged. `BlockedUsersScreen.tsx` uses the same hairline rows; its error states say "tap Retry" (there is no pull-to-refresh).
 
 **State machine**
 
