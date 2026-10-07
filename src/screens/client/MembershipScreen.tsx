@@ -1,17 +1,17 @@
 /**
- * MembershipScreen — Sale-readiness: client-facing membership and access surface.
+ * MembershipScreen — the client's membership and access surface.
  *
- * The Growth Project is a coach-managed platform. Access is granted via an
- * invite code from the coach (Stripe / external billing is handled outside
- * the mobile app). This screen is informational: it shows the active
- * membership status, the coach's identity, and a clear path to the coach
- * for any access changes — without reintroducing in-app billing chrome.
- *
- * No placeholder copy, no fake values. If structured context cannot be
- * loaded, the screen renders a calm "we couldn't reach the server" state.
+ * CF-MONEY-MEMBER-128 (FW-MONEY-128 B-3, U-4): STATUS is the client's real
+ * plan, never the coach link alone. The plan read is
+ * clientPaymentsApi.getPaymentStatus() (purchases joined with the coach's
+ * packages); when it fails, the server entitlement the app already holds
+ * (useEntitlement) decides, and an unknown state says so. The one forest
+ * primary action opens ClientPackages, where Your plans holds the next
+ * charge, Update card and End my plan. Pull to refresh and coming back to
+ * the screen read everything again. Billing actions stay on ClientPackages.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -20,67 +20,174 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Linking,
+  RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { aiApi, AIStructuredContext, usersApi } from '../../services/api';
+import { clientPaymentsApi, type ClientPaymentStatus, type PaymentsResult } from '../../api/clientPaymentsApi';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 import { HELP_CONTACT_URL } from '../../config/env';
 
-import { colors as colorTokens, typography } from '../../theme/tokens';
+import { typography, type SemanticTokens } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type FoundingInfo = { rank: number; total: number; isFoundingMember: boolean };
+type PlanRead = PaymentsResult<ClientPaymentStatus>;
+
+export interface MembershipStatusView {
+  value: string;
+  planName: string | null;
+  detail: string | null;
+  /** A plan is on the account (it may be ending or past due). */
+  hasPlan: boolean;
+}
+
+function formatDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * The plan's one line: the rules and words of ClientPackages' Current plan
+ * line (currentPlanLine), kept here so Membership does not depend on that
+ * screen's module.
+ */
+function planLine(d: ClientPaymentStatus): string | null {
+  if (d.state === 'past_due') return 'To keep this plan, update your card in Your plans.';
+  if (d.state === 'canceled' || d.cancel_at_period_end) {
+    const ends = formatDate(d.current_period_end) ?? formatDate(d.access_expires_at);
+    return ends
+      ? `Ends ${ends}. Nothing more is charged.`
+      : 'Ends at the close of this period. Nothing more is charged.';
+  }
+  const trialEnds = d.state === 'trialing' ? formatDate(d.trial_ends_at) : null;
+  if (trialEnds) return `Trial ends ${trialEnds}`;
+  const renews = formatDate(d.current_period_end);
+  if (renews) return `Renews ${renews}`;
+  const until = formatDate(d.access_expires_at);
+  return until ? `Access until ${until}` : null;
+}
+
+/** B-3: what STATUS says. A coach link alone is never Active. */
+export function membershipStatus(input: {
+  hasCoach: boolean;
+  coachName: string | null | undefined;
+  plan: PlanRead | null;
+  entitlementActive: boolean | null;
+}): MembershipStatusView {
+  const { hasCoach, coachName, plan, entitlementActive } = input;
+  if (!hasCoach) {
+    return {
+      value: 'Awaiting coach access',
+      planName: null,
+      detail: 'Access starts when a coach invite is attached to this account.',
+      hasPlan: false,
+    };
+  }
+  if (plan !== null && plan.ok && plan.data.state !== 'none') {
+    return {
+      value: plan.data.state === 'past_due' ? 'Payment did not go through' : 'Active',
+      planName: plan.data.package_name,
+      detail: planLine(plan.data),
+      hasPlan: true,
+    };
+  }
+  if (entitlementActive === true) {
+    return {
+      value: 'Active',
+      planName: null,
+      detail: coachName ? `Access provided by ${coachName}.` : 'Access provided by your coach.',
+      hasPlan: false,
+    };
+  }
+  if (plan?.ok || entitlementActive === false) {
+    return {
+      value: 'No active plan',
+      planName: null,
+      detail: 'To start one, open View coaching plans or message your coach.',
+      hasPlan: false,
+    };
+  }
+  return { value: 'Status unavailable', planName: null, detail: null, hasPlan: false };
+}
 
 export default function MembershipScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors, semanticColors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, semanticColors), [colors, semanticColors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
+  const { entitlementActive, refreshEntitlement } = useEntitlement();
   const [coach, setCoach] = useState<AIStructuredContext['coach'] | null>(null);
   const [founding, setFounding] = useState<FoundingInfo | null>(null);
+  const [plan, setPlan] = useState<PlanRead | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [reachable, setReachable] = useState(true);
+  const mounted = useRef(true);
+  const loadedOnce = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        // Both calls are independent — issue them in parallel. Either one may
-        // fail without invalidating the screen; we degrade gracefully.
-        const [ctxResult, foundingResult] = await Promise.allSettled([
-          aiApi.getStructuredContext(),
-          usersApi.getFoundingNumber(),
-        ]);
-
-        if (cancelled) return;
-
-        if (ctxResult.status === 'fulfilled') {
-          setCoach(ctxResult.value.data?.coach ?? null);
-        }
-        if (foundingResult.status === 'fulfilled') {
-          setFounding(foundingResult.value.data ?? null);
-        }
-        // If BOTH failed, surface the unreachable state. One failing alone
-        // is fine — the screen still has useful local data to show.
-        if (
-          ctxResult.status === 'rejected' &&
-          foundingResult.status === 'rejected'
-        ) {
-          setReachable(false);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  // The reads are independent and run in parallel; any one may fail without
+  // blanking the screen.
+  const load = useCallback(async () => {
+    const [ctxResult, foundingResult, planResult] = await Promise.allSettled([
+      aiApi.getStructuredContext(),
+      usersApi.getFoundingNumber(),
+      clientPaymentsApi.getPaymentStatus(),
+    ]);
+    if (!mounted.current) return;
+    if (ctxResult.status === 'fulfilled') {
+      setCoach(ctxResult.value.data?.coach ?? null);
+    }
+    if (foundingResult.status === 'fulfilled') {
+      setFounding(foundingResult.value.data ?? null);
+    }
+    setPlan(
+      planResult.status === 'fulfilled'
+        ? planResult.value
+        : { ok: false, reason: 'error', message: 'Plan details could not be loaded.' },
+    );
+    // Both failing is the unreachable state; one alone still leaves useful data.
+    setReachable(!(ctxResult.status === 'rejected' && foundingResult.status === 'rejected'));
+    loadedOnce.current = true;
+    setLoading(false);
   }, []);
 
+  useEffect(() => {
+    mounted.current = true;
+    void load();
+    return () => {
+      mounted.current = false;
+    };
+  }, [load]);
+
+  // Back from Your plans (a plan ended, a card updated): read it again.
+  useFocusEffect(
+    useCallback(() => {
+      if (loadedOnce.current) void load();
+    }, [load]),
+  );
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([load(), refreshEntitlement()]);
+    if (mounted.current) setRefreshing(false);
+  }, [load, refreshEntitlement]);
+
   const coachName = coach?.name || coach?.business_name;
-  const accessGranted = Boolean(currentUser?.coach_id);
+  const hasCoach = Boolean(currentUser?.coach_id);
+  const status = membershipStatus({ hasCoach, coachName, plan, entitlementActive });
+  const notice =
+    hasCoach && plan !== null && !plan.ok
+      ? 'Plan details could not be loaded. Pull down to try again.'
+      : !reachable
+        ? 'Some details could not be loaded. Pull down to try again.'
+        : null;
+  const plansLabel = status.hasPlan ? 'Your plans' : 'View coaching plans';
   const memberSince = currentUser?.createdAt
     ? new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' }).format(
         new Date(currentUser.createdAt),
@@ -108,7 +215,7 @@ export default function MembershipScreen() {
           accessibilityLabel="Back"
           style={styles.backBtn}
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
         </HapticPressable>
         <Text style={styles.headerTitle} accessibilityRole="header">
           Membership
@@ -117,28 +224,30 @@ export default function MembershipScreen() {
       </View>
 
       <ScrollView
+        testID="membership-scroll"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
+        }
       >
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator color={semanticColors.accent} />
           </View>
         ) : (
           <>
-            {/* Status card */}
-            <View style={styles.card}>
+            {/* Status: the real plan (B-3) */}
+            <View style={styles.card} testID="membership-status">
               <Text style={styles.eyebrow}>STATUS</Text>
-              <Text style={styles.statusValue}>
-                {accessGranted ? 'Active' : 'Awaiting coach access'}
-              </Text>
-              <Text style={styles.statusSub}>
-                {accessGranted
-                  ? coachName
-                    ? `Access provided by ${coachName}.`
-                    : 'Access provided by your coach.'
-                  : 'Access starts when a coach invite is attached to this account.'}
-              </Text>
+              <Text style={styles.statusValue}>{status.value}</Text>
+              {status.planName ? <Text style={styles.planName}>{status.planName}</Text> : null}
+              {status.detail ? <Text style={styles.statusSub}>{status.detail}</Text> : null}
+              {notice ? (
+                <Text style={styles.noticeText} accessibilityLiveRegion="polite">
+                  {notice}
+                </Text>
+              ) : null}
               {founding?.isFoundingMember && founding.rank > 0 ? (
                 <View style={styles.foundingRow}>
                   <Ionicons name="bookmark" size={14} color={colors.warning} />
@@ -148,6 +257,20 @@ export default function MembershipScreen() {
                 </View>
               ) : null}
             </View>
+
+            {/* The one forest primary action (U-4): ClientPackages, where Your
+                plans holds the next charge, Update card and End my plan. */}
+            <HapticPressable
+              intent="medium"
+              style={styles.primaryAction}
+              onPress={() => navigation.navigate('ClientPackages')}
+              accessibilityRole="button"
+              accessibilityLabel={plansLabel}
+              accessibilityHint="Opens your plans and the plans your coach offers"
+              testID="membership-plans"
+            >
+              <Text style={styles.primaryActionLabel}>{plansLabel}</Text>
+            </HapticPressable>
 
             {/* Detail rows */}
             <View style={styles.detailGroup}>
@@ -166,45 +289,21 @@ export default function MembershipScreen() {
               <Text style={styles.explainBody}>
                 The Growth Project is a coach-managed platform. Your coach
                 invites you, sets your training and nutrition plan, and may
-                offer self-serve plans below. A plan paid in the app shows
-                under View coaching plans, where a renewing plan can be ended
-                at any time. To pause or change a plan, message your coach.
+                offer plans you can buy in the app. A plan bought in the app
+                shows above. A renewing plan can be ended at any time in Your
+                plans. For questions about a plan, message your coach.
               </Text>
             </View>
 
-            {/* In-app self-serve plans — backend PR #215. The plans screen
-                handles its own honest empty state when the coach has not
-                published packages or Stripe Connect isn't onboarded. */}
             <HapticPressable
               intent="light"
               style={styles.secondaryAction}
-              onPress={() => navigation.navigate('ClientPackages' as never)}
-              accessibilityRole="button"
-              accessibilityLabel="View coaching plans"
-              accessibilityHint="Opens self-serve plans your coach offers, if any"
-            >
-              <Text style={styles.secondaryActionLabel}>VIEW COACHING PLANS</Text>
-            </HapticPressable>
-
-            {!reachable ? (
-              <View style={styles.notice}>
-                <Text style={styles.noticeText}>
-                  Some details couldn’t be reached. Pull to refresh once
-                  you’re back online.
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Primary action — contact coach */}
-            <HapticPressable
-              intent="medium"
-              style={styles.primaryAction}
               onPress={onContactCoach}
               accessibilityRole="button"
               accessibilityLabel="Message your coach"
               accessibilityHint="Opens the in-app messages channel to your coach"
             >
-              <Text style={styles.primaryActionLabel}>MESSAGE YOUR COACH</Text>
+              <Text style={styles.secondaryActionLabel}>Message your coach</Text>
             </HapticPressable>
 
             {/* Secondary — the contact support page for general inquiries.
@@ -239,8 +338,8 @@ export default function MembershipScreen() {
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors, semanticColors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, semanticColors), [colors, semanticColors]);
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -251,9 +350,10 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+// A23 calm: bone page, hairlines instead of filled boxes, theme colours only.
+const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: sc.bgPrimary },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -262,23 +362,22 @@ const makeStyles = (colors: ThemeColors) =>
     paddingTop: 12,
     paddingBottom: 8,
   },
-  backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   headerTitle: {
     ...typography.h3,
-    color: colorTokens.ink,
+    color: sc.textPrimary,
   },
   content: { padding: 24, paddingBottom: 64, gap: 24 },
   loadingWrap: { paddingVertical: 80, alignItems: 'center' },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
+    paddingTop: 18,
   },
-  eyebrow: { ...typography.eyebrow, color: colorTokens.stone, marginBottom: 8 },
-  statusValue: { ...typography.h2, color: colorTokens.ink, marginBottom: 6 },
-  statusSub: { ...typography.bodySmall, color: colorTokens.charcoal },
+  eyebrow: { ...typography.eyebrow, color: sc.textMuted, marginBottom: 8 },
+  statusValue: { ...typography.h2, color: sc.textPrimary, marginBottom: 6 },
+  planName: { ...typography.bodyMd, color: sc.textPrimary },
+  statusSub: { ...typography.bodySmall, color: sc.textMuted },
   foundingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,48 +386,43 @@ const makeStyles = (colors: ThemeColors) =>
   },
   foundingText: { ...typography.caption, color: colors.warning },
   detailGroup: {
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.divider,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
-  detailLabel: { ...typography.eyebrow, color: colorTokens.stone },
+  detailLabel: { ...typography.eyebrow, color: sc.textMuted },
   detailValue: {
     ...typography.bodySmall,
-    color: colorTokens.ink,
+    color: sc.textPrimary,
     maxWidth: '60%',
     textAlign: 'right',
   },
   explainBlock: { gap: 8 },
-  explainTitle: { ...typography.h3, color: colorTokens.ink },
-  explainBody: { ...typography.body, color: colorTokens.charcoal },
-  notice: {
-    backgroundColor: 'rgba(176,141,87,0.08)',
-    borderLeftWidth: 2,
-    borderLeftColor: colorTokens.camel,
-    padding: 16,
-    borderRadius: 2,
-  },
-  noticeText: { ...typography.bodySmall, color: colorTokens.charcoal },
+  explainTitle: { ...typography.h3, color: sc.textPrimary },
+  explainBody: { ...typography.body, color: sc.textMuted },
+  noticeText: { ...typography.bodySmall, color: sc.textPrimary, marginTop: 12 },
   primaryAction: {
-    backgroundColor: colorTokens.ink,
-    paddingVertical: 18,
-    alignItems: 'center',
-  },
-  primaryActionLabel: { ...typography.eyebrow, color: colorTokens.bone },
-  secondaryAction: {
+    backgroundColor: sc.accent,
+    borderRadius: 4,
+    minHeight: 48,
     paddingVertical: 14,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  secondaryActionLabel: { ...typography.bodySmall, color: colorTokens.charcoal },
+  primaryActionLabel: { ...typography.bodyMd, color: sc.textOnAccent },
+  secondaryAction: {
+    minHeight: 44,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryActionLabel: { ...typography.bodyMd, color: sc.textPrimary },
 
   });
