@@ -62,7 +62,9 @@ let mockAutosaveFlag = false;
 const mockAiEntry = jest.fn(() => ({ visible: true, status: null }));
 jest.mock("../../../../config/featureFlags", () => {
   const actual = jest.requireActual("../../../../config/featureFlags");
-  return { ...actual, featureFlags: { ...actual.featureFlags, get mwbAutosave() { return mockAutosaveFlag; } } };
+  // defineProperty, not a getter beside a spread: the spread transform would read the getter once at mock time.
+  const featureFlags = Object.defineProperty({ ...actual.featureFlags }, "mwbAutosave", { get: () => mockAutosaveFlag });
+  return { ...actual, featureFlags };
 });
 jest.mock("../../../../components/coach/ai-entry/useAiEntryStatus", () => ({
   useAiEntryStatus: () => mockAiEntry(),

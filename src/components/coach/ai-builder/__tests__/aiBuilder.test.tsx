@@ -144,18 +144,22 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
   });
 
-  it('U1 (AIB-FINISH-127): the thinking stage names injuries only when an injury area was chosen', async () => {
-    const pending = new Promise(() => undefined); // stay in the thinking state
-    mockApi.post.mockReturnValueOnce(pending).mockReturnValueOnce(pending);
-    const plain = await render(<Harness />);
-    await proposeFromInput(plain);
-    [expect(plain.getByText(/Checking training limits$/)).toBeTruthy(), expect(plain.queryByText(/Checking limits and injuries/)).toBeNull()];
-    plain.unmount();
-    const injury = await render(<Harness />);
-    await waitFor(() => expect(injury.getByTestId('ai-chip-swap_for_injury')).toBeTruthy());
-    await press(injury, 'ai-chip-swap_for_injury');
-    await press(injury, 'ai-injury-knee');
-    [expect(injury.getByText(/Checking limits and injuries$/)).toBeTruthy(), expect(injury.queryByText(/Checking training limits/)).toBeNull()];
+  it.each([
+    ['no injury area', null, /Checking training limits$/, /Checking limits and injuries/],
+    ['the knee', 'knee', /Checking limits and injuries$/, /Checking training limits/],
+  ])('U1 (AIB-FINISH-127): with %s chosen the thinking stage reads only what the server checks', async (_label, area, shown, hidden) => {
+    let finish!: (v: unknown) => void;
+    mockApi.post.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; })); // held in the thinking state
+    const s = await render(<Harness />);
+    await waitFor(() => expect(s.getByTestId('ai-chip-swap_for_injury')).toBeTruthy());
+    if (area) {
+      await press(s, 'ai-chip-swap_for_injury');
+      await press(s, `ai-injury-${area}`);
+    } else await proposeFromInput(s);
+    await waitFor(() => expect(s.getByTestId('ai-builder-thinking')).toBeTruthy());
+    [expect(s.getByText(shown)).toBeTruthy(), expect(s.queryByText(hidden)).toBeNull()];
+    await act(async () => { finish({ data: PROPOSAL }); });
+    await waitFor(() => expect(s.getByTestId('ai-builder-review')).toBeTruthy());
   });
 
   it.each(['paused', 'not_configured'])('status %s: paused copy, no prompt or chips, nothing proposed', async (state) => {
