@@ -499,6 +499,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <WorkoutsTab
             workoutSessions={workoutSessions}
             clientName={clientName}
+            onOpenClientCopy={(planId) => navigation.navigate('CoachWorkoutBuilder', { planId, openAi: true, clientId, clientName })}
             onBuildWithAi={() => {
               setAiProgramRequest(true);
               setActiveTab('summary');

@@ -27,9 +27,10 @@ export interface UseAiBuilderArgs {
   isBlank: boolean;
   prepare: () => Promise<{ ok: boolean; lockToken?: string }>; // land pending edits; ok=false while one is unsaved
   onApplied: (ref: AiBuilderRef, count: number) => void | Promise<void>; // fold the server copy into the screen
+  clientId?: string; // job 6: the client's copy; the server checks the coach-client link and consent and uses that client's limits
 }
 
-export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuilderArgs) {
+export function useAiBuilder({ planId, isBlank, prepare, onApplied, clientId }: UseAiBuilderArgs) {
   // value null = route absent (404): the ONLY hide case. error = status unreadable: the entry stays visible with a retry.
   const [status, setStatus] = useState<{ loaded: boolean; value?: AiBuilderStatus | null; error?: string; checking?: boolean }>({ loaded: false });
   const live = useRef(true);
@@ -66,7 +67,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     async (args: { instruction: string; quickAction?: AiBuilderQuickAction; injuryArea?: AiBuilderInjuryArea }) => {
       if (!planId || phase === 'thinking' || phase === 'applying') return;
       fireAiHaptic('medium');
-      setError(null); setProposal(null); setPhase('thinking'); setStage(0); setStages(aiStages(!!args.injuryArea)); stopStages();
+      setError(null); setProposal(null); setPhase('thinking'); setStage(0); setStages(aiStages(!!args.injuryArea || !!clientId)); stopStages();
       timer.current = setInterval(() => setStage((s) => Math.min(s + 1, AI_STAGES.length - 1)), AI_STAGE_MS);
       try {
         const ready = await prepare();
@@ -76,7 +77,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
         }
         const res = await aiBuilderApi.propose({
           mode: isBlank ? 'create' : 'edit', plan_id: planId, lock_token: ready.lockToken,
-          instruction: args.instruction.trim(), quick_action: args.quickAction, injury_area: args.injuryArea,
+          instruction: args.instruction.trim(), quick_action: args.quickAction, injury_area: args.injuryArea, client_id: clientId,
         });
         setProposal(res);
         setKept(Object.fromEntries(res.changes.map((c) => [c.change_id, true])));
@@ -89,7 +90,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
         stopStages();
       }
     },
-    [planId, phase, prepare, isBlank, stopStages, fail],
+    [planId, phase, prepare, isBlank, stopStages, fail, clientId],
   );
 
   const toggle = useCallback((changeId: string) => {

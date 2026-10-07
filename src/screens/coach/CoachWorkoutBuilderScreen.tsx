@@ -89,6 +89,7 @@ import {
 import { describeAutosaveRefusal } from './workoutBuilderAccess';
 import CoachExerciseName from '../../components/coach/workout-builder/CoachExerciseName';
 import AiBuilderSheet from '../../components/coach/ai-builder/AiBuilderSheet';
+import { ClientCopyBar } from '../../components/coach/ai-entry/ClientCopyBar';
 import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/AiFunLayer';
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
@@ -125,7 +126,7 @@ function historyGatePhase(ref: {
 }
 
 /** openAi (AIB-FINISH-127): open Ask AI on arrival; a new workout is saved first (Ask AI works on a saved plan). */
-type RouteParam = { planId?: string; openAi?: boolean };
+type RouteParam = { planId?: string; openAi?: boolean; clientId?: string; clientName?: string };
 
 /**
  * Placeholder lock token + base index used for the FIRST autosave attempt.
@@ -1547,7 +1548,11 @@ export default function CoachWorkoutBuilderScreen() {
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
   );
-  const ai = useAiBuilder({ planId, isBlank: rows.length === 0, prepare: aiPrepare, onApplied: aiOnApplied });
+  // Job 6 (AIB-FINISH-127): a client's copy. Ask AI sends client_id; the server checks the link and consent and uses that
+  // client's consultation limits. The copy reaches the client only through the Assign button in ClientCopyBar.
+  const clientId = route.params?.clientId;
+  const clientFirst = route.params?.clientName?.trim().split(/\s+/)[0] || 'this client';
+  const ai = useAiBuilder({ planId, isBlank: rows.length === 0, prepare: aiPrepare, onApplied: aiOnApplied, clientId });
   useEffect(() => {
     const t = aiToast ? setTimeout(() => setAiToast(null), 10_000) : undefined;
     return () => clearTimeout(t);
@@ -1622,6 +1627,7 @@ export default function CoachWorkoutBuilderScreen() {
           ) : null}
         </View>
         {ai.visible && autosaveEnabled ? <AiMomentumLine rows={rows} applied={aiApplied} sc={sc} /> : null}
+        {clientId && planId && autosaveEnabled ? <ClientCopyBar planId={planId} clientId={clientId} firstName={clientFirst} prepare={aiPrepare} /> : null}
         {autosaveEnabled ? (
           <View style={styles.historyRow}>
             <Pressable
@@ -1941,7 +1947,7 @@ export default function CoachWorkoutBuilderScreen() {
           </Pressable>
         </View>
       ) : null}
-      <AiBuilderSheet open={aiOpen} onClose={() => setAiOpen(false)} ai={ai} isBlank={rows.length === 0} sc={sc} />
+      <AiBuilderSheet open={aiOpen} onClose={() => setAiOpen(false)} ai={ai} isBlank={rows.length === 0} sc={sc} clientFirst={clientId ? clientFirst : undefined} />
     </KeyboardAvoidingView>
   );
 }

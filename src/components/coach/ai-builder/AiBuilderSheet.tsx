@@ -10,7 +10,7 @@ import { AI_LABEL, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_
 import type { AiBuilderController } from './useAiBuilder';
 import { AI_SPRING, AI_STAGGER_MS } from './AiFunLayer';
 
-type Props = { open: boolean; onClose: () => void; ai: AiBuilderController; isBlank: boolean; sc: SemanticTokens };
+type Props = { open: boolean; onClose: () => void; ai: AiBuilderController; isBlank: boolean; sc: SemanticTokens; clientFirst?: string };
 
 /** One change: kind badge (text plus colour, never colour alone), before -> after, reason, warnings, keep switch; springs in on a 60 ms stagger. */
 type CardProps = { change: AiBuilderChange; index: number; kept: boolean; reduceMotion: boolean; onToggle: (id: string) => void; sc: SemanticTokens };
@@ -59,7 +59,7 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
   );
 }
 
-export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props) {
+export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientFirst }: Props) {
   const reduceMotion = useReduceMotion();
   const [text, setText] = useState('');
   const [injuryPicker, setInjuryPicker] = useState(false);
@@ -156,7 +156,7 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc }: Props
             {p ? (
               <View testID="ai-builder-review">
                 <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{p.summary}</Text>
-                {p.context_used.length ? <Text style={[typography.caption, { color: sc.textMuted }]}>{contextLine(p.context_used)}</Text> : null}
+                {p.context_used.length ? <Text style={[typography.caption, { color: sc.textMuted }]}>{contextLine(p.context_used, clientFirst)}</Text> : null}
                 {p.screening_flag ? line('ai-builder-screening', SCREENING_COPY, true) : null}
                 {p.changes.map((c, i) => (
                   <ChangeCard key={c.change_id} change={c} index={i} kept={!!ai.kept[c.change_id]} reduceMotion={reduceMotion} onToggle={ai.toggle} sc={sc} />
