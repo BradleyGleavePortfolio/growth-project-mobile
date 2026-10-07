@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { typography, radius } from '../../theme/tokens';
+import { typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import RomanAvatar from '../roman/RomanAvatar';
 import { dismissFullMacrosIntro, useFullMacrosIntroVisible } from '../../macros/macroDisplayStore';
@@ -45,7 +45,7 @@ export function FullMacrosIntroCardView({
   const line = fullMacrosIntroLine(carbsG, fatG);
   return (
     <View
-      style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
+      style={[styles.card, { borderColor: sc.border }]}
       testID="full-macros-intro-card"
     >
       <View style={styles.head}>
@@ -84,10 +84,9 @@ export default function FullMacrosIntroCard({
 }
 
 const styles = StyleSheet.create({
+  // DES-K2-128: one hairline above, no box or fill (A23 section).
   card: {
-    borderWidth: 0.5,
-    borderRadius: radius.lg,
-    paddingHorizontal: 20,
+    borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: 18,
     paddingBottom: 6,
     marginBottom: 24,

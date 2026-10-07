@@ -40,6 +40,16 @@ import {
 } from '../../services/notificationsApi';
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
 import type { IoniconName } from '../../types/common';
+import HapticPressable from '../../components/HapticPressable';
+
+function usePreferenceColors() {
+  const { semanticColors: sc } = useTheme();
+  return useMemo(() => ({
+    background: sc.bgPrimary, surface: sc.bgPrimary, border: sc.border,
+    primary: sc.accent, textOnPrimary: sc.textOnAccent,
+    textPrimary: sc.textPrimary, textSecondary: sc.textMuted, textMuted: sc.textMuted,
+  }), [sc]);
+}
 
 // ─── Copy table ───────────────────────────────────────────────────────────────
 // Every toggle must have a label and a 1-sentence explanation.
@@ -51,11 +61,11 @@ const KIND_COPY: Record<NotificationKind, { label: string; description: string }
   },
   milestone: {
     label: 'Milestones',
-    description: 'Sent when you reach a streak or programme marker that your coach has set.',
+    description: 'Alerts for recorded milestones.',
   },
   check_in: {
     label: 'Check-in reminders',
-    description: 'Reminds you to submit your daily check-in if it has not been logged by midday.',
+    description: 'Reminders for a missed check-in.',
   },
   message: {
     label: 'Direct messages',
@@ -92,7 +102,7 @@ interface SectionHeaderProps {
 }
 
 function SectionHeader({ title }: SectionHeaderProps) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   return (
     <Text
       style={{
@@ -123,14 +133,15 @@ interface ToggleRowProps {
 }
 
 function ToggleRow({ label, description, value, disabled, onValueChange, accessibilityLabel }: ToggleRowProps) {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   return (
-    <View style={[rowStyles.row, { backgroundColor: colors.surface }]}>
+    <View style={[rowStyles.row, { borderBottomColor: colors.border }]}>
       <View style={rowStyles.text}>
         <Text style={[rowStyles.label, { color: colors.textPrimary }]}>{label}</Text>
         <Text style={[rowStyles.description, { color: colors.textSecondary }]}>{description}</Text>
       </View>
       <Switch
+        style={{ minHeight: 44 }}
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
@@ -149,7 +160,7 @@ const rowStyles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    borderRadius: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     marginBottom: 2,
     gap: 12,
   },
@@ -189,7 +200,7 @@ export const MUTE_ALL_COPY =
 const CHANNELS: NotificationChannel[] = ['push', 'in_app', 'email'];
 
 export default function NotificationPreferencesScreen() {
-  const { colors } = useTheme();
+  const colors = usePreferenceColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation();
 
@@ -200,20 +211,22 @@ export default function NotificationPreferencesScreen() {
   // B-341-1: set synchronously, so a second tap before the re-render is ignored.
   const savingRef = useRef(false);
 
+  const [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
     let live = true;
+    setIsLoading(true);
     fetchNotificationPreferences()
       .then((loaded) => {
         if (live) setPrefs(loaded);
       })
-      .catch(() => undefined)
+      .catch(() => { if (live) setPrefs(null); })
       .finally(() => {
         if (live) setIsLoading(false);
       });
     return () => {
       live = false;
     };
-  }, []);
+  }, [loadAttempt]);
 
   // `next` is shown at once; only `patch` (what changed) is sent. One save at
   // a time (B-341-1): `previous` is then the only other state there is.
@@ -276,13 +289,26 @@ export default function NotificationPreferencesScreen() {
     );
   }
 
-  if (!prefs) return null;
+  if (!prefs) return (
+    <View style={styles.container}>
+      <TouchableOpacity style={[styles.backTarget, { marginTop: 56, alignSelf: 'flex-start', marginLeft: 20 }]} onPress={() => navigation.goBack()} accessibilityRole="button" accessibilityLabel="Go back">
+        <Ionicons name="arrow-back-outline" size={24} color={colors.textPrimary} />
+      </TouchableOpacity>
+      <View style={[styles.centered, { flex: 1 }]}>
+        <Text style={styles.notice}>Notification preferences could not be loaded. Check your connection, then try again.</Text>
+        <HapticPressable style={[styles.backTarget, { backgroundColor: colors.primary, paddingHorizontal: 20, marginTop: 16 }]} onPress={() => setLoadAttempt((n) => n + 1)} accessibilityRole="button" accessibilityLabel="Try again">
+          <Text style={[styles.kindLabel, { color: colors.textOnPrimary }]}>Try again</Text>
+        </HapticPressable>
+      </View>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
+          style={styles.backTarget}
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           accessibilityRole="button"
@@ -330,7 +356,7 @@ export default function NotificationPreferencesScreen() {
           testID="quiet-hours-fixed"
           accessible
           accessibilityLabel={`${QUIET_HOURS_COPY.label}. ${QUIET_HOURS_COPY.description}`}
-          style={[styles.quietRow, { backgroundColor: colors.surface }]}
+          style={styles.quietRow}
         >
           <Text style={[styles.kindLabel, { color: colors.textPrimary }]}>{QUIET_HOURS_COPY.label}</Text>
           <Text style={[styles.kindDescription, { color: colors.textSecondary }]}>
@@ -349,7 +375,7 @@ export default function NotificationPreferencesScreen() {
           return (
             <View
               key={kind}
-              style={[styles.kindBlock, { backgroundColor: colors.surface }]}
+              style={styles.kindBlock}
             >
               <View style={styles.kindHeader}>
                 <Text style={[styles.kindLabel, { color: colors.textPrimary }]}>{label}</Text>
@@ -364,6 +390,7 @@ export default function NotificationPreferencesScreen() {
                       {CHANNEL_LABELS[channel]}
                     </Text>
                     <Switch
+                      style={{ minHeight: 44 }}
                       value={prefs.channels[kind][channel]}
                       onValueChange={(v) => setKindChannel(kind, channel, v)}
                       // Mute all stops every channel, email too (backend
@@ -389,7 +416,7 @@ export default function NotificationPreferencesScreen() {
   );
 }
 
-const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
+const makeStyles = (colors: ReturnType<typeof usePreferenceColors>) =>
   StyleSheet.create({
     container: {
       flex: 1,
@@ -408,6 +435,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       paddingBottom: 12,
     },
     title: {
+      flex: 1, textAlign: 'center',
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 24,
       lineHeight: 29,
@@ -415,25 +443,28 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       letterSpacing: 0.5,
     },
     headerSpacer: {
-      width: 24,
+      width: 44,
     },
+    backTarget: { minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' },
     scrollContent: {
       paddingBottom: 48,
     },
     channelHeader: {
       fontFamily: 'Inter_400Regular',
-      fontSize: 12,
+      fontSize: 13,
       lineHeight: 16,
       paddingHorizontal: 20,
       marginBottom: 6,
     },
     quietRow: {
       marginHorizontal: 16,
-      borderRadius: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
       padding: 14,
       gap: 4,
     },
     notice: {
+      color: colors.textPrimary,
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
       lineHeight: 19,
@@ -443,7 +474,8 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
     kindBlock: {
       marginHorizontal: 16,
       marginBottom: 2,
-      borderRadius: 4,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
       padding: 14,
     },
     kindHeader: {
@@ -465,7 +497,7 @@ const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
       justifyContent: 'space-between',
       paddingTop: 8,
       borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: 'rgba(176,141,87,0.2)', // tokens.colors.divider equivalent
+      borderTopColor: colors.border,
     },
     channelToggle: {
       alignItems: 'center',
