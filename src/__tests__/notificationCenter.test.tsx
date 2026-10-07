@@ -333,6 +333,7 @@ describe('NotificationCenterScreen', () => {
     ], nextCursor: 'page2' }).mockRejectedValueOnce(new Error('network'));
     const ui = await render(<NotificationCenterScreen />);
     await waitFor(() => expect(ui.getByText('Update')).toBeTruthy());
+    expect(ui.queryByRole('button', { name: 'Update. Details' })).toBeNull();
     const { FlatList } = jest.requireActual('react-native');
     await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
     expect(ui.getByText('Could not load more notifications. Pull down to try again.')).toBeTruthy();

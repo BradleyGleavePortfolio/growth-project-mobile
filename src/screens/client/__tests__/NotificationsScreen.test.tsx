@@ -33,6 +33,7 @@ it('preserves each nudge tap, mark-all and pull-to-refresh', async () => {
   mockRead.mockClear();
   await fireEvent.press(ui.getByText('Earlier note'));
   expect(mockRead).not.toHaveBeenCalled();
+  expect(ui.queryByRole('button', { name: 'Earlier note. Already read.' })).toBeNull();
   await fireEvent.press(ui.getByText('Mark all read'));
   expect(mockRead.mock.calls).toEqual([['unread']]);
   await act(async () => ui.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh());
