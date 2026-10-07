@@ -78,6 +78,10 @@ export interface AIBudgetTutorialModalProps {
   testID?: string;
 }
 
+/** Roman's coach-method learning (playbook refresh) is paid from the AI pool. */
+const ROMAN_LEARNING_LINE =
+  'When Roman learns your coaching method, each refresh uses a few cents of credit, at most four times a day.';
+
 type Card = {
   title: string;
   body: string;
@@ -91,7 +95,7 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card
     return [
       {
         title: 'How AI usage works',
-        body: `Every AI draft (workouts, meal plans, briefs, client chat) runs on a real model and has a real cost. Your monthly plan includes ${total} of AI value.`,
+        body: `Every AI draft (workouts, meal plans, briefs, client chat) runs on a real model and has a real cost. Your monthly plan includes ${total} of AI value. ${ROMAN_LEARNING_LINE}`,
         icon: 'sparkles-outline',
       },
       {
@@ -109,7 +113,7 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card
   return [
     {
       title: 'How AI usage works',
-      body: `Every AI draft — workouts, meal plans, briefs, client chat — runs on a real model and has a real cost. Your monthly plan bundles ${total} of AI value so most coaches never think about it.`,
+      body: `Every AI draft — workouts, meal plans, briefs, client chat — runs on a real model and has a real cost. Your monthly plan bundles ${total} of AI value so most coaches never think about it. ${ROMAN_LEARNING_LINE}`,
       icon: 'sparkles-outline',
     },
     {

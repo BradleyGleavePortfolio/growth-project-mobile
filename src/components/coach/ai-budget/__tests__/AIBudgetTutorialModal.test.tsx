@@ -167,4 +167,26 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
       jest.useRealTimers();
     }
   });
+
+  // PB-POOL-A: Roman learning the coach's method is paid from the AI pool,
+  // so the usage card says so in both modes (packs shown and hidden).
+  it.each([false, true])(
+    'card 1 says Roman learning the coaching method uses credits (purchasesHidden=%s)',
+    async (purchasesHidden) => {
+      const { getByText } = await render(
+        <AIBudgetTutorialModal
+          visible
+          budget={budget}
+          onClose={jest.fn()}
+          onSelectPack={jest.fn()}
+          purchasesHidden={purchasesHidden}
+        />,
+      );
+      expect(
+        getByText(
+          /When Roman learns your coaching method, each refresh uses a few cents of credit, at most four times a day\./,
+        ),
+      ).toBeTruthy();
+    },
+  );
 });
