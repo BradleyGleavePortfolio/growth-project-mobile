@@ -20,7 +20,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Image,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,9 +30,10 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
 import type { ExerciseDetail } from '../../types/exerciseCatalog';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 
 type Props = NativeStackScreenProps<WorkoutStackParamList, 'ExerciseDetail'>;
@@ -98,9 +98,9 @@ export default function ExerciseDetailScreen({ route }: Props) {
         testID="exercise-detail-error"
       >
         <Text style={styles.errorText}>{error ?? 'Exercise not found.'}</Text>
-        <Pressable accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}>
-          <Text style={styles.errorText}>Retry</Text>
-        </Pressable>
+        <HapticPressable disableAnimation style={styles.retry} accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}>
+          <Text style={styles.retryText}>Retry</Text>
+        </HapticPressable>
       </View>
     );
   }
@@ -139,30 +139,35 @@ export default function ExerciseDetailScreen({ route }: Props) {
       ) : (
         <View style={styles.noVideo} testID="exercise-detail-no-video">
           <Text style={styles.noVideoText}>
-            {mediaFailed ? 'The demonstration did not load. Follow the instructions below.' : 'Video not yet available.'}
+            {mediaFailed
+              ? detail.instructions.length > 0
+                ? 'The demonstration did not load. Follow the instructions below.'
+                : 'The demonstration did not load.'
+              : 'No demonstration available for this exercise.'}
           </Text>
         </View>
       )}
 
-      {detail.equipment.length > 0 ? (
+      {detail.primaryMuscle || detail.secondaryMuscles.length > 0 ? (
         <View style={styles.facetBlock}>
-          <Text style={styles.facetLabel}>Equipment</Text>
-          <Text style={styles.facetValue}>{detail.equipment.join(', ')}</Text>
+          <Text style={styles.facetLabel}>MUSCLES</Text>
+          {detail.primaryMuscle ? <Text style={styles.facetValue}>{detail.primaryMuscle}</Text> : null}
+          {detail.secondaryMuscles.length > 0 ? (
+            <Text style={styles.meta}>Also works: {detail.secondaryMuscles.join(', ')}</Text>
+          ) : null}
         </View>
       ) : null}
 
-      {detail.secondaryMuscles.length > 0 ? (
+      {detail.equipment.length > 0 ? (
         <View style={styles.facetBlock}>
-          <Text style={styles.facetLabel}>Also works</Text>
-          <Text style={styles.facetValue}>
-            {detail.secondaryMuscles.join(', ')}
-          </Text>
+          <Text style={styles.facetLabel}>EQUIPMENT</Text>
+          <Text style={styles.facetValue}>{detail.equipment.join(', ')}</Text>
         </View>
       ) : null}
 
       {detail.instructions.length > 0 ? (
         <View style={styles.instructionsBlock}>
-          <Text style={styles.facetLabel}>Instructions</Text>
+          <Text style={styles.facetLabel}>HOW TO</Text>
           {detail.instructions.map((step, i) => (
             <View key={`${i}-${step.slice(0, 16)}`} style={styles.stepRow}>
               <Text style={styles.stepIndex}>{i + 1}.</Text>
@@ -183,7 +188,7 @@ function makeStyles(sc: SemanticTokens) {
     },
     scrollContent: {
       padding: spacing.lg,
-      paddingBottom: spacing['2xl'],
+      paddingBottom: spacing['3xl'],
     },
     center: {
       alignItems: 'center',
@@ -198,33 +203,30 @@ function makeStyles(sc: SemanticTokens) {
       color: sc.textMuted,
       marginTop: spacing.xs,
       marginBottom: spacing.md,
-      textTransform: 'capitalize',
     },
     player: {
       width: '100%',
       aspectRatio: 16 / 9,
-      backgroundColor: '#000',
-      borderRadius: 10,
+      backgroundColor: sc.bgPrimary,
+      borderRadius: radius.lg,
       overflow: 'hidden',
       marginBottom: spacing.lg,
     },
     noVideo: {
       width: '100%',
       paddingVertical: spacing.lg,
-      paddingHorizontal: spacing.md,
-      backgroundColor: sc.bgSurface,
-      borderWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
-      borderRadius: 10,
       marginBottom: spacing.lg,
-      alignItems: 'center',
     },
     noVideoText: {
       ...typography.bodySmall,
       color: sc.textMuted,
     },
     facetBlock: {
-      marginBottom: spacing.md,
+      paddingVertical: spacing.lg,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: sc.border,
     },
     facetLabel: {
       ...typography.eyebrow,
@@ -234,18 +236,18 @@ function makeStyles(sc: SemanticTokens) {
     facetValue: {
       ...typography.body,
       color: sc.textPrimary,
-      textTransform: 'capitalize',
     },
     instructionsBlock: {
-      marginTop: spacing.sm,
+      marginTop: spacing.xl,
     },
     stepRow: {
       flexDirection: 'row',
-      marginTop: spacing.sm,
+      marginTop: spacing.md,
     },
     stepIndex: {
       ...typography.bodyMd,
-      color: sc.accent,
+      color: sc.textMuted,
+      fontVariant: ['tabular-nums'],
       width: 24,
     },
     stepText: {
@@ -255,8 +257,21 @@ function makeStyles(sc: SemanticTokens) {
     },
     errorText: {
       ...typography.body,
-      color: sc.accent,
+      color: sc.textPrimary,
       textAlign: 'center',
+    },
+    retry: {
+      minHeight: 44,
+      minWidth: 120,
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: sc.accent,
+    },
+    retryText: {
+      ...typography.bodyMd,
+      color: sc.textOnAccent,
     },
   });
 }
