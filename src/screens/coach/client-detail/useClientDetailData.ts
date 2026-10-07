@@ -11,7 +11,7 @@ import {
   type WeekSummary,
   type WorkoutSession,
 } from './types';
-import { mapCoachWorkoutSessions } from '../../../utils/workout/workoutLogging';
+import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
 export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
@@ -183,7 +183,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           type: 'workout',
           // WorkoutSession rows carry workout_name (no name / completed_at).
           title: s.workout_name || s.name || 'Workout',
-          subtitle: s.completed_at ? `Completed` : 'Logged',
+          // FU-WORKLOG2-126: what was done, not "Logged" on every row.
+          subtitle: workoutTimelineSubtitle(s),
           date: s.created_at || s.date,
           icon: 'barbell',
           iconColor: colors.primaryDark, // Round 3: hex → token (workout event icon)

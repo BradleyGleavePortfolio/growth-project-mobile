@@ -155,7 +155,7 @@ interface ApiSession {
   workout_name?: string;
   duration_minutes: number;
   notes: string;
-  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
+  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[]; notes?: string | null }>;
 }
 
 /**
@@ -341,6 +341,11 @@ export default function WorkoutScreen() {
   // window the chart reads. The "This Week" tile used to count only the 5
   // most recent workouts, so a 6th session in a week still showed 5.
   const [weekSessionCount, setWeekSessionCount] = useState<number | null>(null);
+  // FU-WORKLOG2-126: Recent Workouts listed only the 5 newest, so a client
+  // could not see, correct or delete anything older. The 50-workout window
+  // the chart already reads is kept for "Show older workouts".
+  const [historySessions, setHistorySessions] = useState<ApiSession[]>([]);
+  const [showAllHistory, setShowAllHistory] = useState(false);
 
   // FU-WORKLOG-126: coach-assigned workouts. This tab stays mounted, and the
   // query only refetched after a finished assigned workout, so a workout the
@@ -382,6 +387,7 @@ export default function WorkoutScreen() {
       // years of history for a chart that only shows the last 8 weeks.
       const chartWindowStart = new Date(Date.now() - CHART_WEEKS * 7 * 24 * 60 * 60 * 1000);
       const allRes = await workoutApi.getAll(50);
+      setHistorySessions(Array.isArray(allRes.data) ? allRes.data : []);
       const allSessions: ApiSession[] = (allRes.data || []).filter(
         (s: ApiSession) => new Date(s.date) >= chartWindowStart,
       );
@@ -542,6 +548,7 @@ export default function WorkoutScreen() {
             try {
               await workoutApi.deleteWorkout(session.id);
               setRecentSessions((prev) => prev.filter((s) => s.id !== session.id));
+              setHistorySessions((prev) => prev.filter((s) => s.id !== session.id));
               loadData();
             } catch (err) {
               logger.error('WorkoutScreen', 'deleteWorkout failed', err);
@@ -586,6 +593,8 @@ export default function WorkoutScreen() {
       }>)
     : [];
   const pendingAssignments = assignmentsList.filter((a) => !a.completed_at);
+  const historyRows =
+    showAllHistory && historySessions.length > recentSessions.length ? historySessions : recentSessions;
   const openAssignedList = () => {
     // Cross-tab navigate: WorkoutScreen lives in WorkoutTab; the assignment
     // viewer lives in MoreTab. Same shape as the W-4 fix.
@@ -833,13 +842,13 @@ export default function WorkoutScreen() {
 
         {/* Recent Workouts */}
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Workouts</Text>
-        {recentSessions.length === 0 ? (
+        {historyRows.length === 0 ? (
           <EmptyStateNoData
             headline="No recent workouts"
             body="Complete a workout to see your history here."
           />
         ) : (
-          recentSessions.map((session) => (
+          historyRows.map((session) => (
             <View key={session.id} style={styles.historyCard}>
               <View style={styles.historyHeader}>
                 <Text style={styles.historyTitle}>{session.workout_name || session.notes || 'Workout'}</Text>
@@ -875,11 +884,31 @@ export default function WorkoutScreen() {
                 <View key={i} style={styles.historyExercise}>
                   <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
                   <Text style={styles.exerciseSets}>{formatLoggedSets(ex)}</Text>
+                  {ex.notes ? <Text style={styles.historyMeta}>{ex.notes}</Text> : null}
                 </View>
               ))}
+              {/* FU-WORKLOG2-126: the note written at Finish was only visible
+                  inside Edit. */}
+              {session.workout_name && session.notes ? (
+                <Text style={styles.historyMeta} testID={`workout-note-${session.id}`}>Note: {session.notes}</Text>
+              ) : null}
             </View>
           ))
         )}
+        {historySessions.length > recentSessions.length ? (
+          <HapticPressable
+            intent="light"
+            onPress={() => setShowAllHistory((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={showAllHistory ? 'Show recent workouts only' : 'Show older workouts'}
+            testID="workout-history-toggle"
+            style={{ paddingVertical: 12, alignItems: 'center' }}
+          >
+            <Text style={{ color: colors.primary, fontWeight: '500' }}>
+              {showAllHistory ? 'Show recent workouts only' : 'Show older workouts'}
+            </Text>
+          </HapticPressable>
+        ) : null}
       </ScrollView>
     </View>
   );
