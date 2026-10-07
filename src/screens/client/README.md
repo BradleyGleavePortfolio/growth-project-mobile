@@ -27,24 +27,29 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | `AIGuideScreen.tsx` | Chat with the assistant. Registered on the More stack as `AIGuide` and reachable from the **Guidance** row on `MoreScreen`. Sends only the user message + short history; the backend attaches structured context, persona, and guardrails. Uses `aiApi.getStructuredContext` once on mount to display "what your coach has shared" — purely informational, never assembled into a prompt by the client. Persists locally via `db/chatDb.ts`. |
 | `MembershipScreen.tsx` | Access surface. Shows account state, coach identity, member-since date, founding-member badge if applicable, and an in-app **MESSAGE YOUR COACH** action that routes to the Home stack's `Messages` screen. Suitable for external Stripe / coach-managed access — there is no in-app billing chrome on the client side. Reads `usersApi.getFoundingNumber()` and `aiApi.getStructuredContext()` only. |
 | `MessagesScreen.tsx` | One-on-one messages with the assigned coach. REST round-trip through `messagesApi`; a Supabase Realtime broadcast channel pings a refetch on new messages. 60 s fallback poll covers WebSocket drops. |
-| `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`). |
+| `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`): unfilled hairline rows, full 15 pt titles / 13 pt bodies and relative times, unread dot/weight, mark-read/all and refresh preserved. Empty, loading and request-failure states are distinct. |
+
+### Calendar
+
+`calendar/CalendarHomeScreen.tsx` leads with the earliest live session: client-local date and time, coach, duration and status. Join or Call opens a real link during the existing join window; an empty schedule with an available appointment offers one forest booking action. Welcome calls, all appointment types, later/past sessions, paging, refresh, messages and support remain reachable. `CalendarSessionScreen.tsx` retains recap, device-calendar export, reschedule, cancel and rebooking. Missing links say “Call link not added yet.” Cancel still notifies the coach through the backend booking emitter. Shared `calendarUi.tsx` uses theme colours, transparent hairline rows, Inter supporting text, tabular serif times and 48-point haptic controls without animation.
 
 ### Logging and planning
 
 | File | What it does |
 | --- | --- |
+| `ClientMacrosScreen.tsx` | Read-only daily target: Cormorant/tabular calorie hero, monochrome QuietBar rows, fiber, notes and recorded effective date. Current targets use `/me/macros/current`; consumed values use today's `/log/daily` totals, never assumed zero on failure. “Set by” appears only when `/v1/clients/me/coach` matches the target's coach ID; otherwise “Your target”. Pull-to-refresh reloads targets and food totals; native back and simple/full visibility are unchanged. Follows `docs/QUIET_LUXURY_DOCTRINE.md`. |
 | `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned. Reads from BOTH `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical) and merges them so a coach assigning via either path lands on the same screen (P0-1 unification). |
 | `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). The list passes `{ recipeId }` (a serialisable string) when navigating, never the full recipe object — `RecipeDetailScreen` reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById(recipeId)`. This eliminates React Navigation's non-serializable-params warning and keeps state rehydration intact. New recipe-aware screens must follow the same id-only param pattern. |
 | `GroceryListScreen.tsx`, `ShoppingListScreen.tsx`, `PrepGuideScreen.tsx` | List management + weekly prep guide (`listsApi`, `prepGuideApi`). |
 | `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); backend is the source of truth, no intermediate local store. |
-| `HabitsScreen.tsx` | Daily habit check-ins (`habitsApi`). |
+| `HabitsScreen.tsx` | Daily habit ticks (`habitsApi`) and mood/energy/sleep/notes check-ins (`checkInsApi`). Hairline habit rows show real “completed of total today” counts and recorded week indicators. Tap to tick/untick, hold to delete; Add habit opens the existing target/unit sheet. Labelled check-in choices and 44 pt sleep/close controls retain every action, with one forest save action. No edit or history route exists on this screen. |
 
 ### Profile, settings, and trust
 
 | File | What it does |
 | --- | --- |
 | `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
-| `SettingsScreen.tsx` | Sign out, change password, reset onboarding, link to Trust Center. |
+| `SettingsScreen.tsx` | Seven visible groups on one screen, no added taps: Account, Training and food, Notifications, Privacy and data, Roman, Support, About. Every existing row/control stays; see [settings/README.md](settings/README.md). |
 | `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
@@ -64,7 +69,7 @@ Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy
 | `HomeScreen.tsx` | `<TutorialHomeSlot />` below the coach introduction banner: the pinned macro explanation card (C08, real `/me/macros/current` or onboarding numbers), a "Message your coach" row into HomeStack `Messages`, and after a skipped tour one quiet line that resumes it. |
 | `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
 | `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
-| `SettingsScreen.tsx` | Settings > Tutorial: resume or run the tour again. |
+| `SettingsScreen.tsx` | Settings > Support: resume or run the tour again. |
 
 ### Lighter start for never-trackers (no flag; driven by the backend `macro_display_mode`)
 
@@ -72,7 +77,7 @@ Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy
 | --- | --- |
 | `HomeScreen.tsx` | Number grid shows Calories, Protein and Water. Once the simple week ends, `FullMacrosIntroCard` (Roman, once, dismissible, persisted) introduces carbohydrate and fat. |
 | `LogScreen.tsx` | Summary bar shows Eaten, Remaining and Protein. Food entries show protein only. |
-| `ClientMacrosScreen.tsx` | Calories and Protein, plus one quiet note that carbohydrate and fat join after the first week. |
+| `ClientMacrosScreen.tsx` | Calories and Protein, plus a neutral note naming the current view; no claim about what a client needs. |
 
 Rules and persistence: `src/macros/README.md`.
 | `wearables/ConnectProviderSheet.tsx` | Emits the tutorial `wearable_connected` signal on an on-device grant or OAuth success. |
