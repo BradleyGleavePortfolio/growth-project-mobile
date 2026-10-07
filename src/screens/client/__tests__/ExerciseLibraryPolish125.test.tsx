@@ -31,13 +31,15 @@ beforeEach(() => {
   });
 });
 describe('exercise library contrast', () => {
-  it.each(['light', 'dark'] as const)('uses the on-accent label in %s appearance', async (scheme) => {
+  it.each(['light', 'dark'] as const)('uses readable underlined text filters in %s appearance', async (scheme) => {
     mockColorScheme = scheme;
     const tokens = scheme === 'dark' ? darkTokens : lightTokens;
     const view = await renderLibrary();
     await waitFor(() => expect(view.getByText('No exercises match.')).toBeTruthy());
     await fireEvent.press(view.getByRole('button', { name: 'cardio' }));
-    expect(StyleSheet.flatten(view.getByText('cardio').props.style).color).toBe(tokens.textOnAccent);
+    expect(StyleSheet.flatten(view.getByText('cardio').props.style).color).toBe(tokens.textPrimary);
+    expect(StyleSheet.flatten(view.getByRole('button', { name: 'cardio' }).props.style))
+      .toMatchObject({ minHeight: 44, borderBottomColor: tokens.textPrimary });
   });
 
   it('uses the readable accent foreground for a load error in dark appearance', async () => {

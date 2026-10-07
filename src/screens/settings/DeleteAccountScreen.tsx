@@ -417,7 +417,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     <View style={styles.card}>
       {PERMANENTLY_DELETED.map((item) => (
         <View key={item} style={styles.listRow}>
-          <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+          <Ionicons name="close-circle-outline" size={16} color={colors.textMuted} />
           <Text style={styles.listText}>{item}</Text>
         </View>
       ))}
@@ -659,8 +659,8 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         <View style={styles.exportReminder}>
           <Ionicons name="download-outline" size={18} color={colors.primary} />
           <Text style={styles.exportReminderText}>
-            Before deleting, consider downloading a copy of your data from Settings under Data
-            &amp; Privacy.
+            Before deleting, consider downloading a copy of your data from My data in Settings,
+            under Privacy and data.
           </Text>
         </View>
 
@@ -806,8 +806,8 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
     },
     topTitle: {
-      fontSize: 18,
-      fontWeight: '500',
+      fontFamily: 'CormorantGaramond_500Medium',
+      fontSize: 22,
       color: colors.textPrimary,
     },
     content: {
@@ -818,13 +818,10 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: colors.surface,
-      borderRadius: 4,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.error,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
-      marginBottom: 24,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+      paddingVertical: 14,
+      marginBottom: 8,
     },
     warningText: {
       flex: 1,
@@ -835,16 +832,16 @@ const makeStyles = (colors: ThemeColors) =>
     sectionHeading: {
       fontSize: 13,
       fontWeight: '500',
-      color: colors.textSecondary,
+      color: colors.textMuted,
       textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      letterSpacing: 1.5,
       marginBottom: 8,
       marginTop: 24,
     },
     card: {
-      backgroundColor: colors.surface,
-      borderRadius: 4,
-      padding: 16,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      paddingVertical: 14,
     },
     bodyText: {
       fontSize: 15,
@@ -871,11 +868,10 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 10,
-      backgroundColor: colors.surface,
-      borderRadius: 4,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary,
-      padding: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: 14,
       marginTop: 24,
     },
     exportReminderText: {
@@ -921,6 +917,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     cancelBtn: {
       marginTop: 14,
+      minHeight: 44,
       paddingVertical: 14,
       alignItems: 'center',
     },
@@ -961,8 +958,8 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.background,
     },
     statusDate: {
-      fontSize: 22,
-      fontWeight: '600',
+      fontFamily: 'CormorantGaramond_500Medium',
+      fontSize: 26,
       color: colors.textPrimary,
       marginTop: 6,
     },

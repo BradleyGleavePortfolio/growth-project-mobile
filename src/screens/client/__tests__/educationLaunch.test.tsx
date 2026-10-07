@@ -17,7 +17,7 @@ jest.mock('../../../theme/ThemeProvider', () => {
     primary: '#4a0404', textPrimary: '#000', textSecondary: '#333',
     textMuted: '#555', background: '#fff', textOnPrimary: '#fff',
   };
-  return { useTheme: () => ({ colors }) };
+  return { useTheme: () => ({ colors, semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }) };
 });
 jest.mock('../../../services/api', () => ({
   lessonsApi: { getAll: jest.fn(), complete: jest.fn() },
@@ -92,8 +92,28 @@ test('does not claim completion or cache it when the server rejects the save', a
   complete.mockRejectedValueOnce(new Error('Network Error'));
   const screen = await render(<EducationScreen />);
   await fireEvent.press(await screen.findByText(serverLesson.title));
-  await fireEvent.press(screen.getByText('Mark as Complete'));
+  await fireEvent.press(screen.getByText('Mark as complete'));
   expect(await screen.findByText('Lesson completion did not save. Check your connection and try again.')).toBeTruthy();
   expect(screen.queryByText('Complete.')).toBeNull();
   expect(markLessonComplete).not.toHaveBeenCalled();
+});
+
+test('lesson rows are factual, filters and detail back remain reachable, completion saves', async () => {
+  const screen = await render(<EducationScreen />);
+  await screen.findByText(serverLesson.title);
+  expect(screen.queryByText('Featured')).toBeNull();
+  await fireEvent.press(screen.getByRole('button', { name: 'Fitness' }));
+  await fireEvent.press(screen.getByRole('button', { name: 'All' }));
+  await fireEvent.press(screen.getByText(serverLesson.title));
+  await fireEvent.press(screen.getByText('Mark as complete'));
+  expect(await screen.findByText('Complete.')).toBeTruthy();
+  expect(complete).toHaveBeenCalledWith(serverLesson.id);
+  await fireEvent.press(screen.getByRole('button', { name: 'Back to lessons' }));
+  expect(await screen.findByText('1 of 1 lessons')).toBeTruthy();
+});
+
+test('empty library makes no claim about having a coach', async () => {
+  getAll.mockResolvedValue(response([]));
+  const screen = await render(<EducationScreen />);
+  expect(await screen.findByText('No lessons available. Pull down to refresh.')).toBeTruthy();
 });
