@@ -1,6 +1,7 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
+import { AxiosHeaders } from 'axios';
 import CategoryScreen from '../NotificationPreferencesScreen';
 import ChannelScreen from '../../notifications/NotificationPreferencesScreen';
 import AppScreen from '../../client/PreferencesScreen';
@@ -32,7 +33,16 @@ jest.mock('../../../hooks/usePreferences', () => ({
   ...jest.requireActual('../../../hooks/usePreferences'),
   usePreferences: () => ({ prefs: mockPrefs, isLoading: false, isSaving: false, updatePrefs: mockUpdateApp }),
 }));
-const navigation = { goBack: mockBack } as Parameters<typeof AppScreen>[0]['navigation'];
+const navigation: Parameters<typeof AppScreen>[0]['navigation'] = {
+  goBack: mockBack, navigate: jest.fn(), navigateDeprecated: jest.fn(), preload: jest.fn(),
+  dispatch: jest.fn(), reset: jest.fn(), isFocused: jest.fn(), canGoBack: jest.fn(),
+  getId: jest.fn(), getParent: jest.fn(), getState: jest.fn(),
+  setOptions: jest.fn(), setParams: jest.fn(), replaceParams: jest.fn(),
+  addListener: jest.fn(), removeListener: jest.fn(),
+};
+const response = (data: Record<string, unknown>) => ({
+  data, status: 200, statusText: 'OK', headers: {}, config: { headers: new AxiosHeaders() },
+});
 const getCategories = jest.mocked(notificationsApi.getPreferences);
 const patchCategories = jest.mocked(notificationsApi.updatePreferences);
 const getChannels = jest.mocked(fetchNotificationPreferences);
@@ -42,8 +52,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPalette = lightTokens;
   mockPrefs = { ...DEFAULT_PREFERENCES };
-  getCategories.mockResolvedValue({ data: {} });
-  patchCategories.mockResolvedValue({ data: {} });
+  getCategories.mockResolvedValue(response({}));
+  patchCategories.mockResolvedValue(response({}));
   getChannels.mockResolvedValue(preferencesFromBackend({}));
   patchChannels.mockImplementation(async (patch) => {
     const next = preferencesFromBackend({});
@@ -77,7 +87,7 @@ it('category copy matches the exact fields and all five actions remain reachable
 });
 
 it('all category switches show the server values, not a default claim', async () => {
-  getCategories.mockResolvedValue({ data: { message_push: false, eat_enabled: false, milestone_push: false, weekly_summary_enabled: false } });
+  getCategories.mockResolvedValue(response({ message_push: false, eat_enabled: false, milestone_push: false, weekly_summary_enabled: false }));
   const screen = await render(<CategoryScreen navigation={navigation} />);
   for (const label of ['Coach Messages', 'Reminders', 'Milestones', 'System']) {
     expect((await screen.findByLabelText(label)).props.value).toBe(false);
