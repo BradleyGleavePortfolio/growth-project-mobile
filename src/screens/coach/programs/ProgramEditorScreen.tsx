@@ -44,6 +44,12 @@ import {
   weeksByDays,
 } from "./ProgramUi";
 import type { ProgramsScreenProps } from "./types";
+import { useAiEntryStatus } from "../../../components/coach/ai-entry/useAiEntryStatus";
+import WeekAiSheet, {
+  WEEK_AI_TITLES,
+  type WeekAiAction,
+} from "../../../components/coach/ai-entry/WeekAiSheet";
+import { fireAiHaptic } from "../../../components/coach/ai-builder/useAiBuilder";
 
 interface Slot {
   week: number;
@@ -77,6 +83,22 @@ export default function ProgramEditorScreen({
 
   const data = program.data;
   const dayMap = useMemo(() => indexDays(data?.days ?? []), [data?.days]);
+  // AIB-6: week-level Ask AI (hidden only when the status route is absent).
+  const aiEntry = useAiEntryStatus();
+  const [weekAi, setWeekAi] = useState<{ action: WeekAiAction; week: number } | null>(null);
+  const [aiNotice, setAiNotice] = useState<string | null>(null);
+  const openWeekAi = (week: number) => {
+    fireAiHaptic("light");
+    const pick = (action: WeekAiAction) => () => {
+      setAiNotice(null);
+      setWeekAi({ action, week });
+    };
+    Alert.alert(`Week ${week + 1}`, "Ask AI suggests changes for each workout day. Nothing changes until you apply.", [
+      { text: WEEK_AI_TITLES.progress, onPress: pick("progress") },
+      { text: WEEK_AI_TITLES.deload, onPress: pick("deload") },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  };
 
   const run = useCallback(
     async (
@@ -447,11 +469,42 @@ export default function ProgramEditorScreen({
         Day 1 of week 1 lands on the start date. Tap a day to open, fill or
         clear it.
       </Text>
+      {aiNotice ? (
+        <Text accessibilityLiveRegion="polite" style={[styles.help, { color: colors.textPrimary }]}>
+          {aiNotice}
+        </Text>
+      ) : null}
+      {weekAi ? (
+        <WeekAiSheet
+          action={weekAi.action}
+          week={weekAi.week}
+          days={data.days.filter((d) => d.week_index === weekAi.week)}
+          status={aiEntry.status}
+          onClose={() => setWeekAi(null)}
+          onApplied={(changes, days) => {
+            setAiNotice(
+              `Applied ${plural(changes, "change", "changes")} across ${plural(days, "day", "days")} in week ${weekAi.week + 1}. AI-suggested, coach-approved.`,
+            );
+            void program.refetch();
+            void invalidate();
+          }}
+        />
+      ) : null}
       {Array.from({ length: data.weeks }, (_, week) => (
         <View key={week} style={styles.weekRow}>
-          <Text style={[styles.weekLabel, { color: colors.textPrimary }]}>
-            Week {week + 1}
-          </Text>
+          <View style={styles.weekHead}>
+            <Text style={[styles.weekLabel, { color: colors.textPrimary }]}>
+              Week {week + 1}
+            </Text>
+            {editable && aiEntry.visible && data.days.some((d) => d.week_index === week) ? (
+              <SmallButton
+                icon="sparkles-outline"
+                label="Ask AI"
+                onPress={() => openWeekAi(week)}
+                accessibilityHint={`Progress week ${week + 1} or make it a deload week`}
+              />
+            ) : null}
+          </View>
           <View style={styles.cells}>
             {DAY_LABELS.map((dayLabel, day) => {
               const d = dayMap.get(`${week}:${day}`);
@@ -550,6 +603,7 @@ const styles = StyleSheet.create({
   notice: { borderRadius: 10, padding: 10, marginTop: 8 },
   weekRow: { gap: 6, marginTop: 8 },
   weekLabel: { fontSize: 14, fontWeight: "600" },
+  weekHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   cells: { flexDirection: "row", gap: 4 },
   cell: {
     flex: 1,
