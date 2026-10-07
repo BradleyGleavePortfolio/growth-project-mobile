@@ -1,10 +1,8 @@
 import React from 'react';
-import { Alert, Switch } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ThemeProvider } from '../../../theme/ThemeProvider';
-import HapticPressable from '../../../components/HapticPressable';
 import { profileApi, notificationsApi } from '../../../services/api';
 import { signOut } from '../../../services/authActions';
 import { updateSupabasePassword } from '../../../utils/supabaseAuth';
@@ -29,6 +27,10 @@ jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
 jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { consultationOnboarding: true, romanChat: true } }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name }: { name: string }) =>
+    require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
+}));
 
 const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
   goBack: jest.fn(), navigate: jest.fn(),
@@ -43,7 +45,7 @@ beforeEach(async () => {
 describe('Settings uses this account’s retained Day-1 check-in choice', () => {
   it('preserves all other Settings navigation and preference actions', async () => {
     const view = await render(<SettingsScreen navigation={navigation} />);
-    await fireEvent.press(view.UNSAFE_getAllByType(HapticPressable)[0]);
+    await fireEvent.press(view.getByTestId('icon-arrow-back'));
     expect(navigation.goBack).toHaveBeenCalled();
     for (const [label, route] of [
       ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
@@ -54,7 +56,8 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
       await fireEvent.press(view.getByLabelText(label));
       expect(navigation.navigate).toHaveBeenLastCalledWith(route);
     }
-    const steps = view.UNSAFE_getAllByType(Ionicons).filter((icon) => ['remove', 'add'].includes(icon.props.name));
+    const steps = [view.getAllByTestId('icon-remove')[0], view.getAllByTestId('icon-add')[0],
+      view.getAllByTestId('icon-remove')[1], view.getAllByTestId('icon-add')[1]];
     for (const [index, payload] of [[0, { meals_per_day: 3 }], [1, { meals_per_day: 4 }],
       [2, { water_goal_oz: 90 }], [3, { water_goal_oz: 100 }]] as const) {
       await fireEvent.press(steps[index]);
@@ -62,7 +65,7 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
     }
     const keys = ['dailyCheckin', 'mealReminders', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
     for (let index = 0; index < keys.length; index += 1) {
-      const toggle = view.UNSAFE_getAllByType(Switch)[index], value = !toggle.props.value;
+      const toggle = view.getAllByRole('switch')[index], value = !toggle.props.value;
       await fireEvent(toggle, 'valueChange', value);
       await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)[keys[index]]).toBe(value));
     }
@@ -81,6 +84,9 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
     expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
     await fireEvent.press(view.getByText('Reset Onboarding'));
     expect(alert).toHaveBeenLastCalledWith('Reset Onboarding', expect.any(String), expect.any(Array));
+    const resetButtons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
+    await resetButtons.find((button) => button.text === 'Reset')!.onPress!();
+    expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
     await fireEvent.press(view.getByText('Sign Out'));
     const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
     buttons.find((button) => button.text === 'Sign Out')!.onPress!();

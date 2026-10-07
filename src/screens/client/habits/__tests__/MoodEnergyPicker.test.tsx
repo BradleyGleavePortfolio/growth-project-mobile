@@ -1,12 +1,14 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../../theme/ThemeProvider';
 import { MoodEnergyPicker } from '../MoodEnergyPicker';
 import { ENERGY_LABELS, MOOD_LABELS } from '../constants';
 import { makeStyles } from '../styles';
 
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name }: { name: string }) =>
+    require('react').createElement(require('react-native').Text, { testID: `icon-${name}` }),
+}));
 jest.mock('../../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 
 it('keeps every check-in action with a single readable word per mood choice', async () => {
@@ -29,10 +31,9 @@ it('keeps every check-in action with a single readable word per mood choice', as
     expect(setEnergy).toHaveBeenLastCalledWith(value);
   }
   for (const retired of ['low', 'off', 'flat', 'good', 'strong']) expect(view.queryByText(retired)).toBeNull();
-  const icons = view.UNSAFE_getAllByType(Ionicons);
-  await fireEvent.press(icons.find((icon) => icon.props.name === 'remove')!);
+  await fireEvent.press(view.getByTestId('icon-remove'));
   expect(setSleepHours.mock.calls[0][0](7)).toBe(6.5);
-  await fireEvent.press(icons.find((icon) => icon.props.name === 'add')!);
+  await fireEvent.press(view.getByTestId('icon-add'));
   expect(setSleepHours.mock.calls[1][0](7)).toBe(7.5);
   await fireEvent.changeText(view.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Steady');
   expect(setNotes).toHaveBeenCalledWith('Steady');
