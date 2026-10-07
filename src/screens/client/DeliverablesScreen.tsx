@@ -34,6 +34,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import HapticPressable from '../../components/HapticPressable';
 import {
   useFocusEffect,
   useNavigation,
@@ -80,7 +82,6 @@ interface DeliverablesScreenContentProps {
   headerTitle: string;
   styles: ReturnType<typeof makeStyles>;
   semanticColors: SemanticTokens;
-  tokens: Tokens;
 }
 
 function DeliverablesContent({
@@ -92,7 +93,6 @@ function DeliverablesContent({
   headerTitle,
   styles,
   semanticColors,
-  tokens,
 }: DeliverablesScreenContentProps) {
   const visible = useMemo(() => {
     if (!result.ok) return { delivered: [] as ScheduledDropView[], upcoming: [] as ScheduledDropView[] };
@@ -131,10 +131,9 @@ function DeliverablesContent({
           <Text style={styles.header}>{headerTitle}</Text>
           <View style={styles.empty}>
             <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
-            <Text style={styles.emptyTitle}>No deliverables yet</Text>
+            <Text style={styles.emptyTitle}>Content list unavailable</Text>
             <Text style={styles.emptyBody}>
-              Your coach hasn&apos;t added anything to this package yet. Check
-              back soon.
+              This purchase&apos;s content list is not available here.
             </Text>
           </View>
         </ScrollView>
@@ -151,7 +150,7 @@ function DeliverablesContent({
       >
         <Text style={styles.header}>{headerTitle}</Text>
         <View style={styles.empty}>
-          <Ionicons name="alert-circle-outline" size={36} color={tokens.colors.error} />
+          <Ionicons name="alert-circle-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>Deliverables did not load</Text>
           <Text style={styles.emptyBody}>
             Check your connection and try again. If this keeps happening,
@@ -184,10 +183,9 @@ function DeliverablesContent({
         <Text style={styles.header}>{headerTitle}</Text>
         <View style={styles.empty}>
           <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
-          <Text style={styles.emptyTitle}>No deliverables yet</Text>
+          <Text style={styles.emptyTitle}>No content listed</Text>
           <Text style={styles.emptyBody}>
-            Your coach hasn&apos;t added anything to this package yet. Check
-            back soon.
+            No content is listed for this purchase.
           </Text>
         </View>
       </ScrollView>
@@ -205,8 +203,8 @@ function DeliverablesContent({
     >
       <Text style={styles.header}>{headerTitle}</Text>
       <Text style={styles.subheader}>
-        What&apos;s included and when it unlocks. Tap a delivered item to open
-        it.
+        What&apos;s included and when it unlocks.
+        {visible.delivered.some(isTappableDelivered) ? ' Tap a delivered item to open it.' : ''}
       </Text>
 
       {visible.delivered.length > 0 ? (
@@ -283,11 +281,7 @@ export default function DeliverablesScreen() {
     [navigation],
   );
 
-  if (!result) {
-    return <SkeletonScreen count={6} testID="deliverables-skeleton" />;
-  }
-
-  return (
+  const content = !result ? <SkeletonScreen count={6} testID="deliverables-skeleton" /> : (
     <DeliverablesContent
       result={result}
       refreshing={refreshing}
@@ -296,8 +290,24 @@ export default function DeliverablesScreen() {
       onOpenDrop={onOpenDrop}
       headerTitle={headerTitle}
       styles={styles}
-      semanticColors={semanticColors} tokens={tokens}
+      semanticColors={semanticColors}
     />
+  );
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <HapticPressable
+        disableAnimation
+        style={styles.back}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        testID="deliverables-back"
+        onPress={() => navigation.goBack()}
+      >
+        <Ionicons name="arrow-back-outline" size={22} color={semanticColors.textPrimary} />
+      </HapticPressable>
+      {content}
+    </SafeAreaView>
   );
 }
 
@@ -317,47 +327,44 @@ export type { ScheduledDropCadenceKind, ScheduledDropAssetType };
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
-    content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
+    content: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 48 },
+    back: { width: 44, height: 44, marginLeft: 16, alignItems: 'center', justifyContent: 'center' },
     header: {
-      fontSize: 28,
-      fontWeight: '600',
+      ...tokens.typography.h1,
       color: semanticColors.textPrimary,
-      marginBottom: 4,
+      marginBottom: 12,
     },
     subheader: {
-      fontSize: 13,
+      ...tokens.typography.bodySmall,
       color: semanticColors.textMuted,
-      lineHeight: 18,
-      marginBottom: 16,
+      marginBottom: 24,
     },
     sectionTitle: {
-      fontSize: 12,
+      ...tokens.typography.eyebrow,
       color: semanticColors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
-      marginTop: 18,
-      marginBottom: 8,
+      marginTop: 24,
+      marginBottom: 12,
     },
     empty: { alignItems: 'center', paddingVertical: 48, paddingHorizontal: 16 },
     emptyTitle: {
-      fontSize: 18,
-      fontWeight: '600',
+      ...tokens.typography.bodyMd,
       color: semanticColors.textPrimary,
       marginTop: 12,
     },
     emptyBody: {
-      fontSize: 14,
+      ...tokens.typography.bodySmall,
       color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 8,
-      lineHeight: 20,
     },
     retryBtn: {
       marginTop: 18,
       backgroundColor: semanticColors.accent,
       paddingHorizontal: 20,
       paddingVertical: 10,
-      borderRadius: 10,
+      minHeight: 44,
+      justifyContent: 'center',
+      borderRadius: tokens.radius.lg,
     },
-    retryBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    retryBtnText: { ...tokens.typography.bodyMd, color: semanticColors.textOnAccent },
   });

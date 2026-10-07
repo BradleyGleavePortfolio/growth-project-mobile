@@ -239,10 +239,10 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       paddingTop: 56,
       paddingBottom: 12,
     },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+    backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
     topTitle: {
-      fontFamily: tokens.typography.bodyMd.fontFamily,
-      fontSize: 16,
+      fontFamily: tokens.typography.eyebrow.fontFamily,
+      fontSize: 13,
       fontWeight: '500',
       color: semanticColors.textPrimary,
     },
@@ -262,6 +262,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       textAlign: 'center',
     },
     errorBody: {
+      ...tokens.typography.bodySmall,
       fontSize: 13,
       color: semanticColors.textMuted,
       textAlign: 'center',
@@ -274,6 +275,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       borderRadius: tokens.radius.lg,
       borderWidth: 1,
       borderColor: semanticColors.accent,
+      minHeight: 44, justifyContent: 'center', backgroundColor: semanticColors.accent,
     },
-    retryText: { color: semanticColors.accent, fontSize: 14, fontWeight: '600' },
+    retryText: { ...tokens.typography.bodyMd, color: semanticColors.textOnAccent, fontSize: 14 },
   });

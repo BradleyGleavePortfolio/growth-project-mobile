@@ -9,7 +9,7 @@
  *  - Apple failures show friendly copy, never the raw server message.
  */
 import React from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
@@ -70,8 +70,9 @@ jest.mock('../../../services/queryClient', () => ({
   purgePersistedQueryCacheForAllUsers: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
+let mockSemanticColors: import('../../../theme/tokens').SemanticTokens;
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: mockSemanticColors }),
 }));
 
 const mockEmit = jest.fn();
@@ -84,6 +85,7 @@ import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
+import { darkTokens, lightTokens } from '../../../theme/tokens';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -117,11 +119,70 @@ async function renderScreen(params?: { invite_code?: string }, role: 'client' | 
 describe('CreateAccountScreen', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockSemanticColors = lightTokens;
     __resetSignupPolicyCacheForTests();
     await AsyncStorage.clear();
     mockPreview.mockResolvedValue({ data: { valid: true, coach_name: 'Bradley' } });
     mockValidate.mockResolvedValue({ data: { valid: true, coach_name: 'Bradley' } });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+  });
+
+  it.each([lightTokens, darkTokens])('uses the active semantic theme, hairline fields and readable type (%#)', async (palette) => {
+    mockSemanticColors = palette;
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'google', 'apple'] } });
+    const ui = await renderScreen();
+    const root = ui.toJSON();
+    expect(root && !Array.isArray(root) ? StyleSheet.flatten(root.props.style).backgroundColor : null).toBe(palette.bgPrimary);
+    expect(StyleSheet.flatten(ui.getByText('Create your account').props.style)).toMatchObject({
+      fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', color: palette.textPrimary,
+    });
+    expect(StyleSheet.flatten(ui.getByText('FULL NAME').props.style)).toMatchObject({
+      fontFamily: 'Inter_500Medium', letterSpacing: 1.98, color: palette.textMuted,
+    });
+    for (const label of ['Full name', 'Email', 'Password', 'Phone number, optional', 'Coach invite code']) {
+      const style = StyleSheet.flatten(ui.getByLabelText(label).props.style);
+      expect(style).toMatchObject({
+        fontFamily: 'Inter_400Regular', fontSize: 16, minHeight: 52,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border, color: palette.textPrimary,
+      });
+      expect(style.backgroundColor).toBeUndefined();
+      expect(style.shadowOpacity).toBeUndefined();
+      expect(ui.getByLabelText(label).props.placeholderTextColor).toBe(palette.textMuted);
+    }
+    expect(StyleSheet.flatten(ui.getByLabelText('Create account').props.style)).toMatchObject({
+      backgroundColor: palette.accent, minHeight: 52,
+    });
+    expect(StyleSheet.flatten(ui.getByText('Create account').props.style).color).toBe(palette.textOnAccent);
+    expect(StyleSheet.flatten(ui.getByLabelText('Continue with Google').props.style).backgroundColor).toBeUndefined();
+  });
+
+  it('visual redo keeps every registration field, provider, legal link and sign-in action reachable', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'google', 'apple'] } });
+    mockGetString.mockResolvedValue('GP-TEST');
+    mockSignInWithGoogle.mockResolvedValue({ success: false, cancelled: true });
+    mockSignInWithApple.mockResolvedValue({ success: false, cancelled: true });
+    mockSignupWithCode.mockResolvedValue({ data: { requires_verification: true } });
+    const ui = await renderScreen();
+    for (const label of ['Full name', 'Email', 'Password', 'Phone number, optional', 'Coach invite code']) {
+      expect(ui.getByLabelText(label)).toBeTruthy();
+    }
+    expect(ui.getByTestId('create-account-terms-link')).toBeTruthy();
+    expect(ui.getByTestId('create-account-privacy-link')).toBeTruthy();
+    await fireEvent.press(ui.getByLabelText('Continue with Google'));
+    await waitFor(() => expect(mockSignInWithGoogle).toHaveBeenCalled());
+    await fireEvent.press(ui.getByTestId('apple-button'));
+    await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalled());
+    await fireEvent.press(ui.getByLabelText('Sign in'));
+    expect(ui.nav.navigate).toHaveBeenCalledWith('Login');
+    await fireEvent.press(ui.getByTestId('paste-invite-code'));
+    await waitFor(() => expect(ui.getByTestId('invite-code-input').props.value).toBe('GP-TEST'));
+    await fireEvent.changeText(ui.getByLabelText('Phone number, optional'), '07123456789');
+    await fillAndSubmit(ui);
+    await waitFor(() => expect(mockSignupWithCode).toHaveBeenCalled());
+    expect(mockSignupWithCode.mock.calls[0][0]).toMatchObject({ invite_code: 'GP-TEST', phone: '07123456789' });
+    expect(await ui.findByText('I verified my email')).toBeTruthy();
+    await fireEvent.press(ui.getByText('Use a different email'));
+    expect(await ui.findByLabelText('Create account')).toBeTruthy();
   });
 
   it('live policy (providers email+apple): hides Google and marks the code optional', async () => {
