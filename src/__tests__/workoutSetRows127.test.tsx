@@ -68,6 +68,13 @@ describe('live workout row ghost values and action parity', () => {
     expect(view.getByTestId('set-reps-0-0').props.value).toBe('10');
   });
 
+  it('shows a repeated bodyweight zero as actual text after completion', async () => {
+    const view = await render(<Harness prior={{ ...previous, weight: 0 }} />);
+    await fireEvent.press(view.getByRole('checkbox'));
+    expect(view.getByTestId('set-weight-0-0').props.value).toBe('0');
+    expect(view.getByTestId('set-reps-0-0').props.value).toBe('10');
+  });
+
   it('keeps Use previous as the same one-tap fill action on the compact cell', async () => {
     const view = await render(<Harness />);
     await fireEvent.changeText(view.getByTestId('set-weight-0-0'), '75');
