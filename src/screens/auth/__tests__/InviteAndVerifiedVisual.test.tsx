@@ -18,11 +18,13 @@ function nav(routes = ['EmailVerified']) {
     getState: jest.fn().mockReturnValue({ index: routes.length - 1, routes: routes.map(name => ({ name })) }) };
 }
 function invite(navigation = nav()) {
-  return <AcceptInviteScreen navigation={navigation as InviteProps['navigation']}
+  const stub: Partial<InviteProps['navigation']> = navigation;
+  return <AcceptInviteScreen navigation={stub as InviteProps['navigation']}
     route={{ key: 'invite', name: 'AcceptInvite', params: { token: 'GP-TEST1' } }} />;
 }
 function verified(navigation = nav(), status: 'confirmed' | 'link_problem' = 'confirmed') {
-  return <EmailVerifiedScreen navigation={navigation as VerifiedProps['navigation']}
+  const stub: Partial<VerifiedProps['navigation']> = navigation;
+  return <EmailVerifiedScreen navigation={stub as VerifiedProps['navigation']}
     route={{ key: 'verified', name: 'EmailVerified', params: { status } }} />;
 }
 beforeEach(() => {
