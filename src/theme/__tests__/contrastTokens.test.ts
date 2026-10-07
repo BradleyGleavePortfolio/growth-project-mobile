@@ -8,10 +8,10 @@
 // fill (CTA backgrounds, progress fills, borders).
 //
 // This gate locks `accentText` so its value can never drift back below AA on
-// either dark background, and confirms `accent` (the fill) is unchanged so the
-// filled-CTA contrast (textOnAccent on accent) is preserved.
+// either dark background, and verifies the owner-approved forest light accent
+// keeps filled-CTA contrast (textOnAccent on accent) accessible.
 
-import { lightTokens, darkTokens } from '../tokens';
+import { colors, gold, lightTokens, darkTokens } from '../tokens';
 
 // ─── WCAG 2.1 relative-luminance contrast ──────────────────────────────────
 function channelLinear(c: number): number {
@@ -60,11 +60,20 @@ describe('v3-1 #235 R4 P2-1 — accentText AA contrast gate', () => {
     ).toBeLessThan(AA_NORMAL);
   });
 
-  it('accent FILL is unchanged so the filled CTA (textOnAccent on accent) stays AA', () => {
-    // Splitting the role must NOT touch the fill; the CTA label contrast
-    // (textOnAccent on accent) must still clear AA in both modes.
+  it('uses the existing forest for light CTA fills and accent foregrounds', () => {
+    expect(lightTokens.accent).toBe(colors.forest);
+    expect(lightTokens.accentText).toBe(colors.forest);
+  });
+
+  it('keeps the founding-tier camel cue separate from the primary accent', () => {
+    expect(colors.camel).toBe(gold[500]);
+    expect(colors.mutedGold).toBe(gold[400]);
+    expect(colors.camel).not.toBe(lightTokens.accent);
+  });
+
+  it('filled CTA labels stay AA in light and retained dark palettes', () => {
+    // Launch is light-only; retain the audited dark palette for a later pass.
     expect(darkTokens.accent).toBe('#B43C3C');
-    expect(lightTokens.accent).toBe('#4A0404');
     expect(
       contrastRatio(darkTokens.textOnAccent, darkTokens.accent),
     ).toBeGreaterThanOrEqual(AA_NORMAL);
