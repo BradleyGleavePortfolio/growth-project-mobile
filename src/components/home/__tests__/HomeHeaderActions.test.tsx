@@ -19,12 +19,23 @@ jest.mock('../../../services/api', () => ({ __esModule: true, default: { get: (u
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: new Proxy({}, { get: () => '#000000' }), colors: new Proxy({}, { get: () => '#000000' }) }),
 }));
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({
+  Ionicons: ({ name, size }: { name: string; size: number }) =>
+    require('react').createElement(require('react-native').Text, { testID: `icon-${name}`, style: { fontSize: size } }),
+}));
 
 import HomeHeaderActions, { messageCoachLabel } from '../HomeHeaderActions';
 
 describe('HomeHeaderActions', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('keeps both outline header actions at 24 pt', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    for (const icon of ['chatbubble-ellipses-outline', 'notifications-outline']) {
+      expect(view.getByTestId(`icon-${icon}`).props.style.fontSize).toBe(24);
+    }
+  });
 
   it('labels the message entry with the coach first name', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });

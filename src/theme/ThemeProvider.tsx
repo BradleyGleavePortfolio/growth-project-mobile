@@ -2,8 +2,8 @@
  * ThemeProvider — Luxury Visual System (Wave 2) + Phase 11 Dark Mode
  *
  * Phase 11 additions:
- *   - Resolves `useColorScheme()` (system preference) into the active
- *     semantic token map (`lightTokens` or `darkTokens`).
+ *   - Launch appearance stays light until every legacy surface supports dark.
+ *     The dark token map is retained for that later migration.
  *   - User override ('system' | 'light' | 'dark') stored in AsyncStorage
  *     under the key `gp_appearance` and persisted across sessions.
  *   - Exposes `colorScheme`, `appearanceOverride`, and `setAppearanceOverride`
@@ -21,14 +21,13 @@
  */
 
 import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo } from 'react';
-import { useColorScheme as useSystemColorScheme } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import tokens, { Tokens, SemanticTokens, lightTokens, darkTokens } from './tokens';
 import CanonicalColors from '../constants/colors';
 import { useFoundingNumber } from '../hooks/useIdentity';
 
 // ─── Appearance override type ─────────────────────────────────────────────────
-/** 'system' defers to the device colour scheme; 'light' and 'dark' hard-lock it. */
+/** Launch supports Light/System; legacy Dark values resolve to Light. */
 export type AppearanceOverride = 'system' | 'light' | 'dark';
 
 const APPEARANCE_KEY = 'gp_appearance';
@@ -134,10 +133,6 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const { data: foundingData } = useFoundingNumber();
-  // Normalise: React Native's ColorSchemeName includes 'unspecified' on some
-  // platforms; treat anything other than 'dark' as light.
-  const rawScheme = useSystemColorScheme();
-  const systemScheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
 
   const [appearanceOverride, setOverrideState] = useState<AppearanceOverride>('system');
   const [overrideLoaded, setOverrideLoaded] = useState(false);
@@ -147,7 +142,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     AsyncStorage.getItem(APPEARANCE_KEY)
       .then((stored) => {
         if (stored === 'light' || stored === 'dark' || stored === 'system') {
-          setOverrideState(stored);
+          setOverrideState(stored === 'dark' ? 'light' : stored);
         }
       })
       .catch(() => {
@@ -158,9 +153,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
 
   const setAppearanceOverride = useMemo(
     () => async (override: AppearanceOverride) => {
-      setOverrideState(override);
+      const supportedOverride = override === 'dark' ? 'light' : override;
+      setOverrideState(supportedOverride);
       try {
-        await AsyncStorage.setItem(APPEARANCE_KEY, override);
+        await AsyncStorage.setItem(APPEARANCE_KEY, supportedOverride);
       } catch {
         // Non-fatal — preference will revert on next app launch
       }
@@ -168,11 +164,8 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     [],
   );
 
-  const colorScheme: 'light' | 'dark' = useMemo(() => {
-    if (appearanceOverride === 'light') return 'light';
-    if (appearanceOverride === 'dark') return 'dark';
-    return systemScheme;
-  }, [appearanceOverride, systemScheme]);
+  // System also resolves light: app.json and the legacy palette are light-only.
+  const colorScheme = useMemo<'light' | 'dark'>(() => 'light', []);
 
   const semanticColors: SemanticTokens = colorScheme === 'dark' ? darkTokens : lightTokens;
 
@@ -189,8 +182,7 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   );
 
   // Render children immediately — the override defaults to 'system' so the
-  // first render is correct on initial mount. Once AsyncStorage resolves the
-  // stored preference a re-render adjusts the scheme if needed.
+  // first render and every stored preference use a coherent light appearance.
   // We keep overrideLoaded in scope to silence the lint warning but intentionally
   // do not gate rendering on it to avoid a flash.
   void overrideLoaded;

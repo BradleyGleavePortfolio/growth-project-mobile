@@ -20,7 +20,7 @@
  *   NotificationCenter and NotificationPreferences added to HomeStackParamList.
  */
 import React from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -672,9 +672,17 @@ export default function ClientNavigator() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarShowLabel: false,
+        tabBarShowLabel: true,
+        tabBarLabel: ({ focused, color, children }) => (
+          <Text style={{
+            fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
+            fontSize: 11,
+            fontWeight: focused ? '500' : '400',
+            color,
+          }}>{children}</Text>
+        ),
         tabBarHideOnKeyboard: true,
-        tabBarActiveTintColor:   sc.textPrimary,
+        tabBarActiveTintColor:   colors.forest,
         tabBarInactiveTintColor: sc.textMuted,
         tabBarStyle: {
           backgroundColor: sc.bgPrimary,
@@ -705,6 +713,7 @@ export default function ClientNavigator() {
         component={HomeStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Home',
+          title: 'Home',
           tabBarIcon: ({ color }) => (
             <Ionicons name="home-outline" size={24} color={color} />
           ),
@@ -715,6 +724,7 @@ export default function ClientNavigator() {
         component={WorkoutStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Train',
+          title: 'Train',
           tabBarIcon: ({ color }) => (
             <Ionicons name="fitness-outline" size={24} color={color} />
           ),
@@ -725,6 +735,7 @@ export default function ClientNavigator() {
         component={ProtectedLogScreen}
         options={{
           tabBarAccessibilityLabel: 'Log food',
+          title: 'Food',
           tabBarIcon: ({ color }) => (
             <Ionicons name="restaurant-outline" size={24} color={color} />
           ),
@@ -738,6 +749,7 @@ export default function ClientNavigator() {
           component={CalendarStackNavigator}
           options={{
             tabBarAccessibilityLabel: 'Calendar',
+            title: 'Calendar',
             tabBarIcon: ({ color }) => (
               <Ionicons name="calendar-outline" size={24} color={color} />
             ),
@@ -749,6 +761,7 @@ export default function ClientNavigator() {
         component={MoreStackNavigator}
         options={{
           tabBarAccessibilityLabel: 'Profile and more',
+          title: 'You',
           tabBarIcon: ({ color }) => (
             <Ionicons name="person-outline" size={24} color={color} />
           ),
@@ -764,6 +777,7 @@ export default function ClientNavigator() {
           component={CommunityNavigator}
           options={{
             tabBarAccessibilityLabel: 'Community',
+            title: 'Community',
             tabBarIcon: ({ color }) => <CommunityTabBarIcon color={color} />,
           }}
         />

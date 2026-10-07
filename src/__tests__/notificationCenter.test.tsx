@@ -133,7 +133,7 @@ jest.mock('../theme/ThemeProvider', () => ({
       surface:        '#F1E8D5',
       textPrimary:    '#1A1A18',
       textSecondary:  '#3D3D3A',
-      textMuted:      '#B1A89F',
+      textMuted:      '#6B675F',
       textOnPrimary:  '#F5EFE4',
       border:         '#B08D57',
       divider:        'rgba(176,141,87,0.2)',

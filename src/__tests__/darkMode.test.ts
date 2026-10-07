@@ -1,13 +1,6 @@
 /**
- * darkMode.test.ts — Phase 11: ThemeProvider dark-mode unit tests
- *
- * Guards the semantic token resolution logic so that:
- *  1. override='dark'   → darkTokens resolved regardless of system scheme
- *  2. override='light'  → lightTokens resolved regardless of system scheme
- *  3. override='system' → follows the mocked useColorScheme() value
- *
- * Uses source-level contract tests (no component render required) plus
- * a light functional test of the token shape.
+ * Retained dark-token contracts; launch appearance stays coherently light.
+ * Runtime resolution is covered by theme/__tests__/launchLegibility.test.tsx.
  */
 
 import { lightTokens, darkTokens } from '../theme/tokens';
@@ -92,26 +85,13 @@ const PROVIDER_SRC = fs.readFileSync(
 );
 
 describe('ThemeProvider source-level contract', () => {
-  it('imports useColorScheme from react-native', () => {
-    expect(PROVIDER_SRC).toMatch(/useColorScheme.*from 'react-native'/);
-  });
-
   it('reads override from AsyncStorage with the correct key', () => {
     expect(PROVIDER_SRC).toMatch(/gp_appearance/);
   });
 
-  it("resolves 'light' override to 'light' scheme", () => {
-    // The resolution logic must contain a branch that maps 'light' -> 'light'
-    expect(PROVIDER_SRC).toMatch(/appearanceOverride === 'light'.*return 'light'/s);
-  });
-
-  it("resolves 'dark' override to 'dark' scheme", () => {
-    expect(PROVIDER_SRC).toMatch(/appearanceOverride === 'dark'.*return 'dark'/s);
-  });
-
-  it("falls back to systemScheme when override is 'system'", () => {
-    // When no explicit override, the code must return systemScheme
-    expect(PROVIDER_SRC).toMatch(/return systemScheme/);
+  it('uses the launch-light scheme and normalizes stored Dark to Light', () => {
+    expect(PROVIDER_SRC).toMatch(/useMemo<'light' \| 'dark'>\(\(\) => 'light'/);
+    expect(PROVIDER_SRC).toMatch(/stored === 'dark' \? 'light' : stored/);
   });
 
   it('persists override to AsyncStorage on change', () => {

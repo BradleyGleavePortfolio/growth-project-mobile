@@ -309,11 +309,11 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         {/* App Preferences */}
         <Text style={styles.sectionLabel}>App Preferences</Text>
         <View style={styles.card}>
-          {/* Appearance — Phase 11 dark mode */}
+          {/* Appearance — coherent light rendering for launch */}
           <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
             <Text style={styles.rowLabel}>Appearance</Text>
             <View style={styles.appearanceRow}>
-              {(['system', 'light', 'dark'] as const).map((option: AppearanceOverride) => (
+              {(['light', 'system'] as const).map((option: AppearanceOverride) => (
                 <HapticPressable
                   key={option}
                   intent="light"
@@ -332,6 +332,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
                 </HapticPressable>
               ))}
             </View>
+            <Text style={styles.rowValue}>Light appearance is used for both options.</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Haptics enabled</Text>

@@ -102,7 +102,7 @@ export default function HomeHeaderActions() {
           { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: pressed ? 0.85 : 1 },
         ]}
       >
-        <Ionicons name="chatbubble-ellipses-outline" size={18} color={sc.textPrimary} />
+        <Ionicons name="chatbubble-ellipses-outline" size={24} color={sc.textPrimary} />
         <Text style={[typography.bodySmall, styles.messageText, { color: sc.textPrimary }]}>
           {label}
         </Text>
