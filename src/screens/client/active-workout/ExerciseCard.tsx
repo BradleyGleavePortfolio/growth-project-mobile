@@ -3,6 +3,7 @@ import { Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { lightTokens as sc } from '../../../theme/tokens';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
@@ -47,31 +48,9 @@ export function ExerciseCard({
       <View pointerEvents={disabled ? 'none' : 'auto'}>
       <View style={styles.exerciseHeader}>
         <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          {/* Mux video v1 — tap to open the catalog detail (modal). The
-              legacy exercise id ≠ catalog id, so we open by slug
-              derived from the name. Detail screen handles the
-              "Exercise not found" case gracefully if it doesn't
-              resolve. v2 will store a stable catalog ref on the
-              session exercise so this is exact. */}
-          <HapticPressable
-            intent="light"
-            onPress={() => onOpenExerciseDetail(exercise)}
-            accessibilityLabel={`Watch video for ${exercise.exerciseName}`}
-          >
-            <Ionicons name="play-circle-outline" size={22} color={colors.textMuted} />
-          </HapticPressable>
-          <HapticPressable
-            intent="warning"
-            onPress={() => onRemoveExercise(exIdx)}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Remove ${exercise.exerciseName}`}
-            testID={`remove-exercise-${exIdx}`}
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-          </HapticPressable>
-        </View>
+        <Text style={styles.exerciseSummary}>
+          {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
+        </Text>
       </View>
       {/* FU-WORKLOG-126: the coach's note used to show only on the screen
           before Start, never while the client was doing the sets. */}
@@ -80,19 +59,47 @@ export function ExerciseCard({
           Coach note: {exercise.coachNote}
         </Text>
       ) : null}
-      {onMove && <View style={styles.exerciseTools}>
-        <HapticPressable intent="light" style={styles.toolButton} disabled={exIdx === 0} onPress={() => onMove(exIdx, -1)} accessibilityLabel={`Move ${exercise.exerciseName} up`}>
-          <Ionicons name="arrow-up" size={18} color={exIdx === 0 ? colors.textMuted : colors.primary} />
+      <View style={styles.exerciseTools}>
+          {/* Mux video v1 — tap to open the catalog detail (modal). The
+              legacy exercise id ≠ catalog id, so we open by slug
+              derived from the name. Detail screen handles the
+              "Exercise not found" case gracefully if it doesn't
+              resolve. v2 will store a stable catalog ref on the
+              session exercise so this is exact. */}
+          <HapticPressable
+            intent="light"
+            style={styles.toolButton}
+            onPress={() => onOpenExerciseDetail(exercise)}
+            accessibilityLabel={`Watch video for ${exercise.exerciseName}`}
+          >
+            <Ionicons name="play-circle-outline" size={24} color={sc.textMuted} />
+          </HapticPressable>
+          <HapticPressable
+            intent="warning"
+            style={styles.toolButton}
+            onPress={() => onRemoveExercise(exIdx)}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${exercise.exerciseName}`}
+            testID={`remove-exercise-${exIdx}`}
+          >
+            <Ionicons name="trash-outline" size={24} color={sc.textMuted} />
+          </HapticPressable>
+      {onMove && <>
+        <HapticPressable intent="light" style={[styles.toolButton, exIdx === 0 && styles.toolButtonDisabled]} disabled={exIdx === 0} onPress={() => onMove(exIdx, -1)} accessibilityLabel={`Move ${exercise.exerciseName} up`}>
+          <Ionicons name="arrow-up-outline" size={24} color={sc.textMuted} />
         </HapticPressable>
-        <HapticPressable intent="light" style={styles.toolButton} disabled={isLast} onPress={() => onMove(exIdx, 1)} accessibilityLabel={`Move ${exercise.exerciseName} down`}>
-          <Ionicons name="arrow-down" size={18} color={isLast ? colors.textMuted : colors.primary} />
+        <HapticPressable intent="light" style={[styles.toolButton, isLast && styles.toolButtonDisabled]} disabled={isLast} onPress={() => onMove(exIdx, 1)} accessibilityLabel={`Move ${exercise.exerciseName} down`}>
+          <Ionicons name="arrow-down-outline" size={24} color={sc.textMuted} />
         </HapticPressable>
         <HapticPressable intent="light" style={styles.toolButton} onPress={() => onSwap?.(exIdx)} accessibilityLabel={`Swap ${exercise.exerciseName}`}>
-          <Text style={styles.addSetText}>Swap</Text>
+          <Ionicons name="swap-horizontal-outline" size={24} color={sc.textMuted} />
         </HapticPressable>
-        <Text style={[styles.setHeaderText, { marginLeft: 'auto' }]}>Rest</Text>
+      </>}
+      </View>
+      {onMove && <View style={styles.exerciseRestTools}>
+        <Text style={styles.setHeaderText}>Rest</Text>
         {[60, 90, 120].map((seconds) => <HapticPressable key={seconds} intent="light" style={styles.toolButton} onPress={() => onChangeRest?.(exIdx, seconds)} accessibilityLabel={`Set rest for ${exercise.exerciseName} to ${seconds} seconds`} accessibilityState={{ selected: exercise.restSec === seconds }}>
-          <Text style={[styles.addSetText, exercise.restSec !== seconds && { color: colors.textMuted }]}>{seconds}s</Text>
+          <Text style={[styles.addSetText, exercise.restSec !== seconds && { color: sc.textMuted }]}>{seconds}s</Text>
         </HapticPressable>)}
       </View>}
       {onChangeRest && ![60, 90, 120].includes(exercise.restSec ?? 0) && <Text style={styles.previousSetText}>Rest: {exercise.restSec ?? 0}s · From the plan</Text>}
@@ -121,7 +128,7 @@ export function ExerciseCard({
       ))}
 
       <HapticPressable intent="medium" style={styles.addSetBtn} onPress={() => onAddSet(exIdx)}>
-        <Ionicons name="add" size={16} color={colors.primary} />
+        <Ionicons name="add-outline" size={24} color={colors.primary} />
         <Text style={styles.addSetText}>Add Set</Text>
       </HapticPressable>
       {onChangeNotes && <TextInput
