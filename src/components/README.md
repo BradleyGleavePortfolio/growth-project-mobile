@@ -4,8 +4,6 @@ Shared, screen-agnostic UI. Anything that more than one screen renders, or anyth
 
 ## Purpose
 
-The shared DM `messaging/MessageBubble` and `ThreadV2Parts` use semantic colours through `thread/useThreadColors`: Inter message text on bone, a hairline for outgoing rows, readable metadata, quiet pins and 44 pt controls. Timestamp grouping is opted into by the client thread; the coach thread keeps its existing rendering contract. Message menus and moderation handlers are unchanged.
-
 - Provide the visual primitives the screens compose with: cards, rings, bars, sheets, banners, splash, error boundary, skeleton loaders.
 - Encapsulate the per-feature mini-systems that don't fit a single screen: trust-cue rails, anticipation tiles, community win cards, log modals.
 - Bake the quiet-luxury motion contract in (entrance fades, hairline dividers, weight-400/500 serifs, no celebration overlays).
@@ -71,6 +69,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `tutorial/` | Clinic launch Roman-led tutorial UI (featureFlags.clientTutorial, default OFF): `TutorialHost` (hydration, signals, live macros, overlay mount), `TutorialOverlay` (Roman coach-mark card, progress, spotlight, skip/resume, defer, done line, completion), `TutorialTarget` (spotlight measurement wrapper), the C08 `MacroExplanationCard` (Home) and `PlanExplanationCard` (Train), `TutorialHomeSlot` (re-offer line, macro card, Message your coach row), `TutorialSettingsRow` (Settings > Tutorial). Logic and flags: `src/tutorial/README.md`. |
 | `home/FullMacrosIntroCard.tsx` | One quiet Roman card on Home. It introduces carbohydrate and fat once, on the day a never-tracker's simple macro view ends. Dismissible and persisted per user. See `src/macros/README.md`. |
 | `log/DailySummaryBar.tsx`, `log/MealSectionCard.tsx` | Accept a `mode` / `macroMode` prop (`simple` or `full`, default `full`). `simple` shows calories and protein only. |
+| `messaging/MessageBubble.tsx`, `messaging/ThreadV2Parts.tsx` | Semantic colours through `thread/useThreadColors`: Inter message text on bone, a hairline for outgoing rows, readable metadata, quiet pins and 44 pt controls. Client timestamps are grouped; the coach keeps its existing rendering contract. Message menus and moderation handlers are unchanged. |
 | `PendingInviteBanner.tsx` | Home consent banner for a pending invite code. It refreshes on auth events and on `subscribePendingInviteCode` (a foreground invite link). Legacy scoped `pending_invite_code:*` keys are never read; they are only deleted at sign-out. |
 
 ## Data flow
