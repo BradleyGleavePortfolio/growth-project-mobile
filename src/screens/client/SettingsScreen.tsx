@@ -31,6 +31,8 @@ import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { typography, withAlpha } from '../../theme/tokens';
+import SettingsSection from './settings/SettingsSection';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors, appearanceOverride, setAppearanceOverride } = useTheme();
@@ -182,17 +184,16 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <HapticPressable intent="light" onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <HapticPressable intent="light" onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
-        <Text style={styles.topTitle}>Settings</Text>
+        <Text style={styles.topTitle} accessibilityRole="header">Settings</Text>
         <View style={styles.backBtn} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Account */}
-        <Text style={styles.sectionLabel}>Account</Text>
-        <View style={styles.card}>
+        <SettingsSection title={<Text style={styles.sectionLabel}>Account</Text>} id="account">
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
@@ -225,22 +226,21 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
             <Ionicons name="trash-outline" size={18} color={colors.error} />
           </HapticPressable>
-        </View>
+        </SettingsSection>
 
         {/* Clinic tutorial: resume or rerun Roman's tour (flag-gated). */}
         <TutorialSettingsRow />
 
         {/* Nutrition Preferences */}
-        <Text style={styles.sectionLabel}>Nutrition Preferences</Text>
-        <View style={styles.card}>
+        <SettingsSection title="Nutrition Preferences" id="nutrition">
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Meals Per Day</Text>
             <View style={styles.stepper}>
-              <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn} accessibilityLabel="Decrease meals per day">
                 <Ionicons name="remove" size={18} color={colors.textPrimary} />
               </HapticPressable>
               <Text style={styles.stepValue}>{settings.mealsPerDay}</Text>
-              <HapticPressable intent="light" onPress={() => stepMeals(1)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepMeals(1)} style={styles.stepBtn} accessibilityLabel="Increase meals per day">
                 <Ionicons name="add" size={18} color={colors.textPrimary} />
               </HapticPressable>
             </View>
@@ -248,23 +248,23 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Water Goal (fl oz)</Text>
             <View style={styles.stepper}>
-              <HapticPressable intent="light" onPress={() => stepWater(-10)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepWater(-10)} style={styles.stepBtn} accessibilityLabel="Decrease water goal">
                 <Ionicons name="remove" size={18} color={colors.textPrimary} />
               </HapticPressable>
               <Text style={styles.stepValue}>{settings.waterGoalOz}</Text>
-              <HapticPressable intent="light" onPress={() => stepWater(10)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepWater(10)} style={styles.stepBtn} accessibilityLabel="Increase water goal">
                 <Ionicons name="add" size={18} color={colors.textPrimary} />
               </HapticPressable>
             </View>
           </View>
-        </View>
+        </SettingsSection>
 
         {/* Notifications */}
-        <Text style={styles.sectionLabel}>Notifications</Text>
-        <View style={styles.card}>
+        <SettingsSection title="Notifications" id="notifications">
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Daily Check-in</Text>
             <Switch
+              accessibilityLabel="Daily Check-in"
               value={settings.dailyCheckin}
               onValueChange={(v) => handleNotificationToggle('dailyCheckin', v)}
               trackColor={{ false: colors.border, true: colors.primary }}
@@ -280,6 +280,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Meal Reminders</Text>
             <Switch
+              accessibilityLabel="Meal Reminders"
               value={settings.mealReminders}
               onValueChange={(v) => handleNotificationToggle('mealReminders', v)}
               trackColor={{ false: colors.border, true: colors.primary }}
@@ -289,6 +290,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Fasting Alerts</Text>
             <Switch
+              accessibilityLabel="Fasting Alerts"
               value={settings.fastingAlerts}
               onValueChange={(v) => handleNotificationToggle('fastingAlerts', v)}
               trackColor={{ false: colors.border, true: colors.primary }}
@@ -298,17 +300,17 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Weekly Summary</Text>
             <Switch
+              accessibilityLabel="Weekly Summary"
               value={settings.weeklySummary}
               onValueChange={(v) => handleNotificationToggle('weeklySummary', v)}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.textOnPrimary}
             />
           </View>
-        </View>
+        </SettingsSection>
 
         {/* App Preferences */}
-        <Text style={styles.sectionLabel}>App Preferences</Text>
-        <View style={styles.card}>
+        <SettingsSection title="App Preferences" id="app">
           {/* Appearance — coherent light rendering for launch */}
           <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
             <Text style={styles.rowLabel}>Appearance</Text>
@@ -345,20 +347,18 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               accessibilityRole="switch"
             />
           </View>
-        </View>
+        </SettingsSection>
 
 
         {/* Security */}
-        <Text style={styles.sectionLabel}>Security</Text>
-        <View style={styles.card}>
+        <SettingsSection title="Security" id="security">
           <BiometricUnlockSetting />
-        </View>
+        </SettingsSection>
 
         {/* AUDIT-12-125: the Personalization row is not offered. Nothing in the
             app or on the server reads those choices (home modules, cadence
             incl. "Off", tone, units, week start), so they had no effect. */}
-        <Text style={styles.sectionLabel}>Notification settings</Text>
-        <View style={styles.card}>
+        <SettingsSection title="Notification settings" id="notification-details">
           {/* Audit P1: surface the canonical NotificationPreferences screen
               from Settings. The local Notifications switches above only
               control the legacy useSettings flags; full channel + quiet-hour
@@ -377,11 +377,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
-        </View>
+        </SettingsSection>
 
         {/* Support */}
-        <Text style={styles.sectionLabel}>Support</Text>
-        <View style={styles.card}>
+        <SettingsSection title="Support" id="support">
           <HapticPressable
             intent="light"
             style={styles.row}
@@ -396,11 +395,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
-        </View>
+        </SettingsSection>
 
         {/* Privacy (D2 contract wording: Settings > Privacy > Roman and AI) */}
-        <Text style={styles.sectionLabel}>Privacy</Text>
-        <View style={styles.card}>
+        <SettingsSection title={<Text style={styles.sectionLabel}>Privacy</Text>} id="privacy">
           {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
           <HapticPressable
             intent="light"
@@ -487,7 +485,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowLabel}>Reset Onboarding</Text>
             <Ionicons name="refresh-outline" size={18} color={colors.warning} />
           </HapticPressable>
-        </View>
+        </SettingsSection>
 
         {/* Sign Out */}
         <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
@@ -496,10 +494,12 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         </HapticPressable>
 
         {/* About */}
+        <SettingsSection title="About" id="about">
         <View style={styles.about}>
           <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
           <Text style={styles.aboutSub}>A daily practice.</Text>
         </View>
+        </SettingsSection>
       </ScrollView>
 
       {/* Password Modal */}
@@ -582,14 +582,13 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   topTitle: {
-    fontSize: 18,
-    fontWeight: '500',
+    ...typography.h1,
     color: colors.textPrimary,
   },
   content: {
@@ -597,52 +596,46 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 40,
   },
   sectionLabel: {
+    ...typography.eyebrow,
     fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    marginBottom: 8,
-    marginTop: 24,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    overflow: 'hidden',
+    lineHeight: 18,
+    color: colors.textMuted,
   },
   avatar: {
     alignSelf: 'center',
     width: 60,
     height: 60,
     borderRadius: 4, // radius.lg
-    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 16,
   },
   avatarText: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: colors.textOnPrimary,
+    ...typography.h1,
+    color: colors.textPrimary,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    minHeight: 52,
     paddingVertical: 14,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   rowLabel: {
+    ...typography.bodySmall,
     fontSize: 15,
     color: colors.textPrimary,
   },
   rowValue: {
+    ...typography.bodySmall,
     fontSize: 15,
     fontWeight: '600',
     color: colors.textPrimary,
   },
   rowValueMuted: {
+    ...typography.bodySmall,
     fontSize: 15,
     color: colors.textSecondary,
   },
@@ -673,14 +666,14 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 12,
   },
   stepBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surfaceElevated,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepValue: {
+    ...typography.bodyMd,
+    fontVariant: ['tabular-nums'],
     fontSize: 16,
     fontWeight: '500',
     color: colors.textPrimary,
@@ -694,33 +687,33 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 8,
     marginTop: 32,
     paddingVertical: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: 1,
-    borderColor: colors.error,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   signOutText: {
+    ...typography.bodyMd,
     fontSize: 16,
     fontWeight: '600',
     color: colors.error,
   },
   about: {
-    alignItems: 'center',
-    marginTop: 24,
+    paddingVertical: 16,
     gap: 4,
   },
   aboutText: {
+    ...typography.bodySmall,
     fontSize: 13,
     fontWeight: '600',
     color: colors.textSecondary,
   },
   aboutSub: {
-    fontSize: 12,
-    color: colors.textMuted,
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: withAlpha(colors.textPrimary, 0.4),
     justifyContent: 'flex-end',
   },
   modalSheet: {
@@ -737,11 +730,11 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '500',
+    ...typography.h2,
     color: colors.textPrimary,
   },
   input: {
+    ...typography.body,
     backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 14,
@@ -758,6 +751,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   saveBtnText: {
+    ...typography.bodyMd,
     fontSize: 16,
     fontWeight: '500',
     color: colors.textOnPrimary,
@@ -778,6 +772,7 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 16,
   },
   radioOption: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -801,6 +796,7 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primary,
   },
   radioLabel: {
+    ...typography.bodySmall,
     fontSize: 14,
     color: colors.textSecondary,
     fontWeight: '400' as const,
