@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert, Linking, Share } from 'react-native';
 const ROOT = path.resolve(__dirname, '..');
 function shipped(dir: string): string[] {
@@ -47,7 +47,7 @@ jest.mock('../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => fa
 jest.mock('../config/featureFlags', () => ({ featureFlags: { deliverables: false, privateCommunityHub: true } }));
 jest.mock('../services/api', () => ({
   __esModule: true, default: { get: jest.fn(async (url: string) => ({ data: url.includes('consent') ? {
-    coach_id: 'coach', consents: [{ scope: 'fitness.workouts', granted: mockConsent[0] }, { scope: 'fitness.food_macros', granted: mockConsent[1] }],
+    coach_id: 'coach', owner_access: false, consents: [{ scope: 'fitness.workouts', granted: mockConsent[0] }, { scope: 'fitness.food_macros', granted: mockConsent[1] }],
   } : { id: 'coach', name: 'Coach Lee' } })) },
   aiApi: { getStructuredContext: jest.fn(async () => ({ data: { coach: null } })) },
   usersApi: { getFoundingNumber: jest.fn(async () => ({ data: null })) },
@@ -197,11 +197,13 @@ it.each([
 ])('matches each confirmed coach-sharing state (%s/%s)', async (workouts, meals, copy) => {
   mockUser.coach_id = 'coach'; mockConsent = [Boolean(workouts), Boolean(meals)];
   const s = await render(React.createElement(ProfileScreen));
+  await act(async () => { jest.requireMock('@react-navigation/native').useFocusEffect.mock.calls.at(-1)?.[0](); });
   await waitFor(() => expect(s.getByText(String(copy))).toBeTruthy());
 });
 it('does not invent privacy reassurance while sharing state is unavailable', async () => {
   mockUser.coach_id = 'coach';
   require('../services/api').default.get.mockRejectedValueOnce(new Error('offline'));
   const s = await render(React.createElement(ProfileScreen));
+  await act(async () => { jest.requireMock('@react-navigation/native').useFocusEffect.mock.calls.at(-1)?.[0](); });
   expect(s.queryByText(/Workouts.*visible/)).toBeNull();
 });
