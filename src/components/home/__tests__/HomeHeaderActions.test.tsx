@@ -21,10 +21,19 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
+import { Ionicons } from '@expo/vector-icons';
 import HomeHeaderActions, { messageCoachLabel } from '../HomeHeaderActions';
 
 describe('HomeHeaderActions', () => {
   beforeEach(() => jest.clearAllMocks());
+
+  it('keeps both outline header actions at 24 pt', async () => {
+    mockUser.mockReturnValue({ id: 'u1', coach_id: null });
+    const view = await render(<HomeHeaderActions />);
+    expect(view.UNSAFE_getAllByType(Ionicons).map((icon) => [icon.props.name, icon.props.size])).toEqual([
+      ['chatbubble-ellipses-outline', 24], ['notifications-outline', 24],
+    ]);
+  });
 
   it('labels the message entry with the coach first name', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });

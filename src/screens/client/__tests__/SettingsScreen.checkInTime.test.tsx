@@ -1,6 +1,7 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { ThemeProvider } from '../../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import SettingsScreen from '../SettingsScreen';
 import { keepDayOneAnswers } from '../../day-one/answers';
@@ -20,6 +21,7 @@ jest.mock('../../../services/authActions', () => ({
 jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn() }));
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
+jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 
 const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
   goBack: jest.fn(), navigate: jest.fn(),
@@ -32,6 +34,18 @@ beforeEach(async () => {
 });
 
 describe('Settings uses this account’s retained Day-1 check-in choice', () => {
+  it('offers working Light and System controls, and resolves a stored Dark to Light', async () => {
+    await AsyncStorage.setItem('gp_appearance', 'dark');
+    await render(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);
+    await waitFor(() => expect(screen.getByLabelText('Light').props.accessibilityState.checked).toBe(true));
+    expect(screen.queryByLabelText('Dark')).toBeNull();
+    for (const [label, value] of [['System', 'system'], ['Light', 'light']]) {
+      await fireEvent.press(screen.getByLabelText(label));
+      await waitFor(async () => expect(await AsyncStorage.getItem('gp_appearance')).toBe(value));
+      expect(screen.getByLabelText(label).props.accessibilityState.checked).toBe(true);
+    }
+  });
+
   it.each<[number, number, string]>([
     [7, 30, '7:30 AM'],
     [18, 45, '6:45 PM'],
