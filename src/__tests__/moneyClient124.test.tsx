@@ -56,7 +56,7 @@ jest.mock('@stripe/stripe-react-native', () => ({
   presentPaymentSheet: jest.fn(async () => ({})),
 }));
 
-import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import ClientPackagesScreen, { currentPlanLine } from '../screens/client/ClientPackagesScreen';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
 
 const MONTHLY = {
@@ -158,14 +158,15 @@ describe('B-MC-2: an ending plan never says Renews', () => {
     purchases = [paidRow(true)];
     plans = [livePlan(true)];
     const r = await render(<ClientPackagesScreen />);
-    await waitFor(() => expect(r.getByTestId('current-plan-line')).toBeTruthy());
-    // B-402-2: the period end, the same day Your plans shows, not the padded expiry.
-    expect(r.getByTestId('current-plan-line').props.children).toBe(
-      'Ends Nov 2, 2030. Nothing more is charged.',
-    );
     await waitFor(() => expect(r.getByTestId('your-plan-line-purchase-1').props.children).toContain(
       'November 2, 2030',
     ));
+    // FW-MONEY-128 U-7: the plan shows once, in Your plans.
+    expect(r.queryByTestId('current-plan-line')).toBeNull();
+    // B-402-2: where the Current plan card shows (Your plans did not load), it
+    // gives the period end, the same day Your plans shows, not the padded expiry.
+    const st = await clientPaymentsApi.getPaymentStatus();
+    expect(st.ok && currentPlanLine(st.data)).toBe('Ends Nov 2, 2030. Nothing more is charged.');
     // It will not renew, so no "keeps renewing" notice on the other plan.
     expect(r.queryByTestId('plan-second-pkg-quarterly')).toBeNull();
   });
@@ -198,7 +199,8 @@ describe('U-MC-4: a past-due plan offers Update card on the plan', () => {
     expect(r.getByTestId('your-plan-line-purchase-1').props.children).toBe(
       'The last payment did not go through. To keep this plan, choose Update card. To end it now, choose End my plan.',
     );
-    expect(r.getByTestId('current-plan-line').props.children).toBe('The last payment did not go through.');
+    // FW-MONEY-128 U-7: the past-due plan shows once, in Your plans.
+    expect(r.queryByTestId('current-plan-line')).toBeNull();
     await fireEvent.press(r.getByTestId('your-plan-update-card-purchase-1'));
     expect(mockNavigate).toHaveBeenCalledWith('UpdateCard', { autostart: true });
   });
@@ -221,7 +223,7 @@ describe('U-MC-5: the plans screen has a back control', () => {
 });
 
 describe('B-402-1: End my plan / Keep my plan update the charge summary', () => {
-  it('after End my plan succeeds, Current plan says Ends and the other plan has no renewing notice', async () => {
+  it('after End my plan succeeds, the plan says it will not renew and the other plan has no renewing notice', async () => {
     purchases = [paidRow(false)];
     plans = [livePlan(false)];
     mockPost.mockImplementation(async (url: string) => {
@@ -239,17 +241,16 @@ describe('B-402-1: End my plan / Keep my plan update the charge summary', () => 
     try {
       const r = await render(<ClientPackagesScreen />);
       await waitFor(() => expect(r.getByTestId('your-plan-end-purchase-1')).toBeTruthy());
-      expect(r.getByTestId('current-plan-line').props.children).toBe('Renews Nov 2, 2030');
+      // FW-MONEY-128 U-7: the renewing plan shows once, in Your plans.
+      expect(r.queryByTestId('current-plan-card')).toBeNull();
       expect(r.getByTestId('plan-second-pkg-quarterly')).toBeTruthy();
       await fireEvent.press(r.getByTestId('your-plan-end-purchase-1'));
       const confirm = alert.mock.calls[0][2]?.find((b) => b.style === 'destructive');
       expect(confirm?.onPress).toBeTruthy();
       await act(async () => { confirm?.onPress?.(); });
       await waitFor(() => expect(r.getByTestId('your-plan-line-purchase-1').props.children).toContain('will not renew'));
-      await waitFor(() => expect(r.getByTestId('current-plan-line').props.children).toBe(
-        'Ends Nov 2, 2030. Nothing more is charged.',
-      ));
-      expect(r.queryByTestId('plan-second-pkg-quarterly')).toBeNull();
+      await waitFor(() => expect(r.queryByTestId('plan-second-pkg-quarterly')).toBeNull());
+      expect(r.queryByTestId('current-plan-card')).toBeNull();
       // The cancel receipt in Your plans survives the summary refresh.
       expect(r.getByTestId('your-plan-line-purchase-1').props.children).toContain('will not renew');
     } finally {
@@ -257,7 +258,7 @@ describe('B-402-1: End my plan / Keep my plan update the charge summary', () => 
     }
   });
 
-  it('after Keep my plan succeeds, Current plan says Renews and the other plan shows the renewing notice', async () => {
+  it('after Keep my plan succeeds, the plan renews again and the other plan shows the renewing notice', async () => {
     purchases = [paidRow(true)];
     plans = [livePlan(true)];
     mockPost.mockImplementation(async (url: string) => {
@@ -270,11 +271,11 @@ describe('B-402-1: End my plan / Keep my plan update the charge summary', () => 
     });
     const r = await render(<ClientPackagesScreen />);
     await waitFor(() => expect(r.getByTestId('your-plan-keep-purchase-1')).toBeTruthy());
-    expect(r.getByTestId('current-plan-line').props.children).toBe('Ends Nov 2, 2030. Nothing more is charged.');
+    expect(r.queryByTestId('current-plan-card')).toBeNull();
     expect(r.queryByTestId('plan-second-pkg-quarterly')).toBeNull();
     await fireEvent.press(r.getByTestId('your-plan-keep-purchase-1'));
     await waitFor(() => expect(r.getByTestId('your-plan-line-purchase-1').props.children).toContain('Next charge of'));
-    await waitFor(() => expect(r.getByTestId('current-plan-line').props.children).toBe('Renews Nov 2, 2030'));
-    expect(r.getByTestId('plan-second-pkg-quarterly')).toBeTruthy();
+    await waitFor(() => expect(r.getByTestId('plan-second-pkg-quarterly')).toBeTruthy());
+    expect(r.queryByTestId('current-plan-card')).toBeNull();
   });
 });
