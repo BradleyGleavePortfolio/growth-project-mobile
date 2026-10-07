@@ -28,6 +28,8 @@ export function SummaryTab({
   onOpenMacrosReview,
   onOpenWorkoutBuilder,
   onOpenAskAi,
+  openWorkoutRequest,
+  onWorkoutRequestHandled,
   colors,
   styles,
 }: {
@@ -48,6 +50,9 @@ export function SummaryTab({
    * omitted, the "Ask AI" pill is not shown.
    */
   onOpenAskAi?: () => void;
+  /** AIB-6: open the AI program generator once (from the Workouts tab entry). */
+  openWorkoutRequest?: boolean;
+  onWorkoutRequestHandled?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -201,6 +206,8 @@ export function SummaryTab({
       <CoachAiSection
         clientId={clientId}
         clientName={clientName}
+        openWorkoutRequest={openWorkoutRequest}
+        onWorkoutRequestHandled={onWorkoutRequestHandled}
         clientAllergies={allergies}
         clientDietaryRestrictions={restrictions}
       />

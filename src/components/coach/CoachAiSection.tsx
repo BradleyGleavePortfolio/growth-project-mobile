@@ -60,6 +60,9 @@ interface Props {
    */
   clientAllergies?: string[];
   clientDietaryRestrictions?: string[];
+  /** AIB-6: the Workouts tab "Build a program with AI" entry asks for the program generator; handled once AI is ready. */
+  openWorkoutRequest?: boolean;
+  onWorkoutRequestHandled?: () => void;
 }
 
 export default function CoachAiSection({
@@ -67,6 +70,8 @@ export default function CoachAiSection({
   clientName,
   clientAllergies,
   clientDietaryRestrictions,
+  openWorkoutRequest,
+  onWorkoutRequestHandled,
 }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -338,6 +343,12 @@ export default function CoachAiSection({
   };
 
   const ready = !!status?.ready;
+  useEffect(() => {
+    if (!openWorkoutRequest || !ready) return;
+    setSubmitError(null);
+    setMode('workout');
+    onWorkoutRequestHandled?.();
+  }, [openWorkoutRequest, ready, onWorkoutRequestHandled]);
 
   return (
     <View style={styles.section}>

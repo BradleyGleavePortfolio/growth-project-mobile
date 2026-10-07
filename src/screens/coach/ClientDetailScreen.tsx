@@ -83,6 +83,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   } = useClientDetailData(clientId, colors);
 
   const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? 'summary');
+  // AIB-6: Workouts tab "Build a program with AI" opens the Coach AI program generator (Summary tab) once.
+  const [aiProgramRequest, setAiProgramRequest] = useState(false);
+  const clearAiProgramRequest = useCallback(() => setAiProgramRequest(false), []);
   const [selectedDays, setSelectedDays] = useState<7 | 30 | 90>(90);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [showNudgeModal, setShowNudgeModal] = useState(false);
@@ -473,6 +476,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+            openWorkoutRequest={aiProgramRequest}
+            onWorkoutRequestHandled={clearAiProgramRequest}
             colors={colors}
             styles={styles}
           />
@@ -490,7 +495,16 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         )}
 
         {activeTab === 'workouts' && (
-          <WorkoutsTab workoutSessions={workoutSessions} colors={colors} styles={styles} />
+          <WorkoutsTab
+            workoutSessions={workoutSessions}
+            clientName={clientName}
+            onBuildWithAi={() => {
+              setAiProgramRequest(true);
+              setActiveTab('summary');
+            }}
+            colors={colors}
+            styles={styles}
+          />
         )}
 
         {activeTab === 'mealplan' && (

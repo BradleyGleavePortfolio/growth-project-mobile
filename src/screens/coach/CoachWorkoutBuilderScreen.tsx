@@ -65,6 +65,7 @@ import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
+import RevisionHistorySheet from '../../components/coach/ai-entry/RevisionHistorySheet';
 import {
   WorkoutAutosaveApiError,
   workoutAutosaveApi,
@@ -1554,6 +1555,8 @@ export default function CoachWorkoutBuilderScreen() {
     autosave.replayInFlight ||
     replayAdoptionPending ||
     replayRefetchFailed;
+  // AIB-6: revision history sheet. Shown with Ask AI: the status and revisions routes ship together (b#808).
+  const [revisionsOpen, setRevisionsOpen] = useState(false);
 
   const pillStatus = replayRefetchFailed ? 'conflict' : autosave.status;
   const onPillPress = useCallback(() => {
@@ -1624,6 +1627,23 @@ export default function CoachWorkoutBuilderScreen() {
             >
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Redo</Text>
             </Pressable>
+            {ai.visible && planId ? (
+              <Pressable
+                testID="revision-history-button"
+                accessibilityRole="button"
+                accessibilityLabel="Show the history of this workout"
+                onPress={() => {
+                  fireAiHaptic('light');
+                  setRevisionsOpen(true);
+                }}
+                style={styles.historyButton}
+              >
+                <Text style={[typography.caption, { color: sc.textPrimary }]}>History</Text>
+              </Pressable>
+            ) : null}
+            {revisionsOpen && planId ? (
+              <RevisionHistorySheet planId={planId} onClose={() => setRevisionsOpen(false)} sc={sc} />
+            ) : null}
           </View>
         ) : null}
         {autosaveEnabled && autosave.refusal ? (

@@ -45,6 +45,7 @@ import type {
 } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
 import { aiWorkoutApproveCopy } from '../../utils/coach/aiWorkoutApproveCopy';
+import { fireAiHaptic } from '../../components/coach/ai-builder/useAiBuilder';
 
 type Nav = NativeStackNavigationProp<ClientsStackParamList, 'AIWorkoutDraft'>;
 type R = RouteProp<ClientsStackParamList, 'AIWorkoutDraft'>;
@@ -248,6 +249,7 @@ export default function AIWorkoutDraftScreen() {
     try {
       const res = await coachAiApi.approveDraft(draftId);
       const copy = aiWorkoutApproveCopy(clientName, res?.data);
+      fireAiHaptic('success'); // AIB-6: approve lands with the same haptic as Apply in the builder
       Alert.alert(
         copy.title,
         copy.body,
@@ -260,6 +262,7 @@ export default function AIWorkoutDraftScreen() {
         ],
       );
     } catch (err) {
+      fireAiHaptic('error');
       Alert.alert('Approve failed', errorMessage(err, 'Try again.'));
     } finally {
       setApproving(false);
@@ -276,11 +279,13 @@ export default function AIWorkoutDraftScreen() {
     setRejecting(true);
     try {
       await coachAiApi.rejectDraft(draftId, reason);
+      fireAiHaptic('warning');
       setShowRejectModal(false);
       Alert.alert('Rejected', 'Draft rejected.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
+      fireAiHaptic('error');
       Alert.alert('Reject failed', errorMessage(err, 'Try again.'));
     } finally {
       setRejecting(false);

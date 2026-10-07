@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
@@ -7,10 +7,15 @@ import type { SessionExercise, WorkoutSession } from './types';
 
 export function WorkoutsTab({
   workoutSessions,
+  clientName,
+  onBuildWithAi,
   colors,
   styles,
 }: {
   workoutSessions: WorkoutSession[];
+  /** AIB-6: "Build a program with AI" opens the existing per-client generator (AIWorkoutDraft review). */
+  clientName?: string;
+  onBuildWithAi?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -25,8 +30,22 @@ export function WorkoutsTab({
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
   };
 
+  const first = clientName?.trim().split(/\s+/)[0] || 'this client';
   return (
     <>
+      {onBuildWithAi ? (
+        <Pressable
+          testID="workouts-build-with-ai"
+          accessibilityRole="button"
+          accessibilityLabel={`Build a program for ${first} with AI`}
+          accessibilityHint="Opens the Coach AI program generator. Nothing reaches the client until you approve it."
+          onPress={onBuildWithAi}
+          style={[styles.emptyCard, { flexDirection: 'row', justifyContent: 'center', padding: 16, marginBottom: 12 }]}
+        >
+          <Ionicons name="sparkles-outline" size={20} color={colors.primary} />
+          <Text style={[styles.emptyText, { color: colors.textPrimary, marginTop: 0 }]}>{`Build a program for ${first} with AI`}</Text>
+        </Pressable>
+      ) : null}
       <Text style={styles.sectionTitle}>Recent Workouts</Text>
       {workoutSessions.length === 0 ? (
         <View style={styles.emptyCard}>
