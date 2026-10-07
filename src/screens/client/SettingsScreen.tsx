@@ -341,7 +341,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           <HapticPressable
             intent="light"
             style={styles.row}
-            onPress={() => navigation.navigate('NotificationPreferences')}
+            onPress={() => navigation.navigate('NotificationSettings')}
             accessibilityRole="button"
             accessibilityLabel="Notification preferences"
             accessibilityHint="Opens detailed channel and quiet-hour controls"

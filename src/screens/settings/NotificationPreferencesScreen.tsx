@@ -153,7 +153,7 @@ const CATEGORIES: CategoryMeta[] = [
     id: 'system',
     noun: 'system notification',
     label: 'System',
-    description: 'App updates, billing, and critical alerts.',
+    description: 'Weekly summary email.',
     icon: 'information-circle-outline',
   },
 ];
