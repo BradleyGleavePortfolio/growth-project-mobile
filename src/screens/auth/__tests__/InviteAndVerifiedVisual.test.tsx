@@ -15,7 +15,7 @@ type InviteProps = React.ComponentProps<typeof AcceptInviteScreen>;
 type VerifiedProps = React.ComponentProps<typeof EmailVerifiedScreen>;
 function nav(routes = ['EmailVerified']) {
   return { navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(),
-    getState: () => ({ index: routes.length - 1, routes: routes.map(name => ({ name })) }) };
+    getState: jest.fn().mockReturnValue({ index: routes.length - 1, routes: routes.map(name => ({ name })) }) };
 }
 function invite(navigation = nav()) {
   return <AcceptInviteScreen navigation={navigation as InviteProps['navigation']}
