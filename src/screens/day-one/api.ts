@@ -8,6 +8,7 @@
  */
 
 import { profileApi, authApi, preferencesApi, notificationsApi } from '../../services/api';
+import { keepDayOneAnswers } from './answers';
 
 // ─── Error shape ─────────────────────────────────────────────────────────────
 
@@ -121,11 +122,12 @@ export async function pairWithCoach(code: string): Promise<{ ok: true } | { ok: 
 /**
  * Step 3 — Goals selection. The backend has no column for these goals and
  * PUT /profile rejects unknown keys with a 400 (forbidNonWhitelisted), so the
- * selection stays on this device in the Day-1 draft (the screen writes it)
- * and this step never makes a network call that can only fail.
+ * selection is kept on this device for this account (answers.ts) and this
+ * step never makes a network call that can only fail. The Ready step keeps
+ * the draft copy as well before it clears the resume checkpoint.
  */
-export function saveGoals(_goals: readonly GoalKey[]): Promise<void> {
-  return Promise.resolve();
+export async function saveGoals(goals: readonly GoalKey[]): Promise<void> {
+  await keepDayOneAnswers({ goals: [...goals] });
 }
 
 /**
@@ -156,7 +158,8 @@ function statusOf(err: unknown): number {
 /**
  * Step 5 — Daily check-in time. The backend stores no check-in time (no
  * profile or notification-preference field; both reject unknown keys with a
- * 400), so the chosen time stays on this device in the Day-1 draft. What the
+ * 400), so the chosen time is kept on this device for this account
+ * (answers.ts) before anything is sent. What the
  * backend does use is the device IANA timezone (quiet hours and the times in
  * notifications): it goes to PUT /notifications/timezone with source
  * 'device', or the older PATCH /notifications/preferences { timezone } on a
@@ -165,9 +168,10 @@ function statusOf(err: unknown): number {
  * completes; sign-in sends the zone again (services/timezoneSync).
  */
 export async function saveCheckInTime(
-  _time: CheckInTime,
+  time: CheckInTime,
   timezone: string = getDeviceTimezone(),
 ): Promise<void> {
+  await keepDayOneAnswers({ checkInTime: time, checkInTimezone: timezone });
   try {
     await withRetry(async () => {
       try {

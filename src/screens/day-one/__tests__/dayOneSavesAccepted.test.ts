@@ -17,12 +17,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { notificationsApi, preferencesApi, profileApi } from '../../../services/api';
 import { completeDayOne, saveCheckInTime, saveGoals, saveNotifPermission } from '../api';
 import { flushPendingSync, readResumeState, writeResumeState } from '../resume';
+import { readDayOneAnswers } from '../answers';
 
 jest.mock('../../../services/api', () => ({
   authApi: { attachInviteCode: jest.fn() },
   profileApi: { update: jest.fn() },
   preferencesApi: { patch: jest.fn() },
   notificationsApi: { updatePreferences: jest.fn(), setTimezone: jest.fn() },
+}));
+
+// The signed-in account the answers are kept for (B-441-1).
+jest.mock('../../../lib/userCache', () => ({
+  readUserCache: jest.fn(async () => ({ id: 'client-9', email: 'c9@example.com' })),
 }));
 
 // Day-1 relevant subset of the backend allow-lists (the fields the client
@@ -69,17 +75,21 @@ describe('Day-1 writes the backend accepts', () => {
     expect(update).toHaveBeenCalledWith({ onboarding_completed: true });
   });
 
-  it('saving goals succeeds without a call the backend can only reject', async () => {
+  it('saving goals keeps them for the account, without a call the backend can only reject', async () => {
     await expect(saveGoals(['fitness', 'mental_health'])).resolves.toBeUndefined();
     expect(update).not.toHaveBeenCalled();
     expect(notifPrefs).not.toHaveBeenCalled();
+    expect((await readDayOneAnswers())?.goals).toEqual(['fitness', 'mental_health']);
   });
 
-  it('saving the check-in time sends only the device zone, with provenance', async () => {
+  it('saving the check-in time keeps the time and sends only the device zone, with provenance', async () => {
     await expect(saveCheckInTime({ hour: 7, minute: 30 }, 'America/Chicago')).resolves.toBeUndefined();
     expect(setTimezone).toHaveBeenCalledWith('America/Chicago');
     expect(update).not.toHaveBeenCalled();
     expect(notifPrefs).not.toHaveBeenCalled();
+    const kept = await readDayOneAnswers('client-9');
+    expect(kept?.checkInTime).toEqual({ hour: 7, minute: 30 });
+    expect(kept?.checkInTimezone).toBe('America/Chicago');
   });
 
   it('a backend without PUT /notifications/timezone gets the zone on the preferences route', async () => {
@@ -110,7 +120,7 @@ describe('Day-1 writes the backend accepts', () => {
 });
 
 describe('Day-1 offline queue drains against the backend', () => {
-  it('every queued step is accepted, so the queue empties and the checkpoint clears', async () => {
+  it('every queued step is accepted, the checkpoint clears and the answers survive', async () => {
     await writeResumeState({
       step: 'Ready',
       pendingSync: [
@@ -123,5 +133,11 @@ describe('Day-1 offline queue drains against the backend', () => {
     await expect(flushPendingSync()).resolves.toBe(4);
     expect(await readResumeState()).toBeNull();
     expect(update).toHaveBeenCalledWith({ onboarding_completed: true });
+    const kept = await readDayOneAnswers('client-9');
+    expect(kept?.goals).toEqual(['fitness']);
+    expect(kept?.checkInTime).toEqual({ hour: 8, minute: 0 });
+    expect(kept?.checkInTimezone).toBe('America/Denver');
+    // Another account on the phone reads nothing.
+    expect(await readDayOneAnswers('someone-else')).toBeNull();
   });
 });

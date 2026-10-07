@@ -83,6 +83,7 @@ import NotificationsScreen from '../NotificationsScreen';
 import CheckInTimeScreen from '../CheckInTimeScreen';
 import ReadyScreen from '../ReadyScreen';
 import { writeResumeState, clearResumeState, readResumeState } from '../resume';
+import { readDayOneAnswers } from '../answers';
 import {
   pairWithCoach,
   saveGoals,
@@ -418,6 +419,34 @@ describe('ReadyScreen', () => {
       expect(state).toBeNull();
       expect(await AsyncStorage.getItem('day_one_completed')).toBe('true');
     });
+  });
+
+  // B-441-1: the backend has no field for the goals or the check-in time, so
+  // finishing must keep them for the account before the checkpoint goes.
+  it('finishing keeps the goals and the chosen check-in time for the account', async () => {
+    mockedComplete.mockResolvedValue(undefined);
+    await writeResumeState({
+      step: 'Ready',
+      draft: {
+        goals: ['fitness', 'mental_health'],
+        checkInTime: { hour: 6, minute: 45 },
+        checkInTimezone: 'America/Los_Angeles',
+      },
+    });
+    const { getByTestId } = await render(
+      <ReadyScreen navigation={makeNav() as never} />,
+    );
+    await act(async () => {
+      await fireEvent.press(getByTestId('day-one-ready-cta'));
+    });
+    await waitFor(async () => {
+      expect(await readResumeState()).toBeNull();
+      expect(await AsyncStorage.getItem('day_one_completed')).toBe('true');
+    });
+    const kept = await readDayOneAnswers('u1');
+    expect(kept?.goals).toEqual(['fitness', 'mental_health']);
+    expect(kept?.checkInTime).toEqual({ hour: 6, minute: 45 });
+    expect(kept?.checkInTimezone).toBe('America/Los_Angeles');
   });
 
   it('failure surfaces the retry banner with the Continue offline CTA', async () => {

@@ -37,8 +37,10 @@ import {
   clearResumeState,
   enqueuePending,
   flushPendingSync,
+  readResumeState,
   writeResumeState,
 } from './resume';
+import { keepDayOneAnswers } from './answers';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -89,6 +91,22 @@ export default function ReadyScreen(_props: Props) {
     await patchUserCache({ profile: { day_one_completed: true } });
   };
 
+  // B-441-1: the backend has no field for the goals or the check-in time, so
+  // the draft is the only other copy. Keep it for this account before the
+  // checkpoint is cleared; true when the answers are safe to drop from it.
+  const keepAnswers = async (): Promise<boolean> => {
+    const draft = (await readResumeState())?.draft;
+    if (!draft) return true;
+    return keepDayOneAnswers(
+      {
+        goals: draft.goals,
+        checkInTime: draft.checkInTime,
+        checkInTimezone: draft.checkInTimezone,
+      },
+      user?.id,
+    );
+  };
+
   const handleFinish = async () => {
     setRetryError(false);
     setSubmitting(true);
@@ -99,7 +117,9 @@ export default function ReadyScreen(_props: Props) {
       await flushPendingSync();
       await completeDayOne();
       await markLocalComplete();
-      await clearResumeState();
+      // A checkpoint whose answers could not be kept stays on the device (the
+      // Day-1 gate already passes on the local completion flag).
+      if (await keepAnswers()) await clearResumeState();
       track('day_one_completed');
       setSubmitting(false);
       // Root navigator listens for this and re-renders into the dashboard.
@@ -111,6 +131,7 @@ export default function ReadyScreen(_props: Props) {
   };
 
   const handleFinishOffline = async () => {
+    await keepAnswers();
     await writeResumeState({ step: 'Ready' });
     await enqueuePending({ kind: 'complete' });
     // Mark local-done so the next boot bypasses Day-1 even if the backend
