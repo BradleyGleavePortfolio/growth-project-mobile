@@ -29,8 +29,22 @@ interface Props {
   saving?: boolean;
 }
 
-export default function QuantityPickerModal({
-  visible,
+export default function QuantityPickerModal({ visible, ...props }: Props) {
+  return (
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => { if (!props.saving) props.onCancel(); }}
+    >
+      <QuantityPickerContent {...props} />
+    </Modal>
+  );
+}
+
+// Search and portion selection can share one native sheet without asking
+// UIKit to present a sibling modal while Add Food is already presented.
+export function QuantityPickerContent({
   selectedFood,
   quantityInput,
   selectedUnit,
@@ -39,7 +53,7 @@ export default function QuantityPickerModal({
   onConfirm,
   onCancel,
   saving = false,
-}: Props) {
+}: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
@@ -47,116 +61,109 @@ export default function QuantityPickerModal({
   const displayMacro = (value: number) => Number.isFinite(value) ? String(value) : '—';
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => { if (!saving) onCancel(); }}
+    <KeyboardAvoidingView
+      style={styles.quantityModalContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <KeyboardAvoidingView
-        style={styles.quantityModalContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <ScrollView
+        contentContainerStyle={styles.quantityModalContent}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={styles.quantityModalContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {selectedFood?.image_url ? (
-            <Image
-              source={{ uri: selectedFood.image_url }}
-              style={styles.quantityFoodImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <FoodImage name={selectedFood?.name || '?'} size={120} />
-          )}
-
-          <Text style={styles.quantityFoodName}>{selectedFood?.name}</Text>
-          {selectedFood?.brand ? (
-            <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
-          ) : null}
-
-          <View style={styles.macroPreviewCard}>
-            <View style={styles.macroPreviewItem}>
-              <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.calories)}</Text>
-              <Text style={styles.macroPreviewLabel}>Cal</Text>
-            </View>
-            <View style={styles.macroPreviewDivider} />
-            <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: Colors.orange }]}>{displayMacro(previewMacros.protein)}g</Text>
-              <Text style={styles.macroPreviewLabel}>Protein</Text>
-            </View>
-            <View style={styles.macroPreviewDivider} />
-            <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: Colors.gold }]}>{displayMacro(previewMacros.carbs)}g</Text>
-              <Text style={styles.macroPreviewLabel}>Carbs</Text>
-            </View>
-            <View style={styles.macroPreviewDivider} />
-            <View style={styles.macroPreviewItem}>
-              <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{displayMacro(previewMacros.fat)}g</Text>
-              <Text style={styles.macroPreviewLabel}>Fat</Text>
-            </View>
-          </View>
-
-          <Text style={styles.quantitySectionLabel}>Quantity</Text>
-          <TextInput
-            accessibilityLabel="Food quantity"
-            style={styles.quantityInput}
-            value={quantityInput}
-            onChangeText={onQuantityChange}
-            keyboardType="decimal-pad"
-            placeholder="1"
-            placeholderTextColor={Colors.textMuted}
+        {selectedFood?.image_url ? (
+          <Image
+            source={{ uri: selectedFood.image_url }}
+            style={styles.quantityFoodImage}
+            resizeMode="cover"
           />
+        ) : (
+          <FoodImage name={selectedFood?.name || '?'} size={120} />
+        )}
 
-          <Text style={styles.quantitySectionLabel}>Unit</Text>
-          <View style={styles.unitChipRow}>
-            {unitOptionsFor(selectedFood).map((u) => (
-              <TouchableOpacity
-                key={u}
-                accessibilityRole="button"
-                accessibilityLabel={`Portion unit ${u}`}
-                accessibilityState={{ selected: selectedUnit === u }}
-                style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}
-                onPress={() => onUnitChange(u)}
-              >
-                <Text style={[styles.unitChipText, selectedUnit === u && styles.unitChipTextActive]}>{u}</Text>
-              </TouchableOpacity>
-            ))}
+        <Text style={styles.quantityFoodName}>{selectedFood?.name}</Text>
+        {selectedFood?.brand ? (
+          <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
+        ) : null}
+
+        <View style={styles.macroPreviewCard}>
+          <View style={styles.macroPreviewItem}>
+            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.calories)}</Text>
+            <Text style={styles.macroPreviewLabel}>Cal</Text>
           </View>
+          <View style={styles.macroPreviewDivider} />
+          <View style={styles.macroPreviewItem}>
+            <Text style={[styles.macroPreviewValue, { color: Colors.orange }]}>{displayMacro(previewMacros.protein)}g</Text>
+            <Text style={styles.macroPreviewLabel}>Protein</Text>
+          </View>
+          <View style={styles.macroPreviewDivider} />
+          <View style={styles.macroPreviewItem}>
+            <Text style={[styles.macroPreviewValue, { color: Colors.gold }]}>{displayMacro(previewMacros.carbs)}g</Text>
+            <Text style={styles.macroPreviewLabel}>Carbs</Text>
+          </View>
+          <View style={styles.macroPreviewDivider} />
+          <View style={styles.macroPreviewItem}>
+            <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{displayMacro(previewMacros.fat)}g</Text>
+            <Text style={styles.macroPreviewLabel}>Fat</Text>
+          </View>
+        </View>
 
-          {selectedFood?.serving_size ? (
-            <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
-          ) : null}
-          {['cup', 'tbsp', 'tsp'].includes(selectedUnit) ? (
-            <Text style={styles.servingSizeInfo}>Volume weights are estimates. Use grams for a weighed portion.</Text>
-          ) : null}
-          {quantity == null ? (
-            <Text style={styles.servingSizeInfo}>Enter a quantity greater than zero to log this food.</Text>
-          ) : null}
+        <Text style={styles.quantitySectionLabel}>Quantity</Text>
+        <TextInput
+          accessibilityLabel="Food quantity"
+          style={styles.quantityInput}
+          value={quantityInput}
+          onChangeText={onQuantityChange}
+          keyboardType="decimal-pad"
+          placeholder="1"
+          placeholderTextColor={Colors.textMuted}
+        />
 
-          <TouchableOpacity
-            style={[styles.quantityLogButton, quantity == null && { opacity: 0.5 }]}
-            accessibilityRole="button"
-            accessibilityLabel={saving ? 'Saving food' : 'Log Food'}
-            disabled={quantity == null || saving}
-            onPress={onConfirm}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add-circle" size={22} color={Colors.white} />
-            <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
-          </TouchableOpacity>
+        <Text style={styles.quantitySectionLabel}>Unit</Text>
+        <View style={styles.unitChipRow}>
+          {unitOptionsFor(selectedFood).map((u) => (
+            <TouchableOpacity
+              key={u}
+              accessibilityRole="button"
+              accessibilityLabel={`Portion unit ${u}`}
+              accessibilityState={{ selected: selectedUnit === u }}
+              style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}
+              onPress={() => onUnitChange(u)}
+            >
+              <Text style={[styles.unitChipText, selectedUnit === u && styles.unitChipTextActive]}>{u}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-          <TouchableOpacity
-            style={styles.quantityCancelLink}
-            onPress={onCancel}
-            disabled={saving}
-          >
-            <Text style={styles.quantityCancelText}>Cancel</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </Modal>
+        {selectedFood?.serving_size ? (
+          <Text style={styles.servingSizeInfo}>1 serving = {selectedFood.serving_size}</Text>
+        ) : null}
+        {['cup', 'tbsp', 'tsp'].includes(selectedUnit) ? (
+          <Text style={styles.servingSizeInfo}>Volume weights are estimates. Use grams for a weighed portion.</Text>
+        ) : null}
+        {quantity == null ? (
+          <Text style={styles.servingSizeInfo}>Enter a quantity greater than zero to log this food.</Text>
+        ) : null}
+
+        <TouchableOpacity
+          style={[styles.quantityLogButton, quantity == null && { opacity: 0.5 }]}
+          accessibilityRole="button"
+          accessibilityLabel={saving ? 'Saving food' : 'Log Food'}
+          disabled={quantity == null || saving}
+          onPress={onConfirm}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="add-circle" size={22} color={Colors.white} />
+          <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.quantityCancelLink}
+          onPress={onCancel}
+          disabled={saving}
+        >
+          <Text style={styles.quantityCancelText}>Cancel</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

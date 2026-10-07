@@ -72,7 +72,7 @@
     "subtitle": "Choose the time of day you plan to check in. Mornings work best for most.",
     "defaultLabel": "Default: 9:00 AM",
     "continue": "Save check-in time",
-    "skip": "Skip. I'll set this later.",
+    "skip": "Skip for now",
     "hourLabel": "Hour",
     "minuteLabel": "Minute",
     "amLabel": "AM",

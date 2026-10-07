@@ -25,7 +25,7 @@ import WaterTracker from '../../components/WaterTracker';
 import DailySummaryBar from '../../components/log/DailySummaryBar';
 import MealSectionCard from '../../components/log/MealSectionCard';
 import FoodSearchModal from '../../components/log/FoodSearchModal';
-import QuantityPickerModal from '../../components/log/QuantityPickerModal';
+import { QuantityPickerContent } from '../../components/log/QuantityPickerModal';
 import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
@@ -476,6 +476,7 @@ export default function LogScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
+          setEditLog(null);
           // The row and the day's totals update at once; the reload below
           // brings the entry back if the server did not delete it.
           removeFoodLogLocally(log.id);
@@ -585,7 +586,16 @@ export default function LogScreen() {
       <FoodSearchModal
         visible={modalVisible}
         activeMealType={activeMealType}
-        onClose={() => { if (!foodSaving) setModalVisible(false); }}
+        onClose={() => {
+          if (!foodSaving) {
+            if (quantityModalVisible) {
+              setQuantityModalVisible(false);
+              setSelectedFood(null);
+            } else {
+              setModalVisible(false);
+            }
+          }
+        }}
         searchQuery={searchQuery}
         onSearchChange={handleSearch}
         onClearSearch={clearSearch}
@@ -611,21 +621,21 @@ export default function LogScreen() {
         onManualFieldChange={onManualFieldChange}
         onManualLog={handleManualLog}
         saving={foodSaving}
-      />
-
-      <QuantityPickerModal
-        visible={quantityModalVisible}
-        selectedFood={selectedFood}
-        quantityInput={quantityInput}
-        selectedUnit={selectedUnit}
-        onQuantityChange={setQuantityInput}
-        onUnitChange={setSelectedUnit}
-        onConfirm={handleConfirmLog}
-        saving={foodSaving}
-        onCancel={() => {
-          setQuantityModalVisible(false);
-          setSelectedFood(null);
-        }}
+        portionPicker={quantityModalVisible ? (
+          <QuantityPickerContent
+            selectedFood={selectedFood}
+            quantityInput={quantityInput}
+            selectedUnit={selectedUnit}
+            onQuantityChange={setQuantityInput}
+            onUnitChange={setSelectedUnit}
+            onConfirm={handleConfirmLog}
+            saving={foodSaving}
+            onCancel={() => {
+              setQuantityModalVisible(false);
+              setSelectedFood(null);
+            }}
+          />
+        ) : undefined}
       />
 
       {/* F-2: edit-log modal. Inline so it works on iOS + Android without
@@ -689,7 +699,7 @@ export default function LogScreen() {
               disabled={editSaving}
               style={styles.deleteEntryButton}
               onPress={() => {
-                if (editLog) { setEditLog(null); void handleDeleteFood(editLog); }
+                if (editLog) void handleDeleteFood(editLog);
               }}
             >
               <Text style={{ color: colors.error }}>Delete entry</Text>

@@ -103,6 +103,9 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('60 g oats');
     expect(screen.queryByLabelText('Food quantity')).toBeNull();
     await fireEvent.press(screen.getByText('Rolled oats'));
+    await fireEvent(screen.getByTestId('food-search-sheet'), 'requestClose');
+    expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('60 g oats');
+    await fireEvent.press(screen.getByText('Rolled oats'));
     await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenCalledWith({

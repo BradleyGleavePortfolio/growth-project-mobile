@@ -51,6 +51,7 @@ interface Props {
   onManualFieldChange: (field: keyof ManualFields, value: string) => void;
   onManualLog: () => void;
   saving?: boolean;
+  portionPicker?: React.ReactNode;
 }
 
 export default function FoodSearchModal(props: Props) {
@@ -67,54 +68,56 @@ export default function FoodSearchModal(props: Props) {
   } = props;
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={styles.modalContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <View style={styles.modalHeader}>
-          <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
-            <Ionicons name="close" size={24} color={Colors.dark} />
-          </HapticPressable>
-          <Text style={styles.modalTitle}>
-            Add to {MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
-          </Text>
-          <View style={{ width: 24 }} />
-        </View>
+    <Modal testID="food-search-sheet" visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      {props.portionPicker ?? (
+        <KeyboardAvoidingView
+          style={styles.modalContainer}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalHeader}>
+            <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
+              <Ionicons name="close" size={24} color={Colors.dark} />
+            </HapticPressable>
+            <Text style={styles.modalTitle}>
+              Add to {MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
+            </Text>
+            <View style={{ width: 24 }} />
+          </View>
 
-        {!manualMode ? (
-          <FoodSearchView
-            searchQuery={props.searchQuery}
-            onSearchChange={props.onSearchChange}
-            onClearSearch={props.onClearSearch}
-            onRetrySearch={props.onRetrySearch}
-            searching={props.searching}
-            showSlowMessage={props.showSlowMessage}
-            searchError={props.searchError}
-            searchResults={props.searchResults}
-            didYouMean={props.didYouMean}
-            recentTab={props.recentTab}
-            onRecentTabChange={props.onRecentTabChange}
-            recentFoods={props.recentFoods}
-            frequentFoods={props.frequentFoods}
-            browseUnavailable={props.browseUnavailable}
-            onSelectFood={props.onSelectFood}
-            repeatMeal={props.repeatMeal}
-            repeatMealTitle={props.repeatMealTitle}
-            onRepeatMeal={props.onRepeatMeal}
-            saving={props.saving}
-            onEnterManualMode={onEnterManualMode}
-          />
-        ) : (
-          <ManualFoodEntryForm
-            fields={manualFields}
-            onFieldChange={onManualFieldChange}
-            onBack={onExitManualMode}
-            onSubmit={onManualLog}
-            saving={props.saving}
-          />
-        )}
-      </KeyboardAvoidingView>
+          {!manualMode ? (
+            <FoodSearchView
+              searchQuery={props.searchQuery}
+              onSearchChange={props.onSearchChange}
+              onClearSearch={props.onClearSearch}
+              onRetrySearch={props.onRetrySearch}
+              searching={props.searching}
+              showSlowMessage={props.showSlowMessage}
+              searchError={props.searchError}
+              searchResults={props.searchResults}
+              didYouMean={props.didYouMean}
+              recentTab={props.recentTab}
+              onRecentTabChange={props.onRecentTabChange}
+              recentFoods={props.recentFoods}
+              frequentFoods={props.frequentFoods}
+              browseUnavailable={props.browseUnavailable}
+              onSelectFood={props.onSelectFood}
+              repeatMeal={props.repeatMeal}
+              repeatMealTitle={props.repeatMealTitle}
+              onRepeatMeal={props.onRepeatMeal}
+              saving={props.saving}
+              onEnterManualMode={onEnterManualMode}
+            />
+          ) : (
+            <ManualFoodEntryForm
+              fields={manualFields}
+              onFieldChange={onManualFieldChange}
+              onBack={onExitManualMode}
+              onSubmit={onManualLog}
+              saving={props.saving}
+            />
+          )}
+        </KeyboardAvoidingView>
+      )}
     </Modal>
   );
 }

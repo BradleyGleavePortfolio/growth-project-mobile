@@ -201,6 +201,9 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       const amountMl = Math.round(amountOz * 29.5735);
       const date = get().selectedDate;
       await waterApi.log({ amount_ml: amountMl, date });
+      set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
+        ? { loadError: null }
+        : {});
     } catch (err) {
       // Revert the optimistic bump and say so: a number that silently goes
       // back down reads as a glitch, not as "this was not saved".
