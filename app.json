@@ -22,10 +22,10 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.growthproject.app",
-      "buildNumber": "6",
+      "buildNumber": "7",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSFaceIDUsageDescription": "Unlock the app and confirm sensitive actions with Face ID",
+        "NSFaceIDUsageDescription": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
         "NSHealthShareUsageDescription": "The Growth Project uses your Apple Health data so your coach can personalize training, recovery, and check-ins around real signals (sleep, heart rate, workouts).",
         "NSHealthUpdateUsageDescription": "The Growth Project may write workouts you log to Apple Health so all your activity stays in one place.",
         "NSMotionUsageDescription": "The Growth Project reads motion and step activity so your coach can track daily movement and progress.",
@@ -168,7 +168,7 @@
       [
         "expo-local-authentication",
         {
-          "faceIDPermission": "Unlock the app and confirm sensitive actions with Face ID"
+          "faceIDPermission": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings."
         }
       ],
       [

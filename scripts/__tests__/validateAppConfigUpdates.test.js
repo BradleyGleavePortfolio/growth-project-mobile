@@ -69,7 +69,7 @@ describe('validate-app-config — EAS Update gate', () => {
     expect(eas.build.preview.channel).toBe('preview');
     expect(eas.build.clinic.channel).toBe('clinic');
     expect(eas.build.clinic.environment).toBe('production');
-    expect(app.ios.buildNumber).toBe('6');
+    expect(app.ios.buildNumber).toBe('7');
     expect(app.android.versionCode).toBe(5);
     withWorkspace((dir) => {
       const r = run(dir);
