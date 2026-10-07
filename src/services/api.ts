@@ -1040,6 +1040,9 @@ export const listsApi = {
   getList: (type: 'grocery' | 'shopping') => api.get(`/lists/${type}`),
   addItem: (type: 'grocery' | 'shopping', data: { name: string; quantity?: number; unit?: string; source_recipe_id?: string }) =>
     api.post(`/lists/${type}`, data),
+  // One transactional request (POST /lists/:type/bulk): all items are added or none are.
+  bulkAdd: (type: 'grocery' | 'shopping', items: Array<{ name: string; quantity?: number; unit?: string; source_recipe_id?: string }>) =>
+    api.post<{ added: number }>(`/lists/${type}/bulk`, { items }),
   updateItem: (id: string, data: { is_checked?: boolean; quantity?: number; name?: string }) =>
     api.patch(`/lists/items/${id}`, data),
   deleteItem: (id: string) => api.delete(`/lists/items/${id}`),

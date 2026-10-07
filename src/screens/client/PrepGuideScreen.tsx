@@ -51,7 +51,12 @@ interface PrepGuideData {
   recipes: PrepRecipe[];
   aggregated_ingredients: AggregatedIngredient[];
   prep_day_suggestions: string[];
+  // 'plan' = recipes from the client's assigned meal plan. Missing (production backend before NUTR-BE) or
+  // 'library' = recipes the account can see, not planned for any week: no week, plan or prep-day claims.
+  source?: 'plan' | 'library';
 }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
 function formatWeekLabel(weekStart: string): string {
@@ -84,25 +89,30 @@ export default function PrepGuideScreen() {
     staleTime: 5 * 60 * 1000,
   });
 
+  const fromPlan = data?.source === 'plan';
+  // The week only changes anything when the recipes come from a plan; once off the current week the
+  // selector stays so the client can always get back.
+  const showWeek = fromPlan || weekOffset !== 0;
+
   const addToGroceryMutation = useMutation({
-    mutationFn: async (ingredients: AggregatedIngredient[]) => {
-      return Promise.all(
-        ingredients.map((i) =>
-          listsApi.addItem('grocery', {
+    mutationFn: (ingredients: AggregatedIngredient[]) =>
+      listsApi
+        .bulkAdd(
+          'grocery',
+          ingredients.map((i) => ({
             name: i.name,
             quantity: Math.round(i.quantity * 10) / 10,
             unit: i.unit || undefined,
-          })
+          })),
         )
-      );
-    },
-    onSuccess: () => {
+        .then((r) => r.data?.added ?? ingredients.length),
+    onSuccess: (added) => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Invalidate grocery list so it's fresh when user navigates to it
       queryClient.invalidateQueries({ queryKey: ['lists', 'grocery'] });
       Alert.alert(
         'Added to Grocery List',
-        `${data?.aggregated_ingredients.length ?? 0} ingredients added to your grocery list.`,
+        `${plural(added, 'ingredient')} added to your grocery list.`,
         [
           { text: 'OK' },
           {
@@ -113,14 +123,14 @@ export default function PrepGuideScreen() {
       );
     },
     onError: () =>
-      Alert.alert('Could not add all ingredients', 'Some ingredients may already be in the grocery list. Open the list to check before adding them again.'),
+      Alert.alert('Could not add the ingredients', 'Nothing was added to your grocery list. Try again.'),
   });
 
   const handleAddToGrocery = useCallback(() => {
     if (!data?.aggregated_ingredients.length) return;
     Alert.alert(
       'Add to Grocery List?',
-      `Add ${data.aggregated_ingredients.length} aggregated ingredients from this week's recipes to your grocery list?`,
+      `Add ${plural(data.aggregated_ingredients.length, 'ingredient')} from these recipes to your grocery list?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -141,8 +151,8 @@ export default function PrepGuideScreen() {
         <Text style={styles.title}>Prep guide</Text>
       </View>
 
-      {/* Week selector */}
-      <View style={styles.weekSelector}>
+      {/* Week selector: only where the week is real (plan recipes) */}
+      {showWeek ? <View style={styles.weekSelector}>
         <TouchableOpacity
           accessibilityRole="button" accessibilityLabel="Previous week"
           style={styles.weekArrow}
@@ -165,7 +175,7 @@ export default function PrepGuideScreen() {
         >
           <Ionicons name="chevron-forward" size={20} color={colors.primary} />
         </TouchableOpacity>
-      </View>
+      </View> : null}
 
       <ScrollView
         testID="list-scroll"
@@ -195,17 +205,20 @@ export default function PrepGuideScreen() {
         ) : !data || data.recipes.length === 0 ? (
           <EmptyState
             icon="clipboard-outline"
-            title="No recipes to prep"
-            subtitle="Recipes from a meal plan appear here for the selected week."
+            title="No recipes yet"
+            subtitle="Recipes from a meal plan or available to this account appear here."
           />
         ) : (
           <>
-            <Text style={styles.summary}>{data.recipes.length} recipe{data.recipes.length === 1 ? '' : 's'} for the week.</Text>
-            {/* Prep day suggestions */}
-            {data.prep_day_suggestions.length > 0 ? (
+            <Text style={styles.summary}>
+              {plural(data.recipes.length, 'recipe')} {fromPlan ? 'from your meal plan.' : 'available to this account.'}
+            </Text>
+            {fromPlan ? null : <Text style={styles.prepDayHint}>None of these come from a meal plan.</Text>}
+            {/* Prep day suggestions: only for plan recipes */}
+            {fromPlan && data.prep_day_suggestions.length > 0 ? (
               <FadeInView>
                 <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Suggested Prep Days</Text>
+                  <Text style={styles.sectionTitle}>Suggested prep days</Text>
                   <View style={styles.prepDayRow}>
                     {data.prep_day_suggestions.map((day) => (
                       <View key={day} style={styles.prepDayBadge}>
@@ -225,10 +238,17 @@ export default function PrepGuideScreen() {
             <FadeInView delay={60}>
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>
-                  Recipes to Prep ({data.recipes.length})
+                  {fromPlan ? 'Recipes to prep' : 'Recipes'} ({data.recipes.length})
                 </Text>
                 {data.recipes.map((recipe, index) => (
-                  <View key={recipe.id} style={styles.recipeRow}>
+                  <TouchableOpacity
+                    key={recipe.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${recipe.title}`}
+                    style={styles.recipeRow}
+                    onPress={() => navigation.navigate('RecipeDetail', { recipeId: recipe.id })}
+                    activeOpacity={0.7}
+                  >
                     <View style={styles.recipeIcon}>
                       <Text style={styles.stepNumber}>{index + 1}</Text>
                     </View>
@@ -244,7 +264,8 @@ export default function PrepGuideScreen() {
                         <Text style={styles.recipeMetaText}>{Math.round(recipe.calories)} kcal</Text>
                       </View>
                     </View>
-                  </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
                 ))}
               </View>
             </FadeInView>
@@ -254,7 +275,7 @@ export default function PrepGuideScreen() {
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitle}>
-                    Aggregated Ingredients ({data.aggregated_ingredients.length})
+                    Ingredients ({data.aggregated_ingredients.length})
                   </Text>
                   <TouchableOpacity
                     accessibilityRole="button" accessibilityLabel="Add all ingredients"
@@ -376,7 +397,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   prepDayText: { ...typography.eyebrow, color: colors.textMuted },
   prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
 
-  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, minHeight: 44, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   stepNumber: { ...typography.h3, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   recipeIcon: {
     width: 38,
