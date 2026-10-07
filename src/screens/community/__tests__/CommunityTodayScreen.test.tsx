@@ -30,18 +30,14 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 // ── Current user ─────────────────────────────────────────────────────────────
-jest.mock('../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', name: 'Dana' }),
-}));
+const mockUser: { coach_id?: string } = {};
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 
 // ── Feature flags — Hall on so the empty-state primary action resolves ───────
-jest.mock('../../../config/featureFlags', () => ({
-  featureFlags: {
-    communityHall: true,
-    communityDm: true,
-    communityEvents: true,
-    communityChallenges: true,
-  },
+const mockFlags = { communityHall: true, communityDm: true, communityEvents: true, communityChallenges: true };
+jest.mock('../../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
+jest.mock('../../../ui/skeletons/Skeleton', () => ({
+  SkeletonScreen: () => null,
 }));
 
 // ── useCommunityToday — the today query (mutable holder) ─────────────────────
@@ -69,6 +65,78 @@ beforeEach(() => {
   mockToday.isLoading = false;
   mockToday.isError = false;
   mockToday.refetch.mockReset();
+  Object.keys(mockFlags).forEach((key) => { mockFlags[key as keyof typeof mockFlags] = true; });
+  mockUser.coach_id = undefined;
+});
+
+describe('Today truthful rows and action parity', () => {
+  const populated = {
+    feature_flag_state: 'enabled',
+    cohort: { id: 'c-1', name: 'Morning group', member_count: 0 },
+    pinned_post: { id: 'p-1', title: 'A shared note', author_user_id: 'other-author' },
+    event: { id: 'e-1', title: 'Group session', starts_at: '2026-10-08T16:00:00Z' },
+    challenge: { id: 'ch-1', title: 'Walk together', ends_at: '2026-10-10T16:00:00Z' },
+    empty_reason: null,
+  };
+  it('keeps all populated destinations and offers the real composer without inventing post facts', async () => {
+    mockToday.data = populated;
+    await render(<CommunityTodayScreen />);
+    expect(screen.queryByText('From your coach')).toBeNull();
+    expect(screen.getByText('Pinned post')).toBeTruthy();
+    expect(screen.getByText('0 members')).toBeTruthy();
+    const actions = [
+      ['cohort', 'CommunitySpace', { space: 'cohort', cohortId: 'c-1' }],
+      ['pinned', 'CommunityThread', { postId: 'p-1' }],
+      ['event', 'CommunityEventDetail', { eventId: 'e-1' }],
+      ['challenge', 'CommunityChallengeDetail', { challengeId: 'ch-1' }],
+      ['compose', 'CommunityComposer', { mode: 'post' }],
+    ] as const;
+    for (const [id, route, params] of actions) {
+      await fireEvent.press(screen.getByTestId(`community-today-${id}`));
+      expect(mockNavigate).toHaveBeenLastCalledWith(route, params);
+    }
+  });
+  it('keeps event and challenge flag-off fallbacks to the Hall', async () => {
+    mockToday.data = populated;
+    mockFlags.communityEvents = mockFlags.communityChallenges = false;
+    await render(<CommunityTodayScreen />);
+    for (const id of ['event', 'challenge']) {
+      await fireEvent.press(screen.getByTestId(`community-today-${id}`));
+      expect(mockNavigate).toHaveBeenLastCalledWith('CommunitySpace', { space: 'hall' });
+    }
+  });
+  it.each([['hall', true, true, undefined], ['dm', false, true, undefined], ['coach', false, false, 'coach-1']])(
+    'labels a true-empty %s action with its actual destination',
+    async (_kind, hall, dm, coach) => {
+      mockFlags.communityHall = Boolean(hall); mockFlags.communityDm = Boolean(dm);
+      mockUser.coach_id = typeof coach === 'string' ? coach : undefined;
+      mockToday.data = { ...populated, cohort: null, pinned_post: null, event: null, challenge: null, empty_reason: 'no_today_content' };
+      await render(<CommunityTodayScreen />);
+      expect(screen.getByText('No updates in Today')).toBeTruthy();
+      expect(screen.getByText(hall ? 'Visit the Hall' : dm ? 'Messages' : 'Send your coach a message')).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('community-today-empty-action'));
+      expect(mockNavigate).toHaveBeenCalledWith(...(hall ? ['CommunitySpace', { space: 'hall' }] : dm ? ['CommunityDmList'] : ['Home', { screen: 'Messages' }]));
+    },
+  );
+  it('omits an unavailable empty fallback for a coachless client', async () => {
+    mockFlags.communityHall = mockFlags.communityDm = false;
+    mockToday.data = { ...populated, cohort: null, pinned_post: null, event: null, challenge: null, empty_reason: 'no_today_content' };
+    await render(<CommunityTodayScreen />);
+    expect(screen.queryByTestId('community-today-empty-action')).toBeNull();
+  });
+  it('does not promise a coach or a composer to a client without membership', async () => {
+    mockToday.data = { ...populated, cohort: null, pinned_post: null, event: null, challenge: null, empty_reason: 'no_membership' };
+    await render(<CommunityTodayScreen />);
+    expect(screen.getByText('A community space is not available for this account.')).toBeTruthy();
+    expect(screen.queryByTestId('community-today-empty-action')).toBeNull();
+    expect(screen.queryByTestId('community-today-compose')).toBeNull();
+  });
+  it('distinguishes initial loading from true empty', async () => {
+    mockToday.isLoading = true;
+    await render(<CommunityTodayScreen />);
+    expect(screen.getByLabelText('Loading community Today')).toBeTruthy();
+    expect(screen.queryByTestId('community-today-empty')).toBeNull();
+  });
 });
 
 describe('CommunityTodayScreen error state', () => {
