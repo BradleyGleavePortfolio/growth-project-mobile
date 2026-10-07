@@ -15,7 +15,7 @@
  */
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { FlatList, Share, StyleSheet } from 'react-native';
+import { Share, StyleSheet } from 'react-native';
 import { typography } from '../../../theme/tokens';
 
 const mockGetClients = jest.fn();
@@ -354,7 +354,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     await fireEvent.press(screen.getByTestId('clients-sort'));
     expect(screen.getByText('Name')).toBeTruthy();
     const before = mockGetClients.mock.calls.length;
-    await act(async () => screen.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh());
+    await act(async () => screen.getByTestId('clients-list').props.refreshControl.props.onRefresh());
     expect(mockGetClients.mock.calls.length).toBe(before + 1);
     expect(mockGetClients).toHaveBeenLastCalledWith('active', undefined, ROSTER_PAGE_SIZE);
     await fireEvent.press(screen.getByTestId('client-row-c1'));
@@ -368,7 +368,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     expect(navigate).toHaveBeenCalledWith('InviteCodes');
     expect(screen.getByTestId('clients-hero').props.children).toBe(0);
     mockGetClients.mockResolvedValue({ data: [wireRow('c1', 'Ana Lopez')] });
-    await act(async () => screen.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh());
+    await act(async () => screen.getByTestId('clients-list').props.refreshControl.props.onRefresh());
     await screen.findByText('Ana Lopez');
     expect(screen.getByText('Joined Sep 1')).toBeTruthy();
     expect(screen.queryByText(/need you|are steady|to review/)).toBeNull();

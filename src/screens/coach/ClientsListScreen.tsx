@@ -338,6 +338,7 @@ export default function ClientsListScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          testID="clients-list"
           data={shownClients}
           renderItem={renderClient}
           keyExtractor={(item) => item.id}
