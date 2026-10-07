@@ -583,7 +583,7 @@ export default function ClientPackagesScreen() {
       <Text style={styles.fineprint}>
         Payments are processed securely by Stripe inside the app. A renewing
         plan can be ended at any time in Your plans when it shows End my
-        plan, or through your coach; refunds are handled by your coach.
+        plan, or through your coach. Refunds are issued by The Growth Project team; to ask, go to You &gt; Settings &gt; Support.
       </Text>
     </ScrollView>
   );
