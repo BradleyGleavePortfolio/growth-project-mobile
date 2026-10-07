@@ -49,7 +49,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | File | What it does |
 | --- | --- |
 | `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
-| `SettingsScreen.tsx` | Sign out, change password, reset onboarding, link to Trust Center. |
+| `SettingsScreen.tsx` | Seven visible groups on one screen, no added taps: Account, Training and food, Notifications, Privacy and data, Roman, Support, About. Every existing row/control stays; see [settings/README.md](settings/README.md). |
 | `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
@@ -69,7 +69,7 @@ Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy
 | `HomeScreen.tsx` | `<TutorialHomeSlot />` below the coach introduction banner: the pinned macro explanation card (C08, real `/me/macros/current` or onboarding numbers), a "Message your coach" row into HomeStack `Messages`, and after a skipped tour one quiet line that resumes it. |
 | `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
 | `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
-| `SettingsScreen.tsx` | Settings > Tutorial: resume or run the tour again. |
+| `SettingsScreen.tsx` | Settings > Support: resume or run the tour again. |
 
 ### Lighter start for never-trackers (no flag; driven by the backend `macro_display_mode`)
 
