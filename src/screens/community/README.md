@@ -1,0 +1,19 @@
+# Client Community
+
+Today is a calm date-led column on the theme background: small-caps sections,
+text-first hairline rows and one forest action. The server supplies cohort name
+and count, pinned title, event start and challenge end; no author name, post body,
+post timestamp or engagement count is invented. “Pinned post” does not imply its
+author is the client's coach.
+
+The shell retains Today, Hall, Cohorts, Challenges and Messages behind their
+existing flags, with underlined text segments and real unread counts. Safety and
+coach-gated leaderboard stay visible; Find and Classroom open their existing
+routes when enabled. Loading, retry and true-empty states remain distinct.
+Empty actions name their actual Hall/community-message/coach-message destination;
+coachless accounts see no unavailable coach-message action. New post opens the
+existing composer only after an enabled Today response confirms a workspace and
+Hall is enabled. Event/challenge feature-off fallbacks are unchanged.
+
+Tests: `CommunityTodayScreen.test.tsx`, `communityLeaderboardEntry.test.tsx`,
+`communityMessageCoach.test.tsx`. Design rules: `docs/QUIET_LUXURY_DOCTRINE.md`.
