@@ -863,6 +863,10 @@ export const coachApi = {
     const qs = q.toString();
     return api.get(`/coach/clients/${clientId}/check-ins${qs ? `?${qs}` : ''}`);
   },
+  // Coach marks one check-in reviewed (live on production; 404 when the
+  // check-in is not attached to this coach).
+  markCheckInReviewed: (clientId: string, checkInId: string) =>
+    api.post(`/coach/clients/${clientId}/check-ins/${checkInId}/reviewed`),
 };
 
 // ---------------------------------------------------------------------------

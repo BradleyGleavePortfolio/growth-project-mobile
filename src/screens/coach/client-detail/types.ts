@@ -122,6 +122,8 @@ export interface TimelineEvent {
   date: string;
   icon: IoniconName;
   iconColor: string;
+  /** Check-in rows only: what the coach needs to mark it reviewed. */
+  checkIn?: { id: string; coachId: string | null; reviewed: boolean };
 }
 
 export interface CoachMealEntry {
