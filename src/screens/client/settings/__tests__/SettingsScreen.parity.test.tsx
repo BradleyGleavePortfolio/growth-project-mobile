@@ -14,6 +14,7 @@ import { dispatchTutorial, startClientTutorial } from '../../../../tutorial/tuto
 const mockUpdateSetting = jest.fn();
 const mockParentNavigate = jest.fn();
 let mockRomanEnabled = true;
+let mockTutorialEnabled = true;
 let mockTutorialStatus = 'paused';
 jest.mock('../../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'settings-client', name: 'Alex', email: 'alex@example.com' }),
@@ -52,7 +53,8 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { get consultationOnboarding() { return mockRomanEnabled; },
-    get romanChat() { return mockRomanEnabled; }, clientTutorial: true },
+    get romanChat() { return mockRomanEnabled; },
+    get clientTutorial() { return mockTutorialEnabled; } },
 }));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) =>
@@ -67,6 +69,7 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockRomanEnabled = true;
+  mockTutorialEnabled = true;
   mockTutorialStatus = 'paused';
 });
 
@@ -87,8 +90,8 @@ it('groups every existing row into seven ordered sections without disclosure tap
     ['support', 'Support', ['Resume the tour']],
     ['about', 'About', ['The Growth Project v1.0.0', 'A daily practice.']],
   ] as const;
-  expect(view.getAllByRole('header').map((header) =>
-    within(header).getByText(/.+/).props.children)).toEqual(['Settings', ...groups.map(([, title]) => title)]);
+  expect(view.getAllByRole('header').map((header) => header.props.children))
+    .toEqual(['Settings', ...groups.map(([, title]) => title)]);
   for (const [id, title, rows] of groups) {
     const section = within(view.getByTestId(`settings-section-${id}`));
     expect(section.getByRole('header', { name: title })).toBeTruthy();
@@ -207,4 +210,12 @@ it('keeps the existing Roman consent visibility gate', async () => {
   expect(view.queryByTestId('settings-roman-ai')).toBeNull();
   expect(view.queryByTestId('settings-section-roman')).toBeNull();
   expect(view.getByTestId('settings-coach-sharing')).toBeTruthy();
+});
+
+it('keeps Support available when the tutorial flag is off', async () => {
+  mockTutorialEnabled = false;
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  expect(view.queryByTestId('tutorial-settings-button')).toBeNull();
+  await fireEvent.press(view.getByLabelText('Support inbox'));
+  expect(navigationStub.navigate).toHaveBeenLastCalledWith('SupportInbox');
 });
