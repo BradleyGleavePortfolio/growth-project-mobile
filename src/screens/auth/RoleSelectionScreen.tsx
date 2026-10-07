@@ -31,6 +31,8 @@ import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton
 import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
 import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { typography } from '../../theme/tokens';
+import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
@@ -89,6 +91,9 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
   );
   const [inviteCode, setInviteCode] = useState(route?.params?.inviteCode ?? '');
+  // B-SHARE-127: with a code, Continue is the join; the sentence shows above it
+  // (and its version is sent) only when the server records it.
+  const sharingVersion = useCoachSharingNotice();
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
@@ -259,7 +264,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     let stage: 'attach' | 'finish' = 'attach';
     try {
       if (trimmed) {
-        const res = await authApi.attachInviteCode(trimmed);
+        const res = await authApi.attachInviteCode(trimmed, sharingVersion);
         const data = (res?.data ?? {}) as { role?: string; coach_id?: string | null };
         const confirmedNow = {
           role: typeof data.role === 'string' ? data.role : 'student',
@@ -444,6 +449,10 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
           ) : null}
         </View>
 
+        <CoachSharingNotice
+          version={!attached && inviteCode.trim() ? sharingVersion : null}
+          coachName={invitePreview?.valid ? invitePreview.business_name || invitePreview.coach_name : null}
+        />
         <TouchableOpacity
           style={[styles.continueBtn, loading && styles.btnDisabled]}
           onPress={() => handleContinue()}

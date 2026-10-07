@@ -21,6 +21,8 @@ import {
   subscribePendingInviteCode,
 } from '../lib/pendingInviteCode';
 import { authEvents } from '../utils/authEvents';
+import { useCoachSharingNotice } from '../lib/coachSharingNotice';
+import CoachSharingNotice from './coachSharing/CoachSharingNotice';
 
 export default function PendingInviteBanner() {
   const { colors } = useTheme();
@@ -31,6 +33,8 @@ export default function PendingInviteBanner() {
   const [errMessage, setErrMessage] = useState<string | null>(null);
   // Refs to clear timers on unmount — prevents setState on dead component.
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // B-SHARE-127: Attach is the join; the sentence shows and its version is sent.
+  const sharingVersion = useCoachSharingNotice();
 
   const refresh = useCallback(async () => {
     setCode(await readPendingInviteCode());
@@ -65,7 +69,7 @@ export default function PendingInviteBanner() {
     setBusy(true);
     setStatus('idle');
     setErrMessage(null);
-    const result = await claimPendingInviteCode(code);
+    const result = await claimPendingInviteCode(code, sharingVersion);
     setBusy(false);
     if (result.ok) {
       setStatus('ok');
@@ -96,6 +100,7 @@ export default function PendingInviteBanner() {
             ? (errMessage ?? "Couldn't attach this code.")
             : `Tap to attach "${code}" to your account.`}
         </Text>
+        <CoachSharingNotice version={status === 'idle' ? sharingVersion : null} style={styles.sharing} />
       </View>
       {status === 'ok' ? (
         <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
@@ -156,6 +161,7 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
+    sharing: { fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 0 },
     actions: {
       flexDirection: 'row',
       alignItems: 'center',

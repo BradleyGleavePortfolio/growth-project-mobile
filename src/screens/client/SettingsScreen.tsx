@@ -29,6 +29,7 @@ import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
 import { featureFlags } from '../../config/featureFlags';
+import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -411,6 +412,22 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
               <Text style={styles.rowLabel}>Trust & Privacy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
+          {/* B-SHARE-127: which logs the coach can see (four toggles). */}
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('CoachSharing')}
+            accessibilityRole="button"
+            accessibilityLabel={coachSharingCopy.settingsRow}
+            accessibilityHint={coachSharingCopy.settingsRowHint}
+            testID="settings-coach-sharing"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="people-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>{coachSharingCopy.settingsRow}</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
