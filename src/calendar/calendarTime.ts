@@ -75,6 +75,40 @@ export function formatRange(startIso: string, endIso: string, tz: string = resol
   return `${formatTime(new Date(startIso), tz)} to ${formatTime(new Date(endIso), tz)}`;
 }
 
+function clockParts(d: Date, tz: string | undefined): { clock: string; period: string } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).formatToParts(d);
+  const value = (type: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === type)?.value ?? '';
+  return { clock: `${value('hour')}:${value('minute')}`, period: value('dayPeriod').toUpperCase() };
+}
+
+/**
+ * Compact session line for lists: "Wed, Oct 7 · 9:00–9:30 AM", or
+ * "Wed, Oct 7 · 11:30 AM–12:15 PM" when the session crosses noon. Built from
+ * parts so the output does not depend on the platform's spacing characters.
+ * No zone means the device zone (the coach inbox reads in the coach's clock).
+ */
+export function formatSessionSpan(startIso: string, endIso: string, tz?: string): string {
+  const s = new Date(startIso);
+  const e = new Date(endIso);
+  const dayParts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  }).formatToParts(s);
+  const dv = (type: Intl.DateTimeFormatPartTypes) => dayParts.find((p) => p.type === type)?.value ?? '';
+  const day = `${dv('weekday')}, ${dv('month')} ${dv('day')}`;
+  const a = clockParts(s, tz);
+  const b = clockParts(e, tz);
+  const start = a.period === b.period ? a.clock : `${a.clock} ${a.period}`;
+  return `${day} · ${start}–${b.clock} ${b.period}`;
+}
+
 /**
  * "10:00 AM PDT coach time" when the coach zone shows a different clock,
  * otherwise null.

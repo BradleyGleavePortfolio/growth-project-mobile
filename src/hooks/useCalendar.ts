@@ -7,6 +7,7 @@
  *   ['scheduling', 'openSlots', coachId, sessionTypeId, durationMinutes, from]
  *   ['scheduling', 'sessions', 'me', { limit }]
  *   ['scheduling', 'sessions', 'me', 'past']
+ *   ['scheduling', 'sessions', 'me', 'ended', statuses]   (coach inbox, U-04-3)
  *   ['scheduling', 'sessionTypes', coachId]            (bookable, active only)
  *   ['scheduling', 'sessionTypes', coachId, 'all']     (owning coach, with archived)
  *   ['scheduling', 'overrides']
@@ -183,6 +184,33 @@ export function useUpcomingSessionsByStatus(
       }),
     initialPageParam: null,
     getNextPageParam: (last) => lastCursor(last, COACH_INBOX_PAGE),
+    enabled,
+    staleTime: THIRTY_S_MS,
+    refetchOnMount: 'always',
+    refetchInterval: THIRTY_S_MS,
+  });
+}
+
+/**
+ * Ended sessions in the given statuses, newest first (U-04-3): the coach inbox
+ * asks for ended sessions still marked confirmed, so the coach can record
+ * whether each one happened. Pages on (start_at, id) like usePastSessions.
+ */
+export function useEndedSessionsByStatus(
+  statuses: readonly SchedulingSessionStatus[],
+  enabled = true,
+) {
+  return useInfiniteQuery<CoachingSession[], Error, InfiniteData<CoachingSession[]>, readonly unknown[], SessionCursor | null>({
+    queryKey: ['scheduling', 'sessions', 'me', 'ended', statuses.join(',')],
+    queryFn: ({ pageParam }) =>
+      schedulingApi.listMySessions(PAST_SESSIONS_PAGE, {
+        scope: 'past',
+        status: statuses,
+        before: pageParam?.start_at,
+        beforeId: pageParam?.id,
+      }),
+    initialPageParam: null,
+    getNextPageParam: (last) => lastCursor(last, PAST_SESSIONS_PAGE),
     enabled,
     staleTime: THIRTY_S_MS,
     refetchOnMount: 'always',

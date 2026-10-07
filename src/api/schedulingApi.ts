@@ -232,6 +232,9 @@ export interface OpenSlotsPayload {
   /** S-SCHED-2: echoed when slots were computed for one appointment type. */
   session_type_id?: string | null;
   duration_minutes?: number;
+  /** S-AVAIL-122: the coach's booking options echoed (older backends omit them). */
+  min_notice_minutes?: number;
+  booking_window_days?: number;
 }
 
 /** Server-derived call link state on a session (S-SCHED-2 SessionView). */

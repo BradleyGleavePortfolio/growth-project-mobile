@@ -2,12 +2,18 @@
  * S-SCHED calendar time helpers: client-zone display, coach clock label
  * only when it differs, and day grouping across a DST change.
  */
-import { coachTimeLabel, formatRange, formatWhen, groupSlotsByDay, nowToMinuteIso, zonesDiffer } from '../calendarTime';
+import { coachTimeLabel, formatRange, formatSessionSpan, formatWhen, groupSlotsByDay, nowToMinuteIso, zonesDiffer } from '../calendarTime';
 
 describe('calendarTime', () => {
   it('formats in the given client zone', () => {
     expect(formatWhen('2026-10-05T16:00:00.000Z', 'America/Los_Angeles')).toBe('Monday, October 5 at 9:00 AM');
     expect(formatRange('2026-10-05T16:00:00.000Z', '2026-10-05T16:20:00.000Z', 'America/New_York')).toBe('12:00 PM to 12:20 PM');
+  });
+
+  it('formats a compact session line with weekday, date and one period when both ends share it (U-04-4)', () => {
+    expect(formatSessionSpan('2026-10-07T16:00:00.000Z', '2026-10-07T16:30:00.000Z', 'America/Los_Angeles')).toBe('Wed, Oct 7 \u00b7 9:00\u20139:30 AM');
+    expect(formatSessionSpan('2026-10-07T18:30:00.000Z', '2026-10-07T19:15:00.000Z', 'America/Los_Angeles')).toBe('Wed, Oct 7 \u00b7 11:30 AM\u201312:15 PM');
+    expect(formatSessionSpan('2026-10-07T16:00:00.000Z', '2026-10-07T16:30:00.000Z', 'America/New_York')).not.toMatch(/:\d\d:\d\d|\//);
   });
 
   it('labels the coach clock only when it differs from the client clock', () => {
