@@ -805,17 +805,8 @@ describe("CoachWorkoutBuilderScreen — history barrier and unknown outcomes (S-
 });
 
 describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
-  const STATUS = (state: string) => ({
-    state,
-    create: true,
-    edit: true,
-    credits: { remaining_pct: 50, resets_at: null },
-    label: "AI-suggested, coach-approved",
-  });
-  const AI_PLAN = {
-    ...EXISTING_PLAN,
-    exercises: [{ ...EXISTING_PLAN.exercises[0], sets: 4, reps_or_duration_seconds: 8 }],
-  };
+  const STATUS = (state: string) => ({ state, create: true, edit: true, credits: { remaining_pct: 50, resets_at: null }, label: "AI-suggested, coach-approved" });
+  const press = (screen: Screen, id: string) => act(async () => { await fireEvent.press(screen.getByTestId(id)); });
 
   it("status 404 (current production backend): no Ask AI entry", async () => {
     setFlag(true);
@@ -832,73 +823,36 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     mockAiStatus.mockResolvedValue(STATUS("paused"));
     const Screen = loadScreen();
     const screen = await render(<Screen />);
-    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
-    expect(screen.getByTestId("ai-header-button")).toBeTruthy();
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("ai-prompt-bar"));
-    });
-    expect(
-      screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged."),
-    ).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
+    await press(screen, "ai-prompt-bar");
+    expect(screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged.")).toBeTruthy();
   });
 
   it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
     setFlag(true);
     mockAiStatus.mockResolvedValue(STATUS("on"));
     mockAiPropose.mockResolvedValue({
-      draft_id: "d1",
-      summary: "1 change.",
-      changes: [
-        {
-          change_id: "c1",
-          kind: "changed",
-          op: {},
-          before: { sets: 3, reps_or_duration_seconds: 10 },
-          after: { sets: 4, reps_or_duration_seconds: 8 },
-          exercise: { id: "bench", name: "Bench press", thumbnail_url: null },
-          reason: "One progression step.",
-          warnings: [],
-        },
-      ],
-      dropped: [],
-      context_used: [],
-      screening_flag: false,
+      draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false,
+      changes: [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise: { id: "bench", name: "Bench press", thumbnail_url: null }, reason: "One step.", warnings: [] }],
     });
-    mockAiApply.mockResolvedValue({
-      status: "approved",
-      materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" },
-    });
-    mockRefetch.mockResolvedValue({ data: AI_PLAN, isError: false });
+    mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" } });
+    mockRefetch.mockResolvedValue({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false });
     const Screen = loadScreen();
     const screen = await render(<Screen />);
     await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("ai-prompt-bar"));
-    });
-    await act(async () => {
-      fireEvent.changeText(screen.getByTestId("ai-builder-input"), "progress this");
-    });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("ai-builder-send"));
-    });
+    await press(screen, "ai-prompt-bar");
+    await act(async () => { await fireEvent.changeText(screen.getByTestId("ai-builder-input"), "progress this"); });
+    await press(screen, "ai-builder-send");
     await waitFor(() => expect(screen.getByTestId("ai-builder-apply")).toBeTruthy());
-    expect(mockAiPropose).toHaveBeenCalledWith(
-      expect.objectContaining({ mode: "edit", plan_id: "plan-1", lock_token: undefined }),
-    );
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("ai-builder-apply"));
-    });
+    expect(mockAiPropose).toHaveBeenCalledWith(expect.objectContaining({ mode: "edit", plan_id: "plan-1", lock_token: undefined }));
+    await press(screen, "ai-builder-apply");
     expect(mockAiApply).toHaveBeenCalledWith("d1", ["c1"]);
     await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
+    expect(screen.getByLabelText("Plan name").props.value).toBe("AI push day");
 
     mockUndoCall.mockResolvedValueOnce({ head_revision_index: 2, lock_token: "abababababababab" });
     mockRefetch.mockResolvedValueOnce({ data: EXISTING_PLAN, isError: false });
-    await act(async () => {
-      fireEvent.press(screen.getByTestId("ai-toast-undo"));
-    });
-    expect(mockUndoCall).toHaveBeenCalledWith("plan-1", {
-      to_revision_index: 0,
-      expected_head_index: 1,
-    });
+    await press(screen, "ai-toast-undo");
+    expect(mockUndoCall).toHaveBeenCalledWith("plan-1", { to_revision_index: 0, expected_head_index: 1 });
   });
 });

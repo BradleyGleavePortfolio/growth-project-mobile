@@ -88,7 +88,7 @@ import { describeAutosaveRefusal } from './workoutBuilderAccess';
 import CoachExerciseName from '../../components/coach/workout-builder/CoachExerciseName';
 import AiBuilderSheet from '../../components/coach/ai-builder/AiBuilderSheet';
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
-import type { AiBuilderDecision } from '../../api/aiBuilderApi';
+import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, SAVE_FIRST_COPY } from '../../components/coach/ai-builder/aiBuilderCopy';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
@@ -1516,7 +1516,7 @@ export default function CoachWorkoutBuilderScreen() {
     return { ok: true, lockToken: token === AUTOSAVE_BOOTSTRAP_LOCK_TOKEN ? undefined : token };
   }, [autosaveEnabled, autosave]);
   const aiOnApplied = useCallback(
-    async (ref: AiBuilderDecision['materialised_ref'], count: number) => {
+    async (ref: AiBuilderRef, count: number) => {
       const before = autosave.readHead().index;
       const token = ref?.lock_token;
       const head = ref?.revision_index;
@@ -1540,20 +1540,11 @@ export default function CoachWorkoutBuilderScreen() {
       deletedSignaturesRef.current.clear();
       setName(plan.name ?? '');
       setType(plan.type ?? 'strength');
-      setRows(
-        plan.exercises.map((e) => ({
-          clientId: clientIdForServerRow(e.id),
-          row_id: e.id,
-          exercise_external_id: e.exercise_external_id,
-          display_name: e.exercise_external_id,
-          sets: e.sets,
-          reps_or_duration_seconds: e.reps_or_duration_seconds,
-          rest_seconds: e.rest_seconds,
-          weight_lbs: e.weight_lbs,
-          superset_group_id: e.superset_group_id,
-          notes: e.notes,
-        })),
-      );
+      setRows(plan.exercises.map((e) => ({
+        clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id,
+        display_name: e.exercise_external_id, sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds,
+        rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes,
+      })));
       setAiToast({ text: appliedToast(count), undo: true });
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
@@ -1565,9 +1556,8 @@ export default function CoachWorkoutBuilderScreen() {
     return () => clearTimeout(t);
   }, [aiToast]);
   const openAi = useCallback(() => {
-    if (!autosaveEnabled) return;
-    fireAiHaptic('light');
-    setAiOpen(true);
+    if (autosaveEnabled) setAiOpen(true);
+    if (autosaveEnabled) fireAiHaptic('light');
   }, [autosaveEnabled]);
 
   const historyBlocked =
@@ -1610,13 +1600,7 @@ export default function CoachWorkoutBuilderScreen() {
             />
           ) : null}
           {ai.visible && autosaveEnabled ? (
-            <Pressable
-              testID="ai-header-button"
-              accessibilityRole="button"
-              accessibilityLabel="Ask AI to change this workout"
-              onPress={openAi}
-              style={styles.historyButton}
-            >
+            <Pressable testID="ai-header-button" accessibilityRole="button" accessibilityLabel="Ask AI to change this workout" onPress={openAi} style={styles.historyButton}>
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Ask AI</Text>
             </Pressable>
           ) : null}
@@ -1913,32 +1897,15 @@ export default function CoachWorkoutBuilderScreen() {
         <View testID="ai-applied-toast" accessibilityLiveRegion="polite" style={styles.aiBar}>
           <Text style={[typography.body, { color: sc.textPrimary, flex: 1 }]}>{aiToast.text}</Text>
           {aiToast.undo ? (
-            <Pressable
-              testID="ai-toast-undo"
-              accessibilityRole="button"
-              accessibilityLabel="Undo the AI change"
-              disabled={historyBlocked}
-              onPress={() => {
-                fireAiHaptic('medium');
-                setAiToast(null);
-                void runHistoryStep('undo');
-              }}
-              style={styles.historyButton}
-            >
+            <Pressable testID="ai-toast-undo" accessibilityRole="button" accessibilityLabel="Undo the AI change" disabled={historyBlocked}
+              onPress={() => { fireAiHaptic('medium'); setAiToast(null); void runHistoryStep('undo'); }} style={styles.historyButton}>
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Undo</Text>
             </Pressable>
           ) : null}
         </View>
       ) : ai.visible ? (
-        <Pressable
-          testID="ai-prompt-bar"
-          accessibilityRole="button"
-          accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
-          accessibilityState={{ disabled: !autosaveEnabled }}
-          disabled={!autosaveEnabled}
-          onPress={openAi}
-          style={styles.aiBar}
-        >
+        <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
+          accessibilityState={{ disabled: !autosaveEnabled }} disabled={!autosaveEnabled} onPress={openAi} style={styles.aiBar}>
           <Text style={[typography.body, { color: sc.textMuted }]}>
             {!autosaveEnabled ? SAVE_FIRST_COPY : rows.length === 0 ? 'Describe the workout to build' : 'Ask AI to change this workout'}
           </Text>
@@ -1998,17 +1965,8 @@ function makeStyles(sc: SemanticTokens) {
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
     historyRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
     aiBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: spacing.sm,
-      minHeight: 52,
-      marginHorizontal: spacing.lg,
-      marginBottom: spacing.md,
-      paddingHorizontal: spacing.md,
-      borderWidth: 1,
-      borderRadius: 14,
-      borderColor: sc.border,
-      backgroundColor: sc.bgSurface,
+      flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 52, marginHorizontal: spacing.lg, marginBottom: spacing.md,
+      paddingHorizontal: spacing.md, borderWidth: 1, borderRadius: 14, borderColor: sc.border, backgroundColor: sc.bgSurface,
     },
     historyButton: {
       minHeight: 44,
