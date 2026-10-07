@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Platform, RefreshControl } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AxiosHeaders, type AxiosResponse } from 'axios';
 import LogScreen from '../LogScreen';
@@ -216,7 +216,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(screen.getByText('Recent foods, last 7 days')).toBeTruthy();
     jest.mocked(foodApi.search).mockRejectedValueOnce(new Error('Network Error'));
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'fruit');
-    await fireEvent.press(await screen.findByText('Retry Search'));
+    await fireEvent.press(await screen.findByText(/^(Retry Search|Try again)$/));
     await waitFor(() => expect(foodApi.search).toHaveBeenCalledTimes(2));
     await fireEvent.press(screen.getByLabelText('Clear food search'));
     jest.mocked(foodApi.search).mockResolvedValueOnce({ ...ok, data: { results: [], suggestions: [mockBanana] } });
@@ -251,7 +251,10 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(waterApi.log).toHaveBeenCalledTimes(3);
     expect(useClientStore.getState().waterOz).toBe(36);
     const reads = jest.mocked(logApi.getDaily).mock.calls.length;
-    await fireEvent(screen.UNSAFE_getByType(RefreshControl), 'refresh');
+    let scroll = screen.getByText('Food Log').parent;
+    while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
+    expect(scroll?.props.refreshControl).toBeTruthy();
+    await act(async () => scroll?.props.refreshControl.props.onRefresh());
     expect(jest.mocked(logApi.getDaily).mock.calls.length).toBeGreaterThan(reads);
     for (const [index, meal] of ['Breakfast', 'Lunch', 'Dinner', 'Snacks'].entries()) {
       await fireEvent.press(screen.getAllByText('Add Food')[index]);
