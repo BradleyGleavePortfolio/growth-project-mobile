@@ -80,6 +80,18 @@ describe('food edit screen uses the retained portion metadata', () => {
     alert.mockRestore();
   });
 
+  it('keeps unsaved portion edits when the client cancels the delete confirmation', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await openEdit();
+    await fireEvent.changeText(screen.getByLabelText('Edit quantity'), '2');
+    await fireEvent.press(screen.getByRole('button', { name: 'Delete entry' }));
+    const buttons = alert.mock.calls[0][2];
+    await act(async () => buttons?.find((button) => button.text === 'Cancel')?.onPress?.());
+    expect(screen.getByLabelText('Edit quantity').props.value).toBe('2');
+    expect(logApi.deleteEntry).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
   it('shows no target rather than a made-up 2,000-calorie allowance', async () => {
     await render(<LogScreen />);
     expect(screen.getByText('No target')).toBeTruthy();
