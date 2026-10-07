@@ -6,7 +6,7 @@
  * - Closing CTA replaced by date list per brief.
  * - Radius literals cleaned to tokens.
  */
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
@@ -57,22 +57,25 @@ export default function ProfileScreen() {
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
   const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean } | null>(null);
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
+    setSharing(null);
     const coachId = currentUser?.coach_id;
-    if (!coachId) { setSharing(null); return; }
+    if (!coachId) return;
     let alive = true;
     Promise.all([
       api.get<{ id: string; name: string }>('/v1/clients/me/coach'),
-      api.get<{ coach_id: string; consents: Array<{ scope: string; granted: boolean }> }>(`/consent/me?coach_id=${encodeURIComponent(coachId)}`),
+      api.get<{ coach_id: string; owner_access?: unknown; consents: Array<{ scope: string; granted: boolean }> }>(`/consent/me?coach_id=${encodeURIComponent(coachId)}`),
     ]).then(([coach, consent]) => {
-      if (alive && coach.data.id === coachId && consent.data.coach_id === coachId) setSharing({
-        coachId, name: coach.data.name || 'your coach',
-        workouts: consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted),
-        meals: consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted),
+      if (!alive || coach.data.id !== coachId || consent.data.coach_id !== coachId) return;
+      const ownerAccess = typeof consent.data.owner_access === 'boolean' ? consent.data.owner_access : null;
+      const workouts = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted === true);
+      const meals = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted === true);
+      setSharing(ownerAccess === null && (!workouts || !meals) ? null : {
+        coachId, name: coach.data.name || 'your coach', workouts, meals,
       });
     }).catch(() => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load'); });
     return () => { alive = false; };
-  }, [currentUser?.id, currentUser?.coach_id]);
+  }, [currentUser?.id, currentUser?.coach_id]));
   const privacyCopy = !currentUser ? null : !currentUser.coach_id ? 'Workouts and meals are visible only to you.'
     : sharing?.coachId !== currentUser.coach_id ? null
     : sharing.workouts === sharing.meals
