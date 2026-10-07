@@ -10,6 +10,7 @@
 // BrandedCheckoutWebView.
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 // ── Theme mock ──────────────────────────────────────────────────────────────
@@ -116,6 +117,10 @@ describe('PackageCheckoutScreen — buyer flow', () => {
     expect(getByText('Coach Lee')).toBeTruthy();
     // Buyer mode → functional pay CTA present.
     expect(getByLabelText('Continue to payment')).toBeTruthy();
+    const back = getByLabelText('Go back');
+    expect(StyleSheet.flatten(back.props.style).width).toBe(44);
+    await fireEvent.press(back);
+    expect(props.navigation.goBack).toHaveBeenCalledTimes(1);
   });
 
   it('sells the renewing plan through subscription-intent and the native PaymentSheet (no webview)', async () => {
@@ -188,5 +193,16 @@ describe('PackageCheckoutScreen — buyer flow', () => {
     );
     await waitFor(() => expect(getByText('This link is not yet active')).toBeTruthy());
     expect(mockGetByShareToken).not.toHaveBeenCalled();
+  });
+
+  it('keeps load-error retry in the same checkout screen', async () => {
+    mockGetByShareToken.mockRejectedValueOnce({ response: { status: 503 } });
+    mockGetByShareToken.mockResolvedValueOnce({ data: PKG });
+    const props = makeProps();
+    const r = await render(<PackageCheckoutScreen navigation={props.navigation} route={props.route} />);
+    await waitFor(() => expect(r.getByText('Try again')).toBeTruthy());
+    await fireEvent.press(r.getByText('Try again'));
+    await waitFor(() => expect(r.getByLabelText('Continue to payment')).toBeTruthy());
+    expect(mockGetByShareToken).toHaveBeenCalledTimes(2);
   });
 });
