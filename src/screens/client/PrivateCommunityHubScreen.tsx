@@ -85,7 +85,7 @@ export default function PrivateCommunityHubScreen() {
         <EmptyState
           icon="lock-closed-outline"
           title="Community is preview-only"
-          subtitle="Private rooms, cohorts, and coach-led threads are in development."
+          subtitle="Private community is not available in this version."
         />
       </View>
     );
@@ -132,7 +132,7 @@ export default function PrivateCommunityHubScreen() {
           <EmptyState
             icon="home-outline"
             title="No rooms yet"
-            subtitle="Your coach will invite you to a private room or cohort. You won't be added without an invitation."
+            subtitle="Private rooms appear here after an invitation. No one is added without one."
           />
         ) : (
           payload!.rooms.map((r) => <RoomRow key={r.id} room={r} />)
@@ -145,26 +145,13 @@ export default function PrivateCommunityHubScreen() {
           <EmptyState
             icon="document-text-outline"
             title="Nothing new here"
-            subtitle="Posts from your rooms appear here. Voice notes are coming — they'll always be reviewed before they go live."
+            subtitle="Posts from your rooms appear here."
           />
         ) : (
           payload!.recentPosts.map((p) => <PostRow key={p.id} post={p} />)
         )}
       </View>
 
-      {!featureFlags.communityVoiceNotes ? (
-        <View
-          style={styles.gatedNote}
-          accessibilityLabel="Voice notes coming soon — will be reviewed before going live"
-          accessibilityRole="none"
-        >
-          <Ionicons name="mic-off-outline" size={14} color={tokens.charcoal} />
-          <Text style={styles.gatedText}>
-            Voice notes are coming soon. They&apos;ll be capped at 60s and scanned
-            before they reach your room.
-          </Text>
-        </View>
-      ) : null}
     </ScrollView>
   );
 }

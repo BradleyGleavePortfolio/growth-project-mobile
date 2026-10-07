@@ -137,7 +137,7 @@ export default function MembershipScreen() {
                   ? coachName
                     ? `Access provided by ${coachName}.`
                     : 'Access provided by your coach.'
-                  : 'Your coach will activate access once your invite is attached.'}
+                  : 'Access starts when a coach invite is attached to this account.'}
               </Text>
               {founding?.isFoundingMember && founding.rank > 0 ? (
                 <View style={styles.foundingRow}>

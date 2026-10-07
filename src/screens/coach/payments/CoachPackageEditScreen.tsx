@@ -917,22 +917,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 />
                 <Text style={styles.secondaryBtnText}>Share link</Text>
               </TouchableOpacity>
-            ) : (
-              <View
-                style={styles.secondaryBtnDisabled}
-                accessibilityRole="text"
-                accessibilityLabel="Share links are coming soon"
-              >
-                <Ionicons
-                  name="share-outline"
-                  size={18}
-                  color={semanticColors.textMuted}
-                />
-                <Text style={styles.secondaryBtnTextDisabled}>
-                  Share links are coming soon
-                </Text>
-              </View>
-            )}
+            ) : null}
 
             <TouchableOpacity
               style={[

@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { Alert, FlatList } from 'react-native';
+import { Alert, FlatList, Share } from 'react-native';
 const ROOT = path.resolve(__dirname, '..');
 function shipped(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -24,7 +24,7 @@ it('does not bring back retired customer-facing claims', () => {
 const mockNavigate = jest.fn(), mockBack = jest.fn(), mockReplace = jest.fn();
 const mockNav = { navigate: mockNavigate, goBack: mockBack, replace: mockReplace, dispatch: jest.fn(), addListener: () => () => {}, getParent: () => ({ navigate: mockNavigate }) };
 let mockParams: Record<string, unknown> = {};
-let mockPayment = { ok: true, data: { state: 'active', purchase_id: 'purchase', package_id: 'package', package_name: 'Strength' } };
+let mockPayment: Record<string, unknown> = { ok: true, data: { state: 'active', purchase_id: 'purchase', package_id: 'package', package_name: 'Strength' } };
 let mockDrops: Record<string, unknown> = { ok: true, data: [] };
 let mockPairStatus = 'unavailable';
 const mockStart = jest.fn(), mockRetry = jest.fn(), mockCancel = jest.fn();
@@ -58,7 +58,7 @@ jest.mock('../hooks/useExtensionPairing', () => ({
   PAIRING_REASON_COPY: {},
 }));
 jest.mock('../api/packagesApi', () => ({ coachPackagesApi: {
-  list: jest.fn(async () => { throw { response: { status: 404, data: { code: 'PACKAGES_DISABLED' } } }; }),
+  list: jest.fn(async () => { throw Object.assign(new Error('Packages unavailable'), { response: { status: 404, data: { code: 'PACKAGES_DISABLED' } } }); }),
   get: jest.fn(async () => ({ data: mockPackage })),
   update: jest.fn(async () => ({ data: mockPackage })),
   publish: jest.fn(async () => ({ data: mockPackage })),
@@ -116,6 +116,16 @@ it('confirms only payment status, retaining the Home action', async () => {
   expect(s.queryByText(/coach has been notified|will be in touch/)).toBeNull();
   await fireEvent.press(s.getByText('Go to home')); expect(mockNavigate).toHaveBeenCalled();
 });
+it.each(['cancel', 'error', 'pending'])('keeps checkout recovery routes without invented payment facts: %s', async (state) => {
+  mockParams = { outcome: state === 'cancel' ? 'cancel' : 'success', session_id: 'session' };
+  if (state === 'error') mockPayment = { ok: false, reason: 'not_configured' };
+  if (state === 'pending') mockPayment = { ok: true, data: { state: 'none', purchase_id: null } };
+  const s = await render(React.createElement(CheckoutReturnScreen));
+  await waitFor(() => expect(s.getByText(state === 'cancel' ? 'Back to plans' : 'Go to home')).toBeTruthy());
+  expect(s.queryByText(/Backend not configured|coach has been notified|will be in touch|within a few minutes/)).toBeNull();
+  await fireEvent.press(s.getByText(state === 'cancel' ? 'Back to plans' : 'Go to home'));
+  expect(mockNavigate).toHaveBeenLastCalledWith(state === 'cancel' ? 'MoreTab' : 'Home', ...(state === 'cancel' ? [{ screen: 'ClientPackages' }] : []));
+});
 it('keeps private rooms/posts and refresh, removing only a false voice-note placeholder', async () => {
   const s = await render(React.createElement(PrivateCommunityHubScreen));
   await waitFor(() => expect(s.getByText('Private rooms appear here after an invitation. No one is added without one.')).toBeTruthy());
@@ -138,11 +148,25 @@ it('keeps real package editing, preview and navigation, not a dead share row', a
   for (const label of ['Manage content', 'View subscribers']) {
     await fireEvent.press(s.getByLabelText(label)); expect(mockNavigate).toHaveBeenCalled();
   }
+  await fireEvent.press(s.getByLabelText('Make Strength live'));
+  await waitFor(() => expect(require('../api/packagesApi').coachPackagesApi.publish).toHaveBeenCalled());
   await fireEvent.press(s.getByLabelText('Save changes'));
   await waitFor(() => expect(require('../api/packagesApi').coachPackagesApi.update).toHaveBeenCalled());
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await fireEvent.press(s.getByLabelText('Archive package')); expect(alert).toHaveBeenCalled();
   await fireEvent.press(s.getByLabelText('Go back')); expect(mockBack).toHaveBeenCalled();
+});
+it('retains real package sharing and the create/open-package routes', async () => {
+  jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+  const s = await render(React.createElement(CoachPackageEditScreen, {
+    navigation: mockNav, route: { key: 'share', name: 'CoachPackageEdit', params: { packageId: 'package', initialPackage: { ...mockPackage, shareToken: 'real-token' } } },
+  } as React.ComponentProps<typeof CoachPackageEditScreen>));
+  await fireEvent.press(s.getByLabelText('Share package link')); expect(Share.share).toHaveBeenCalled();
+  require('../api/packagesApi').coachPackagesApi.list.mockResolvedValueOnce({ data: [mockPackage] });
+  const list = await render(React.createElement(CoachPackagesListScreen, { navigation: mockNav } as React.ComponentProps<typeof CoachPackagesListScreen>));
+  await waitFor(() => expect(list.getByLabelText('Edit Strength')).toBeTruthy());
+  await fireEvent.press(list.getByLabelText('Create package')); expect(mockNavigate).toHaveBeenLastCalledWith('CoachPackageEdit', { packageId: null });
+  await fireEvent.press(list.getByLabelText('Edit Strength')); expect(mockNavigate).toHaveBeenLastCalledWith('CoachPackageEdit', { packageId: 'package', initialPackage: mockPackage });
 });
 it('does not promise import enablement and keeps pairing Copy/Cancel/Review/Retry', async () => {
   const s = await render(React.createElement(ExtensionPairingPanel, { platformId: 'everfit' }));

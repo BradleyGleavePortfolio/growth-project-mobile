@@ -27,7 +27,7 @@
  *   • Coming up — pending|due drops, with `upcomingCaption` for unlock
  *     timing (immediate / on_completion / on_milestone / fire_at date).
  *
- * States: loading skeleton, calm empty ("Your coach is setting things up"),
+ * States: loading skeleton, calm empty (nothing released),
  * error retry banner, pull-to-refresh, graceful "purchase complete /
  * deliverables coming" when the endpoint is `not_configured` (501/404 —
  * never strands the buyer if PR-15A hasn't deployed yet).
@@ -76,6 +76,8 @@ import {
   routeForDrop,
 } from './deliverables/dropRow';
 import { formatCurrencyCents } from '../../utils/currency';
+import api from '../../services/api';
+import { logger } from '../../utils/logger';
 
 type PurchaseUnpackRouteParams = {
   purchaseId: string;
@@ -139,6 +141,7 @@ function formatChargeDate(iso: string | null, nowMs: number = Date.now()): strin
 }
 
 interface PurchaseUnpackContentProps {
+  coachName: string | null;
   dropsResult: PaymentsResult<ScheduledDropView[]>;
   receipt: Receipt;
   refreshing: boolean;
@@ -153,6 +156,7 @@ interface PurchaseUnpackContentProps {
 }
 
 function PurchaseUnpackContent({
+  coachName,
   dropsResult,
   receipt,
   refreshing,
@@ -236,8 +240,7 @@ function PurchaseUnpackContent({
           <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>Purchase complete</Text>
           <Text style={styles.emptyBody}>
-            Your coach is finalising what&apos;s included. You&apos;ll see
-            everything appear in Deliverables as your coach releases it.
+            Items appear in Deliverables when they are released.
           </Text>
         </View>
         <View style={styles.footerCtas}>
@@ -318,10 +321,9 @@ function PurchaseUnpackContent({
         {ReceiptHeader}
         <View style={styles.empty}>
           <Ionicons name="hourglass-outline" size={36} color={semanticColors.textMuted} />
-          <Text style={styles.emptyTitle}>Your coach is setting things up</Text>
+          <Text style={styles.emptyTitle}>Nothing released yet.</Text>
           <Text style={styles.emptyBody}>
-            Items in this package will appear here as your coach releases
-            them. You&apos;ll get a notification each time.
+            {`Items appear here when ${coachName || 'your coach'} releases them.`}
           </Text>
         </View>
         <View style={styles.footerCtas}>
@@ -431,6 +433,14 @@ export default function PurchaseUnpackScreen() {
     nextChargeAt: null,
   });
   const [refreshing, setRefreshing] = useState(false);
+  const [coachName, setCoachName] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    api.get<{ name?: string }>('/v1/clients/me/coach').then((res) => {
+      if (alive) setCoachName(res.data.name ?? null);
+    }).catch((err: unknown) => { logger.warn('PurchaseUnpackScreen', 'Coach name did not load', err); });
+    return () => { alive = false; };
+  }, []);
 
   // PR-15B audit P3-2 — cancel-safe load. A fast back-out (the buyer
   // taps "Done" or swipes back before the three parallel fetches
@@ -517,6 +527,7 @@ export default function PurchaseUnpackScreen() {
 
   return (
     <PurchaseUnpackContent
+      coachName={coachName}
       dropsResult={dropsResult}
       receipt={receipt}
       refreshing={refreshing}
