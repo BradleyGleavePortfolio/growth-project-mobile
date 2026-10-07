@@ -11,7 +11,7 @@ const mockBack = jest.fn(), mockNavigate = jest.fn(), mockRefetch = jest.fn();
 const recipe = { id: 'r1', title: 'Lentil soup', calories: 320, protein: 24, carbs: 40, fat: 8, prep_time_min: 5, cook_time_min: 20, servings: 2, tags: ['vegan'], ingredients: ['Lentils'], instructions: ['Simmer gently.'], isSaved: false };
 let mockData: unknown, mockError = false, mockLoading = false, mockRestrictions: string[] | undefined = [];
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: mockBack, navigate: mockNavigate }), useRoute: () => ({ params: { recipeId: 'r1' } }) }));
-jest.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: mockData, isError: mockError, isLoading: mockLoading, refetch: mockRefetch }), useQueryClient: () => ({ getQueryData: () => undefined }) }));
+jest.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: mockData, isError: mockError, isLoading: mockLoading, refetch: mockRefetch }), useQueryClient: () => ({ getQueryData: () => undefined, setQueryData: jest.fn(), invalidateQueries: jest.fn() }) }));
 jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens, colors: new Proxy({}, { get: () => 'legacy' }) }) }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', profile: { diet_restrictions: mockRestrictions } }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -30,9 +30,9 @@ it('keeps list navigation, all filters, search/clear, and refresh reachable as t
   expect(mockNavigate).toHaveBeenCalledWith('RecipeDetail', { recipeId: 'r1' });
   await fireEvent.press(ui.getByRole('button', { name: 'Go back' }));
   expect(mockBack).toHaveBeenCalledTimes(1);
-  for (const tag of ['All', 'breakfast', 'lunch', 'dinner', 'high-protein', 'low-carb', 'meal-prep', 'quick', 'vegan', 'gluten-free']) {
+  for (const tag of ['All', 'Saved', 'breakfast', 'lunch', 'dinner', 'high-protein', 'low-carb', 'meal-prep', 'quick', 'vegan', 'gluten-free']) {
     await fireEvent.press(ui.getByRole('button', { name: tag }));
-    expect(Boolean(ui.queryByText('Lentil soup'))).toBe(tag === 'All' || tag === 'vegan');
+    expect(Boolean(ui.queryByText('Lentil soup'))).toBe(tag === 'All' || tag === 'Saved' || tag === 'vegan');
   }
   await fireEvent.press(ui.getByRole('button', { name: 'All' }));
   await fireEvent.changeText(ui.getByPlaceholderText('Search recipes…'), 'toast');

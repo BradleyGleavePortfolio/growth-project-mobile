@@ -106,8 +106,10 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// 'Saved' is not a tag: it shows the account's saved recipes (GET /recipes/saved).
+const SAVED_FILTER = 'Saved';
 const ALL_TAGS = [
-  'All', 'breakfast', 'lunch', 'dinner', 'high-protein', 'low-carb',
+  'All', SAVED_FILTER, 'breakfast', 'lunch', 'dinner', 'high-protein', 'low-carb',
   'meal-prep', 'quick', 'vegan', 'gluten-free',
 ];
 
@@ -191,11 +193,19 @@ export default function RecipesScreen() {
     await dismissAllergyPromptForever();
   }, [dismissAllergyPromptForever]);
 
-  const { data, isLoading, isError, refetch, isRefetching } = useQuery({
+  const showingSaved = activeTag === SAVED_FILTER;
+  const listQuery = useQuery({
     queryKey: ['recipes'],
     queryFn: () => recipesApi.list().then((r) => r.data as Recipe[]),
     staleTime: 5 * 60 * 1000,
   });
+  const savedQuery = useQuery({
+    queryKey: ['recipes', 'saved'],
+    queryFn: () => recipesApi.listSaved().then((r) => r.data as Recipe[]),
+    enabled: showingSaved,
+    staleTime: 5 * 60 * 1000,
+  });
+  const { data, isLoading, isError, refetch, isRefetching } = showingSaved ? savedQuery : listQuery;
 
   const recipes = data ?? [];
 
@@ -204,7 +214,7 @@ export default function RecipesScreen() {
       !search ||
       r.title.toLowerCase().includes(search.toLowerCase()) ||
       r.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-    const matchesTag = activeTag === 'All' || r.tags.includes(activeTag);
+    const matchesTag = activeTag === 'All' || showingSaved || r.tags.includes(activeTag);
     return matchesSearch && matchesTag;
   });
 
@@ -307,8 +317,14 @@ export default function RecipesScreen() {
             isError ? (
               <EmptyState
                 icon="alert-circle-outline"
-                title="Couldn't load recipes"
+                title={showingSaved ? "Couldn't load saved recipes" : "Couldn't load recipes"}
                 subtitle="Pull down to try again."
+              />
+            ) : showingSaved && !search ? (
+              <EmptyState
+                icon="bookmark-outline"
+                title="No saved recipes"
+                subtitle="Recipes you save from a recipe page appear here."
               />
             ) : (
               <EmptyState

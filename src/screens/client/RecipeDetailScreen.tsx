@@ -63,25 +63,28 @@ export default function RecipeDetailScreen() {
   const recipeId = route.params?.recipeId;
   const queryClient = useQueryClient();
 
-  // Cache-first read: if the user navigated from RecipesScreen (the list
-  // query), we'll already have the recipe in cache and paint synchronously.
-  // Otherwise, we fetch by id and fall back to first paint loading state.
+  // Cache-first paint: a recipe opened from the list paints from the list
+  // cache, but that cache has no `isSaved`, so it counts as already stale and
+  // GET /recipes/:id always runs once to supply the saved state.
   const initialFromCache = (() => {
     const list = queryClient.getQueryData<Recipe[]>(['recipes']);
     return list?.find((r) => r.id === recipeId);
   })();
 
-  const { data, isLoading, isError, error, refetch } = useQuery<Recipe>({
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<Recipe>({
     queryKey: ['recipe', recipeId],
     queryFn: () => recipesApi.getById(recipeId).then((r) => r.data as Recipe),
     enabled: !!recipeId,
     initialData: initialFromCache,
+    initialDataUpdatedAt: 0,
     staleTime: 5 * 60 * 1000,
   });
 
   const recipe = data;
 
-  const [isSaved, setIsSaved] = useState<boolean>(recipe?.isSaved ?? false);
+  // undefined = the server has not said yet; the bookmark waits for it.
+  const [isSaved, setIsSaved] = useState<boolean | undefined>(recipe?.isSaved);
+  const savedPending = isSaved === undefined && isFetching;
   const [saving, setSaving] = useState(false);
 
   // Keep local saved-state in sync if the underlying record refreshes.
@@ -96,19 +99,18 @@ export default function RecipeDetailScreen() {
     if (saving || !recipe) return;
     setSaving(true);
     try {
-      if (isSaved) {
-        await recipesApi.unsave(recipe.id);
-        setIsSaved(false);
-      } else {
-        await recipesApi.save(recipe.id);
-        setIsSaved(true);
-      }
+      const next = !isSaved;
+      await (next ? recipesApi.save(recipe.id) : recipesApi.unsave(recipe.id));
+      setIsSaved(next);
+      // Reopening this recipe and the Saved filter both show the new state.
+      queryClient.setQueryData<Recipe>(['recipe', recipe.id], (old) => (old ? { ...old, isSaved: next } : old));
+      void queryClient.invalidateQueries({ queryKey: ['recipes', 'saved'] });
     } catch {
       Alert.alert('Could not update saved recipe', 'The saved-recipe change could not be confirmed. Check your connection and tap the bookmark again.');
     } finally {
       setSaving(false);
     }
-  }, [isSaved, saving, recipe]);
+  }, [isSaved, saving, recipe, queryClient]);
 
   if (isLoading && !recipe) {
     return <SkeletonScreen count={6} />;
@@ -155,12 +157,12 @@ export default function RecipeDetailScreen() {
           style={styles.saveBtn}
           onPress={handleToggleSave}
           activeOpacity={0.8}
-          disabled={saving}
+          disabled={saving || savedPending}
           accessibilityRole="button"
-          accessibilityLabel={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
-          accessibilityState={{ selected: isSaved, busy: saving, disabled: saving }}
+          accessibilityLabel={savedPending ? 'Checking saved recipes' : isSaved ? 'Remove from saved recipes' : 'Save recipe'}
+          accessibilityState={{ selected: isSaved === true, busy: saving || savedPending, disabled: saving || savedPending }}
         >
-          {saving ? (
+          {saving || savedPending ? (
             <ActivityIndicator size="small" color={colors.textOnAccent} />
           ) : (
             <Ionicons
