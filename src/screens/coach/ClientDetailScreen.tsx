@@ -54,7 +54,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     featureFlags.communityWearablePrompts &&
     !serverFlags.isLoading &&
     serverFlags.flags.coach_community_wearable_prompts === true;
-  const { colors } = useTheme();
+  const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { clientId, clientName } = route.params;
   const currentUser = useCurrentUser();
@@ -421,7 +421,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         horizontal
         showsHorizontalScrollIndicator={false}
         style={[styles.tabScroll, { maxHeight: 52 }]}
-        contentContainerStyle={[styles.tabRow, { gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border }]}
+        contentContainerStyle={[styles.tabRow, { gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border }]}
       >
         {tabs.map((tab) => (
           <TouchableOpacity
@@ -429,10 +429,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             accessibilityRole="tab"
             accessibilityLabel={tab.label}
             accessibilityState={{ selected: activeTab === tab.key }}
-            style={{ minHeight: 48, paddingVertical: 12, borderRadius: 0, backgroundColor: colors.background, borderBottomWidth: activeTab === tab.key ? 2 : 0, borderBottomColor: colors.primary }}
+            style={{ minHeight: 48, minWidth: 44, alignItems: 'center', paddingVertical: 12, borderRadius: 0, backgroundColor: sc.bgPrimary, borderBottomWidth: activeTab === tab.key ? 2 : 0, borderBottomColor: sc.accent }}
             onPress={() => setActiveTab(tab.key)}
           >
-            <Text style={[typography.bodySmall, { color: activeTab === tab.key ? colors.primary : colors.textSecondary }]}>
+            <Text style={[typography.bodySmall, { color: activeTab === tab.key ? sc.accentText : sc.textMuted }]}>
               {tab.label}
             </Text>
           </TouchableOpacity>

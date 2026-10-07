@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, Modal, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { WorkoutsTab } from '../screens/coach/client-detail/WorkoutsTab';
@@ -121,6 +121,7 @@ it('preserves all nine tab destinations and both AI actions, including client-co
   for (const label of ['Summary', 'Logs', 'Plan', 'Progress', 'Fitness', 'Recovery', 'Timeline', 'Weekly']) {
     await fireEvent.press(s.getByText(label));
     expect(s.getByText(`${label} content`)).toBeTruthy();
+    expect(s.getByRole('tab', { name: label })).toHaveStyle({ minWidth: 44, minHeight: 48 });
   }
   expect(mockDetail.loadTimeline).toHaveBeenCalledWith(90);
   expect(mockDetail.loadWeeklySummaries).toHaveBeenCalledWith(90);
@@ -133,6 +134,9 @@ it('preserves all nine tab destinations and both AI actions, including client-co
   await fireEvent.press(s.getByText('Workouts'));
   await fireEvent.press(s.getByLabelText('Adjust a saved workout for Sam'));
   await fireEvent.press(s.getByLabelText('Close'));
+  expect(s.queryByTestId('adjust-for-client-sheet')).toBeNull();
+  await fireEvent.press(s.getByLabelText('Adjust a saved workout for Sam'));
+  await fireEvent(s.UNSAFE_getByType(Modal), 'requestClose');
   expect(s.queryByTestId('adjust-for-client-sheet')).toBeNull();
   await fireEvent.press(s.getByLabelText('Adjust a saved workout for Sam'));
   await fireEvent.press(s.getByLabelText('Adjust Push day for Sam'));

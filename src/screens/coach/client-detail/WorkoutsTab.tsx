@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Polyline } from 'react-native-svg';
-import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import type { SessionExercise, WorkoutSession } from './types';
 import { formatCoachSessionSets } from '../../../utils/workout/workoutLogging';
@@ -14,7 +14,6 @@ export function WorkoutsTab({
   clientName,
   onBuildWithAi,
   onOpenClientCopy,
-  colors,
   styles,
 }: {
   workoutSessions: WorkoutSession[];
@@ -26,6 +25,7 @@ export function WorkoutsTab({
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
+  const { semanticColors: sc } = useTheme();
   const parseExercises = (json: string): (SessionExercise & { rpe?: number | null })[] => {
     try { return JSON.parse(json); } catch { return []; }
   };
@@ -44,10 +44,10 @@ export function WorkoutsTab({
   };
 
   const first = clientName?.trim().split(/\s+/)[0] || 'this client';
-  const body = { ...typography.bodySmall, color: colors.textSecondary };
+  const body = { ...typography.bodySmall, color: sc.textMuted };
   const meta = { ...body, fontSize: 13, lineHeight: 20 };
-  const heading = { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums' as const] };
-  const rule = { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border };
+  const heading = { ...typography.h2, color: sc.textPrimary, fontVariant: ['tabular-nums' as const] };
+  const rule = { borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border };
   const now = new Date();
   const weekStart = new Date(now);
   weekStart.setHours(0, 0, 0, 0);
@@ -76,9 +76,9 @@ export function WorkoutsTab({
           accessibilityLabel={`Build a program for ${first} with AI`}
           accessibilityHint="Opens the Coach AI program generator. Nothing reaches the client until you approve it."
           onPress={onBuildWithAi}
-          style={{ alignItems: 'center', justifyContent: 'center', minHeight: 48, padding: spacing.lg, backgroundColor: colors.primary, marginBottom: spacing.md }}
+          style={{ alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: 4, padding: spacing.lg, backgroundColor: sc.accent, marginBottom: spacing.md }}
         >
-          <Text style={[typography.bodyMd, { color: colors.textOnPrimary, textAlign: 'center' }]}>{`Build a program for ${first} with AI`}</Text>
+          <Text style={[typography.bodyMd, { color: sc.textOnAccent, textAlign: 'center' }]}>{`Build a program for ${first} with AI`}</Text>
         </Pressable>
       ) : null}
       {onOpenClientCopy ? <AdjustForClientEntry firstName={first} onOpened={onOpenClientCopy} /> : null}
@@ -94,9 +94,9 @@ export function WorkoutsTab({
           const completedSets = exList.reduce((s, e) => s + e.sets.filter((st) => st.completed).length, 0);
           const duration = formatDuration(session);
           return (
-            <View key={session.id} testID={`coach-session-${session.id}`} style={[rule, { backgroundColor: colors.background, paddingVertical: spacing.xl }]}>
+            <View key={session.id} testID={`coach-session-${session.id}`} style={[rule, { backgroundColor: sc.bgPrimary, paddingVertical: spacing.xl }]}>
               <View style={styles.sessionTop}>
-                <Ionicons name={session.completed ? 'checkmark-circle-outline' : 'ellipse-outline'} size={24} color={session.completed ? colors.primary : colors.textSecondary} style={{ marginRight: spacing.md }} />
+                <Ionicons name={session.completed ? 'checkmark-circle-outline' : 'ellipse-outline'} size={24} color={session.completed ? sc.accentText : sc.textMuted} style={{ marginRight: spacing.md }} />
                 <View style={{ flex: 1 }}>
                   <Text style={heading}>{session.routineName}</Text>
                   <Text style={meta}>
@@ -131,7 +131,7 @@ export function WorkoutsTab({
                   of every set, and the notes the client wrote. */}
               {exList.map((e, i) => (
                 <View key={`${e.exerciseId}-${i}`} style={{ marginTop: i === 0 ? 0 : 8 }} testID={`coach-session-${session.id}-exercise-${i}`}>
-                  <Text style={[body, { color: colors.textPrimary }]}>{e.exerciseName}</Text>
+                  <Text style={[body, { color: sc.textPrimary }]}>{e.exerciseName}</Text>
                   <Text style={body}>{formatCoachSessionSets(e.sets)}</Text>
                   {typeof e.rpe === 'number' ? <Text style={meta}>{`RPE ${e.rpe}`}</Text> : null}
                   {e.notes ? (
@@ -154,7 +154,7 @@ export function WorkoutsTab({
           <Text style={meta}>{`${strength[0]} · top recorded load (lb)`}</Text>
           <View accessible accessibilityRole="image" accessibilityLabel={points.map((p) => `${new Date(p.date).toLocaleDateString()}: ${p.weight} lb`).join(', ')}>
             <Svg height={80} width="100%" viewBox="0 0 300 80">
-              <Polyline fill="none" stroke={colors.primary} strokeWidth={2} points={points.map((p, i) => `${8 + i * 284 / (points.length - 1)},${68 - (p.weight - low) * 56 / (high - low || 1)}`).join(' ')} />
+              <Polyline fill="none" stroke={sc.accent} strokeWidth={2} points={points.map((p, i) => `${8 + i * 284 / (points.length - 1)},${68 - (p.weight - low) * 56 / (high - low || 1)}`).join(' ')} />
             </Svg>
           </View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>

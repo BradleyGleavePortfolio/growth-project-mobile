@@ -26,6 +26,21 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 | `CreditPackCheckoutScreen.tsx` | Stripe-webview entry point for AI credit packs (Stream 1). Two-phase flow: selection (pack tiers + custom amount, bounded by `pack_options_cents` / `custom_pack_bounds_cents` from the budget query) then webview (`react-native-webview` pointing at the minted Stripe Checkout URL with the same origin allow-list + deep-link parser as `BrandedCheckoutWebViewScreen`). Not a 1:1 service: on iOS the route is replaced by the neutral hidden state (`withNonP2PPurchaseGate`, see `src/config/purchaseSurfaces.ts`); elsewhere billed via Stripe. Success state is `SuccessReceipt` (quiet-luxury — see "Success state" below). |
 | `PendingAiDraftsScreen.tsx` | Stream 2 inbox of pending AI execution drafts. Lists `AiActionDraft` rows in `status='pending'` for the current coach across the four Stream 2 capabilities (`draft.client_message`, `draft.assign_workout`, `draft.assign_meal_plan`, `draft.send_notification`). Per-capability card variants render the appropriate preview (message body / workout name + weeks + day-1 exercise count / meal plan macro summary / notification title + body). Approve + Reject buttons call the existing approval endpoints. Focus-gated 30s polling via `usePendingAiDrafts` composed with `useIsFocused()`. Reached from any client-detail screen via the `<AskAiActionSheet>` flow (`Summary tab → Ask AI pill → pick capability → submit prompt → navigate here`). |
 
+### Client file — workout history
+
+The client file keeps all nine in-page tabs as text with an active forest underline.
+Workouts leads with the count of completed sessions logged this week, without an
+assigned denominator or inferred missed/upcoming schedule. Hairline rows keep dates,
+recorded duration, set counts, volume, every weight/rep and both note levels visible.
+RPE appears only when supplied in exercise JSON; the current workout mapper does not
+provide it. A top-recorded-load trajectory appears only for an exercise with at least
+two completed-session points; it is not an estimated one-rep maximum.
+Build-with-AI still opens the Summary generator; Adjust-for-client still copies a
+saved workout into CoachWorkoutBuilder with the client's context. Header back,
+message, archive/unarchive and pull-to-refresh stay unchanged. The render/parity
+proof is `src/__tests__/coachClientWorkoutsMakeover127.test.tsx`; styling follows
+`docs/QUIET_LUXURY_DOCTRINE.md`.
+
 ### Stream 2 — AI execution drafts
 
 The coach can ask the AI to propose a side-effecting action (message, workout assignment, meal plan assignment, push notification) and review every draft before it materialises. The flow is:
