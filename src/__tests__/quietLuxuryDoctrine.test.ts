@@ -185,13 +185,15 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
 });
 
 // Render the touched client surfaces: truthful text must not cut working actions.
-import React from 'react'; import { render, fireEvent, waitFor } from '@testing-library/react-native'; import { Alert } from 'react-native';
+import React from 'react'; import { act, render, fireEvent, waitFor } from '@testing-library/react-native'; import { Alert } from 'react-native';
 const mockNavigate = jest.fn(), mockBack = jest.fn();
 let mockUser: import('../hooks/useCurrentUser').CurrentUser = { id: 'client', email: 'client@example.test' };
 let mockAssignments: Array<{ id: string; completed_at: null; workout_plan: { name: string } }> = [];
 let mockRoutines: Array<{ id: string; name: string; exercises: []; is_template: boolean }> = [];
 let mockSessions: Array<{ id: string; date: string; workout_name: string; exercises: [] }> = [];
 let mockWeights: Array<{ id: string; date: string; weight_lbs: number }> = [];
+let mockConsent = [true, false];
+let mockOwnerAccess: boolean | string | undefined = false;
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: require('../constants/colors').default, tokens: require('../theme/tokens').default, semanticColors: require('../theme/tokens').lightTokens,
@@ -205,7 +207,7 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(async (url: string) => ({ data: url.includes('consent') ? {
-    coach_id: 'coach', consents: [{ scope: 'fitness.workouts', granted: true }, { scope: 'fitness.food_macros', granted: false }],
+    coach_id: 'coach', owner_access: mockOwnerAccess, consents: [{ scope: 'fitness.workouts', granted: mockConsent[0] }, { scope: 'fitness.food_macros', granted: mockConsent[1] }],
   } : { id: 'coach', name: 'Coach Lee' } })) },
   workoutApi: {
     getRoutines: jest.fn(async () => ({ data: mockRoutines })),
@@ -233,9 +235,11 @@ jest.mock('../screens/client/progress/ProgressChartCard', () => () => null);
 import WorkoutScreen from '../screens/client/WorkoutScreen'; import ProgressScreen from '../screens/client/ProgressScreen';
 import ProfileScreen from '../screens/client/ProfileScreen'; import ReportScreen from '../screens/client/ReportScreen';
 const press = async (s: Awaited<ReturnType<typeof render>>, label: string) => fireEvent.press(s.getByLabelText(label));
+const focusProfile = () => jest.requireMock('@react-navigation/native').useFocusEffect.mock.calls.at(-1)?.[0]();
 beforeEach(() => {
   jest.clearAllMocks(); mockUser = { id: 'client', email: 'client@example.test' };
   mockAssignments = []; mockRoutines = []; mockSessions = []; mockWeights = [];
+  mockConsent = [true, false]; mockOwnerAccess = false;
 });
 describe('Truthful client copy and routes/actions parity', () => {
   it('puts Quick Workout, routines and history before both collapsed charts on day one', async () => {
@@ -315,7 +319,36 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(require('../services/authActions').signOut).toHaveBeenCalled(); alert.mockRestore();
     mockUser = { ...mockUser, coach_id: 'coach' };
     await s.rerender(React.createElement(ProfileScreen));
+    await act(async () => { focusProfile(); });
     await waitFor(() => expect(s.getByText('Workouts are visible to you and Coach Lee. Meals are visible only to you.')).toBeTruthy());
+  });
+  it.each([true, false, undefined, 'false'])('never hides owner access or assumes it is absent (%s)', async (ownerAccess) => {
+    mockUser.coach_id = 'coach'; mockConsent = [false, false]; mockOwnerAccess = ownerAccess;
+    const s = await render(React.createElement(ProfileScreen));
+    await act(async () => { focusProfile(); });
+    await waitFor(() => expect(require('../services/api').default.get).toHaveBeenCalledWith('/consent/me?coach_id=coach'));
+    if (ownerAccess === false) expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy();
+    else {
+      expect(s.queryByText(/visible only to you/)).toBeNull();
+      if (ownerAccess === true) expect(s.getByText('Workouts and meals are visible to you and Coach Lee.')).toBeTruthy();
+    }
+  });
+  it('refreshes sharing after Profile to Settings to Profile and suppresses stale reassurance during the read', async () => {
+    mockUser.coach_id = 'coach'; mockConsent = [false, false];
+    const s = await render(React.createElement(ProfileScreen));
+    let blur: (() => void) | undefined;
+    await act(async () => { blur = focusProfile(); });
+    await waitFor(() => expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy());
+    await press(s, 'Settings'); expect(mockNavigate).toHaveBeenLastCalledWith('Settings'); blur?.();
+    mockConsent = [true, true];
+    let releaseCoach: (() => void) | undefined;
+    const pendingCoach = new Promise((resolve) => { releaseCoach = () => resolve({ data: { id: 'coach', name: 'Coach Lee' } }); });
+    require('../services/api').default.get.mockImplementationOnce(() => pendingCoach);
+    await act(async () => { focusProfile(); });
+    expect(s.queryByText(/visible only to you/)).toBeNull();
+    await act(async () => { releaseCoach?.(); });
+    await waitFor(() => expect(s.getByText('Workouts and meals are visible to you and Coach Lee.')).toBeTruthy());
+    expect(require('../services/api').default.get).toHaveBeenCalledTimes(4);
   });
   it('labels canned report advice as general and keeps Back', async () => {
     const s = await render(React.createElement(ReportScreen, { navigation: jest.requireMock('@react-navigation/native').useNavigation() }));
