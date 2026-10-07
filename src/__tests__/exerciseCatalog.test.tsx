@@ -7,7 +7,7 @@
  *   2. ExerciseLibraryScreen: renders the title, search bar, filter
  *      chip rows, and at least one row from the mocked list response.
  *   3. ExerciseDetailScreen:
- *        a. shows the "Video not yet available" caption when
+ *        a. shows a neutral no-demonstration caption when
  *           `playbackUrl` is null,
  *        b. mounts the VideoView (via its testID) when `playbackUrl`
  *           is a Mux HLS URL.
@@ -229,7 +229,7 @@ describe('ExerciseLibraryScreen', () => {
     mockedGet.mockResolvedValue(ok(SAMPLE_LIST));
     const { findByText, getByText } = await renderInNav(ExerciseLibraryScreen);
     // Title + chip headers exist from the first paint.
-    expect(getByText('Exercise Library')).toBeTruthy();
+    expect(getByText('Exercise library')).toBeTruthy();
     expect(getByText('Category')).toBeTruthy();
     expect(getByText('Muscle')).toBeTruthy();
     expect(getByText('Equipment')).toBeTruthy();
@@ -270,7 +270,7 @@ describe('ExerciseDetailScreen', () => {
     expect(screen.getByText('The demonstration did not load. Follow the instructions below.')).toBeTruthy();
     expect(screen.getByText('Lie on the bench.')).toBeTruthy();
   });
-  test('shows the "video not yet available" caption when playbackUrl is null', async () => {
+  test('shows a neutral no-demonstration caption when playbackUrl is null', async () => {
     const detail: ExerciseDetail = { ...SAMPLE_EX, playbackUrl: null };
     mockedGet.mockResolvedValueOnce(ok(detail));
     const { findByText, queryByTestId } = await renderInNav(
@@ -278,6 +278,7 @@ describe('ExerciseDetailScreen', () => {
       { idOrSlug: 'ex-1' },
     );
     await findByText('Barbell Bench Press');
+    expect(await findByText('No demonstration available for this exercise.')).toBeTruthy();
     expect(queryByTestId('exercise-detail-no-video')).not.toBeNull();
     expect(queryByTestId('exercise-detail-player')).toBeNull();
   });
