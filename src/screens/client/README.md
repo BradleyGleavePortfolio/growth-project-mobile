@@ -81,6 +81,9 @@ Roman's tour runs over these real screens. See `src/tutorial/README.md`.
 
 ## Data flow
 
+### Health activity overview
+`wearables/HealthFitnessScreen.tsx` uses `cards/ActivityBars.tsx` instead of activity rings in loaded, loading and empty states. Each QuietBar shows the latest actual daily value and its sample date; missing samples show an absent value, not zero. `wearables/starterGoals.ts` is the sole fallback: 5,000 steps, 20 exercise minutes and 250 active kcal, visibly labelled “Starter goal”. Explicit typed coach/client targets override each fallback. The current API exposes no activity-target storage or goal editor, so no edit button is shown. Heart, Workouts, Body and Steps detail routes, refresh/retry, AI slot and Connections CTA remain; coach embeds stay read-only.
+
 ```
 useCurrentUser() ─► AsyncStorage('user_data')
                   ─► sets Sentry user, sets PostHog identity
