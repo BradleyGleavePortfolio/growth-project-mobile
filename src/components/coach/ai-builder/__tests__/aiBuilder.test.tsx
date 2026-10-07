@@ -49,8 +49,7 @@ async function proposeFromInput(s: Screen) {
 const proposeCall = (fields: object) => expect(mockApi.post).toHaveBeenCalledWith('/ai/gateway/workout-builder/propose', expect.objectContaining(fields), expect.anything());
 
 beforeEach(() => {
-  [jest.clearAllMocks(), (mockReduceMotion = false), mockOnApplied.mockResolvedValue(undefined), mockApi.get.mockResolvedValue({ data: STATUS_ON })];
-  mockPrepare.mockResolvedValue({ ok: true, lockToken: 'abcdefabcdefabcd' });
+  [jest.clearAllMocks(), (mockReduceMotion = false), mockOnApplied.mockResolvedValue(undefined), mockApi.get.mockResolvedValue({ data: STATUS_ON }), mockPrepare.mockResolvedValue({ ok: true, lockToken: 'abcdefabcdefabcd' })];
 });
 
 describe('aiBuilderApi + copy', () => {
@@ -60,9 +59,7 @@ describe('aiBuilderApi + copy', () => {
   });
 
   it('maps every refusal to one specific code and line; never first person, an exclamation or purchase wording', () => {
-    expect(toAiBuilderError(httpError(402, { code: 'COACH_AI_BUDGET_EXHAUSTED', budget: { period_end: '2026-11-01' } }))).toEqual(
-      expect.objectContaining({ code: 'no_credits', resetsAt: '2026-11-01' }),
-    );
+    expect(toAiBuilderError(httpError(402, { code: 'COACH_AI_BUDGET_EXHAUSTED', budget: { period_end: '2026-11-01' } }))).toEqual(expect.objectContaining({ code: 'no_credits', resetsAt: '2026-11-01' }));
     const cases: [number, object, string][] = [
       [403, { code: 'COACH_AI_BUDGET_EXHAUSTED' }, 'no_credits'], [403, { code: 'ai_consent_required' }, 'consent_required'],
       [409, {}, 'stale'], [422, {}, 'no_safe_proposal'], [429, {}, 'rate_limited'], [503, { code: 'AI_PAUSED' }, 'paused'],
@@ -96,11 +93,12 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(mockOnApplied).toHaveBeenCalledWith(ref, 1);
   });
 
-  it('Discard rejects the draft with a warning haptic', async () => {
-    [mockApi.post.mockResolvedValueOnce({ data: PROPOSAL }), mockApi.patch.mockResolvedValueOnce({ data: { status: 'rejected' } })];
+  it('no lock token yet: propose still goes out and sends none; Discard rejects the draft with a warning haptic', async () => {
+    [mockPrepare.mockResolvedValueOnce({ ok: true }), mockApi.post.mockResolvedValueOnce({ data: PROPOSAL }), mockApi.patch.mockResolvedValueOnce({ data: { status: 'rejected' } })];
     const s = await render(<Harness />);
     await proposeFromInput(s);
     await waitFor(() => expect(s.getByTestId('ai-builder-discard')).toBeTruthy());
+    expect(JSON.parse(JSON.stringify(mockApi.post.mock.calls[0][1]))).not.toHaveProperty('lock_token');
     await press(s, 'ai-builder-discard');
     expect(mockApi.patch).toHaveBeenCalledWith('/ai/gateway/drafts/draft-1', { decision: 'rejected' });
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('warning');
@@ -129,6 +127,24 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     await proposeFromInput(s);
     await waitFor(() => expect(s.getByTestId('ai-builder-error').props.children).toMatch(copy));
     expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+  });
+
+  it.each(['paused', 'not_configured'])('status %s: paused copy, no prompt or chips, nothing proposed', async (state) => {
+    mockApi.get.mockResolvedValueOnce({ data: { ...STATUS_ON, state } });
+    const s = await render(<Harness />);
+    await waitFor(() => expect(s.getByTestId('ai-builder-blocked').props.children).toBe('Ask AI is paused for maintenance. Your workouts are unchanged.'));
+    expect(s.queryByTestId('ai-builder-input') ?? s.queryByTestId('ai-chip-deload') ?? s.queryByTestId('ai-builder-retry')).toBeNull();
+    expect(mockApi.post).not.toHaveBeenCalled();
+  });
+
+  it('status unreadable (network): specific copy and a retry; the prompt returns once status loads', async () => {
+    mockApi.get.mockRejectedValueOnce(new Error('socket'));
+    const s = await render(<Harness />);
+    await waitFor(() => expect(s.getByTestId('ai-builder-blocked').props.children).toMatch(/^No connection\./));
+    expect(s.queryByTestId('ai-builder-input')).toBeNull();
+    await press(s, 'ai-builder-retry');
+    await waitFor(() => expect(s.getByTestId('ai-builder-input')).toBeTruthy());
+    expect(mockApi.get).toHaveBeenCalledTimes(2);
   });
 
   it('Reduce Motion: cards appear at once, no stagger animation', async () => {

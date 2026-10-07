@@ -18,7 +18,6 @@ export const INJURY_AREA_LABELS: Record<AiBuilderInjuryArea, string> = {
 };
 export const KIND_LABELS = { added: 'Added', changed: 'Changed', removed: 'Removed', moved: 'Moved', meta: 'Details' } as const;
 export const PAUSED_COPY = 'Ask AI is paused for maintenance. Your workouts are unchanged.';
-export const NOT_CONFIGURED_COPY = 'Ask AI is not set up on this account yet. Your workouts are unchanged.';
 export const SAVE_FIRST_COPY = 'Save this workout first, then Ask AI can change it.';
 export const WAIT_FOR_SAVE_COPY = 'Your last edit is still saving. Ask again in a moment.';
 export const SCREENING_COPY = 'This client flagged a health screening question. Confirm medical clearance before increasing intensity.';
@@ -39,7 +38,7 @@ const ERROR_COPY: Record<Exclude<AiBuilderErrorCode, 'no_credits'>, string> = {
   rate_limited: 'That is a lot of requests in an hour. Try again in a few minutes.',
   forbidden: 'This account cannot use Ask AI on this workout.',
   network: 'No connection. Your workout is unchanged. Check your connection and ask again.',
-  contract: 'The suggestion arrived in a format this app version cannot read. Your workout is unchanged.',
+  contract: 'The AI reply arrived in a format this app version cannot read. Your workout is unchanged.',
   server: 'The AI service did not answer. Your workout is unchanged. Ask again in a minute.',
 };
 

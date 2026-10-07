@@ -33,18 +33,10 @@ import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
 // "Invalid hook call" at `useMemo`. Keeping a single React also keeps RTL's
 // auto-cleanup `afterEach` intact, so no test leaks an open handle.
 // AIB-5: Ask AI status reads 404 on this backend, so the entry stays hidden.
-const mockAiStatus = jest.fn();
-const mockAiPropose = jest.fn();
-const mockAiApply = jest.fn();
-jest.mock('../api/aiBuilderApi', () => ({
-  ...jest.requireActual('../api/aiBuilderApi'),
-  aiBuilderApi: {
-    getStatus: (...a: unknown[]) => mockAiStatus(...a),
-    propose: (...a: unknown[]) => mockAiPropose(...a),
-    apply: (...a: unknown[]) => mockAiApply(...a),
-    discard: () => Promise.resolve({ status: 'rejected' }),
-  },
-}));
+const [mockAiStatus, mockAiPropose, mockAiApply] = [jest.fn(), jest.fn(), jest.fn()];
+jest.mock('../api/aiBuilderApi', () => ({ ...jest.requireActual('../api/aiBuilderApi'), aiBuilderApi: {
+  getStatus: (...a: unknown[]) => mockAiStatus(...a), propose: (...a: unknown[]) => mockAiPropose(...a), apply: (...a: unknown[]) => mockAiApply(...a), discard: () => Promise.resolve({ status: 'rejected' }),
+} }));
 
 jest.mock('../api/exerciseLibraryApi', () => ({
   exerciseLibraryApi: { getById: jest.fn().mockRejectedValue(new Error('Catalog unavailable in this isolated undo test')) },
@@ -810,7 +802,8 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
 
   const mount = async (status: object | null) => {
     setFlag(true);
-    mockAiStatus.mockResolvedValue(status);
+    if (status instanceof Error) mockAiStatus.mockRejectedValue(status);
+    else mockAiStatus.mockResolvedValue(status);
     const Screen = loadScreen();
     return render(<Screen />);
   };
@@ -822,11 +815,21 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     expect(screen.queryByTestId("ai-prompt-bar") ?? screen.queryByTestId("ai-header-button")).toBeNull();
   });
 
-  it("status paused: the entry stays visible and the sheet says it is paused", async () => {
-    const screen = await mount(STATUS("paused"));
+  it.each(["paused", "not_configured"])("status %s: the entry stays visible; a tap shows the paused copy and proposes nothing", async (state) => {
+    const screen = await mount(STATUS(state));
     await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
     await press(screen, "ai-prompt-bar");
     expect(screen.getByText("Ask AI is paused for maintenance. Your workouts are unchanged.")).toBeTruthy();
+    expect(screen.queryByTestId("ai-builder-input")).toBeNull();
+    expect(mockAiPropose).not.toHaveBeenCalled();
+  });
+
+  it("status unreadable (network): the entry stays visible and the sheet offers a retry", async () => {
+    const screen = await mount(new Error("socket"));
+    await waitFor(() => expect(screen.getByTestId("ai-header-button")).toBeTruthy());
+    await press(screen, "ai-header-button");
+    expect(screen.getByTestId("ai-builder-retry")).toBeTruthy();
+    expect(mockAiPropose).not.toHaveBeenCalled();
   });
 
   it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {

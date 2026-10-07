@@ -1501,8 +1501,7 @@ export default function CoachWorkoutBuilderScreen() {
     }
   }, [sendHistoryRequest, settleHistoryHead, setHistoryGate]);
 
-  // AIB-5 Ask AI: land pending edits before a proposal; after an apply adopt the server head (the header Undo
-  // reverts the AI change like a manual edit), or without a lock token re-read via the edited-elsewhere path.
+  // AIB-5 Ask AI: land pending edits before a proposal; after apply adopt the server head (header Undo reverts it) or, without a lock token, re-read.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiToast, setAiToast] = useState<{ text: string; undo: boolean } | null>(null);
   const aiPrepare = useCallback(async () => {
@@ -1510,7 +1509,7 @@ export default function CoachWorkoutBuilderScreen() {
     await autosave.flush();
     if (autosaveHasPendingRef.current) return { ok: false };
     const token = autosave.readHead().lockToken;
-    return { ok: true, lockToken: token === AUTOSAVE_BOOTSTRAP_LOCK_TOKEN ? undefined : token };
+    return { ok: true, lockToken: token && token !== AUTOSAVE_BOOTSTRAP_LOCK_TOKEN ? token : undefined };
   }, [autosaveEnabled, autosave]);
   const aiOnApplied = useCallback(
     async (ref: AiBuilderRef, count: number) => {
@@ -1530,11 +1529,8 @@ export default function CoachWorkoutBuilderScreen() {
       deletedSignaturesRef.current.clear();
       setName(meta.name);
       setType(meta.type);
-      setRows(plan.exercises.map((e) => ({
-        clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id,
-        display_name: e.exercise_external_id, sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds,
-        rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes,
-      })));
+      setRows(plan.exercises.map((e) => ({ clientId: clientIdForServerRow(e.id), row_id: e.id, exercise_external_id: e.exercise_external_id, display_name: e.exercise_external_id,
+        sets: e.sets, reps_or_duration_seconds: e.reps_or_duration_seconds, rest_seconds: e.rest_seconds, weight_lbs: e.weight_lbs, superset_group_id: e.superset_group_id, notes: e.notes })));
     },
     [autosave, refetchPlan, buildServerWorkingCopy, runReplayRefetch, setUndoStack, setRedoStack, clientIdForServerRow],
   );

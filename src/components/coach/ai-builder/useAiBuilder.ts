@@ -33,15 +33,21 @@ export interface UseAiBuilderArgs {
 }
 
 export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuilderArgs) {
-  // value undefined = unreadable (entry stays visible; propose reports the cause); null = route absent (404): the ONLY hide case.
-  const [status, setStatus] = useState<{ loaded: boolean; value?: AiBuilderStatus | null }>({ loaded: false });
-  useEffect(() => {
-    let live = true;
-    Promise.resolve()
-      .then(() => aiBuilderApi.getStatus())
-      .then((value) => live && setStatus({ loaded: true, value }), () => live && setStatus({ loaded: true }));
-    return () => void (live = false);
+  // value null = route absent (404): the ONLY hide case. error = status unreadable: the entry stays visible with a retry.
+  const [status, setStatus] = useState<{ loaded: boolean; value?: AiBuilderStatus | null; error?: string; checking?: boolean }>({ loaded: false });
+  const live = useRef(true);
+  const loadStatus = useCallback(() => {
+    setStatus((s) => ({ ...s, checking: true }));
+    void Promise.resolve().then(() => aiBuilderApi.getStatus()).then(
+      (value) => live.current && setStatus({ loaded: true, value }),
+      (err: unknown) => live.current && setStatus({ loaded: true, error: describeAiBuilderError(toAiBuilderError(err).code) }),
+    );
   }, []);
+  useEffect(() => {
+    live.current = true;
+    loadStatus();
+    return () => void (live.current = false);
+  }, [loadStatus]);
 
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'review' | 'applying'>('idle');
   const [stage, setStage] = useState(0);
@@ -130,7 +136,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     }
   }, [proposal]);
 
-  return { visible: status.loaded && status.value !== null, status: status.value ?? null, phase, stage, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
+  return { visible: status.loaded && status.value !== null, status: status.value ?? null, statusError: status.error ?? null, checking: !!status.checking, retryStatus: loadStatus, phase, stage, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
 }
 
 export type AiBuilderController = ReturnType<typeof useAiBuilder>;
