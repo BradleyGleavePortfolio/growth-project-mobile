@@ -124,6 +124,13 @@ describe('Today truthful rows and action parity', () => {
     await render(<CommunityTodayScreen />);
     expect(screen.queryByTestId('community-today-empty-action')).toBeNull();
   });
+  it('does not promise a coach or a composer to a client without membership', async () => {
+    mockToday.data = { ...populated, cohort: null, pinned_post: null, event: null, challenge: null, empty_reason: 'no_membership' };
+    await render(<CommunityTodayScreen />);
+    expect(screen.getByText('A community space is not available for this account.')).toBeTruthy();
+    expect(screen.queryByTestId('community-today-empty-action')).toBeNull();
+    expect(screen.queryByTestId('community-today-compose')).toBeNull();
+  });
   it('distinguishes initial loading from true empty', async () => {
     mockToday.isLoading = true;
     await render(<CommunityTodayScreen />);

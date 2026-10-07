@@ -15,11 +15,11 @@
  * Standardized on semanticColors / tokens.ts.
  */
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../components/HapticPressable';
-import { spacing } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import type { CommunityNav } from './communityNavTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
@@ -29,7 +29,7 @@ import {
   useCommunityBadge,
   useCommunityMe,
 } from '../../hooks/useCommunity';
-import SpaceTabBar, {
+import {
   type CommunitySpaceKey,
   type SpaceTab,
 } from '../../components/community/SpaceTabBar';
@@ -81,13 +81,38 @@ export default function CommunityTabScreen(): React.ReactElement {
       edges={['top']}
       testID="community-tab-screen"
     >
-      <SpaceTabBar
-        tabs={tabs}
-        active={active}
-        onSelect={setActive}
-        testID="community-space-tabbar"
-      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} accessibilityRole="tablist"
+        testID="community-space-tabbar" contentContainerStyle={styles.segments}
+        style={{ flexGrow: 0, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: semanticColors.border }}>
+        {tabs.map((tab) => (
+          <HapticPressable key={tab.key} intent="light" accessibilityRole="tab"
+            accessibilityLabel={tab.unread ? `${tab.label}, ${tab.unread} unread` : tab.label}
+            accessibilityState={{ selected: active === tab.key }} testID={`space-tab-${tab.key}`}
+            onPress={() => setActive(tab.key)}
+            style={[styles.segment, { borderBottomWidth: active === tab.key ? 2 : 0, borderBottomColor: semanticColors.accent }]}>
+            <Text style={[typography.bodySmall, { color: active === tab.key ? semanticColors.textPrimary : semanticColors.textMuted }]}>{tab.label}</Text>
+            {tab.unread ? (
+              <Text testID={`space-tab-${tab.key}-badge`}
+                style={[typography.bodySmall, { color: semanticColors.textMuted, fontVariant: ['tabular-nums'] }]}>
+                {tab.unread}
+              </Text>
+            ) : null}
+          </HapticPressable>
+        ))}
+      </ScrollView>
       <View style={styles.linkRow}>
+        {featureFlags.communitySearch ? (
+          <HapticPressable intent="light" accessibilityRole="button" accessibilityLabel="Find"
+            testID="community-find-link" onPress={() => navigation.navigate('CommunityFind')} style={styles.headerLink}>
+            <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>Find</Text>
+          </HapticPressable>
+        ) : null}
+        {featureFlags.communityClassroom ? (
+          <HapticPressable intent="light" accessibilityRole="button" accessibilityLabel="Classroom"
+            testID="community-classroom-link" onPress={() => navigation.navigate('CommunityClassroom')} style={styles.headerLink}>
+            <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>Classroom</Text>
+          </HapticPressable>
+        ) : null}
         {/* Opt-in board of one coach's clients: no coach, no entry point. */}
         {hasCoach ? (
           <HapticPressable
@@ -179,7 +204,9 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  linkRow: { flexDirection: 'row', alignItems: 'center' },
+  segments: { paddingHorizontal: spacing.xl, gap: spacing.lg },
+  segment: { minHeight: 48, minWidth: 44, flexDirection: 'row', gap: spacing.xs, alignItems: 'center' },
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center' },
   headerLink: {
     minHeight: 44,
     flexDirection: 'row',
@@ -189,6 +216,7 @@ const styles = StyleSheet.create({
   },
   safetyLink: { marginLeft: 'auto' },
   safetyText: {
+    ...typography.bodySmall,
     fontSize: 13,
   },
 });
