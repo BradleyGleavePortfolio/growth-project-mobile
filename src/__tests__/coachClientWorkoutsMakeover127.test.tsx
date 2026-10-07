@@ -1,13 +1,18 @@
 import React from 'react';
-import { Alert, RefreshControl } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { WorkoutsTab } from '../screens/coach/client-detail/WorkoutsTab';
 import { makeStyles } from '../screens/coach/client-detail/styles';
-import type { WorkoutSession } from '../screens/coach/client-detail/types';
+import type { Props, WorkoutSession } from '../screens/coach/client-detail/types';
 import { testColors } from '../screens/client/wearables/recoveryTestColors';
 
-jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: ({ name }: { name: string }) => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, name) }));
+jest.mock('react-native', () => {
+  const actual = jest.requireActual('react-native');
+  return { ...actual, RefreshControl: ({ onRefresh, children }: { onRefresh: () => void; children?: React.ReactNode }) =>
+    jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Refresh client', onRefresh }, children) };
+});
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({
   colors: jest.requireActual('../screens/client/wearables/recoveryTestColors').testColors,
   semanticColors: jest.requireActual('../theme/tokens').lightTokens,
@@ -25,8 +30,11 @@ jest.mock('../api/workoutBuilderApi', () => ({ workoutBuilderApi: {
   createPlan: jest.fn(async () => ({ data: { id: 'copy-1' } })),
   setExercises: jest.fn(async () => undefined),
 } }));
-const mockArchive = jest.fn(async () => undefined);
-jest.mock('../services/api', () => ({ coachApi: { archiveClient: (...a: unknown[]) => mockArchive(...a) } }));
+const mockArchive = jest.fn(async (..._args: unknown[]) => undefined);
+const mockUnarchive = jest.fn(async (..._args: unknown[]) => undefined);
+jest.mock('../services/api', () => ({ coachApi: {
+  archiveClient: (...a: unknown[]) => mockArchive(...a), unarchiveClient: (...a: unknown[]) => mockUnarchive(...a),
+} }));
 const mockDetail = {
   profile: {}, totals: {}, foodShared: true, workoutSessions: [], weightLogs: [], timeline: [], weekSummaries: [],
   isLoading: false, refreshing: false, isArchived: false, serverMealPlans: [],
@@ -49,14 +57,18 @@ jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () =
 jest.mock('../components/coach/DisputePausedPlansCard', () => ({ DisputePausedPlansCard: () => null }));
 jest.mock('../components/coach/ai-execution/AskAiActionSheet', () => ({ AskAiActionSheet: () => null }));
 
-const session = (id: string, weight = 135): WorkoutSession => ({
+const session = (id: string, weight = 135, rpe: number | null = 8): WorkoutSession => ({
   id, routineName: 'Push day', startTime: new Date().toISOString(), completed: true, durationMinutes: 45,
   notes: 'Felt strong', exercises: JSON.stringify([{
-    exerciseId: 'bench', exerciseName: 'Bench press', notes: 'Shoulder fine', rpe: 8,
+    exerciseId: 'bench', exerciseName: 'Bench press', notes: 'Shoulder fine', rpe,
     sets: [{ weight, reps: 8, completed: true }],
   }]),
 });
 const tabProps = { colors: testColors, styles: makeStyles(testColors), clientName: 'Sam Lee' };
+const screenProps = (navigate: Props['navigation']['navigate'], goBack: Props['navigation']['goBack']): Props => ({
+  navigation: { navigate, goBack } as Props['navigation'],
+  route: { key: 'client-detail', name: 'ClientDetail', params: { clientId: 'client-1', clientName: 'Sam Lee' } },
+});
 beforeEach(() => { jest.clearAllMocks(); jest.spyOn(Alert, 'alert').mockImplementation(() => undefined); });
 afterEach(() => jest.restoreAllMocks());
 
@@ -66,7 +78,7 @@ it('uses the honest weekly fallback, hairline rows, and preserves all recorded d
   expect(s.getByText('1 workout this week')).toBeTruthy();
   expect(s.queryByText(/\d+ of \d+ workouts/)).toBeNull();
   expect(s.getAllByText('Done')).toHaveLength(2);
-  expect(s.getByTestId('coach-session-a')).toHaveStyle({ backgroundColor: testColors.background, borderBottomWidth: 0.5 });
+  expect(s.getByTestId('coach-session-a')).toHaveStyle({ backgroundColor: testColors.background, borderBottomWidth: StyleSheet.hairlineWidth });
   for (const text of ['Exercises', 'Sets', 'Volume (lbs)', 'Bench press', '1 set · 135 lb x 8', 'Client note: Shoulder fine', 'Workout note: Felt strong', 'RPE 8']) {
     expect(s.getAllByText(text).length).toBeGreaterThan(0);
   }
@@ -77,15 +89,22 @@ it('keeps empty and unfinished states honest without invented duration, schedule
   const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[]} />);
   expect(s.getByText('0 workouts this week')).toBeTruthy();
   expect(s.getByText('No workout sessions yet')).toBeTruthy();
+  expect(s.queryByTestId('workouts-build-with-ai')).toBeNull();
+  expect(s.queryByTestId('workouts-adjust-with-ai')).toBeNull();
   expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
-  await s.rerender(<WorkoutsTab {...tabProps} workoutSessions={[{ ...session('a'), completed: false, durationMinutes: null }]} />);
+  await s.rerender(<WorkoutsTab {...tabProps} workoutSessions={[{ ...session('a', 135, null), completed: false, durationMinutes: null }]} />);
   expect(s.getByText('In progress')).toBeTruthy();
   expect(s.queryByText(/0 min|Missed|Upcoming|On track/)).toBeNull();
+  expect(s.queryByText(/RPE/)).toBeNull();
   expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
 });
 
 it('shows only real same-exercise strength points, and only with at least two', async () => {
   const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[session('a')]} />);
+  expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
+  await s.rerender(<WorkoutsTab {...tabProps} workoutSessions={[session('a'), {
+    ...session('b'), exercises: JSON.stringify([{ exerciseId: 'row', exerciseName: 'Row', sets: [{ weight: 95, reps: 8, completed: true }] }]),
+  }]} />);
   expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
   await s.rerender(<WorkoutsTab {...tabProps} workoutSessions={[session('a'), session('b', 145)]} />);
   expect(s.getByTestId('coach-strength-trajectory')).toBeTruthy();
@@ -94,7 +113,7 @@ it('shows only real same-exercise strength points, and only with at least two', 
 
 it('preserves all nine tab destinations and both AI actions, including client-copy navigation', async () => {
   const navigate = jest.fn(); const goBack = jest.fn();
-  const props = { navigation: { navigate, goBack }, route: { params: { clientId: 'client-1', clientName: 'Sam Lee' } } } as React.ComponentProps<typeof ClientDetailScreen>;
+  const props = screenProps(navigate, goBack);
   const s = await render(<ClientDetailScreen {...props} />);
   for (const label of ['Summary', 'Logs', 'Plan', 'Progress', 'Fitness', 'Recovery', 'Timeline', 'Weekly']) {
     await fireEvent.press(s.getByText(label));
@@ -121,14 +140,16 @@ it('preserves all nine tab destinations and both AI actions, including client-co
 
 it('preserves the surrounding header actions and refresh handler', async () => {
   const navigate = jest.fn(); const goBack = jest.fn();
-  const props = { navigation: { navigate, goBack }, route: { params: { clientId: 'client-1', clientName: 'Sam Lee' } } } as React.ComponentProps<typeof ClientDetailScreen>;
+  const props = screenProps(navigate, goBack);
   const s = await render(<ClientDetailScreen {...props} />);
-  // Existing unnamed header buttons are located by their unchanged handler-bearing order.
-  const buttons = s.UNSAFE_getAllByType(jest.requireActual('react-native').TouchableOpacity);
-  await fireEvent.press(buttons[0]); expect(goBack).toHaveBeenCalledTimes(1);
-  await fireEvent.press(buttons[1]); expect(navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Sam Lee' });
+  await fireEvent.press(s.getByText('arrow-back')); expect(goBack).toHaveBeenCalledTimes(1);
+  await fireEvent.press(s.getByText('chatbubble-outline')); expect(navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Sam Lee' });
   await fireEvent.press(s.getByLabelText('Archive client')); expect(mockArchive).toHaveBeenCalledWith('client-1');
-  await fireEvent(s.UNSAFE_getByType(RefreshControl), 'refresh');
+  mockDetail.isArchived = true;
+  await s.rerender(<ClientDetailScreen {...props} />);
+  await fireEvent.press(s.getByLabelText('Unarchive client')); expect(mockUnarchive).toHaveBeenCalledWith('client-1');
+  mockDetail.isArchived = false;
+  await fireEvent(s.getByLabelText('Refresh client'), 'refresh');
   expect(mockDetail.setRefreshing).toHaveBeenCalledWith(true);
   expect(mockDetail.setRefreshing).toHaveBeenCalledWith(false);
   expect(mockDetail.loadData).toHaveBeenCalledTimes(2);
