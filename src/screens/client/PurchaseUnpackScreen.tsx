@@ -438,7 +438,7 @@ export default function PurchaseUnpackScreen() {
     let alive = true;
     api.get<{ name?: string }>('/v1/clients/me/coach').then((res) => {
       if (alive) setCoachName(res.data.name ?? null);
-    }).catch((err: unknown) => { logger.warn('PurchaseUnpackScreen', 'Coach name did not load', err); });
+    }).catch(() => { logger.warn('PurchaseUnpackScreen', 'Coach name did not load'); });
     return () => { alive = false; };
   }, []);
 

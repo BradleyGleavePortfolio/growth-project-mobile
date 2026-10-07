@@ -27,23 +27,28 @@ let mockParams: Record<string, unknown> = {};
 let mockPayment: Record<string, unknown> = { ok: true, data: { state: 'active', purchase_id: 'purchase', package_id: 'package', package_name: 'Strength' } };
 let mockDrops: Record<string, unknown> = { ok: true, data: [] };
 let mockPairStatus = 'unavailable';
+let mockUser: import('../hooks/useCurrentUser').CurrentUser = { id: 'client', email: 'client@example.test' };
+let mockConsent = [true, true];
 const mockStart = jest.fn(), mockRetry = jest.fn(), mockCancel = jest.fn();
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({
   colors: require('../constants/colors').default, tokens: require('../theme/tokens').default,
   semanticColors: require('../theme/tokens').lightTokens, colorScheme: 'light',
 }) }));
 jest.mock('../theme/useTheme', () => ({ useTheme: () => require('../theme/ThemeProvider').useTheme() }));
-jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client', email: 'client@example.test' }) }));
+jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => mockNav, useRoute: () => ({ params: mockParams }), useFocusEffect: jest.fn(),
 }));
 jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../analytics/posthog.service', () => ({ track: jest.fn() }));
+jest.mock('../services/authActions', () => ({ signOut: jest.fn() }));
 jest.mock('../utils/haptics', () => ({ mediumTap: jest.fn(), successTap: jest.fn(), warningTap: jest.fn() }));
 jest.mock('../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => false }));
 jest.mock('../config/featureFlags', () => ({ featureFlags: { deliverables: false, privateCommunityHub: true } }));
 jest.mock('../services/api', () => ({
-  __esModule: true, default: { get: jest.fn(async () => ({ data: { id: 'coach', name: 'Coach Lee' } })) },
+  __esModule: true, default: { get: jest.fn(async (url: string) => ({ data: url.includes('consent') ? {
+    coach_id: 'coach', consents: [{ scope: 'fitness.workouts', granted: mockConsent[0] }, { scope: 'fitness.food_macros', granted: mockConsent[1] }],
+  } : { id: 'coach', name: 'Coach Lee' } })) },
   aiApi: { getStructuredContext: jest.fn(async () => ({ data: { coach: null } })) },
   usersApi: { getFoundingNumber: jest.fn(async () => ({ data: null })) },
 }));
@@ -57,8 +62,8 @@ jest.mock('../hooks/useExtensionPairing', () => ({
   useExtensionPairing: () => ({ status: mockPairStatus, code: 'ABCD', start: mockStart, retry: mockRetry, cancel: mockCancel }),
   PAIRING_REASON_COPY: {},
 }));
-jest.mock('../api/packagesApi', () => ({ coachPackagesApi: {
-  list: jest.fn(async () => { throw Object.assign(new Error('Packages unavailable'), { response: { status: 404, data: { code: 'PACKAGES_DISABLED' } } }); }),
+jest.mock('../api/packagesApi', () => ({ ...jest.requireActual('../api/packagesApi'), coachPackagesApi: {
+  list: jest.fn(async () => { throw Object.assign(new Error('Packages unavailable'), { response: { status: 404, data: { error: 'PACKAGES_DISABLED' } } }); }),
   get: jest.fn(async () => ({ data: mockPackage })),
   update: jest.fn(async () => ({ data: mockPackage })),
   publish: jest.fn(async () => ({ data: mockPackage })),
@@ -78,10 +83,14 @@ import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScre
 import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import ExtensionPairingPanel from '../components/coach/ExtensionPairingPanel';
+import ProfileScreen from '../screens/client/ProfileScreen';
+jest.mock('../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
+jest.mock('../components/community/MilestoneCabinet', () => () => null);
 beforeEach(() => {
   jest.clearAllMocks(); mockParams = { purchaseId: 'purchase' };
   mockPayment = { ok: true, data: { state: 'active', purchase_id: 'purchase', package_id: 'package', package_name: 'Strength' } };
   mockDrops = { ok: true, data: [] }; mockPairStatus = 'unavailable';
+  mockUser = { id: 'client', email: 'client@example.test' }; mockConsent = [true, true];
   jest.spyOn(require('react-native').AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
 });
 afterEach(() => jest.restoreAllMocks());
@@ -178,4 +187,20 @@ it('does not promise import enablement and keeps pairing Copy/Cancel/Review/Retr
   await fireEvent.press(s.getByTestId('pairing-review-cta')); expect(mockNavigate).toHaveBeenLastCalledWith('ClientsStack', { screen: 'ClientsList' });
   mockPairStatus = 'failed'; await s.rerender(React.createElement(ExtensionPairingPanel, { platformId: 'everfit' }));
   await fireEvent.press(s.getByTestId('pairing-retry')); expect(mockRetry).toHaveBeenCalled();
+});
+it.each([
+  [true, true, 'Workouts and meals are visible to you and Coach Lee.'],
+  [false, false, 'Workouts and meals are visible only to you.'],
+  [true, false, 'Workouts are visible to you and Coach Lee. Meals are visible only to you.'],
+  [false, true, 'Workouts are visible only to you. Meals are visible to you and Coach Lee.'],
+])('matches each confirmed coach-sharing state (%s/%s)', async (workouts, meals, copy) => {
+  mockUser.coach_id = 'coach'; mockConsent = [Boolean(workouts), Boolean(meals)];
+  const s = await render(React.createElement(ProfileScreen));
+  await waitFor(() => expect(s.getByText(String(copy))).toBeTruthy());
+});
+it('does not invent privacy reassurance while sharing state is unavailable', async () => {
+  mockUser.coach_id = 'coach';
+  require('../services/api').default.get.mockRejectedValueOnce(new Error('offline'));
+  const s = await render(React.createElement(ProfileScreen));
+  expect(s.queryByText(/Workouts.*visible/)).toBeNull();
 });
