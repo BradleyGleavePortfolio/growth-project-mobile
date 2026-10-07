@@ -80,7 +80,7 @@ afterEach(() => jest.restoreAllMocks());
 it('uses the honest weekly fallback, hairline rows, and preserves all recorded details', async () => {
   const old = { ...session('old'), startTime: '2025-01-01T12:00:00Z' };
   const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[session('a'), old]} />);
-  expect(s.getByText('1 workout this week')).toBeTruthy();
+  expect(s.getByText('1 shared workout this week')).toBeTruthy();
   expect(s.queryByText(/\d+ of \d+ workouts/)).toBeNull();
   expect(s.getAllByText('Done')).toHaveLength(2);
   expect(s.getByTestId('coach-session-a')).toHaveStyle({ backgroundColor: testColors.background, borderBottomWidth: StyleSheet.hairlineWidth });
@@ -92,8 +92,8 @@ it('uses the honest weekly fallback, hairline rows, and preserves all recorded d
 
 it('keeps empty and unfinished states honest without invented duration, schedule or trajectory', async () => {
   const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[]} />);
-  expect(s.getByText('0 workouts this week')).toBeTruthy();
-  expect(s.getByText('No workout sessions yet')).toBeTruthy();
+  expect(s.getByText('0 shared workouts this week')).toBeTruthy();
+  expect(s.getByText('No shared workout sessions to show')).toBeTruthy();
   expect(s.queryByTestId('workouts-build-with-ai')).toBeNull();
   expect(s.queryByTestId('workouts-adjust-with-ai')).toBeNull();
   expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
@@ -102,6 +102,17 @@ it('keeps empty and unfinished states honest without invented duration, schedule
   expect(s.queryByText(/0 min|Missed|Upcoming|On track/)).toBeNull();
   expect(s.queryByText(/RPE/)).toBeNull();
   expect(s.queryByTestId('coach-strength-trajectory')).toBeNull();
+});
+
+it('does not call withheld workout history a zero total and keeps the build action', async () => {
+  // The existing backend returns an empty visible list when sharing is off.
+  const build = jest.fn();
+  const s = await render(<WorkoutsTab {...tabProps} workoutSessions={[]} onBuildWithAi={build} />);
+  expect(s.getByText('0 shared workouts this week')).toBeTruthy();
+  expect(s.getByText('No shared workout sessions to show')).toBeTruthy();
+  expect(s.queryByText('0 workouts this week')).toBeNull();
+  await fireEvent.press(s.getByTestId('workouts-build-with-ai'));
+  expect(build).toHaveBeenCalledTimes(1);
 });
 
 it('shows only real same-exercise strength points, and only with at least two', async () => {

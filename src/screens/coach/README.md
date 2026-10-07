@@ -15,7 +15,7 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 | File | What it does |
 | --- | --- |
 | `ClientsListScreen.tsx` | Searchable, filterable list of clients (`coachApi.getClients`). Routes to `ClientDetail`, `ClientMessages`, and `InviteCodes`. |
-| `ClientDetailScreen.tsx` | Per-client timeline — workouts, weight logs, food logs, check-ins. Surfaces guidelines + the "send nudge" form. Reads `coachApi.getClientTimeline`, `getClientCheckIns`, `getClientSummary`. |
+| `ClientDetailScreen.tsx` | Per-client timeline — workouts, weight logs, food logs, check-ins. Nine text tabs retain their destinations with an active underline. Workouts counts only shared recorded sessions this week; an empty visible list says “No shared workout sessions to show”, not that the client never trained. Hairline rows keep recorded date/duration, sets, volume, weight/reps and both note levels visible; RPE appears only if supplied. The top-recorded-load trajectory requires two same-exercise points, not an estimated 1RM. Build-with-AI, copy-and-adjust, back, messages, archive/unarchive and refresh remain reachable. Parity: `src/__tests__/coachClientWorkoutsMakeover127.test.tsx`; styling: `docs/QUIET_LUXURY_DOCTRINE.md`. Surfaces guidelines + the "send nudge" form. Reads `coachApi.getClientTimeline`, `getClientCheckIns`, `getClientSummary`. |
 | `ClientMessagesScreen.tsx` | One-on-one thread with a single client. Realtime ping + 60 s safety poll, same shape as the client side. |
 | `MessagesScreen.tsx` | Inbox across all clients. Pulls `coachApi.getUnreadCounts`. |
 | `CoachHomeScreen.tsx` | Dashboard — `coachApi.getDashboard` + `coachApi.getAlerts`. The coach's first-open screen. Renders weight-trend / missed-check-in alerts as the activity feed when alerts exist; renders an explicit empty state explaining what *would* appear here when they don't. There is no "Activity feed coming soon" placeholder — the doctrine forbids it. |
@@ -25,21 +25,6 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 | `SettingsScreen.tsx` | Coach-side settings: business profile (name, bio), notification preferences (server-backed via `notificationsApi.getPreferences` / `updatePreferences`), local haptics toggle, password change (Supabase), **Subscription → Billing & access** entry, **Privacy & Data** section linking to Trust Center, account deletion, and sign out. Polls `usersApi.getAccountStatus` on mount and renders either *Delete account* or *Deletion scheduled — tap to cancel* with the permanent-on date when present. The static *Theme: Dark* row is gone — the app ships a single bone/forest light theme, and a row that didn't reflect that was untrue chrome. |
 | `CreditPackCheckoutScreen.tsx` | Stripe-webview entry point for AI credit packs (Stream 1). Two-phase flow: selection (pack tiers + custom amount, bounded by `pack_options_cents` / `custom_pack_bounds_cents` from the budget query) then webview (`react-native-webview` pointing at the minted Stripe Checkout URL with the same origin allow-list + deep-link parser as `BrandedCheckoutWebViewScreen`). Not a 1:1 service: on iOS the route is replaced by the neutral hidden state (`withNonP2PPurchaseGate`, see `src/config/purchaseSurfaces.ts`); elsewhere billed via Stripe. Success state is `SuccessReceipt` (quiet-luxury — see "Success state" below). |
 | `PendingAiDraftsScreen.tsx` | Stream 2 inbox of pending AI execution drafts. Lists `AiActionDraft` rows in `status='pending'` for the current coach across the four Stream 2 capabilities (`draft.client_message`, `draft.assign_workout`, `draft.assign_meal_plan`, `draft.send_notification`). Per-capability card variants render the appropriate preview (message body / workout name + weeks + day-1 exercise count / meal plan macro summary / notification title + body). Approve + Reject buttons call the existing approval endpoints. Focus-gated 30s polling via `usePendingAiDrafts` composed with `useIsFocused()`. Reached from any client-detail screen via the `<AskAiActionSheet>` flow (`Summary tab → Ask AI pill → pick capability → submit prompt → navigate here`). |
-
-### Client file — workout history
-
-The client file keeps all nine in-page tabs as text with an active forest underline.
-Workouts leads with the count of completed sessions logged this week, without an
-assigned denominator or inferred missed/upcoming schedule. Hairline rows keep dates,
-recorded duration, set counts, volume, every weight/rep and both note levels visible.
-RPE appears only when supplied in exercise JSON; the current workout mapper does not
-provide it. A top-recorded-load trajectory appears only for an exercise with at least
-two completed-session points; it is not an estimated one-rep maximum.
-Build-with-AI still opens the Summary generator; Adjust-for-client still copies a
-saved workout into CoachWorkoutBuilder with the client's context. Header back,
-message, archive/unarchive and pull-to-refresh stay unchanged. The render/parity
-proof is `src/__tests__/coachClientWorkoutsMakeover127.test.tsx`; styling follows
-`docs/QUIET_LUXURY_DOCTRINE.md`.
 
 ### Stream 2 — AI execution drafts
 

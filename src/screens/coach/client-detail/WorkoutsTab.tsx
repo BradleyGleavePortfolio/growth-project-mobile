@@ -67,7 +67,7 @@ export function WorkoutsTab({
     <>
       <View style={[rule, { paddingBottom: spacing.xl, marginBottom: spacing.xl }]}>
         <Text style={[meta, { letterSpacing: 1, marginBottom: spacing.sm }]}>THIS WEEK</Text>
-        <Text accessibilityRole="header" style={heading}>{`${weeklyCount} ${weeklyCount === 1 ? 'workout' : 'workouts'} this week`}</Text>
+        <Text accessibilityRole="header" style={heading}>{`${weeklyCount} shared ${weeklyCount === 1 ? 'workout' : 'workouts'} this week`}</Text>
       </View>
       {onBuildWithAi ? (
         <Pressable
@@ -85,7 +85,7 @@ export function WorkoutsTab({
       <Text style={[heading, { marginTop: spacing.lg }]}>Recent workouts</Text>
       {workoutSessions.length === 0 ? (
         <View style={[rule, { paddingVertical: spacing.xl }]}>
-          <Text style={body}>No workout sessions yet</Text>
+          <Text style={body}>No shared workout sessions to show</Text>
         </View>
       ) : (
         workoutSessions.map((session) => {
