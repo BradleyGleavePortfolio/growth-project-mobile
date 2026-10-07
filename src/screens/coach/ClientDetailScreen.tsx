@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  StyleSheet,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -43,6 +44,7 @@ import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActio
 import { DisputePausedPlansCard } from '../../components/coach/DisputePausedPlansCard';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
+import { typography } from '../../theme/tokens';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
@@ -52,7 +54,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     featureFlags.communityWearablePrompts &&
     !serverFlags.isLoading &&
     serverFlags.flags.coach_community_wearable_prompts === true;
-  const { colors } = useTheme();
+  const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { clientId, clientName } = route.params;
   const currentUser = useCurrentUser();
@@ -418,21 +420,19 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.tabScroll}
-        contentContainerStyle={styles.tabRow}
+        style={[styles.tabScroll, { maxHeight: 52 }]}
+        contentContainerStyle={[styles.tabRow, { gap: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: sc.border }]}
       >
         {tabs.map((tab) => (
           <TouchableOpacity
             key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
+            accessibilityRole="tab"
+            accessibilityLabel={tab.label}
+            accessibilityState={{ selected: activeTab === tab.key }}
+            style={{ minHeight: 48, minWidth: 44, alignItems: 'center', paddingVertical: 12, borderRadius: 0, backgroundColor: sc.bgPrimary, borderBottomWidth: activeTab === tab.key ? 2 : 0, borderBottomColor: sc.accent }}
             onPress={() => setActiveTab(tab.key)}
           >
-            <Ionicons
-              name={tab.icon}
-              size={16}
-              color={activeTab === tab.key ? colors.textOnPrimary : colors.textSecondary}
-            />
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
+            <Text style={[typography.bodySmall, { color: activeTab === tab.key ? sc.accentText : sc.textMuted }]}>
               {tab.label}
             </Text>
           </TouchableOpacity>

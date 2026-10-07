@@ -1,5 +1,5 @@
 /**
- * HomeHeaderActions — top-of-Home row with the two things a clinic client
+ * HomeHeaderActions — top-of-Home row with the two things a client
  * must always be able to reach in one tap:
  *
  *   - "Message <coach first name>" (falls back to "Message your coach")
@@ -7,6 +7,7 @@
  *   - A notification bell with the unread badge → HomeStack `NotificationCenter`
  *     (the old headerRight bell never rendered because the Home stack is
  *     headerShown:false).
+ *   - When Roman chat is enabled, a compact avatar → MoreTab / RomanChat.
  *
  * The coach name comes from `GET /v1/clients/me/coach` (same endpoint as
  * CoachIntroductionBanner); any failure keeps the generic label.
@@ -22,6 +23,8 @@ import NotificationBadge from '../NotificationBadge';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 import { logger } from '../../utils/logger';
+import { featureFlags } from '../../config/featureFlags';
+import RomanAvatar from '../roman/RomanAvatar';
 
 export function messageCoachLabel(coachName?: string | null): string {
   const first = typeof coachName === 'string' ? coachName.trim().split(/\s+/)[0] : '';
@@ -99,7 +102,7 @@ export default function HomeHeaderActions() {
         testID="home-message-coach"
         style={({ pressed }) => [
           styles.message,
-          { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: pressed ? 0.85 : 1 },
+          { opacity: pressed ? 0.85 : 1 },
         ]}
       >
         <Ionicons name="chatbubble-ellipses-outline" size={24} color={sc.textPrimary} />
@@ -108,6 +111,17 @@ export default function HomeHeaderActions() {
         </Text>
         <NotificationBadge count={unreadMessages} />
       </Pressable>
+      {featureFlags.romanChat ? (
+        <Pressable
+          onPress={() => navigation.navigate('MoreTab', { screen: 'RomanChat' })}
+          accessibilityRole="button"
+          accessibilityLabel="Chat with Roman"
+          testID="home-roman-chat"
+          style={styles.bell}
+        >
+          <RomanAvatar crop="neutral" size={32} testID="home-roman-avatar" />
+        </Pressable>
+      ) : null}
       <Pressable
         onPress={() => navigation.navigate('NotificationCenter')}
         accessibilityRole="button"
@@ -128,8 +142,6 @@ const styles = StyleSheet.create({
   message: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 0.5,
-    paddingHorizontal: 14,
     paddingVertical: 10,
     minHeight: 44,
     flexShrink: 1,

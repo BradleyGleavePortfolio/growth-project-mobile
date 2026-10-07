@@ -15,7 +15,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 
 | File | Tab | What it does |
 | --- | --- | --- |
-| `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
+| `HomeScreen.tsx` | Home | Muted date overline, verified meal/workout summary in serif, one forest action (Train or Log) and one hairline row of every `homeCells()` metric with serif tabular figures. Existing metric prompts still open Log; all supporting sections retain their relative order and actions below the row. Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
 | `MoreScreen.tsx` | More | Hairline-separated groups: Your plan, Guidance and community, Food and preparation, Health and devices, Account, Learning. Every existing row remains a one-tap destination; order within each group follows the previous menu. Roman stays flag-gated; tutorial builds put health first, otherwise health follows plan. Neutral descriptions do not assume a coach, plan, targets, video or connected device. Cormorant title, Inter rows and semantic theme colors replace filled cards. Roman retains its existing avatar and wearable rows retain tutorial targets. Reachability tests cover every action with flags on/off, iOS/Android and semantic light/dark palettes. Six client tabs are unchanged. |
