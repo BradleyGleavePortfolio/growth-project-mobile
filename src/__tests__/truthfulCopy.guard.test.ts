@@ -65,7 +65,7 @@ jest.mock('../api/packagesApi', () => ({ coachPackagesApi: {
   unpublish: jest.fn(async () => ({ data: mockPackage })),
   archive: jest.fn(async () => ({ data: mockPackage })),
 } }));
-const mockPackage = {
+const mockPackage: import('../api/packagesApi').CoachPackage = {
   id: 'package', coachUserId: 'client', title: 'Strength', description: 'Training', priceCents: 9900,
   currency: 'usd', billingInterval: 'monthly', intervalCount: 1, trialDays: null, features: [],
   status: 'active', shareToken: null, subscriberCount: 0, monthlyRevenueCents: 0,
@@ -140,7 +140,7 @@ it('labels unavailable packages honestly and retains Back and refresh', async ()
 });
 it('keeps real package editing, preview and navigation, not a dead share row', async () => {
   const s = await render(React.createElement(CoachPackageEditScreen, {
-    navigation: mockNav, route: { key: 'edit', name: 'CoachPackageEdit', params: { packageId: 'package', initialPackage: mockPackage } },
+    navigation: jest.requireMock('@react-navigation/native').useNavigation(), route: { key: 'edit', name: 'CoachPackageEdit', params: { packageId: 'package', initialPackage: mockPackage } },
   } as React.ComponentProps<typeof CoachPackageEditScreen>));
   await waitFor(() => expect(s.getByLabelText('Save changes')).toBeTruthy());
   expect(s.queryByText(/Share links are coming soon/i)).toBeNull();
@@ -159,7 +159,7 @@ it('keeps real package editing, preview and navigation, not a dead share row', a
 it('retains real package sharing and the create/open-package routes', async () => {
   jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
   const s = await render(React.createElement(CoachPackageEditScreen, {
-    navigation: mockNav, route: { key: 'share', name: 'CoachPackageEdit', params: { packageId: 'package', initialPackage: { ...mockPackage, shareToken: 'real-token' } } },
+    navigation: jest.requireMock('@react-navigation/native').useNavigation(), route: { key: 'share', name: 'CoachPackageEdit', params: { packageId: 'package', initialPackage: { ...mockPackage, shareToken: 'real-token' } } },
   } as React.ComponentProps<typeof CoachPackageEditScreen>));
   await fireEvent.press(s.getByLabelText('Share package link')); expect(Share.share).toHaveBeenCalled();
   require('../api/packagesApi').coachPackagesApi.list.mockResolvedValueOnce({ data: [mockPackage] });
