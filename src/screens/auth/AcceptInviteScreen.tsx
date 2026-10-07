@@ -36,6 +36,7 @@ import { secureStorage } from '../../services/secureStorage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { isValidInviteToken } from '../../utils/inviteToken';
+import { writePendingInviteCode } from '../../lib/pendingInviteCode';
 import { typography } from '../../theme/tokens';
 
 type FailureReason = 'expired' | 'already_accepted' | 'invalid' | 'network';
@@ -114,8 +115,12 @@ export default function AcceptInviteScreen({
     void accept();
   }, [accept]);
 
-  const onContinue = useCallback(() => {
+  const onContinue = useCallback(async () => {
     if (state.kind !== 'accepted') return;
+    // Keep the validated invite for after sign-in: Home's PendingInviteBanner
+    // shows it with the coach-sharing notice and attaches only on an explicit
+    // tap (the server refuses to re-parent an already-coached client).
+    if (token) await writePendingInviteCode(token);
     if (state.authed) {
       // Signed in — bounce to the root nav. RootNavigator detects the
       // auth state and renders the matching tabs; we just dismiss this
@@ -124,7 +129,7 @@ export default function AcceptInviteScreen({
       return;
     }
     navigation.navigate('Login', { email: state.payload.email });
-  }, [state, navigation]);
+  }, [state, navigation, token]);
 
   const onCreateAccount = useCallback(() => {
     if (state.kind !== 'accepted') return;
