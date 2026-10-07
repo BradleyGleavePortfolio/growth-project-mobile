@@ -56,6 +56,8 @@ P0 comes straight after W1. Nothing is sent before Continue:
 3. A stored P0 counts only when `copy_version` equals the displayed copy, `agreed_at` is a valid date and any `text_sha256` is lowercase hex (`isConsentAnswerCurrent`). Stale (including the single-box `consult-consent-v1`) or malformed records route back to P0 with both boxes unticked. Box 1 is not read from the AI consent ledger.
 4. A P0-only PUT rejected with `409 consent_missing` means the server does not accept this copy version: the box is cleared, Continue stays disabled and the client is asked to update the app. A `409 consent_missing` on a later save, or from complete after resending P0 once, routes back to P0.
 
+Roman memory on by default (R11-C2B, owner 2026-10-07 10:18): while `GET /me/ai-consent` says `memory_on` and sends a well-formed `memory_copy` (client-ai-v5, sha256 equal to the pinned `AI_CONSENT_MEMORY_COPY_SHA256`, same box 2 label), box 2 shows that paragraph, its tick grants `{ version: 'client-ai-v5', copy_sha256 }`, and P0 records `consult-consent-v4` with `CONSENT_MEMORY_COPY_SHA256`. Same box, same label, unticked by default. Otherwise (the current production server sends no `memory_copy`) box 2, its grant and P0 stay exactly as above. A live v4 holder keeps seeing the v4 text; a live v5 holder sees the v5 text.
+
 Any change to the P0 copy bumps `CONSULT_CONSENT_COPY_VERSION` (and the backend's accepted versions); a change to paragraph 4 or box 2 also bumps `AI_CONSENT_VERSION` and the R2a server copy. The unit test recomputes both pinned hashes. Consent copy changes need T4 review.
 
 ## Privacy

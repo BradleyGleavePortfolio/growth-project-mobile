@@ -17,7 +17,13 @@ import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
 import { CONSENT_TITLE } from './consentVersion';
 
-export { CONSULT_CONSENT_COPY_VERSION, CONSENT_BINDING, AI_CONSENT_VERSION, WAIVER_VERSION } from './consentVersion';
+export {
+  CONSULT_CONSENT_COPY_VERSION,
+  CONSULT_CONSENT_MEMORY_COPY_VERSION,
+  CONSENT_BINDING,
+  AI_CONSENT_VERSION,
+  WAIVER_VERSION,
+} from './consentVersion';
 export { CONSENT_TITLE };
 
 /** Paragraphs 1-3: shown above box 1 (waiver, collection and use for coaching). */
@@ -47,12 +53,12 @@ export const CONSENT_FOOTER =
  * 1-3, box 1, paragraph 4, box 2, footer). Its sha256 is sent as the P0
  * record's `text_sha256` (backend #607 stores what was shown).
  */
-export function consentCopyText(): string {
+export function consentCopyText(aiParagraph: string = AI_CONSENT_PARAGRAPH): string {
   return [
     CONSENT_TITLE,
     ...CONSENT_PARAGRAPHS,
     CONSENT_CHECKBOX_LABEL,
-    AI_CONSENT_PARAGRAPH,
+    aiParagraph,
     AI_CONSENT_CHECKBOX_LABEL,
     CONSENT_FOOTER,
   ].join('\n\n');
@@ -75,6 +81,15 @@ export function aiConsentCopyText(): string {
  */
 export const CONSENT_COPY_SHA256 = '79ceeb6b8316ee9e3f583fe678e2463584c6dda4c93b5c95746dfe5c52ef31c9';
 export const AI_CONSENT_COPY_SHA256 = 'fbf821401d4313c6a301a6cc08d3870bb117c293fbb970e321bf87f49abe34f4';
+
+/**
+ * R11-C2B pins for box 2 with the server's client-ai-v5 paragraph (the app holds no v5 text): the
+ * sha256 of that paragraph + "\n\n" + the box 2 label (backend CLIENT_AI_CONSENT_V5_COPY_SHA256), and
+ * of the whole P0 screen with it, consentCopyText(v5 paragraph) (backend CONSULT_CONSENT_V4_TEXT_SHA256).
+ * Box 2 shows server v5 text only when its copy sha256 equals the first pin, so the P0 record is exact.
+ */
+export const AI_CONSENT_MEMORY_COPY_SHA256 = '8c19fca94c2455094c47b1802bb6693aff47d24c7b6df3b256d0a0e8e90fe8ee';
+export const CONSENT_MEMORY_COPY_SHA256 = '74d0a48ad2b0a50f6f8e699fe6d131f0262f35ce1fff6248c9770d9267a5fb1a';
 
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {
