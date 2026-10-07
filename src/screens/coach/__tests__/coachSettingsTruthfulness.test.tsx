@@ -11,7 +11,7 @@ describe('coach Settings truthfulness', () => {
   });
 
   it('caches and confirms a bio only after the API accepts it', () => {
-    const saveBody = settingsSource.match(/const handleSaveBio = async \(\) => \{([\s\S]*?)\n  \};/)?.[1];
+    const saveBody = settingsSource.match(/const handleSaveBio = async \(\) => \{([\s\S]*?)\n {2}\};/)?.[1];
     expect(saveBody).toBeDefined();
     if (!saveBody) return;
 
