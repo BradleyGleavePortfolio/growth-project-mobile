@@ -379,12 +379,15 @@ export default function RomanAiConsentScreen({
     const offer = view.phase === 'ready' && !pendingWithdraw ? memoryOfferOf(view.status) : null;
     if (!offer) return null;
     return (
-      <View style={styles.card} testID="roman-ai-memory-offer">
-        <Text style={styles.head} accessibilityRole="header">{ROMAN_AI_COPY.memoryHead}</Text>
-        <Text style={styles.body}>{ROMAN_AI_COPY.memoryIntro}</Text>
-        <Text style={styles.body} testID="roman-ai-memory-paragraph">{offer.paragraph.text}</Text>
-        {button(ROMAN_AI_COPY.memoryAllow, () => confirmMemory(offer), 'roman-ai-memory-allow')}
-      </View>
+      <>
+        <View style={styles.divider} />
+        <View style={styles.card} testID="roman-ai-memory-offer">
+          <Text style={styles.head} accessibilityRole="header">{ROMAN_AI_COPY.memoryHead}</Text>
+          <Text style={styles.body}>{ROMAN_AI_COPY.memoryIntro}</Text>
+          <Text style={styles.body} testID="roman-ai-memory-paragraph">{offer.paragraph.text}</Text>
+          {button(ROMAN_AI_COPY.memoryAllow, () => confirmMemory(offer), 'roman-ai-memory-allow')}
+        </View>
+      </>
     );
   }
 
@@ -410,7 +413,6 @@ export default function RomanAiConsentScreen({
           {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) || AI_CONSENT_PARAGRAPH}
         </Text>
         {renderState()}
-        {renderMemoryOffer()}
         {notice ? (
           <Text style={styles.notice} accessibilityLiveRegion="polite" testID="roman-ai-notice">{notice}</Text>
         ) : null}
@@ -420,6 +422,7 @@ export default function RomanAiConsentScreen({
         <View style={styles.divider} />
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}
+        {renderMemoryOffer()}
       </ScrollView>
     </View>
   );
