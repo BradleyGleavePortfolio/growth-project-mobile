@@ -1,7 +1,7 @@
 /**
  * romanVoice — the ONLY client-side Roman-voiced strings the chat surface
- * renders. Strings follow the identity spec; greetings use the owner-approved truthful-copy revision.
- * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md),
+ * renders. Strings follow the identity spec
+ * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md) and the owner-approved truthful-copy greeting revision,
  * cited per string with its §section. The Phase 1 backend serves NO greeting /
  * empty / error PROSE for the chat surface — the controller returns only
  * session/message views and SSE chunks (roman.controller.ts), and there are no
@@ -34,7 +34,7 @@ export interface RomanGreetingInput {
 /**
  * Empty-chat greeting, aware of BOTH the surface and whether this is the first
  * time Roman has been opened (R1 UX finding U1). The four registers are taken
- * verbatim from the identity spec:
+ * adapted from the identity spec:
  *
  *   - First open (client OR coach): the §2.1 first-launch self-introduction —
  *     `"Good day. My name is Roman. Ask about training, food or recovery at any time."` This is Roman's defining first
@@ -45,7 +45,7 @@ export interface RomanGreetingInput {
  *   - Returning client (nameless): the §2.1 nameless ambient register, trimmed
  *     to the greeting clause, to avoid an empty "Welcome back, ." render.
  *   - Returning coach: the §2.3 coach operational register —
- *     `"Good morning, {coachName}. I am ready. What needs attention?"` When the
+ *     `"Good {device time of day}, {coachName}. I am ready. What needs attention?"` When the
  *     coach name is unknown the nameless variant `"I am ready. What needs
  *     attention?"` is used so we never render "Good morning, .".
  */

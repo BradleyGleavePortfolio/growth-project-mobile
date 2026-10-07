@@ -1,4 +1,5 @@
 import React from 'react';
+import { RefreshControl } from 'react-native';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 
@@ -45,20 +46,29 @@ beforeEach(() => {
   mockActive.mockResolvedValue(null);
 });
 
+it('keeps Messages registered on Home and reachable from More/Membership', () => {
+  const read = (file: string) => require('fs').readFileSync(require.resolve(file), 'utf8');
+  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Messages"');
+  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Membership"');
+  expect(read('../MembershipScreen.tsx')).toContain("parent.navigate('Home', { screen: 'Messages' })");
+});
+
 it.each([
   ['assigned', 'One meal logged. Foundations is ready.', 'Start Foundations', 'WorkoutTab'],
   ['active', 'One meal logged. A workout is in progress.', 'Resume workout', 'WorkoutTab'],
+  ['active-only', 'One meal logged. A workout is in progress.', 'Log a meal', 'Log'],
   ['done', 'One meal logged. Workout complete.', 'Open Train', 'WorkoutTab'],
   ['empty', 'One meal logged.', 'Log a meal', 'Log'],
   ['coachless', 'One meal logged.', 'Log a meal', 'Log'],
 ] as const)('%s: truthful line and the same CTA destination', async (state, line, label, destination) => {
-  if (state === 'assigned') mockAssignments.mockResolvedValue([
+  if (state === 'assigned' || state === 'done') mockAssignments.mockResolvedValue([
     { completed_at: null, workout_plan: { name: 'Foundations' } },
   ]);
   if (state === 'active') {
     mockHistory.mockResolvedValue({ data: [{ date: '2026-09-01' }] });
     mockActive.mockResolvedValue({ session: {} });
   }
+  if (state === 'active-only') mockActive.mockResolvedValue({ session: {} });
   if (state === 'done') mockHistory.mockResolvedValue({ data: [{ date: getTodayString() }] });
   if (state === 'coachless') mockUser.coach_id = '';
   await render(<HomeScreen />);
@@ -77,14 +87,18 @@ it.each([false, true])('profile copy reflects coach plan presence: %s', async (h
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
 });
 
-it('keeps coachless Messages, notifications, macro logging, and refresh reachable; water uses oz', async () => {
+it.each([0, 24])('keeps coachless Messages, notifications, macro logging and refresh; water is %s oz', async (oz) => {
   mockUser.coach_id = '';
+  mockDay.waterOz = oz;
   await render(<HomeScreen />);
   await screen.findByLabelText('Log a meal');
-  expect(screen.getByText('24 oz')).toBeTruthy();
+  expect(screen.getByText(`${oz} oz`)).toBeTruthy();
   for (const [label, destination] of [['Message your coach', 'Messages'], ['Notifications', 'NotificationCenter'],
     ['Log a meal to see your protein', 'Log'], ['Log a meal to see your carbs', 'Log'], ['Log a meal to see your fat', 'Log']]) {
     await fireEvent.press(screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
   }
+  await fireEvent(screen.UNSAFE_getByType(RefreshControl), 'refresh');
+  expect(mockDay.loadDayData).toHaveBeenCalledTimes(2);
+  expect(mockDay.loadProfile).toHaveBeenCalledTimes(2);
 });

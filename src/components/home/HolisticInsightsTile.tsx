@@ -7,10 +7,8 @@
  *                             with a small "View all" affordance the
  *                             caller wires to navigation. Up to 3
  *                             insights total, but the tile shows 1.
- *   - 'insufficient_data'   — honest empty-state copy from envelope.notes
- *                             (or a built-in fallback).
- *   - 'finance_unavailable' — same as above but using the finance-
- *                             specific copy from the backend.
+ *   - 'insufficient_data'   — hidden.
+ *   - 'finance_unavailable' — hidden.
  *
  * The tile is read-only. No mutations, no navigation prop required;
  * the caller passes an optional `onPress` to wire navigation to the
