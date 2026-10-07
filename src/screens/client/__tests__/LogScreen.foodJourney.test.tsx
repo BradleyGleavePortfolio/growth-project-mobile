@@ -201,7 +201,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(useClientStore.getState().dailyTotals.calories).toBe(468);
     expect(logApi.logFood).toHaveBeenCalledTimes(2);
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
-    expect(screen.getByTestId('food-search-sheet', { includeHiddenElements: true }).props.visible).toBe(false);
+    expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
     await fireEvent.press(screen.getAllByText('Add Food')[0]);
     expect(screen.queryByText('Added Rolled oats.')).toBeNull();
   });
@@ -237,7 +237,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getByText('Enter Manually'));
     await fireEvent.press(screen.getByText('Back to Search'));
     await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
-    expect(screen.getByTestId('food-search-sheet', { includeHiddenElements: true }).props.visible).toBe(false);
+    expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
   });
 
   it('retains day selection, water, refresh and all four meal entry points', async () => {
