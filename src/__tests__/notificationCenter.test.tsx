@@ -309,10 +309,9 @@ describe('NotificationCenterScreen', () => {
     expect(mockGoBack).toHaveBeenCalled();
     await fireEvent.press(ui.getByText('Notification preferences'));
     expect(mockNavigate).toHaveBeenCalledWith('NotificationPreferences');
-    const { FlatList } = jest.requireActual('react-native');
-    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    await fireEvent(ui.getByTestId('notification-list'), 'endReached');
     expect(notificationsApi.fetchNotifications).toHaveBeenCalledWith('page2', 25);
-    await act(async () => ui.UNSAFE_getByType(FlatList).props.refreshControl.props.onRefresh());
+    await fireEvent(ui.getByTestId('notification-refresh'), 'refresh');
     expect(notificationsApi.fetchNotifications).toHaveBeenLastCalledWith(null, 25);
   });
 
@@ -334,13 +333,12 @@ describe('NotificationCenterScreen', () => {
     const ui = await render(<NotificationCenterScreen />);
     await waitFor(() => expect(ui.getByText('Update')).toBeTruthy());
     expect(ui.queryByRole('button', { name: 'Update. Details' })).toBeNull();
-    const { FlatList } = jest.requireActual('react-native');
-    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    await fireEvent(ui.getByTestId('notification-list'), 'endReached');
     expect(ui.getByText('Could not load more notifications. Pull down to try again.')).toBeTruthy();
     expect(ui.getByText('Update')).toBeTruthy();
     expect(ui.queryByLabelText('Loading more notifications')).toBeNull();
     (notificationsApi.fetchNotifications as jest.Mock).mockResolvedValueOnce({ items: [], nextCursor: null });
-    await act(async () => ui.UNSAFE_getByType(FlatList).props.onEndReached());
+    await fireEvent(ui.getByTestId('notification-list'), 'endReached');
     expect(ui.queryByText('Could not load more notifications. Pull down to try again.')).toBeNull();
   });
 

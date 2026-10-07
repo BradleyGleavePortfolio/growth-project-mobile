@@ -133,6 +133,7 @@ export default function NotificationsScreen() {
       )}
 
       <FlatList
+        testID="nudge-list"
         data={sorted}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
@@ -140,6 +141,7 @@ export default function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            testID="nudge-refresh"
             refreshing={isRefetching}
             onRefresh={onRefresh}
             tintColor={colors.primary}

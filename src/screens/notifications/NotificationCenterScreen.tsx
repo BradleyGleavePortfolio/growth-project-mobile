@@ -356,6 +356,7 @@ export default function NotificationCenterScreen() {
       {/* List */}
       {!state.isLoadingFirst && (
         <FlatList
+          testID="notification-list"
           data={state.notifications}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
@@ -367,6 +368,7 @@ export default function NotificationCenterScreen() {
           ListEmptyComponent={ListEmpty}
           refreshControl={
             <RefreshControl
+              testID="notification-refresh"
               refreshing={state.isRefreshing}
               onRefresh={onRefresh}
               tintColor={colors.primary}
