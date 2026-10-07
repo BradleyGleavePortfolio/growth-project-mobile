@@ -6,8 +6,8 @@
  * action sheet (Reply / Copy / Report).
  *
  * Visual rules:
- *   - "me" bubbles render in colors.primary with white text
- *   - "them" bubbles render in colors.surface with primary text
+ *   - own messages align right with a forest hairline
+ *   - incoming messages align left on the page, without a bubble fill
  *   - replies render a quoted parent stub above the bubble body
  *   - the long-press hold triggers a selection haptic
  */
@@ -15,7 +15,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
+import { typography } from '../../theme/tokens';
 
 export interface BubbleMessage {
   id: string;
@@ -38,6 +39,7 @@ export interface MessageBubbleProps {
   message: BubbleMessage;
   isMe: boolean;
   receipt?: React.ReactNode;
+  showTimestamp?: boolean;
   onLongPress: (m: BubbleMessage) => void;
   onPressParent?: (parentId: string) => void;
 }
@@ -46,10 +48,11 @@ export function MessageBubble({
   message,
   isMe,
   receipt,
+  showTimestamp = true,
   onLongPress,
   onPressParent,
 }: MessageBubbleProps): React.ReactElement {
-  const { colors } = useTheme();
+  const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const handleLongPress = (): void => {
@@ -80,7 +83,7 @@ export function MessageBubble({
             ? 'Message deleted.'
             : `Message: ${message.body}.${message.edited ? ' Edited.' : ''}${message.pinned ? ' Pinned.' : ''} Long press for actions.`
         }
-        accessibilityHint="Long press to reply, copy, or report this message."
+        accessibilityHint="Long press for message actions."
         style={({ pressed }) => [
           styles.bubble,
           isMe ? styles.bubbleMe : styles.bubbleThem,
@@ -119,14 +122,14 @@ export function MessageBubble({
         ) : (
           <Text style={[styles.body, isMe && styles.bodyMe]}>{message.body}</Text>
         )}
-        <Text style={[styles.time, isMe && styles.timeMe]}>
+        {(showTimestamp || message.edited || message.pinned || message.pending) && <Text style={[styles.time, isMe && styles.timeMe]}>
           {message.deleted ? '' : `${message.pinned ? 'Pinned  ' : ''}${message.edited ? 'Edited  ' : ''}`}
-          {formatTime(message.created_at)}
+          {showTimestamp ? formatTime(message.created_at) : ''}
           {message.pending ? '  ' : ''}
           {message.pending ? (
             <Ionicons name="time-outline" size={10} color={colors.textMuted} />
           ) : null}
-        </Text>
+        </Text>}
       </Pressable>
 
       {receipt ? <View style={styles.receiptWrap}>{receipt}</View> : null}
@@ -134,34 +137,32 @@ export function MessageBubble({
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: ThreadColors) =>
   StyleSheet.create({
-    row: { marginBottom: 6 },
+    row: { marginBottom: 12 },
     rowRight: { alignItems: 'flex-end' },
     rowLeft: { alignItems: 'flex-start' },
-    rowPending: { opacity: 0.55 },
+    rowPending: { opacity: 1 },
 
     bubble: {
       maxWidth: '78%',
-      borderRadius: 18,
+      borderRadius: 4,
+      minHeight: 44,
       paddingHorizontal: 14,
       paddingVertical: 10,
     },
-    bubbleMe: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+    bubbleMe: { borderRightWidth: StyleSheet.hairlineWidth, borderRightColor: colors.primary },
     bubbleThem: {
-      backgroundColor: colors.surface,
-      borderBottomLeftRadius: 4,
-      borderWidth: 1,
-      borderColor: colors.border,
+      backgroundColor: colors.background,
     },
     bubblePressed: { opacity: 0.85 },
 
-    body: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
-    bodyMe: { color: colors.textOnPrimary },
+    body: { ...typography.body, color: colors.textPrimary },
+    bodyMe: { color: colors.textPrimary },
     bodyDeleted: { fontStyle: 'italic', color: colors.textMuted },
 
-    time: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
-    timeMe: { color: colors.textOnPrimary + 'B3' },
+    time: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end', fontVariant: ['tabular-nums'] },
+    timeMe: { color: colors.textMuted },
 
     receiptWrap: { marginTop: 2, alignSelf: 'flex-end' },
 
@@ -171,19 +172,20 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       paddingVertical: 6,
       paddingHorizontal: 8,
-      borderRadius: 8,
+      borderRadius: 4,
+      minHeight: 44,
       marginBottom: 6,
     },
-    replyStubMe: { backgroundColor: colors.textOnPrimary + '22' },
-    replyStubThem: { backgroundColor: colors.border + '88' },
+    replyStubMe: { backgroundColor: colors.background },
+    replyStubThem: { backgroundColor: colors.background },
     replyStubBar: {
-      width: 3,
+      width: StyleSheet.hairlineWidth,
       alignSelf: 'stretch',
       backgroundColor: colors.primary,
       borderRadius: 2,
     },
-    replyStubText: { flex: 1, fontSize: 12, lineHeight: 16 },
-    replyStubTextMe: { color: colors.textOnPrimary + 'DD' },
+    replyStubText: { ...typography.bodySmall, flex: 1, fontSize: 13 },
+    replyStubTextMe: { color: colors.textMuted },
     replyStubTextThem: { color: colors.textSecondary },
   });
 

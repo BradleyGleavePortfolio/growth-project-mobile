@@ -16,9 +16,14 @@ import * as Haptics from 'expo-haptics';
 import { prepGuideApi, listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
-import EmptyState from '../../components/EmptyState';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
 import { getLocalWeekStart } from '../../utils/date';
+
+function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
+  const { semanticColors: sc } = useTheme();
+  return <View style={{ padding: 24, gap: 12 }}><Text style={[typography.h2, { color: sc.textPrimary }]}>{title}</Text><Text style={[typography.bodySmall, { color: sc.textMuted }]}>{subtitle}</Text></View>;
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PrepRecipe {
@@ -60,7 +65,12 @@ function formatWeekLabel(weekStart: string): string {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function PrepGuideScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: sc } = useTheme();
+  const colors = useMemo(() => ({
+    background: sc.bgPrimary, surface: sc.bgPrimary, primary: sc.accent,
+    textPrimary: sc.textPrimary, textMuted: sc.textMuted, textSecondary: sc.textMuted,
+    textOnPrimary: sc.textOnAccent, border: sc.border, primaryPale: sc.bgPrimary,
+  }), [sc]);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
@@ -122,18 +132,19 @@ export default function PrepGuideScreen() {
   }, [data, addToGroceryMutation]);
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="grocery-prep-screen">
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Prep Guide</Text>
+        <Text style={styles.title}>Prep guide</Text>
       </View>
 
       {/* Week selector */}
       <View style={styles.weekSelector}>
         <TouchableOpacity
+          accessibilityRole="button" accessibilityLabel="Previous week"
           style={styles.weekArrow}
           onPress={() => setWeekOffset((o) => o - 1)}
           activeOpacity={0.7}
@@ -147,6 +158,7 @@ export default function PrepGuideScreen() {
           ) : null}
         </View>
         <TouchableOpacity
+          accessibilityRole="button" accessibilityLabel="Next week"
           style={styles.weekArrow}
           onPress={() => setWeekOffset((o) => o + 1)}
           activeOpacity={0.7}
@@ -156,11 +168,13 @@ export default function PrepGuideScreen() {
       </View>
 
       <ScrollView
+        testID="list-scroll"
         style={styles.content}
         contentContainerStyle={styles.contentInner}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
+            testID="list-refresh"
             refreshing={isRefetching}
             onRefresh={refetch}
             tintColor={colors.primary}
@@ -170,7 +184,7 @@ export default function PrepGuideScreen() {
         {isLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Building your prep guide…</Text>
+            <Text style={styles.loadingText}>Loading your prep guide…</Text>
           </View>
         ) : isError ? (
           <EmptyState
@@ -182,10 +196,11 @@ export default function PrepGuideScreen() {
           <EmptyState
             icon="clipboard-outline"
             title="No recipes to prep"
-            subtitle="Ask your coach to assign a meal plan with recipes to see your weekly prep guide here."
+            subtitle="Recipes from a meal plan appear here for the selected week."
           />
         ) : (
           <>
+            <Text style={styles.summary}>{data.recipes.length} recipe{data.recipes.length === 1 ? '' : 's'} for the week.</Text>
             {/* Prep day suggestions */}
             {data.prep_day_suggestions.length > 0 ? (
               <FadeInView>
@@ -200,7 +215,7 @@ export default function PrepGuideScreen() {
                     ))}
                   </View>
                   <Text style={styles.prepDayHint}>
-                    Prep on these days to keep fresh food ready for the whole week.
+                    Choose the prep days that fit your week.
                   </Text>
                 </View>
               </FadeInView>
@@ -212,10 +227,10 @@ export default function PrepGuideScreen() {
                 <Text style={styles.sectionTitle}>
                   Recipes to Prep ({data.recipes.length})
                 </Text>
-                {data.recipes.map((recipe) => (
+                {data.recipes.map((recipe, index) => (
                   <View key={recipe.id} style={styles.recipeRow}>
                     <View style={styles.recipeIcon}>
-                      <Ionicons name="restaurant-outline" size={20} color={colors.primary} />
+                      <Text style={styles.stepNumber}>{index + 1}</Text>
                     </View>
                     <View style={styles.recipeInfo}>
                       <Text style={styles.recipeName}>{recipe.title}</Text>
@@ -242,13 +257,14 @@ export default function PrepGuideScreen() {
                     Aggregated Ingredients ({data.aggregated_ingredients.length})
                   </Text>
                   <TouchableOpacity
+                    accessibilityRole="button" accessibilityLabel="Add all ingredients"
                     style={[
                       styles.addToGroceryBtn,
-                      addToGroceryMutation.isPending && styles.addToGroceryBtnDisabled,
+                      (addToGroceryMutation.isPending || data.aggregated_ingredients.length === 0) && styles.addToGroceryBtnDisabled,
                     ]}
                     onPress={handleAddToGrocery}
                     activeOpacity={0.8}
-                    disabled={addToGroceryMutation.isPending}
+                    disabled={addToGroceryMutation.isPending || data.aggregated_ingredients.length === 0}
                   >
                     {addToGroceryMutation.isPending ? (
                       <ActivityIndicator size="small" color={colors.textOnPrimary} />
@@ -283,7 +299,7 @@ export default function PrepGuideScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   header: {
@@ -294,8 +310,9 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 12,
     gap: 12,
   },
-  backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '500', color: colors.textPrimary },
+  backBtn: { width: 44, height: 44, justifyContent: 'center' },
+  title: { ...typography.h1, color: colors.textPrimary },
+  summary: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
 
   weekSelector: {
     flexDirection: 'row',
@@ -307,13 +324,14 @@ const makeStyles = (colors: ThemeColors) =>
     marginHorizontal: 16,
     marginBottom: 12,
     borderRadius: 2, // radius.md
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  weekArrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
+  weekArrow: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   weekLabel: { alignItems: 'center', gap: 2 },
-  weekLabelText: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  weekLabelText: { ...typography.bodyMd, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   weekCurrentBadge: {
+    ...typography.eyebrow,
     fontSize: 11,
     fontWeight: '600',
     color: colors.primary,
@@ -327,22 +345,23 @@ const makeStyles = (colors: ThemeColors) =>
   contentInner: { padding: 16, paddingBottom: 60, gap: 14 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { fontSize: 15, color: colors.textMuted },
+  loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   section: {
     backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    padding: 16,
+    paddingVertical: 16,
     gap: 10,
   },
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    gap: 12,
+    flexDirection: 'column',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  sectionTitle: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
+  sectionTitle: { ...typography.eyebrow, color: colors.textMuted, fontVariant: ['tabular-nums'] },
 
   prepDayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   prepDayBadge: {
@@ -354,10 +373,11 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 6,
     borderRadius: 4, // radius.lg
   },
-  prepDayText: { fontSize: 14, fontWeight: '500', color: colors.primary },
-  prepDayHint: { fontSize: 12, color: colors.textMuted, lineHeight: 16 },
+  prepDayText: { ...typography.eyebrow, color: colors.textMuted },
+  prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
 
-  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
+  stepNumber: { ...typography.h3, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   recipeIcon: {
     width: 38,
     height: 38,
@@ -367,24 +387,25 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
   },
   recipeInfo: { flex: 1 },
-  recipeName: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
-  recipeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
-  recipeMetaText: { fontSize: 12, color: colors.textMuted },
-  recipeMetaDot: { fontSize: 12, color: colors.textMuted },
+  recipeName: { ...typography.bodyMd, color: colors.textPrimary },
+  recipeMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: 2 },
+  recipeMetaText: { ...typography.bodySmall, color: colors.textMuted, fontVariant: ['tabular-nums'] },
+  recipeMetaDot: { ...typography.bodySmall, color: colors.textMuted },
 
   addToGroceryBtn: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
     backgroundColor: colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 0, // radius.sm
+    borderRadius: 4,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { fontSize: 12, fontWeight: '500', color: colors.textOnPrimary },
+  addToGroceryBtnText: { ...typography.bodySmall, color: colors.textOnPrimary },
 
-  ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border },
   ingredientBullet: {
     width: 6,
     height: 6,
@@ -393,7 +414,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 7,
     flexShrink: 0,
   },
-  ingredientText: { flex: 1, fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
+  ingredientText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
   ingredientName: { color: colors.textPrimary, fontWeight: '600' },
 
   });
