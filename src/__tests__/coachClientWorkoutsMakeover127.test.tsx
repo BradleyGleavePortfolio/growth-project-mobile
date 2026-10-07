@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert, Modal, StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { WorkoutsTab } from '../screens/coach/client-detail/WorkoutsTab';
@@ -14,6 +14,8 @@ jest.mock('react-native', () => {
   return Object.defineProperties({}, { ...Object.getOwnPropertyDescriptors(actual),
     RefreshControl: { enumerable: true, value: ({ onRefresh, children }: { onRefresh: () => void; children?: React.ReactNode }) =>
       jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Refresh client', onRefresh }, children) },
+    Modal: { enumerable: true, value: ({ onRequestClose, children }: { onRequestClose: () => void; children?: React.ReactNode }) =>
+      jest.requireActual('react').createElement(actual.View, { accessible: true, accessibilityLabel: 'Native picker back', onRequestClose }, children) },
   });
 });
 jest.mock('../theme/ThemeProvider', () => ({ useTheme: () => ({
@@ -136,7 +138,7 @@ it('preserves all nine tab destinations and both AI actions, including client-co
   await fireEvent.press(s.getByLabelText('Close'));
   expect(s.queryByTestId('adjust-for-client-sheet')).toBeNull();
   await fireEvent.press(s.getByLabelText('Adjust a saved workout for Sam'));
-  await fireEvent(s.UNSAFE_getByType(Modal), 'requestClose');
+  await fireEvent(s.getByLabelText('Native picker back'), 'requestClose');
   expect(s.queryByTestId('adjust-for-client-sheet')).toBeNull();
   await fireEvent.press(s.getByLabelText('Adjust a saved workout for Sam'));
   await fireEvent.press(s.getByLabelText('Adjust Push day for Sam'));
