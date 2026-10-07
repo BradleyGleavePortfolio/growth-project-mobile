@@ -1,13 +1,12 @@
 /**
  * ProfileScreen — Wave 3: luxury redesign.
  *
- * - Streak moved here from Home: "Day 7 of 30." as a plain text line.
  * - Identity badge kept (founding-member context lives here, not home).
  * - MilestoneCabinet now renders as MilestoneList (date · note rows).
  * - Closing CTA replaced by date list per brief.
  * - Radius literals cleaned to tokens.
  */
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -17,10 +16,12 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
+import api from '../../services/api';
+import { logger } from '../../utils/logger';
 
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useFoundingNumber } from '../../hooks/useIdentity';
@@ -55,6 +56,31 @@ export default function ProfileScreen() {
   const { colors } = useTheme();
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
+  const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean; ownerAccess: boolean } | null>(null);
+  useFocusEffect(useCallback(() => {
+    setSharing(null);
+    const coachId = currentUser?.coach_id;
+    if (!coachId) return;
+    let alive = true;
+    Promise.all([
+      api.get<{ id: string; name: string }>('/v1/clients/me/coach'),
+      api.get<{ coach_id: string; owner_access?: unknown; consents: Array<{ scope: string; granted: boolean }> }>(`/consent/me?coach_id=${encodeURIComponent(coachId)}`),
+    ]).then(([coach, consent]) => {
+      if (!alive || coach.data.id !== coachId || consent.data.coach_id !== coachId) return;
+      const ownerAccess = typeof consent.data.owner_access === 'boolean' ? consent.data.owner_access : null;
+      const workouts = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.workouts' && c.granted === true);
+      const meals = ownerAccess === true || consent.data.consents.some((c) => c.scope === 'fitness.food_macros' && c.granted === true);
+      setSharing(ownerAccess === null && (!workouts || !meals) ? null : {
+        coachId, name: coach.data.name || 'your coach', workouts, meals, ownerAccess: ownerAccess === true,
+      });
+    }).catch(() => { if (alive) setSharing(null); logger.warn('ProfileScreen', 'Sharing status did not load'); });
+    return () => { alive = false; };
+  }, [currentUser?.id, currentUser?.coach_id]));
+  const privacyCopy = !currentUser?.coach_id || sharing?.coachId !== currentUser.coach_id ? null
+    : sharing.ownerAccess ? `Workouts and meals are visible to you and ${sharing.name}.`
+    : sharing.workouts === sharing.meals
+      ? `Workouts and meals are ${sharing.workouts ? 'shared' : 'not shared'} with ${sharing.name}.`
+      : `Workouts are ${sharing.workouts ? 'shared' : 'not shared'} with ${sharing.name}. Meals are ${sharing.meals ? 'shared' : 'not shared'} with ${sharing.name}.`;
 
   const foundingQ = useFoundingNumber();
   const foundingData = foundingQ.data ?? null;
@@ -127,13 +153,8 @@ export default function ProfileScreen() {
         </Text>
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
 
-        {/* Wave 3: Streak line — "Day 7 of 30." No flame. */}
-        <Text style={styles.streakLine}>Day 7 of 30.</Text>
-
-        {/* Privacy reassurance line */}
-        <Text style={styles.privacyLine}>
-          Workouts and meals stay private to you and your assigned coach.
-        </Text>
+        {/* Current client-coach sharing state */}
+        {privacyCopy ? <Text style={styles.privacyLine}>{privacyCopy}</Text> : null}
       </View>
 
       {/* Quick Actions — 2×2 grid */}
