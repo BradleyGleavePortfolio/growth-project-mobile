@@ -33,6 +33,9 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 
 `calendar/CalendarHomeScreen.tsx` leads with the earliest live session: client-local date and time, coach, duration and status. Join or Call opens a real link during the existing join window; an empty schedule with an available appointment offers one forest booking action. Welcome calls, all appointment types, later/past sessions, paging, refresh, messages and support remain reachable. `CalendarSessionScreen.tsx` retains recap, device-calendar export, reschedule, cancel and rebooking. Missing links say “Call link not added yet.” Cancel still notifies the coach through the backend booking emitter. Shared `calendarUi.tsx` uses theme colours, transparent hairline rows, Inter supporting text, tabular serif times and 48-point haptic controls without animation.
 
+### Health activity overview
+`wearables/HealthFitnessScreen.tsx` uses `cards/ActivityBars.tsx` instead of activity rings in loaded, loading and empty states. Each QuietBar shows the latest actual daily value and its sample date; completed missing samples show an absent value, not zero, while initial queries say “Loading samples”. `wearables/starterGoals.ts` is the sole fallback: 5,000 steps, 20 exercise minutes and 250 active kcal, visibly labelled “Starter goal”. Explicit typed coach/client targets override each fallback. The current API exposes no activity-target storage or goal editor, so no edit button is shown. Heart, Workouts, Body and Steps detail routes, refresh/retry, AI slot and Connections CTA remain; coach embeds stay read-only.
+
 ### Logging and planning
 
 | File | What it does |
