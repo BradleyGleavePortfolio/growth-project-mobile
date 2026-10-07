@@ -30,19 +30,20 @@ import {
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, typography, spacing, radius } from '../../theme/tokens';
+import { typography, spacing, type SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 import { timelineApi, fetchTimeline, TimelineEvent, TimelineLane } from '../../services/timelineApi';
 
 // ─── Lane configuration ───────────────────────────────────────────────────────
 
 const LANE_CONFIG: Record<
   TimelineLane,
-  { label: string; dotColor: string; accessibilityLabel: string }
+  { label: string; accessibilityLabel: string }
 > = {
-  body:     { label: 'Body',    dotColor: colors.forest,    accessibilityLabel: 'Body lane' },
-  win:      { label: 'Wins',   dotColor: colors.mutedGold, accessibilityLabel: 'Wins lane' },
-  coach:    { label: 'Coach',   dotColor: colors.ink,       accessibilityLabel: 'Coach lane' },
-  friction: { label: 'Friction', dotColor: colors.stone,   accessibilityLabel: 'Friction lane' },
+  body:     { label: 'Body', accessibilityLabel: 'Body lane' },
+  win:      { label: 'Wins', accessibilityLabel: 'Wins lane' },
+  coach:    { label: 'Coach', accessibilityLabel: 'Coach lane' },
+  friction: { label: 'Friction', accessibilityLabel: 'Friction lane' },
 };
 
 const ALL_LANES: TimelineLane[] = ['body', 'win', 'coach', 'friction'];
@@ -142,10 +143,12 @@ function useTimeline(activeLanes: TimelineLane[]) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function LaneDot({ lane }: { lane: TimelineLane }) {
-  const { dotColor, accessibilityLabel } = LANE_CONFIG[lane];
+  const { semanticColors } = useTheme();
+  const styles = makeStyles(semanticColors);
+  const { accessibilityLabel } = LANE_CONFIG[lane];
   return (
     <View
-      style={[styles.laneDot, { backgroundColor: dotColor }]}
+      style={[styles.laneDot, { backgroundColor: semanticColors.textMuted }]}
       accessible
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="image"
@@ -164,6 +167,7 @@ function FilterChip({
   onPress: () => void;
   accessibilityLabel: string;
 }) {
+  const styles = makeStyles(useTheme().semanticColors);
   return (
     <Pressable
       onPress={onPress}
@@ -189,6 +193,7 @@ function formatDate(iso: string): string {
 }
 
 function EventCard({ event }: { event: TimelineEvent }) {
+  const styles = makeStyles(useTheme().semanticColors);
   const cfg = LANE_CONFIG[event.lane];
 
   return (
@@ -216,17 +221,19 @@ function EventCard({ event }: { event: TimelineEvent }) {
 }
 
 function EmptyState() {
+  const styles = makeStyles(useTheme().semanticColors);
   return (
     <View style={styles.emptyState} accessible accessibilityLiveRegion="polite">
       <Text style={styles.emptyStateTitle}>No entries yet</Text>
       <Text style={styles.emptyStateBody}>
-        Your transformation timeline starts the day you log your first weight.
+        No entries match these filters.
       </Text>
     </View>
   );
 }
 
 function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const styles = makeStyles(useTheme().semanticColors);
   return (
     <View style={styles.emptyState}>
       <Text style={styles.emptyStateTitle}>Could not load timeline</Text>
@@ -246,6 +253,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function TimelineScreen() {
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   const insets = useSafeAreaInsets();
   const [activeLanes, setActiveLanes] = useState<TimelineLane[]>(ALL_LANES);
   const { state, refresh, loadMore } = useTimeline(activeLanes);
@@ -279,7 +288,7 @@ export default function TimelineScreen() {
     if (!state.isFetchingMore) return null;
     return (
       <View style={styles.footerLoader}>
-        <ActivityIndicator size="small" color={colors.ink} />
+        <ActivityIndicator size="small" color={sc.textMuted} />
       </View>
     );
   };
@@ -343,7 +352,7 @@ export default function TimelineScreen() {
             <RefreshControl
               refreshing={state.isRefreshing}
               onRefresh={refresh}
-              tintColor={colors.ink}
+              tintColor={sc.textMuted}
               accessibilityLabel="Pull to refresh timeline"
             />
           }
@@ -360,7 +369,9 @@ export default function TimelineScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: SemanticTokens) => {
+  const colors = { bone: sc.bgPrimary, ink: sc.textPrimary, charcoal: sc.textMuted, stone: sc.border };
+  return StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: colors.bone,
@@ -376,6 +387,7 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: spacing.xl,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
@@ -383,22 +395,22 @@ const styles = StyleSheet.create({
   filterChip: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs + 2,
-    borderRadius: radius.pill,
-    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.stone,
     backgroundColor: 'transparent',
   },
   filterChipActive: {
-    backgroundColor: colors.ink,
+    borderBottomWidth: 2,
     borderColor: colors.ink,
   },
   filterChipText: {
-    ...typography.caption,
+    ...typography.bodySmall,
     color: colors.charcoal,
-    textTransform: 'uppercase' as const,
   },
   filterChipTextActive: {
-    color: colors.bone,
+    color: colors.ink,
   },
   listContent: {
     paddingHorizontal: spacing.xl,
@@ -433,8 +445,10 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.stone,
   },
   cardDate: {
-    ...typography.eyebrow,
-    color: colors.stone,
+    ...typography.bodySmall,
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    color: colors.charcoal,
     marginBottom: spacing.xs,
   },
   cardTitle: {
@@ -468,13 +482,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     paddingHorizontal: spacing['2xl'],
     paddingVertical: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.ink,
+    minHeight: 44,
+    borderRadius: 4,
+    backgroundColor: sc.accent,
   },
   retryButtonText: {
-    ...typography.caption,
-    color: colors.ink,
-    textTransform: 'uppercase' as const,
+    ...typography.bodySmall,
+    color: sc.textOnAccent,
   },
   footerLoader: {
     paddingVertical: spacing.xl,
@@ -486,3 +500,4 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 });
+};

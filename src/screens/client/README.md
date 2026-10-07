@@ -53,10 +53,10 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 | `PreferencesScreen.tsx` | Personalisation toggles persisted via `preferencesApi`. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
 | `WidgetsScreen.tsx` | iOS / Android widget setup walkthrough. |
-| `EducationScreen.tsx` | Lesson library (`lessonsApi`). |
+| `EducationScreen.tsx` | Lesson library (`lessonsApi`) with monochrome hairline rows, recorded dates and real completion counts; filters, refresh, lesson links, detail back and server-confirmed completion remain reachable. No invented Featured badges or coach assumption in the empty state. Follows `docs/QUIET_LUXURY_DOCTRINE.md`. `TimelineScreen.tsx` keeps all four lane filters, refresh and cursor paging with recorded event dates. `ClientPathCopilotScreen.tsx` keeps its existing feature gate and refresh; unavailable data makes no promises of future suggestions or coach review. Both use semantic theme colors. |
 | `CommunityScreen.tsx` | Founders' circle leaderboard / wins (`communityApi`). |
 | `ProgressScreen.tsx` | Weight chart + macro adherence (`weightApi`, `logApi.getWeekly`). |
-| `CoachGuidelinesScreen.tsx` | Read-only render of guidelines the coach posted. |
+| `CoachGuidelinesScreen.tsx` | Read-only guidelines with the supplied title and optional Added date (never an invented workout plan or update date), Inter reading copy, hairlines, skeleton loading, back and retry. Semantic theme colors and neutral empty/error states follow `docs/QUIET_LUXURY_DOCTRINE.md`. |
 
 The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in this directory because it is shared with the coach navigator).
 

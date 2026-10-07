@@ -25,25 +25,18 @@ import { lessonFromApi, type EducationLesson } from './educationLesson';
 type ScreenMode = 'list' | 'detail';
 
 const CATEGORY_ICONS: Record<string, string> = {
-  'Nutrition Basics': 'nutrition',
-  'Muscle Building': 'barbell',
-  Fitness: 'fitness',
-  Lifestyle: 'heart',
+  'Nutrition Basics': 'nutrition-outline',
+  'Muscle Building': 'barbell-outline',
+  Fitness: 'fitness-outline',
+  Lifestyle: 'heart-outline',
 };
-
-function makeCATEGORY_COLORS(colors: ThemeColors): Record<string, string> {
-  return {
-  'Nutrition Basics': colors.primary,
-  'Muscle Building': colors.info,
-  Fitness: colors.warning,
-  Lifestyle: colors.streak,
-};
-}
 
 export default function EducationScreen() {
-  const { colors } = useTheme();
+  const { colors: base, semanticColors: sc } = useTheme();
+  const colors = useMemo(() => ({ ...base, background: sc.bgPrimary, surface: sc.bgPrimary,
+    textPrimary: sc.textPrimary, textSecondary: sc.textMuted, textMuted: sc.textMuted,
+    primary: sc.accent, primaryPale: sc.border, border: sc.border, textOnPrimary: sc.textOnAccent }), [base, sc]);
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const CATEGORY_COLORS = useMemo(() => makeCATEGORY_COLORS(colors), [colors]);
   const currentUser = useCurrentUser();
   const [mode, setMode] = useState<ScreenMode>('list');
   const [lessons, setLessons] = useState<EducationLesson[]>([]);
@@ -135,7 +128,7 @@ export default function EducationScreen() {
       if (!url || !/^https?:\/\//i.test(url)) throw new Error('Unavailable lesson URL');
       await Linking.openURL(url);
     } catch {
-      setDetailError(`The lesson ${kind} could not open. Ask your coach for a working link.`);
+      setDetailError(`The lesson ${kind} could not open. Try the link again.`);
     }
   };
 
@@ -158,18 +151,18 @@ export default function EducationScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.detailHeader}>
-          <TouchableOpacity onPress={goBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity onPress={goBack} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Back to lessons">
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.detailHeaderCenter}>
             <Text style={styles.detailCategory}>{selectedLesson.category}</Text>
             {selectedLesson.durationMin > 0 ? (
-              <Text style={styles.detailDuration}>{selectedLesson.durationMin} min read</Text>
+              <Text style={styles.detailDuration}>{selectedLesson.durationMin} min</Text>
             ) : null}
           </View>
           {selectedLesson.completed ? (
             <View style={styles.completedBadge}>
-              <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+              <Ionicons name="checkmark-circle-outline" size={24} color={sc.accentText} />
             </View>
           ) : (
             <View style={{ width: 24 }} />
@@ -186,19 +179,19 @@ export default function EducationScreen() {
 
           <View style={styles.detailDivider} />
           {selectedLesson.videoUrl ? (
-            <TouchableOpacity style={styles.completeBtn} accessibilityRole="link"
+            <TouchableOpacity style={styles.lessonLink} accessibilityRole="link"
               onPress={() => void openLessonLink(selectedLesson.videoUrl, 'video')}>
-              <Text style={styles.completeBtnText}>Watch lesson</Text>
+              <Text style={styles.lessonLinkText}>Watch lesson</Text>
             </TouchableOpacity>
           ) : null}
           {selectedLesson.articleUrl ? (
-            <TouchableOpacity style={styles.completeBtn} accessibilityRole="link"
+            <TouchableOpacity style={styles.lessonLink} accessibilityRole="link"
               onPress={() => void openLessonLink(selectedLesson.articleUrl, 'article')}>
-              <Text style={styles.completeBtnText}>Read article</Text>
+              <Text style={styles.lessonLinkText}>Read article</Text>
             </TouchableOpacity>
           ) : null}
           {!selectedLesson.content && !selectedLesson.videoUrl && !selectedLesson.articleUrl ? (
-            <Text style={styles.detailParagraph}>This lesson has no content yet. Ask your coach to add it.</Text>
+            <Text style={styles.detailParagraph}>No lesson content or links are available.</Text>
           ) : null}
           {detailError ? <Text style={styles.detailParagraph}>{detailError}</Text> : null}
 
@@ -250,14 +243,14 @@ export default function EducationScreen() {
           {!selectedLesson.completed && (
             <TouchableOpacity style={styles.completeBtn} onPress={handleComplete} disabled={completing}
               accessibilityRole="button" accessibilityState={{ disabled: completing }}>
-              <Ionicons name="checkmark-circle" size={20} color={colors.textOnPrimary} />
-              <Text style={styles.completeBtnText}>{completing ? 'Saving completion…' : 'Mark as Complete'}</Text>
+              <Ionicons name="checkmark-circle-outline" size={20} color={colors.textOnPrimary} />
+              <Text style={styles.completeBtnText}>{completing ? 'Saving completion…' : 'Mark as complete'}</Text>
             </TouchableOpacity>
           )}
 
           {selectedLesson.completed && (
             <View style={styles.completedCard}>
-              <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+              <Ionicons name="checkmark-circle-outline" size={24} color={sc.accentText} />
               <Text style={styles.completedCardText}>Complete.</Text>
             </View>
           )}
@@ -280,16 +273,16 @@ export default function EducationScreen() {
       {loadError ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>{loadError}</Text>
-          <TouchableOpacity onPress={() => void loadData()} accessibilityRole="button">
-            <Text style={styles.emptyTitle}>Retry</Text>
+          <TouchableOpacity style={styles.completeBtn} onPress={() => void loadData()} accessibilityRole="button">
+            <Text style={styles.completeBtnText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : null}
 
       {/* Progress Card */}
-      <View style={styles.progressCard}>
+      {!loading && !loadError && totalCount > 0 ? <View style={styles.progressCard}>
         <View style={styles.progressInfo}>
-          <Text style={styles.progressTitle}>Your Progress</Text>
+          <Text style={styles.progressTitle}>Completed</Text>
           <Text style={styles.progressCount}>
             {completedCount} of {totalCount} lessons
           </Text>
@@ -300,7 +293,7 @@ export default function EducationScreen() {
           </View>
           <Text style={styles.progressPercent}>{progressPercent}%</Text>
         </View>
-      </View>
+      </View> : null}
 
       {/* Category Filters */}
       <ScrollView
@@ -310,6 +303,7 @@ export default function EducationScreen() {
       >
         <TouchableOpacity
           style={[styles.categoryChip, !filterCategory && styles.categoryChipActive]}
+          accessibilityRole="button" accessibilityLabel="All" accessibilityState={{ selected: !filterCategory }}
           onPress={() => setFilterCategory(null)}
         >
           <Text style={[styles.categoryChipText, !filterCategory && styles.categoryChipTextActive]}>
@@ -320,12 +314,13 @@ export default function EducationScreen() {
           <TouchableOpacity
             key={cat}
             style={[styles.categoryChip, filterCategory === cat && styles.categoryChipActive]}
+            accessibilityRole="button" accessibilityLabel={cat} accessibilityState={{ selected: filterCategory === cat }}
             onPress={() => setFilterCategory(filterCategory === cat ? null : cat)}
           >
             <Ionicons
-              name={(CATEGORY_ICONS[cat] || 'book') as IoniconName}
+              name={(CATEGORY_ICONS[cat] || 'book-outline') as IoniconName}
               size={14}
-              color={filterCategory === cat ? colors.textOnPrimary : CATEGORY_COLORS[cat] || colors.textSecondary}
+              color={sc.textMuted}
             />
             <Text
               style={[
@@ -350,7 +345,7 @@ export default function EducationScreen() {
             <Ionicons name="book-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No lessons yet</Text>
             <Text style={styles.emptyText}>
-              Your coach hasn't published any lessons. When they do, you'll see them here.
+              No lessons available. Pull down to refresh.
             </Text>
           </View> : null
         }
@@ -363,14 +358,15 @@ export default function EducationScreen() {
           />
         }
         renderItem={({ item, index }) => {
-          const catColor = CATEGORY_COLORS[item.category] || colors.primary;
+          const catColor = sc.textMuted;
           return (
             <TouchableOpacity
               style={styles.lessonCard}
               onPress={() => openLesson(item)}
+              accessibilityRole="button" accessibilityLabel={item.title}
               activeOpacity={0.7}
             >
-              <View style={[styles.lessonNumber, { backgroundColor: catColor + '18' }]}>
+              <View style={styles.lessonNumber}>
                 <Text style={[styles.lessonNumberText, { color: catColor }]}>
                   {index + 1}
                 </Text>
@@ -379,19 +375,17 @@ export default function EducationScreen() {
                 <Text style={styles.lessonTitle}>{item.title}</Text>
                 <Text style={styles.lessonSubtitle}>{item.subtitle}</Text>
                 <View style={styles.lessonMeta}>
-                  <View style={[styles.lessonCategoryTag, { backgroundColor: catColor + '18' }]}>
+                  <View style={styles.lessonCategoryTag}>
                     <Text style={[styles.lessonCategoryText, { color: catColor }]}>
                       {item.category}
                     </Text>
                   </View>
-                  <View style={styles.featuredTag}>
-                    <Text style={styles.featuredTagText}>Featured</Text>
-                  </View>
                   {item.durationMin > 0 ? <Text style={styles.lessonDuration}>{item.durationMin} min</Text> : null}
                 </View>
+                {item.createdAt ? <Text style={styles.lessonDuration}>{new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Text> : null}
               </View>
               {item.completed ? (
-                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
+                <Ionicons name="checkmark-circle-outline" size={24} color={sc.accentText} />
               ) : (
                 <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               )}
@@ -433,7 +427,7 @@ const makeStyles = (colors: ThemeColors) =>
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   progressInfo: {
@@ -443,14 +437,14 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 10,
   },
   progressTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
+    fontFamily: 'Inter_500Medium',
     fontSize: 18,
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
     color: colors.textPrimary,
   },
-  progressCount: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
+  progressCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, fontVariant: ['tabular-nums'], color: colors.textPrimary },
   progressBarContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   progressBarBg: {
     flex: 1,
@@ -460,7 +454,7 @@ const makeStyles = (colors: ThemeColors) =>
     overflow: 'hidden',
   },
   progressBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
-  progressPercent: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.primary, minWidth: 36 },
+  progressPercent: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textPrimary, minWidth: 36 },
   // ── Category Filters ──
   categoryRow: { paddingHorizontal: 24, gap: 8, marginBottom: 12 },
   categoryChip: {
@@ -471,12 +465,13 @@ const makeStyles = (colors: ThemeColors) =>
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderWidth: 1,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  categoryChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', letterSpacing: 0.4, color: colors.textSecondary },
-  categoryChipTextActive: { color: colors.textOnPrimary },
+  categoryChipActive: { borderBottomWidth: 2, borderColor: colors.textPrimary },
+  categoryChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+  categoryChipTextActive: { color: colors.textPrimary },
   // ── Lesson Cards ──
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   lessonCard: {
@@ -487,7 +482,7 @@ const makeStyles = (colors: ThemeColors) =>
     padding: 14,
     marginBottom: 10,
     gap: 12,
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   lessonNumber: {
@@ -506,17 +501,17 @@ const makeStyles = (colors: ThemeColors) =>
   },
   lessonInfo: { flex: 1, gap: 4 },
   lessonTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
+    fontFamily: 'Inter_500Medium',
     fontSize: 18,
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
     color: colors.textPrimary,
   },
-  lessonSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary },
-  lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  lessonSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary },
+  lessonMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 4 },
   lessonCategoryTag: { borderRadius: 0, paddingHorizontal: 8, paddingVertical: 2 },
-  lessonCategoryText: { fontFamily: 'Inter_500Medium', fontSize: 10, fontWeight: '500', letterSpacing: 1.5, textTransform: 'uppercase' },
+  lessonCategoryText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500' },
   featuredTag: {
     backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
@@ -531,7 +526,7 @@ const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.primary,
   },
-  lessonDuration: { fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted },
+  lessonDuration: { fontFamily: 'Inter_400Regular', fontSize: 13, fontVariant: ['tabular-nums'], color: colors.textMuted },
   // ── Detail View ──
   detailHeader: {
     flexDirection: 'row',
@@ -551,9 +546,9 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     letterSpacing: 1.98,
     textTransform: 'uppercase',
-    color: colors.primary,
+    color: colors.textPrimary,
   },
-  detailDuration: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 4 },
+  detailDuration: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, marginTop: 4 },
   completedBadge: {},
   detailScroll: { flex: 1 },
   detailContent: { padding: 24 },
@@ -573,7 +568,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginVertical: 16,
   },
   detailHeading: {
-    fontFamily: 'CormorantGaramond_500Medium',
+    fontFamily: 'Inter_500Medium',
     fontSize: 20,
     lineHeight: 24,
     letterSpacing: 0.4,
@@ -592,12 +587,13 @@ const makeStyles = (colors: ThemeColors) =>
   detailBold: { fontFamily: 'Inter_500Medium', fontWeight: '500' },
   bulletRow: { flexDirection: 'row', paddingLeft: 4, marginBottom: 6, paddingRight: 16 },
   bulletDot: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: colors.textSecondary,
     width: 20,
     lineHeight: 23,
   },
-  bulletText: { flex: 1, fontSize: 15, color: colors.textPrimary, lineHeight: 23 },
+  bulletText: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.textPrimary, lineHeight: 23 },
   completeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -608,12 +604,13 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 16,
     marginTop: 24,
   },
+  lessonLink: { minHeight: 44, justifyContent: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+  lessonLinkText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.textPrimary },
   completeBtnText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
+    letterSpacing: 0,
     color: colors.textOnPrimary,
   },
   completedCard: {
@@ -621,7 +618,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: colors.primaryPale,
+    backgroundColor: colors.background,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 24,
@@ -632,7 +629,7 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.primary,
+    color: colors.textPrimary,
   },
   emptyContainer: {
     alignItems: 'center',
