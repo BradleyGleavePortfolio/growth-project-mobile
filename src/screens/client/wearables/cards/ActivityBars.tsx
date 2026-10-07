@@ -14,11 +14,12 @@ const METRICS = [
 
 interface Props {
   readonly data?: SamplesResponse;
+  readonly isLoading?: boolean;
   /** Explicit coach/client targets override Starter goals independently. */
   readonly targets?: ActivityTargets;
 }
 
-export default function ActivityBars({ data, targets }: Props) {
+export default function ActivityBars({ data, targets, isLoading = false }: Props) {
   const { semanticColors: sc } = useTheme();
   return (
     <View style={styles.wrap}>
@@ -29,7 +30,7 @@ export default function ActivityBars({ data, targets }: Props) {
         const hasTarget = supplied != null && Number.isFinite(supplied) && supplied > 0;
         const target = hasTarget ? supplied : STARTER_GOALS[metric];
         const value = latest ? `${Math.round(latest.y).toLocaleString('en-US')} ${unit}` : '—';
-        const date = latest ? new Date(latest.x).toLocaleDateString('en-GB', {
+        const date = isLoading ? 'Loading samples' : latest ? new Date(latest.x).toLocaleDateString('en-GB', {
           weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC',
         }).replace(',', '') : 'No sample yet';
         return (

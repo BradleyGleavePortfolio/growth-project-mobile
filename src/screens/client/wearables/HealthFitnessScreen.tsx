@@ -177,7 +177,7 @@ export default function HealthFitnessScreen({
         accessibilityLabel="Loading your fitness overview"
       >
         <View style={styles.heroBlock}>
-          <ActivityBars targets={targets} />
+          <ActivityBars targets={targets} isLoading />
         </View>
         {[0, 1, 2, 3].map((i) => (
           <View key={i} style={[styles.skeletonCard, { backgroundColor: sc.border }]} accessibilityElementsHidden />

@@ -231,7 +231,8 @@ describe('HealthFitnessScreen resting heart rate (S14)', () => {
     mockUseWearableSamples.mockReturnValue({ isLoading: true });
     await render(<HealthFitnessScreen />);
     expect(screen.getByLabelText('Loading your fitness overview')).toBeTruthy();
-    expect(screen.getAllByText('No sample yet')).toHaveLength(3);
+    expect(screen.getAllByText('Loading samples')).toHaveLength(3);
+    expect(screen.queryByText('No sample yet')).toBeNull();
     const refetch = jest.fn();
     mockUseWearableSamples.mockReturnValue({ isLoading: false, isError: true, refetch });
     await render(<HealthFitnessScreen />);
