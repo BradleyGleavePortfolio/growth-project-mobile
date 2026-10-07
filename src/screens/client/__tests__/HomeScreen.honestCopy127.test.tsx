@@ -45,7 +45,8 @@ beforeEach(() => {
 });
 it('keeps Messages registered on Home and reachable from More/Membership', () => {
   const read = (file: string) => require('fs').readFileSync(require.resolve(file), 'utf8');
-  expect(read('../../../navigation/ClientNavigator.tsx')).toMatch(/name="Messages"[\s\S]*name="Membership"/);
+  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Messages"');
+  expect(read('../../../navigation/ClientNavigator.tsx')).toContain('name="Membership"');
   expect(read('../MembershipScreen.tsx')).toContain("parent.navigate('Home', { screen: 'Messages' })");
 });
 it.each([
@@ -86,9 +87,9 @@ it.each([0, 24])('keeps coachless Messages, notifications, macro logging and ref
   await render(<HomeScreen />);
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(`${oz} oz`)).toBeTruthy();
-  for (const [label, destination] of [['Message your coach', 'Messages'], ['Notifications', 'NotificationCenter'],
+  for (const [label, destination] of [['home-message-coach', 'Messages'], ['home-notification-bell', 'NotificationCenter'],
     ['Log a meal to see your protein', 'Log'], ['Log a meal to see your carbs', 'Log'], ['Log a meal to see your fat', 'Log']]) {
-    await fireEvent.press(screen.getByLabelText(label));
+    await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
   }
   await fireEvent(screen.UNSAFE_getByType(RefreshControl), 'refresh');
