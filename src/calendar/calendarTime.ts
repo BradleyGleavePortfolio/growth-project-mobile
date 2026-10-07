@@ -75,7 +75,7 @@ export function formatRange(startIso: string, endIso: string, tz: string = resol
   return `${formatTime(new Date(startIso), tz)} to ${formatTime(new Date(endIso), tz)}`;
 }
 
-function clockParts(d: Date, tz: string): { clock: string; period: string } {
+function clockParts(d: Date, tz: string | undefined): { clock: string; period: string } {
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     hour: 'numeric',
@@ -90,8 +90,9 @@ function clockParts(d: Date, tz: string): { clock: string; period: string } {
  * Compact session line for lists: "Wed, Oct 7 · 9:00–9:30 AM", or
  * "Wed, Oct 7 · 11:30 AM–12:15 PM" when the session crosses noon. Built from
  * parts so the output does not depend on the platform's spacing characters.
+ * No zone means the device zone (the coach inbox reads in the coach's clock).
  */
-export function formatSessionSpan(startIso: string, endIso: string, tz: string = resolveClientTimezone()): string {
+export function formatSessionSpan(startIso: string, endIso: string, tz?: string): string {
   const s = new Date(startIso);
   const e = new Date(endIso);
   const dayParts = new Intl.DateTimeFormat('en-US', {

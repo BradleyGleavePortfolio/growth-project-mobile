@@ -407,7 +407,7 @@ export default function CoachBookingInboxScreen() {
         Past sessions
       </Text>
       <Text style={[typography.bodySmall, { color: colors.textMuted, marginTop: spacing.xs }]}>
-        {"Sessions that have ended. Mark each one complete or missed so your client's Calendar shows how it went."}
+        {"Sessions that have ended. Record whether each one happened so your client's Calendar shows how it went."}
       </Text>
       {outcome ? (
         <Text accessibilityLiveRegion="polite" style={[typography.body, { color: outcome.tone === 'error' ? colors.error : colors.textPrimary, marginTop: spacing.sm }]} testID="coach-outcome-message">
