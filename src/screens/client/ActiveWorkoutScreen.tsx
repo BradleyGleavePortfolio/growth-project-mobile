@@ -11,6 +11,7 @@ import {
   AppState,
   AppStateStatus,
   ActivityIndicator,
+  type AlertButton,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,6 +79,7 @@ import { completedExercisePayload, moveExercise, newSessionExercise, previousSet
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
+import { setWorkoutLeaveGuard } from './active-workout/leaveGuard';
 // §2.9 Voice-log confirmation — Roman reads back the most recently completed
 // set in his voice, beside his face (RomanVoiceLogReadback co-locates
 // <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
@@ -313,77 +315,23 @@ export default function ActiveWorkoutScreen() {
         setHydrated(true);
         return;
       }
-      const { session, isStale } = result;
-      if (resumeRequested) {
-        adoptPersistedSession(session);
-        setHydrated(true);
-        return;
+      const { session } = result;
+      // TRAIN-GATE-128 (owner 15:03 10-07): an unfinished workout is never
+      // deleted from the return path. Opening the workout screen goes straight
+      // back into it, with its own name, coach assignment and sets; there is
+      // no prompt and no "start fresh" choice.
+      if (!resumeRequested) {
+        // FU-WORKLOG2-126: opened from Quick Workout, a routine or another
+        // coach workout, carry the saved workout's own name and assignment.
+        const carried = resumedSessionRouteParams(session, {
+          routineName,
+          exercises: exercisesJson,
+          assignmentId,
+        });
+        if (carried) navigation.setParams(carried);
       }
-      const promptTitle = isStale ? 'Resume earlier workout?' : 'Resume workout?';
-      const promptBody = isStale
-        ? `Found an unfinished workout from over 12 hours ago${
-            session.routineName ? ` ("${session.routineName}")` : ''
-          }. Resume it, or start fresh?`
-        : `Found an unfinished workout${
-            session.routineName ? ` ("${session.routineName}")` : ''
-          }. Resume it, or start fresh?`;
-      Alert.alert(
-        promptTitle,
-        promptBody,
-        [
-          {
-            text: 'Start Fresh',
-            style: 'destructive',
-            onPress: async () => {
-              // Await the clear before enabling persistence: a slow native
-              // removeItem can otherwise race the very first debounced save
-              // for the fresh session and delete the new payload after it
-              // lands. See audit #6.
-              try {
-                await clearActiveWorkoutSession(userId);
-              } catch (error) {
-                // Best-effort clear: a fresh session still mounts even if the
-                // stale one couldn't be removed. Surfaced for diagnosis rather
-                // than swallowed (R69) — a persistently failing clear would
-                // otherwise silently re-prompt "Resume?" forever.
-                logger.warn('mwb.activeWorkout.start-fresh-clear', {
-                  ...buildCompletionLogBase({
-                    route: 'ActiveWorkout',
-                    userRole: currentUser?.role,
-                    userKey: userId || undefined,
-                    // No completion id exists on a non-completion clear path; use the documented sentinel.
-                    justCompletedId: 'unknown',
-                  }),
-                  checkpoint: 'start-fresh-clear',
-                  error: normalizeError(error),
-                });
-              }
-              setSessionExercises(defaultSessionExercises);
-              setHydrated(true);
-            },
-          },
-          {
-            text: 'Resume',
-            onPress: () => {
-              // FU-WORKLOG2-126: the prompt also appears when the client
-              // opens Quick Workout, a routine or another coach workout.
-              // Resume kept that entry's name and coach assignment, so a
-              // resumed coach workout was saved under the wrong name and the
-              // coach's assignment never showed as done. Carry the saved
-              // workout's own name and assignment with its sets.
-              const carried = resumedSessionRouteParams(session, {
-                routineName,
-                exercises: exercisesJson,
-                assignmentId,
-              });
-              if (carried) navigation.setParams(carried);
-              adoptPersistedSession(session);
-              setHydrated(true);
-            },
-          },
-        ],
-        { cancelable: false },
-      );
+      adoptPersistedSession(session);
+      setHydrated(true);
     })();
     return () => {
       cancelled = true;
@@ -742,7 +690,7 @@ export default function ActiveWorkoutScreen() {
     ]);
   };
 
-  const finishWorkout = () => {
+  const finishWorkout = (confirmed = false) => {
     if (saving) return;
     const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
     if (completedSets === 0) {
@@ -750,7 +698,8 @@ export default function ActiveWorkoutScreen() {
       return;
     }
     const recordLines = summary.records.map((r) => `Recent best: ${r.name} · ${r.weight} lb`).join('\n');
-    Alert.alert('Finish Workout?', `${completedSets} sets completed · ${summary.exercises} exercises · ${summary.volume.toLocaleString()} lb volume${recordLines ? `\n${recordLines}\nCompared with the last 50 saved workouts.` : ''}${completedSets < sessionExercises.reduce((n, ex) => n + ex.sets.length, 0) ? '\nUnfinished sets will not be saved.' : ''}`, [
+    const finishMessage = `${completedSets} sets completed · ${summary.exercises} exercises · ${summary.volume.toLocaleString()} lb volume${recordLines ? `\n${recordLines}\nCompared with the last 50 saved workouts.` : ''}${completedSets < sessionExercises.reduce((n, ex) => n + ex.sets.length, 0) ? '\nUnfinished sets will not be saved.' : ''}`;
+    const finishButtons: AlertButton[] = [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finish',
@@ -1123,55 +1072,98 @@ export default function ActiveWorkoutScreen() {
           );
         },
       },
-    ]);
+    ];
+    // TRAIN-GATE-128: "Finish and log" on the leave question already confirmed.
+    if (confirmed) {
+      void finishButtons[1].onPress?.();
+      return;
+    }
+    Alert.alert('Finish Workout?', finishMessage, finishButtons);
   };
 
-  const cancelWorkout = () => {
-    Alert.alert('Discard this workout?', 'The sets logged in this session will not be saved.', [
-      { text: 'Keep going', style: 'cancel' },
-      {
-        text: 'Discard',
-        style: 'destructive',
-        onPress: async () => {
-          // User explicitly abandoned the session — drop the persisted
-          // copy so it doesn't show up as a "Resume?" prompt later.
-          //
-          // We set finishingRef synchronously so any concurrent effect
-          // tick (debounce fire, AppState background flush) bails out,
-          // then await the clear so the next mount cannot race a still-
-          // in-flight removeItem and read the just-deleted entry back.
-          finishingRef.current = true;
-          cancelRestAlert();
-          if (persistDebounceRef.current) {
-            clearTimeout(persistDebounceRef.current);
-            persistDebounceRef.current = null;
-          }
-          pendingPersistPayloadRef.current = null;
-          try {
-            if (userId) await clearActiveWorkoutSession(userId);
-          } catch (error) {
-            // Best-effort — if clearing fails the next mount still has the
-            // "Resume?" prompt to safely back out of. Surfaced for diagnosis
-            // rather than swallowed (R69) so a persistent clear failure is
-            // visible instead of silent.
-            logger.warn('mwb.activeWorkout.cancel-clear', {
-              ...buildCompletionLogBase({
-                route: 'ActiveWorkout',
-                userRole: currentUser?.role,
-                userKey: userId || undefined,
-                // No completion id exists on an explicit-cancel clear path; use the documented sentinel.
-                justCompletedId: 'unknown',
-              }),
-              checkpoint: 'cancel-clear',
-              error: normalizeError(error),
-            });
-          }
-          if (timerRef.current) clearInterval(timerRef.current);
-          navigation.goBack();
-        },
-      },
-    ]);
+  // TRAIN-GATE-128 (owner 15:03 10-07): leaving a live workout never deletes
+  // it. With sets logged, the client is asked to log the workout or keep
+  // training. With nothing logged there is nothing to save: leaving the
+  // screen releases the empty session; a tab switch keeps it open.
+  const releaseEmptySession = async () => {
+      // Nothing was logged in this session, so there is nothing to keep:
+      // drop the empty persisted copy so the next workout opens clean.
+      //
+      // We set finishingRef synchronously so any concurrent effect
+      // tick (debounce fire, AppState background flush) bails out,
+      // then await the clear so the next mount cannot race a still-
+      // in-flight removeItem and read the just-deleted entry back.
+      finishingRef.current = true;
+      cancelRestAlert();
+      if (persistDebounceRef.current) {
+        clearTimeout(persistDebounceRef.current);
+        persistDebounceRef.current = null;
+      }
+      pendingPersistPayloadRef.current = null;
+      try {
+        if (userId) await clearActiveWorkoutSession(userId);
+      } catch (error) {
+        // Best-effort — if clearing fails the next mount reopens the empty
+        // session, which is harmless. Surfaced for diagnosis
+        // rather than swallowed (R69) so a persistent clear failure is
+        // visible instead of silent.
+        logger.warn('mwb.activeWorkout.cancel-clear', {
+          ...buildCompletionLogBase({
+            route: 'ActiveWorkout',
+            userRole: currentUser?.role,
+            userKey: userId || undefined,
+            // No completion id exists on an explicit-cancel clear path; use the documented sentinel.
+            justCompletedId: 'unknown',
+          }),
+          checkpoint: 'cancel-clear',
+          error: normalizeError(error),
+        });
+      }
+      if (timerRef.current) clearInterval(timerRef.current);
   };
+
+  const askBeforeLeaving = (leave: () => void, releaseIfEmpty: boolean) => {
+    if (finishingRef.current) {
+      leave();
+      return;
+    }
+    const logged = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
+    if (logged === 0) {
+      if (!releaseIfEmpty) {
+        leave();
+        return;
+      }
+      void releaseEmptySession().then(leave);
+      return;
+    }
+    const unfinished = sessionExercises.reduce((n, ex) => n + ex.sets.length, 0) > logged;
+    Alert.alert(
+      'Log this workout?',
+      `${logged} ${logged === 1 ? 'set' : 'sets'} logged so far. Finish to save ${logged === 1 ? 'it' : 'them'}, or keep training.${
+        unfinished ? ' Unfinished sets will not be saved.' : ''
+      }`,
+      [
+        { text: 'Keep training', style: 'cancel' },
+        { text: 'Finish and log', onPress: () => finishWorkout(true) },
+      ],
+    );
+  };
+  const askBeforeLeavingRef = useRef(askBeforeLeaving);
+  askBeforeLeavingRef.current = askBeforeLeaving;
+
+  // Back button, back gesture and any in-app navigation that removes this
+  // screen ask first; the Finish paths set finishingRef and pass through.
+  useEffect(
+    () =>
+      navigation.addListener('beforeRemove', (e) => {
+        if (finishingRef.current) return;
+        e.preventDefault();
+        askBeforeLeavingRef.current(() => navigation.dispatch(e.data.action), true);
+      }),
+    [navigation],
+  );
+  // A press on another tab asks the same question (ClientNavigator).
+  useEffect(() => setWorkoutLeaveGuard((leave) => askBeforeLeavingRef.current(leave, false)), []);
 
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
@@ -1196,12 +1188,12 @@ export default function ActiveWorkoutScreen() {
       <View style={styles.topBar}>
         <HapticPressable
           intent="warning"
-          onPress={cancelWorkout}
+          onPress={() => askBeforeLeaving(() => navigation.goBack(), true)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           accessibilityRole="button"
-          accessibilityLabel="Discard workout"
+          accessibilityLabel="Leave workout"
         >
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <View style={styles.topCenter}>
           <Text style={styles.topTitle} numberOfLines={2}>{routineName}</Text>
@@ -1209,7 +1201,7 @@ export default function ActiveWorkoutScreen() {
         </View>
         <HapticPressable
           intent="success"
-          onPress={finishWorkout}
+          onPress={() => finishWorkout()}
           disabled={saving}
           style={[styles.finishBtn, saving && { opacity: 0.6 }]}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}

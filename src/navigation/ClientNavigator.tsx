@@ -49,6 +49,7 @@ import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
+import { workoutLeaveGuard } from '../screens/client/active-workout/leaveGuard';
 import WorkoutHistoryEditScreen from '../screens/client/WorkoutHistoryEditScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
@@ -691,12 +692,18 @@ export default function ClientNavigator() {
           height: 64 + insets.bottom,
         },
       }}
-      screenListeners={({ navigation }) => {
+      screenListeners={({ navigation, route }) => {
         if (featureFlags.clientTutorial) tabNavRef.current = navigation;
         return {
-          tabPress: () => {
+          tabPress: (e) => {
             // Phase 11 / Track 3: haptic selection feedback on tab switch
             HapticService.selection();
+            // TRAIN-GATE-128: a live workout asks whether to log it before
+            // another tab opens; the workout itself is never closed here.
+            const guard = route.name === 'WorkoutTab' ? null : workoutLeaveGuard();
+            if (!guard) return;
+            e.preventDefault();
+            guard(() => navigation.navigate(route.name));
           },
           // Clinic tutorial: report the focused route path so route gates
           // (e.g. "tap Train") are satisfied by real navigation only.

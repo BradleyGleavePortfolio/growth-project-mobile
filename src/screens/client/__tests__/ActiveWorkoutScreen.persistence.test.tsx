@@ -315,16 +315,15 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     // Both paths must clear, and both must guard against the
     // debounced effect re-writing the session after the clear.
     const clearCalls = SCREEN_SRC.match(/clearActiveWorkoutSession\(/g) ?? [];
-    // restore "Start Fresh" = 1, finish = 1, cancel = 1
+    // finish paths + releasing an empty session on leave
     expect(clearCalls.length).toBeGreaterThanOrEqual(3);
     expect(SCREEN_SRC).toMatch(/finishingRef\.current = true/);
   });
 
-  it('renders a Resume vs Start Fresh prompt with stale phrasing for old sessions', () => {
-    expect(SCREEN_SRC).toMatch(/Resume earlier workout\?/);
-    expect(SCREEN_SRC).toMatch(/Resume workout\?/);
-    expect(SCREEN_SRC).toMatch(/Start Fresh/);
-    expect(SCREEN_SRC).toMatch(/Resume/);
+  it('reopens an unfinished workout with no prompt and no delete choice (TRAIN-GATE-128)', () => {
+    expect(SCREEN_SRC).not.toMatch(/Resume earlier workout\?|Resume workout\?/);
+    expect(SCREEN_SRC).not.toMatch(/Start Fresh|Discard this workout\?|text: 'Discard'/);
+    expect(SCREEN_SRC).toMatch(/adoptPersistedSession\(session\);\s*setHydrated\(true\);/);
   });
 
   // ───── Audit follow-up coverage ──────────────────────────────────────────
@@ -382,16 +381,10 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     expect(guard).toBeLessThan(setHydrated);
   });
 
-  it('Cancel handler awaits the clear and nulls the pending payload before goBack', () => {
-    // The Cancel onPress must:
-    //   - be async
-    //   - set finishingRef.current = true synchronously
-    //   - null pendingPersistPayloadRef.current
-    //   - await clearActiveWorkoutSession(userId)
-    //   - navigation.goBack() last
+  it('releasing an empty session awaits the clear and nulls the pending payload', () => {
+    // TRAIN-GATE-128: only a session with nothing logged is released on leave.
     const cancelBlock = SCREEN_SRC.match(
-      // UX-WORKOUT-124: the destructive button is labelled "Discard".
-      /text: 'Discard',\s*style: 'destructive',[\s\S]*?onPress: async \(\) => \{[\s\S]*?navigation\.goBack\(\);\s*\}/,
+      /const releaseEmptySession = async \(\) => \{[\s\S]*?\n  \};/,
     );
     expect(cancelBlock).not.toBeNull();
     const body = cancelBlock![0];

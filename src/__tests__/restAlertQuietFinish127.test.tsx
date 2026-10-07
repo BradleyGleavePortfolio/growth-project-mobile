@@ -1,5 +1,5 @@
 // DES-R-127: rest alert in the background (granted permission only, never asks; cancelled on return,
-// Skip, +30s, Finish, Discard, leaving), the quiet finish summary, and parity of every finish/rest action.
+// Skip, +30s, Finish, leaving), the quiet finish summary, and parity of every finish/rest action.
 import React from 'react';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -9,10 +9,20 @@ import { render, act, waitFor, fireEvent, within } from '@testing-library/react-
 jest.mock('../config/featureFlags', () => ({ featureFlags: { coachBrief: true, romanChat: false } }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'c1', role: 'client' }) }));
 const mockGoBack = jest.fn();
+const mockDispatch = jest.fn();
+let mockRouteParams: Record<string, unknown> = { routineName: 'Push Day', exercises: '[]', resume: true };
+let mockBeforeRemove: ((e: { preventDefault: () => void; data: { action: unknown } }) => void) | null = null;
+const mockNavigation = {
+  navigate: jest.fn(), goBack: mockGoBack, setParams: jest.fn(), dispatch: mockDispatch,
+  addListener: (type: string, cb: NonNullable<typeof mockBeforeRemove>) => {
+    if (type === 'beforeRemove') mockBeforeRemove = cb;
+    return () => undefined;
+  },
+};
 jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
-  useNavigation: () => ({ navigate: jest.fn(), goBack: mockGoBack, setParams: jest.fn(), addListener: () => () => undefined }),
-  useRoute: () => ({ params: { routineName: 'Push Day', exercises: '[]', resume: true } }),
+  useNavigation: () => mockNavigation,
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 let mutateOptions: { onSuccess?: (data: unknown) => void } | null = null;
 const mockMutate = jest.fn((_vars: unknown, options: typeof mutateOptions) => { mutateOptions = options; });
@@ -91,6 +101,8 @@ let spies: jest.SpyInstance[] = [];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockRouteParams = { routineName: 'Push Day', exercises: '[]', resume: true };
+  mockBeforeRemove = null;
   listeners = [];
   alerts = [];
   alertChoice = 'Finish';
@@ -183,10 +195,10 @@ describe('rest alert while the app is in the background', () => {
     expect(mockSchedule).toHaveBeenCalledTimes(1);
   });
 
-  it('Discard and leaving the screen cancel the alert', async () => {
-    alertChoice = 'Discard';
+  it('Finish and log from the leave question, and leaving the screen, cancel the alert', async () => {
+    alertChoice = 'Finish and log';
     const view = await restInBackground();
-    await press(view.getByLabelText('Discard workout'));
+    await press(view.getByLabelText('Leave workout'));
     expect(mockCancel).toHaveBeenCalledWith('rest-alert-1');
     await view.unmount();
     mockCancel.mockClear();
@@ -255,10 +267,9 @@ describe('parity: every finish and rest action stays in place', () => {
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
-  it('Discard asks with Keep going and Discard, then closes', async () => {
-    alertChoice = 'Discard';
-    await press((await openScreen()).getByLabelText('Discard workout'));
-    expect(alerts[0]).toEqual({ title: 'Discard this workout?', buttons: ['Keep going', 'Discard'] });
+  it('Leave with nothing logged closes the screen without a question', async () => {
+    await press((await openScreen()).getByLabelText('Leave workout'));
+    expect(alerts).toEqual([]);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
 
@@ -270,5 +281,68 @@ describe('parity: every finish and rest action stays in place', () => {
     expect(view.getByText(/^(01:59|02:00)$/)).toBeTruthy();
     await press(view.getByLabelText('Skip rest timer'));
     expect(view.queryByText('Skip')).toBeNull();
+  });
+});
+
+// TRAIN-GATE-128 (owner 15:03 10-07): autosave, reopen straight into the workout, never a delete choice,
+// and leaving the screen or the tab asks to log it or keep training.
+describe('leaving a live workout never deletes it', () => {
+  const NO_DELETE = ['Start Fresh', 'Discard', 'Discard workout'];
+  const allButtons = () => alerts.flatMap((a) => a.buttons);
+
+  it('opening the workout screen with an unfinished session goes straight back in, no prompt', async () => {
+    mockRouteParams = { routineName: 'Quick Workout', exercises: '[]' };
+    mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
+    const view = await openScreen();
+    expect(alerts).toEqual([]);
+    expect(view.getByText('1 of 4 sets completed')).toBeTruthy();
+    expect(mockNavigation.setParams).toHaveBeenCalledWith(expect.objectContaining({ routineName: 'Push Day' }));
+  });
+
+  it('Leave with sets logged asks to log or keep training; Keep training keeps everything', async () => {
+    alertChoice = 'Keep training';
+    mockLoadSession.mockResolvedValue(stored([true, true, false], [false]));
+    const view = await openScreen();
+    await press(view.getByLabelText('Leave workout'));
+    expect(alerts).toEqual([{ title: 'Log this workout?', buttons: ['Keep training', 'Finish and log'] }]);
+    expect(allButtons().some((b) => NO_DELETE.includes(b))).toBe(false);
+    expect(mockGoBack).not.toHaveBeenCalled();
+    expect(mockMutate).not.toHaveBeenCalled();
+    expect(view.getByText('2 of 4 sets completed')).toBeTruthy();
+  });
+
+  it('Finish and log saves the workout through the normal finish path, then closes', async () => {
+    alertChoice = 'Finish and log';
+    mockLoadSession.mockResolvedValue(stored([true, true, false], [false]));
+    const view = await openScreen();
+    await press(view.getByLabelText('Leave workout'));
+    expect(alerts.map((a) => a.title)).toEqual(['Log this workout?']);
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    await saved('srv-9');
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('back gesture or back button (beforeRemove) is held and asks the same question', async () => {
+    alertChoice = 'Keep training';
+    mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
+    await openScreen();
+    const preventDefault = jest.fn();
+    await act(async () => { mockBeforeRemove!({ preventDefault, data: { action: { type: 'GO_BACK' } } }); await flush(); });
+    expect(preventDefault).toHaveBeenCalled();
+    expect(alerts[0].title).toBe('Log this workout?');
+    expect(mockDispatch).not.toHaveBeenCalled();
+  });
+
+  it('a press on another tab asks while the workout is open; nothing logged lets the tab open', async () => {
+    const { workoutLeaveGuard } = jest.requireActual('../screens/client/active-workout/leaveGuard');
+    alertChoice = 'Keep training';
+    mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
+    const view = await openScreen();
+    const leave = jest.fn();
+    await act(async () => { workoutLeaveGuard()!(leave); await flush(); });
+    expect(alerts[0]).toEqual({ title: 'Log this workout?', buttons: ['Keep training', 'Finish and log'] });
+    expect(leave).not.toHaveBeenCalled();
+    await view.unmount();
+    expect(workoutLeaveGuard()).toBeNull();
   });
 });
