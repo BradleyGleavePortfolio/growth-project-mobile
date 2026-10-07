@@ -22,6 +22,7 @@ import { prefsStorage } from '../../storage/mmkv';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
+import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
@@ -36,7 +37,12 @@ const BODY_COPY: Record<PushPermissionAudience, string> = {
 
 export default function PushPermissionCard({
   audience = 'client',
-}: { audience?: PushPermissionAudience } = {}) {
+  presentation = 'card',
+}: {
+  audience?: PushPermissionAudience;
+  /** 'section' = Home's hairline look (DES-K2-128); other callers keep the card. */
+  presentation?: 'card' | 'section';
+} = {}) {
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
   const userId = user?.id ?? null;
@@ -81,15 +87,48 @@ export default function PushPermissionCard({
     }
   };
 
+  const body = audience === 'client' && !user?.coach_id
+    ? 'Turn on notifications for reminders you set in the app.'
+    : BODY_COPY[audience];
+
+  if (presentation === 'section') {
+    return (
+      <QuietSection testID="push-permission-card">
+        <QuietOverline>STAY IN TOUCH</QuietOverline>
+        <Text style={{ ...typography.body, color: sc.textPrimary }}>{body}</Text>
+        <View style={quietActions.row}>
+          <Pressable
+            onPress={enable}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Turn on notifications"
+            accessibilityState={{ disabled: busy, busy }}
+            testID="push-permission-enable"
+            style={({ pressed }) => [quietActions.action, { opacity: busy || pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[quietActions.label, { color: sc.accentText }]}>Turn on</Text>
+          </Pressable>
+          <Pressable
+            onPress={dismiss}
+            accessibilityRole="button"
+            accessibilityLabel="Not now"
+            testID="push-permission-dismiss"
+            style={({ pressed }) => [quietActions.action, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[quietActions.label, { color: sc.textMuted }]}>Not now</Text>
+          </Pressable>
+        </View>
+      </QuietSection>
+    );
+  }
+
   return (
     <View
       style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface }]}
       testID="push-permission-card"
     >
       <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>STAY IN TOUCH</Text>
-      <Text style={{ ...typography.body, color: sc.textPrimary }}>{audience === 'client' && !user?.coach_id
-        ? 'Turn on notifications for reminders you set in the app.'
-        : BODY_COPY[audience]}</Text>
+      <Text style={{ ...typography.body, color: sc.textPrimary }}>{body}</Text>
       <View style={styles.actions}>
         <Pressable
           onPress={enable}
