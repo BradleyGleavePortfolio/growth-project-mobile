@@ -1,7 +1,7 @@
 /**
  * romanVoice — the ONLY client-side Roman-voiced strings the chat surface
- * renders. Every string below is taken from the locked identity spec
- * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md),
+ * renders. Strings follow the identity spec
+ * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md) and the owner-approved truthful-copy greeting revision,
  * cited per string with its §section. The Phase 1 backend serves NO greeting /
  * empty / error PROSE for the chat surface — the controller returns only
  * session/message views and SSE chunks (roman.controller.ts), and there are no
@@ -34,19 +34,18 @@ export interface RomanGreetingInput {
 /**
  * Empty-chat greeting, aware of BOTH the surface and whether this is the first
  * time Roman has been opened (R1 UX finding U1). The four registers are taken
- * verbatim from the identity spec:
+ * adapted from the identity spec:
  *
  *   - First open (client OR coach): the §2.1 first-launch self-introduction —
- *     `"Good day. My name is Roman. I will be looking after things here.
- *     Whenever you need me, I am present."` This is Roman's defining first
+ *     `"Good day. My name is Roman. Ask about training, food or recovery at any time."` This is Roman's defining first
  *     impression and must NOT be replaced by returning-user copy.
  *   - Returning client (named): §2.2 "App boot / returning user" Default —
- *     `"Welcome back, {firstName}. Everything is in order. Where shall we
+ *     `"Welcome back, {firstName}. Where shall we
  *     begin?"`
  *   - Returning client (nameless): the §2.1 nameless ambient register, trimmed
  *     to the greeting clause, to avoid an empty "Welcome back, ." render.
  *   - Returning coach: the §2.3 coach operational register —
- *     `"Good morning, {coachName}. I am ready. What needs attention?"` When the
+ *     `"Good {device time of day}, {coachName}. I am ready. What needs attention?"` When the
  *     coach name is unknown the nameless variant `"I am ready. What needs
  *     attention?"` is used so we never render "Good morning, .".
  */
@@ -55,7 +54,7 @@ export function romanGreeting(input: RomanGreetingInput): string {
 
   if (input.isFirstOpen) {
     // identity spec §2.1 first-launch self-introduction (both surfaces).
-    return 'Good day. My name is Roman. I will be looking after things here. Whenever you need me, I am present.';
+    return 'Good day. My name is Roman. Ask about training, food or recovery at any time.';
   }
 
   if (input.surface === 'coach') {
@@ -63,15 +62,17 @@ export function romanGreeting(input: RomanGreetingInput): string {
     if (name === '') {
       return 'I am ready. What needs attention?';
     }
-    return `Good morning, ${name}. I am ready. What needs attention?`;
+    const hour = new Date().getHours();
+    const period = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+    return `Good ${period}, ${name}. I am ready. What needs attention?`;
   }
 
   // Returning client — identity spec §2.2 Default.
   if (name === '') {
     // Nameless ambient register — identity spec §2.1 greeting clause.
-    return 'Good day. Everything is in order. Where shall we begin?';
+    return 'Good day. Where shall we begin?';
   }
-  return `Welcome back, ${name}. Everything is in order. Where shall we begin?`;
+  return `Welcome back, ${name}. Where shall we begin?`;
 }
 
 /**
