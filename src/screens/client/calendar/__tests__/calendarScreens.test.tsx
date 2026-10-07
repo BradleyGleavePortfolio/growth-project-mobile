@@ -9,7 +9,7 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
 import type { CoachingSession, SessionType } from '../../../../api/schedulingApi';
 
 jest.mock('../../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -61,7 +61,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { emitTutorialSignal } from '../../../../tutorial/tutorialEvents';
 import CalendarHomeScreen from '../CalendarHomeScreen';
 import CalendarBookScreen, { bookedMessage, bookingErrorMessage, firstPageSpan, moveNeedsApprovalWarning, openTimesPage } from '../CalendarBookScreen';
-import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
+import CalendarSessionScreen, { canJoin, clientLinkLine } from '../CalendarSessionScreen';
 import { pickWelcomeType } from '../CalendarBookScreen';
 import { statusLabel } from '../calendarUi';
 
@@ -252,7 +252,7 @@ describe('CalendarHomeScreen', () => {
     api.listMySessions.mockImplementation(async (_l, opts) => (opts?.scope === 'past' ? [] : [sess({ meeting_link_status: 'pending' })]));
     const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
     await waitFor(() => expect(r.getByTestId('calendar-session-sess-1')).toBeTruthy());
-    expect(r.getByText('Your coach will add the call link before it starts.')).toBeTruthy();
+    expect(r.getByText('Call link not added yet.')).toBeTruthy();
   });
 
   it('past sessions: newest first, Show earlier pages with the before cursor', async () => {
@@ -516,6 +516,8 @@ describe('CalendarSessionScreen', () => {
     const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
     await waitFor(() => expect(r.getByTestId('calendar-cancel')).toBeTruthy());
     await fireEvent.press(r.getByTestId('calendar-cancel'));
+    expect(alert).toHaveBeenCalledWith('Cancel this session?', 'Bradley will be told.',
+      expect.arrayContaining([expect.objectContaining({ text: 'Keep it', style: 'cancel' })]));
     await waitFor(() => expect(api.cancelSession).toHaveBeenCalledWith('sess-1', undefined));
     await waitFor(() => expect(r.getByText(/remove that copy/)).toBeTruthy());
     alert.mockRestore();
@@ -527,7 +529,7 @@ describe('CalendarSessionScreen', () => {
     await waitFor(() => expect(r.getByTestId('calendar-cancel')).toBeTruthy());
     expect(r.queryByTestId('calendar-reschedule')).toBeNull();
     expect(r.getByTestId('calendar-session-link-pending')).toBeTruthy();
-    expect(r.getByText(/will add the call link before the session/)).toBeTruthy();
+    expect(r.getByText('Call link not added yet.')).toBeTruthy();
   });
 
   it('a started session (server says not cancellable) explains why it is locked', async () => {
@@ -546,6 +548,110 @@ describe('CalendarSessionScreen', () => {
     expect(r.queryByTestId('calendar-reschedule')).toBeNull();
     expect(r.queryByTestId('calendar-cancel')).toBeNull();
     expect(r.queryByTestId('calendar-add-phone')).toBeNull();
+  });
+});
+
+describe('DES-AF calendar hierarchy, truthful states and action parity', () => {
+  it('retains every list recovery action and pull-to-refresh', async () => {
+    api.listMyCoaches.mockRejectedValueOnce(new Error('Network Error'));
+    api.listSessionTypes.mockRejectedValueOnce(new Error('Network Error'));
+    const failed = new Set(['upcoming', 'past']);
+    api.listMySessions.mockImplementation(async (_l, opts) => {
+      if (failed.delete(opts?.scope === 'past' ? 'past' : 'upcoming')) throw new Error('Network Error');
+      return [];
+    });
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    for (const label of ['Refresh your coach', 'Refresh sessions', 'Refresh past sessions', 'Refresh appointment types']) {
+      await waitFor(() => expect(r.getByText(label)).toBeTruthy());
+      await fireEvent.press(r.getByText(label));
+    }
+    await waitFor(() => expect(r.getByTestId('calendar-type-st-1')).toBeTruthy());
+    const count = api.listMySessions.mock.calls.length;
+    await act(async () => r.getByTestId('calendar-home').props.refreshControl.props.onRefresh());
+    await waitFor(() => expect(api.listMySessions.mock.calls.length).toBeGreaterThan(count));
+  });
+
+  it('retains recovery when a session read fails', async () => {
+    api.getSession.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(sess());
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-session-missing')).toBeTruthy());
+    await fireEvent.press(r.getByText('Try again'));
+    await waitFor(() => expect(r.getByTestId('calendar-session-status')).toBeTruthy());
+    expect(api.getSession).toHaveBeenCalledTimes(2);
+  });
+
+  it('puts the earliest live session above booking, with coach and real duration; later and past rows still open', async () => {
+    const next = sess({ id: 'next', start_at: '2030-10-06T16:00:00.000Z', end_at: '2030-10-06T16:20:00.000Z' });
+    api.listMySessions.mockImplementation(async (_l, opts) => opts?.scope === 'past'
+      ? [sess({ id: 'past', status: 'completed' })] : [sess({ id: 'later' }), next]);
+    const n = nav();
+    const r = await renderQ(<CalendarHomeScreen {...homeProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-next-session')).toBeTruthy());
+    expect(r.getByTestId('calendar-next-session').findByProps({ testID: 'calendar-session-next' })).toBeTruthy();
+    expect(r.getAllByText('With Bradley. 20 minutes.').length).toBeGreaterThan(0);
+    const text = r.toJSON();
+    expect(JSON.stringify(text).indexOf('Next session')).toBeLessThan(JSON.stringify(text).indexOf('Your coach'));
+    for (const id of ['next', 'later', 'past']) {
+      await fireEvent.press(r.getByTestId(id === 'past' ? 'calendar-past-past' : `calendar-session-${id}`));
+      expect(n.navigate).toHaveBeenCalledWith('CalendarSession', { sessionId: id });
+    }
+  });
+
+  it('keeps one real booking primary on an empty schedule and no coach-only message action without a coach', async () => {
+    const n = nav();
+    const r = await renderQ(<CalendarHomeScreen {...homeProps(n)} />);
+    await waitFor(() => expect(r.getByText('Book a session')).toBeTruthy());
+    await fireEvent.press(r.getByText('Book a session'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', sessionTypeId: 'st-1' });
+    await fireEvent.press(r.getByTestId('calendar-empty-message'));
+    expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+    await cleanup();
+    api.listMyCoaches.mockResolvedValue([]);
+    const empty = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(empty.getByTestId('calendar-no-coach')).toBeTruthy());
+    expect(empty.queryByTestId('calendar-empty-message')).toBeNull();
+    expect(empty.queryByText('Book a session')).toBeNull();
+  });
+
+  it('offers a real Join from the next-session hero and keeps the link action', async () => {
+    const now = Date.now();
+    api.listMySessions.mockImplementation(async (_l, opts) => opts?.scope === 'past' ? [] : [sess({
+      start_at: new Date(now + 5 * 60_000).toISOString(), end_at: new Date(now + 25 * 60_000).toISOString(),
+      video_url: 'https://meet.example/room',
+    })]);
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const r = await renderQ(<CalendarHomeScreen {...homeProps()} />);
+    await waitFor(() => expect(r.getByTestId('calendar-home-join')).toBeTruthy());
+    expect(r.queryByText('Book a session')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-home-join'));
+    expect(open).toHaveBeenCalledWith('https://meet.example/room');
+    open.mockRestore();
+  });
+
+  it('preserves session calendar export, reschedule and messages with readable, tabular hero type', async () => {
+    const s = sess({ cancellable: true, reschedulable: true });
+    api.getSession.mockResolvedValue(s);
+    const n = nav();
+    const r = await renderQ(<CalendarSessionScreen {...sessionProps(n)} />);
+    await waitFor(() => expect(r.getByTestId('calendar-reschedule')).toBeTruthy());
+    expect(r.getByText('20 minutes.')).toBeTruthy();
+    expect(StyleSheet.flatten(r.getByTestId('calendar-time-hero').props.style)).toMatchObject({
+      fontFamily: 'CormorantGaramond_400Regular', fontVariant: ['tabular-nums'],
+    });
+    await fireEvent.press(r.getByTestId('calendar-add-phone'));
+    await waitFor(() => expect(addSessionToPhoneCalendar).toHaveBeenCalledWith(s, 'Bradley'));
+    await fireEvent.press(r.getByTestId('calendar-reschedule'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', sessionTypeId: 'st-1', rescheduleSessionId: 'sess-1' });
+    await fireEvent.press(r.getByTestId('calendar-session-message'));
+    expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+  });
+
+  it('never promises a future link; ready and ended states make no missing-link claim', () => {
+    for (const status of ['requested', 'scheduled'] as const) {
+      expect(clientLinkLine(sess({ status }), 'Bradley', false)).toBe('Call link not added yet.');
+      expect(clientLinkLine(sess({ status }), 'Bradley', true)).toBeNull();
+    }
+    expect(clientLinkLine(sess({ status: 'completed' }), 'Bradley', false)).toBeNull();
   });
 });
 
