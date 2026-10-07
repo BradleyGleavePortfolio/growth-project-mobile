@@ -5,8 +5,8 @@
  */
 
 import React from 'react';
-import { RefreshControl, Text } from 'react-native';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Text } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
 const mockUseWearableSamples = jest.fn();
 jest.mock('../../../../hooks/useWearableSamples', () => ({
@@ -238,8 +238,11 @@ describe('HealthFitnessScreen resting heart rate (S14)', () => {
     await fireEvent.press(screen.getByLabelText('Try again'));
     expect(refetch).toHaveBeenCalledTimes(1);
     mockUseWearableSamples.mockReturnValue({ data: response('HEALTH_FITNESS', [series('STEPS', [2500])]), refetch });
-    const populated = await render(<HealthFitnessScreen />);
-    await fireEvent(populated.UNSAFE_getByType(RefreshControl), 'refresh');
+    await render(<HealthFitnessScreen />);
+    let scroll = screen.getByText('2,500 steps').parent;
+    while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
+    expect(scroll?.props.refreshControl).toBeTruthy();
+    await act(async () => scroll?.props.refreshControl.props.onRefresh());
     expect(refetch).toHaveBeenCalledTimes(2);
   });
 
