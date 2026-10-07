@@ -234,8 +234,7 @@ import WorkoutScreen from '../screens/client/WorkoutScreen'; import ProgressScre
 import ProfileScreen from '../screens/client/ProfileScreen'; import ReportScreen from '../screens/client/ReportScreen';
 const press = async (s: Awaited<ReturnType<typeof render>>, label: string) => fireEvent.press(s.getByLabelText(label));
 beforeEach(() => {
-  jest.clearAllMocks();
-  mockUser = { id: 'client', email: 'client@example.test' };
+  jest.clearAllMocks(); mockUser = { id: 'client', email: 'client@example.test' };
   mockAssignments = []; mockRoutines = []; mockSessions = []; mockWeights = [];
 });
 describe('Truthful client copy and routes/actions parity', () => {

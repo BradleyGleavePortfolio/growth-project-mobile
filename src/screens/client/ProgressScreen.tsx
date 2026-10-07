@@ -474,9 +474,6 @@ export default function ProgressScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Progress</Text>
           <View style={styles.headerRight}>
-            {loggingStreak > 0 && (
-              <Text style={styles.runText}>{runLabel}</Text>
-            )}
             {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
                 navigate directly instead of through the old ProfileStack parent. */}
             {/* Phase 11: Share streak card when streak >= 3 days */}
@@ -509,6 +506,7 @@ export default function ProgressScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        {loggingStreak > 0 && <Text style={[styles.runText, { marginHorizontal: 24, marginBottom: 8 }]}>{runLabel}</Text>}
 
         {/* §2.7 Roman streak milestone — voiced beside his face. HIDE-UNTIL-LIVE
             (P1-B-02): `streakTier` is derived from a CLIENT-SIDE recomputed
