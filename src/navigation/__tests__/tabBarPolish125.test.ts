@@ -5,12 +5,12 @@ const src = (name: string) => fs.readFileSync(path.join(__dirname, '..', name), 
 
 describe('primary tab-bar appearance and safe-area contracts', () => {
   it.each([
-    ['ClientNavigator.tsx', 'textPrimary', 'bgPrimary', 64],
+    ['ClientNavigator.tsx', 'forest', 'bgPrimary', 64],
     ['CoachNavigator.tsx', 'accentText', 'bgSurface', 60],
   ] as const)('%s uses readable tokens and preserves content above the safe inset', (name, active, bg, height) => {
     const nav = src(name);
     expect(nav).toMatch(/semanticColors:\s*sc/);
-    expect(nav).toMatch(new RegExp(`tabBarActiveTintColor:\\s*sc\\.${active}`));
+    expect(nav).toMatch(new RegExp(`tabBarActiveTintColor:\\s*${name === 'ClientNavigator.tsx' ? 'colors' : 'sc'}\\.${active}`));
     expect(nav).toMatch(/tabBarInactiveTintColor:\s*sc\.textMuted/);
     expect(nav).toMatch(new RegExp(`backgroundColor:\\s*sc\\.${bg}`));
     expect(nav).toMatch(/borderTopColor:\s*sc\.border/);

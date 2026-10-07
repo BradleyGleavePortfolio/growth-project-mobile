@@ -45,7 +45,7 @@ jest.mock('../theme/ThemeProvider', () => ({
       bgSurface: '#F1E8D5',
       accent: '#2C4A36',
       textPrimary: '#1A1A18',
-      textMuted: '#B1A89F',
+      textMuted: '#6B675F',
       border: 'rgba(176,141,87,0.2)',
     },
   }),

@@ -1,7 +1,13 @@
 import React from 'react';
+import { Alert, Switch } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { ThemeProvider } from '../../../theme/ThemeProvider';
+import HapticPressable from '../../../components/HapticPressable';
+import { profileApi, notificationsApi } from '../../../services/api';
+import { signOut } from '../../../services/authActions';
+import { updateSupabasePassword } from '../../../utils/supabaseAuth';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import SettingsScreen from '../SettingsScreen';
 import { keepDayOneAnswers } from '../../day-one/answers';
@@ -12,16 +18,17 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: mockUserId, email: 'client@example.com' }),
 }));
 jest.mock('../../../services/api', () => ({
-  profileApi: { update: jest.fn() },
-  notificationsApi: { updatePreferences: jest.fn() },
+  profileApi: { update: jest.fn(async () => ({})) },
+  notificationsApi: { updatePreferences: jest.fn(async () => ({})) },
 }));
 jest.mock('../../../services/authActions', () => ({
   signOut: jest.fn(), refreshProfile: jest.fn(),
 }));
-jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn() }));
+jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn(async () => ({ ok: true })) }));
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
 jest.mock('../../../components/tutorial/TutorialSettingsRow', () => () => null);
 jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
+jest.mock('../../../config/featureFlags', () => ({ featureFlags: { consultationOnboarding: true, romanChat: true } }));
 
 const navigationStub: Pick<NavigationProp<ParamListBase>, 'goBack' | 'navigate'> = {
   goBack: jest.fn(), navigate: jest.fn(),
@@ -34,6 +41,53 @@ beforeEach(async () => {
 });
 
 describe('Settings uses this account’s retained Day-1 check-in choice', () => {
+  it('preserves all other Settings navigation and preference actions', async () => {
+    const view = await render(<SettingsScreen navigation={navigation} />);
+    await fireEvent.press(view.UNSAFE_getAllByType(HapticPressable)[0]);
+    expect(navigation.goBack).toHaveBeenCalled();
+    for (const [label, route] of [
+      ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
+      ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
+      ['Roman and AI', 'RomanAiConsent'], ['Blocked Users', 'BlockedUsers'],
+      ['Request my data export', 'DataExport'],
+    ]) {
+      await fireEvent.press(view.getByLabelText(label));
+      expect(navigation.navigate).toHaveBeenLastCalledWith(route);
+    }
+    const steps = view.UNSAFE_getAllByType(Ionicons).filter((icon) => ['remove', 'add'].includes(icon.props.name));
+    for (const [index, payload] of [[0, { meals_per_day: 3 }], [1, { meals_per_day: 4 }],
+      [2, { water_goal_oz: 90 }], [3, { water_goal_oz: 100 }]] as const) {
+      await fireEvent.press(steps[index]);
+      expect(profileApi.update).toHaveBeenLastCalledWith(payload);
+    }
+    const keys = ['dailyCheckin', 'mealReminders', 'fastingAlerts', 'weeklySummary', 'hapticsEnabled'];
+    for (let index = 0; index < keys.length; index += 1) {
+      const toggle = view.UNSAFE_getAllByType(Switch)[index], value = !toggle.props.value;
+      await fireEvent(toggle, 'valueChange', value);
+      await waitFor(async () => expect(JSON.parse((await AsyncStorage.getItem('gp_client_settings'))!)[keys[index]]).toBe(value));
+    }
+    expect(notificationsApi.updatePreferences).toHaveBeenCalledTimes(4);
+  });
+
+  it('preserves password, reset and sign-out controls without real account writes', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const view = await render(<SettingsScreen navigation={navigation} />);
+    await fireEvent.press(view.getByText('Change Password'));
+    await fireEvent.press(view.getByLabelText('Close'));
+    await fireEvent.press(view.getByText('Change Password'));
+    await fireEvent.changeText(view.getByLabelText('New password'), 'test-password');
+    await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'test-password');
+    await fireEvent.press(view.getByLabelText('Update password'));
+    expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
+    await fireEvent.press(view.getByText('Reset Onboarding'));
+    expect(alert).toHaveBeenLastCalledWith('Reset Onboarding', expect.any(String), expect.any(Array));
+    await fireEvent.press(view.getByText('Sign Out'));
+    const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
+    buttons.find((button) => button.text === 'Sign Out')!.onPress!();
+    expect(signOut).toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
   it('offers working Light and System controls, and resolves a stored Dark to Light', async () => {
     await AsyncStorage.setItem('gp_appearance', 'dark');
     await render(<ThemeProvider><SettingsScreen navigation={navigation} /></ThemeProvider>);

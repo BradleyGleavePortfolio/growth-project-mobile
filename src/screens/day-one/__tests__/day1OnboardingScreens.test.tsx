@@ -57,7 +57,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
       surfaceElevated: '#E8DCC8',
       textPrimary: '#1A1A18',
       textSecondary: '#5C5C5A',
-      textMuted: '#B1A89F',
+      textMuted: '#6B675F',
       textOnPrimary: '#F5EFE4',
       primary: '#2C4A36',
       primaryDark: '#1E3326',

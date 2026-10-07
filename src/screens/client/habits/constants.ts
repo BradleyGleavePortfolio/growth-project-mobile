@@ -2,7 +2,6 @@ import type { ThemeColors } from '../../../theme/ThemeProvider';
 import { Colors } from '../../../constants/colors';
 
 export const MOOD_LABELS = ['', 'Awful', 'Bad', 'Okay', 'Good', 'Great'];
-export const MOOD_EMOJIS = ['', 'low', 'off', 'flat', 'good', 'strong'];
 export const ENERGY_LABELS = ['', 'Exhausted', 'Low', 'Normal', 'High', 'Energized'];
 export const STRESS_LABELS = ['', 'Minimal', 'Low', 'Moderate', 'High', 'Extreme'];
 export const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
