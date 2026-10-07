@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Haptics from 'expo-haptics';
 import { aiBuilderApi, toAiBuilderError, type AiBuilderInjuryArea, type AiBuilderProposal, type AiBuilderQuickAction, type AiBuilderRef, type AiBuilderStatus } from '../../../api/aiBuilderApi';
-import { AI_STAGES, describeAiBuilderError, WAIT_FOR_SAVE_COPY } from './aiBuilderCopy';
+import { AI_STAGES, aiStages, describeAiBuilderError, WAIT_FOR_SAVE_COPY } from './aiBuilderCopy';
 
 export type AiHaptic = 'light' | 'medium' | 'success' | 'warning' | 'error' | 'selection';
 
@@ -48,6 +48,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
 
   const [phase, setPhase] = useState<'idle' | 'thinking' | 'review' | 'applying'>('idle');
   const [stage, setStage] = useState(0);
+  const [stages, setStages] = useState<readonly string[]>(AI_STAGES); // U1: the labels match what the server screens for this ask
   const [proposal, setProposal] = useState<AiBuilderProposal | null>(null);
   const [kept, setKept] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     async (args: { instruction: string; quickAction?: AiBuilderQuickAction; injuryArea?: AiBuilderInjuryArea }) => {
       if (!planId || phase === 'thinking' || phase === 'applying') return;
       fireAiHaptic('medium');
-      setError(null); setProposal(null); setPhase('thinking'); setStage(0); stopStages();
+      setError(null); setProposal(null); setPhase('thinking'); setStage(0); setStages(aiStages(!!args.injuryArea)); stopStages();
       timer.current = setInterval(() => setStage((s) => Math.min(s + 1, AI_STAGES.length - 1)), AI_STAGE_MS);
       try {
         const ready = await prepare();
@@ -127,7 +128,7 @@ export function useAiBuilder({ planId, isBlank, prepare, onApplied }: UseAiBuild
     }
   }, [proposal]);
 
-  return { visible: status.loaded && status.value !== null, status: status.value ?? null, statusError: status.error ?? null, checking: !!status.checking, retryStatus: loadStatus, phase, stage, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
+  return { visible: status.loaded && status.value !== null, status: status.value ?? null, statusError: status.error ?? null, checking: !!status.checking, retryStatus: loadStatus, phase, stage, stages, proposal, kept, acceptedIds, error, propose, toggle, apply, discard };
 }
 
 export type AiBuilderController = ReturnType<typeof useAiBuilder>;

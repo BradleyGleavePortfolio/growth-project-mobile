@@ -57,6 +57,19 @@ jest.mock("../../../../hooks/usePrograms", () => ({
   useInvalidatePrograms: () => jest.fn(),
 }));
 
+// AIB-FINISH-127: the library's New workout with AI entry (Ask AI status visible + the builder's autosave flag).
+let mockAutosaveFlag = false;
+const mockAiEntry = jest.fn(() => ({ visible: true, status: null }));
+jest.mock("../../../../config/featureFlags", () => {
+  const actual = jest.requireActual("../../../../config/featureFlags");
+  // defineProperty, not a getter beside a spread: the spread transform would read the getter once at mock time.
+  const featureFlags = Object.defineProperty({ ...actual.featureFlags }, "mwbAutosave", { get: () => mockAutosaveFlag });
+  return { ...actual, featureFlags };
+});
+jest.mock("../../../../components/coach/ai-entry/useAiEntryStatus", () => ({
+  useAiEntryStatus: () => mockAiEntry(),
+}));
+
 import ProgramsLibraryScreen from "../ProgramsLibraryScreen";
 import ProgramEditorScreen from "../ProgramEditorScreen";
 
@@ -144,6 +157,20 @@ describe("ProgramsLibraryScreen", () => {
     ).toBeTruthy();
     expect(screen.getByLabelText("Contact support")).toBeTruthy();
     expect(screen.queryByText(/Something went wrong/)).toBeNull();
+  });
+
+  it.each([
+    [true, true, true], [false, true, false], [true, false, false],
+  ])("New workout with AI (status visible %s, autosave %s) shows %s and opens the builder straight into Ask AI", async (visible, flag, shown) => {
+    [(mockAutosaveFlag = flag), mockAiEntry.mockReturnValue({ visible, status: null }), mockProgramList.mockReturnValue(listResult())];
+    const screen = await render(<ProgramsLibraryScreen />);
+    const entry = screen.queryByLabelText("New workout with AI");
+    expect(!!entry).toBe(shown);
+    if (entry) {
+      await fireEvent.press(entry);
+      expect(mockNavigate).toHaveBeenCalledWith("CoachWorkoutBuilder", { openAi: true });
+    }
+    mockAutosaveFlag = false;
   });
 
   it("saved workouts tab opens the builder for a new standalone workout", async () => {

@@ -24,6 +24,8 @@ import type {
   SavedWorkout,
 } from "../../../api/programsApi";
 import { describeProgramFailure } from "../../../utils/programErrors";
+import { featureFlags } from "../../../config/featureFlags";
+import { useAiEntryStatus } from "../../../components/coach/ai-entry/useAiEntryStatus";
 import {
   Chip,
   FailureBox,
@@ -45,6 +47,8 @@ export default function ProgramsLibraryScreen() {
   const [status, setStatus] = useState<ProgramStatusFilter>("active");
 
   const programs = useProgramList(query, goalTag, status);
+  // U3 (AIB-FINISH-127): shown where Ask AI exists (status route present) in builds with the builder's autosave.
+  const aiEntry = useAiEntryStatus();
   const saved = useSavedWorkouts(tab === "saved" ? query : "");
 
   const programItems = useMemo(
@@ -91,6 +95,16 @@ export default function ProgramsLibraryScreen() {
           />
         )}
       </View>
+      {aiEntry.visible && featureFlags.mwbAutosave ? (
+        <View style={styles.row}>
+          <SmallButton
+            icon="sparkles-outline"
+            label="New workout with AI"
+            onPress={() => navigation.navigate("CoachWorkoutBuilder", { openAi: true })}
+            accessibilityHint="Saves a new workout and opens Ask AI to build it"
+          />
+        </View>
+      ) : null}
       <View style={styles.row} accessibilityRole="tablist">
         <Chip
           label="Programs"

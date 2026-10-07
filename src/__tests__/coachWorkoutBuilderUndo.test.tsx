@@ -22,6 +22,7 @@
 
 import React from "react";
 import { render, waitFor, fireEvent, act } from "@testing-library/react-native";
+import { Alert } from "react-native";
 
 // Drive the MWB-4 autosave flag WITHOUT `jest.resetModules()`. The screen
 // reads `featureFlags.mwbAutosave` at *render* time (a live property access in
@@ -97,11 +98,13 @@ jest.mock("../screens/client/wearables/components/useReduceMotion", () => ({
 // (the stable-flush teardown path), so the stub must expose `addListener`
 // returning an unsubscribe; without it the screen's effect throws on mount.
 const mockGoBack = jest.fn();
+const mockReplace = jest.fn();
 const mockAddListener = jest.fn(() => jest.fn());
+let mockRouteParams: { planId?: string; openAi?: boolean } = { planId: "plan-1" }; // AIB-FINISH-127: new-workout cases
 jest.mock("@react-navigation/native", () => ({
   __esModule: true,
-  useRoute: () => ({ params: { planId: "plan-1" } }),
-  useNavigation: () => ({ goBack: mockGoBack, addListener: mockAddListener }),
+  useRoute: () => ({ name: "CoachWorkoutBuilder", params: mockRouteParams }),
+  useNavigation: () => ({ goBack: mockGoBack, replace: mockReplace, addListener: mockAddListener }),
 }));
 
 // The workout-builder query/mutation hooks — deterministic stand-ins.
@@ -284,6 +287,7 @@ beforeEach(() => {
   // `clearAllMocks` wipes implementations too, so re-establish the defaults the
   // boundary mocks need between tests.
   mockCurrentPlan = EXISTING_PLAN;
+  mockRouteParams = { planId: "plan-1" };
   mockAiStatus.mockResolvedValue(null);
   mockReadMirror.mockResolvedValue(null);
   mockClearMirrorIfKey.mockResolvedValue(undefined);
@@ -865,5 +869,58 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     mockRefetch.mockResolvedValueOnce({ data: EXISTING_PLAN, isError: false });
     await press(screen, "ai-toast-undo");
     expect(mockUndoCall).toHaveBeenCalledWith("plan-1", { to_revision_index: 0, expected_head_index: 1 });
+  });
+});
+
+describe("CoachWorkoutBuilderScreen — Ask AI on a new workout (AIB-FINISH-127 U3)", () => {
+  const ON = { state: "on", create: true, edit: true, credits: { remaining_pct: 50, resets_at: null }, label: "AI-suggested, coach-approved" };
+  const press = (screen: Screen, id: string) => act(async () => { await fireEvent.press(screen.getByTestId(id)); });
+  const mountNew = async (params: { planId?: string; openAi?: boolean }, status: object = ON) => {
+    [setFlag(true), (mockRouteParams = params), mockAiStatus.mockResolvedValue(status), mockCreateMutateAsync.mockResolvedValue({ id: "new-1" })];
+    if (!params.planId) mockCurrentPlan = undefined;
+    const Screen = loadScreen();
+    return render(<Screen />);
+  };
+  const reopened = () => expect(mockReplace).toHaveBeenCalledWith("CoachWorkoutBuilder", { planId: "new-1", openAi: true });
+
+  it("the bar invites a description (no save-first dead end); a tap saves through Create plan and reopens the saved plan with Ask AI open", async () => {
+    const alert = jest.spyOn(Alert, "alert");
+    const screen = await mountNew({});
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    [expect(screen.getByText("Describe the workout to build")).toBeTruthy(), expect(screen.queryByText(/Save this workout first/)).toBeNull()];
+    await press(screen, "ai-prompt-bar");
+    expect(mockCreateMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ name: "New workout", type: "strength" }));
+    expect(mockSetExercisesMutateAsync).toHaveBeenCalledWith({ planId: "new-1", rows: [] });
+    [reopened(), expect(alert).not.toHaveBeenCalled(), expect(mockGoBack).not.toHaveBeenCalled()];
+    alert.mockRestore();
+  });
+
+  it("a failed save shows its own copy and keeps the coach on the screen", async () => {
+    const screen = await mountNew({});
+    mockCreateMutateAsync.mockRejectedValueOnce(new Error("offline"));
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    await press(screen, "ai-prompt-bar");
+    expect(screen.getByTestId("ai-save-error").props.children).toMatch(/^The workout could not be saved, so Ask AI did not open\./);
+    expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it("paused: the tap opens the sheet with the paused copy and saves nothing", async () => {
+    const screen = await mountNew({}, { ...ON, state: "paused" });
+    await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
+    await press(screen, "ai-prompt-bar");
+    expect(screen.getByTestId("ai-builder-blocked").props.children).toMatch(/^Ask AI is paused/);
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("arriving on the saved plan with openAi opens the Ask AI sheet without another tap", async () => {
+    const screen = await mountNew({ planId: "plan-1", openAi: true });
+    await waitFor(() => expect(screen.getByTestId("ai-builder-input")).toBeTruthy());
+    expect(mockCreateMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it("New workout with AI (a new workout with openAi) saves and reopens straight into Ask AI", async () => {
+    await mountNew({ openAi: true });
+    await waitFor(() => reopened());
+    expect(mockCreateMutateAsync).toHaveBeenCalledTimes(1);
   });
 });

@@ -33,7 +33,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
+import { RouteProp, useNavigation, useRoute, type ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Alert,
   KeyboardAvoidingView,
@@ -91,7 +92,7 @@ import AiBuilderSheet from '../../components/coach/ai-builder/AiBuilderSheet';
 import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/AiFunLayer';
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
-import { appliedToast, SAVE_FIRST_COPY } from '../../components/coach/ai-builder/aiBuilderCopy';
+import { appliedToast, NEW_WORKOUT_NAME, NEW_WORKOUT_PROMPT, NEW_WORKOUT_SAVE_FAILED, NEW_WORKOUT_SAVING } from '../../components/coach/ai-builder/aiBuilderCopy';
 
 /** S-MWB-3: the undo / redo barrier phases (see the screen body). */
 type HistoryOutcome = 'applied' | 'elsewhere';
@@ -123,7 +124,8 @@ function historyGatePhase(ref: {
   return ref.current?.phase ?? null;
 }
 
-type RouteParam = { planId?: string };
+/** openAi (AIB-FINISH-127): open Ask AI on arrival; a new workout is saved first (Ask AI works on a saved plan). */
+type RouteParam = { planId?: string; openAi?: boolean };
 
 /**
  * Placeholder lock token + base index used for the FIRST autosave attempt.
@@ -270,7 +272,7 @@ function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
 
 export default function CoachWorkoutBuilderScreen() {
   const route = useRoute<RouteProp<Record<string, RouteParam>, string>>();
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
   const planId = route.params?.planId;
   const isEditing = Boolean(planId);
 
@@ -1189,8 +1191,7 @@ export default function CoachWorkoutBuilderScreen() {
   // baseline reanchor, exactly the window in which a full-replace Save is unsafe.
   // AUDIT-07-125: never send a full-replace Save for a plan that has not
   // loaded yet; its exercise list would be empty and erase the saved one.
-  const canSave =
-    name.trim().length > 0 &&
+  const saveReady =
     !planLoading &&
     !editorLocked &&
     !autosave.replayInFlight &&
@@ -1199,9 +1200,13 @@ export default function CoachWorkoutBuilderScreen() {
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;
+  const canSave = name.trim().length > 0 && saveReady;
+  // U3 (AIB-FINISH-127): Ask AI on a new workout runs this same save (a blank name becomes NEW_WORKOUT_NAME), then reopens the
+  // screen on the saved plan with the sheet open: the save, close and reopen the coach used to do by hand.
+  const [aiSaveError, setAiSaveError] = useState<string | null>(null);
 
-  const onSave = useCallback(async () => {
-    const trimmedName = name.trim();
+  const onSave = useCallback(async (forAi = false) => {
+    const trimmedName = name.trim() || (forAi ? NEW_WORKOUT_NAME : '');
     if (!trimmedName) return;
     const durationParsed = duration.trim() ? parseInt(duration.trim(), 10) : undefined;
     const cleanDuration =
@@ -1249,9 +1254,11 @@ export default function CoachWorkoutBuilderScreen() {
           rows: payload,
         });
       }
+      if (forAi && resolvedPlanId) return navigation.replace(route.name, { planId: resolvedPlanId, openAi: true });
       Alert.alert('Plan saved', 'Workout plan saved successfully.');
       navigation.goBack();
     } catch (err) {
+      if (forAi) return setAiSaveError(NEW_WORKOUT_SAVE_FAILED);
       Alert.alert(
         'Could not save plan',
         err instanceof Error ? err.message : 'Unknown error',
@@ -1264,6 +1271,7 @@ export default function CoachWorkoutBuilderScreen() {
     name,
     navigation,
     planId,
+    route.name,
     rows,
     setExercisesMut,
     type,
@@ -1544,11 +1552,27 @@ export default function CoachWorkoutBuilderScreen() {
     const t = aiToast ? setTimeout(() => setAiToast(null), 10_000) : undefined;
     return () => clearTimeout(t);
   }, [aiToast]);
+  // A new workout: with Ask AI on, the tap saves it first (onSave(true) reopens the screen with the sheet open). Paused or out of
+  // credits, the sheet opens straight away with that state and nothing is saved.
+  const aiOnNew = !isEditing && featureFlags.mwbAutosave;
+  const savingNew = !isEditing && (createMut.isPending || setExercisesMut.isPending);
+  const aiBarLabel = savingNew ? NEW_WORKOUT_SAVING : rows.length === 0 ? NEW_WORKOUT_PROMPT : 'Ask AI to change this workout';
   const openAi = useCallback(() => {
-    if (!autosaveEnabled) return;
+    if (!autosaveEnabled && !aiOnNew) return;
     fireAiHaptic('light');
-    setAiOpen(true);
-  }, [autosaveEnabled]);
+    if (!aiOnNew || ai.status?.state !== 'on') return setAiOpen(true);
+    if (!saveReady) return;
+    setAiSaveError(null);
+    void onSave(true);
+  }, [autosaveEnabled, aiOnNew, ai.status?.state, saveReady, onSave]);
+  // Arrival with openAi (Ask AI on a new workout, or New workout with AI in the library): once the plan has loaded, open the
+  // sheet; on a new workout take the same path as a tap on the Ask AI bar.
+  const openAiOnArrival = useRef(route.params?.openAi === true);
+  useEffect(() => {
+    if (!openAiOnArrival.current || !ai.visible || (isEditing ? !autosaveEnabled || planLoading : !aiOnNew)) return;
+    openAiOnArrival.current = false;
+    openAi();
+  }, [ai.visible, isEditing, autosaveEnabled, planLoading, aiOnNew, openAi]);
 
   const historyBlocked =
     editorLocked ||
@@ -1591,7 +1615,7 @@ export default function CoachWorkoutBuilderScreen() {
               onPress={onPillPress}
             />
           ) : null}
-          {ai.visible && autosaveEnabled ? (
+          {ai.visible && (autosaveEnabled || aiOnNew) ? (
             <Pressable testID="ai-header-button" accessibilityRole="button" accessibilityLabel="Ask AI to change this workout" onPress={openAi} style={styles.historyButton}>
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Ask AI</Text>
             </Pressable>
@@ -1906,13 +1930,16 @@ export default function CoachWorkoutBuilderScreen() {
       {aiToast ? (
         <AiWinToast key={aiApplied} text={aiToast.text} undo={aiToast.undo} undoDisabled={historyBlocked} sc={sc}
           onUndo={() => { setAiToast(null); void runHistoryStep('undo'); }} />
-      ) : ai.visible && (autosaveEnabled || !isEditing) ? (
-        <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
-          accessibilityState={{ disabled: !autosaveEnabled }} disabled={!autosaveEnabled} onPress={openAi} style={styles.aiBar}>
-          <Text style={[typography.body, { color: sc.textMuted }]}>
-            {!autosaveEnabled ? SAVE_FIRST_COPY : rows.length === 0 ? 'Describe the workout to build' : 'Ask AI to change this workout'}
-          </Text>
-        </Pressable>
+      ) : ai.visible && (autosaveEnabled || aiOnNew) ? (
+        <View>
+          {aiSaveError ? (
+            <Text testID="ai-save-error" accessibilityRole="alert" style={[typography.caption, { color: sc.textPrimary, paddingHorizontal: spacing.md }]}>{aiSaveError}</Text>
+          ) : null}
+          <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={aiBarLabel} accessibilityHint={aiOnNew ? 'Saves this workout, then opens Ask AI' : undefined}
+            accessibilityState={{ disabled: savingNew, busy: savingNew }} disabled={savingNew} onPress={openAi} style={styles.aiBar}>
+            <Text style={[typography.body, { color: sc.textMuted }]}>{aiBarLabel}</Text>
+          </Pressable>
+        </View>
       ) : null}
       <AiBuilderSheet open={aiOpen} onClose={() => setAiOpen(false)} ai={ai} isBlank={rows.length === 0} sc={sc} />
     </KeyboardAvoidingView>
