@@ -305,7 +305,7 @@ describe('Truthful client copy and routes/actions parity', () => {
   it('keeps every Profile route and names only granted sharing scopes', async () => {
     const s = await render(React.createElement(ProfileScreen));
     expect(s.queryByText('Day 7 of 30.')).toBeNull();
-    expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy();
+    expect(s.queryByText(/Workouts.*(?:visible|shared)/)).toBeNull();
     for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Widgets', 'Widgets'], ['Learn', 'Learn'], ['Edit personal info', 'EditProfile']]) {
       await press(s, label); expect(mockNavigate).toHaveBeenLastCalledWith(route);
     }
@@ -320,14 +320,27 @@ describe('Truthful client copy and routes/actions parity', () => {
     mockUser = { ...mockUser, coach_id: 'coach' };
     await s.rerender(React.createElement(ProfileScreen));
     await act(async () => { focusProfile(); });
-    await waitFor(() => expect(s.getByText('Workouts are visible to you and Coach Lee. Meals are visible only to you.')).toBeTruthy());
+    await waitFor(() => expect(s.getByText('Workouts are shared with Coach Lee. Meals are not shared with Coach Lee.')).toBeTruthy());
+    expect(s.queryByText(/only to you/)).toBeNull();
+  });
+  it.each([
+    { grants: [true, true], copy: 'Workouts and meals are shared with Coach Lee.' },
+    { grants: [false, false], copy: 'Workouts and meals are not shared with Coach Lee.' },
+    { grants: [true, false], copy: 'Workouts are shared with Coach Lee. Meals are not shared with Coach Lee.' },
+    { grants: [false, true], copy: 'Workouts are not shared with Coach Lee. Meals are shared with Coach Lee.' },
+  ])('describes only assigned-coach sharing for grants $grants', async ({ grants, copy }) => {
+    mockUser.coach_id = 'coach'; mockConsent = grants;
+    const s = await render(React.createElement(ProfileScreen));
+    await act(async () => { focusProfile(); });
+    await waitFor(() => expect(s.getByText(copy)).toBeTruthy());
+    expect(s.queryByText(/only to you/)).toBeNull();
   });
   it.each([true, false, undefined, 'false'])('never hides owner access or assumes it is absent (%s)', async (ownerAccess) => {
     mockUser.coach_id = 'coach'; mockConsent = [false, false]; mockOwnerAccess = ownerAccess;
     const s = await render(React.createElement(ProfileScreen));
     await act(async () => { focusProfile(); });
     await waitFor(() => expect(require('../services/api').default.get).toHaveBeenCalledWith('/consent/me?coach_id=coach'));
-    if (ownerAccess === false) expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy();
+    if (ownerAccess === false) expect(s.getByText('Workouts and meals are not shared with Coach Lee.')).toBeTruthy();
     else {
       expect(s.queryByText(/visible only to you/)).toBeNull();
       if (ownerAccess === true) expect(s.getByText('Workouts and meals are visible to you and Coach Lee.')).toBeTruthy();
@@ -338,16 +351,16 @@ describe('Truthful client copy and routes/actions parity', () => {
     const s = await render(React.createElement(ProfileScreen));
     let blur: (() => void) | undefined;
     await act(async () => { blur = focusProfile(); });
-    await waitFor(() => expect(s.getByText('Workouts and meals are visible only to you.')).toBeTruthy());
+    await waitFor(() => expect(s.getByText('Workouts and meals are not shared with Coach Lee.')).toBeTruthy());
     await press(s, 'Settings'); expect(mockNavigate).toHaveBeenLastCalledWith('Settings'); blur?.();
     mockConsent = [true, true];
     let releaseCoach: (() => void) | undefined;
     const pendingCoach = new Promise((resolve) => { releaseCoach = () => resolve({ data: { id: 'coach', name: 'Coach Lee' } }); });
     require('../services/api').default.get.mockImplementationOnce(() => pendingCoach);
     await act(async () => { focusProfile(); });
-    expect(s.queryByText(/visible only to you/)).toBeNull();
+    expect(s.queryByText(/Workouts.*(?:visible|shared)/)).toBeNull();
     await act(async () => { releaseCoach?.(); });
-    await waitFor(() => expect(s.getByText('Workouts and meals are visible to you and Coach Lee.')).toBeTruthy());
+    await waitFor(() => expect(s.getByText('Workouts and meals are shared with Coach Lee.')).toBeTruthy());
     expect(require('../services/api').default.get).toHaveBeenCalledTimes(4);
   });
   it('labels canned report advice as general and keeps Back', async () => {
