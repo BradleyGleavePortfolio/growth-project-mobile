@@ -175,6 +175,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens,
     colors: {
       background: '#F5EFE4',
       surface: '#F1E8D5',

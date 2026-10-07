@@ -39,9 +39,7 @@ test('path keeps flag gating, refresh and factual empty state without promised m
   fetchPath.mockResolvedValue({ suggestions: [], pendingVerifiedProgress: [], isStale: true, generatedAt: '' });
   const screen = await render(<ClientPathCopilotScreen />); expect(await screen.findByText('No suggestions are available.')).toBeTruthy();
   await act(async () => screen.getByLabelText('Client Path Copilot screen').props.refreshControl.props.onRefresh());
-  expect(fetchPath).toHaveBeenCalledTimes(2);
-  await screen.unmount();
-  mockFlags.clientPathCopilot = false;
+  expect(fetchPath).toHaveBeenCalledTimes(2); await screen.unmount(); mockFlags.clientPathCopilot = false;
   expect((await render(<ClientPathCopilotScreen />)).getByText('Path suggestions are not available on this account.')).toBeTruthy();
 });
 test('path shows only supplied suggestions and keeps a failed load distinct from emptiness', async () => {
