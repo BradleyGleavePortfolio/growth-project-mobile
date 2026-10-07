@@ -52,6 +52,8 @@ import { SupportEmailFallback, useSupportEmail } from '../../components/support/
 // Static import (was a dynamic `import()`): Metro bundles the module either
 // way, and a static import lets the Google path be exercised in Jest.
 import { signInWithGoogle } from '../../utils/googleAuth';
+import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { authEvents } from '../../utils/authEvents';
@@ -193,6 +195,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     roleChoiceEnabled === true && intendedRole === 'coach' && !arrivedWithCode && !hasTypedCode;
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  // B-SHARE-127: with a code, the sign-up buttons are the join. The sentence
+  // shows above them, and its version is sent, only when the server records it.
+  const sharingVersion = useCoachSharingNotice();
+  const sharingNotice = !isCoachSignup && hasTypedCode ? sharingVersion : null;
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
   );
@@ -508,6 +514,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             password,
             phone: phone || undefined,
             invite_code: trimmedCode,
+            ...(sharingNotice ? { coach_sharing_notice: sharingNotice } : {}),
           });
           // C03: the account can be created while the coach attach fails.
           // Never continue silently; remember it so the post-verify step
@@ -742,6 +749,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       const result = await signInWithApple({
         inviteCode: trimmedCode || undefined,
         intendedRole: intendedRoleForRequest(roleChoiceEnabled === true, intendedRole, !!trimmedCode),
+        ...(trimmedCode && sharingNotice ? { coachSharingNotice: sharingNotice } : {}),
       });
       if (!result.success) {
         // A cancelled Apple sheet never reached the server.
@@ -820,6 +828,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       const result = await signInWithGoogle({
         inviteCode: trimmedCode || undefined,
         intendedRole: intendedRoleForRequest(roleChoiceEnabled === true, intendedRole, !!trimmedCode),
+        ...(trimmedCode && sharingNotice ? { coachSharingNotice: sharingNotice } : {}),
       });
 
       if (!result.success) {
@@ -1395,6 +1404,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </Text>
           .
         </Text>
+
+        <CoachSharingNotice
+          version={sharingNotice}
+          coachName={invitePreview?.valid ? invitePreview.business_name || invitePreview.coach_name : null}
+        />
 
         <TouchableOpacity
           style={[styles.registerButton, loading && styles.buttonDisabled]}

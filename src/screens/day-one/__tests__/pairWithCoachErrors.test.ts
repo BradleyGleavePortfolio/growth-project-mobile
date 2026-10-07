@@ -27,7 +27,7 @@ function refusal(status: number, data: Record<string, unknown>) {
 async function kindFor(status: number, data: Record<string, unknown>) {
   attach.mockRejectedValueOnce(refusal(status, data));
   const res = await pairWithCoach(' GP-ABC234 ');
-  expect(attach).toHaveBeenLastCalledWith('GP-ABC234');
+  expect(attach).toHaveBeenLastCalledWith('GP-ABC234', undefined);
   if (res.ok) throw new Error('expected a refusal');
   return res.error.kind;
 }

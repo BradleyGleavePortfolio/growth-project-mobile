@@ -58,8 +58,9 @@ export function buildAppleAuthBody(input: {
   givenName?: string | null;
   familyName?: string | null;
   inviteCode?: string;
-}): { token: string; full_name?: string; invite_code?: string } {
-  const body: { token: string; full_name?: string; invite_code?: string } = {
+  coachSharingNotice?: string;
+}): { token: string; full_name?: string; invite_code?: string; coach_sharing_notice?: string } {
+  const body: { token: string; full_name?: string; invite_code?: string; coach_sharing_notice?: string } = {
     token: input.identityToken,
   };
   const fullName = [input.givenName, input.familyName]
@@ -69,6 +70,8 @@ export function buildAppleAuthBody(input: {
     .slice(0, 200);
   if (fullName) body.full_name = fullName;
   if (input.inviteCode) body.invite_code = input.inviteCode;
+  // B-SHARE-127: only with the code, and only when the sentence was shown.
+  if (input.inviteCode && input.coachSharingNotice) body.coach_sharing_notice = input.coachSharingNotice;
   return body;
 }
 
@@ -131,6 +134,8 @@ export interface AppleAuthOptions {
    * is present (always client).
    */
   intendedRole?: IntendedRole;
+  /** B-SHARE-127: sent with the invite code only when the screen showed the coach-sharing sentence. */
+  coachSharingNotice?: string;
 }
 
 // Apple-specific cancel error code surfaced by expo-apple-authentication.
@@ -222,6 +227,7 @@ export async function signInWithApple(
       givenName: credential.fullName?.givenName,
       familyName: credential.fullName?.familyName,
       inviteCode: options.inviteCode,
+      coachSharingNotice: options.coachSharingNotice,
     });
 
     // POST the identity token to /auth/apple. The backend verifies the JWT

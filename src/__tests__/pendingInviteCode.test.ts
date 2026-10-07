@@ -42,7 +42,7 @@ describe('pending invite code', () => {
     (authApi.attachInviteCode as jest.Mock).mockResolvedValueOnce({ data: {} });
     const result = await claimPendingInviteCode();
     expect(result.ok).toBe(true);
-    expect(authApi.attachInviteCode).toHaveBeenCalledWith('GROWTH-1');
+    expect(authApi.attachInviteCode).toHaveBeenCalledWith('GROWTH-1', undefined);
     expect(await readPendingInviteCode()).toBeNull();
   });
 

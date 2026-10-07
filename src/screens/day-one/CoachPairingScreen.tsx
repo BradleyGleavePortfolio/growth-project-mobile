@@ -33,6 +33,8 @@ import { writePendingInviteCode } from '../../lib/pendingInviteCode';
 import { t } from './i18n/strings';
 import { pairWithCoach, type DayOneError } from './api';
 import StepHeader from './StepHeader';
+import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
@@ -75,6 +77,8 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = code.trim().length >= 4 && !submitting;
+  // B-SHARE-127: the sentence above the connect button; its version is sent with the code.
+  const sharingVersion = useCoachSharingNotice();
 
   const handleSubmit = async () => {
     setError(null);
@@ -84,7 +88,7 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
       return;
     }
     setSubmitting(true);
-    const result = await pairWithCoach(trimmed);
+    const result = await pairWithCoach(trimmed, sharingVersion);
     setSubmitting(false);
     if (result.ok) {
       track('day_one_step_completed', { step: 2, screen: 'coach_pairing', method: fromDeepLink ? 'deep_link' : 'manual' });
@@ -154,6 +158,7 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
           </View>
 
           <View style={styles.actions}>
+            <CoachSharingNotice version={sharingVersion} />
             <TouchableOpacity
               style={[styles.cta, !canSubmit && styles.ctaDisabled]}
               activeOpacity={0.85}

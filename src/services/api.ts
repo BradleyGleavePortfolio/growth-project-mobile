@@ -595,16 +595,20 @@ export const authApi = {
     ),
   // Invite-code signup is always a client: the server default. The field is
   // never sent here (the server refuses 'coach' with a code anyway).
-  signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
+  // `coach_sharing_notice` (B-SHARE-127) only when the screen showed the
+  // coach-sharing sentence (lib/coachSharingNotice).
+  signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string; coach_sharing_notice?: string }) =>
     api.post<SignupWithCodeResponse>('/auth/signup-with-code', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
   // With an invite code the user is always a client, so `intended_role` is
   // omitted regardless of what the caller passed.
-  googleAuth: (token: string, inviteCode?: string, intendedRole?: IntendedRole) =>
+  googleAuth: (token: string, inviteCode?: string, intendedRole?: IntendedRole, coachSharingNotice?: string) =>
     postWithIntendedRole(
       (body) => api.post('/auth/google', body),
-      inviteCode ? { token, invite_code: inviteCode } : { token },
+      inviteCode
+        ? { token, invite_code: inviteCode, ...(coachSharingNotice ? { coach_sharing_notice: coachSharingNotice } : {}) }
+        : { token },
       inviteCode ? undefined : intendedRole,
     ),
   // Apple Sign-In: POST the identity token from expo-apple-authentication.
@@ -621,8 +625,11 @@ export const authApi = {
       ...(extras.fullName ? { full_name: extras.fullName } : {}),
       ...(extras.inviteCode ? { invite_code: extras.inviteCode } : {}),
     }),
-    attachInviteCode: (code: string) =>
-    api.post('/auth/attach-invite-code', { invite_code: code }),
+  attachInviteCode: (code: string, coachSharingNotice?: string | null) =>
+    api.post('/auth/attach-invite-code', {
+      invite_code: code,
+      ...(coachSharingNotice ? { coach_sharing_notice: coachSharingNotice } : {}),
+    }),
   selectRole: (role: 'coach' | 'student', coachCode?: string) =>
     api.post('/auth/select-role', { role, coach_code: coachCode }),
   me: () =>

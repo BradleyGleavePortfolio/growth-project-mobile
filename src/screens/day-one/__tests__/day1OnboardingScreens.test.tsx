@@ -177,7 +177,7 @@ describe('CoachPairingScreen', () => {
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-invite-submit'));
     });
-    expect(mockedPair).toHaveBeenCalledWith('XYZ9');
+    expect(mockedPair).toHaveBeenCalledWith('XYZ9', null);
     await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('Goals'));
   });
 

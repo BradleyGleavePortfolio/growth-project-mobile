@@ -87,7 +87,7 @@ describe('RoleSelection retry step', () => {
     await fireEvent.press(getByTestId('role-paste-invite-code'));
     await waitFor(() => expect(getByTestId('role-invite-code-input').props.value).toBe('GP-NEW2'));
     await fireEvent.press(getByTestId('role-continue'));
-    await waitFor(() => expect(mockAttach).toHaveBeenCalledWith('GP-NEW2'));
+    await waitFor(() => expect(mockAttach).toHaveBeenCalledWith('GP-NEW2', null));
     // A2: finalize without a code; attach was the only redemption.
     await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
     expect(mockAttach).toHaveBeenCalledTimes(1);
