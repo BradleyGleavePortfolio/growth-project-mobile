@@ -184,7 +184,9 @@ describe("the Roman's memory switch (R11-C2B)", () => {
     await fireEvent(memorySwitch(r), 'valueChange', false);
     expect(lastAlert().title).toBe(ROMAN_AI_COPY.confirmMemoryOffTitle);
     expect(lastAlert().message).toBe(ROMAN_AI_COPY.confirmMemoryOffBody);
-    confirmLastAlert(ROMAN_AI_COPY.cancel);
+    // Cancel (or dismissing the alert) sends nothing.
+    expect(lastAlert().buttons.map((b) => b.text)).toEqual([ROMAN_AI_COPY.cancel, ROMAN_AI_COPY.memoryOff]);
+    expect(lastAlert().buttons[0].onPress).toBeUndefined();
     expect(api.grantRoman).not.toHaveBeenCalled();
     expect(api.withdrawRoman).not.toHaveBeenCalled();
 
