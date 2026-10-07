@@ -197,8 +197,8 @@ export default function ClientsListScreen({ navigation }: Props) {
     <EmptyStateNoClients onInvite={goToInviteCodes} />
   );
 
-  return (
-    <View style={styles.container}>
+  const listHeader = (
+    <>
       <View style={styles.header}>
         <Text style={styles.date} testID="clients-date">{dateLine}</Text>
         <View style={styles.titleRow}>
@@ -313,14 +313,36 @@ export default function ClientsListScreen({ navigation }: Props) {
           Clients did not refresh. Pull down to try again.
         </Text>
       ) : null}
+    </>
+  );
 
-      {isLoading ? (
+  return (
+    <FlatList
+      testID="clients-list"
+      style={styles.container}
+      data={isLoading ? [] : shownClients}
+      renderItem={renderClient}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={styles.listContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+      ListHeaderComponent={listHeader}
+      ListEmptyComponent={isLoading ? (
         <>
           {[0, 1, 2, 3, 4].map((i) => (
             <SkeletonClientCard key={i} />
           ))}
         </>
-      ) : loadError && shownClients.length === 0 ? (
+      ) : loadError ? (
         // Network/server failure with no prior data — show an explicit error
         // surface with a retry button instead of falling through to the
         // empty-roster CTA (which falsely implied the coach had no clients).
@@ -337,28 +359,8 @@ export default function ClientsListScreen({ navigation }: Props) {
             <Text style={styles.retryButtonText}>Try again</Text>
           </HapticPressable>
         </View>
-      ) : (
-        <FlatList
-          testID="clients-list"
-          data={shownClients}
-          renderItem={renderClient}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.primary}
-              colors={[colors.primary]}
-            />
-          }
-          ListEmptyComponent={emptyList}
-        />
-      )}
-    </View>
+      ) : emptyList}
+    />
   );
 }
 
@@ -367,7 +369,6 @@ const makeStyles = (colors: ThemeColors) =>
   container: {
     flex: 1,
     backgroundColor: colors.background,
-    paddingTop: 60,
   },
   header: {
     paddingHorizontal: 24,
@@ -474,10 +475,11 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.primary,
   },
   listContent: {
-    paddingHorizontal: 24,
+    paddingTop: 60,
     paddingBottom: 100,
   },
   clientCard: {
+    marginHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -14,7 +14,7 @@
  *     an Archived empty state that does not offer the invite flow.
  */
 import React from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Share, StyleSheet } from 'react-native';
 import { typography } from '../../../theme/tokens';
 
@@ -304,6 +304,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     expect(screen.getByTestId('clients-date').props.children).toBe(
       new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
     );
+    expect(within(screen.getByTestId('clients-list')).getByTestId('clients-date')).toBeTruthy();
     const hero = screen.getByTestId('clients-hero');
     expect(hero.props.children).toBe(1);
     expect(StyleSheet.flatten(hero.props.style).fontFamily).toBe(typography.display.fontFamily);
