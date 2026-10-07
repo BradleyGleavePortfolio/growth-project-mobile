@@ -24,7 +24,7 @@ jest.mock('../../../api/mealTemplatesApi', () => ({
   SLOT_LABELS: ['breakfast', 'lunch', 'dinner', 'snack', 'preworkout', 'postworkout'],
   mealTemplatesApi: { todayForClient: jest.fn() },
 }));
-jest.mock('../../../hooks/useMealTemplates', () => ({ useMealPlanToday: jest.fn() }));
+jest.mock('../../../hooks/useMealTemplates', () => ({ useMealPlanToday: (date?: string) => mockDaily(date) }));
 
 import PlanScreen from '../PlanScreen';
 import ClientDailyMealPlanScreen from '../ClientDailyMealPlanScreen';
@@ -36,7 +36,10 @@ import { useMealPlanToday } from '../../../hooks/useMealTemplates';
 let mockParams: { date?: string; assignmentId?: string } | undefined;
 const list = jest.mocked(mealPlansApi.list);
 const today = jest.mocked(mealTemplatesApi.todayForClient);
-const daily = jest.mocked(useMealPlanToday);
+type DailyView = Partial<Pick<ReturnType<typeof useMealPlanToday>,
+  'data' | 'isLoading' | 'isError' | 'isRefetching' | 'refetch'>>;
+const mockDaily = jest.fn<DailyView, [string | undefined]>();
+const daily = mockDaily;
 const refetch = jest.fn();
 const assignment: DailyMealPlanAssignmentWithPlan = {
   id: 'chosen', daily_meal_plan_id: 'dp', client_id: 'c', assigned_by_coach_id: 'coach',
@@ -59,7 +62,7 @@ beforeEach(() => {
   list.mockResolvedValue(response([]));
   today.mockResolvedValue(response({ date: '2026-10-07', assignments: [] }));
   daily.mockReturnValue({ data: { date: '2026-10-07', assignments: [] }, isLoading: false,
-    isError: false, isRefetching: false, refetch } as ReturnType<typeof useMealPlanToday>);
+    isError: false, isRefetching: false, refetch });
   jest.spyOn(console, 'error').mockImplementation(() => {});
   jest.spyOn(console, 'warn').mockImplementation(() => {});
 });
@@ -132,7 +135,7 @@ it('preserves date and delivered assignment selection plus daily pull-to-refresh
   daily.mockReturnValue({ data: { date: '2026-10-07', assignments: [
     { ...assignment, id: 'newer', daily_meal_plan: { ...assignment.daily_meal_plan, name: 'Different plan' } },
     assignment,
-  ] }, isLoading: false, isError: false, isRefetching: false, refetch } as ReturnType<typeof useMealPlanToday>);
+  ] }, isLoading: false, isError: false, isRefetching: false, refetch });
   await render(<ClientDailyMealPlanScreen />);
   expect(daily).toHaveBeenCalledWith('2026-10-07');
   for (const text of ['Delivered plan', 'Cook ahead', 'Dinner', 'Pasta', 'With greens']) {
@@ -147,10 +150,10 @@ it('preserves date and delivered assignment selection plus daily pull-to-refresh
 it('daily loading, empty and error states stay distinct and the retry refetches', async () => {
   const empty = await render(<ClientDailyMealPlanScreen />);
   expect(screen.getByText('No meal plan is assigned for today.')).toBeTruthy();
-  daily.mockReturnValue({ isLoading: true } as ReturnType<typeof useMealPlanToday>);
+  daily.mockReturnValue({ isLoading: true });
   await empty.rerender(<ClientDailyMealPlanScreen />);
   expect(screen.queryByText('No plan for today')).toBeNull();
-  daily.mockReturnValue({ isError: true, refetch } as ReturnType<typeof useMealPlanToday>);
+  daily.mockReturnValue({ isError: true, refetch });
   await empty.rerender(<ClientDailyMealPlanScreen />);
   expect(screen.getByText('Could not load this meal plan. Pull to retry.')).toBeTruthy();
   await fireEvent.press(screen.getByLabelText('Try again'));
