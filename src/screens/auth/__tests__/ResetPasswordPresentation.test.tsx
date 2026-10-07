@@ -28,8 +28,9 @@ it('resolves input colors from the retained dark theme', async () => {
 });
 
 function props(valid = true): React.ComponentProps<typeof ResetPasswordScreen> {
+  const navigation: Partial<React.ComponentProps<typeof ResetPasswordScreen>['navigation']> = { navigate: jest.fn() };
   return {
-    navigation: { navigate: jest.fn() } as React.ComponentProps<typeof ResetPasswordScreen>['navigation'],
+    navigation: navigation as React.ComponentProps<typeof ResetPasswordScreen>['navigation'],
     route: { key: 'reset', name: 'ResetPassword', params: valid ? { access_token: 'a', refresh_token: 'r' } : {} },
   };
 }
