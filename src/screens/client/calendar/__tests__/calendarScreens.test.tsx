@@ -9,7 +9,8 @@
 import React from 'react';
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, StyleSheet } from 'react-native';
+import { lightTokens } from '../../../../theme/tokens';
 import type { CoachingSession, SessionType } from '../../../../api/schedulingApi';
 
 jest.mock('../../../../services/sentry', () => ({ captureError: jest.fn() }));
@@ -295,11 +296,17 @@ describe('CalendarBookScreen', () => {
   it('auto-approve: one tap books once and reads Booked', async () => {
     let resolve: (s: CoachingSession) => void = () => undefined;
     api.requestSession.mockImplementation(() => new Promise((res) => (resolve = res)));
-    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    const n = nav();
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' }, n)} />);
     await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
     // Client sees their own clock (PDT) and the coach clock (EDT).
     expect(r.getByText('9:00 AM')).toBeTruthy();
+    await fireEvent.press(r.getByText('Refresh open times'));
+    await waitFor(() => expect(api.getOpenSlots.mock.calls.length).toBeGreaterThan(1));
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
+    const slotStyle = StyleSheet.flatten(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`).props.style);
+    expect(slotStyle).toMatchObject({ minHeight: 44, backgroundColor: lightTokens.accent });
+    expect(r.getByText('Book 9:00 AM')).toBeTruthy();
     expect(r.getByText('12:00 PM EDT coach time')).toBeTruthy();
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await fireEvent.press(r.getByTestId('calendar-submit'));
@@ -316,6 +323,8 @@ describe('CalendarBookScreen', () => {
     expect(r.getByText('Booked. Bradley will see it in the booking inbox.')).toBeTruthy();
     await fireEvent.press(r.getByTestId('calendar-add-phone'));
     await waitFor(() => expect(addSessionToPhoneCalendar).toHaveBeenCalled());
+    await fireEvent.press(r.getByTestId('calendar-book-finish'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarSession', { sessionId: 'sess-1' });
     expect(emitTutorialSignal).not.toHaveBeenCalled();
   });
 
@@ -325,7 +334,7 @@ describe('CalendarBookScreen', () => {
     const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
     await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
-    expect(r.getByText('Request this time')).toBeTruthy();
+    expect(r.getByText('Request 9:00 AM')).toBeTruthy();
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await waitFor(() => expect(r.getByText(/Requested, waiting for your coach\./)).toBeTruthy());
   });
@@ -390,6 +399,15 @@ describe('CalendarBookScreen', () => {
     expect(r.queryByTestId('calendar-welcome-open')).toBeNull();
   });
 
+  it('an existing welcome request does not promise coach confirmation', async () => {
+    api.listMyCoaches.mockResolvedValue([{ ...COACH, welcome: { ...WELCOME, active_session_id: 'sess-w', active_session_status: 'requested', active_session_start_at: SLOT_A.start_at } }]);
+    const n = nav();
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ welcome: true }, n)} />);
+    await waitFor(() => expect(r.getByText(/Waiting for Bradley to confirm\./)).toBeTruthy());
+    await fireEvent.press(r.getByTestId('calendar-welcome-home'));
+    expect(n.navigate).toHaveBeenCalledWith('CalendarHome');
+  });
+
   it('pending request limit and busy calendar get their own next step', async () => {
     api.requestSession.mockRejectedValueOnce({ response: { status: 409, data: { code: 'PENDING_REQUEST_LIMIT' } } });
     const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
@@ -400,13 +418,13 @@ describe('CalendarBookScreen', () => {
     expect(bookingErrorMessage({ response: { status: 503, data: { code: 'CALENDAR_BUSY' } } })).toMatch(/Wait a few seconds/);
   });
 
-  it('a booking with no call link yet says the coach will add it', async () => {
+  it('a booking with no call link yet states only what is known', async () => {
     api.requestSession.mockResolvedValue(sess({ meeting_link_status: 'pending' }));
     const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
     await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`));
     await fireEvent.press(r.getByTestId('calendar-submit'));
-    await waitFor(() => expect(r.getByText('Booked. Bradley will see it in the booking inbox. Bradley will add the call link before it starts.')).toBeTruthy());
+    await waitFor(() => expect(r.getByText('Booked. Bradley will see it in the booking inbox. Call link not added yet.')).toBeTruthy());
   });
 
   it('welcome mode without a welcome type falls back to Calendar and Message your coach', async () => {
@@ -435,6 +453,7 @@ describe('CalendarBookScreen', () => {
     // The session's own current slot is not offered.
     expect(r.queryByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeNull();
     await fireEvent.press(r.getByTestId(`calendar-slot-${SLOT_B.start_at}`));
+    expect(r.getByText('Move to 10:00 AM')).toBeTruthy();
     await fireEvent.press(r.getByTestId('calendar-submit'));
     await waitFor(() => expect(api.rescheduleSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({ start_at: SLOT_B.start_at })));
     await waitFor(() =>
