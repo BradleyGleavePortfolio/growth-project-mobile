@@ -11,7 +11,7 @@
       "body": "Check your connection and tap Retry. Nothing you typed is lost.",
       "cta": "Retry"
     },
-    "saveLater": "Continue offline. We'll save when you're back online.",
+    "saveLater": "Continue offline. Saves when the connection is back.",
     "progressLabel": "Step {current} of {total}"
   },
   "welcome": {
@@ -43,25 +43,25 @@
   },
   "goals": {
     "title": "What are you here to grow?",
-    "subtitle": "Pick everything that fits. You can adjust this any time.",
+    "subtitle": "Pick everything that fits.",
     "categories": {
       "fitness": { "label": "Fitness", "sub": "Strength, conditioning, body composition." },
       "business": { "label": "Business", "sub": "Revenue, leadership, focus." },
       "personalGrowth": { "label": "Personal Growth", "sub": "Habits, discipline, identity." },
       "relationships": { "label": "Relationships", "sub": "Family, partners, network." },
       "mentalHealth": { "label": "Mental Health", "sub": "Calm, sleep, resilience." },
-      "custom": { "label": "Something else", "sub": "Tell your coach in your own words." }
+      "custom": { "label": "Something else", "sub": "A goal that is not on this list." }
     },
     "continue": "Continue",
     "skip": "Skip for now"
   },
   "notifications": {
     "title": "Stay close to your coach",
-    "subtitle": "We'll only ping you for coach messages and your daily check-in. Never spam.",
+    "subtitle": "Coach messages, session reminders and progress milestones. Choose what arrives in Settings.",
     "bullets": [
       "Coach replies the moment they arrive",
-      "A gentle daily check-in nudge",
-      "Nothing else. Promise."
+      "Reminders before booked sessions",
+      "Every alert can be turned off in Settings"
     ],
     "enable": "Turn on notifications",
     "skip": "Not now",
@@ -69,7 +69,7 @@
   },
   "checkInTime": {
     "title": "Pick your daily check-in",
-    "subtitle": "We'll remind you once a day at this time. Mornings work best for most.",
+    "subtitle": "Choose the time of day you plan to check in. Mornings work best for most.",
     "defaultLabel": "Default: 9:00 AM",
     "continue": "Save check-in time",
     "skip": "Skip. I'll set this later.",
@@ -81,7 +81,7 @@
   "ready": {
     "title": "Welcome to TGP, {firstName}.",
     "titleFallback": "Welcome to TGP.",
-    "subtitle": "Your coach has been notified you've joined. The work starts now.",
+    "subtitle": "Your setup is done. The work starts now.",
     "cta": "Open my dashboard",
     "badgeA11y": "Onboarding complete"
   }

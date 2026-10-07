@@ -86,10 +86,16 @@ describe('Day-1 API persistence module', () => {
     expect(API).toMatch(/pairWithCoach/);
   });
 
-  it('captures and persists the device IANA timezone with the check-in time', () => {
+  it('captures the device IANA timezone with the check-in time and sends it with provenance', () => {
     expect(API).toMatch(/getDeviceTimezone/);
     expect(API).toMatch(/Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/);
-    expect(API).toMatch(/daily_checkin_timezone/);
+    expect(API).toMatch(/notificationsApi\.setTimezone\(timezone\)/);
+  });
+
+  it('sends no field the backend DTOs reject (FU-FIRSTRUN-126)', () => {
+    for (const key of ['day_one_goals', 'daily_checkin_time', 'daily_checkin_timezone', 'day_one_completed']) {
+      expect(API).not.toMatch(new RegExp(`${key}:`));
+    }
   });
 });
 
