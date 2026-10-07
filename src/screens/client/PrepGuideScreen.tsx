@@ -51,9 +51,11 @@ interface PrepGuideData {
   recipes: PrepRecipe[];
   aggregated_ingredients: AggregatedIngredient[];
   prep_day_suggestions: string[];
-  // 'plan' = recipes from the client's assigned meal plan. Missing (production backend before NUTR-BE) or
-  // 'library' = recipes the account can see, not planned for any week: no week, plan or prep-day claims.
+  // 'plan' = recipes from the client's assigned meal plan; 'library' = recipes the account can see, none
+  // from a meal plan. Missing (a backend before NUTR-BE) = unknown: neutral copy, no plan claim either way.
   source?: 'plan' | 'library';
+  // true only when the server filters recipes by week_start; NUTR-BE sends false for both sources.
+  week_filter_applied?: boolean;
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
@@ -90,9 +92,10 @@ export default function PrepGuideScreen() {
   });
 
   const fromPlan = data?.source === 'plan';
-  // The week only changes anything when the recipes come from a plan; once off the current week the
-  // selector stays so the client can always get back.
-  const showWeek = fromPlan || weekOffset !== 0;
+  const fromLibrary = data?.source === 'library';
+  // The week arrows only change anything when the server filters by week; once off the current week
+  // the selector stays so the client can always get back.
+  const showWeek = data?.week_filter_applied === true || weekOffset !== 0;
 
   const addToGroceryMutation = useMutation({
     mutationFn: (ingredients: AggregatedIngredient[]) =>
@@ -151,7 +154,7 @@ export default function PrepGuideScreen() {
         <Text style={styles.title}>Prep guide</Text>
       </View>
 
-      {/* Week selector: only where the week is real (plan recipes) */}
+      {/* Week selector: only where the week is real (the server filters by it) */}
       {showWeek ? <View style={styles.weekSelector}>
         <TouchableOpacity
           accessibilityRole="button" accessibilityLabel="Previous week"
@@ -213,7 +216,7 @@ export default function PrepGuideScreen() {
             <Text style={styles.summary}>
               {plural(data.recipes.length, 'recipe')} {fromPlan ? 'from your meal plan.' : 'available to this account.'}
             </Text>
-            {fromPlan ? null : <Text style={styles.prepDayHint}>None of these come from a meal plan.</Text>}
+            {fromLibrary ? <Text style={styles.prepDayHint}>None of these come from a meal plan.</Text> : null}
             {/* Prep day suggestions: only for plan recipes */}
             {fromPlan && data.prep_day_suggestions.length > 0 ? (
               <FadeInView>

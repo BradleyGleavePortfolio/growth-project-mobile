@@ -36,6 +36,8 @@ const guide = {
   prep_day_suggestions: ['Sunday'],
 };
 const planGuide = { ...guide, source: 'plan' };
+// A server that filters by week (NUTR-BE sends week_filter_applied: false for both sources today).
+const weekGuide = { ...planGuide, week_filter_applied: true };
 type GuideResponse = Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>;
 const respond = (data: object) => jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data } as GuideResponse);
 function mount(Screen: React.ComponentType) {
@@ -96,7 +98,7 @@ describe.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]]
   });
 });
 it('preserves prep back, both week arrows, refresh, add/cancel and success grocery navigation', async () => {
-  respond(planGuide);
+  respond(weekGuide);
   const view = await mount(PrepGuideScreen);
   await view.findByText('Soup');
   expect(view.getByText('Sunday')).toBeTruthy();
@@ -141,8 +143,8 @@ it.each([GroceryListScreen, ShoppingListScreen, PrepGuideScreen])('uses semantic
 });
 
 describe('prep guide says where its recipes come from (NUTR-AUD-128 B1)', () => {
-  it.each([[{ ...guide }], [{ ...guide, source: 'library' }]])('missing or library source: no plan, week or prep-day claims', async (data) => {
-    respond(data);
+  it('library source: says none come from a meal plan, with no week or prep-day claims', async () => {
+    respond({ ...guide, source: 'library', week_filter_applied: false });
     const view = await mount(PrepGuideScreen);
     await view.findByText('Soup');
     expect(view.getByText('1 recipe available to this account.')).toBeTruthy();
@@ -155,21 +157,48 @@ describe('prep guide says where its recipes come from (NUTR-AUD-128 B1)', () => 
     await fireEvent.press(view.getByText('Add all'));
     expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('Add 1 ingredient from these recipes to your grocery list?');
   });
-  it('plan source: names the meal plan and keeps the week selector and suggested days', async () => {
+  it('unknown source (a backend that may return plan recipes without saying so): neutral, never denies a meal plan', async () => {
+    respond(guide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    expect(view.getByText('1 recipe available to this account.')).toBeTruthy();
+    expect(view.getByText('Recipes (1)')).toBeTruthy();
+    expect(view.queryByText(/None of these|from your meal plan|Recipes to prep|for the week/)).toBeNull();
+    expect(view.queryByText('Sunday')).toBeNull();
+    expect(view.queryByLabelText('Previous week')).toBeNull();
+  });
+  it('plan source: names the meal plan and keeps suggested days', async () => {
     respond(planGuide);
     const view = await mount(PrepGuideScreen);
     await view.findByText('Soup');
     expect(view.getByText('1 recipe from your meal plan.')).toBeTruthy();
     expect(view.getByText('Recipes to prep (1)')).toBeTruthy();
     expect(view.getByText('Sunday')).toBeTruthy();
-    expect(view.getByLabelText('Previous week')).toBeTruthy();
     expect(view.queryByText(/None of these/)).toBeNull();
   });
-  it('keeps the week selector after leaving the current week so the client can come back', async () => {
-    respond(planGuide);
+});
+describe('the week selector shows only where the server filters by week (Sol U1)', () => {
+  it.each([[undefined], [false]])('plan source with week_filter_applied %s: no week arrows (they would change nothing)', async (applied) => {
+    respond({ ...planGuide, week_filter_applied: applied });
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('1 recipe from your meal plan.');
+    expect(view.queryByLabelText('Previous week')).toBeNull();
+    expect(view.queryByLabelText('Next week')).toBeNull();
+    expect(view.queryByText('This week')).toBeNull();
+  });
+  it('week_filter_applied true: shows the week selector', async () => {
+    respond(weekGuide);
     const view = await mount(PrepGuideScreen);
     await view.findByText('Soup');
-    respond(guide);
+    expect(view.getByLabelText('Previous week')).toBeTruthy();
+    expect(view.getByLabelText('Next week')).toBeTruthy();
+    expect(view.getByText('This week')).toBeTruthy();
+  });
+  it('keeps the week selector after leaving the current week so the client can come back', async () => {
+    respond(weekGuide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    respond({ ...guide, source: 'library', week_filter_applied: false });
     await fireEvent.press(view.getByLabelText('Next week'));
     await view.findByText('None of these come from a meal plan.');
     await fireEvent.press(view.getByLabelText('Previous week'));
