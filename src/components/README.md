@@ -4,6 +4,8 @@ Shared, screen-agnostic UI. Anything that more than one screen renders, or anyth
 
 ## Purpose
 
+The shared DM `messaging/MessageBubble` and `ThreadV2Parts` use semantic colours through `thread/useThreadColors`: Inter message text on bone, a hairline for outgoing rows, readable metadata, quiet pins and 44 pt controls. Timestamp grouping is opted into by the client thread; the coach thread keeps its existing rendering contract. Message menus and moderation handlers are unchanged.
+
 - Provide the visual primitives the screens compose with: cards, rings, bars, sheets, banners, splash, error boundary, skeleton loaders.
 - Encapsulate the per-feature mini-systems that don't fit a single screen: trust-cue rails, anticipation tiles, community win cards, log modals.
 - Bake the quiet-luxury motion contract in (entrance fades, hairline dividers, weight-400/500 serifs, no celebration overlays).
