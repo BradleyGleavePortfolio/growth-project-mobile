@@ -24,7 +24,6 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -41,6 +40,7 @@ import type {
 import { spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import HapticPressable from '../../components/HapticPressable';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 
 // ── Filter facets (v1, hardcoded) ────────────────────────────────────────────
@@ -154,7 +154,8 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
           {values.map((v) => {
             const active = selected === v;
             return (
-              <Pressable
+              <HapticPressable
+                disableAnimation
                 key={v}
                 onPress={() => setSelected(active ? null : v)}
                 style={[styles.chip, active && styles.chipActive]}
@@ -169,7 +170,7 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
                 >
                   {v}
                 </Text>
-              </Pressable>
+              </HapticPressable>
             );
           })}
         </ScrollView>
@@ -180,7 +181,8 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
 
   const renderItem = useCallback(
     ({ item }: { item: Exercise }) => (
-      <Pressable
+      <HapticPressable
+        disableAnimation
         onPress={() =>
           navigation.navigate('ExerciseDetail', { idOrSlug: item.id })
         }
@@ -190,11 +192,11 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
       >
         <Text style={styles.rowName}>{item.name}</Text>
         <Text style={styles.rowMeta}>
-          {[item.primaryMuscle, item.category, item.difficulty]
+          {[item.primaryMuscle, item.equipment.join(', '), item.category, item.difficulty]
             .filter(Boolean)
             .join(' · ')}
         </Text>
-      </Pressable>
+      </HapticPressable>
     ),
     [navigation, styles],
   );
@@ -202,7 +204,7 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
   return (
     <View style={styles.screen} testID="exercise-library-screen">
       <View style={styles.header}>
-        <Text style={styles.title}>Exercise Library</Text>
+        <Text style={styles.title}>Exercise library</Text>
         <TextInput
           style={styles.searchInput}
           placeholder="Search exercises"
@@ -233,13 +235,14 @@ export default function ExerciseLibraryScreen({ navigation }: Props) {
       {error ? (
         <View style={styles.emptyWrap}>
           <Text style={styles.errorText}>{error}</Text>
-          <Pressable accessibilityRole="button" onPress={() => void fetchPage('replace')}>
-            <Text style={styles.errorText}>Retry</Text>
-          </Pressable>
+          <HapticPressable disableAnimation style={styles.retry} accessibilityRole="button" onPress={() => void fetchPage('replace')}>
+            <Text style={styles.retryText}>Retry</Text>
+          </HapticPressable>
         </View>
       ) : null}
 
       <FlatList
+        testID="exercise-library-list"
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
@@ -279,18 +282,16 @@ function makeStyles(sc: SemanticTokens) {
       borderBottomColor: sc.border,
     },
     title: {
-      ...typography.h2,
+      ...typography.h1,
       color: sc.textPrimary,
       marginBottom: spacing.md,
     },
     searchInput: {
       ...typography.body,
       color: sc.textPrimary,
-      backgroundColor: sc.bgSurface,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-      borderRadius: 10,
-      paddingHorizontal: spacing.md,
+      minHeight: 44,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: sc.border,
       paddingVertical: spacing.sm,
       marginBottom: spacing.sm,
     },
@@ -306,29 +307,29 @@ function makeStyles(sc: SemanticTokens) {
       gap: spacing.sm,
     },
     chip: {
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.xs + 2,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-      borderRadius: 999,
-      backgroundColor: sc.bgSurface,
+      minHeight: 44,
+      minWidth: 44,
+      justifyContent: 'center',
+      paddingHorizontal: spacing.sm,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: sc.border,
     },
     chipActive: {
-      borderColor: sc.accent,
-      backgroundColor: sc.accent,
+      borderBottomWidth: 2,
+      borderBottomColor: sc.textPrimary,
     },
     chipText: {
       ...typography.bodySmall,
-      color: sc.textPrimary,
-      textTransform: 'capitalize',
+      color: sc.textMuted,
     },
     chipTextActive: {
-      color: sc.textOnAccent,
+      color: sc.textPrimary,
     },
     listContent: {
       paddingBottom: spacing.xl,
     },
     row: {
+      minHeight: 44,
       paddingHorizontal: spacing.lg,
       paddingVertical: spacing.md,
       borderBottomWidth: StyleSheet.hairlineWidth,
@@ -342,7 +343,6 @@ function makeStyles(sc: SemanticTokens) {
       ...typography.bodySmall,
       color: sc.textMuted,
       marginTop: 2,
-      textTransform: 'capitalize',
     },
     emptyWrap: {
       paddingHorizontal: spacing.lg,
@@ -356,6 +356,19 @@ function makeStyles(sc: SemanticTokens) {
     errorText: {
       ...typography.body,
       color: sc.accentText,
+    },
+    retry: {
+      minHeight: 44,
+      minWidth: 120,
+      marginTop: spacing.md,
+      paddingHorizontal: spacing.lg,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: sc.accent,
+    },
+    retryText: {
+      ...typography.bodyMd,
+      color: sc.textOnAccent,
     },
     footerWrap: {
       paddingVertical: spacing.lg,
