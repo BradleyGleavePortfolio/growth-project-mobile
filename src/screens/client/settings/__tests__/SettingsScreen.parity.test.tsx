@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import SettingsScreen from '../../SettingsScreen';
 import { ThemeProvider } from '../../../../theme/ThemeProvider';
@@ -14,6 +14,7 @@ import { dispatchTutorial, startClientTutorial } from '../../../../tutorial/tuto
 const mockUpdateSetting = jest.fn();
 const mockParentNavigate = jest.fn();
 let mockRomanEnabled = true;
+let mockTutorialEnabled = true;
 let mockTutorialStatus = 'paused';
 jest.mock('../../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'settings-client', name: 'Alex', email: 'alex@example.com' }),
@@ -52,7 +53,8 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { get consultationOnboarding() { return mockRomanEnabled; },
-    get romanChat() { return mockRomanEnabled; }, clientTutorial: true },
+    get romanChat() { return mockRomanEnabled; },
+    get clientTutorial() { return mockTutorialEnabled; } },
 }));
 jest.mock('@expo/vector-icons', () => ({
   Ionicons: ({ name }: { name: string }) =>
@@ -67,7 +69,41 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockRomanEnabled = true;
+  mockTutorialEnabled = true;
   mockTutorialStatus = 'paused';
+});
+
+it('groups every existing row into seven ordered sections without disclosure taps', async () => {
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  await view.findByLabelText('Biometric unlock');
+  await view.findByText('7:30 AM');
+  // Part-1 row inventory, regrouped only. Existing action tests below prove effects.
+  const groups = [
+    ['account', 'Account', ['Name', 'Email', 'Change Password', 'Appearance',
+      'Light', 'System', 'Haptics enabled', 'Biometric unlock', 'Reset Onboarding',
+      'Delete account', 'Sign Out']],
+    ['training-food', 'Training and food', ['Meals Per Day', 'Water Goal (fl oz)']],
+    ['notifications', 'Notifications', ['Daily Check-in', 'Check-in Time',
+      'Meal Reminders', 'Fasting Alerts', 'Weekly Summary', 'Notification preferences']],
+    ['privacy', 'Privacy and data', ['Trust & Privacy', 'Coach sharing', 'Blocked Users', 'My data']],
+    ['roman', 'Roman', ['Roman and AI']],
+    ['support', 'Support', ['Resume the tour']],
+    ['about', 'About', ['The Growth Project v1.0.0', 'A daily practice.']],
+  ] as const;
+  expect(view.getAllByRole('header').map((header) => header.props.children))
+    .toEqual(['Settings', ...groups.map(([, title]) => title)]);
+  for (const [id, title, rows] of groups) {
+    const section = within(view.getByTestId(`settings-section-${id}`));
+    expect(section.getByRole('header', { name: title })).toBeTruthy();
+    for (const row of rows) expect(section.getByText(row)).toBeTruthy();
+  }
+  expect(within(view.getByTestId('settings-section-support')).getByLabelText('Support inbox')).toBeTruthy();
+  const training = within(view.getByTestId('settings-section-training-food'));
+  for (const label of ['Decrease meals per day', 'Increase meals per day',
+    'Decrease water goal', 'Increase water goal']) expect(training.getByLabelText(label)).toBeTruthy();
+  for (const label of ['Nutrition Preferences', 'App Preferences', 'Security', 'Notification settings', 'Tutorial']) {
+    expect(view.queryByText(label)).toBeNull();
+  }
 });
 
 it('uses a serif heading, flat themed sections and accessible 44-point controls', async () => {
@@ -172,5 +208,14 @@ it('keeps the existing Roman consent visibility gate', async () => {
   mockRomanEnabled = false;
   const view = await render(<SettingsScreen navigation={navigation} />);
   expect(view.queryByTestId('settings-roman-ai')).toBeNull();
+  expect(view.queryByTestId('settings-section-roman')).toBeNull();
   expect(view.getByTestId('settings-coach-sharing')).toBeTruthy();
+});
+
+it('keeps Support available when the tutorial flag is off', async () => {
+  mockTutorialEnabled = false;
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  expect(view.queryByTestId('tutorial-settings-button')).toBeNull();
+  await fireEvent.press(view.getByLabelText('Support inbox'));
+  expect(navigationStub.navigate).toHaveBeenLastCalledWith('SupportInbox');
 });
