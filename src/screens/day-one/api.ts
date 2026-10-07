@@ -9,6 +9,8 @@
 
 import { profileApi, authApi, preferencesApi, notificationsApi } from '../../services/api';
 import { keepDayOneAnswers } from './answers';
+import { patchUserCache } from '../../lib/userCache';
+import { logger } from '../../utils/logger';
 
 // ─── Error shape ─────────────────────────────────────────────────────────────
 
@@ -112,7 +114,13 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
 export async function pairWithCoach(code: string): Promise<{ ok: true } | { ok: false; error: DayOneError }> {
   const trimmed = code.trim();
   try {
-    await authApi.attachInviteCode(trimmed);
+    const response = await authApi.attachInviteCode(trimmed);
+    const coachId = response?.data?.coach_id;
+    if (typeof coachId === 'string') {
+      await patchUserCache({ coach_id: coachId }).catch((err: unknown) =>
+        logger.warn('DayOnePairing', 'user cache patch after attach failed', err),
+      );
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: classify(err) };
