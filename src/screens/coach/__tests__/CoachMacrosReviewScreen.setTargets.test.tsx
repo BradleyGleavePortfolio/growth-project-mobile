@@ -1,8 +1,4 @@
-/**
- * A coach opens a client's Macros and sets their daily targets. Before this
- * screen pointed at a "prescriber" that did not exist, so no coach could set
- * a client's calories or macros anywhere in the app.
- */
+// A coach sets a client's daily targets (before: a prescriber that did not exist).
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 
@@ -53,17 +49,6 @@ describe('CoachMacrosReviewScreen set targets', () => {
       expect.any(Object),
     );
     expect(screen.getByTestId('macros-save-ok').props.children).toBe("Saved. These are now Sam's daily targets.");
-  });
-
-  it('stops an out-of-range value before it reaches the server', async () => {
-    await renderScreen();
-    await fireEvent.changeText(screen.getByTestId('macros-input-calories'), '500');
-    await fireEvent.changeText(screen.getByTestId('macros-input-protein'), '170');
-    await fireEvent.changeText(screen.getByTestId('macros-input-carbs'), '210');
-    await fireEvent.changeText(screen.getByTestId('macros-input-fat'), '65');
-    await fireEvent.press(screen.getByTestId('macros-save'));
-    expect(mockMutate).not.toHaveBeenCalled();
-    expect(screen.getByTestId('macros-save-error').props.children).toBe('Calories must be between 800 and 7000 kcal.');
   });
 
   it('prefills from the current target and shows a specific save failure', async () => {

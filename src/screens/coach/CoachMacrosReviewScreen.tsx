@@ -3,8 +3,7 @@
  * history plus the form that sets a new daily target.
  *
  * Reads /coach/clients/:clientId/macros and surfaces:
- *   - the current target prominently (most recent row whose
- *     effective_from <= today)
+ *   - the current target (most recent row with effective_from <= today)
  *   - a "Set daily targets" form (POST /coach/clients/:clientId/macros),
  *     prefilled from the current target, validated with the server's limits
  *   - the rolling history below it, newest first
@@ -169,7 +168,7 @@ function SetTargetsForm({
   const implied = kcalFromMacros(draft);
   const update = (field: keyof MacroTargetDraft) => (text: string) => {
     setDraft((d) => ({ ...d, [field]: text }));
-    if (message) setMessage(null);
+    setMessage(null);
   };
 
   const onSave = () => {
@@ -182,12 +181,8 @@ function SetTargetsForm({
     create.mutate(
       { clientId, input: result.input },
       {
-        onSuccess: () => {
-          setMessage({
-            kind: 'saved',
-            text: `Saved. These are now ${clientName ?? 'the client'}'s daily targets.`,
-          });
-        },
+        onSuccess: () =>
+          setMessage({ kind: 'saved', text: `Saved. These are now ${clientName ?? 'the client'}'s daily targets.` }),
         onError: (err) => setMessage({ kind: 'error', text: macroTargetSaveError(err) }),
       },
     );

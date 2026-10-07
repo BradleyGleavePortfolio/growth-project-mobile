@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { useSettings } from '../hooks/useSettings';
 
 interface WaterTrackerProps {
   currentOz: number;
@@ -13,9 +14,11 @@ const WATER_AMOUNTS = [8, 12, 16];
 
 export default function WaterTracker({
   currentOz,
-  targetOz = 128,
+  targetOz: targetOzProp,
   onAdd,
 }: WaterTrackerProps) {
+  const { settings } = useSettings();
+  const targetOz = targetOzProp ?? settings.waterGoalOz;
   const progress = Math.min(currentOz / targetOz, 1);
   const glasses = Math.floor(currentOz / 8);
 

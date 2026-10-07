@@ -1,9 +1,4 @@
-/**
- * Home's food numbers: the targets are the server's (the coach's target, else
- * the server-calculated profile targets, as on the Food Log), and the numbers
- * are always today's, even after the client looked back at an earlier day on
- * the Food Log (the day store is shared).
- */
+// Home: server targets (as on the Food Log), and always today's numbers.
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { render, screen } from '@testing-library/react-native';

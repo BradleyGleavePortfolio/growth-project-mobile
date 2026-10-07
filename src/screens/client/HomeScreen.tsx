@@ -220,10 +220,8 @@ export default function HomeScreen() {
   // when neither logged data nor a target is present. This is the contract:
   // never render a bare "—" with no path forward — Home always points the
   // user at their next action.
-  // Targets come from GET /me/macros/current (the coach's target, else the
-  // server-calculated profile targets), the same source as the Food Log's
-  // goal line. The locally cached profile numbers are only a fallback for
-  // a first paint before that read lands.
+  // Same targets as the Food Log goal line (GET /me/macros/current); the cached
+  // profile numbers only cover the first paint.
   const macroTargets = useMacroTargets();
   const proteinTarget = macroTargets?.protein ?? currentUser?.profile?.protein_target;
   const carbsTarget   = macroTargets?.carbs ?? currentUser?.profile?.carbs_target;
@@ -270,9 +268,7 @@ export default function HomeScreen() {
   })();
   const macroCells = { CALORIES: calories, PROTEIN: protein, CARBS: carbs, FAT: fat };
 
-  // Home always shows today. The day store is shared with the Food Log, so
-  // after the client looks back at an earlier day there, Home reloads today
-  // instead of showing that day's meals and totals under today's date.
+  // Home always shows today, even after the Food Log (shared store) moved to another day.
   useEffect(() => {
     if (currentUser) {
       loadDayData(currentUser.id, getTodayString());

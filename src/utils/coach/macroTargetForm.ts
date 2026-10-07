@@ -12,8 +12,7 @@ export interface MacroTargetDraft {
 
 type NumberField = Exclude<keyof MacroTargetDraft, 'notes'>;
 
-// Same limits as the server's CreateMacroTargetDto (backend
-// src/macros/macros.dto.ts), so a value the form accepts is never a 400.
+// Same limits as the server's CreateMacroTargetDto (backend src/macros/macros.dto.ts).
 export const MACRO_TARGET_LIMITS: Record<NumberField, { label: string; min: number; max: number; unit: string }> = {
   calories: { label: 'Calories', min: 800, max: 7000, unit: 'kcal' },
   protein: { label: 'Protein', min: 0, max: 500, unit: 'g' },
@@ -25,13 +24,9 @@ export const MACRO_TARGET_NOTE_MAX = 500;
 
 const FIELDS: NumberField[] = ['calories', 'protein', 'carbs', 'fat'];
 
-export function emptyMacroTargetDraft(): MacroTargetDraft {
-  return { calories: '', protein: '', carbs: '', fat: '', notes: '' };
-}
-
 /** Prefill from the live target so a change starts from today's numbers. */
 export function draftFromTarget(target: Pick<MacroTarget, 'calories_kcal' | 'protein_g' | 'carbs_g' | 'fats_g' | 'notes'> | null | undefined): MacroTargetDraft {
-  if (!target) return emptyMacroTargetDraft();
+  if (!target) return { calories: '', protein: '', carbs: '', fat: '', notes: '' };
   return {
     calories: String(target.calories_kcal),
     protein: String(target.protein_g),

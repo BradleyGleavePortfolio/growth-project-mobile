@@ -22,15 +22,10 @@ describe('coach macro target form', () => {
 
   it('names the field and the allowed range instead of failing on the server', () => {
     expect(validateMacroTargetDraft(draft({ calories: '' }))).toEqual({ ok: false, message: 'Enter calories in kcal.' });
-    expect(validateMacroTargetDraft(draft({ calories: '650' }))).toEqual({
-      ok: false, message: 'Calories must be between 800 and 7000 kcal.',
-    });
-    expect(validateMacroTargetDraft(draft({ fat: '450' }))).toEqual({
-      ok: false, message: 'Fat must be between 0 and 400 g.',
-    });
-    expect(validateMacroTargetDraft(draft({ carbs: 'lots' }))).toEqual({
-      ok: false, message: 'Carbs must be a whole number of g.',
-    });
+    const msg = (over: Parameters<typeof draft>[0]) => (validateMacroTargetDraft(draft(over)) as { message: string }).message;
+    expect(msg({ calories: '650' })).toBe('Calories must be between 800 and 7000 kcal.');
+    expect(msg({ fat: '450' })).toBe('Fat must be between 0 and 400 g.');
+    expect(msg({ carbs: 'lots' })).toBe('Carbs must be a whole number of g.');
   });
 
   it('gives specific save-failure copy', () => {
