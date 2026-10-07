@@ -19,11 +19,14 @@
  * Allow here is a newer choice and clears that pending "no" before it is
  * sent; a confirmed Withdraw here settles it.
  *
- * Roman memory (R11-C1): a server `upgrade` (client-ai-v5, live v4 grant, `memory_on`) is a separate
- * optional choice with the server's text and sha256; null shows nothing. A v5 grant shows the v5 text.
+ * Roman memory, on by default (R11-C2B, owner 2026-10-07 10:18): Allow grants the server's client-ai-v5
+ * copy while the server says memory is on (the same rule as box 2 of the consultation), otherwise v4.
+ * At the very bottom, a "Roman's memory" switch: ON for a live v5 grant. Off grants client-ai-v4 (Roman
+ * stays allowed; the server deletes Roman's notes about the client). On grants the server's v5 copy
+ * again with its sha256. Shown only on a live grant, and for a v4 holder only while the server offers v5.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
@@ -38,8 +41,9 @@ import {
   AI_LEDGER_NOT_SENT,
   drainAiWithdrawal,
   grantAiChoiceAs,
-  platformTag,
+  pinnedMemoryCopy,
   readAiWithdrawalPending,
+  romanBox2MemoryCopyOf,
   romanGrantBody,
   withdrawAiChoiceAs,
 } from '../../lib/consultation/aiConsent';
@@ -95,11 +99,15 @@ export const ROMAN_AI_COPY = {
     'You switched Roman and AI off during setup, and that is not confirmed yet, so the choice above may still be in place. Tap Withdraw to try again now.',
   allowedMemoryBody:
     'Roman and your coach\u2019s AI tools may use your information, processed by Anthropic. Roman may also keep notes and summaries about you, as described above.',
-  memoryHead: 'Notes and summaries',
-  memoryIntro:
-    'Optional. Roman can keep notes and summaries about your training to personalise his replies, under the wording below. Nothing changes unless you allow it.',
-  memoryAllow: 'Allow notes and summaries',
-  confirmMemoryTitle: 'Allow notes and summaries?',
+  memoryLabel: 'Roman\u2019s memory',
+  memoryHelper: 'Roman keeps notes from chats and logs to give answers that fit. Turn off to stop and delete them.',
+  confirmMemoryOnTitle: 'Turn on Roman\u2019s memory?',
+  memoryOn: 'Turn on',
+  confirmMemoryOffTitle: 'Turn off Roman\u2019s memory?',
+  confirmMemoryOffBody:
+    'Roman stops keeping notes, and the notes he has about you are deleted. Roman and AI stay allowed. You can turn it on again at any time.',
+  memoryOff: 'Turn off',
+  memoryOffDone: 'Roman\u2019s memory is off, and his notes about you are deleted.',
   memoryChanged:
     'The wording of this option changed before your choice was saved, so nothing changed. The current wording and choice are shown here.',
 } as const;
@@ -140,16 +148,25 @@ export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoi
 }
 
 /**
- * The Roman memory offer to show: a well-formed client-ai-v5 `upgrade` from a
- * server that says Roman memory is on (`memory_on`; the 10-06 server sent
- * `upgrade` to every v4 holder without it), only on top of a live v4 grant.
- * Anything else shows nothing.
+ * The "Roman's memory" switch (R11-C2B), or null to show none. ON for a live client-ai-v5 grant. OFF
+ * for a live v4 grant while the server says memory is on and sends the pinned v5 copy (`memory_copy`,
+ * or `upgrade` from a server before it); `onCopy` is what turning it on grants. The 10-06 server sent
+ * `upgrade` without `memory_on`, so it shows nothing. No live grant shows nothing.
  */
-export function memoryOfferOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
-  const offer = status.upgrade;
-  if (status.memory_on !== true || !offer || offer.version !== AI_CONSENT_MEMORY_VERSION) return null;
+export function memorySwitchOf(
+  status: AiConsentStatusResponse,
+): { on: boolean; onCopy: AiConsentUpgradeCopy | null } | null {
+  if (isMemoryAllowed(status)) return { on: true, onCopy: null };
   const liveV4 = choiceOf(status).choice === 'allowed' && status.version === AI_CONSENT_VERSION;
-  return liveV4 ? offer : null;
+  if (!liveV4 || status.memory_on !== true) return null;
+  const onCopy = pinnedMemoryCopy(status.memory_copy) ?? pinnedMemoryCopy(status.upgrade);
+  return onCopy ? { on: false, onCopy } : null;
+}
+
+/** What Allow grants (not allowed / reconsent): the server's v5 copy while memory is on, else null (v4). */
+export function allowCopyOf(status: AiConsentStatusResponse): AiConsentUpgradeCopy | null {
+  const { choice } = choiceOf(status);
+  return choice === 'not_allowed' || choice === 'reconsent' ? romanBox2MemoryCopyOf(status) : null;
 }
 
 /** The heading: "Allowed" only for a live server grant (C-310-2). */
@@ -241,7 +258,7 @@ export default function RomanAiConsentScreen({
   }, [load]);
 
   const act = useCallback(
-    async (kind: 'allow' | 'withdraw', offer: AiConsentUpgradeCopy | null = null) => {
+    async (kind: 'allow' | 'withdraw', offer: AiConsentUpgradeCopy | null = null, doneNotice: string | null = null) => {
       if (busy) return;
       setBusy(true);
       setNotice(null);
@@ -254,7 +271,7 @@ export default function RomanAiConsentScreen({
         kind === 'allow'
           ? await grantAiChoiceAs(uid, sessionUserId, () =>
               // The offered copy: its version and the server's sha256 of exactly the text shown.
-              api.grantRoman(offer ? { version: offer.version, copy_sha256: offer.sha256, platform: platformTag() } : romanGrantBody()),
+              api.grantRoman(romanGrantBody(offer)),
             )
           : await withdrawAiChoiceAs(uid, sessionUserId, () => api.withdrawRoman());
       if (!mounted.current) return;
@@ -273,6 +290,7 @@ export default function RomanAiConsentScreen({
       if (out.kind === 'ok') {
         if (out.status) setView({ phase: 'ready', status: out.status });
         else await load();
+        if (doneNotice && !stale()) setNotice(doneNotice);
         return;
       }
       if (out.kind === 'version_mismatch') {
@@ -293,15 +311,26 @@ export default function RomanAiConsentScreen({
     [api, busy, load, sessionUserId],
   );
 
-  const confirmAllow = () =>
+  const confirmAllow = (offer: AiConsentUpgradeCopy | null) =>
     Alert.alert(ROMAN_AI_COPY.confirmAllowTitle, AI_CONSENT_CHECKBOX_LABEL.replace(/^Optional: /, ''), [
       { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
-      { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow') },
-    ]);
-  const confirmMemory = (offer: AiConsentUpgradeCopy) =>
-    Alert.alert(ROMAN_AI_COPY.confirmMemoryTitle, offer.box_label.text.replace(/^Optional: /, ''), [
-      { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
       { text: ROMAN_AI_COPY.allow, onPress: () => void act('allow', offer) },
+    ]);
+  // Memory on: the server's v5 text is the confirmation, and its sha256 is what is granted.
+  const confirmMemoryOn = (offer: AiConsentUpgradeCopy) =>
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryOnTitle, offer.paragraph.text, [
+      { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
+      { text: ROMAN_AI_COPY.memoryOn, onPress: () => void act('allow', offer) },
+    ]);
+  // Memory off: the v4 grant (Roman stays allowed); the server deletes Roman's notes first.
+  const confirmMemoryOff = () =>
+    Alert.alert(ROMAN_AI_COPY.confirmMemoryOffTitle, ROMAN_AI_COPY.confirmMemoryOffBody, [
+      { text: ROMAN_AI_COPY.cancel, style: 'cancel' },
+      {
+        text: ROMAN_AI_COPY.memoryOff,
+        style: 'destructive',
+        onPress: () => void act('allow', null, ROMAN_AI_COPY.memoryOffDone),
+      },
     ]);
   const confirmWithdraw = () =>
     Alert.alert(ROMAN_AI_COPY.confirmWithdrawTitle, ROMAN_AI_COPY.confirmWithdrawBody, [
@@ -361,7 +390,7 @@ export default function RomanAiConsentScreen({
         <Text style={styles.head} accessibilityRole="header" testID="roman-ai-state">{head}</Text>
         <Text style={styles.body}>{line}</Text>
         {choice === 'not_allowed' || choice === 'reconsent'
-          ? button(ROMAN_AI_COPY.allow, confirmAllow, 'roman-ai-allow')
+          ? button(ROMAN_AI_COPY.allow, () => confirmAllow(allowCopyOf(view.status)), 'roman-ai-allow')
           : null}
         {withdrawable && pendingWithdraw ? (
           <Text style={styles.body} accessibilityLiveRegion="polite" testID="roman-ai-pending-withdraw">
@@ -374,18 +403,34 @@ export default function RomanAiConsentScreen({
     );
   }
 
-  /** The optional Roman memory offer: only while the server sends one (never during a pending "no"). */
-  function renderMemoryOffer() {
-    const offer = view.phase === 'ready' && !pendingWithdraw ? memoryOfferOf(view.status) : null;
-    if (!offer) return null;
+  /** The "Roman's memory" switch at the very bottom (never during a pending "no"). */
+  function renderMemorySwitch() {
+    const sw = view.phase === 'ready' && !pendingWithdraw ? memorySwitchOf(view.status) : null;
+    if (!sw) return null;
+    const onCopy = sw.onCopy;
     return (
       <>
         <View style={styles.divider} />
-        <View style={styles.card} testID="roman-ai-memory-offer">
-          <Text style={styles.head} accessibilityRole="header">{ROMAN_AI_COPY.memoryHead}</Text>
-          <Text style={styles.body}>{ROMAN_AI_COPY.memoryIntro}</Text>
-          <Text style={styles.body} testID="roman-ai-memory-paragraph">{offer.paragraph.text}</Text>
-          {button(ROMAN_AI_COPY.memoryAllow, () => confirmMemory(offer), 'roman-ai-memory-allow')}
+        <View style={styles.switchRow} testID="roman-ai-memory-row">
+          <View style={styles.switchText}>
+            <Text style={styles.head}>{ROMAN_AI_COPY.memoryLabel}</Text>
+            <Text style={styles.caption}>{ROMAN_AI_COPY.memoryHelper}</Text>
+          </View>
+          <Switch
+            value={sw.on}
+            onValueChange={(next) => {
+              if (!next) confirmMemoryOff();
+              else if (onCopy) confirmMemoryOn(onCopy);
+            }}
+            disabled={busy}
+            trackColor={{ false: colors.border, true: colors.primary }}
+            thumbColor={colors.white}
+            accessibilityRole="switch"
+            accessibilityLabel={ROMAN_AI_COPY.memoryLabel}
+            accessibilityHint={ROMAN_AI_COPY.memoryHelper}
+            accessibilityState={{ checked: sw.on, disabled: busy }}
+            testID="roman-ai-memory-switch"
+          />
         </View>
       </>
     );
@@ -410,7 +455,9 @@ export default function RomanAiConsentScreen({
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.body} testID="roman-ai-paragraph">
-          {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) || AI_CONSENT_PARAGRAPH}
+          {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
+            (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
+            AI_CONSENT_PARAGRAPH}
         </Text>
         {renderState()}
         {notice ? (
@@ -422,7 +469,7 @@ export default function RomanAiConsentScreen({
         <View style={styles.divider} />
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}
-        {renderMemoryOffer()}
+        {renderMemorySwitch()}
       </ScrollView>
     </View>
   );
@@ -455,6 +502,8 @@ function makeStyles(colors: ThemeColors) {
     caption: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, color: colors.textSecondary },
     notice: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: colors.textPrimary },
     divider: { height: 1, backgroundColor: colors.divider },
+    switchRow: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 44 },
+    switchText: { flex: 1, gap: 4 },
     button: {
       minHeight: 44,
       borderRadius: 4,
