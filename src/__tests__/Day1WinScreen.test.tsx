@@ -101,7 +101,7 @@ jest.mock('../theme/ThemeProvider', () => {
         primaryTint: 'rgba(44,74,54,0.06)',
         textPrimary: '#1A1A18',
         textSecondary: '#3D3D3A',
-        textMuted: '#B1A89F',
+        textMuted: '#6B675F',
         textOnPrimary: '#F5EFE4',
         border: 'rgba(176,141,87,0.2)',
         divider: 'rgba(176,141,87,0.15)',
@@ -124,6 +124,10 @@ jest.mock('../lib/analytics', () => ({
 
 // Mock the firstWinApi service
 const mockComplete = jest.fn();
+const mockGetEntitlement = jest.fn();
+jest.mock('../api/clientPaymentsApi', () => ({
+  clientPaymentsApi: { getEntitlement: () => mockGetEntitlement() },
+}));
 jest.mock('../services/firstWinApi', () => ({
   firstWinApi: {
     getStatus: jest.fn().mockResolvedValue({ data: { completed: false, completedAt: null } }),
@@ -138,8 +142,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 
 describe('Day1WinScreen — RTL mount', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      id: 'client-day1', role: 'student', name: 'Day One',
+    }));
   });
 
   it('renders the selection view with all three win cards', async () => {
@@ -148,8 +156,10 @@ describe('Day1WinScreen — RTL mount', () => {
 
     expect(getByTestId('day1win-selection-view')).toBeTruthy();
     expect(getByTestId('day1win-card-logged_first_weight')).toBeTruthy();
-    expect(getByTestId('day1win-card-first_checkin')).toBeTruthy();
-    expect(getByTestId('day1win-card-first_meal')).toBeTruthy();
+    await waitFor(() => {
+      expect(getByTestId('day1win-card-first_checkin')).toBeTruthy();
+      expect(getByTestId('day1win-card-first_meal')).toBeTruthy();
+    });
   });
 
   it('skip button calls onComplete without recording a win', async () => {
@@ -189,6 +199,7 @@ describe('Day1WinScreen — RTL mount', () => {
     const onComplete = jest.fn();
     const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
+    await waitFor(() => expect(getByTestId('day1win-card-first_checkin')).toBeTruthy());
     await fireEvent.press(getByTestId('day1win-card-first_checkin'));
     expect(mockComplete).toHaveBeenCalledWith('first_checkin');
 
@@ -227,7 +238,7 @@ describe('Day1WinScreen — RTL mount', () => {
   // the tap does and never assumes a coach.
   it('the check-in card says it opens the habits, with no coach wording', async () => {
     const { getByText, queryByText } = await render(<Day1WinScreen onComplete={jest.fn()} />);
-    expect(getByText("Check off today's habits")).toBeTruthy();
+    await waitFor(() => expect(getByText("Check off today's habits")).toBeTruthy());
     expect(queryByText('Submit your first check-in')).toBeNull();
     expect(queryByText(/your coach/)).toBeNull();
   });
@@ -242,6 +253,7 @@ describe('Day1WinScreen — RTL mount', () => {
     const { getByTestId, getByText, queryByText } = await render(
       <Day1WinScreen onComplete={jest.fn()} />,
     );
+    await waitFor(() => expect(getByTestId('day1win-card-first_meal')).toBeTruthy());
     await fireEvent.press(getByTestId('day1win-card-first_meal'));
     await waitFor(() => {
       expect(getByTestId('day1win-complete-view')).toBeTruthy();

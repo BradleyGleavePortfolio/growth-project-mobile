@@ -13,6 +13,7 @@ import { Platform, Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockState: { flag: boolean; build: string | null } = { flag: true, build: '6' };
+let mockCoachId: string | undefined = 'coach-1';
 jest.mock('../config/featureFlags', () => {
   const actual = jest.requireActual('../config/featureFlags');
   return {
@@ -68,7 +69,7 @@ jest.mock('../api/clientPaymentsApi', () => ({
   },
 }));
 jest.mock('../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'u1', email: 'a@b.com', role: 'student' }),
+  useCurrentUser: () => ({ id: 'u1', email: 'a@b.com', role: 'student', coach_id: mockCoachId }),
 }));
 jest.mock('../services/queryClient', () => ({
   queryClient: { invalidateQueries: jest.fn() },
@@ -116,6 +117,7 @@ async function emit402() {
 }
 
 beforeEach(() => {
+  mockCoachId = 'coach-1';
   mockedGetEntitlement.mockReset();
   mockedGetPackages.mockReset();
   mockedGetPackages.mockResolvedValue({ ok: true, data: [PKG] });
@@ -165,6 +167,7 @@ describe('hidden iOS build (flag true, native build 6)', () => {
     await emit402();
     await fireEvent.press(await r.findByTestId('paywall-message-coach'));
     expect(r.onMessageCoach).toHaveBeenCalledTimes(1);
+    expect(r.onMessageCoach).toHaveBeenCalledWith();
     await waitFor(() => expect(r.queryByTestId('paywall-coach-managed')).toBeNull());
     expect(r.onOpenPlans).not.toHaveBeenCalled();
   });
@@ -175,6 +178,17 @@ describe('hidden iOS build (flag true, native build 6)', () => {
     await emit402();
     await r.findByTestId('paywall-coach-managed');
     expect(r.queryByTestId('paywall-subscribe')).toBeNull();
+  });
+
+  it('a coachless gate requests code entry through the existing thread callback', async () => {
+    mockCoachId = undefined;
+    const r = await mountInactive();
+    await fireEvent.press(await r.findByText('Enter a coach code'));
+    expect(r.onMessageCoach).toHaveBeenCalledWith(true);
+    await emit402();
+    await fireEvent.press(r.getByTestId('paywall-message-coach'));
+    expect(r.onMessageCoach).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(r.queryByTestId('paywall-coach-managed')).toBeNull());
   });
 });
 

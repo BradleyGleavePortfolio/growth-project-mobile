@@ -59,6 +59,8 @@ export default function SettingsScreen() {
   const [clientCount, setClientCount] = useState(0);
   const [bioText, setBioText] = useState('');
   const [showBioModal, setShowBioModal] = useState(false);
+  const [bioSaveError, setBioSaveError] = useState('');
+  const [bioSaving, setBioSaving] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -203,16 +205,26 @@ export default function SettingsScreen() {
   };
 
   const handleSaveBio = async () => {
-    // Optimistic: write to AsyncStorage cache first for instant UI
-    await AsyncStorage.setItem('gp_coach_bio_' + userId, bioText);
-    // Backend is source of truth
+    setBioSaveError('');
+    setBioSaving(true);
     try {
       await profileApi.update({ bio: bioText });
     } catch (err) {
       console.warn('coach SettingsScreen: failed to sync bio to backend', errorMessage(err));
+      setBioSaveError('The bio was not saved. Check the connection and try again.');
+      setBioSaving(false);
+      return;
+    }
+
+    // Keep the local cache in sync only after the source of truth accepts the bio.
+    try {
+      await AsyncStorage.setItem('gp_coach_bio_' + userId, bioText);
+    } catch (err) {
+      console.warn('coach SettingsScreen: failed to cache saved bio', errorMessage(err));
     }
     successTap();
     setShowBioModal(false);
+    setBioSaving(false);
   };
 
   const handleChangePassword = async () => {
@@ -363,7 +375,10 @@ export default function SettingsScreen() {
         lastName={currentUser?.lastName}
         email={currentUser?.email}
         bioText={bioText}
-        onOpenBio={() => setShowBioModal(true)}
+        onOpenBio={() => {
+          setBioSaveError('');
+          setShowBioModal(true);
+        }}
         onOpenPassword={() => setShowPasswordModal(true)}
         colors={colors}
         styles={styles}
@@ -521,20 +536,6 @@ export default function SettingsScreen() {
         >
           <Ionicons name="barbell-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Workout Builder</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => {
-            mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachMealTemplates' });
-          }}
-          accessibilityRole="button"
-          accessibilityLabel="Open meal templates"
-        >
-          <Ionicons name="restaurant-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Meal Templates</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -805,30 +806,47 @@ export default function SettingsScreen() {
             <TextInput
               style={styles.bioInput}
               value={bioText}
-              onChangeText={setBioText}
+              onChangeText={(value) => {
+                setBioText(value);
+                setBioSaveError('');
+              }}
               placeholder="Tell your clients about yourself..."
               placeholderTextColor={colors.textMuted}
               multiline
               maxLength={300}
               textAlignVertical="top"
+              editable={!bioSaving}
             />
             <Text style={styles.charCount}>{bioText.length}/300</Text>
+            {bioSaveError ? (
+              <Text
+                style={{ color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
+                accessibilityLiveRegion="assertive"
+              >
+                {bioSaveError}
+              </Text>
+            ) : null}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
-                onPress={() => setShowBioModal(false)}
+                onPress={() => {
+                  setShowBioModal(false);
+                  setBioSaveError('');
+                }}
+                disabled={bioSaving}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSaveBtn}
+                style={[styles.modalSaveBtn, bioSaving && { opacity: 0.6 }]}
                 onPress={handleSaveBio}
+                disabled={bioSaving}
                 accessibilityRole="button"
                 accessibilityLabel="Save bio"
               >
-                <Text style={styles.modalSaveText}>Save</Text>
+                <Text style={styles.modalSaveText}>{bioSaving ? 'Saving…' : 'Save'}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -1,7 +1,6 @@
 import React from 'react';
 import {
   View,
-  Text,
   StyleSheet,
   TouchableOpacity,
   Modal,
@@ -12,7 +11,9 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, colors } from '../../theme/index';
+import { Colors, Radius } from '../../theme/index';
+import { useTheme } from '../../theme/useTheme';
+import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
 import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
@@ -55,6 +56,7 @@ export function QuantityPickerContent({
   saving = false,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
+  const styles = makeStyles(useTheme().semanticColors);
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
@@ -91,17 +93,17 @@ export function QuantityPickerContent({
           </View>
           <View style={styles.macroPreviewDivider} />
           <View style={styles.macroPreviewItem}>
-            <Text style={[styles.macroPreviewValue, { color: Colors.orange }]}>{displayMacro(previewMacros.protein)}g</Text>
+            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.protein)}g</Text>
             <Text style={styles.macroPreviewLabel}>Protein</Text>
           </View>
           <View style={styles.macroPreviewDivider} />
           <View style={styles.macroPreviewItem}>
-            <Text style={[styles.macroPreviewValue, { color: Colors.gold }]}>{displayMacro(previewMacros.carbs)}g</Text>
+            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.carbs)}g</Text>
             <Text style={styles.macroPreviewLabel}>Carbs</Text>
           </View>
           <View style={styles.macroPreviewDivider} />
           <View style={styles.macroPreviewItem}>
-            <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{displayMacro(previewMacros.fat)}g</Text>
+            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.fat)}g</Text>
             <Text style={styles.macroPreviewLabel}>Fat</Text>
           </View>
         </View>
@@ -167,7 +169,7 @@ export function QuantityPickerContent({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   quantityModalContainer: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -199,14 +201,13 @@ const styles = StyleSheet.create({
   macroPreviewCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
     paddingVertical: 14,
     paddingHorizontal: 8,
     marginBottom: 24,
     width: '100%',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   macroPreviewItem: {
     flex: 1,
@@ -215,17 +216,17 @@ const styles = StyleSheet.create({
   macroPreviewValue: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   macroPreviewLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 2,
   },
   macroPreviewDivider: {
-    width: 1,
+    width: StyleSheet.hairlineWidth,
     height: 28,
-    backgroundColor: Colors.border,
+    backgroundColor: sc.border,
   },
   quantitySectionLabel: {
     fontSize: 13,

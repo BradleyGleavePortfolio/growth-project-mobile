@@ -24,6 +24,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
+import { patchUserCache } from './userCache';
+import { logger } from '../utils/logger';
 
 const KEY = 'pending_invite_code';
 
@@ -111,13 +113,21 @@ export interface ClaimResult {
 
 export async function claimPendingInviteCode(
   code?: string | null,
+  // B-SHARE-127: the coach-sharing sentence version, when the banner showed it.
+  coachSharingNotice?: string | null,
 ): Promise<ClaimResult> {
   const c = (code ?? (await readPendingInviteCode()))?.trim();
   if (!c) {
     return { ok: false, reason: 'missing', message: 'No invite code to claim.' };
   }
   try {
-    await authApi.attachInviteCode(c);
+    const response = await authApi.attachInviteCode(c, coachSharingNotice);
+    const coachId = response?.data?.coach_id;
+    if (typeof coachId === 'string') {
+      await patchUserCache({ coach_id: coachId }).catch((err: unknown) =>
+        logger.warn('PendingInviteCode', 'user cache patch after attach failed', err),
+      );
+    }
     await clearPendingInviteCode();
     return { ok: true };
   } catch (err: unknown) {

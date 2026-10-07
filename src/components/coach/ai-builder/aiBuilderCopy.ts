@@ -2,7 +2,9 @@
 import type { AiBuilderErrorCode, AiBuilderInjuryArea, AiBuilderQuickAction } from '../../../api/aiBuilderApi';
 
 export const AI_LABEL = 'AI-suggested, coach-approved';
-export const AI_STAGES = ['Reading the workout', 'Checking limits and injuries', 'Choosing from your exercise library'] as const;
+// U1 (SAFE-AIB-127): stage 2 names injuries only when the server really screens some (an injury area was chosen).
+export const AI_STAGES = ['Reading the workout', 'Checking training limits', 'Choosing from your exercise library'] as const;
+export const aiStages = (injuries: boolean): readonly string[] => (injuries ? [AI_STAGES[0], 'Checking limits and injuries', AI_STAGES[2]] : AI_STAGES);
 export const QUICK_ACTIONS: Record<AiBuilderQuickAction, { label: string; instruction: string }> = {
   swap_for_injury: { label: 'Swap for injury', instruction: 'Swap exercises that load the selected area for safer options.' },
   progress: { label: 'Progress', instruction: 'Progress this workout by one step.' },
@@ -18,9 +20,20 @@ export const INJURY_AREA_LABELS: Record<AiBuilderInjuryArea, string> = {
 export const KIND_LABELS = { added: 'Added', changed: 'Changed', removed: 'Removed', moved: 'Moved', meta: 'Details' } as const;
 export const UNNAMED_CHANGE: Record<string, string> = { moved: 'New order', meta: 'Workout details' }; // b#809 sends exercise: null for these and removes
 const CONTEXT_LABELS: Record<string, string> = { exercise_library: 'your exercise library', current_workout: 'this workout', schedule: 'training days' };
-export const contextLine = (keys: string[]) => `Using ${keys.map((k) => CONTEXT_LABELS[k] ?? k.replace(/_/g, ' ')).join(', ')}`;
+const CLIENT_KEYS = ['goal', 'experience', 'equipment', 'schedule', 'health_screening', 'injuries'];
+const label = (k: string) => CONTEXT_LABELS[k] ?? k.replace(/_/g, ' ');
+/** Job 6: with a client attached, the client's answers read as theirs ("Sam's goal, equipment"). */
+export const contextLine = (keys: string[], client?: string) => {
+  const theirs = client ? keys.filter((k) => CLIENT_KEYS.includes(k)).map(label) : [];
+  const own = keys.filter((k) => !client || !CLIENT_KEYS.includes(k)).map(label);
+  return `Using ${[...own, ...(theirs.length ? [`${client}'s ${theirs.join(', ')}`] : [])].join(', ')}`;
+};
 export const PAUSED_COPY = 'Ask AI is paused for maintenance. Your workouts are unchanged.';
-export const SAVE_FIRST_COPY = 'Save this workout first, then Ask AI can change it.';
+// U3 (AIB-FINISH-127): Ask AI on a new workout saves it first (name left blank -> NEW_WORKOUT_NAME), then opens the sheet.
+export const NEW_WORKOUT_PROMPT = 'Describe the workout to build';
+export const NEW_WORKOUT_NAME = 'New workout';
+export const NEW_WORKOUT_SAVING = 'Saving the workout for Ask AI';
+export const NEW_WORKOUT_SAVE_FAILED = 'The workout could not be saved, so Ask AI did not open. Check your connection and tap again.';
 export const WAIT_FOR_SAVE_COPY = 'Your last edit is still saving. Ask again in a moment.';
 export const SCREENING_COPY = 'This client flagged a health screening question. Confirm medical clearance before increasing intensity.';
 

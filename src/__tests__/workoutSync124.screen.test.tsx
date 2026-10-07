@@ -12,6 +12,8 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import { render, act, waitFor, fireEvent } from '@testing-library/react-native';
+import type { LoggedWorkout } from '../screens/client/active-workout/sessionQuality';
+import type { Exercise } from '../screens/client/active-workout/types';
 
 jest.mock('../config/featureFlags', () => ({
   featureFlags: { coachBrief: true, romanChat: false },
@@ -63,12 +65,14 @@ jest.mock('../storage/activeWorkoutSession', () => ({
   clearActiveWorkoutSession: jest.fn(async () => undefined),
 }));
 
+const mockGetWorkoutHistory = jest.fn(async () => ({ data: [] as LoggedWorkout[] }));
 jest.mock('../services/api', () => ({
-  workoutApi: { getRoutines: jest.fn(), getAll: jest.fn(async () => ({ data: [] })), getVolume: jest.fn() },
+  workoutApi: { getRoutines: jest.fn(), getAll: () => mockGetWorkoutHistory(), getVolume: jest.fn() },
 }));
 
+const mockCatalog = jest.fn(async (): Promise<Exercise[]> => []);
 jest.mock('../db/workoutDb', () => ({
-  getAllExercises: jest.fn(async () => []),
+  getAllExercises: () => mockCatalog(),
 }));
 
 const mockCompleteMyAssignment = jest.fn(async (..._a: unknown[]) => undefined);
@@ -131,6 +135,8 @@ beforeEach(() => {
   alertTitles = [];
   mockRouteParams = { routineName: 'Push Day', exercises: '[]' };
   mockLoadActiveWorkoutSession.mockResolvedValue(storedSession());
+  mockGetWorkoutHistory.mockResolvedValue({ data: [] });
+  mockCatalog.mockResolvedValue([]);
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation((title, _body, buttons) => {
     alertTitles.push(String(title));
     const press = (buttons ?? []).find((b) => b.text === 'Resume' || b.text === 'Finish');
@@ -148,6 +154,50 @@ async function finishOnce(view: Awaited<ReturnType<typeof render>>) {
     for (let i = 0; i < 6; i++) await Promise.resolve();
   });
 }
+
+describe('DES-W-127 live screen route/action parity', () => {
+  it('adopts ghosts through the real screen, keeps video, rest, notes, Add Set and Finish', async () => {
+    mockLoadActiveWorkoutSession.mockResolvedValue(storedSession({ sessionExercises: [{
+      exerciseId: 'ex-1', exerciseName: 'Bench Press', restSec: 90,
+      sets: [{ weight: 0, reps: 0, completed: false }],
+    }] }));
+    mockGetWorkoutHistory.mockResolvedValue({ data: [{
+      id: 'prior', exercises: [{ exercise_name: 'Bench Press', muscle_group: 'chest',
+        sets_completed: 1, weight_per_set: [60], reps_per_set: [10] }],
+    }] });
+    const view = await render(<ActiveWorkoutScreen />);
+    await waitFor(() => expect(view.getByText('Previous')).toBeTruthy());
+    expect(view.getByLabelText('Discard workout')).toBeTruthy();
+    expect(view.getByLabelText('Finish workout')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Discard workout'));
+    expect(alertSpy).toHaveBeenCalledWith('Discard this workout?', expect.any(String), expect.any(Array));
+    mockCatalog.mockResolvedValue([{ id: 'curl', name: 'Dumbbell Curl', muscle: 'biceps', equipment: 'dumbbell' }]);
+    await fireEvent.press(view.getByText('Add Exercise'));
+    const search = await view.findByPlaceholderText('Search exercises...');
+    await fireEvent.press(view.getByRole('button', { name: 'Biceps' }));
+    await fireEvent.changeText(search, 'Curl');
+    await fireEvent.press(view.getByText('Dumbbell Curl'));
+    expect(view.getByLabelText('Notes for Dumbbell Curl')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Watch video for Bench Press'));
+    expect(mockNavigate).toHaveBeenCalledWith('ExerciseDetail', { idOrSlug: 'ex-1' });
+    await fireEvent.changeText(view.getByLabelText('Workout notes'), 'Controlled session');
+    await fireEvent.changeText(view.getByLabelText('Notes for Bench Press'), 'Smooth');
+    await fireEvent.press(view.getByTestId('set-done-0-0'));
+    expect(view.getByTestId('set-weight-0-0').props.value).toBe('60');
+    expect(view.getByTestId('set-reps-0-0').props.value).toBe('10');
+    expect(view.getByLabelText('Skip rest timer')).toBeTruthy();
+    await fireEvent.press(view.getByLabelText('Add 30 seconds to rest timer'));
+    await fireEvent.press(view.getByLabelText('Skip rest timer'));
+    expect(view.queryByLabelText('Skip rest timer')).toBeNull();
+    await fireEvent.press(view.getAllByText('Add Set')[0]);
+    expect(view.getByTestId('set-weight-0-1').props.value).toBe('60');
+    await finishOnce(view);
+    expect(mockQueueWorkout.mock.calls[0][0]).toMatchObject({ payload: {
+      notes: 'Controlled session',
+      exercises: [{ weight_per_set: [60], reps_per_set: [10], notes: 'Smooth' }],
+    } });
+  });
+});
 
 describe('Finish with no signal', () => {
   it('queues the whole workout, says it is saved and will be sent, and closes the screen', async () => {

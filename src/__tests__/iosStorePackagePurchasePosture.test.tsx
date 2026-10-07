@@ -72,7 +72,7 @@ describe('client 1:1 coaching purchase on iOS', () => {
 
   it('the feature gate never routes to package purchase on hidden iOS (PaywallSheet / ProtectedScreen)', () => {
     expect(read('src/entitlements/PaywallSheet.tsx')).toMatch(/if \(hidden\) \{\s*return \(\s*<CoachManagedAccessSheet/);
-    expect(read('src/entitlements/ProtectedScreen.tsx')).toMatch(/entitlementActive !== true && nonP2PPurchasesHidden\(\)/);
+    expect(read('src/entitlements/ProtectedScreen.tsx')).toMatch(/entitlementActive !== true && \(nonP2PPurchasesHidden\(\) \|\| noCoach\)/);
   });
 });
 

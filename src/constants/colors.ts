@@ -17,10 +17,10 @@ export const Colors = {
   surface:           '#F1E8D5',  // cream (was #FFFFFF)
   surfaceElevated:   '#F1E8D5',  // cream (was #F5F0E8)
 
-  // Text → ink/charcoal/stone
+  // Text → ink/charcoal/readable warm grey
   textPrimary:    '#1A1A18',  // ink (was #1B2B1E)
   textSecondary:  '#3D3D3A',  // charcoal (was #4A6358)
-  textMuted:      '#B1A89F',  // stone (was #8FA89A)
+  textMuted:      '#6B675F',  // AA-readable on bone and cream
   textOnPrimary:  '#F5EFE4',  // bone on dark bg (was #FFFFFF)
 
   // Borders & dividers → stone/camel

@@ -22,7 +22,7 @@ describe('RoleSelectionScreen invite-code path', () => {
   it('never passes a code to selectRole (single redemption via attach)', () => {
     expect(SRC).not.toMatch(/selectRole\('student', trimmed/);
     expect(SRC).toMatch(/authApi\.selectRole\('student', undefined\)/);
-    expect(SRC).toMatch(/await authApi\.attachInviteCode\(trimmed\)/);
+    expect(SRC).toMatch(/await authApi\.attachInviteCode\(trimmed, sharingVersion\)/);
   });
 
   it('does not log raw error objects', () => {

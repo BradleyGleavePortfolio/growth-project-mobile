@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { ENERGY_LABELS, MOOD_EMOJIS, MOOD_LABELS } from './constants';
+import { ENERGY_LABELS, MOOD_LABELS } from './constants';
 import type { HabitsStyles } from './styles';
 
 export function MoodEnergyPicker({
@@ -37,11 +37,16 @@ export function MoodEnergyPicker({
           {[1, 2, 3, 4, 5].map((val) => (
             <TouchableOpacity
               key={val}
-              style={[styles.ratingBtn, mood === val && styles.ratingBtnActive]}
+              style={[styles.ratingBtn, { minHeight: 44 }, mood === val && styles.ratingBtnActive]}
               onPress={() => setMood(val)}
+              accessibilityRole="radio"
+              accessibilityLabel={MOOD_LABELS[val]}
+              accessibilityState={{ checked: mood === val }}
             >
-              <Text style={styles.ratingEmoji}>{MOOD_EMOJIS[val]}</Text>
-              <Text style={[styles.ratingLabel, mood === val && styles.ratingLabelActive]}>
+              <Ionicons name={mood === val ? 'ellipse' : 'ellipse-outline'} size={16}
+                color={mood === val ? colors.primary : colors.textMuted} />
+              <Text style={[styles.ratingLabel, { fontSize: 12, letterSpacing: 0, textTransform: 'none' },
+                mood === val && styles.ratingLabelActive]}>
                 {MOOD_LABELS[val]}
               </Text>
             </TouchableOpacity>

@@ -194,7 +194,8 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
-  CoachWorkoutBuilder:  { planId?: string } | undefined;
+  /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
+  CoachWorkoutBuilder:  { planId?: string; openAi?: boolean; clientId?: string; clientName?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
   /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */

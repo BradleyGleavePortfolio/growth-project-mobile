@@ -75,7 +75,7 @@ describe('food edit screen uses the retained portion metadata', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await openEdit();
     await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Delete entry' })));
-    expect(alert).toHaveBeenCalledWith('Delete Food', 'Remove Almonds?', expect.any(Array));
+    expect(alert).toHaveBeenCalledWith('Delete food', 'Remove Almonds?', expect.any(Array));
     expect(logApi.deleteEntry).not.toHaveBeenCalled();
     alert.mockRestore();
   });

@@ -7,6 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
 import { PRIVACY_POLICY_URL } from '../../config/env';
 import type { AiConsentUpgradeCopy } from '../../api/aiConsentApi';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import type {
   AnswerValue,
   Answers,
@@ -94,6 +95,8 @@ export interface QuestionScreenProps {
     aiUnconfirmed?: boolean;
     aiUnknown?: boolean;
     aiMemory?: AiConsentUpgradeCopy | null;
+    /** B-SHARE-GUEST-127: the coach-sharing sentence printed above P0 Continue (null: none). */
+    coachSharing?: { version: string; coachName: string | null } | null;
   };
 }
 
@@ -507,13 +510,21 @@ function ConsentBody(props: BodyProps) {
       props={props}
       header={header}
       footer={
-        <PrimaryButton
-          label={props.screen.cta ?? 'Continue'}
-          disabled={!checked || blocked}
-          hint={checked ? undefined : 'Tick the first box to continue'}
-          onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
-          testID="consult-continue"
-        />
+        <>
+          <CoachSharingNotice
+            version={state?.coachSharing?.version ?? null}
+            coachName={state?.coachSharing?.coachName}
+            style={[s.mutedSmall, { marginBottom: 12 }]}
+            testID="consent-coach-sharing"
+          />
+          <PrimaryButton
+            label={props.screen.cta ?? 'Continue'}
+            disabled={!checked || blocked}
+            hint={checked ? undefined : 'Tick the first box to continue'}
+            onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
+            testID="consult-continue"
+          />
+        </>
       }
     >
       {CONSENT_PARAGRAPHS.map((p) => (

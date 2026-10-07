@@ -101,6 +101,8 @@ export interface GoogleAuthOptions {
    * is present (always client).
    */
   intendedRole?: IntendedRole;
+  /** B-SHARE-127: sent with the invite code only when the screen showed the coach-sharing sentence. */
+  coachSharingNotice?: string;
 }
 
 export async function signInWithGoogle(
@@ -187,7 +189,12 @@ export async function signInWithGoogle(
     }
 
     try {
-      const response = await authApi.googleAuth(accessToken, options.inviteCode, options.intendedRole);
+      const response = await authApi.googleAuth(
+        accessToken,
+        options.inviteCode,
+        options.intendedRole,
+        options.coachSharingNotice,
+      );
       const { user } = response.data;
 
       // Defensive second pass: if the backend doesn't yet support the

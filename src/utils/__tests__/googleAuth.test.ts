@@ -81,7 +81,7 @@ describe('signInWithGoogle: coach request with no server answer', () => {
     expect(mockStore.has('supabase_token')).toBe(false);
     expect(mockStore.has('supabase_refresh_token')).toBe(false);
     expect(await AsyncStorage.getItem('user_data')).toBeNull();
-    expect(mockGoogleAuth).toHaveBeenCalledWith('tok-1', undefined, 'coach');
+    expect(mockGoogleAuth).toHaveBeenCalledWith('tok-1', undefined, 'coach', undefined);
   });
 
   it('a retry after a lost response returns the server answer (the account the server committed)', async () => {

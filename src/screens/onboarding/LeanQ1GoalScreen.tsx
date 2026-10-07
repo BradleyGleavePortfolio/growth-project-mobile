@@ -21,6 +21,8 @@ import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
+import { useFirstSignInCoachSharing } from '../../lib/coachSharingFirstSignIn';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ1'>;
@@ -38,12 +40,16 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<Goal | null>(null);
+  // B-SHARE-GUEST-127: an account linked outside the app (share-link buyer)
+  // sees the coach-sharing sentence here; moving on records it.
+  const coachSharing = useFirstSignInCoachSharing();
 
   // Psych Report #4: Analytics — onboarding_started fires on mount of Q1
   React.useEffect(() => { track('onboarding_started'); }, []);
 
   const handleSelect = async (goal: Goal) => {
     setSelected(goal);
+    coachSharing.accept();
     await saveOnboardingData({ primaryGoal: goal });
     // Psych Report #4: step 1 completed
     track('onboarding_step_completed', { step: 1, goal });
@@ -67,6 +73,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
           style: 'destructive',
           onPress: async () => {
             track('onboarding_skipped', { at_step: 1 });
+            coachSharing.accept();
             await markOnboardingComplete('explore');
           },
         },
@@ -121,6 +128,12 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
           ))}
         </View>
 
+        <CoachSharingNotice
+          version={coachSharing.notice?.version ?? null}
+          coachName={coachSharing.notice?.coachName}
+          style={styles.sharingNotice}
+        />
+
         {/* Skip */}
         <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.6}>
           <Text style={styles.skipText}>Skip — I'll set this later</Text>
@@ -144,6 +157,10 @@ const makeStyles = (colors: ThemeColors) =>
   },
   header: {
     marginBottom: 36,
+  },
+  sharingNotice: {
+    marginTop: 16,
+    textAlign: 'center',
   },
   stepIndicator: {
     flexDirection: 'row',

@@ -59,7 +59,7 @@ import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
-import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+import { colors, lightTokens, spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
 
 export interface RomanChatScreenProps {
@@ -432,13 +432,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: lightTokens.border,
   },
   headerTitle: {
-    ...typography.h4,
+    ...typography.h1,
     color: colors.ink,
   },
   listContent: {
@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
   },
   olderNoteText: {
     ...typography.bodySmall,
@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
   },
   sendErrorText: {
@@ -475,16 +475,13 @@ const styles = StyleSheet.create({
   retryButton: {
     minHeight: 48,
     minWidth: 48,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.sm,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radius.lg,
-    borderWidth: 0.5,
-    borderColor: withAlpha(colors.forest, 0.45),
-    backgroundColor: withAlpha(colors.forest, 0.08),
   },
   retryLabel: {
     ...typography.bodyMd,
     color: colors.forest,
+    textDecorationLine: 'underline',
   },
 });

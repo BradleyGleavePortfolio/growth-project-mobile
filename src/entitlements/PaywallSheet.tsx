@@ -37,17 +37,21 @@ import { clientPaymentsApi, ClientCoachPackage } from '../api/clientPaymentsApi'
 import { useTheme } from '../theme/useTheme';
 import { logger } from '../utils/logger';
 import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
+import { useCoachlessClient } from '../hooks/useCoachlessClient';
 
 export const COACH_MANAGED_TITLE = 'Your coach manages your access';
 export const COACH_MANAGED_BODY =
   'Your coach sets up what is included in your coaching. Send them a message and they will take it from here.';
+export const COACHLESS_TITLE = 'Join a coach to start logging';
+export const COACHLESS_BODY = 'Enter the code your coach gave you.';
+export const COACHLESS_CTA = 'Enter a coach code';
 
 export interface PaywallSheetProps {
   visible: boolean;
   message?: string | null;
   onClose: () => void;
   onSubscribe: (packageId?: string) => void;
-  /** Opens the in-app thread with the coach (always free server-side). */
+  /** Opens Messages (coachless clients enter a code in its existing sheet). */
   onMessageCoach?: () => void;
   /** Defaults to nonP2PPurchasesHidden(); injectable for tests. */
   purchasesHidden?: boolean;
@@ -67,13 +71,15 @@ export function PaywallSheet({
   onMessageCoach,
   purchasesHidden,
 }: PaywallSheetProps) {
-  const hidden = purchasesHidden ?? nonP2PPurchasesHidden();
+  const noCoach = useCoachlessClient();
+  const hidden = (purchasesHidden ?? nonP2PPurchasesHidden()) || noCoach;
   if (hidden) {
     return (
       <CoachManagedAccessSheet
         visible={visible}
         onClose={onClose}
         onMessageCoach={onMessageCoach}
+        noCoach={noCoach}
       />
     );
   }
@@ -88,17 +94,19 @@ export function PaywallSheet({
 }
 
 /**
- * iOS hidden-purchase variant: no packages, no prices, no Subscribe. One
- * clear sentence and one explicit action (message the coach).
+ * Hidden-purchase or coachless variant: no packages, prices or Subscribe.
+ * One primary recovery action (message the coach or enter a coach code).
  */
 function CoachManagedAccessSheet({
   visible,
   onClose,
   onMessageCoach,
+  noCoach,
 }: {
   visible: boolean;
   onClose: () => void;
   onMessageCoach?: () => void;
+  noCoach: boolean;
 }) {
   const { colors, tokens } = useTheme();
   return (
@@ -116,10 +124,10 @@ function CoachManagedAccessSheet({
         >
           <ScrollView contentContainerStyle={styles.scroll}>
             <Text style={[styles.title, { color: colors.textPrimary, ...tokens.typography.h2 }]}>
-              {COACH_MANAGED_TITLE}
+              {noCoach ? COACHLESS_TITLE : COACH_MANAGED_TITLE}
             </Text>
             <Text style={[styles.message, { color: colors.textSecondary, ...tokens.typography.body }]}>
-              {COACH_MANAGED_BODY}
+              {noCoach ? COACHLESS_BODY : COACH_MANAGED_BODY}
             </Text>
             {onMessageCoach ? (
               <TouchableOpacity
@@ -134,7 +142,7 @@ function CoachManagedAccessSheet({
                     { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
                   ]}
                 >
-                  Message your coach
+                  {noCoach ? COACHLESS_CTA : 'Message your coach'}
                 </Text>
               </TouchableOpacity>
             ) : null}

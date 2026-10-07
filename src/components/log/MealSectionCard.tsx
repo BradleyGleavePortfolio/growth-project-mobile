@@ -1,8 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Spacing } from '../../theme/index';
+import { Colors, Spacing } from '../../theme/index';
+import { useTheme } from '../../theme/useTheme';
+import { QuietText as Text } from '../../ui/progress/QuietBar';
 import { FoodLog, MealType } from '../../types';
 import type { IoniconName } from '../../types/common';
 import { foodMacroLine, type MacroDisplayMode } from '../../macros/macroDisplay';
@@ -34,6 +36,7 @@ export default function MealSectionCard({
   onEditPress,
   macroMode = 'full',
 }: Props) {
+  const styles = makeStyles(useTheme().semanticColors);
   return (
     <View style={styles.mealSection}>
       <View style={styles.mealHeader}>
@@ -108,13 +111,13 @@ export default function MealSectionCard({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   mealSection: {
     marginHorizontal: Spacing.lg,
     marginBottom: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
+    paddingVertical: Spacing.md,
   },
   mealHeader: {
     flexDirection: 'row',
@@ -135,33 +138,34 @@ const styles = StyleSheet.create({
   mealCals: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textMuted,
+    color: sc.textMuted,
   },
   foodItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    minHeight: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
   },
   foodItemLeft: {
     flex: 1,
     marginRight: 12,
   },
   foodName: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.dark,
   },
   foodQuantityMuted: {
     fontSize: 13,
     fontWeight: '400',
-    color: Colors.textMuted,
+    color: sc.textMuted,
   },
   foodMacros: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 2,
   },
   foodCals: {
@@ -176,8 +180,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
     marginTop: 4,
   },
   addFoodText: {
@@ -187,7 +191,7 @@ const styles = StyleSheet.create({
   },
   emptyMealText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: sc.textMuted,
     textAlign: 'center',
     paddingVertical: 8,
   },

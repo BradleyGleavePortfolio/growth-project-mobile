@@ -924,12 +924,14 @@ export default function RootNavigator() {
 
   // iOS coach-managed gate action (audit #304 B1): the client's thread with
   // their coach lives on the Home stack and is free server-side.
-  const openCoachThread = () => {
+  const openCoachThread = (openCoachCode = false) => {
     try {
       const nav = navigationRef as unknown as {
         navigate: (name: string, params?: object) => void;
       };
-      nav.navigate('Home', { screen: 'Messages' });
+      nav.navigate('Home', openCoachCode === true
+        ? { screen: 'Messages', params: { openCoachCode: true } }
+        : { screen: 'Messages' });
     } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
   };
 

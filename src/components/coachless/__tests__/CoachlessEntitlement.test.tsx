@@ -45,7 +45,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 jest.mock('../../../hooks/useFeatureFlags', () => ({ useFeatureFlags: () => ({ flags: { coachless_home: true } }) }));
 jest.mock('../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => false }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
-jest.mock('../../../lib/userCache', () => ({ patchUserCache: async () => undefined }));
+jest.mock('../../../lib/userCache', () => ({ patchUserCache: async () => undefined, readUserCacheSync: () => null }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../../PackageSelectionSheet', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../../entitlements/PaywallSheet', () => ({
@@ -104,7 +104,7 @@ it('redeeming a code with a granted plan unlocks protected content without a res
       </EntitlementProvider>
     </QueryClientProvider>,
   );
-  expect(await screen.findByTestId('protected-screen-paywall')).toBeTruthy();
+  expect(await screen.findByTestId('protected-screen-coach-managed')).toBeTruthy();
   expect(screen.queryByTestId('workout-content')).toBeNull();
   expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
 
@@ -114,6 +114,6 @@ it('redeeming a code with a granted plan unlocks protected content without a res
   await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
 
   await waitFor(() => expect(screen.getByTestId('workout-content')).toBeTruthy());
-  expect(screen.queryByTestId('protected-screen-paywall')).toBeNull();
+  expect(screen.queryByTestId('protected-screen-coach-managed')).toBeNull();
   expect(mockGetEntitlement).toHaveBeenCalledTimes(2);
 });
