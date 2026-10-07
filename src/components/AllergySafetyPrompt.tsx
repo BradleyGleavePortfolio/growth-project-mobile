@@ -5,10 +5,13 @@
  * Why this exists
  * ───────────────
  * Wave 5's lean onboarding dropped the legacy 10-step flow's
- * `restrictions` chip set. Recipes / meal-plan code still reads
- * `profile.diet_restrictions`. A peanut-allergic user could land on the
- * Recipes tab and see a peanut recipe at the top. This prompt is the
- * safety net.
+ * `restrictions` chip set. This prompt asks for it again and saves it to
+ * `profile.diet_restrictions` (backend `dietary_restrictions`).
+ *
+ * ALLERGY-128: nothing filters the recipe library by this answer (GET
+ * /recipes selects by creator and coach only; RecipesScreen filters by
+ * search and tag only). The copy therefore promises nothing about hiding
+ * recipes and tells the client to check each recipe's ingredients.
  *
  * Trigger conditions (managed by the caller — useAllergySafetyPrompt):
  *   - User completed the lean flow (lean_onboarding_done === 'true')
@@ -103,10 +106,11 @@ export default function AllergySafetyPrompt({
     >
       <View style={styles.backdrop}>
         <View style={styles.sheet} accessibilityViewIsModal>
-          <Text style={styles.eyebrow}>BEFORE WE BEGIN</Text>
+          <Text style={styles.eyebrow}>BEFORE YOU BROWSE</Text>
           <Text style={styles.headline}>Anything to avoid?</Text>
           <Text style={styles.lede}>
-            Your recipe library will hide anything that conflicts. Choose
+            This is saved to your profile. Recipes are not filtered by it,
+            so check each recipe&apos;s ingredients before you cook. Choose
             None if you have no restrictions.
           </Text>
 

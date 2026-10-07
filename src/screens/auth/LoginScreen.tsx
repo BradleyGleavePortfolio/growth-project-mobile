@@ -21,6 +21,7 @@ import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import { describeSignInFailure, type AuthFailure } from '../../utils/authFailure';
+import ResendVerificationLink from './ResendVerificationLink';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -107,9 +108,13 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [error, setError] = useState('');
   // #306 r5 (owner 13:34): Contact support next to an unknown failure.
   const [errorSupport, setErrorSupport] = useState(false);
-  const showFailure = (failure: AuthFailure) => {
+  // FW-ONB-128 B1: an unconfirmed email-and-password sign-in offers Send a
+  // new link (never Apple / Google: no link was sent for those).
+  const [errorUnconfirmed, setErrorUnconfirmed] = useState(false);
+  const showFailure = (failure: AuthFailure, emailSignIn = false) => {
     setError(failure.message);
     setErrorSupport(failure.support);
+    setErrorUnconfirmed(emailSignIn && failure.kind === 'email_unconfirmed');
   };
   // B3: Google only when the shared signup policy advertises it (hidden
   // while unknown), same reader as CreateAccount.
@@ -287,7 +292,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     } catch (err) {
       // Status and backend message decide the copy; an unknown failure gets
       // a reference and Contact support (utils/authFailure).
-      showFailure(describeSignInFailure(err));
+      showFailure(describeSignInFailure(err), true);
     } finally {
       setLoading(false);
     }
@@ -477,6 +482,9 @@ export default function LoginScreen({ navigation, route }: Props) {
               >
                 Contact support
               </Text>
+            ) : null}
+            {errorUnconfirmed && email.trim() ? (
+              <ResendVerificationLink email={email} testID="login-resend" />
             ) : null}
           </View>
         ) : null}

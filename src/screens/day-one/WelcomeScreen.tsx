@@ -1,5 +1,5 @@
 /**
- * Day-1 step 1 — Welcome. TGP wordmark fades + lifts in (~600ms), greeting
+ * Day-1 step 1 — Welcome. TGP wordmark fades + lifts in (300ms), greeting
  * appears with the user's first name once the profile cache resolves.
  * Animations respect Reduce Motion (snap to final state).
  *
@@ -11,18 +11,18 @@ import {
   AccessibilityInfo,
   Animated,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
-import StepHeader from './StepHeader';
+import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import { writeResumeState } from './resume';
 
 type Props = {
@@ -30,7 +30,7 @@ type Props = {
 };
 
 export default function WelcomeScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const user = useCurrentUser();
   const firstName = user?.firstName?.trim();
@@ -54,8 +54,8 @@ export default function WelcomeScreen({ navigation }: Props) {
         return;
       }
       Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: 600, useNativeDriver: true }),
-        Animated.timing(translateY, { toValue: 0, duration: 600, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: 0, duration: 300, useNativeDriver: true }),
       ]).start();
     });
     return () => {
@@ -78,7 +78,7 @@ export default function WelcomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} testID="day-one-welcome">
       <StepHeader step={1} />
-      <View style={styles.inner}>
+      <ScrollView contentContainerStyle={styles.inner}>
         <Animated.View
           style={[styles.logoBlock, { opacity, transform: [{ translateY }] }]}
         >
@@ -109,16 +109,16 @@ export default function WelcomeScreen({ navigation }: Props) {
         >
           <Text style={styles.ctaText}>{t('welcome.cta')}</Text>
         </TouchableOpacity>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     inner: {
-      flex: 1,
+      flexGrow: 1,
       paddingHorizontal: 24,
       paddingBottom: 32,
       justifyContent: 'space-between',
@@ -164,14 +164,13 @@ const makeStyles = (colors: ThemeColors) =>
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
-      borderRadius: 2,
+      minHeight: 56,
+      borderRadius: 4,
       alignItems: 'center',
     },
     ctaText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
   });

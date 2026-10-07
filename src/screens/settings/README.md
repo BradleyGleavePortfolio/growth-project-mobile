@@ -8,6 +8,8 @@ Settings-area screens for The Growth Project mobile app.
 
 `DeleteAccountScreen.tsx` — GDPR right-to-erasure flow (Phase 10).
 
+Look (DES-BB-127): bone page, hairline sections instead of cream cards, Cormorant for the title and the deletion date; flow, re-auth and wording unchanged.
+
 **Purpose**
 
 In-app account deletion for both roles (Apple App Review 5.1.1(v); GDPR Art. 17; Washington My Health My Data Act right to deletion). Deletion can be completed entirely in the app: no email step, no contacting support.
@@ -84,7 +86,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 ### RomanConversationsScreen and RomanConversationScreen
 
-`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).
+`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only). Theme-colored hairline rows retain real dates, times and counts; the list API supplies no first-line text, so no preview is invented. Transcripts use ROMAN / YOU labels, Inter body text and Roman's existing face, with interrupted-reply notes preserved. Navigation, paging, confirmations, retry/support and account-binding behavior are unchanged.
 
 **Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
 
@@ -119,7 +121,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
 Client Settings > Notifications shows per-category switches (coach messages,
-reminders, workout reminders, milestones, system). Each switch PATCHes
+reminders, workout reminders, milestones, system). Unfilled hairline rows use semantic-theme colours, 13 pt descriptions and 44 pt controls under a quiet category overline. Each switch PATCHes
 `/notifications/preferences` with the mapped backend fields and rolls back on
 failure. A failed save shows an inline notice that names the setting and says
 what to do next, by status (`notificationPreferenceErrors.ts`): no response =
@@ -132,7 +134,7 @@ a Sentry report (status, machine code, reference only).
 Roman at the client's preferred training time (consultation S2) on their first
 session day and every plan day, in the client's local timezone, at most once a
 day, and not when that day's session is already logged. The switch reads the
-server value on mount. The device timezone is synced to the backend by
+server value on mount, as do all other category switches. Descriptions match each mapped field (messages, meal-reminder preference, recorded milestones and daily/weekly summary email through `digest_email`); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
 `src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
 time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for
@@ -141,6 +143,8 @@ coach and owner accounts.
 ### DataExportScreen
 
 `DataExportScreen.tsx` — GDPR Article 20 data portability. The user requests a JSON archive of their data; the backend builds it in the background and keeps it for 7 days in private storage. **Download file** asks `POST /v1/me/data-export/download-link` for a fresh link (5 minutes, bound to the signed-in user) and opens it with `Linking.openURL`; the browser saves `tgp-data-export-YYYY-MM-DD.json`. Nothing is stored inside the app.
+
+Look (DES-BB-127): hairline status sections instead of boxes, one forest primary button, Cormorant <= 500; states and copy unchanged. `BlockedUsersScreen.tsx` uses the same hairline rows; its error states say "tap Retry" (there is no pull-to-refresh).
 
 **State machine**
 

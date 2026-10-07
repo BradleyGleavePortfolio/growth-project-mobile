@@ -171,7 +171,7 @@ export type CoachTabParamList = {
 export type ClientsStackParamList = {
   ClientsList: undefined;
   /** initialTab: opens on that tab (the daily brief opens Workouts). */
-  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' };
+  ClientDetail: { clientId: string; clientName: string; initialTab?: 'workouts' | 'mealplan' };
   /**
    * S14 round 3: the coach-only wearable coaching prompts for one client,
    * opened from the client's Health tab. Registered only behind

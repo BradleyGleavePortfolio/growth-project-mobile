@@ -5,7 +5,7 @@
  * computes macros on the device.
  */
 import React, { useState } from 'react';
-import { Alert, Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Answers } from '../../lib/consultation/types';
 import type { CompleteOnboardingResponse } from '../../api/consultationApi';
@@ -18,11 +18,12 @@ import {
   trainingDayPattern,
   weeksEyebrow,
 } from '../../lib/consultation/copy';
-import { FadeIn, Frame, palette, PrimaryButton, RomanLine, s, TextLink } from './components';
+import { FadeIn, Frame, PrimaryButton, RomanLine, TextLink, useConsultationStyles } from './components';
 import { SUPPORT_EMAIL } from '../../constants/support';
 import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
 
 function Disclosure({ label, children, testID }: { label: string; children: React.ReactNode; testID?: string }) {
+  const { s, palette } = useConsultationStyles();
   const [open, setOpen] = useState(false);
   return (
     <View style={{ marginTop: 20 }}>
@@ -32,7 +33,7 @@ function Disclosure({ label, children, testID }: { label: string; children: Reac
         accessibilityLabel={label}
         accessibilityState={{ expanded: open }}
         testID={testID}
-        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44, borderTopWidth: 1, borderBottomWidth: 1, borderColor: palette.border }}
+        style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 44, borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: palette.border }}
       >
         <Text style={s.rowLabel}>{label}</Text>
         <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={palette.charcoal} />
@@ -61,6 +62,7 @@ export function SummaryScreen({
   onPrepare: () => void;
   preparing?: boolean;
 }) {
+  const { s, palette } = useConsultationStyles();
   const sections = buildSummary(answers, now);
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const forName = ctx.firstName?.trim() ? `Prepared for ${ctx.firstName.trim()} · ` : '';
@@ -74,7 +76,7 @@ export function SummaryScreen({
         <Text style={s.eyebrow}>{`${forName}${now.getDate()} ${months[now.getMonth()]}`}</Text>
         <Text style={[s.h1, { marginTop: 12 }]} accessibilityRole="header">Your consultation</Text>
         {sections.map((sec) => (
-          <View key={sec.title} style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: palette.border }}>
+          <View key={sec.title} style={{ paddingVertical: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={s.eyebrow}>{sec.title}</Text>
               {sec.editChapter && !preparing ? (
@@ -84,12 +86,13 @@ export function SummaryScreen({
                   accessibilityLabel={`Edit ${sec.title.toLowerCase()}`}
                   hitSlop={10}
                   testID={`summary-edit-${sec.editChapter}`}
+                  style={{ minHeight: 44, minWidth: 44, alignItems: 'flex-end', justifyContent: 'center' }}
                 >
                   <Text style={[s.linkText, s.linkAccent]}>Edit</Text>
                 </Pressable>
               ) : null}
             </View>
-            <Text style={[s.h3, { marginTop: 6 }]}>{sec.body}</Text>
+            <Text style={[s.body, { marginTop: 6 }]}>{sec.body}</Text>
           </View>
         ))}
         {!preparing ? (
@@ -123,8 +126,8 @@ export type CompleteProblem =
 
 const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: string }> = {
   not_attached: {
-    head: 'Your coach link is still being set up.',
-    body: 'Your answers are saved. Once your account is linked to your coach, I can prepare your numbers and your plan. Please try again in a moment.',
+    head: 'A coach link is needed.',
+    body: 'Your answers are saved. A coach must be linked before your numbers and plan can be prepared. Contact support for help with the link, or try again.',
     cta: 'Try again',
   },
   consultation_incomplete: {
@@ -143,8 +146,8 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
     cta: 'Review the agreement',
   },
   clinic_not_configured: {
-    head: 'Your coach is still setting things up.',
-    body: 'Your answers are saved. Your plan will be ready to prepare shortly. Please try again in a little while.',
+    head: 'Your plan could not be prepared.',
+    body: 'Your answers are saved. The required coach setup is incomplete. Contact support for help, or try again.',
     cta: 'Try again',
   },
   completion_in_progress: {
@@ -193,6 +196,7 @@ export const ESCAPE_COPY = {
 export const CONSULT_SUPPORT_SUBJECT = 'Help with my consultation';
 
 function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
+  const { s, palette } = useConsultationStyles();
   // Sol B-324-1: if no email app opens, the address (selectable), Copy and
   // Try again show in place, not in a dismissible alert.
   const supportEmail = useSupportEmail(CONSULT_SUPPORT_SUBJECT);
@@ -206,7 +210,7 @@ function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
           void supportEmail.open();
         }}
       />
-      <SupportEmailFallback handle={supportEmail} textStyle={s.body} linkColor={palette.accent} testID="consult-support-fallback" />
+      <SupportEmailFallback handle={supportEmail} textStyle={s.body} linkColor={palette.accentText} testID="consult-support-fallback" />
       {onSignOut ? (
         <TextLink
           label={ESCAPE_COPY.signOut}
@@ -237,6 +241,7 @@ export function CompleteProblemScreen({
   /** Short support reference of the failed request (unknown and invalid answers only). */
   reference?: string | null;
 }) {
+  const { s } = useConsultationStyles();
   const c = PROBLEM_COPY[problem];
   const ref = problem === 'unknown' || problem === 'invalid_answers' ? referenceLine(reference) : null;
   return (
@@ -256,6 +261,7 @@ export function CompleteProblemScreen({
 // ─── Paused ─────────────────────────────────────────────────────────────────
 
 export function PausedScreen({ ctx, onResume, onSignOut }: { ctx: CopyContext; onResume: () => void; onSignOut?: () => void }) {
+  const { s } = useConsultationStyles();
   return (
     <Frame testID="consult-paused" footer={<PrimaryButton label="Continue my consultation" onPress={onResume} testID="consult-resume" />}>
       <Text style={[s.h1, { marginTop: 48 }]} accessibilityRole="header">Your place is kept.</Text>
@@ -280,6 +286,7 @@ export function MacroRevealScreen({
   ctx: CopyContext;
   onNext: () => void;
 }) {
+  const { s, palette } = useConsultationStyles();
   const m = result.macros;
   const coach = result.coach?.display_name || ctx.coachName || null;
   const c2 = { ...ctx, coachName: coach };
@@ -299,10 +306,10 @@ export function MacroRevealScreen({
         <Text style={s.mutedSmall}>kcal</Text>
       </FadeIn>
       <FadeIn delayIndex={1}><Text style={s.mutedSmall}>calories a day</Text></FadeIn>
-      <FadeIn delayIndex={2} style={{ marginTop: 20, borderTopWidth: 1, borderTopColor: palette.border }}>
+      <FadeIn delayIndex={2} style={{ marginTop: 24, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: palette.border }}>
         {rows.map(([l, v]) => (
-          <View key={l} accessible accessibilityLabel={`${l} ${fmt(v)} grams`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: palette.border }}>
-            <Text style={s.h3}>{l}</Text>
+          <View key={l} accessible accessibilityLabel={`${l} ${fmt(v)} grams`} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingVertical: 18, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border }}>
+            <Text style={s.body}>{l}</Text>
             <Text style={s.h2} testID={`macro-${l.toLowerCase()}`}>{`${fmt(v)} g`}</Text>
           </View>
         ))}
@@ -315,7 +322,7 @@ export function MacroRevealScreen({
         <Text style={s.small}>{`Protein helps you keep and build muscle, and keeps you fuller for longer. ${proteinExample(answers.N1, Math.round(m.protein_g))}`}</Text>
         {simple ? (
           <Text style={s.small} testID="macro-simple-note">
-            {'For your first week, two numbers are enough: calories and protein. Carbs and fat join them after that, once logging feels easy.'}
+            {'Calories and protein are shown here. Carbs and fat targets are also set.'}
           </Text>
         ) : (
           <>
@@ -352,6 +359,7 @@ export function PlanRevealScreen({
   onBack: () => void;
   onFinish: () => void;
 }) {
+  const { s, palette } = useConsultationStyles();
   const p = result.program;
   const coach = result.coach?.display_name || ctx.coachName || null;
   const c2 = { ...ctx, coachName: coach };
@@ -377,10 +385,11 @@ export function PlanRevealScreen({
       ) : null}
       <View style={s.hair} />
       <FadeIn delayIndex={3}>
+        <Text style={[s.eyebrow, { marginBottom: 16 }]}>Suggested training days</Text>
         <View
           style={{ flexDirection: 'row', justifyContent: 'space-between' }}
           accessible
-          accessibilityLabel={`Training days this week: ${days.map((d) => DAY_NAMES[d]).join(', ')}`}
+          accessibilityLabel={`Suggested training days: ${days.map((d) => DAY_NAMES[d]).join(', ')}`}
           testID="plan-week-strip"
         >
           {DAY_LETTERS.map((l, i) => (

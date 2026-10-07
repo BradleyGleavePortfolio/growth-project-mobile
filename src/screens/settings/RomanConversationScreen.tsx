@@ -21,7 +21,9 @@ import { AccessibilityInfo, ActivityIndicator, FlatList, StyleSheet, Text, View 
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
-import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
+import RomanAvatar from '../../components/roman/RomanAvatar';
+import { ROMAN_INTERRUPTED_NOTE } from '../../components/roman/romanVoice';
+import { typography } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { romanChatsApi as defaultApi, type RomanChatsApi } from '../../api/romanChatsApi';
 import type { RomanMessage } from '../../api/romanApi';
@@ -308,7 +310,17 @@ export default function RomanConversationScreen({
       <FlatList
         data={messages}
         keyExtractor={(m) => m.id}
-        renderItem={({ item }) => <RomanMessageBubble message={item} testID={`roman-transcript-message-${item.id}`} />}
+        renderItem={({ item }) => (
+          <View style={styles.turn} testID={`roman-transcript-message-${item.id}`} role="listitem">
+            <View style={[styles.speaker, item.role === 'user' && styles.userTurn]}>
+              {item.role === 'assistant' ? <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" /> : null}
+              <Text style={styles.speakerLabel}>{item.role === 'user' ? 'YOU' : 'ROMAN'}</Text>
+            </View>
+            <Text style={[styles.body, item.role === 'user' && styles.userText]}
+              accessibilityLabel={`${item.role === 'user' ? 'You' : 'Roman'} said: ${item.content}`}>{item.content}</Text>
+            {item.interrupted && item.role === 'assistant' ? <Text style={styles.caption}>{ROMAN_INTERRUPTED_NOTE}</Text> : null}
+          </View>
+        )}
         role="list"
         contentContainerStyle={styles.list}
         testID="roman-chat-transcript-list"
@@ -383,20 +395,24 @@ function makeStyles(colors: ThemeColors) {
       paddingBottom: 12,
     },
     backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    topTitle: { flex: 1, textAlign: 'center', fontFamily: 'Inter_500Medium', fontSize: 17, color: colors.textPrimary },
+    topTitle: { ...typography.h2, flex: 1, textAlign: 'center', color: colors.textPrimary },
     content: { padding: 24, paddingBottom: 48, gap: 16 },
     list: { paddingVertical: 16, paddingBottom: 48 },
     header: { gap: 12, paddingHorizontal: 24, paddingBottom: 8 },
     footer: { gap: 12, paddingHorizontal: 24, paddingTop: 16 },
     card: {
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderRadius: 4,
       padding: 16,
       gap: 12,
-      backgroundColor: colors.surface,
     },
     body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: colors.textPrimary },
+    turn: { marginHorizontal: 24, paddingVertical: 24, gap: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    speaker: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    speakerLabel: { ...typography.eyebrow, color: colors.textSecondary },
+    userTurn: { justifyContent: 'flex-end' },
+    userText: { textAlign: 'right' },
     caption: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19, color: colors.textSecondary },
     notice: { gap: 8 },
     noticeText: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: colors.textPrimary },
@@ -406,7 +422,7 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: 0,
       borderColor: colors.border,
       paddingHorizontal: 16,
     },
@@ -416,7 +432,7 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: 0,
       borderColor: colors.error,
       paddingHorizontal: 16,
     },

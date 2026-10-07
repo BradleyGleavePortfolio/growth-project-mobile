@@ -23,6 +23,8 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 ## Data flow
 
+`ClientsStack.ClientDetail` accepts optional `initialTab: 'workouts' | 'mealplan'`. Omission opens Summary; AI meal-plan approval requests `mealplan`, and route updates also select that tab on an already-mounted screen.
+
 ```
 App.tsx mounts RootNavigator
    │
@@ -187,12 +189,12 @@ Welcome → CoachPairing → Goals → Notifications → CheckInTime → Ready
 
 | Screen | Purpose | Persistence | Skip allowed |
 | --- | --- | --- | --- |
-| `Welcome` | Brand fade, greet by first name | none (cover) | n/a |
-| `CoachPairing` | Pair via invite code (manual or deep-link prefill) | `POST /auth/attach-invite-code` | Yes — unless arrived via deep link |
-| `Goals` | Multi-select coaching goals | on device only (Day-1 draft); the backend has no goals field | Yes |
+| `Welcome` | 300 ms reduced-motion-aware brand reveal, greet by first name; shared StepHeader shows “Step n of 6” above a progress hairline | none (cover) | n/a |
+| `CoachPairing` | Pair via invite code (manual or deep-link prefill); sharing notice stays above the forest action; spinner while submitting, no premature pairing claim | `POST /auth/attach-invite-code` | Yes — unless arrived via deep link |
+| `Goals` | Multi-select coaching goals as Inter hairline rows, with all six choices retained | on device only (Day-1 draft); the backend has no goals field | Yes |
 | `Notifications` | Permission ask with value-prop context | `PATCH /users/me/preferences { notif_permission_state }` | Yes — denial does NOT block |
-| `CheckInTime` | Pick daily check-in (default 9:00 AM local) | time on device only; device zone via `PUT /notifications/timezone` (fallback `PATCH /notifications/preferences { timezone }`) | Yes |
-| `Ready` | Terminal screen, calls `completeDayOne()` + `authEvents.emit()` | `PUT /profile { onboarding_completed: true }` | n/a |
+| `CheckInTime` | Pick daily check-in (default 9:00 AM local), 44 pt time controls and tabular values; content scrolls on smaller screens | time on device only; device zone via `PUT /notifications/timezone` (fallback `PATCH /notifications/preferences { timezone }`) | Yes |
+| `Ready` | Neutral welcome without premature completion claims, calls `completeDayOne()` + `authEvents.emit()`; offline finish retained | `PUT /profile { onboarding_completed: true }` | n/a |
 
 All step persistence runs through `src/screens/day-one/api.ts`, which applies
 exponential-backoff retry with jitter for transient failures and classifies

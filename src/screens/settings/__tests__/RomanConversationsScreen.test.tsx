@@ -109,6 +109,12 @@ async function confirmDeleteAll(screen: Awaited<ReturnType<typeof render>>) {
 }
 
 describe('list', () => {
+  it('uses calm hairline rows and keeps Back reachable', async () => {
+    const screen = await renderScreen(makeApi());
+    expect((await screen.findByTestId('roman-chat-row-ca1')).props.style.backgroundColor).toBeUndefined();
+    await fireEvent.press(screen.getByLabelText(ROMAN_CHATS_COPY.back));
+    expect(navigation.goBack).toHaveBeenCalled();
+  });
   it('shows a loading state, then every chat newest first with accessible labels', async () => {
     const d = deferred<RomanChatsOutcome<RomanChatPage>>();
     const api = makeApi({ list: jest.fn(() => d.promise) });

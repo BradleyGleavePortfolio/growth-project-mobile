@@ -91,8 +91,8 @@ describe('PrivateCommunityHubScreen — source guards', () => {
     expect(COMMUNITY_SRC).toMatch(/about 20 members/);
   });
 
-  it('voice note affordance is gated behind communityVoiceNotes flag', () => {
-    expect(COMMUNITY_SRC).toMatch(/featureFlags\.communityVoiceNotes/);
+  it('does not advertise unavailable voice-note functionality', () => {
+    expect(COMMUNITY_SRC).not.toMatch(/coming soon|Voice notes are coming/i);
   });
 
   it('has no global feed tab — doctrine "no public feed"', () => {
@@ -175,6 +175,7 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens,
     colors: {
       background: '#F5EFE4',
       surface: '#F1E8D5',
