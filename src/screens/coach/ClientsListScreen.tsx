@@ -16,6 +16,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
 import { SkeletonClientCard } from '../../ui/skeletons';
 import { EmptyState, EmptyStateNoClients, EmptyStateNoResults, IconPeople } from '../../ui/empty-states';
 import {
@@ -105,14 +106,17 @@ export default function ClientsListScreen({ navigation }: Props) {
   const shownClients = sortRoster(getFilteredClients(), sort);
   const total = clients.length;
   const countLine = rosterCountLine(shownClients, total, filterStatus, searching);
+  const countKnown = !isLoading && !loadError;
+  const dateLine = new Date().toLocaleDateString('en-US', {
+    weekday: 'long', month: 'long', day: 'numeric',
+  });
 
   const renderClient = ({ item }: { item: RosterClient }) => {
     const name = rosterDisplayName(item);
     const line = rosterActivityLine(item);
     const review = rosterReviewBadge(item);
     const archived = item.status === 'archived';
-    const lineColor =
-      line.tone === 'quiet' ? colors.warning : line.tone === 'ok' ? colors.textSecondary : colors.textMuted;
+    const lineColor = colors.textSecondary;
     const a11y = [name, line.text, review, archived ? 'Archived' : null].filter(Boolean).join(', ');
     return (
       <HapticPressable
@@ -140,7 +144,7 @@ export default function ClientsListScreen({ navigation }: Props) {
               <View
                 style={[
                   styles.statusDot,
-                  { backgroundColor: line.tone === 'quiet' ? colors.warning : colors.success },
+                  { backgroundColor: colors.primary },
                 ]}
               />
             ) : null}
@@ -195,12 +199,10 @@ export default function ClientsListScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
+        <Text style={styles.date} testID="clients-date">{dateLine}</Text>
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>Clients</Text>
-            <Text style={styles.subtitle} testID="clients-count">
-              {isLoading ? ' ' : countLine}
-            </Text>
           </View>
           {canSeeRiskBoard ? (
             <HapticPressable
@@ -213,7 +215,7 @@ export default function ClientsListScreen({ navigation }: Props) {
               testID="clients-risk-pill"
             >
               <Ionicons name="pulse-outline" size={16} color={colors.primary} />
-              <Text style={styles.invitePillText}>At risk</Text>
+              <Text style={[styles.invitePillText, styles.riskPillText]}>At risk</Text>
             </HapticPressable>
           ) : null}
           <HapticPressable
@@ -225,10 +227,14 @@ export default function ClientsListScreen({ navigation }: Props) {
             accessibilityHint="Opens the invite-codes screen so you can add a client"
             testID="clients-invite-pill"
           >
-            <Ionicons name="person-add-outline" size={16} color={colors.primary} />
+            <Ionicons name="person-add-outline" size={16} color={colors.textOnPrimary} />
             <Text style={styles.invitePillText}>Invite</Text>
           </HapticPressable>
         </View>
+        <Text style={styles.hero} testID="clients-hero">{countKnown ? total : '—'}</Text>
+        <Text style={styles.subtitle} testID="clients-count">
+          {isLoading ? 'Loading clients' : loadError ? 'Client count unavailable' : countLine}
+        </Text>
       </View>
 
       {/* C-S-PUSH-3: the coach landing screen carries the same deferred push
@@ -240,7 +246,7 @@ export default function ClientsListScreen({ navigation }: Props) {
 
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
       <View style={styles.privacyBanner}>
-        <Ionicons name="shield-checkmark-outline" size={16} color={colors.info} style={{ marginTop: 1 }} />
+        <Ionicons name="shield-checkmark-outline" size={16} color={colors.textSecondary} style={{ marginTop: 1 }} />
         <Text style={styles.privacyBannerText}>
           Clients choose what they share with you. Anything not shared stays private.
         </Text>
@@ -253,7 +259,7 @@ export default function ClientsListScreen({ navigation }: Props) {
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search by name or email"
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={colors.textSecondary}
           accessibilityLabel="Search clients"
           autoCorrect={false}
           autoCapitalize="none"
@@ -363,23 +369,40 @@ const makeStyles = (colors: ThemeColors) =>
   },
   header: {
     paddingHorizontal: 24,
-    marginBottom: 20,
+    marginBottom: 16,
+  },
+  date: {
+    ...typography.eyebrow,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
+    marginBottom: 12,
+  },
+  hero: {
+    ...typography.display,
+    fontSize: 64,
+    lineHeight: 68,
+    fontVariant: ['tabular-nums'],
+    color: colors.textPrimary,
+    marginTop: 8,
   },
   pushCardWrap: {
     paddingHorizontal: 24,
   },
   titleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
   titleBlock: { flex: 1 },
   title: {
-    fontSize: 28,
-    fontWeight: '500',
-    color: colors.textPrimary,
+    ...typography.eyebrow,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textSecondary,
   },
   subtitle: {
+    ...typography.bodySmall,
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 4,
@@ -389,30 +412,33 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: colors.primaryPale,
+    minHeight: 44,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
   },
   riskPill: {
     marginRight: 8,
+    backgroundColor: colors.background,
+  },
+  riskPillText: {
+    color: colors.primary,
   },
   invitePillText: {
+    ...typography.bodyMd,
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-    letterSpacing: 0.2,
+    color: colors.textOnPrimary,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
-    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     marginHorizontal: 24,
-    marginBottom: 16,
+    marginBottom: 8,
     gap: 10,
   },
   searchInput: {
+    ...typography.body,
     flex: 1,
     paddingVertical: 14,
     fontSize: 16,
@@ -421,28 +447,26 @@ const makeStyles = (colors: ThemeColors) =>
   filterRow: {
     flexDirection: 'row',
     paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 16,
+    gap: 4,
+    marginBottom: 8,
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingHorizontal: 8,
+    minHeight: 44,
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderColor: colors.background,
   },
   filterChipActive: {
-    backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
   filterChipText: {
+    ...typography.bodyMd,
     fontSize: 13,
-    fontWeight: '600',
     color: colors.textSecondary,
   },
   filterChipTextActive: {
-    color: colors.textOnPrimary,
+    color: colors.primary,
   },
   listContent: {
     paddingHorizontal: 24,
@@ -451,31 +475,31 @@ const makeStyles = (colors: ThemeColors) =>
   clientCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
-    padding: 16,
-    marginBottom: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingVertical: 16,
     gap: 12,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.primaryDark,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: colors.textOnPrimary,
+    ...typography.bodyMd,
+    color: colors.textSecondary,
     fontSize: 16,
-    fontWeight: '500',
   },
   clientInfo: {
     flex: 1,
   },
   clientName: {
+    ...typography.bodyMd,
     fontSize: 16,
-    fontWeight: '600',
     color: colors.textPrimary,
   },
   activityRow: {
@@ -485,6 +509,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 3,
   },
   activityText: {
+    ...typography.bodySmall,
     flexShrink: 1,
     fontSize: 13,
   },
@@ -494,44 +519,39 @@ const makeStyles = (colors: ThemeColors) =>
     borderRadius: 3,
   },
   avatarArchived: {
-    backgroundColor: colors.textMuted,
+    borderStyle: 'dashed',
   },
   reviewBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: colors.primaryPale,
+    marginLeft: 4,
   },
   reviewBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.bodyMd,
+    fontSize: 13,
     color: colors.primary,
   },
   archivedTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.border,
+    marginLeft: 4,
   },
   archivedTagText: {
-    fontSize: 12,
-    color: colors.textMuted,
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   filterSpacer: { flex: 1 },
   sortToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingHorizontal: 8,
+    minHeight: 44,
   },
   sortToggleText: {
+    ...typography.bodyMd,
     fontSize: 13,
-    fontWeight: '600',
     color: colors.textSecondary,
   },
   staleText: {
+    ...typography.bodySmall,
     fontSize: 13,
     color: colors.textSecondary,
     paddingHorizontal: 24,
@@ -545,19 +565,15 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    backgroundColor: colors.primaryTint,
-    borderRadius: 4, // radius.lg
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    marginHorizontal: 24,
+    marginBottom: 8,
   },
   privacyBannerText: {
+    ...typography.bodySmall,
     flex: 1,
     fontSize: 13,
     lineHeight: 19,
-    color: colors.info,
-    fontWeight: '500',
+    color: colors.textSecondary,
   },
   errorContainer: {
     flex: 1,
@@ -567,25 +583,22 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 12,
   },
   errorText: {
+    ...typography.bodySmall,
     fontSize: 15,
     color: colors.textSecondary,
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: colors.primary,
-    borderRadius: 4,
     paddingVertical: 12,
     paddingHorizontal: 24,
     marginTop: 8,
   },
   retryButtonText: {
-    color: colors.textOnPrimary,
+    ...typography.bodyMd,
+    color: colors.primary,
     fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 1.1,
-    textTransform: 'uppercase',
+    textDecorationLine: 'underline',
   },
 
 
   });
-

@@ -15,12 +15,23 @@
  */
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, Share, StyleSheet } from 'react-native';
 import { typography } from '../../../theme/tokens';
 
 const mockGetClients = jest.fn();
+const mockListInviteCodes = jest.fn();
+const mockCopy = jest.fn();
+let mockUseRealEmpty = false;
 jest.mock('../../../services/api', () => ({
-  coachApi: { getClients: (...a: unknown[]) => mockGetClients(...a) },
+  coachApi: {
+    getClients: (...a: unknown[]) => mockGetClients(...a),
+    listInviteCodes: () => mockListInviteCodes(),
+  },
+}));
+jest.mock('expo-clipboard', () => ({ setStringAsync: (code: string) => mockCopy(code) }));
+jest.mock('expo-haptics', () => ({ impactAsync: jest.fn(), ImpactFeedbackStyle: { Light: 'light' } }));
+jest.mock('../../../storage/mmkv', () => ({
+  prefsStorage: { getStringAsync: async () => null, set: async () => undefined },
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'coach-1', role: 'coach' }),
@@ -40,9 +51,13 @@ jest.mock('../../../ui/empty-states', () => {
   const { Text, Pressable } = jest.requireActual('react-native');
   return {
     EmptyState: ({ headline }: { headline: string }) => <Text>{headline}</Text>,
-    EmptyStateNoClients: ({ onInvite }: { onInvite: () => void }) => (
-      <Pressable onPress={onInvite}><Text>Invite your first client</Text></Pressable>
-    ),
+    EmptyStateNoClients: ({ onInvite }: { onInvite: () => void }) => {
+      if (mockUseRealEmpty) {
+        const ActualEmpty = jest.requireActual('../../../ui/empty-states/EmptyStateNoClients').default;
+        return <ActualEmpty onInvite={onInvite} />;
+      }
+      return <Pressable onPress={onInvite}><Text>Invite your first client</Text></Pressable>;
+    },
     EmptyStateNoResults: ({ onClearSearch }: { onClearSearch: () => void }) => (
       <Pressable onPress={onClearSearch}><Text>Clear search</Text></Pressable>
     ),
@@ -98,6 +113,10 @@ async function mount() {
 }
 
 beforeEach(() => {
+  jest.restoreAllMocks();
+  mockUseRealEmpty = false;
+  mockListInviteCodes.mockReset();
+  mockCopy.mockReset().mockResolvedValue(undefined);
   mockGetClients.mockReset();
   navigate.mockReset();
   focusListener = null;
@@ -353,5 +372,22 @@ describe('DES-O-127: honest landing and action parity', () => {
     await screen.findByText('Ana Lopez');
     expect(screen.getByText('Joined Sep 1')).toBeTruthy();
     expect(screen.queryByText(/need you|are steady|to review/)).toBeNull();
+  });
+
+  it('keeps real empty-roster Share and Copy actions, and the invite-management fallback', async () => {
+    mockUseRealEmpty = true;
+    mockGetClients.mockResolvedValue({ data: [] });
+    mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+    const view = await mount();
+    await fireEvent.press(await screen.findByTestId('share-code-btn'));
+    expect(share).toHaveBeenCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST' });
+    await fireEvent.press(screen.getByTestId('copy-code-btn'));
+    expect(mockCopy).toHaveBeenCalledWith('GP-TEST');
+    await view.unmount();
+    mockListInviteCodes.mockResolvedValue({ data: [] });
+    await mount();
+    await fireEvent.press(await screen.findByTestId('empty-no-clients-settings-btn'));
+    expect(navigate).toHaveBeenCalledWith('InviteCodes');
   });
 });
