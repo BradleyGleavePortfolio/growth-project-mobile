@@ -20,7 +20,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
-import api from '../../services/api';
+import api, { profileApi } from '../../services/api';
+import { macrosApi, type MacroTarget } from '../../api/macrosApi';
 import { logger } from '../../utils/logger';
 
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
@@ -32,30 +33,32 @@ import { useEffect } from 'react';
 import { colors as colorTokens, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getProfileCompletion } from '../../lib/profileCompletion';
+import { buildProfileRows, buildTargetRows, type ProfileValues } from './profileDisplay';
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
-
-const GYM_LABEL: Record<string, string> = {
-  yes_regular: 'Full gym, regular',
-  yes_occasional: 'Full gym, occasional',
-  home_gym: 'Home setup',
-  no_gym: 'Bodyweight only',
-};
-
-const DIET_LABEL: Record<string, string> = {
-  omnivore: 'Omnivore',
-  vegetarian: 'Vegetarian',
-  vegan: 'Vegan',
-  pescatarian: 'Pescatarian',
-  keto: 'Keto',
-  paleo: 'Paleo',
-  mediterranean: 'Mediterranean',
-  other: 'Other',
-};
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
+  // Saved values from the server, read on every focus (also after Edit).
+  // Until they arrive, or if the read fails, the cached profile stands in.
+  const [saved, setSaved] = useState<{ userId: string; profile?: ProfileValues; targets?: MacroTarget | null }>();
+  // Registered before the sharing effect, which tests reach as the last focus callback.
+  useFocusEffect(useCallback(() => {
+    const userId = currentUser?.id;
+    if (!userId) return;
+    let alive = true;
+    const keep = (patch: { profile?: ProfileValues; targets?: MacroTarget | null }) => {
+      if (alive) setSaved((prev) => ({ ...(prev?.userId === userId ? prev : {}), userId, ...patch }));
+    };
+    profileApi.get()
+      .then((res: { data?: ProfileValues | null }) => { if (res.data && typeof res.data === 'object') keep({ profile: res.data }); })
+      .catch(() => logger.warn('ProfileScreen', 'Saved profile did not load'));
+    macrosApi.currentForSelf()
+      .then((res) => keep({ targets: res.data ?? null }))
+      .catch(() => logger.warn('ProfileScreen', 'Daily targets did not load'));
+    return () => { alive = false; };
+  }, [currentUser?.id]));
   const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean; ownerAccess: boolean } | null>(null);
   useFocusEffect(useCallback(() => {
     setSharing(null);
@@ -97,40 +100,17 @@ export default function ProfileScreen() {
   });
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: () => signOut() },
+      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);
   };
 
-  const completion = getProfileCompletion(currentUser);
-  const sexValue = currentUser?.profile?.sex;
-  const dobValue = currentUser?.profile?.dob;
-  const dietValue = currentUser?.profile?.diet_type;
-  const gymValue = currentUser?.profile?.gym_membership;
-  const workoutDaysValue = currentUser?.profile?.workout_days_per_week;
-
-  const profileItems = [
-    { label: 'Name',            value: currentUser?.name || 'No name set', missing: !currentUser?.name },
-    { label: 'Email',           value: currentUser?.email || '', missing: false },
-    { label: 'Sex',             value: sexValue ? sexValue.charAt(0).toUpperCase() + sexValue.slice(1) : 'Not set', missing: !sexValue },
-    { label: 'Date of Birth',   value: dobValue || 'Not set', missing: !dobValue },
-    { label: 'Current Weight',  value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set', missing: !currentUser?.profile?.current_weight },
-    { label: 'Target Weight',   value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set', missing: !currentUser?.profile?.target_weight },
-    { label: 'Activity Level',  value: currentUser?.profile?.activity_level || 'Not set', missing: !currentUser?.profile?.activity_level },
-    { label: 'Goal',            value: currentUser?.profile?.primary_goal || 'Not set', missing: !currentUser?.profile?.primary_goal },
-    { label: 'Diet',            value: dietValue ? (DIET_LABEL[dietValue] ?? dietValue) : 'Not set', missing: !dietValue },
-    { label: 'Workout Days',    value: workoutDaysValue ? `${workoutDaysValue} per week` : 'Not set', missing: !workoutDaysValue },
-    { label: 'Equipment',       value: gymValue ? (GYM_LABEL[gymValue] ?? gymValue) : 'Not set', missing: !gymValue },
-  ];
-
-  const targetItems = [
-    { label: 'TDEE',           value: currentUser?.profile?.tdee ? `${currentUser.profile.tdee} kcal` : '--' },
-    { label: 'Calorie Target', value: currentUser?.profile?.calorie_target ? `${currentUser.profile.calorie_target} kcal` : '--' },
-    { label: 'Protein',        value: currentUser?.profile?.protein_target ? `${currentUser.profile.protein_target}g` : '--' },
-    { label: 'Carbs',          value: currentUser?.profile?.carbs_target ? `${currentUser.profile.carbs_target}g` : '--' },
-    { label: 'Fat',            value: currentUser?.profile?.fat_target ? `${currentUser.profile.fat_target}g` : '--' },
-  ];
+  const mine = saved && saved.userId === currentUser?.id ? saved : undefined;
+  const shownProfile: ProfileValues | undefined = mine?.profile ?? currentUser?.profile;
+  const completion = getProfileCompletion({ profile: shownProfile });
+  const profileItems = buildProfileRows(currentUser, shownProfile);
+  const targetItems = buildTargetRows(mine ? mine.targets : undefined, shownProfile);
 
   return (
     <ScrollView
@@ -179,7 +159,7 @@ export default function ProfileScreen() {
           accessibilityHint="Opens your progress report"
         >
           <Ionicons name="document-text-outline" size={24} color={colors.primary} />
-          <Text style={styles.actionText}>My Report</Text>
+          <Text style={styles.actionText}>My report</Text>
         </HapticPressable>
         <HapticPressable
           intent="light"
@@ -207,7 +187,7 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeaderRow}>
-          <Text style={styles.sectionTitle}>Personal Info</Text>
+          <Text style={styles.sectionTitle}>Personal info</Text>
           <HapticPressable
             intent="light"
             onPress={() => {
@@ -247,7 +227,10 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Daily Targets</Text>
+        <Text style={styles.sectionTitle}>Daily targets</Text>
+        {targetItems.length === 0 ? (
+          <Text style={styles.sectionStatus}>No daily targets yet.</Text>
+        ) : null}
         {targetItems.map((item) => (
           <View key={item.label} style={styles.row}>
             <Text style={styles.rowLabel}>{item.label}</Text>
@@ -265,7 +248,7 @@ export default function ProfileScreen() {
 
       <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={20} color={colors.error} />
-        <Text style={styles.signOutText}>Sign Out</Text>
+        <Text style={styles.signOutText}>Sign out</Text>
       </HapticPressable>
     </ScrollView>
   );
