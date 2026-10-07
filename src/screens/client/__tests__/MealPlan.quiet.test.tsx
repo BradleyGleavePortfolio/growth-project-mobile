@@ -166,3 +166,42 @@ it('does not invent an end date or coach relationship when the selected plan is 
   expect(screen.getByText('This plan is not available for this day')).toBeTruthy();
   expect(screen.queryByText('This plan has ended')).toBeNull();
 });
+
+// Production `/meal-plans` canonical fallback row (backend meal-plans.service.ts):
+// created_at = assignment starts_on, updated_at = the plan's real creation time.
+const fallbackRow = (planId: string, title: string) => ({ id: `canonical:${planId}`, title,
+  notes: null, days: null, created_at: '2026-10-05', updated_at: '2026-09-30', source: 'real-meal-plans',
+  items: [{ name: 'Pasta', calories: 420, protein: 20, time_of_day: 'dinner' }] });
+
+it('labels a canonical fallback row Created with the plan creation date, not its start date', async () => {
+  list.mockResolvedValue(response([fallbackRow('dp', 'Delivered plan')]));
+  await render(<PlanScreen />);
+  expect(await screen.findByText('Delivered plan')).toBeTruthy();
+  expect(screen.getByText('Created Sep 30')).toBeTruthy();
+  expect(screen.queryByText('Created Oct 5')).toBeNull();
+});
+
+it('shows a canonical plan once when both sources return it, keeping other plans', async () => {
+  today.mockResolvedValue(response({ date: '2026-10-07', assignments: [assignment] }));
+  list.mockResolvedValue(response([fallbackRow('dp', 'Delivered plan'), fallbackRow('other', 'Next plan'),
+    { id: 'p', title: 'Legacy plan', items: [] }]));
+  await render(<PlanScreen />);
+  expect(await screen.findByText('Today · Delivered plan')).toBeTruthy();
+  expect(screen.queryByText('Delivered plan')).toBeNull();
+  for (const text of ['Next plan', 'Legacy plan']) expect(screen.getByText(text)).toBeTruthy();
+  expect(screen.getAllByText('Pasta')).toHaveLength(2);
+});
+
+it('daily plan shows one tabular day-total line from every slot', async () => {
+  const plan = assignment.daily_meal_plan;
+  const lunch = { ...plan.slots[0], id: 's2', slot_label: 'lunch' as const,
+    meal_template: { ...plan.slots[0].meal_template, id: 'm2', name: 'Soup', calories_kcal: 300.4,
+      protein_g: 15, carbs_g: 30, fats_g: 8 } };
+  daily.mockReturnValue({ data: { date: '2026-10-07', assignments: [{ ...assignment,
+    daily_meal_plan: { ...plan, slots: [...plan.slots, lunch] } }] }, isLoading: false,
+  isError: false, isRefetching: false, refetch });
+  await render(<ClientDailyMealPlanScreen />);
+  const total = screen.getByTestId('daily-meal-plan-total');
+  expect(total).toHaveTextContent('Day total 720 kcal • P 35g • C 90g • F 18g');
+  expect(total).toHaveStyle({ fontVariant: ['tabular-nums'] });
+});

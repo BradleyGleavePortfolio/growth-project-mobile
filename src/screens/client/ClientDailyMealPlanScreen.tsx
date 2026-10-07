@@ -105,6 +105,8 @@ export default function ClientDailyMealPlanScreen() {
     }));
   }, [active]);
 
+  const dayTotal = useMemo(() => formatDayTotal(active?.daily_meal_plan.slots ?? []), [active]);
+
   return (
     <ScrollView
       style={styles.screen}
@@ -144,6 +146,12 @@ export default function ClientDailyMealPlanScreen() {
           <Text style={[typography.h2, { color: sc.textPrimary }]}>
             {active.daily_meal_plan.name}
           </Text>
+          {dayTotal ? (
+            <Text testID="daily-meal-plan-total"
+              style={[typography.bodySmall, { color: sc.textMuted, fontVariant: ['tabular-nums'] }]}>
+              {dayTotal}
+            </Text>
+          ) : null}
           {active.daily_meal_plan.notes ? (
             <Text style={[typography.bodySmall, { color: sc.textMuted }]}>{active.daily_meal_plan.notes}</Text>
           ) : null}
@@ -224,6 +232,29 @@ function EmptyState({
       </Text>
     </View>
   );
+}
+
+// One day-total line from the slots' own macros. A nutrient is totalled only
+// when every slot supplies it, so a missing value is never counted as zero.
+function formatDayTotal(slots: DailyMealPlanSlot[]): string | null {
+  if (slots.length === 0) return null;
+  const sum = (pick: (s: DailyMealPlanSlot) => number | null | undefined): number | null => {
+    let total = 0;
+    for (const s of slots) {
+      const v = pick(s);
+      if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+      total += v;
+    }
+    return Math.round(total);
+  };
+  const parts = [
+    [sum((s) => s.meal_template.calories_kcal), '', ' kcal'],
+    [sum((s) => s.meal_template.protein_g), 'P ', 'g'],
+    [sum((s) => s.meal_template.carbs_g), 'C ', 'g'],
+    [sum((s) => s.meal_template.fats_g), 'F ', 'g'],
+  ] as const;
+  const shown = parts.filter(([v]) => v !== null).map(([v, pre, unit]) => `${pre}${v}${unit}`);
+  return shown.length > 0 ? `Day total ${shown.join(' • ')}` : null;
 }
 
 function formatSlotLabel(label: SlotLabel): string {

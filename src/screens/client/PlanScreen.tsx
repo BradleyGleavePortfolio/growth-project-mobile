@@ -74,7 +74,14 @@ interface MealPlan {
   // Present only for AI-generated plans (H2 fix).
   days?: MealDay[] | null;
   created_at?: string | null;
+  // Canonical DailyMealPlan id when this row is a canonical plan (today
+  // response, or the `/meal-plans` fallback row marked
+  // `source: 'real-meal-plans'`); null for genuine legacy rows. Used to
+  // show a canonical plan once when both sources return it.
+  canonical_plan_id?: string | null;
 }
+
+const CANONICAL_ID_PREFIX = 'canonical:';
 
 const TIME_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -116,6 +123,12 @@ function normalisePlans(payload: unknown): MealPlan[] {
         ? (root.meal_plans as JsonRecord[])
         : [];
   return raw.map((p) => {
+    // The `/meal-plans` canonical fallback row carries the assignment's
+    // effective start in `created_at` and the plan's real creation time in
+    // `updated_at` (backend meal-plans.service.ts, `source:
+    // 'real-meal-plans'`). Only a real creation time is labelled Created.
+    const isCanonicalFallback = p.source === 'real-meal-plans';
+    const rawId = String(p.id);
     const itemsRaw: JsonRecord[] = Array.isArray(p.items)
       ? (p.items as JsonRecord[])
       : Array.isArray(p.meal_items)
@@ -157,12 +170,17 @@ function normalisePlans(payload: unknown): MealPlan[] {
         }))
       : null;
     return {
-      id: String(p.id),
+      id: rawId,
       title: typeof p.title === 'string' && p.title ? p.title : 'Meal plan',
       notes: (p.notes as string | null | undefined) ?? null,
       items,
       days,
-      created_at: (p.created_at as string | null | undefined) ?? (p.createdAt as string | null | undefined) ?? null,
+      created_at: isCanonicalFallback
+        ? (p.updated_at as string | null | undefined) ?? null
+        : (p.created_at as string | null | undefined) ?? (p.createdAt as string | null | undefined) ?? null,
+      canonical_plan_id: isCanonicalFallback && rawId.startsWith(CANONICAL_ID_PREFIX)
+        ? rawId.slice(CANONICAL_ID_PREFIX.length)
+        : null,
     };
   });
 }
@@ -215,6 +233,7 @@ function assignmentToMealPlan(
     items,
     days: null,
     created_at: assignment.daily_meal_plan.created_at,
+    canonical_plan_id: assignment.daily_meal_plan.id,
   };
 }
 
@@ -237,10 +256,14 @@ export default function PlanScreen() {
         mealTemplatesApi.todayForClient(),
       ]);
 
-      const legacyPlans =
-        legacyRes.status === 'fulfilled' ? normalisePlans(legacyRes.value.data) : [];
       const todayPlans =
         todayRes.status === 'fulfilled' ? todayAssignmentsToPlans(todayRes.value.data) : [];
+      // `/meal-plans` also returns the newest canonical plan; when today's
+      // response already shows that same plan, keep only the today row.
+      const todayPlanIds = new Set(todayPlans.map((p) => p.canonical_plan_id));
+      const legacyPlans = (
+        legacyRes.status === 'fulfilled' ? normalisePlans(legacyRes.value.data) : []
+      ).filter((p) => !p.canonical_plan_id || !todayPlanIds.has(p.canonical_plan_id));
 
       // Sprint-B today assignment goes first — it's the most actionable view
       // for the client right now.
