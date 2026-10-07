@@ -1,10 +1,101 @@
-import React, { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { errorMessage } from '../../../types/common';
+import { successTap, warningTap } from '../../../utils/haptics';
 import type { TimelineEvent } from './types';
 
-export function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad: () => void; days: number }) {
+/**
+ * A check-in row offers "Mark reviewed" only when it is unreviewed and is
+ * attached to the signed-in coach: the server accepts the review from that
+ * coach only, so any other row would be a button that always fails.
+ */
+export function canMarkReviewed(event: TimelineEvent, viewerId: string | null | undefined): boolean {
+  const c = event.checkIn;
+  return !!c && !c.reviewed && !!viewerId && c.coachId === viewerId;
+}
+
+/** "Reviewed" tick, or the "Mark reviewed" action with its own busy/error state. */
+function CheckInReview({
+  checkInId,
+  reviewed,
+  onMarkReviewed,
+}: {
+  checkInId: string;
+  reviewed: boolean;
+  onMarkReviewed?: (checkInId: string) => Promise<void>;
+}) {
+  const { colors } = useTheme();
+  const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (reviewed) {
+    return (
+      <View style={tlStyles.reviewedRow} testID={`timeline-checkin-reviewed-${checkInId}`}>
+        <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+        <Text style={tlStyles.reviewedText}>Reviewed</Text>
+      </View>
+    );
+  }
+  if (!onMarkReviewed) return null;
+
+  const onPress = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onMarkReviewed(checkInId);
+      successTap();
+    } catch (err) {
+      warningTap();
+      setError(errorMessage(err, 'This check-in could not be marked reviewed. Try again.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <TouchableOpacity
+        style={tlStyles.reviewBtn}
+        onPress={onPress}
+        disabled={saving}
+        accessibilityRole="button"
+        accessibilityLabel="Mark check-in reviewed"
+        accessibilityState={{ busy: saving }}
+        testID={`timeline-checkin-review-${checkInId}`}
+      >
+        {saving ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <Text style={tlStyles.reviewBtnText}>Mark reviewed</Text>
+        )}
+      </TouchableOpacity>
+      {error ? (
+        <Text style={tlStyles.reviewError} accessibilityLiveRegion="polite">
+          {error}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
+export function TimelineTab({
+  events,
+  onLoad,
+  days,
+  viewerId,
+  onMarkReviewed,
+}: {
+  events: TimelineEvent[];
+  onLoad: () => void;
+  days: number;
+  /** Signed-in coach id; check-in review is offered only for their rows. */
+  viewerId?: string | null;
+  onMarkReviewed?: (checkInId: string) => Promise<void>;
+}) {
   const { colors } = useTheme();
   const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
   React.useEffect(() => {
@@ -47,6 +138,13 @@ export function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[];
             <Text style={tlStyles.title}>{event.title}</Text>
             <Text style={tlStyles.subtitle}>{event.subtitle}</Text>
             <Text style={tlStyles.date}>{formatDate(event.date)}</Text>
+            {event.checkIn && (event.checkIn.reviewed || canMarkReviewed(event, viewerId)) ? (
+              <CheckInReview
+                checkInId={event.checkIn.id}
+                reviewed={event.checkIn.reviewed}
+                onMarkReviewed={onMarkReviewed}
+              />
+            ) : null}
           </View>
         </View>
       ))}
@@ -128,6 +226,40 @@ export const makeTlStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+  },
+  reviewedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  reviewedText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: colors.success,
+  },
+  reviewBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 44,
+    minWidth: 120,
+    marginTop: 6,
+    paddingHorizontal: 14,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reviewBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: colors.primary,
+  },
+  reviewError: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: colors.error,
+    marginTop: 4,
   },
 
   });

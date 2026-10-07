@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
+import { errorStatus } from '../../types/common';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -68,7 +69,7 @@ export default function RecipeDetailScreen() {
     return list?.find((r) => r.id === recipeId);
   })();
 
-  const { data, isLoading, isError } = useQuery<Recipe>({
+  const { data, isLoading, isError, error, refetch } = useQuery<Recipe>({
     queryKey: ['recipe', recipeId],
     queryFn: () => recipesApi.getById(recipeId).then((r) => r.data as Recipe),
     enabled: !!recipeId,
@@ -100,7 +101,7 @@ export default function RecipeDetailScreen() {
         setIsSaved(true);
       }
     } catch {
-      Alert.alert('Error', 'Could not update saved status. Please try again.');
+      Alert.alert('Could not update saved recipe', 'The saved-recipe change could not be confirmed. Check your connection and tap the bookmark again.');
     } finally {
       setSaving(false);
     }
@@ -110,11 +111,21 @@ export default function RecipeDetailScreen() {
     return <SkeletonScreen count={6} />;
   }
 
-  if (isError || !recipe) {
+  if (!recipe) {
+    const unavailable = !recipeId || errorStatus(error) === 404 || !isError;
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Recipe not found.</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Text style={styles.errorText}>
+          {unavailable
+            ? 'This recipe is no longer available.'
+            : 'Could not load this recipe. Check your connection and try again.'}
+        </Text>
+        {!unavailable && (
+          <TouchableOpacity onPress={() => void refetch()} accessibilityRole="button" accessibilityLabel="Retry recipe">
+            <Text style={styles.errorLink}>Try again</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity onPress={() => navigation.goBack()} accessibilityRole="button">
           <Text style={styles.errorLink}>Go back</Text>
         </TouchableOpacity>
       </View>

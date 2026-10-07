@@ -8,6 +8,10 @@
  * size. Confirm and Decline send the start time the coach is looking at; a
  * request the client moved meanwhile answers SESSION_MOVED and the inbox
  * refreshes instead of confirming a time the coach never saw.
+ *
+ * U-04-3: ended sessions still marked confirmed are listed under Past
+ * sessions with Mark complete / Mark missed, so the client's Calendar stops
+ * reading "Confirmed" for a session that already happened.
  */
 
 import React, { useMemo, useRef, useState } from 'react';
@@ -26,16 +30,69 @@ import {
   useDeclineSession,
   useAttachManualVideoLink,
   useCancelSession,
+  useCompleteSession,
+  useMarkNoShow,
 } from '../../hooks/useScheduling';
-import { useUpcomingSessionsByStatus } from '../../hooks/useCalendar';
+import { useEndedSessionsByStatus, useUpcomingSessionsByStatus } from '../../hooks/useCalendar';
 import type { CoachingSession, SchedulingSessionStatus } from '../../api/schedulingApi';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { calendarErrorMessage } from '../../calendar/schedulingErrors';
+import { formatSessionSpan } from '../../calendar/calendarTime';
 import { normalizeCallLinkInput, resolveCallLink } from '../../api/schedulingApi';
 
 const REQUESTED: readonly SchedulingSessionStatus[] = ['requested'];
 const CONFIRMED: readonly SchedulingSessionStatus[] = ['scheduled', 'pending_provider'];
+const ENDED_OPEN: readonly SchedulingSessionStatus[] = ['scheduled'];
+
+type Notice = { text: string; tone: 'ok' | 'error' };
+
+/**
+ * Mark complete / Mark missed for one ended session. The result line lives
+ * on the screen, because the card leaves the list once the outcome saves.
+ */
+function SessionOutcomeActions({ session, onNotice }: { session: CoachingSession; onNotice: (n: Notice) => void }) {
+  const { colors } = useTheme();
+  const complete = useCompleteSession();
+  const noShow = useMarkNoShow();
+  const inFlight = useRef(false);
+  const busy = complete.isPending || noShow.isPending;
+  const who = session.client_name ?? 'your client';
+
+  const onComplete = () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    complete.mutate({ id: session.id }, {
+      onSuccess: () => onNotice({ tone: 'ok', text: `Marked complete. ${session.title} shows as completed in Calendar for ${who}.` }),
+      onError: (err) => onNotice({ tone: 'error', text: calendarErrorMessage(err, 'mark the session complete', 'coach', 'complete') }),
+      onSettled: () => { inFlight.current = false; },
+    });
+  };
+  const onMissed = () => {
+    Alert.alert('Mark this session missed?', `Use this when ${who} did not join. Their Calendar will show the session as missed.`, [
+      { text: 'Keep it', style: 'cancel' },
+      { text: 'Mark missed', style: 'destructive', onPress: () => {
+        if (inFlight.current) return;
+        inFlight.current = true;
+        noShow.mutate({ id: session.id, input: { expected_start_at: session.start_at } }, {
+          onSuccess: () => onNotice({ tone: 'ok', text: `Marked missed. ${session.title} shows as missed in Calendar for ${who}.` }),
+          onError: (err) => onNotice({ tone: 'error', text: calendarErrorMessage(err, 'mark the session missed', 'coach', 'no_show') }),
+          onSettled: () => { inFlight.current = false; },
+        });
+      } },
+    ]);
+  };
+  return (
+    <View style={styles.actions}>
+      <TouchableOpacity onPress={onComplete} disabled={busy} accessibilityRole="button" accessibilityLabel={`Mark ${session.title} complete`} accessibilityState={{ disabled: busy }} style={[styles.confirmBtn, { backgroundColor: colors.textPrimary, opacity: busy ? 0.6 : 1 }]} testID={`coach-complete-${session.id}`}>
+        <Text style={[typography.body, { color: colors.background }]}>Mark complete</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onMissed} disabled={busy} accessibilityRole="button" accessibilityLabel={`Mark ${session.title} missed`} accessibilityState={{ disabled: busy }} style={[styles.declineBtn, { borderColor: colors.border, opacity: busy ? 0.6 : 1 }]} testID={`coach-no-show-${session.id}`}>
+        <Text style={[typography.body, { color: colors.textPrimary }]}>Mark missed</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 function initialLinkText(raw: string | null | undefined): string {
   const link = resolveCallLink(raw);
@@ -111,30 +168,41 @@ export default function CoachBookingInboxScreen() {
   const oxblood = colors.error;
   const requestsQ = useUpcomingSessionsByStatus(REQUESTED);
   const agendaQ = useUpcomingSessionsByStatus(CONFIRMED);
+  const endedQ = useEndedSessionsByStatus(ENDED_OPEN);
   const isLoading = requestsQ.isLoading || agendaQ.isLoading;
   const isError = requestsQ.isError;
   const error = requestsQ.error;
   const refetch = async () => {
-    await Promise.all([requestsQ.refetch(), agendaQ.refetch()]);
+    await Promise.all([requestsQ.refetch(), agendaQ.refetch(), endedQ.refetch()]);
   };
   const approve = useApproveSession();
   const decline = useDeclineSession();
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<Notice | null>(null);
+  const [outcome, setOutcome] = useState<Notice | null>(null);
   const inFlight = useRef(false);
   const actOnRequest = (s: CoachingSession, confirm: boolean) => {
     if (inFlight.current) return;
     inFlight.current = true;
     setMessage(null);
     const handlers = {
+      onSuccess: () => {
+        setMessage({
+          tone: 'ok',
+          text: confirm
+            ? `Confirmed. ${s.title} is now under Upcoming sessions and in your client's Calendar.`
+            : `Declined. Your client sees the request as not accepted and can pick another time.`,
+        });
+      },
       onError: (err: unknown) => {
-        setMessage(
-          calendarErrorMessage(
+        setMessage({
+          tone: 'error',
+          text: calendarErrorMessage(
             err,
             confirm ? 'confirm the request' : 'decline the request',
             'coach',
             confirm ? 'approve' : 'decline',
           ),
-        );
+        });
         void refetch();
       },
       onSettled: () => { inFlight.current = false; },
@@ -156,6 +224,15 @@ export default function CoachBookingInboxScreen() {
         (s) => s.status === 'scheduled' || s.status === 'pending_provider',
       ),
     [agendaQ.data],
+  );
+  // Server-filtered (scope=past, status=scheduled); the end-time check keeps
+  // an older backend that ignores the filter from listing upcoming sessions.
+  const ended = useMemo<CoachingSession[]>(
+    () =>
+      (endedQ.data?.pages ?? []).flat().filter(
+        (s) => s.status === 'scheduled' && Date.parse(s.end_at) <= Date.now(),
+      ),
+    [endedQ.data],
   );
 
   if (isLoading) {
@@ -189,7 +266,7 @@ export default function CoachBookingInboxScreen() {
       <Text style={[typography.h2, { color: colors.textPrimary }]}>
         Pending requests
       </Text>
-      {message ? <Text accessibilityLiveRegion="polite" style={[typography.body, { color: colors.error }]}>{message}</Text> : null}
+      {message ? <Text accessibilityLiveRegion="polite" style={[typography.body, { color: message.tone === 'error' ? colors.error : colors.textPrimary }]} testID="coach-request-message">{message.text}</Text> : null}
       <TouchableOpacity accessibilityRole="button" accessibilityLabel="Refresh sessions" onPress={() => void refetch()} style={[styles.primaryBtn, { borderColor: colors.border, borderWidth: 1 }]}>
         <Text style={[typography.body, { color: colors.textPrimary }]}>Refresh sessions</Text>
       </TouchableOpacity>
@@ -230,7 +307,7 @@ export default function CoachBookingInboxScreen() {
                 { color: colors.textMuted, marginTop: spacing.xs },
               ]}
             >
-              {formatRange(s.start_at, s.end_at)}
+              {formatSessionSpan(s.start_at, s.end_at)}
             </Text>
             <Text
               style={[
@@ -308,7 +385,7 @@ export default function CoachBookingInboxScreen() {
           >
             <Text style={[typography.body, { color: colors.textPrimary }]}>{s.title}</Text>
             <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
-              {formatRange(s.start_at, s.end_at)}
+              {formatSessionSpan(s.start_at, s.end_at)}
             </Text>
             <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
               {agendaLine(s)}
@@ -320,6 +397,52 @@ export default function CoachBookingInboxScreen() {
       {agendaQ.hasNextPage ? (
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Show more upcoming sessions" disabled={agendaQ.isFetchingNextPage} onPress={() => void agendaQ.fetchNextPage()} style={[styles.primaryBtn, { borderColor: colors.border, borderWidth: 1 }]} testID="coach-agenda-more">
           <Text style={[typography.body, { color: colors.textPrimary }]}>Show more upcoming sessions</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      <Text
+        style={[typography.h2, { color: colors.textPrimary, marginTop: spacing.xl }]}
+        accessibilityRole="header"
+      >
+        Past sessions
+      </Text>
+      <Text style={[typography.bodySmall, { color: colors.textMuted, marginTop: spacing.xs }]}>
+        {"Sessions that have ended. Record whether each one happened so your client's Calendar shows how it went."}
+      </Text>
+      {outcome ? (
+        <Text accessibilityLiveRegion="polite" style={[typography.body, { color: outcome.tone === 'error' ? colors.error : colors.textPrimary, marginTop: spacing.sm }]} testID="coach-outcome-message">
+          {outcome.text}
+        </Text>
+      ) : null}
+      {endedQ.isLoading ? (
+        <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]} testID="coach-ended-loading">
+          Loading past sessions.
+        </Text>
+      ) : endedQ.isError ? (
+        <Text style={[typography.body, { color: colors.error, marginTop: spacing.md }]} testID="coach-ended-error">
+          {calendarErrorMessage(endedQ.error, 'load past sessions', 'coach')}
+        </Text>
+      ) : ended.length === 0 ? (
+        <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]} testID="coach-ended-empty">
+          No past sessions waiting for an outcome.
+        </Text>
+      ) : (
+        ended.map((s) => (
+          <View key={s.id} style={[styles.card, { borderColor: colors.border }]} testID={`coach-ended-${s.id}`}>
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{s.title}</Text>
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+              {formatSessionSpan(s.start_at, s.end_at)}
+            </Text>
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+              {s.client_name ? `Client: ${s.client_name}` : 'Client not named on this session'}
+            </Text>
+            <SessionOutcomeActions session={s} onNotice={setOutcome} />
+          </View>
+        ))
+      )}
+      {endedQ.hasNextPage ? (
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Show more past sessions" disabled={endedQ.isFetchingNextPage} onPress={() => void endedQ.fetchNextPage()} style={[styles.primaryBtn, { borderColor: colors.border, borderWidth: 1 }]} testID="coach-ended-more">
+          <Text style={[typography.body, { color: colors.textPrimary }]}>Show more past sessions</Text>
         </TouchableOpacity>
       ) : null}
     </ScrollView>
@@ -336,12 +459,6 @@ export function agendaLine(s: CoachingSession): string {
   if (s.status === 'pending_provider') return `Confirmed${who}. Call link is being prepared.`;
   if (link?.kind === 'phone') return `Confirmed${who}. Phone call on ${link.display}.`;
   return `Confirmed${who}. Call link ready.`;
-}
-
-function formatRange(startIso: string, endIso: string): string {
-  const s = new Date(startIso);
-  const e = new Date(endIso);
-  return `${s.toLocaleString()} – ${e.toLocaleTimeString()}`;
 }
 
 const styles = StyleSheet.create({

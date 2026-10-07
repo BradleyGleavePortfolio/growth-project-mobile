@@ -9,14 +9,12 @@
  *   - Suggested actions
  *   - Questions for coach
  *
- * One-tap actions:
+ * One-tap action:
  *   - "Send check-in": navigates to ClientMessages with a templated
  *     check-in prefilled in the composer via `initialDraft` route param.
- *   - "Schedule call": booking surface deferred. There is no first-class
- *     coach-side booking screen yet (the existing CoachBookingInbox is
- *     the trainer-facing booking *inbox*, not a "schedule a call with
- *     this client" flow). For v1 we surface a toast and log the
- *     deferral in the rollout report rather than inventing calendar UI.
+ *   FU-CHECKIN-126 (U-A13-7): the "Schedule call" button is gone. It only
+ *   showed a "Booking integration pending" toast, because there is no
+ *   coach-side "book a session for this client" screen to send it to.
  *
  * Doctrine-clean: theme tokens, no emoji, no hex literals.
  */
@@ -24,7 +22,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   ScrollView,
   StyleSheet,
   Text,
@@ -86,8 +83,6 @@ export default function ClientInsightScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft<InsightPayload> | null>(null);
   const [payload, setPayload] = useState<InsightPayload>(emptyPayload());
-  const [toast, setToast] = useState<string | null>(null);
-  const toastOpacity = useMemo(() => new Animated.Value(0), []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -107,26 +102,6 @@ export default function ClientInsightScreen() {
     load();
   }, [load]);
 
-  const showToast = useCallback(
-    (msg: string) => {
-      setToast(msg);
-      Animated.sequence([
-        Animated.timing(toastOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.delay(2200),
-        Animated.timing(toastOpacity, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-      ]).start(() => setToast(null));
-    },
-    [toastOpacity],
-  );
-
   const handleSendCheckIn = () => {
     const initialDraft = buildCheckInTemplate(clientName, payload);
     navigation.navigate('ClientMessages', {
@@ -136,14 +111,6 @@ export default function ClientInsightScreen() {
       // no-op if the screen has not been redeployed with the param.
       initialDraft,
     });
-  };
-
-  const handleScheduleCall = () => {
-    // Deferred: wire to a coach-to-client booking composer once one
-    // exists. The current CoachBookingInbox is read-only for incoming
-    // bookings, not a "schedule a call with X" surface. Until that
-    // ships we degrade to a toast — see README "Coach AI" section.
-    showToast('Booking integration pending — please reach out via message for now');
   };
 
   if (loading) {
@@ -235,27 +202,8 @@ export default function ClientInsightScreen() {
           <Ionicons name="chatbubble-outline" size={18} color={colors.textOnPrimary} />
           <Text style={styles.actionPrimaryText}>Send check-in</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.actionSecondary}
-          onPress={handleScheduleCall}
-          accessibilityRole="button"
-          accessibilityLabel="Schedule call"
-          testID="insight-schedule-call"
-        >
-          <Ionicons name="calendar-outline" size={18} color={colors.primary} />
-          <Text style={styles.actionSecondaryText}>Schedule call</Text>
-        </TouchableOpacity>
       </View>
 
-      {toast ? (
-        <Animated.View
-          style={[styles.toast, { opacity: toastOpacity }]}
-          accessibilityLiveRegion="polite"
-          pointerEvents="none"
-        >
-          <Text style={styles.toastText}>{toast}</Text>
-        </Animated.View>
-      ) : null}
     </View>
   );
 }
@@ -440,39 +388,5 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: colors.textOnPrimary,
-    },
-    actionSecondary: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      paddingVertical: 12,
-      borderRadius: 4,
-      backgroundColor: colors.primaryPale,
-    },
-    actionSecondaryText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 12,
-      fontWeight: '500',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-      color: colors.primary,
-    },
-    toast: {
-      position: 'absolute',
-      bottom: 92,
-      alignSelf: 'center',
-      paddingVertical: 10,
-      paddingHorizontal: 16,
-      backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    toastText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 12,
-      color: colors.textPrimary,
     },
   });

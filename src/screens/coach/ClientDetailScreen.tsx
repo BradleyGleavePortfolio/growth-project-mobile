@@ -79,6 +79,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     loadData,
     loadServerMealPlans,
     loadTimeline,
+    markCheckInReviewed,
     loadWeeklySummaries,
   } = useClientDetailData(clientId, colors);
 
@@ -538,6 +539,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               events={timeline}
               onLoad={() => loadTimeline(selectedDays)}
               days={selectedDays}
+              viewerId={currentUser?.id ?? null}
+              onMarkReviewed={markCheckInReviewed}
             />
           </>
         )}

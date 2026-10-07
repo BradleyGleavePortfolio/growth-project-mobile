@@ -183,7 +183,7 @@ describe('Coach Tools section wires the previously-disconnected routes', () => {
     'CoachMealTemplates',
     'CoachBookingInbox',
     'CoachAvailabilityEditor',
-    'CoachBulkInvite',
+    'BulkInvite',
   ])('SettingsScreen exposes a tap target that navigates to %s', (routeName) => {
     expect(settingsSrc).toContain(`screen: '${routeName}'`);
   });
@@ -291,8 +291,8 @@ describe('MoneyScreen honesty', () => {
 describe('InviteCodeRedeemersScreen honesty', () => {
   const src = readSrc('screens/coach/InviteCodeRedeemersScreen.tsx');
 
-  it('renders "Redeemer history coming soon" on 404 / 501', () => {
-    expect(src).toMatch(/Redeemer history coming soon/);
-    expect(src).toContain("'not_available'");
+  it('does not claim the live redeemer route is coming soon', () => {
+    expect(src).not.toMatch(/coming soon|isn't live yet/);
+    expect(src).toContain('Invite code unavailable');
   });
 });

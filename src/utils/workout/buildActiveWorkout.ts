@@ -19,6 +19,8 @@ export interface SessionExerciseSeed {
   workoutPlanExerciseId?: string;
   /** Coach target weight (lb); ActiveWorkout pre-fills each set with it. */
   weightLbs?: number;
+  /** The coach's note for this exercise, shown during the live workout. */
+  coachNote?: string;
 }
 
 export function buildActiveWorkoutExercises(
@@ -39,6 +41,7 @@ function exerciseToSessionSeed(ex: WorkoutPlanExercise): SessionExerciseSeed {
     restSec: ex.rest_seconds ?? 60,
     workoutPlanExerciseId: ex.id,
     ...(ex.weight_lbs && ex.weight_lbs > 0 ? { weightLbs: ex.weight_lbs } : {}),
+    ...(ex.notes && ex.notes.trim() ? { coachNote: ex.notes.trim() } : {}),
   };
 }
 

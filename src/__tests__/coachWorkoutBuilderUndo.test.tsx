@@ -827,12 +827,11 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     if (status instanceof Error) expect(screen.getByTestId("ai-builder-retry")).toBeTruthy();
   });
 
-  it("apply adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
+  const applyOnce = async (ref: object | null, refetched: Promise<unknown>) => { // ref as aiBuilderApi hands it over (b#809's plan id -> null)
     const exercise = { id: "bench", name: "Bench press", thumbnail_url: null };
     const changes = [{ change_id: "c1", kind: "changed", op: {}, after: { sets: 4 }, exercise, reason: "One step.", warnings: [] }];
     mockAiPropose.mockResolvedValue({ draft_id: "d1", summary: "1 change.", dropped: [], context_used: [], screening_flag: false, changes });
-    mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: { plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" } });
-    mockRefetch.mockResolvedValue({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false });
+    [mockAiApply.mockResolvedValue({ status: "approved", materialised_ref: ref }), mockRefetch.mockReturnValue(refetched)];
     const screen = await mount(STATUS("on"));
     await waitFor(() => expect(screen.getByTestId("ai-prompt-bar")).toBeTruthy());
     await press(screen, "ai-prompt-bar");
@@ -842,6 +841,22 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     expect(mockAiPropose).toHaveBeenCalledWith(expect.objectContaining({ mode: "edit", plan_id: "plan-1", lock_token: undefined }));
     await press(screen, "ai-builder-apply");
     expect(mockAiApply).toHaveBeenCalledWith("d1", ["c1"]);
+    return screen;
+  };
+
+  it("b#809 plan id reply: the fresh plan from the awaited GET is adopted (never the cached copy) and Save stays usable", async () => {
+    let deliver!: (v: unknown) => void;
+    const screen = await applyOnce(null, new Promise((resolve) => { deliver = resolve; }));
+    const fresh = { ...EXISTING_PLAN, exercises: EXISTING_PLAN.exercises.map((row) => ({ ...row, sets: 4 })) };
+    await act(async () => { [(mockCurrentPlan = fresh), deliver({ data: fresh, isError: false })]; }); // the cached plan stays until here
+    await waitFor(() => expect(screen.getByLabelText("Sets").props.value).toBe("4"));
+    [expect(screen.getByText("Applied 1 change.")).toBeTruthy(), expect(screen.queryByTestId("ai-toast-undo")).toBeNull()];
+    await act(async () => { fireEvent.press(screen.getByLabelText("Save changes")); });
+    expect(mockSetExercisesMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ rows: [expect.objectContaining({ exercise_external_id: "bench", sets: 4 })] }));
+  });
+
+  it("apply with a head token adopts the server rows, and the toast Undo calls the undo route for the AI change", async () => {
+    const screen = await applyOnce({ plan_id: "plan-1", revision_index: 1, lock_token: "abcdefabcdefabcd" }, Promise.resolve({ data: { ...EXISTING_PLAN, name: "AI push day" }, isError: false }));
     await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
     expect(screen.getByTestId("ai-momentum-line").props.children).toMatch(/ 1 change applied with Ask AI this session\.$/);
     expect(screen.getByLabelText("Plan name").props.value).toBe("AI push day");

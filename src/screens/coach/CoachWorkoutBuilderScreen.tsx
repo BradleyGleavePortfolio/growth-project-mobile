@@ -1502,7 +1502,8 @@ export default function CoachWorkoutBuilderScreen() {
     }
   }, [sendHistoryRequest, settleHistoryHead, setHistoryGate]);
 
-  // AIB-5 Ask AI: land pending edits before a proposal; after apply adopt the server head (header Undo reverts it) or, without a lock token, re-read.
+  // AIB-5 Ask AI: flush edits before a proposal. After apply adopt the AWAITED fresh plan (never the cached copy): a head token lets the header
+  // Undo revert it; without one (b#809: plan id only) the fresh copy is the baseline and history resets. A failed read uses the refresh path.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiToast, setAiToast] = useState<{ text: string; undo: boolean } | null>(null);
   const [aiApplied, setAiApplied] = useState(0); // changes applied with Ask AI since the screen opened (header momentum line)
@@ -1516,17 +1517,17 @@ export default function CoachWorkoutBuilderScreen() {
   const aiOnApplied = useCallback(
     async (ref: AiBuilderRef, count: number) => {
       const before = autosave.readHead().index;
-      const token = ref?.lock_token;
-      const head = ref?.revision_index;
-      const fresh = token ? await refetchPlan().catch(() => null) : null;
+      const [token, head] = [ref?.lock_token, ref?.revision_index];
+      const fresh = await refetchPlan().catch(() => null);
       const plan = fresh && !fresh.isError ? fresh.data : undefined;
       const meta = { name: plan?.name ?? '', type: plan?.type ?? 'strength' };
-      const adopted = !!plan && !!token && head !== undefined &&
-        autosave.adoptServerHead({ headRevisionIndex: head, lockToken: token, serverCopy: buildServerWorkingCopy(plan.exercises, meta) });
+      const serverCopy = plan ? buildServerWorkingCopy(plan.exercises, meta) : null;
+      const adopted = !!serverCopy && !!token && head !== undefined && autosave.adoptServerHead({ headRevisionIndex: head, lockToken: token, serverCopy });
       setAiApplied((c) => c + count);
       setAiToast({ text: appliedToast(count), undo: adopted });
-      if (!plan || !adopted) return runReplayRefetch();
-      setUndoStack([...undoStackRef.current, before]);
+      if (!plan || !serverCopy) return runReplayRefetch();
+      if (!adopted) autosave.rebaselineTo(serverCopy);
+      setUndoStack(adopted ? [...undoStackRef.current, before] : []);
       setRedoStack([]);
       deletedKeysRef.current.clear();
       deletedSignaturesRef.current.clear();

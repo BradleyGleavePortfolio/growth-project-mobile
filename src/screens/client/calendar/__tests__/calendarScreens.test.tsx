@@ -60,7 +60,7 @@ import type { CalendarStackParamList } from '../../../../navigation/calendarRout
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { emitTutorialSignal } from '../../../../tutorial/tutorialEvents';
 import CalendarHomeScreen from '../CalendarHomeScreen';
-import CalendarBookScreen, { bookedMessage, bookingErrorMessage, moveNeedsApprovalWarning } from '../CalendarBookScreen';
+import CalendarBookScreen, { bookedMessage, bookingErrorMessage, firstPageSpan, moveNeedsApprovalWarning, openTimesPage } from '../CalendarBookScreen';
 import CalendarSessionScreen, { canJoin } from '../CalendarSessionScreen';
 import { pickWelcomeType } from '../CalendarBookScreen';
 import { statusLabel } from '../calendarUi';
@@ -686,5 +686,62 @@ describe('Opus B-367-1: a request the coach did not answer in time reads as clos
     expect(r.queryByTestId('calendar-reschedule')).toBeNull();
     await fireEvent.press(r.getByTestId('calendar-expired-rebook'));
     expect(n.navigate).toHaveBeenCalledWith('CalendarBook', { coachId: 'coach-1', sessionTypeId: 'st-1' });
+  });
+});
+
+describe('CalendarBookScreen open times beyond two weeks (U-04-2)', () => {
+  const LATER = { start_at: '2030-11-04T16:00:00.000Z', end_at: '2030-11-04T16:20:00.000Z' };
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('pages 14 days at a time inside the booking window', () => {
+    const base = '2026-10-07T16:00:00.000Z';
+    expect(openTimesPage(base, 0, 120, 'America/Los_Angeles')).toMatchObject({ fromIso: base, hasEarlier: false, hasLater: true });
+    expect(Date.parse(openTimesPage(base, 1, 120, 'America/Los_Angeles').fromIso) - Date.parse(base)).toBe(14 * DAY);
+    expect(openTimesPage(base, 8, 120, 'America/Los_Angeles')).toMatchObject({ hasEarlier: true, hasLater: false });
+    expect(openTimesPage(base, 0, 7, 'America/Los_Angeles')).toMatchObject({
+      hasLater: false,
+      rangeLabel: 'Wednesday, October 7 to Wednesday, October 14',
+    });
+    // An older backend that does not echo the window: first page only.
+    expect(openTimesPage(base, 0, undefined, 'America/Los_Angeles').hasLater).toBe(false);
+    expect(firstPageSpan(undefined)).toBe('two weeks');
+    expect(firstPageSpan(7)).toBe('7 days');
+    expect(firstPageSpan(1)).toBe('1 day');
+  });
+
+  it('a 120-day window offers Show later times, which asks for the next 14 days, and Show earlier times goes back', async () => {
+    const froms: string[] = [];
+    api.getOpenSlots.mockImplementation(async (_coachId, args) => {
+      if (!froms.includes(args.from)) froms.push(args.from);
+      return {
+        coach_id: 'coach-1', timezone: 'America/New_York', generated_at: '', booking_window_days: 120,
+        slots: args.from === froms[0] ? [SLOT_A] : [LATER],
+      };
+    });
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-later-times')).toBeTruthy());
+    expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy();
+    expect(r.queryByTestId('calendar-earlier-times')).toBeNull();
+    await fireEvent.press(r.getByTestId('calendar-later-times'));
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${LATER.start_at}`)).toBeTruthy());
+    expect(Date.parse(froms[1]) - Date.parse(froms[0])).toBe(14 * DAY);
+    expect(r.getByTestId('calendar-times-range')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('calendar-earlier-times'));
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+  });
+
+  it('nothing open in the first two weeks of a long window -> the fallback still offers later times', async () => {
+    api.getOpenSlots.mockResolvedValue({ coach_id: 'coach-1', timezone: 'UTC', generated_at: '', booking_window_days: 60, slots: [] });
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    await waitFor(() => expect(r.getByTestId('calendar-later-times')).toBeTruthy());
+    expect(r.getByTestId('calendar-book-fallback')).toBeTruthy();
+    expect(r.getByText(/Show later times to look further ahead/)).toBeTruthy();
+  });
+
+  it('a backend without booking_window_days keeps the first two weeks and offers no later page', async () => {
+    const r = await renderQ(<CalendarBookScreen {...bookProps({ coachId: 'coach-1', sessionTypeId: 'st-1' })} />);
+    await waitFor(() => expect(r.getByTestId(`calendar-slot-${SLOT_A.start_at}`)).toBeTruthy());
+    expect(r.queryByTestId('calendar-later-times')).toBeNull();
+    expect(r.queryByTestId('calendar-times-range')).toBeNull();
   });
 });

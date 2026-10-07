@@ -194,6 +194,14 @@ export default function CoachCodesScreen({
         >
           <Text style={styles.actionText}>Bulk invite from a list</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.action}
+          onPress={() => navigation.navigate('CoachInvites')}
+          accessibilityRole="button"
+          testID="coach-codes-emailed-invites"
+        >
+          <Text style={styles.actionText}>Emailed invites</Text>
+        </TouchableOpacity>
         {banner ? (
           <Text style={styles.banner} accessibilityRole="alert" testID="coach-codes-banner">{banner}</Text>
         ) : null}
