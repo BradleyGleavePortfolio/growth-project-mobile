@@ -21,6 +21,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -73,6 +74,15 @@ const VM: PackageDetailViewModel = {
 };
 
 describe('PackageDetailSurface — shared presentation (no forked visuals)', () => {
+  it('uses open sections, tabular prices and readable detail without hiding inclusions', async () => {
+    const r = await render(<PackageDetailSurface package={VM} mode="buyer" onPay={jest.fn()} />);
+    expect(r.getByText('How it works')).toBeTruthy();
+    const price = StyleSheet.flatten(r.getByText('$199.00').props.style);
+    expect(price.fontVariant).toEqual(['tabular-nums']);
+    expect(StyleSheet.flatten(r.getByText('Weekly check-ins').props.style).fontFamily).toMatch(/^Inter/);
+    expect(StyleSheet.flatten(r.getByLabelText('Continue to payment').props.style).minHeight).toBe(44);
+  });
+
   it('renders title, price, features, and coach name in BUYER mode', async () => {
     const { getByText, getAllByText } = await render(
       <PackageDetailSurface package={VM} mode="buyer" onPay={jest.fn()} />,
@@ -94,6 +104,17 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
     expect(getByText('Jordan Coach')).toBeTruthy();
     expect(getByText('Weekly check-ins')).toBeTruthy();
     expect(getAllByText(/199/).length).toBeGreaterThan(0);
+  });
+
+  it('shows only supplied inclusions and trial data, retaining one-time billing copy', async () => {
+    const r = await render(<PackageDetailSurface package={{ ...VM, features: [], trialDays: null,
+      billingInterval: 'one_time' }} mode="buyer" onPay={jest.fn()} />);
+    expect(r.queryByText("What's included")).toBeNull();
+    expect(r.queryByText(/Includes a .*free trial/)).toBeNull();
+    expect(r.getByText('one-time payment')).toBeTruthy();
+    await r.rerender(<PackageDetailSurface package={{ ...VM, trialDays: 7 }} mode="buyer" onPay={jest.fn()} />);
+    expect(r.getByText('Includes a 7-day free trial.')).toBeTruthy();
+    expect(r.getByText("What's included")).toBeTruthy();
   });
 });
 

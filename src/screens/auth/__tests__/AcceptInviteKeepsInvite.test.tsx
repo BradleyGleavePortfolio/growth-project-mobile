@@ -22,7 +22,10 @@ jest.mock('../../../services/api', () => ({
   authApi: { attachInviteCode: (...a: unknown[]) => mockAttach(...a) },
 }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: require('../../../constants/colors').default }),
+  useTheme: () => ({
+    colors: require('../../../constants/colors').default,
+    semanticColors: require('../../../theme/tokens').lightTokens,
+  }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 

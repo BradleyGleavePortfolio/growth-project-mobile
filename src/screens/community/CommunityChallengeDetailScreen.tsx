@@ -43,10 +43,10 @@ import {
 } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { featureFlags } from '../../config/featureFlags';
-import { ThreadHeader, ComposerInput } from '../../components/community';
+import { ComposerInput } from '../../components/community';
 import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import HapticPressable from '../../components/HapticPressable';
 import ChallengeProgressSheet from '../../components/community/ChallengeProgressSheet';
@@ -68,6 +68,15 @@ import type { CommunityRoute } from './communityNavTypes';
 import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
+
+function ThreadHeader({ title, testID }: { title: string; testID: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View testID={testID} style={[styles.header, { borderColor: sc.border }]}>
+      <Text accessibilityRole="header" style={[typography.h1, { color: sc.textPrimary }]}>{title}</Text>
+    </View>
+  );
+}
 
 /**
  * A human, non-shaming reason for an error surface (no raw error leakage).
@@ -560,7 +569,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       style={[
         styles.lbRow,
         { borderColor: semanticColors.border },
-        row.is_self ? { backgroundColor: semanticColors.bgSurface } : null,
       ]}
       testID={`community-challenge-lb-${row.user_id}`}
     >
@@ -579,6 +587,8 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   const Header = (
     <View style={styles.headerBlock}>
+      {challenge.starts_at ? <Text style={[styles.description, { color: semanticColors.textMuted }]}>Starts {new Date(challenge.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</Text> : null}
+      {challenge.ends_at ? <Text style={[styles.description, { color: semanticColors.textMuted }]}>Ends {new Date(challenge.ends_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</Text> : null}
       {challenge.description ? (
         <Text style={[styles.description, { color: semanticColors.textPrimary }]}>
           {challenge.description}
@@ -590,7 +600,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         <Text style={[styles.sectionLabel, { color: semanticColors.textMuted }]}>
           Your progress
         </Text>
-        {fraction !== null ? (
+        {joined && fraction !== null ? (
           <View
             style={[styles.track, { backgroundColor: semanticColors.bgSurface }]}
             accessibilityRole="progressbar"
@@ -635,6 +645,11 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
           <Text style={[styles.sectionLabel, { color: semanticColors.textMuted }]}>
             Cohort leaderboard
           </Text>
+          {optedIn && !leaderboard.isError && leaderboardRows.find((row) => row.is_self) ? (
+            <Text testID="community-challenge-self-rank" style={[styles.lbValue, { color: semanticColors.textPrimary }]}>
+              Your rank: {leaderboardRows.find((row) => row.is_self)?.rank}
+            </Text>
+          ) : null}
           {!joined ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
               Join the challenge to take part in the leaderboard.
@@ -646,7 +661,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             // so opting out is as easy as opting in (§3.4, no pressure).
             <View style={styles.optInBlock}>
               <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-                Private is the default. Sharing puts your progress on your
+                Leaderboard sharing is off by default. Sharing puts your progress on your
                 cohort's leaderboard; logging works either way, and you can
                 change this any time.
               </Text>
@@ -656,7 +671,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                   onPress={() => optInMutation.mutate(false)}
                   disabled={optInMutation.isPending}
                   accessibilityRole="button"
-                  accessibilityLabel="Keep my progress private"
+                  accessibilityLabel="Keep progress off the leaderboard"
                   testID="community-challenge-keep-private"
                   style={[
                     styles.optInChoice,
@@ -672,7 +687,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                   onPress={() => optInMutation.mutate(true)}
                   disabled={optInMutation.isPending}
                   accessibilityRole="button"
-                  accessibilityLabel="Share my progress with my cohort"
+                  accessibilityLabel="Share progress with the cohort"
                   testID="community-challenge-optin"
                   style={[
                     styles.optInChoice,
@@ -703,7 +718,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             </Text>
           ) : leaderboardRows.length === 0 ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-              No one has shared progress yet. You are first — nicely done.
+              No shared progress to show yet.
             </Text>
           ) : (
             <View>
@@ -751,12 +766,12 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                 onPress={() => optInMutation.mutate(false)}
                 disabled={optInMutation.isPending}
                 accessibilityRole="button"
-                accessibilityLabel="Stop sharing my progress on the leaderboard"
+                accessibilityLabel="Stop sharing progress on the leaderboard"
                 testID="community-challenge-optout"
                 style={styles.optOutButton}
               >
                 <Text style={[styles.optOutLabel, { color: semanticColors.textMuted }]}>
-                  Stop sharing my progress
+                  Stop sharing progress
                 </Text>
               </HapticPressable>
             </View>
@@ -783,7 +798,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         color={semanticColors.textMuted}
       />
       <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-        Encouragement notes did not load. Your message will still send.
+        Encouragement notes did not load. You can still try sending a note.
       </Text>
       <HapticPressable
         intent="light"
@@ -836,7 +851,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
           // covers focus that is elsewhere on the screen.
           accessibilityLiveRegion="polite"
           testID="community-challenge-action-error"
-          style={[styles.banner, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border }]}
+          style={[styles.banner, { borderColor: semanticColors.border }]}
         >
           <Text style={[styles.bannerText, { color: semanticColors.textPrimary }]}>
             {actionError}
@@ -891,6 +906,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 }
 
 const styles = StyleSheet.create({
+  header: { padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth },
   safe: { flex: 1 },
   center: {
     flex: 1,
@@ -899,12 +915,12 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
   },
-  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  muted: { fontFamily: typography.body.fontFamily, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   errorTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
   retry: {
     marginTop: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
@@ -912,32 +928,32 @@ const styles = StyleSheet.create({
   },
   retryLabel: { fontSize: 14, fontWeight: '600' },
   listContent: { padding: spacing.lg, gap: spacing.sm },
-  headerBlock: { gap: spacing.md, marginBottom: spacing.md },
-  description: { fontSize: 15, lineHeight: 22 },
+  headerBlock: { gap: spacing.lg, marginBottom: spacing.lg },
+  description: { fontFamily: typography.body.fontFamily, fontSize: 15, lineHeight: 22 },
   progressBlock: { gap: spacing.xs },
-  sectionLabel: { fontSize: 13, fontWeight: '600' },
+  sectionLabel: { fontFamily: typography.eyebrow.fontFamily, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
   track: {
-    height: 12,
+    height: 4,
     borderRadius: radius.pill,
     overflow: 'hidden',
     marginTop: spacing.xs,
   },
   fill: { height: '100%', borderRadius: radius.pill },
-  progressText: { fontSize: 15, fontWeight: '600', marginTop: spacing.xs },
+  progressText: { ...typography.h2, fontVariant: ['tabular-nums'], marginTop: spacing.sm },
   cta: {
     minHeight: 48,
     borderRadius: radius.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaLabel: { fontSize: 15, fontWeight: '600' },
+  ctaLabel: { fontFamily: typography.body.fontFamily, fontSize: 15, fontWeight: '500' },
   lbBlock: { gap: spacing.sm, marginTop: spacing.sm },
   optInBlock: { gap: spacing.sm },
   optInChoiceRow: { flexDirection: 'row', gap: spacing.sm },
   optInChoice: {
     flex: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
@@ -953,14 +969,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: 48,
   },
   bannerText: { flex: 1, fontSize: 13, lineHeight: 18 },
   optInButton: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
@@ -977,22 +992,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  lbRank: { fontSize: 14, fontWeight: '600', minWidth: 24 },
-  lbName: { flex: 1, fontSize: 14 },
-  lbValue: { fontSize: 14, fontWeight: '600' },
+  lbRank: { fontFamily: typography.body.fontFamily, fontSize: 14, fontVariant: ['tabular-nums'], minWidth: 24 },
+  lbName: { fontFamily: typography.body.fontFamily, flex: 1, fontSize: 14 },
+  lbValue: { fontFamily: typography.body.fontFamily, fontSize: 14, fontVariant: ['tabular-nums'] },
   optOutButton: { paddingVertical: spacing.md, minHeight: 48, justifyContent: 'center' },
   optOutLabel: { fontSize: 13, fontWeight: '500' },
   commentsHeading: { marginTop: spacing.md },
   comment: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
+  commentBody: { fontFamily: typography.body.fontFamily, flex: 1, fontSize: 14, lineHeight: 20 },
   emptyComments: {
     paddingVertical: spacing.lg,
     alignItems: 'center',

@@ -9,7 +9,7 @@
  * was no Your plans panel.
  */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../theme/ThemeProvider', () => {
@@ -19,11 +19,19 @@ jest.mock('../theme/ThemeProvider', () => {
   };
 });
 jest.mock('../ui/skeletons/Skeleton', () => ({ SkeletonScreen: () => null }));
+jest.mock('../config/featureFlags', () => {
+  const actual = jest.requireActual('../config/featureFlags');
+  return { ...actual, featureFlags: { ...actual.featureFlags, deliverables: true } };
+});
 const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
+let mockNoCoach = false;
+jest.mock('../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockNoCoach }));
 jest.mock('@react-navigation/native', () => {
   const ReactLib = jest.requireActual('react');
   return {
-    useNavigation: () => ({ navigate: mockNavigate }),
+    useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack, canGoBack: () => true,
+      getParent: () => ({ navigate: mockNavigate }) }),
     useFocusEffect: (cb: () => void) => ReactLib.useEffect(cb, []),
   };
 });
@@ -69,6 +77,10 @@ jest.mock('@stripe/stripe-react-native', () => ({
 }));
 
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import { clientPaymentsApi } from '../api/clientPaymentsApi';
+
+const defaultPackages = jest.mocked(clientPaymentsApi.getPackages).getMockImplementation();
+const defaultStatus = jest.mocked(clientPaymentsApi.getPaymentStatus).getMockImplementation();
 
 const PLAN = {
   purchase_id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching', state: 'active',
@@ -80,6 +92,9 @@ let plans: unknown[] = [];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockNoCoach = false;
+  if (defaultPackages) jest.mocked(clientPaymentsApi.getPackages).mockImplementation(defaultPackages);
+  if (defaultStatus) jest.mocked(clientPaymentsApi.getPaymentStatus).mockImplementation(defaultStatus);
   process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = 'pk_test_build';
   plans = [];
   mockGet.mockImplementation(async (url: string) => {
@@ -105,11 +120,22 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
 });
 
+it.each([false, true])('names the refund team and the existing support path (renewing plan: %s)', async (hasPlan) => {
+  plans = hasPlan ? [PLAN] : [];
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
+  expect(r.getByText(/Refunds are issued by The Growth Project team; to ask, go to You > Settings > Support\./)).toBeTruthy();
+  expect(r.queryByText(/refunds are handled by your coach/i)).toBeNull();
+});
+
 it('shows the plan terms and sells the renewing plan in the native PaymentSheet', async () => {
   const r = await render(<ClientPackagesScreen />);
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
   expect(r.getByTestId('plan-terms-pkg-monthly-renewal').props.children).toMatch(/Renews automatically/);
   expect(r.getByText('Subscribe for $99.00 a month')).toBeTruthy();
+  expect(StyleSheet.flatten(r.getByText('Monthly coaching').props.style).fontFamily).toMatch(/^Cormorant/);
+  expect(StyleSheet.flatten(r.getAllByText('$99.00 a month')[0].props.style).fontVariant).toEqual(['tabular-nums']);
+  expect(StyleSheet.flatten(r.getByTestId('buy-plan-pkg-monthly').props.style).minHeight).toBe(44);
 
   await fireEvent.press(r.getByTestId('buy-plan-pkg-monthly'));
   await waitFor(() => expect(r.getByTestId('payment-success')).toBeTruthy());
@@ -136,6 +162,51 @@ it('Your plans: End my plan confirms, then cancels at period end through the #62
     'Your plan stays active until November 2, 2026, and nothing more is charged after that. If a payment is overdue, ending it ends access now instead and cancels the unpaid charge.',
   );
   alertSpy.mockRestore();
+});
+
+it('keeps Back, message-coach, coach-code and list retry paths reachable', async () => {
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({ ok: true, data: [] });
+  jest.mocked(clientPaymentsApi.getPaymentStatus).mockResolvedValue({ ok: true, data: {
+    state: 'none', purchase_id: null, package_id: null, package_name: null,
+    current_period_end: null, trial_ends_at: null, dunning: null,
+  } });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByLabelText('Message your coach')).toBeTruthy());
+  await fireEvent.press(r.getByLabelText('Back'));
+  expect(mockGoBack).toHaveBeenCalledTimes(1);
+  await fireEvent.press(r.getByLabelText('Message your coach'));
+  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
+  mockNoCoach = true;
+  await r.rerender(<ClientPackagesScreen />);
+  await fireEvent.press(r.getByRole('button', { name: /coach code/i }));
+  expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages', params: { openCoachCode: true } });
+  mockNoCoach = false;
+  jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({
+    ok: false, reason: 'error', message: 'Plans did not load.',
+  });
+  await r.unmount();
+  const retry = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(retry.getByText('Plans did not load. Tap to retry.')).toBeTruthy());
+  jest.mocked(clientPaymentsApi.getPackages).mockClear();
+  await fireEvent.press(retry.getByText('Plans did not load. Tap to retry.'));
+  expect(clientPaymentsApi.getPackages).toHaveBeenCalled();
+});
+
+it('keeps current-plan inclusions and native card-update destinations', async () => {
+  jest.mocked(clientPaymentsApi.getPaymentStatus).mockResolvedValue({ ok: true, data: {
+    state: 'past_due', purchase_id: 'purchase-1', package_id: 'pkg-monthly', package_name: 'Monthly coaching',
+    current_period_end: null, trial_ends_at: null,
+    dunning: { summary: 'Payment needs attention.', update_card_url: null, grace_until: null },
+  } });
+  const r = await render(<ClientPackagesScreen />);
+  await waitFor(() => expect(r.getByLabelText('Update card')).toBeTruthy());
+  await fireEvent.press(r.getByLabelText('Update card'));
+  expect(mockNavigate).toHaveBeenCalledWith('UpdateCard', { autostart: true });
+  await fireEvent.press(r.getByTestId('view-deliverables-cta'));
+  expect(mockNavigate).toHaveBeenCalledWith('Deliverables', {
+    purchaseId: 'purchase-1', packageName: 'Monthly coaching',
+  });
+  expect(r.getByTestId('buy-plan-pkg-monthly').props.accessibilityState.disabled).toBe(true);
 });
 
 it('Your plans: a plan that already ended gets its own copy, never a generic error', async () => {

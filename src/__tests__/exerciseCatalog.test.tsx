@@ -7,7 +7,7 @@
  *   2. ExerciseLibraryScreen: renders the title, search bar, filter
  *      chip rows, and at least one row from the mocked list response.
  *   3. ExerciseDetailScreen:
- *        a. shows the "Video not yet available" caption when
+ *        a. shows a neutral no-demonstration caption when
  *           `playbackUrl` is null,
  *        b. mounts the VideoView (via its testID) when `playbackUrl`
  *           is a Mux HLS URL.
@@ -107,6 +107,7 @@ import type {
   ExerciseDetail,
   ExerciseListResponse,
 } from '../types/exerciseCatalog';
+import type { WorkoutStackParamList } from '../navigation/ClientNavigator';
 
 const mockedGet = api.get as jest.Mock;
 let mockVideoStatusListener: (event: { status: string }) => void;
@@ -224,37 +225,75 @@ async function renderInNav(Screen: any, params?: unknown) {
   );
 }
 
+// The client library lists GET /exercises/search (the ExerciseDB proxy the
+// coach builder uses); the /exercise-catalog table is empty in production.
+const LibraryStack = createNativeStackNavigator<WorkoutStackParamList>();
+const LIBRARY_LIST = {
+  items: [{
+    id: '0025', name: 'barbell bench press', bodyPart: 'chest', target: 'pectorals',
+    equipment: 'barbell', secondaryMuscles: ['triceps'], instructions: ['Lie on the bench.'],
+    gifUrl: '',
+  }],
+  nextCursor: null,
+  total: 1,
+};
+
 describe('ExerciseLibraryScreen', () => {
-  test('renders title, chip filter labels, and a row from the list', async () => {
-    mockedGet.mockResolvedValue(ok(SAMPLE_LIST));
+  test('lists real exercises from the /exercises source, not the empty catalog', async () => {
+    mockedGet.mockResolvedValue(ok(LIBRARY_LIST));
     const { findByText, getByText } = await renderInNav(ExerciseLibraryScreen);
-    // Title + chip headers exist from the first paint.
-    expect(getByText('Exercise Library')).toBeTruthy();
-    expect(getByText('Category')).toBeTruthy();
-    expect(getByText('Muscle')).toBeTruthy();
+    expect(getByText('Exercise library')).toBeTruthy();
+    expect(getByText('Body part')).toBeTruthy();
     expect(getByText('Equipment')).toBeTruthy();
-    // A list row from the mocked response.
-    await findByText('Barbell Bench Press');
+    await findByText('Barbell bench press');
+    expect(getByText('pectorals · barbell · chest')).toBeTruthy();
+    expect(mockedGet.mock.calls[0][0]).toBe('/exercises/search');
+    expect(mockedGet.mock.calls.some(([url]) => String(url).startsWith('/exercise-catalog'))).toBe(false);
   });
 
-  test('uses the production-safe default page size and the seeded filter values', async () => {
-    mockedGet.mockResolvedValue(ok(SAMPLE_LIST));
+  test('search and both filter rows reach the live source; both chips apply together', async () => {
+    mockedGet.mockResolvedValue(ok(LIBRARY_LIST));
     const screen = await renderInNav(ExerciseLibraryScreen);
-    await screen.findByText('Barbell Bench Press');
-    expect(mockedGet.mock.calls[0][0]).toBe('/exercise-catalog');
-    await fireEvent.press(screen.getByText('pectorals'));
-    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercise-catalog?primaryMuscle=pectorals'));
-    await screen.findByText('Barbell Bench Press');
-    await fireEvent.press(screen.getByText('body weight'));
-    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercise-catalog?primaryMuscle=pectorals&equipment=body%20weight'));
+    await screen.findByText('Barbell bench press');
+    await fireEvent.press(screen.getByText('chest'));
+    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercises/search?muscleGroup=chest&limit=100'));
+    await screen.findByText('Barbell bench press');
+    await fireEvent.press(screen.getByText('dumbbell'));
+    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercises/search?muscleGroup=chest&equipment=dumbbell&limit=100'));
+    // The server ignores equipment beside a body part; the barbell row is filtered out here.
+    expect(await screen.findByText('No exercises match.')).toBeTruthy();
+    await fireEvent.press(screen.getByText('chest'));
+    await fireEvent.press(screen.getByText('dumbbell'));
+    const search = screen.getByLabelText('Search exercises');
+    await fireEvent.changeText(search, 'bench');
+    await fireEvent(search, 'submitEditing');
+    await waitFor(() => expect(mockedGet).toHaveBeenLastCalledWith('/exercises/search?q=bench&limit=100'));
   });
 
-  test('shows a specific retry when the catalog cannot load', async () => {
-    mockedGet.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(ok(SAMPLE_LIST));
+  test('shows a specific retry when the library cannot load', async () => {
+    mockedGet.mockRejectedValueOnce(new Error('Network Error')).mockResolvedValue(ok(LIBRARY_LIST));
     const screen = await renderInNav(ExerciseLibraryScreen);
     await screen.findByText('Exercises did not load. Check your connection and try again.');
     await fireEvent.press(screen.getByText('Retry'));
-    expect(await screen.findByText('Barbell Bench Press')).toBeTruthy();
+    expect(await screen.findByText('Barbell bench press')).toBeTruthy();
+  });
+
+  test('opens a listed ExerciseDB exercise through the detail fallback', async () => {
+    mockedGet.mockResolvedValueOnce(ok(LIBRARY_LIST))
+      .mockRejectedValueOnce({ response: { status: 404 } })
+      .mockResolvedValueOnce(ok(LIBRARY_LIST.items[0]));
+    const screen = await render(
+      <NavigationContainer>
+        <LibraryStack.Navigator>
+          <LibraryStack.Screen name="ExerciseLibrary" component={ExerciseLibraryScreen} />
+          <LibraryStack.Screen name="ExerciseDetail" component={ExerciseDetailScreen} />
+        </LibraryStack.Navigator>
+      </NavigationContainer>,
+    );
+    await fireEvent.press(await screen.findByRole('button', { name: 'Open Barbell bench press' }));
+    await screen.findByText('Lie on the bench.');
+    expect(mockedGet).toHaveBeenCalledWith('/exercise-catalog/0025');
+    expect(mockedGet).toHaveBeenLastCalledWith('/exercises/0025');
   });
 });
 
@@ -270,7 +309,7 @@ describe('ExerciseDetailScreen', () => {
     expect(screen.getByText('The demonstration did not load. Follow the instructions below.')).toBeTruthy();
     expect(screen.getByText('Lie on the bench.')).toBeTruthy();
   });
-  test('shows the "video not yet available" caption when playbackUrl is null', async () => {
+  test('shows a neutral no-demonstration caption when playbackUrl is null', async () => {
     const detail: ExerciseDetail = { ...SAMPLE_EX, playbackUrl: null };
     mockedGet.mockResolvedValueOnce(ok(detail));
     const { findByText, queryByTestId } = await renderInNav(
@@ -278,6 +317,7 @@ describe('ExerciseDetailScreen', () => {
       { idOrSlug: 'ex-1' },
     );
     await findByText('Barbell Bench Press');
+    expect(await findByText('No demonstration available for this exercise.')).toBeTruthy();
     expect(queryByTestId('exercise-detail-no-video')).not.toBeNull();
     expect(queryByTestId('exercise-detail-player')).toBeNull();
   });

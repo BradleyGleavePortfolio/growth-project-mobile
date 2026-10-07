@@ -13,7 +13,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useTheme, ThemeColors } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
+import { typography, type SemanticTokens } from '../theme/tokens';
 import {
   claimPendingInviteCode,
   clearPendingInviteCode,
@@ -25,7 +26,7 @@ import { useCoachSharingNotice } from '../lib/coachSharingNotice';
 import CoachSharingNotice from './coachSharing/CoachSharingNotice';
 
 export default function PendingInviteBanner() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = makeStyles(colors);
   const [code, setCode] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,8 +90,8 @@ export default function PendingInviteBanner() {
   };
 
   return (
-    <View style={styles.container} accessibilityLiveRegion="polite">
-      <Ionicons name="mail-outline" size={18} color={colors.primary} />
+    <View style={styles.container} accessibilityLiveRegion="polite" testID="pending-invite-banner">
+      <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
       <View style={styles.body}>
         <Text style={styles.title}>Invite code received</Text>
         <Text style={styles.subtitle} numberOfLines={2}>
@@ -103,7 +104,7 @@ export default function PendingInviteBanner() {
         <CoachSharingNotice version={status === 'idle' ? sharingVersion : null} style={styles.sharing} />
       </View>
       {status === 'ok' ? (
-        <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
+        <Ionicons name="checkmark-circle-outline" size={20} color={colors.accentText} />
       ) : (
         <View style={styles.actions}>
           <HapticPressable
@@ -115,7 +116,7 @@ export default function PendingInviteBanner() {
             accessibilityLabel="Attach invite code"
           >
             {busy ? (
-              <ActivityIndicator color={colors.textOnPrimary} />
+              <ActivityIndicator color={colors.accentText} />
             ) : (
               <Text style={styles.attachText}>Attach</Text>
             )}
@@ -127,7 +128,7 @@ export default function PendingInviteBanner() {
             accessibilityRole="button"
             accessibilityLabel="Dismiss invite code"
           >
-            <Ionicons name="close" size={16} color={colors.textMuted} />
+            <Ionicons name="close" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
       )}
@@ -135,52 +136,32 @@ export default function PendingInviteBanner() {
   );
 }
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(colors: SemanticTokens) {
   return StyleSheet.create({
     container: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      paddingVertical: 10,
-      paddingHorizontal: 14,
-      marginHorizontal: 16,
-      marginVertical: 8,
-      backgroundColor: colors.surface,
-      borderRadius: 4,
-      borderWidth: 1,
+      // DES-K2-128: one hairline above, no box or fill (A23 section).
+      paddingVertical: 18,
+      marginBottom: 24,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
     body: { flex: 1 },
-    title: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
+    title: { ...typography.bodyMd, color: colors.textPrimary },
     subtitle: {
-      fontSize: 12,
+      ...typography.bodySmall,
       color: colors.textMuted,
       marginTop: 2,
     },
-    sharing: { fontSize: 12, lineHeight: 17, marginTop: 4, marginBottom: 0 },
+    sharing: { fontSize: 13, lineHeight: 19, marginTop: 4, marginBottom: 0 },
     actions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
     },
-    attachBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 4,
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-    },
-    attachText: {
-      color: colors.textOnPrimary,
-      fontSize: 12,
-      fontWeight: '600',
-      letterSpacing: 0.6,
-    },
-    dismissBtn: {
-      padding: 6,
-    },
+    attachBtn: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: 'center' },
+    attachText: { ...typography.bodyMd, color: colors.accentText },
+    dismissBtn: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
   });
 }

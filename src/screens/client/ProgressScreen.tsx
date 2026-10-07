@@ -28,6 +28,11 @@ import {
   Alert,
   Dimensions,
   RefreshControl,
+  KeyboardAvoidingView,
+  Keyboard,
+  Platform,
+  Pressable,
+  InputAccessoryView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, G, Path as SvgPath } from 'react-native-svg';
@@ -79,6 +84,28 @@ export function streakMilestoneTier(loggingStreak: number): RomanStreakTier | nu
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
+
+/** Server bounds for weight_lbs (backend weight DTO); checked before sending. */
+const WEIGHT_MIN_LBS = 40;
+const WEIGHT_MAX_LBS = 1500;
+const WEIGHT_KEYBOARD_ACCESSORY_ID = 'progress-log-weight-keyboard';
+const LOG_DATE_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const LOG_DATE_MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/**
+ * U9 (FW-BODY-128): "2026-10-07" -> "Wed 7 Oct". The value is a calendar day,
+ * so it is read as local Y-M-D (no UTC shift). Anything else passes through.
+ */
+export function formatLogDate(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return date;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (isNaN(d.getTime())) return date;
+  return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
+}
 
 function CalorieRing({
   eaten,
@@ -252,6 +279,10 @@ export default function ProgressScreen() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [newWeight, setNewWeight] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  // B1 (FW-BODY-128): Save is disabled while the POST is in flight so a
+  // second tap cannot create a duplicate entry.
+  const [savingWeight, setSavingWeight] = useState(false);
+  const savingWeightRef = useRef(false);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -365,13 +396,27 @@ export default function ProgressScreen() {
     }
   }, [loadData]);
 
+  const closeLogModal = () => {
+    Keyboard.dismiss();
+    setShowLogModal(false);
+  };
+
   const handleLogWeight = async () => {
-    if (!newWeight) return;
-    const w = parseFloat(newWeight);
-    if (isNaN(w) || w <= 0) {
-      Alert.alert('Invalid weight', 'Please enter a valid number.');
+    if (savingWeightRef.current) return;
+    const w = parseFloat(newWeight.replace(',', '.'));
+    if (isNaN(w)) {
+      Alert.alert('Weight not saved', 'Enter your weight as a number.');
       return;
     }
+    // U6 (FW-BODY-128): the server rejects values outside 40-1,500 lb with a
+    // raw "Bad Request"; say the real range before sending.
+    if (w < WEIGHT_MIN_LBS || w > WEIGHT_MAX_LBS) {
+      Alert.alert('Weight not saved', 'Enter a weight between 40 and 1,500 lb.');
+      return;
+    }
+    Keyboard.dismiss();
+    savingWeightRef.current = true;
+    setSavingWeight(true);
     try {
       await weightApi.log({
         weight_lbs: w,
@@ -384,6 +429,9 @@ export default function ProgressScreen() {
       console.error('ProgressScreen: weight log failed', err);
       Alert.alert("Couldn't log weight", errorMessage(err, 'Please try again.'));
       return;
+    } finally {
+      savingWeightRef.current = false;
+      setSavingWeight(false);
     }
     setNewWeight('');
     setNewNotes('');
@@ -393,7 +441,10 @@ export default function ProgressScreen() {
 
   const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : null;
   const startWeight = weightLogs.length > 0 ? weightLogs[0].weight : null;
-  const goalWeight = macroTargets?.goalWeight || null;
+  // U1 (FW-BODY-128): the consultation saves the goal on the profile
+  // (target_weight_lbs); the macro-target cache never carried it.
+  const goalWeight =
+    currentUser?.profile?.target_weight_lbs || macroTargets?.goalWeight || null;
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
   const runCount = loggingStreak === 60 ? '60+' : String(loggingStreak);
   const runLabel = `${runCount} days in a row with a weigh-in`;
@@ -586,10 +637,8 @@ export default function ProgressScreen() {
           {change !== null && (
             <View style={styles.statCard}>
               <Text
-                style={[
-                  styles.statValue,
-                  { color: change <= 0 ? colors.success : colors.warning },
-                ]}
+                style={styles.statValue}
+                testID="progress-weight-change"
               >
                 {change > 0 ? '+' : ''}
                 {change.toFixed(1)}
@@ -738,7 +787,7 @@ export default function ProgressScreen() {
               .slice(0, 10)
               .map((log) => (
                 <View key={log.id} style={styles.logRow}>
-                  <Text style={styles.logDate}>{log.date}</Text>
+                  <Text style={styles.logDate}>{formatLogDate(log.date)}</Text>
                   <View style={styles.logRight}>
                     <Text style={styles.logWeight}>
                       {log.weight} {log.unit}
@@ -767,48 +816,107 @@ export default function ProgressScreen() {
         <Ionicons name="add" size={28} color={colors.textOnPrimary} />
       </TouchableOpacity>
 
-      {/* Weight Log Modal */}
-      <Modal visible={showLogModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalSheet}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Log Weight</Text>
+      {/* Weight Log Modal. B1 (FW-BODY-128): the sheet rides above the
+          iPhone number pad (KeyboardAvoidingView), tapping outside the fields
+          or "Done" dismisses the pad, and Save is disabled while saving. */}
+      <Modal
+        visible={showLogModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeLogModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalAvoider}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          testID="log-weight-keyboard-avoider"
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={Keyboard.dismiss}
+            accessible={false}
+            testID="log-weight-backdrop"
+          >
+            <Pressable
+              style={styles.modalSheet}
+              onPress={Keyboard.dismiss}
+              accessible={false}
+              testID="log-weight-sheet"
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Log weight</Text>
+                <TouchableOpacity
+                  onPress={closeLogModal}
+                  style={styles.modalClose}
+                  accessibilityLabel="Close log weight modal"
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={styles.input}
+                placeholder="Weight (lbs)"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="decimal-pad"
+                value={newWeight}
+                onChangeText={setNewWeight}
+                autoFocus
+                inputAccessoryViewID={WEIGHT_KEYBOARD_ACCESSORY_ID}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                accessibilityLabel="Enter weight in pounds"
+                testID="log-weight-input"
+              />
+              <TextInput
+                style={[styles.input, { marginTop: 12 }]}
+                placeholder="Notes (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={newNotes}
+                onChangeText={setNewNotes}
+                maxLength={500}
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+                accessibilityLabel="Enter optional notes"
+              />
               <TouchableOpacity
-                onPress={() => setShowLogModal(false)}
-                accessibilityLabel="Close log weight modal"
+                style={[
+                  styles.saveBtn,
+                  (savingWeight || !newWeight.trim()) && styles.saveBtnDisabled,
+                ]}
+                onPress={() => {
+                  void handleLogWeight();
+                }}
+                disabled={savingWeight || !newWeight.trim()}
+                accessibilityLabel="Save weight log entry"
                 accessibilityRole="button"
+                accessibilityState={{
+                  disabled: savingWeight || !newWeight.trim(),
+                  busy: savingWeight,
+                }}
+                testID="log-weight-save"
               >
-                <Ionicons name="close" size={24} color={colors.textSecondary} />
+                <Text style={styles.saveBtnText}>
+                  {savingWeight ? 'Saving' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+        {Platform.OS === 'ios' ? (
+          <InputAccessoryView nativeID={WEIGHT_KEYBOARD_ACCESSORY_ID}>
+            <View style={styles.keyboardBar}>
+              <TouchableOpacity
+                onPress={Keyboard.dismiss}
+                style={styles.keyboardDone}
+                accessibilityLabel="Done"
+                accessibilityRole="button"
+                testID="log-weight-keyboard-done"
+              >
+                <Text style={styles.keyboardDoneText}>Done</Text>
               </TouchableOpacity>
             </View>
-            <TextInput
-              style={styles.input}
-              placeholder="Weight (lbs)"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="decimal-pad"
-              value={newWeight}
-              onChangeText={setNewWeight}
-              autoFocus
-              accessibilityLabel="Enter weight in pounds"
-            />
-            <TextInput
-              style={[styles.input, { marginTop: 12 }]}
-              placeholder="Notes (optional)"
-              placeholderTextColor={colors.textMuted}
-              value={newNotes}
-              onChangeText={setNewNotes}
-              accessibilityLabel="Enter optional notes"
-            />
-            <TouchableOpacity
-              style={styles.saveBtn}
-              onPress={handleLogWeight}
-              accessibilityLabel="Save weight log entry"
-              accessibilityRole="button"
-            >
-              <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          </InputAccessoryView>
+        ) : null}
       </Modal>
     </View>
   );
@@ -1132,6 +1240,9 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     ...shadowTokens.md,
   },
+  modalAvoider: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(26,26,24,0.5)',
@@ -1149,6 +1260,12 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  modalClose: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   modalTitle: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -1173,6 +1290,29 @@ const makeStyles = (colors: ThemeColors) =>
     borderRadius: 2,
     paddingVertical: 14,
     alignItems: 'center',
+  },
+  saveBtnDisabled: {
+    opacity: 0.5,
+  },
+  keyboardBar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    backgroundColor: colors.surfaceElevated,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingHorizontal: 16,
+  },
+  keyboardDone: {
+    minHeight: 44,
+    minWidth: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyboardDoneText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.primary,
   },
   saveBtnText: {
     fontFamily: 'Inter_500Medium',

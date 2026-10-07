@@ -55,8 +55,8 @@ export function MealPlanTab({
         <View style={styles.emptyCard}>
           <Ionicons name="restaurant-outline" size={32} color={colors.textMuted} />
           <Text style={styles.emptyText}>
-            No meal plans yet. Tap "New plan" to assign one — the client will see it
-            on their Plan tab.
+            No meal plans yet. Tap "New plan" to assign one.
+            {' '}The client sees it under Meal plan.
           </Text>
         </View>
       ) : (

@@ -1,6 +1,6 @@
 /**
  * CommunityChallengesScreen — the discovery surface for community challenges
- * (v3-1). Lists the workspace's challenges as ChallengeCards; tapping a card
+ * (v3-1). Lists the workspace's challenges as dated rows; tapping a row
  * opens its detail (where the caller's own participation is loaded).
  *
  * Each row foregrounds the challenge itself (a calm "Join" affordance), not a
@@ -28,11 +28,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import { dedupeById } from '../../utils/dedupeById';
-import { ThreadHeader, ChallengeCard } from '../../components/community';
 import HapticPressable from '../../components/HapticPressable';
 import {
   communityChallengesApi,
@@ -66,6 +65,15 @@ interface Props {
   prerequisiteError?: boolean;
   /** Refetches `/community/me`; wired to the error-state retry button. */
   onRetryPrerequisite?: () => void;
+}
+
+function ThreadHeader({ title, testID }: { title: string; testID: string }) {
+  const { semanticColors: sc } = useTheme();
+  return (
+    <View testID={testID} style={[styles.header, { borderColor: sc.border }]}>
+      <Text accessibilityRole="header" style={[typography.h1, { color: sc.textPrimary }]}>{title}</Text>
+    </View>
+  );
 }
 
 export default function CommunityChallengesScreen({
@@ -295,7 +303,7 @@ export default function CommunityChallengesScreen({
         <ThreadHeader title="Challenges" testID="community-challenges-header" />
         <View style={styles.center} testID="community-challenges-empty">
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            No challenges yet. Your coach will add one when it is time.
+            No challenges yet.
           </Text>
         </View>
       </Container>
@@ -321,12 +329,21 @@ export default function CommunityChallengesScreen({
           // `role` prop (not `accessibilityRole`) for list/listitem; this
           // matches the EventCard precedent.
           <View role="listitem" testID={`community-challenge-listitem-${item.id}`}>
-            <ChallengeCard
-              challenge={item}
-              participation={null}
-              onPress={open}
+            <HapticPressable
+              intent="light"
+              onPress={() => open(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Open challenge ${item.title}`}
               testID={`community-challenge-card-${item.id}`}
-            />
+              style={[styles.challengeRow, { borderColor: semanticColors.border }]}
+            >
+              <Text style={[styles.status, { color: semanticColors.textMuted }]}>{item.status}</Text>
+              <Text style={[styles.title, { color: semanticColors.textPrimary }]}>{item.title}</Text>
+              {item.description ? <Text style={[styles.description, { color: semanticColors.textMuted }]}>{item.description}</Text> : null}
+              {item.starts_at ? <Text style={[styles.description, { color: semanticColors.textMuted }]}>Starts {new Date(item.starts_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</Text> : null}
+              {item.ends_at ? <Text style={[styles.description, { color: semanticColors.textMuted }]}>Ends {new Date(item.ends_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</Text> : null}
+              <Text style={[styles.description, { color: semanticColors.accentText }]}>View challenge</Text>
+            </HapticPressable>
           </View>
         )}
         keyExtractor={(item) => item.id}
@@ -351,6 +368,7 @@ export default function CommunityChallengesScreen({
 }
 
 const styles = StyleSheet.create({
+  header: { padding: spacing.lg, borderBottomWidth: StyleSheet.hairlineWidth },
   flex: { flex: 1 },
   center: {
     flex: 1,
@@ -359,17 +377,21 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.xl,
   },
-  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  muted: { fontFamily: typography.body.fontFamily, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   retry: {
     marginTop: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.pill,
+    borderRadius: radius.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     minHeight: 48,
     justifyContent: 'center',
   },
   retryLabel: { fontSize: 14, fontWeight: '600' },
-  listContent: { padding: spacing.lg, gap: spacing.sm },
+  listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  challengeRow: { minHeight: 48, paddingVertical: spacing.lg, gap: spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth },
+  status: { fontFamily: typography.eyebrow.fontFamily, fontSize: 11, letterSpacing: 1.2, textTransform: 'uppercase' },
+  title: { fontFamily: typography.body.fontFamily, fontSize: 17, lineHeight: 24 },
+  description: { fontFamily: typography.body.fontFamily, fontSize: 13, lineHeight: 20, fontVariant: ['tabular-nums'] },
   loadMore: { paddingVertical: spacing.lg, alignItems: 'center' },
 });

@@ -410,6 +410,8 @@ src/
 
 ## Navigation
 
+Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
+
 **iOS purchase surfaces.** `src/config/purchaseSurfaces.ts` is the single gate.
 - Client 1:1 coach packages stay available on iOS (Guideline 3.1.3(d), Stripe).
 - Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.

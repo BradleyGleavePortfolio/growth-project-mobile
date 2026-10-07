@@ -10,6 +10,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -17,10 +18,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
-import StepHeader from './StepHeader';
+import StepHeader, { useDayOneColors, type DayOneColors } from './StepHeader';
 import { getDeviceTimezone, saveCheckInTime } from './api';
 import { enqueuePending, readResumeState, writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
@@ -44,7 +44,7 @@ function to24h(hour12: number, period: 'AM' | 'PM'): number {
 }
 
 export default function CheckInTimeScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const colors = useDayOneColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const initial = to12h(DEFAULT_HOUR_24);
@@ -130,7 +130,7 @@ export default function CheckInTimeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container} testID="day-one-checkin">
       <StepHeader step={5} onBack={() => navigation.goBack()} />
-      <View style={styles.inner}>
+      <ScrollView contentContainerStyle={styles.inner}>
         <View style={styles.copy}>
           <Text style={styles.headline} accessibilityRole="header">
             {t('checkInTime.title')}
@@ -186,6 +186,7 @@ export default function CheckInTimeScreen({ navigation }: Props) {
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
             <View style={styles.errorActions}>
               <TouchableOpacity
+                style={styles.secondaryAction}
                 onPress={advance}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.retry')}
@@ -194,6 +195,7 @@ export default function CheckInTimeScreen({ navigation }: Props) {
                 <Text style={styles.errorCta}>{t('common.retry')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
+                style={styles.secondaryAction}
                 onPress={handleContinueOffline}
                 accessibilityRole="button"
                 accessibilityLabel={t('common.saveLater')}
@@ -232,7 +234,7 @@ export default function CheckInTimeScreen({ navigation }: Props) {
             <Text style={styles.skipText}>{t('checkInTime.skip')}</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -244,7 +246,7 @@ interface StepperProps {
   onIncrement: () => void;
   onDecrement: () => void;
   testIDPrefix: string;
-  colors: ThemeColors;
+  colors: DayOneColors;
 }
 
 function Stepper({ label, value, onIncrement, onDecrement, testIDPrefix, colors }: StepperProps) {
@@ -279,18 +281,18 @@ function Stepper({ label, value, onIncrement, onDecrement, testIDPrefix, colors 
   );
 }
 
-const stepperStyles = (colors: ThemeColors) =>
+const stepperStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     wrap: { alignItems: 'center', gap: 4 },
     label: {
       fontFamily: 'Inter_500Medium',
-      fontSize: 10,
+      fontSize: 11,
       letterSpacing: 1.5,
       textTransform: 'uppercase',
       color: colors.textMuted,
       marginBottom: 4,
     },
-    btn: { padding: 4 },
+    btn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
     value: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 44,
@@ -298,13 +300,14 @@ const stepperStyles = (colors: ThemeColors) =>
       color: colors.textPrimary,
       minWidth: 56,
       textAlign: 'center',
+      fontVariant: ['tabular-nums'],
     },
   });
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: DayOneColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    inner: { flex: 1, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24 },
+    inner: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 24, paddingBottom: 24 },
     copy: { marginBottom: 28 },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
@@ -322,7 +325,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     pickerRow: {
       flexDirection: 'row',
-      alignItems: 'flex-end',
+      alignItems: 'center',
       justifyContent: 'center',
       gap: 12,
       marginTop: 12,
@@ -333,7 +336,7 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 44,
       lineHeight: 50,
       color: colors.textPrimary,
-      paddingBottom: 4,
+      paddingTop: 22,
     },
     periodToggle: {
       flexDirection: 'column',
@@ -343,18 +346,19 @@ const makeStyles = (colors: ThemeColors) =>
     periodBtn: {
       paddingVertical: 6,
       paddingHorizontal: 12,
-      borderRadius: 2,
-      borderWidth: 1,
+      minWidth: 56,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
     },
     periodBtnOn: {
       borderColor: colors.primary,
-      backgroundColor: colors.primaryPale,
     },
     periodText: {
       fontFamily: 'Inter_500Medium',
-      fontSize: 12,
+      fontSize: 13,
       letterSpacing: 1.2,
       color: colors.textSecondary,
     },
@@ -362,14 +366,14 @@ const makeStyles = (colors: ThemeColors) =>
     defaultHint: {
       textAlign: 'center',
       fontFamily: 'Inter_400Regular',
-      fontSize: 12,
+      fontSize: 13,
       color: colors.textMuted,
       marginBottom: 16,
     },
     errorBanner: {
-      backgroundColor: colors.noticeCriticalBg,
-      borderRadius: 4,
-      padding: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: 14,
       marginBottom: 12,
     },
     errorTitle: {
@@ -388,11 +392,10 @@ const makeStyles = (colors: ThemeColors) =>
     errorCta: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 13,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.noticeCriticalAccent,
     },
-    errorActions: { gap: 10 },
+    errorActions: { gap: 4 },
+    secondaryAction: { minHeight: 44, justifyContent: 'center' },
     errorCtaSecondary: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
@@ -404,18 +407,17 @@ const makeStyles = (colors: ThemeColors) =>
     cta: {
       backgroundColor: colors.primary,
       paddingVertical: 18,
-      borderRadius: 2,
+      minHeight: 56,
+      borderRadius: 4,
       alignItems: 'center',
     },
     ctaDisabled: { opacity: 0.4 },
     ctaText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
       color: colors.textOnPrimary,
     },
-    skipBtn: { alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
+    skipBtn: { minHeight: 44, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 },
     skipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
