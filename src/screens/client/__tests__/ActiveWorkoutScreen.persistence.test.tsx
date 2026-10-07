@@ -384,7 +384,7 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
   it('releasing an empty session awaits the clear and nulls the pending payload', () => {
     // TRAIN-GATE-128: only a session with nothing logged is released on leave.
     const cancelBlock = SCREEN_SRC.match(
-      /const releaseEmptySession = async \(\) => \{[\s\S]*?\n  \};/,
+      /const releaseEmptySession = async \(\) => \{[\s\S]*?\n {2}\};/,
     );
     expect(cancelBlock).not.toBeNull();
     const body = cancelBlock![0];
