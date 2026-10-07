@@ -15,7 +15,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 | File | Tab | What it does |
 | --- | --- | --- |
-| `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
+| `HomeScreen.tsx` | Home | Muted date overline, verified meal/workout summary in serif, one forest action (Train or Log) and one hairline row of every `homeCells()` metric with serif tabular figures. Existing metric prompts still open Log; all supporting sections retain their relative order and actions below the row. Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
 | `MoreScreen.tsx` | Profile | Index of every secondary screen. The two top rows are **Guidance** (`AIGuide`) and **Membership** (`Membership`); the rest cover Recipes, Fasting, Community, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, the lists, and the Plan view. There is no floating chat widget — `AIGuide` is reached from this index, not from a global FAB. |

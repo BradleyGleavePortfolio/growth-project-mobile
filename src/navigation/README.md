@@ -4,6 +4,8 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 ## Purpose
 
+Home's header adds a shortcut to the existing `MoreTab → RomanChat` destination only when `featureFlags.romanChat` is on. The More entry, Messages and NotificationCenter remain unchanged; no navigator or tab-list changes.
+
 - Centralise the auth gate. There is exactly one place where "is this user signed in, and which experience do they get?" is decided: `RootNavigator.bootstrapAuth`.
 - Map deep links to a single screen (`CreateAccount`) so an invite-code URL always lands in the right place, regardless of which navigator is currently active.
 - Keep the per-role navigators (auth, lean onboarding, client, coach) self-contained. Adding a screen to one role does not require touching the others.
