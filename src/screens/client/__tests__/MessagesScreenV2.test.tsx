@@ -5,9 +5,10 @@
  * The HTTP layer is mocked (services/api), not messagingV2Api.
  */
 import React from 'react';
-import { Platform } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { Alert, Platform, StyleSheet, Text } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import api from '../../../services/api';
+import * as Clipboard from 'expo-clipboard';
 
 const originalOS = Platform.OS;
 beforeAll(() => {
@@ -16,13 +17,18 @@ beforeAll(() => {
 afterAll(() => {
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => originalOS });
 });
+afterEach(() => jest.restoreAllMocks());
 
-jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }) }));
+jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({
+  colors: new Proxy({}, { get: () => '#000000' }),
+  semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+}) }));
 jest.mock('../../../storage/mmkv', () => {
   const store = { getString: () => undefined, getStringAsync: async () => undefined, set: async () => undefined, delete: async () => undefined };
   return { prefsStorage: store, cacheStorage: store };
 });
 const mockList = jest.fn();
+const mockProfileGet = jest.fn();
 const mockLegacySend = jest.fn();
 const mockLegacyRead = jest.fn(async () => ({ data: {} }));
 jest.mock('../../../services/api', () => ({
@@ -34,7 +40,7 @@ jest.mock('../../../services/api', () => ({
     send: (...a: unknown[]) => mockLegacySend(...a),
     markRead: () => mockLegacyRead(),
   },
-  profileApi: { get: jest.fn(async () => ({ data: {} })) },
+  profileApi: { get: () => mockProfileGet() },
 }));
 jest.mock('../../../services/realtime', () => ({ subscribeToMessages: () => () => undefined }));
 jest.mock('../../../hooks/useFeatureFlags', () => ({
@@ -46,12 +52,14 @@ jest.mock('../../../hooks/useBlockedUsersHydration', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => undefined) }));
+const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
     useRoute: () => ({ key: 'messages', name: 'Messages', params: undefined }),
-    useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn(), getParent: () => ({ navigate: jest.fn() }) }),
+    useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate, getParent: () => ({ navigate: jest.fn() }) }),
     useFocusEffect: (cb: () => void | (() => void)) => {
       const R = jest.requireActual('react');
       R.useEffect(() => cb(), [cb]);
@@ -78,6 +86,7 @@ const inbox = (muted: boolean) => ({
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockProfileGet.mockResolvedValue({ data: {} });
   mockList.mockResolvedValue({
     data: {
       messages: [
@@ -101,6 +110,102 @@ beforeEach(() => {
 });
 
 describe('client MessagesScreen with messaging_core_v2 ON', () => {
+  it('groups timestamps without hiding Edited, and names never imply online presence', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } });
+    mockList.mockResolvedValue({ data: [
+      row({ id: 'a', sender_id: 'coach-9', body: 'first', edited_at: recent }),
+      row({ id: 'b', sender_id: 'coach-9', body: 'second' }),
+      row({ id: 'c', sender_id: 'client-1', body: 'third', read_at: recent }),
+    ] });
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText(/Message: second/);
+    const time = new Date(recent).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    expect(u.getAllByText(time)).toHaveLength(2);
+    expect(u.getByText('Edited')).toBeTruthy();
+    expect(u.getByText('Read')).toBeTruthy();
+    const contact = await u.findByLabelText('View Coach Nine contact details');
+    expect(React.Children.toArray(contact.props.children)[0]).toHaveProperty('type', Text);
+    expect(StyleSheet.flatten(u.getByLabelText('Send message').props.style)).toMatchObject({ width: 44, height: 44 });
+  });
+
+  it('parity: back, contact, copy, reply/cancel, report/close and send remain reachable', async () => {
+    mockProfileGet.mockResolvedValueOnce({ data: { coach_id: 'coach-9', coach_name: 'Coach Nine' } });
+    const u = await render(<MessagesScreen />);
+    await fireEvent.press(await u.findByLabelText('View Coach Nine contact details'));
+    expect(mockNavigate).toHaveBeenCalledWith('ContactView', { contactId: 'coach-9', displayName: 'Coach Nine', role: 'coach' });
+    await fireEvent.press(u.getByLabelText('Go back'));
+    expect(mockGoBack).toHaveBeenCalled();
+    const menu = async (label: string) => {
+      await fireEvent(u.getByLabelText(/Message: from the coach/), 'longPress');
+      await fireEvent.press(await waitFor(() => u.getByLabelText(label)));
+    };
+    await menu('Copy');
+    await waitFor(() => expect(Clipboard.setStringAsync).toHaveBeenCalledWith('from the coach'));
+    await menu('Reply');
+    await fireEvent.press(u.getByLabelText('Cancel reply'));
+    await menu('Report Message');
+    await fireEvent.press(u.getByLabelText('Close report sheet'));
+    const spy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await menu('Report Message');
+    await fireEvent.press(u.getByLabelText('Spam'));
+    await fireEvent.press(u.getByLabelText('Submit report'));
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/messages/report', { messageId: 'm1', reason: 'spam', details: undefined }));
+    expect(spy).toHaveBeenCalledWith('Reported', 'Your report has been submitted.');
+    spy.mockRestore();
+    await menu('Reply');
+    postMock.mockImplementation(async (url: string, body: Record<string, unknown>) => ({ data: url === '/messages'
+      ? row({ id: 'new', sender_id: 'client-1', body: body.body }) : {} }));
+    await fireEvent.changeText(u.getByLabelText('Message text'), 'reply');
+    await fireEvent.press(u.getByLabelText('Send message'));
+    await waitFor(() => expect(postMock).toHaveBeenCalledWith('/messages', expect.objectContaining({ body: 'reply', reply_to_id: 'm1' }), expect.anything()));
+  });
+
+  it('load errors offer an honest retry, not a contradictory empty conversation', async () => {
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    mockList.mockRejectedValue(new Error('offline'));
+    const u = await render(<MessagesScreen />);
+    await u.findByLabelText('Retry loading messages');
+    expect(u.queryByText('Start a conversation with your coach')).toBeNull();
+    mockList.mockResolvedValue({ data: [] });
+    await fireEvent.press(u.getByLabelText('Retry loading messages'));
+    await u.findByText('Start a conversation with your coach');
+    spy.mockRestore();
+  });
+
+  it('parity: pins, load older, edit/save/cancel and delete confirmation retain their handlers', async () => {
+    const own = row({ id: 'own', sender_id: 'client-1', body: 'own text', pinned_at: recent });
+    mockList.mockResolvedValue({ data: Array.from({ length: 100 }, (_, i) => i === 0 ? own : { ...own, id: `older-${i}`, body: 'history' }) });
+    getMock.mockImplementation(async (url: string) => ({ data: url === '/messages/pins' ? { items: [own] } : {} }));
+    const patch = api.patch as jest.Mock;
+    patch.mockResolvedValue({ data: { ...own, body: 'edited', edited_at: recent } });
+    const del = api.delete as jest.Mock;
+    del.mockResolvedValue({ data: { ...own, body: null, deleted: true } });
+    const spy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const u = await render(<MessagesScreen />);
+    await fireEvent.press(await u.findByTestId('thread-pinned-bar'));
+    await fireEvent.press(u.getByLabelText('Load older messages'));
+    await waitFor(() => expect(mockList).toHaveBeenCalledWith({ before: recent, limit: 100 }));
+    const menu = async (label: string) => {
+      await fireEvent(u.getByLabelText(/Message: own text/), 'longPress');
+      await fireEvent.press(await waitFor(() => u.getByLabelText(label)));
+    };
+    await menu('Edit');
+    await fireEvent.press(u.getByLabelText('Cancel editing'));
+    await menu('Edit');
+    await fireEvent.changeText(u.getByLabelText('Edited message text'), 'edited');
+    await fireEvent.press(u.getByLabelText('Save edit'));
+    await waitFor(() => expect(patch).toHaveBeenCalledWith('/messages/own', { body: 'edited' }, expect.anything()));
+    await menu('Unpin');
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/messages/own/pin', expect.anything()));
+    del.mockClear();
+    await menu('Delete for everyone');
+    expect(del).not.toHaveBeenCalled();
+    expect(spy).toHaveBeenCalledWith('Delete for everyone?', expect.any(String), expect.any(Array));
+    await act(async () => spy.mock.calls.find(([title]) => title === 'Delete for everyone?')?.[2]?.find((b) => b.text === 'Delete')?.onPress?.());
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/messages/own', expect.anything()));
+    spy.mockRestore();
+  });
+
   it('coach message is the coach side even without sender_role; read goes up to it; server quote renders', async () => {
     const utils = await render(<MessagesScreen />);
     await utils.findByLabelText(/Message: from the coach/);
@@ -121,6 +226,9 @@ describe('client MessagesScreen with messaging_core_v2 ON', () => {
     expect(utils.queryByLabelText('Unmute')).toBeNull();
     await fireEvent.press(await waitFor(() => utils.getByLabelText('Mute for 8 hours')));
     await waitFor(() => expect(putMock).toHaveBeenCalledWith('/messages/mute', { duration: '8h' }, expect.anything()));
+    await fireEvent.press(utils.getByTestId('thread-mute-button'));
+    await fireEvent.press(await waitFor(() => utils.getByLabelText('Unmute')));
+    await waitFor(() => expect(putMock).toHaveBeenCalledWith('/messages/mute', { duration: 'off' }, expect.anything()));
   });
 
   it('a failed send stays as "Not sent" with its key; Send again replays the same key, no duplicate', async () => {
