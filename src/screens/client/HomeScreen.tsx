@@ -354,6 +354,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
       <ScrollView
+        testID="home-scroll"
         contentContainerStyle={{ paddingHorizontal: 32, paddingTop: 64, paddingBottom: 96 }}
         showsVerticalScrollIndicator={false}
         refreshControl={

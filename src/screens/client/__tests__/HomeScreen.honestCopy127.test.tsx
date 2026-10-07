@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { getTodayString } from '../../../utils/date';
 const mockNavigate = jest.fn();
 const mockHistory = jest.fn();
@@ -92,6 +92,6 @@ it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s m
     await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
   }
-  await fireEvent(screen.getByTestId('home-refresh-control'), 'refresh');
+  await act(async () => screen.getByTestId('home-scroll').props.refreshControl.props.onRefresh());
   for (const load of [mockDay.loadDayData, mockDay.loadProfile]) expect(load).toHaveBeenCalledTimes(2);
 });
