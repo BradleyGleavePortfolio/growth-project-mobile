@@ -35,6 +35,12 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { getProfileCompletion } from '../../lib/profileCompletion';
 import { buildProfileRows, buildTargetRows, type ProfileValues } from './profileDisplay';
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
+interface SavedValues {
+  userId: string;
+  profile?: ProfileValues;
+  targets?: MacroTarget | null;
+  targetStatus?: 'loading' | 'loaded' | 'error';
+}
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
@@ -42,21 +48,24 @@ export default function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   // Saved values from the server, read on every focus (also after Edit).
   // Until they arrive, or if the read fails, the cached profile stands in.
-  const [saved, setSaved] = useState<{ userId: string; profile?: ProfileValues; targets?: MacroTarget | null }>();
-  // Registered before the sharing effect, which tests reach as the last focus callback.
+  const [saved, setSaved] = useState<SavedValues>();
   useFocusEffect(useCallback(() => {
     const userId = currentUser?.id;
     if (!userId) return;
     let alive = true;
-    const keep = (patch: { profile?: ProfileValues; targets?: MacroTarget | null }) => {
+    const keep = (patch: Partial<Omit<SavedValues, 'userId'>>) => {
       if (alive) setSaved((prev) => ({ ...(prev?.userId === userId ? prev : {}), userId, ...patch }));
     };
+    keep({ targetStatus: 'loading' });
     profileApi.get()
       .then((res: { data?: ProfileValues | null }) => { if (res.data && typeof res.data === 'object') keep({ profile: res.data }); })
       .catch(() => logger.warn('ProfileScreen', 'Saved profile did not load'));
     macrosApi.currentForSelf()
-      .then((res) => keep({ targets: res.data ?? null }))
-      .catch(() => logger.warn('ProfileScreen', 'Daily targets did not load'));
+      .then((res) => keep({ targets: res.data ?? null, targetStatus: 'loaded' }))
+      .catch(() => {
+        keep({ targetStatus: 'error' });
+        logger.warn('ProfileScreen', 'Daily targets did not load');
+      });
     return () => { alive = false; };
   }, [currentUser?.id]));
   const [sharing, setSharing] = useState<{ coachId: string; name: string; workouts: boolean; meals: boolean; ownerAccess: boolean } | null>(null);
@@ -111,6 +120,10 @@ export default function ProfileScreen() {
   const completion = getProfileCompletion({ profile: shownProfile });
   const profileItems = buildProfileRows(currentUser, shownProfile);
   const targetItems = buildTargetRows(mine ? mine.targets : undefined, shownProfile);
+  const targetStatusCopy = targetItems.length > 0 ? null
+    : mine?.targetStatus === 'loaded' ? 'No daily targets yet.'
+    : mine?.targetStatus === 'error' ? 'Daily targets did not load. Reopen Profile to try again.'
+    : 'Loading daily targets.';
 
   return (
     <ScrollView
@@ -228,8 +241,8 @@ export default function ProfileScreen() {
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Daily targets</Text>
-        {targetItems.length === 0 ? (
-          <Text style={styles.sectionStatus}>No daily targets yet.</Text>
+        {targetStatusCopy ? (
+          <Text style={styles.sectionStatus}>{targetStatusCopy}</Text>
         ) : null}
         {targetItems.map((item) => (
           <View key={item.label} style={styles.row}>
@@ -380,11 +393,16 @@ const styles = StyleSheet.create({
   rowLabel: {
     ...typography.body,
     color: colorTokens.stone,
+    flex: 1,
+    paddingRight: 12,
   },
   rowValue: {
     ...typography.body,
     color: colorTokens.ink,
     fontWeight: '500' as const,
+    flexShrink: 1,
+    maxWidth: '55%',
+    textAlign: 'right',
   },
   milestoneCabinetSection: {
     paddingHorizontal: 24,

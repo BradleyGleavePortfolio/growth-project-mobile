@@ -6,8 +6,9 @@
  * `dietary_pattern`, `has_gym_membership`, `macro_target_*`) and the older
  * names the app's own writes put in the local cache (`current_weight`, `dob`,
  * `primary_goal`, ...). Rows read both through `resolveProfileFields`, the
- * same resolver the completion line uses, so the two always agree. Raw enum
- * values never reach the screen; a missing answer reads "Not set".
+ * same resolver the completion line uses. Canonical goal and gym labels
+ * do not infer a pace or equipment details the server did not save.
+ * Raw enum values never reach the screen; a missing answer reads "Not set".
  */
 import type { CurrentUser } from '../../hooks/useCurrentUser';
 import type { MacroTarget } from '../../api/macrosApi';
@@ -90,6 +91,10 @@ function positive(v: unknown): number | undefined {
   return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : undefined;
 }
 
+function nonNegative(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined;
+}
+
 function sentence(token: string): string {
   const s = token.replace(/_/g, ' ').trim();
   return s.charAt(0).toUpperCase() + s.slice(1);
@@ -137,7 +142,9 @@ export function buildProfileRows(
     : label(GOAL_TYPE_LABEL, p.goal_type);
   const equipment = typeof p.gym_membership === 'string' && p.gym_membership
     ? label(GYM_LABEL, p.gym_membership)
-    : p.has_gym_membership === true ? 'Gym access' : undefined;
+    : typeof p.has_gym_membership === 'boolean'
+      ? p.has_gym_membership ? 'Gym access' : 'No gym membership'
+      : undefined;
   const days = positive(r.workout_days_per_week);
   const height = positive(r.height_cm);
   return [
@@ -173,14 +180,14 @@ export function buildTargetRows(
     ? positive(p.macro_target_calories) ?? positive(p.calorie_target)
     : positive(current?.calories_kcal);
   const protein = current === undefined
-    ? positive(p.macro_target_protein_g) ?? positive(p.protein_target)
-    : positive(current?.protein_g);
+    ? nonNegative(p.macro_target_protein_g) ?? nonNegative(p.protein_target)
+    : nonNegative(current?.protein_g);
   const carbs = current === undefined
-    ? positive(p.macro_target_carbs_g) ?? positive(p.carbs_target)
-    : positive(current?.carbs_g);
+    ? nonNegative(p.macro_target_carbs_g) ?? nonNegative(p.carbs_target)
+    : nonNegative(current?.carbs_g);
   const fat = current === undefined
-    ? positive(p.macro_target_fat_g) ?? positive(p.fat_target)
-    : positive(current?.fats_g);
+    ? nonNegative(p.macro_target_fat_g) ?? nonNegative(p.fat_target)
+    : nonNegative(current?.fats_g);
   if (calories === undefined) return [];
   const rows: TargetRow[] = [{ label: 'Calories', value: `${Math.round(calories)} kcal` }];
   if (protein !== undefined) rows.push({ label: 'Protein', value: `${Math.round(protein)} g` });
