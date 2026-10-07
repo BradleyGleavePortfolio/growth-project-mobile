@@ -4,8 +4,6 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 ## Purpose
 
-Home's header adds a shortcut to the existing `MoreTab → RomanChat` destination only when `featureFlags.romanChat` is on. The More entry, Messages and NotificationCenter remain unchanged; no navigator or tab-list changes.
-
 - Centralise the auth gate. There is exactly one place where "is this user signed in, and which experience do they get?" is decided: `RootNavigator.bootstrapAuth`.
 - Map deep links to a single screen (`CreateAccount`) so an invite-code URL always lands in the right place, regardless of which navigator is currently active.
 - Keep the per-role navigators (auth, lean onboarding, client, coach) self-contained. Adding a screen to one role does not require touching the others.
@@ -117,7 +115,7 @@ Both `ClientNavigator` and `CoachNavigator` now inject a bell icon into the head
 ### ClientNavigator
 - Clinic tutorial (featureFlags.clientTutorial, default OFF): the tab navigator is wrapped in `TutorialHost`, and `screenListeners` is now a function. It reports the focused route path (`state` event, via `src/tutorial/navigationFocus.ts`) to the tutorial step machine and captures the tab navigation object so the overlay's "Take me there" can open `Home/Messages`, `MoreTab/Connections` and `MoreTab/Health`. Tab list and routes are unchanged. With the flag OFF the host is a pass-through. See `src/tutorial/README.md`.
 
-The bell is rendered as `headerRight` on every screen inside `HomeStackNavigator`. It shows a `NotificationBadge` with the live unread count (polled every 30 s, refreshed on foreground). Tapping navigates to `HomeStack → NotificationCenter`.
+Home renders the bell in `HomeHeaderActions` (not `headerRight`), alongside the coach-message entry with its unread count. The bell's `NotificationBadge` shows the live unread count (polled every 30 s, refreshed on foreground); tapping opens `HomeStack → NotificationCenter`. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar in a 44 pt target opens the existing `MoreTab → RomanChat` destination. The More entry, Messages and tab list remain unchanged.
 
 New screen names added to `HomeStackParamList`:
 
