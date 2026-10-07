@@ -24,9 +24,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, RouteProp } from '@react-navigation/native';
@@ -36,6 +36,7 @@ import { secureStorage } from '../../services/secureStorage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { isValidInviteToken } from '../../utils/inviteToken';
+import { typography } from '../../theme/tokens';
 
 type FailureReason = 'expired' | 'already_accepted' | 'invalid' | 'network';
 
@@ -139,16 +140,16 @@ export default function AcceptInviteScreen({
 
   if (state.kind === 'loading') {
     return (
-      <View style={styles.center} testID="accept-loading">
+      <ScrollView contentContainerStyle={styles.center} style={styles.page} testID="accept-loading">
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.helperText}>Accepting your invite…</Text>
-      </View>
+        <Text style={styles.helperText}>Checking your invite…</Text>
+      </ScrollView>
     );
   }
 
   if (state.kind === 'failed') {
     return (
-      <View style={styles.center} testID={`accept-failed-${state.reason}`}>
+      <ScrollView contentContainerStyle={styles.center} style={styles.page} testID={`accept-failed-${state.reason}`}>
         <Ionicons
           name={
             state.reason === 'expired'
@@ -157,7 +158,7 @@ export default function AcceptInviteScreen({
                 ? 'checkmark-done-outline'
                 : 'alert-circle-outline'
           }
-          size={48}
+          size={32}
           color={colors.textMuted}
         />
         <Text style={styles.title}>{failureTitle(state.reason)}</Text>
@@ -186,19 +187,19 @@ export default function AcceptInviteScreen({
             <Text style={styles.secondaryBtnText}>Try again</Text>
           </Pressable>
         )}
-      </View>
+      </ScrollView>
     );
   }
 
   const { payload, authed } = state;
   return (
-    <View style={styles.center} testID="accept-success">
-      <Ionicons name="checkmark-circle" size={56} color={colors.success} />
-      <Text style={styles.title}>You're in</Text>
+    <ScrollView contentContainerStyle={styles.center} style={styles.page} testID="accept-success">
+      <Ionicons name="checkmark-circle-outline" size={32} color={colors.primary} />
+      <Text style={styles.overline}>Coach invite</Text>
+      <Text style={styles.title}>Invite ready</Text>
+      {payload.coachName ? <Text style={styles.coachName}>{payload.coachName}</Text> : null}
       <Text style={styles.body}>
-        {payload.coachName
-          ? `You've been linked to ${payload.coachName}.`
-          : "You've been linked to your coach."}
+        This invite is ready to use.
       </Text>
       {authed ? (
         <Pressable
@@ -235,7 +236,7 @@ export default function AcceptInviteScreen({
           </Pressable>
         </>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -270,36 +271,38 @@ function failureBody(
 }
 
 function failureCta(
-  reason: 'expired' | 'already_accepted' | 'invalid' | 'network',
+  _reason: 'expired' | 'already_accepted' | 'invalid' | 'network',
 ): string {
-  if (reason === 'already_accepted') return 'Go to sign in';
   return 'Back to welcome';
 }
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
+    page: { flex: 1, backgroundColor: colors.background },
+    overline: { ...typography.eyebrow, color: colors.textMuted, marginTop: 16 },
+    coachName: { ...typography.h2, color: colors.textPrimary, textAlign: 'center' },
     center: {
-      flex: 1,
+      flexGrow: 1,
       backgroundColor: colors.background,
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 24,
+      paddingVertical: 64,
       gap: 12,
     },
     title: {
-      fontSize: 22,
-      fontWeight: '600',
+      ...typography.h1,
+      textAlign: 'center',
       color: colors.textPrimary,
       marginTop: 8,
     },
     body: {
-      fontSize: 14,
+      ...typography.body,
       color: colors.textSecondary,
       textAlign: 'center',
-      lineHeight: 20,
     },
     helperText: {
-      fontSize: 13,
+      ...typography.bodySmall,
       color: colors.textMuted,
       textAlign: 'center',
       marginTop: 4,
@@ -307,27 +310,31 @@ function makeStyles(colors: ThemeColors) {
     primaryBtn: {
       marginTop: 12,
       backgroundColor: colors.primary,
-      paddingVertical: 12,
+      paddingVertical: 16,
       paddingHorizontal: 32,
-      borderRadius: 8,
-      minWidth: 200,
+      borderRadius: 4,
+      minHeight: 52,
+      width: '100%',
       alignItems: 'center',
     },
     primaryBtnText: {
+      ...typography.bodyMd,
       color: colors.textOnPrimary,
       fontSize: 15,
       fontWeight: '600',
     },
     secondaryBtn: {
       marginTop: 4,
-      backgroundColor: colors.surfaceElevated,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.divider,
       paddingVertical: 12,
       paddingHorizontal: 32,
-      borderRadius: 8,
-      minWidth: 200,
+      minHeight: 44,
+      width: '100%',
       alignItems: 'center',
     },
     secondaryBtnText: {
+      ...typography.bodyMd,
       color: colors.textPrimary,
       fontSize: 15,
       fontWeight: '600',

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -340,7 +341,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
 
   if (acknowledgeOnly && signupNotice) {
     return (
-      <View style={styles.container}>
+      <ScrollView style={styles.page} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <StatusBar barStyle="dark-content" />
         <View style={styles.header}>
           <Text style={styles.title}>Before you continue</Text>
@@ -358,12 +359,12 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
             <Text style={styles.continueText}>Continue</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
@@ -428,7 +429,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
           ) : invitePreview?.valid ? (
             <Text style={styles.invitePreviewOk}>
               You will be paired with{' '}
-              {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+              <Text style={styles.coachName}>{invitePreview.coach_name || invitePreview.business_name || 'your coach'}</Text>.
             </Text>
           ) : invitePreview && !invitePreview.valid ? (
             <Text style={styles.invitePreviewBad}>
@@ -502,26 +503,27 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
           </Text>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+  page: { flex: 1, backgroundColor: colors.background },
   container: {
-    flex: 1,
+    flexGrow: 1,
     backgroundColor: colors.background,
     paddingHorizontal: 24,
-    paddingTop: 80,
+    paddingTop: 64,
+    paddingBottom: 40,
   },
   header: {
     marginBottom: 40,
   },
   greeting: {
-    fontSize: 16,
-    color: colors.primary,
-    fontWeight: '600',
-    marginBottom: 8,
+    ...typography.eyebrow,
+    color: colors.textMuted,
+    marginBottom: 16,
   },
   title: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -546,50 +548,47 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 6,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...typography.eyebrow,
     color: colors.textSecondary,
     letterSpacing: 1,
   },
   input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 4,
-    paddingHorizontal: 14,
+    ...typography.body,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.divider,
+    minHeight: 52,
     paddingVertical: 14,
     fontSize: 16,
     color: colors.textPrimary,
   },
-  invitePreviewOk: { fontSize: 13, color: colors.primary, marginTop: 4 },
-  invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 4 },
-  invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
-  errorText: { fontSize: 13, color: colors.error, marginTop: 4 },
+  coachName: { ...typography.h2, color: colors.textPrimary },
+  invitePreviewOk: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 12 },
+  invitePreviewBad: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 12 },
+  invitePreviewMuted: { ...typography.bodySmall, color: colors.textMuted, marginTop: 12 },
+  errorText: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 12 },
   retryBox: {
-    backgroundColor: colors.surface,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.error,
-    borderRadius: 4,
-    padding: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.divider,
+    paddingVertical: 16,
     marginVertical: 12,
   },
   retryText: { ...typography.bodySmall, color: colors.textPrimary },
-  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: 8 },
-  skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
+  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: 8, minHeight: 44, paddingVertical: 11 },
+  skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', minHeight: 44, paddingVertical: 11 },
   continueBtn: {
     backgroundColor: colors.primary,
     borderRadius: 4,
     paddingVertical: 16,
+    minHeight: 52,
     alignItems: 'center',
   },
   btnDisabled: { opacity: 0.6 },
   continueText: {
-    fontFamily: 'Inter_600SemiBold',
+    ...typography.bodyMd,
     color: colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
   },
   coachNote: {
     flexDirection: 'row',
@@ -599,10 +598,9 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 8,
   },
   coachNoteText: {
+    ...typography.bodySmall,
     flex: 1,
-    fontSize: 12,
     color: colors.textMuted,
-    lineHeight: 18,
   },
 
   });
