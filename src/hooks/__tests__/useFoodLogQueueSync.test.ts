@@ -52,7 +52,7 @@ describe('useFoodLogQueueSync', () => {
   });
 
   it('sends again when the connection returns', async () => {
-    const { rerender } = await renderHook(({ online }) => useFoodLogQueueSync(true, online), {
+    const { rerender } = await renderHook(({ online }: { online: boolean }) => useFoodLogQueueSync(true, online), {
       initialProps: { online: false },
     });
     expect(mockSync).toHaveBeenCalledTimes(1);
