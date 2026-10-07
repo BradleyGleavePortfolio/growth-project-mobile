@@ -226,12 +226,12 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getByLabelText('Clear food search'));
     await fireEvent.press(screen.getByText('Enter Manually'));
     for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByText('Log Food'));
     expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
     await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Lunch label');
     await fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
     await fireEvent.changeText(screen.getByPlaceholderText('serving'), 'g');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByText('Log Food'));
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
     await fireEvent.press(screen.getAllByText('Add Food')[0]);
     await fireEvent.press(screen.getByText('Enter Manually'));
