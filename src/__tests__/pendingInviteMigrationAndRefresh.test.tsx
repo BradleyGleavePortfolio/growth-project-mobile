@@ -9,7 +9,7 @@ import { act, render, waitFor } from '@testing-library/react-native';
 
 jest.mock('../services/api', () => ({ authApi: { attachInviteCode: jest.fn() } }));
 jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
