@@ -24,7 +24,8 @@ import {
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
-import { colors as tokens, typography, spacing } from '../../theme/tokens';
+import { typography, spacing, type SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 import { fetchClientPathCopilot } from '../../services/wave11Adapters';
 import type { ClientPathCopilotPayload, CopilotSuggestion } from '../../types/wave11';
 import AINote from '../../components/trust/AINote';
@@ -33,14 +34,20 @@ import EmptyState from '../../components/EmptyState';
 import { featureFlags } from '../../config/featureFlags';
 
 export default function ClientPathCopilotScreen() {
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
+  const [error, setError] = useState(false);
   const [payload, setPayload] = useState<ClientPathCopilotPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     try {
+      setError(false);
       const next = await fetchClientPathCopilot();
       setPayload(next);
+    } catch {
+      setError(true);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -60,13 +67,13 @@ export default function ClientPathCopilotScreen() {
     return (
       <View
         style={styles.flagOff}
-        accessibilityLabel="Copilot is preview-only"
+        accessibilityLabel="Path suggestions unavailable"
         accessibilityRole="none"
       >
         <EmptyState
           icon="lock-closed-outline"
-          title="Copilot is preview-only"
-          subtitle="The Client Path Copilot is in development and not yet available on your account."
+          title="Your path"
+          subtitle="Path suggestions are not available on this account."
         />
       </View>
     );
@@ -93,29 +100,30 @@ export default function ClientPathCopilotScreen() {
     >
       <Text style={styles.title} accessibilityRole="header">Your path</Text>
       <Text style={styles.subtitle}>
-        AI summarises what you logged. Your coach decides what changes.
+        Suggestions and submitted progress.
       </Text>
 
       {payload?.isStale ? (
         <View
           style={styles.stale}
-          accessibilityLabel="Data not yet live — pull to refresh"
+          accessibilityLabel="Latest path data unavailable"
           accessibilityRole="none"
         >
-          <Ionicons name="time-outline" size={14} color={tokens.charcoal} />
+          <Ionicons name="time-outline" size={14} color={sc.textMuted} />
           <Text style={styles.staleText}>
-            Latest update isn&apos;t live yet — pull to refresh.
+            Latest path data is unavailable. Pull down to refresh.
           </Text>
         </View>
       ) : null}
+      {error ? <Text style={styles.subtitle} accessibilityRole="alert">Path data did not load. Check your connection and pull down to try again.</Text> : null}
 
-      <View style={styles.section}>
+      {!error || payload ? <><View style={styles.section}>
         <Text style={styles.sectionTitle} accessibilityRole="header">Suggestions</Text>
         {empty ? (
           <EmptyState
             icon="sparkles-outline"
             title="No suggestions yet"
-            subtitle="Once you log a few days, your Copilot will summarise the patterns it sees and your coach will weigh in."
+            subtitle="No suggestions are available."
           />
         ) : (
           payload!.suggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} />)
@@ -134,15 +142,17 @@ export default function ClientPathCopilotScreen() {
           <EmptyState
             icon="ribbon-outline"
             title="No pending submissions"
-            subtitle="Submit a milestone or check-in and your coach will review and sign off."
+            subtitle="No progress submissions are waiting for review."
           />
         )}
-      </View>
+      </View></> : null}
     </ScrollView>
   );
 }
 
 function SuggestionCard({ suggestion }: { suggestion: CopilotSuggestion }) {
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   return (
     <View
       style={styles.card}
@@ -168,12 +178,12 @@ function SuggestionCard({ suggestion }: { suggestion: CopilotSuggestion }) {
         >
           {suggestion.coachApproval ? (
             <Text style={[styles.statusText, styles.approved]}>
-              <Ionicons name="checkmark-circle" size={14} color={tokens.forest} />{' '}
+              <Ionicons name="checkmark-circle-outline" size={14} color={sc.accentText} />{' '}
               Approved by your coach
             </Text>
           ) : (
             <Text style={styles.statusText}>
-              <Ionicons name="time-outline" size={14} color={tokens.charcoal} /> Awaiting
+              <Ionicons name="time-outline" size={14} color={sc.textMuted} /> Awaiting
               coach approval
             </Text>
           )}
@@ -183,7 +193,9 @@ function SuggestionCard({ suggestion }: { suggestion: CopilotSuggestion }) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: SemanticTokens) => {
+  const tokens = { bone: sc.bgPrimary, ink: sc.textPrimary, charcoal: sc.textMuted, cream: sc.bgPrimary, forest: sc.accentText };
+  return StyleSheet.create({
   scroll: { flex: 1, backgroundColor: tokens.bone },
   content: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   flagOff: { flex: 1, backgroundColor: tokens.bone, justifyContent: 'center' },
@@ -207,15 +219,16 @@ const styles = StyleSheet.create({
   staleText: { ...typography.bodySmall, color: tokens.charcoal },
   section: { marginTop: spacing.lg, gap: spacing.md },
   sectionTitle: {
-    ...typography.h3,
+    ...typography.eyebrow,
     color: tokens.ink,
     marginBottom: spacing.xs,
   },
   list: { gap: spacing.sm },
   card: {
     backgroundColor: tokens.cream,
-    borderRadius: 4,
-    padding: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
+    paddingVertical: spacing.lg,
     gap: spacing.sm,
   },
   cardHeadline: {
@@ -229,3 +242,4 @@ const styles = StyleSheet.create({
   },
   approved: { color: tokens.forest, fontWeight: '600' },
 });
+};
