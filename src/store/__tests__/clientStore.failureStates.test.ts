@@ -2,10 +2,14 @@ import { useClientStore } from '../clientStore';
 
 const mockGetFood = jest.fn();
 const mockGetWater = jest.fn();
+const mockLogWater = jest.fn();
 
 jest.mock('../../services/api', () => ({
   logApi: { getDaily: (...args: unknown[]) => mockGetFood(...args) },
-  waterApi: { getDaily: (...args: unknown[]) => mockGetWater(...args) },
+  waterApi: {
+    getDaily: (...args: unknown[]) => mockGetWater(...args),
+    log: (...args: unknown[]) => mockLogWater(...args),
+  },
 }));
 jest.mock('../../utils/logger', () => ({ logger: { error: jest.fn() } }));
 
@@ -59,5 +63,15 @@ describe('client day data failure state', () => {
     await useClientStore.getState().loadDayData('client');
     useClientStore.getState().reset();
     expect(useClientStore.getState()).toMatchObject({ loadError: null, isLoading: false });
+  });
+
+  it('says so when added water was not saved, instead of silently taking it back', async () => {
+    await useClientStore.getState().loadDayData('client', '2026-10-06');
+    mockLogWater.mockRejectedValueOnce(new Error('Network Error'));
+    await useClientStore.getState().logWater('client', '', 8);
+    expect(useClientStore.getState()).toMatchObject({
+      waterOz: 20,
+      loadError: '8 oz of water was not saved. Check the connection, then add it again.',
+    });
   });
 });

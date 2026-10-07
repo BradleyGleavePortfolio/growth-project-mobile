@@ -30,12 +30,19 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   hapticsEnabled: true,
 };
 
+// Every mounted useSettings() sees a save at once (e.g. Water Goal on the Food Log).
+const listeners = new Set<(s: ClientSettings) => void>();
+
 export function useSettings() {
   const [settings, setSettings] = useState<ClientSettings>(DEFAULT_SETTINGS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     loadSettings();
+    listeners.add(setSettings);
+    return () => {
+      listeners.delete(setSettings);
+    };
   }, []);
 
   const loadSettings = async () => {
@@ -57,6 +64,7 @@ export function useSettings() {
 
   const saveSettings = useCallback(async (updated: ClientSettings) => {
     setSettings(updated);
+    listeners.forEach((notify) => notify(updated));
     await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
   }, []);
 
