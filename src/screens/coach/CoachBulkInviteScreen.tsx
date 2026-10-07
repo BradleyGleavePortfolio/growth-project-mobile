@@ -68,10 +68,10 @@ export default function CoachBulkInviteScreen() {
       onSuccess: (data) => {
         setPreviewRows(data.rows);
       },
-      onError: (err) => {
+      onError: () => {
         Alert.alert(
-          'Could not parse',
-          err instanceof Error ? err.message : 'Unknown error',
+          'Could not preview emails',
+          'Your pasted list is still here. Check your connection and open Preview again.',
         );
       },
     });
@@ -94,10 +94,10 @@ export default function CoachBulkInviteScreen() {
         setPreviewRows([]);
         setPaste('');
       },
-      onError: (err) => {
+      onError: () => {
         Alert.alert(
           'Could not send invites',
-          err instanceof Error ? err.message : 'Unknown error',
+          'Your email list is still here. Check your connection and try sending the invites again.',
         );
       },
     });

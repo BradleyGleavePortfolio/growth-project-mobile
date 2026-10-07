@@ -5,7 +5,8 @@
  * "use it when you sign up", which a signed-up client cannot do.
  */
 import React from 'react';
-import { fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import type { CoachCodeSheetProps } from '../../../components/coachless/CoachCodeSheet';
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
@@ -38,8 +39,9 @@ jest.mock('../../../services/api', () => ({
   profileApi: { get: jest.fn(async () => ({ data: {} })) },
 }));
 jest.mock('../../../services/realtime', () => ({ subscribeToMessages: () => () => undefined }));
+let mockCoachlessEnabled = true;
 jest.mock('../../../hooks/useFeatureFlags', () => ({
-  useFeatureFlags: () => ({ flags: { messaging_core_v2: false } }),
+  useFeatureFlags: () => ({ flags: { messaging_core_v2: false, coachless_home: mockCoachlessEnabled } }),
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'client-1' }) }));
 jest.mock('../../../hooks/useBlockedUsersHydration', () => ({
@@ -47,6 +49,14 @@ jest.mock('../../../hooks/useBlockedUsersHydration', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => undefined) }));
+let mockSheetProps: CoachCodeSheetProps;
+jest.mock('../../../components/coachless/CoachCodeSheet', () => {
+  const { Text } = jest.requireActual('react-native');
+  return (props: CoachCodeSheetProps) => {
+    mockSheetProps = props;
+    return <Text testID="mock-coach-code-sheet">Coach code sheet</Text>;
+  };
+});
 
 const mockParentNavigate = jest.fn();
 const mockGoBack = jest.fn();
@@ -71,6 +81,7 @@ import MessagesScreen from '../MessagesScreen';
 describe('client MessagesScreen with no coach', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCoachlessEnabled = true;
     mockList.mockRejectedValue({ response: { status: 409, data: { code: 'NO_COACH_ASSIGNED' } } });
   });
 
@@ -81,5 +92,40 @@ describe('client MessagesScreen with no coach', () => {
     expect(utils.queryByText(/No coach yet/)).toBeNull();
     await fireEvent.press(utils.getByTestId('messages-no-coach-support'));
     expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'SupportInbox' });
+  });
+
+  it('opens the existing code sheet and refreshes the thread after connecting', async () => {
+    const utils = await render(<MessagesScreen />);
+    await utils.findByText('No coach connected');
+    expect(utils.queryByText(/code from a coach, contact support/)).toBeNull();
+    await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
+    expect(utils.getByTestId('mock-coach-code-sheet')).toBeTruthy();
+    mockList.mockResolvedValue({ data: [] });
+    await act(async () => mockSheetProps.onAttached({
+      status: 'attached',
+      already_attached: false,
+      coach: { id: 'coach-2', name: 'Coach Two', photo_url: null, business_name: null, bio: null },
+      next: { featured_package: null, packages_available: 0 },
+      grant: null,
+      replayed: false,
+    }));
+    await waitFor(() => expect(utils.queryByText('No coach connected')).toBeNull());
+    expect(utils.getByTestId('mock-coach-code-sheet')).toBeTruthy();
+  });
+
+  it('retains the support fallback when coach codes are unavailable', async () => {
+    mockCoachlessEnabled = false;
+    const utils = await render(<MessagesScreen />);
+    await utils.findByText('No coach connected');
+    expect(utils.queryByTestId('messages-no-coach-code')).toBeNull();
+    expect(utils.getByTestId('messages-no-coach-support')).toBeTruthy();
+  });
+
+  it('hands the sheet plan action to the existing coaching-plan screen', async () => {
+    const utils = await render(<MessagesScreen />);
+    await utils.findByText('No coach connected');
+    await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
+    await act(async () => mockSheetProps.onChoosePlan(null));
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientPackages' });
   });
 });
