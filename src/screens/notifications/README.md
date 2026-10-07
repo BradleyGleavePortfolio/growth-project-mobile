@@ -64,11 +64,14 @@ error (message shown in empty state)
 loading (fetchNotificationPreferences)
   ↓ resolves
 idle
-  ─ any toggle / time change → saving (saveNotificationPreferences) → idle
+  ─ any toggle → saving (saveNotificationPreferences) → idle
   ─ save failure → revert to previous prefs
+  ─ load failure → notification-specific notice + Try again or back
 ```
 
 #### Controls
+
+Semantic-theme bone page, unfilled hairline groups, small-caps overlines and 44 pt controls preserve mute-all and every mapped category/channel switch. Quiet hours remain read-only. Milestone/check-in descriptions do not invent a coach-set goal or a midday schedule.
 
 | Control | What it does |
 | --- | --- |

@@ -34,6 +34,7 @@ import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
 import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 import RomanAvatar from '../roman/RomanAvatar';
+import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import PackageSelectionSheet from '../PackageSelectionSheet';
 import CoachCodeSheet from './CoachCodeSheet';
 import {
@@ -110,6 +111,7 @@ export default function CoachlessHomeSlot(): React.ReactElement | null {
       {home && home.banner ? (
         <Banner
           home={home}
+          presentation="section"
           onUseCode={(code) => setSheet({ code })}
           onEnterCode={() => setSheet({ code: null })}
         />
@@ -151,10 +153,13 @@ export function Banner({
   home,
   onUseCode,
   onEnterCode,
+  presentation = 'card',
 }: {
   home: CoachlessHome;
   onUseCode: (code: string) => void;
   onEnterCode: () => void;
+  /** 'section' = Home's hairline look (DES-K2-128); the coach preview keeps the card unless passed. */
+  presentation?: 'card' | 'section';
 }) {
   const { semanticColors: sc } = useTheme();
   const banner = home.banner;
@@ -162,12 +167,9 @@ export function Banner({
   const coach = home.featured_coach;
   const pkg = coach?.package ? purchasableFromCoachPackage(coach.package) : null;
   const offerCode = banner.offer_text && banner.code ? banner.code : null;
-  return (
-    <View
-      style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
-      testID="coachless-banner"
-      accessibilityRole="summary"
-    >
+  const section = presentation === 'section';
+  const content = (
+    <>
       <Text style={[styles.title, { color: sc.textPrimary }]}>{banner.title}</Text>
       {offerCode ? (
         <Text style={[styles.body, { color: sc.textPrimary }]} testID="coachless-offer">
@@ -192,6 +194,44 @@ export function Banner({
           </View>
         </View>
       ) : null}
+    </>
+  );
+  if (section) {
+    return (
+      <QuietSection testID="coachless-banner" accessibilityRole="summary">
+        {content}
+        <View style={quietActions.row}>
+          {offerCode ? (
+            <Pressable
+              onPress={() => onUseCode(offerCode)}
+              accessibilityRole="button"
+              testID="coachless-use-code"
+              style={({ pressed }) => [quietActions.action, { opacity: pressed ? 0.6 : 1 }]}
+            >
+              <Text style={[quietActions.label, { color: sc.accentText }]}>{`Use code ${offerCode}`}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={onEnterCode}
+            accessibilityRole="button"
+            testID="coachless-enter-code"
+            style={({ pressed }) => [quietActions.action, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <Text style={[quietActions.label, { color: offerCode ? sc.textMuted : sc.accentText }]}>
+              {offerCode ? 'Enter a different code' : 'Enter a coach code'}
+            </Text>
+          </Pressable>
+        </View>
+      </QuietSection>
+    );
+  }
+  return (
+    <View
+      style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
+      testID="coachless-banner"
+      accessibilityRole="summary"
+    >
+      {content}
       {offerCode ? (
         <Pressable
           onPress={() => onUseCode(offerCode)}
@@ -219,28 +259,28 @@ export function Banner({
 export function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnterCode: () => void; onNotNow: () => void }) {
   const { semanticColors: sc } = useTheme();
   return (
-    <View style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]} testID="coachless-roman-card">
+    <QuietSection testID="coachless-roman-card">
       <View style={styles.head}>
         <RomanAvatar crop="neutral" size={32} />
-        <Text style={[styles.eyebrow, { color: sc.textMuted }]}>FROM ROMAN</Text>
+        <QuietOverline style={styles.headOverline}>FROM ROMAN</QuietOverline>
       </View>
       <Text style={[styles.body, { color: sc.textPrimary, marginTop: 12 }]}>{text}</Text>
-      <View style={styles.row}>
-        <Pressable onPress={onEnterCode} accessibilityRole="button" testID="coachless-roman-yes" style={styles.rowBtn}>
-          <Text style={[styles.ctaText, { color: sc.accentText }]}>Enter the code</Text>
+      <View style={quietActions.row}>
+        <Pressable onPress={onEnterCode} accessibilityRole="button" testID="coachless-roman-yes" style={quietActions.action}>
+          <Text style={[quietActions.label, { color: sc.accentText }]}>Enter the code</Text>
         </Pressable>
-        <Pressable onPress={onNotNow} accessibilityRole="button" testID="coachless-roman-not-now" style={styles.rowBtn}>
-          <Text style={[styles.ctaText, { color: sc.textMuted }]}>Not now</Text>
+        <Pressable onPress={onNotNow} accessibilityRole="button" testID="coachless-roman-not-now" style={quietActions.action}>
+          <Text style={[quietActions.label, { color: sc.textMuted }]}>Not now</Text>
         </Pressable>
       </View>
-    </View>
+    </QuietSection>
   );
 }
 
 const styles = StyleSheet.create({
   card: { borderWidth: 0.5, borderRadius: radius.lg, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 24 },
   head: { flexDirection: 'row', alignItems: 'center' },
-  eyebrow: { ...typography.eyebrow, marginLeft: 12 },
+  headOverline: { marginLeft: 12, marginBottom: 0 },
   title: { ...typography.bodyMd, marginBottom: 6 },
   body: { ...typography.body, marginBottom: 12 },
   small: { ...typography.bodySmall },
@@ -251,6 +291,4 @@ const styles = StyleSheet.create({
   ctaText: { ...typography.bodyMd },
   link: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginTop: 4 },
   linkText: { ...typography.bodyMd, textDecorationLine: 'underline' },
-  row: { flexDirection: 'row', marginTop: 4 },
-  rowBtn: { minHeight: 44, justifyContent: 'center', marginRight: 24 },
 });

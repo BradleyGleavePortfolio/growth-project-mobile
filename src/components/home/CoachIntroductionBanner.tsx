@@ -18,7 +18,8 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
@@ -40,7 +41,7 @@ interface CoachProfile {
 // ─── CoachIntroductionBanner ──────────────────────────────────────────────────
 
 export default function CoachIntroductionBanner() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const introKey = useMemo(
@@ -139,7 +140,7 @@ export default function CoachIntroductionBanner() {
       {/* Dismiss */}
       <TouchableOpacity
         onPress={handleDismiss}
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.dismiss}
         accessibilityRole="button"
         accessibilityLabel="Dismiss coach introduction banner"
         testID="coach-intro-dismiss"
@@ -152,17 +153,15 @@ export default function CoachIntroductionBanner() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
     banner: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderWidth: 1,
+      // DES-K2-128: one hairline above, no box or fill (A23 section).
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 2,
-      backgroundColor: colors.surface,
-      paddingHorizontal: 16,
-      paddingVertical: 14,
+      paddingVertical: 18,
       marginBottom: 24,
       gap: 12,
     },
@@ -173,6 +172,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textPrimary,
       lineHeight: 20,
     },
+    dismiss: { minWidth: 44, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' },
     dismissText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 18,
@@ -191,19 +191,20 @@ const makeStyles = (colors: ThemeColors) =>
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: colors.primaryDark,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       justifyContent: 'center',
       alignItems: 'center',
     },
     avatarInitials: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
-      color: colors.textOnPrimary,
+      color: colors.textPrimary,
     },
     skeleton: {
       height: 64,
-      borderRadius: 2,
-      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       marginBottom: 24,
     },
   });

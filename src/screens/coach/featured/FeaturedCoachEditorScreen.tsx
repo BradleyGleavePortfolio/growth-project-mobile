@@ -283,7 +283,7 @@ export default function FeaturedCoachEditorScreen(): React.ReactElement {
   return (
     <ScrollView style={{ backgroundColor: sc.bgPrimary }} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" testID="featured-coach-editor">
       <Text style={[styles.eyebrow, { color: sc.textMuted }]}>PREVIEW FOR A CLIENT WITH NO COACH</Text>
-      <Banner home={preview} onUseCode={() => undefined} onEnterCode={() => undefined} />
+      <Banner home={preview} presentation="section" onUseCode={() => undefined} onEnterCode={() => undefined} />
       {romanHiddenReason ? (
         note('featured-roman-hidden', romanHiddenReason)
       ) : (
