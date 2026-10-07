@@ -57,7 +57,7 @@ async function joinAndReadBody(): Promise<unknown> {
 
 it('current production policy: no sentence on the sheet and the old redeem body', async () => {
   mockPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
-  renderSheet();
+  await renderSheet();
   expect(await screen.findByText('Coach: Alex Rivera')).toBeTruthy();
   await waitFor(() => expect(mockPolicy).toHaveBeenCalled());
   expect(screen.queryByTestId('coach-sharing-notice')).toBeNull();
@@ -68,7 +68,7 @@ it('advertised version: the sentence names the coach above Join and the version 
   mockPolicy.mockResolvedValue({
     data: { coach_sharing_notice: 'coach_sharing_join_v1', coach_sharing_notice_field: 'coach_sharing_notice' },
   });
-  renderSheet();
+  await renderSheet();
   expect(await screen.findByText(SENTENCE)).toBeTruthy();
   expect(await joinAndReadBody()).toEqual({ code: 'GP-TOP', coach_sharing_notice: 'coach_sharing_join_v1' });
 });
