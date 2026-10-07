@@ -843,6 +843,7 @@ describe("CoachWorkoutBuilderScreen — Ask AI (AIB-5)", () => {
     await press(screen, "ai-builder-apply");
     expect(mockAiApply).toHaveBeenCalledWith("d1", ["c1"]);
     await waitFor(() => expect(screen.getByText("Applied 1 change.")).toBeTruthy());
+    expect(screen.getByTestId("ai-momentum-line").props.children).toMatch(/ 1 change applied with Ask AI this session\.$/);
     expect(screen.getByLabelText("Plan name").props.value).toBe("AI push day");
 
     mockUndoCall.mockResolvedValueOnce({ head_revision_index: 2, lock_token: "abababababababab" });

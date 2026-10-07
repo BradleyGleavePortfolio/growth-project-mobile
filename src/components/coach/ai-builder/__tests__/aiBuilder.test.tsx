@@ -162,14 +162,14 @@ describe('AiBuilderSheet + useAiBuilder', () => {
     expect(mockApi.get).toHaveBeenCalledTimes(2);
   });
 
-  it('Reduce Motion: cards appear at once, no stagger animation', async () => {
+  it('Reduce Motion: cards appear at once, no stagger and no spring', async () => {
     mockReduceMotion = true;
-    const timing = jest.spyOn(Animated, 'timing');
+    const [timing, spring] = [jest.spyOn(Animated, 'timing'), jest.spyOn(Animated, 'spring')];
     mockApi.post.mockResolvedValueOnce({ data: PROPOSAL });
     const s = await render(<Harness />);
     await proposeFromInput(s);
     await waitFor(() => expect(s.getByTestId('ai-change-c1')).toBeTruthy());
-    expect(timing).not.toHaveBeenCalled();
-    timing.mockRestore();
+    [expect(timing).not.toHaveBeenCalled(), expect(spring).not.toHaveBeenCalled()];
+    [timing.mockRestore(), spring.mockRestore()];
   });
 });

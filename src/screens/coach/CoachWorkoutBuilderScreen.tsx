@@ -87,6 +87,7 @@ import {
 import { describeAutosaveRefusal } from './workoutBuilderAccess';
 import CoachExerciseName from '../../components/coach/workout-builder/CoachExerciseName';
 import AiBuilderSheet from '../../components/coach/ai-builder/AiBuilderSheet';
+import { AiMomentumLine, AiWinToast } from '../../components/coach/ai-builder/AiFunLayer';
 import { fireAiHaptic, useAiBuilder } from '../../components/coach/ai-builder/useAiBuilder';
 import type { AiBuilderRef } from '../../api/aiBuilderApi';
 import { appliedToast, SAVE_FIRST_COPY } from '../../components/coach/ai-builder/aiBuilderCopy';
@@ -1504,6 +1505,7 @@ export default function CoachWorkoutBuilderScreen() {
   // AIB-5 Ask AI: land pending edits before a proposal; after apply adopt the server head (header Undo reverts it) or, without a lock token, re-read.
   const [aiOpen, setAiOpen] = useState(false);
   const [aiToast, setAiToast] = useState<{ text: string; undo: boolean } | null>(null);
+  const [aiApplied, setAiApplied] = useState(0); // changes applied with Ask AI since the screen opened (header momentum line)
   const aiPrepare = useCallback(async () => {
     if (!autosaveEnabled || historyGateRef.current) return { ok: false };
     await autosave.flush();
@@ -1521,6 +1523,7 @@ export default function CoachWorkoutBuilderScreen() {
       const meta = { name: plan?.name ?? '', type: plan?.type ?? 'strength' };
       const adopted = !!plan && !!token && head !== undefined &&
         autosave.adoptServerHead({ headRevisionIndex: head, lockToken: token, serverCopy: buildServerWorkingCopy(plan.exercises, meta) });
+      setAiApplied((c) => c + count);
       setAiToast({ text: appliedToast(count), undo: adopted });
       if (!plan || !adopted) return runReplayRefetch();
       setUndoStack([...undoStackRef.current, before]);
@@ -1590,6 +1593,7 @@ export default function CoachWorkoutBuilderScreen() {
             </Pressable>
           ) : null}
         </View>
+        {ai.visible && autosaveEnabled ? <AiMomentumLine rows={rows} applied={aiApplied} sc={sc} /> : null}
         {autosaveEnabled ? (
           <View style={styles.historyRow}>
             <Pressable
@@ -1597,7 +1601,7 @@ export default function CoachWorkoutBuilderScreen() {
               accessibilityLabel="Undo last change"
               accessibilityState={{ disabled: historyBlocked || undoStack.length === 0 }}
               disabled={historyBlocked || undoStack.length === 0}
-              onPress={() => void runHistoryStep('undo')}
+              onPress={() => { fireAiHaptic('medium'); void runHistoryStep('undo'); }}
               style={[
                 styles.historyButton,
                 (historyBlocked || undoStack.length === 0) && styles.historyButtonDisabled,
@@ -1879,15 +1883,8 @@ export default function CoachWorkoutBuilderScreen() {
         </Pressable>
       </ScrollView>
       {aiToast ? (
-        <View testID="ai-applied-toast" accessibilityLiveRegion="polite" style={styles.aiBar}>
-          <Text style={[typography.body, { color: sc.textPrimary, flex: 1 }]}>{aiToast.text}</Text>
-          {aiToast.undo ? (
-            <Pressable testID="ai-toast-undo" accessibilityRole="button" accessibilityLabel="Undo the AI change" disabled={historyBlocked}
-              onPress={() => { fireAiHaptic('medium'); setAiToast(null); void runHistoryStep('undo'); }} style={styles.historyButton}>
-              <Text style={[typography.caption, { color: sc.textPrimary }]}>Undo</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <AiWinToast key={aiApplied} text={aiToast.text} undo={aiToast.undo} undoDisabled={historyBlocked} sc={sc}
+          onUndo={() => { setAiToast(null); void runHistoryStep('undo'); }} />
       ) : ai.visible && (autosaveEnabled || !isEditing) ? (
         <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={autosaveEnabled ? 'Ask AI to change this workout' : SAVE_FIRST_COPY}
           accessibilityState={{ disabled: !autosaveEnabled }} disabled={!autosaveEnabled} onPress={openAi} style={styles.aiBar}>
