@@ -15,6 +15,7 @@ import { authEpoch } from '../../../services/accountBinding';
 import { captureError } from '../../../services/sentry';
 import type { RomanChatsApi, RomanChatsFailure, RomanTranscriptPage } from '../../../api/romanChatsApi';
 import type { RomanMessage } from '../../../api/romanApi';
+import { ROMAN_INTERRUPTED_NOTE } from '../../../components/roman/romanVoice';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../utils/haptics', () => ({ lightTap: jest.fn(), mediumTap: jest.fn(), warningTap: jest.fn(), selectionTap: jest.fn() }));
@@ -81,6 +82,17 @@ it('shows the transcript oldest first, read only', async () => {
   expect(items.map((i) => i.props.testID)).toEqual(['roman-transcript-message-m1', 'roman-transcript-message-m2']);
   expect(screen.getByText(ROMAN_CHATS_COPY.readOnlyNote)).toBeTruthy();
   expect(api.readMessages).toHaveBeenCalledWith(BA, 'cx1', {});
+  expect(screen.getByText('ROMAN')).toBeTruthy();
+  expect(screen.getByText('YOU')).toBeTruthy();
+  await fireEvent.press(screen.getByLabelText(ROMAN_CHATS_COPY.back));
+  expect(navigation.goBack).toHaveBeenCalled();
+});
+
+it('keeps Roman’s face and marks a real interrupted reply', async () => {
+  const api = makeApi({ readMessages: jest.fn(async () => pageOf([{ ...msg('partial', 'assistant', 'Partial answer'), interrupted: true }])) });
+  const screen = await renderScreen(api);
+  expect(await screen.findByText(ROMAN_INTERRUPTED_NOTE)).toBeTruthy();
+  expect(screen.getByTestId('roman-bubble-avatar')).toBeTruthy();
 });
 
 it('loads earlier messages with the cursor and puts them on top', async () => {

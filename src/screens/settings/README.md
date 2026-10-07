@@ -84,7 +84,7 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 ### RomanConversationsScreen and RomanConversationScreen
 
-`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only).
+`RomanConversationsScreen.tsx` ("Your conversations with Roman") and `RomanConversationScreen.tsx` (one past conversation, read only). Theme-colored hairline rows retain real dates, times and counts; the list API supplies no first-line text, so no preview is invented. Transcripts use ROMAN / YOU labels, Inter body text and Roman's existing face, with interrupted-reply notes preserved. Navigation, paging, confirmations, retry/support and account-binding behavior are unchanged.
 
 **Why:** owner decision 2026-10-01 20:32 and ruling OR-110-1. Roman chats are kept until the client deletes them or their account, and the box-2 consent copy (`client-ai-v4`) says exactly that, so every chat must be findable and deletable. Roman chats are never visible to coaches.
 

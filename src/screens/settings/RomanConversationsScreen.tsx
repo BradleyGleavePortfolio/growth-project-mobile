@@ -33,6 +33,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
 import type { RomanChatsApi, RomanChatSummary } from '../../api/romanChatsApi';
 import type { AccountBinding } from '../../services/accountBinding';
 import { isEffectivelyOnline, useNetworkStatus } from '../../hooks/useNetworkStatus';
@@ -340,7 +341,7 @@ export default function RomanConversationsScreen({
         >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
-        <Text style={styles.topTitle} accessibilityRole="header" numberOfLines={1}>
+        <Text style={styles.topTitle} accessibilityRole="header" numberOfLines={2}>
           {ROMAN_CHATS_COPY.title}
         </Text>
         <View style={styles.backBtn} />
@@ -391,17 +392,16 @@ function makeStyles(colors: ThemeColors) {
       paddingBottom: 12,
     },
     backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    topTitle: { flex: 1, textAlign: 'center', fontFamily: 'Inter_500Medium', fontSize: 17, color: colors.textPrimary },
+    topTitle: { ...typography.h2, flex: 1, textAlign: 'center', color: colors.textPrimary },
     content: { padding: 24, paddingBottom: 48, gap: 12 },
     header: { gap: 16, marginBottom: 4 },
     footer: { gap: 12, marginTop: 12 },
     card: {
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderRadius: 4,
       padding: 16,
       gap: 12,
-      backgroundColor: colors.surface,
     },
     body: { fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: colors.textPrimary },
     notice: { gap: 8 },
@@ -410,12 +410,11 @@ function makeStyles(colors: ThemeColors) {
     row: {
       flexDirection: 'row',
       alignItems: 'center',
-      borderWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderRadius: 4,
-      backgroundColor: colors.surface,
     },
-    rowMain: { flex: 1, minHeight: 56, paddingVertical: 12, paddingHorizontal: 16, gap: 2 },
+    rowMain: { flex: 1, minHeight: 72, paddingVertical: 16, gap: 6 },
     rowTitle: { fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.textPrimary },
     rowSub: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
     rowDelete: { width: 48, minHeight: 56, alignItems: 'center', justifyContent: 'center' },
@@ -424,7 +423,7 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: 0,
       borderColor: colors.border,
       paddingHorizontal: 16,
     },
@@ -434,7 +433,7 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      borderWidth: 1,
+      borderWidth: 0,
       borderColor: colors.error,
       paddingHorizontal: 16,
     },
