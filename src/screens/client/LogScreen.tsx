@@ -45,12 +45,14 @@ import {
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens } from '../../theme/tokens';
 import { errorMessage } from '../../types/common';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 
 export default function LogScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const network = useNetworkStatus();
@@ -65,6 +67,7 @@ export default function LogScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
+    hasLoadedDay,
     isLoading,
     loadError,
     setSelectedDate,
@@ -508,6 +511,7 @@ export default function LogScreen() {
     getMealLogs(mealType).reduce((sum, f) => sum + f.calories, 0);
 
   const remaining = macroTargets ? macroTargets.calories - dailyTotals.calories : null;
+  const showDayLoading = !hasLoadedDay && (isLoading || !loadError);
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
@@ -534,13 +538,13 @@ export default function LogScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
+            tintColor={colors.accent}
+            colors={[colors.accent]}
           />
         }
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Food Log</Text>
+          <Text style={styles.title}>Food log</Text>
         </View>
 
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
@@ -554,7 +558,7 @@ export default function LogScreen() {
           />
         ) : null}
 
-        <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} />
+        {hasLoadedDay ? <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} /> : null}
         {pendingFoods > 0 ? (
           <Text style={styles.pendingMessage} accessibilityLiveRegion="polite" testID="log-offline-pending">
             {pendingFoods === 1
@@ -566,24 +570,32 @@ export default function LogScreen() {
           <Text style={styles.savedMessage} accessibilityLiveRegion="polite">{savedMessage}</Text>
         ) : null}
 
-        {MEAL_SECTIONS.map((section) => (
-          <MealSectionCard
-            key={section.type}
-            label={section.label}
-            icon={section.icon}
-            mealType={section.type}
-            logs={getMealLogs(section.type)}
-            mealCalories={getMealCalories(section.type)}
-            onAddPress={openAddFood}
-            onDeletePress={handleDeleteFood}
-            onEditPress={handleEditFood}
-            macroMode={macroMode}
-          />
-        ))}
-
-        <View style={styles.waterSection}>
-          <WaterTracker currentOz={waterOz} onAdd={handleAddWater} />
-        </View>
+        {showDayLoading ? <SkeletonScreen count={4} testID="log-day-loading" /> : (
+          <>
+            {hasLoadedDay && foodLogs.length === 0 ? (
+              <Text style={styles.emptyDayMessage}>No foods logged for this day. Add food to a meal below.</Text>
+            ) : null}
+            {MEAL_SECTIONS.map((section) => (
+              <MealSectionCard
+                key={section.type}
+                label={section.label}
+                icon={section.icon}
+                mealType={section.type}
+                logs={getMealLogs(section.type)}
+                mealCalories={getMealCalories(section.type)}
+                onAddPress={openAddFood}
+                onDeletePress={handleDeleteFood}
+                onEditPress={handleEditFood}
+                macroMode={macroMode}
+              />
+            ))}
+            {hasLoadedDay ? (
+              <View style={styles.waterSection}>
+                <WaterTracker currentOz={waterOz} onAdd={handleAddWater} />
+              </View>
+            ) : null}
+          </>
+        )}
       </ScrollView>
 
       <FoodSearchModal
@@ -654,8 +666,9 @@ export default function LogScreen() {
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.editModalBackdrop}
+          testID="log-edit-backdrop"
         >
-          <ScrollView style={styles.editModalCard} contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
+          <ScrollView testID="log-edit-sheet" style={styles.editModalCard} contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
             <Text style={styles.editModalTitle} numberOfLines={1}>
               {editLog?.foodName || 'Edit entry'}
             </Text>
@@ -677,9 +690,9 @@ export default function LogScreen() {
                   accessibilityState={{ selected: editUnit === unit }}
                   disabled={editSaving}
                   onPress={() => setEditUnit(unit)}
-                  style={[styles.editModalBtn, editUnit === unit && { borderColor: colors.primary }]}
+                  style={[styles.editModalBtn, editUnit === unit && { borderColor: colors.accent }]}
                 >
-                  <Text style={{ color: colors.textPrimary }}>{unit}</Text>
+                  <Text style={styles.editButtonText}>{unit}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -692,9 +705,9 @@ export default function LogScreen() {
                   accessibilityState={{ selected: editMealType === meal.type }}
                   disabled={editSaving}
                   onPress={() => setEditMealType(meal.type)}
-                  style={[styles.editModalBtn, editMealType === meal.type && { borderColor: colors.primary }]}
+                  style={[styles.editModalBtn, editMealType === meal.type && { borderColor: colors.accent }]}
                 >
-                  <Text style={{ color: colors.textPrimary }}>{meal.label}</Text>
+                  <Text style={styles.editButtonText}>{meal.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -706,7 +719,7 @@ export default function LogScreen() {
                 if (editLog) void handleDeleteFood(editLog);
               }}
             >
-              <Text style={{ color: colors.error }}>Delete entry</Text>
+              <Text style={styles.editButtonText}>Delete entry</Text>
             </TouchableOpacity>
             <View style={styles.editModalActions}>
               <TouchableOpacity
@@ -719,7 +732,7 @@ export default function LogScreen() {
                   { borderColor: colors.border, opacity: editSaving ? 0.5 : 1 },
                 ]}
               >
-                <Text style={{ color: colors.textPrimary }}>Cancel</Text>
+                <Text style={styles.editButtonText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -730,12 +743,12 @@ export default function LogScreen() {
                   styles.editModalBtn,
                   styles.editModalBtnPrimary,
                   {
-                    backgroundColor: colors.primary,
+                    backgroundColor: colors.accent,
                     opacity: editSaving ? 0.6 : 1,
                   },
                 ]}
               >
-                <Text style={{ color: colors.textOnPrimary }}>
+                <Text style={[styles.editButtonText, { color: colors.textOnAccent }]}>
                   {editSaving ? 'Saving…' : 'Save'}
                 </Text>
               </TouchableOpacity>
@@ -747,11 +760,11 @@ export default function LogScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   content: {
     paddingBottom: 40,
@@ -767,7 +780,7 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: colors.dark,
+    color: colors.textPrimary,
   },
   waterSection: {
     paddingHorizontal: Spacing.lg,
@@ -776,20 +789,30 @@ const makeStyles = (colors: ThemeColors) =>
   pendingMessage: {
     marginHorizontal: Spacing.lg,
     marginBottom: 12,
-    color: colors.textSecondary,
+    color: colors.textMuted,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
+  },
+  emptyDayMessage: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 16,
+    color: colors.textMuted,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    lineHeight: 19,
   },
   savedMessage: {
     marginHorizontal: Spacing.lg,
     marginBottom: 12,
-    color: colors.primary,
+    color: colors.accentText,
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
   },
   editUnitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   deleteEntryButton: { minHeight: 44, justifyContent: 'center', marginTop: 8 },
   editModalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: colors.overlay,
     alignItems: 'center',
     justifyContent: 'center',
     padding: Spacing.lg,
@@ -798,19 +821,23 @@ const makeStyles = (colors: ThemeColors) =>
     width: '100%',
     maxWidth: 420,
     maxHeight: '100%',
-    backgroundColor: colors.surface,
-    borderRadius: 12,
+    backgroundColor: colors.bgPrimary,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   editModalContent: { padding: Spacing.lg },
   editModalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 22,
+    fontWeight: '400',
     color: colors.textPrimary,
     marginBottom: 12,
   },
   editModalSubtitle: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginTop: 8,
@@ -819,10 +846,11 @@ const makeStyles = (colors: ThemeColors) =>
   editModalInput: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: 4,
     paddingHorizontal: 12,
     paddingVertical: 10,
     color: colors.textPrimary,
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
   },
   editModalActions: {
@@ -833,7 +861,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   editModalBtn: {
     borderWidth: 1,
-    borderRadius: 8,
+    borderRadius: 4,
     paddingHorizontal: 16,
     paddingVertical: 10,
     minHeight: 44,
@@ -841,7 +869,8 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   editModalBtnPrimary: {
-    borderColor: 'transparent',
+    borderColor: colors.accent,
   },
+  editButtonText: { fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.textPrimary },
 
   });
