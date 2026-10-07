@@ -12,7 +12,7 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Typography, Spacing, Radius, Shadow } from '../../theme';
+import { Spacing, Radius } from '../../theme';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
@@ -41,7 +41,7 @@ import {
 } from '../../lib/signupPolicy';
 import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
@@ -86,8 +86,7 @@ import {
   type CoachSignupIdentity,
   type CoachSignupMethod,
 } from '../../lib/coachSignupAttempt';
-import { Colors } from '../../constants/colors';
-import { typography } from '../../theme/tokens';
+import { lightTokens, typography, type SemanticTokens } from '../../theme/tokens';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -166,7 +165,7 @@ function canonicalEmailFrom(data: unknown, submitted: string): string {
 }
 
 export default function CreateAccountScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors = lightTokens } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Sol B-324-1: "Request access" opens the one support inbox; if no email
   // app opens, the address, Copy and Try again are shown under the hint.
@@ -964,7 +963,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             disabled={verifyLoading}
           >
             {verifyLoading ? (
-              <ActivityIndicator color={colors.white} />
+              <ActivityIndicator color={colors.textOnDisabled} />
             ) : (
               <Text style={styles.verifyButtonText}>I verified my email</Text>
             )}
@@ -982,7 +981,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     return (
       <View style={styles.container} testID="signup-policy-loading">
         <View style={styles.verifyContent}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.accentText} />
           <Text style={styles.verifySubBody}>Preparing sign-up.</Text>
         </View>
       </View>
@@ -1087,7 +1086,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             testID="coach-choice-withdrawn-recheck"
           >
             {recheckLoading ? (
-              <ActivityIndicator color={colors.primary} />
+              <ActivityIndicator color={colors.accentText} />
             ) : (
               <Text style={styles.secondaryButtonText}>Check again</Text>
             )}
@@ -1193,13 +1192,13 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             </Text>
             {signupIssue !== 'signup_pending' ? (
               <TouchableOpacity
-                style={styles.registerButton}
+                style={styles.secondaryButton}
                 onPress={() => navigation.navigate('Login', email.trim() ? { email: email.trim() } : undefined)}
                 accessibilityRole="button"
                 accessibilityLabel="Log in"
                 testID="signup-issue-log-in"
               >
-                <Text style={styles.registerButtonText}>Log in</Text>
+                <Text style={styles.secondaryButtonText}>Log in</Text>
               </TouchableOpacity>
             ) : null}
             {signupIssue !== 'email_exists_after_coach' ? (
@@ -1316,7 +1315,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
               <SupportEmailFallback
                 handle={requestAccessEmail}
                 textStyle={styles.requestAccessFallbackText}
-                linkColor={colors.primary}
+                linkColor={colors.accentText}
                 testID="request-access-fallback"
               />
             ) : null}
@@ -1408,6 +1407,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         <CoachSharingNotice
           version={sharingNotice}
           coachName={invitePreview?.valid ? invitePreview.business_name || invitePreview.coach_name : null}
+          style={styles.legalText}
         />
 
         <TouchableOpacity
@@ -1419,7 +1419,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
-            <ActivityIndicator color={colors.white} />
+            <ActivityIndicator color={colors.textOnDisabled} />
           ) : (
             <Text style={styles.registerButtonText}>Create account</Text>
           )}
@@ -1456,6 +1456,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Already have an account? </Text>
           <TouchableOpacity
+            style={styles.signInTarget}
             onPress={() => navigation.navigate('Login')}
             accessibilityRole="link"
             accessibilityLabel="Sign in"
@@ -1468,132 +1469,130 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scroll: { flexGrow: 1, padding: Spacing.lg },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  scroll: { flexGrow: 1, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl },
   header: { marginTop: Spacing.xl, marginBottom: Spacing.xl },
-  title: { ...Typography.h1, marginBottom: Spacing.xs },
-  subtitle: { ...Typography.body },
-  changeRole: { ...Typography.body, color: colors.primary, marginTop: Spacing.sm },
+  title: { ...typography.h1, color: colors.textPrimary, marginBottom: Spacing.sm },
+  subtitle: { ...typography.bodySmall, color: colors.textMuted },
+  changeRole: { ...typography.bodySmall, color: colors.accentText, minHeight: 44, paddingVertical: Spacing.sm, marginTop: Spacing.sm },
   errorBox: {
-    backgroundColor: Colors.noticeCriticalBg,
-    borderRadius: Radius.sm,
-    padding: Spacing.md,
+    paddingVertical: Spacing.md,
     marginBottom: Spacing.md,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.error,
-  },
-  errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
-  noticeBox: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.sm,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.primary,
-  },
-  noticeText: { ...typography.bodySmall, color: colors.dark },
-  inputGroup: { marginBottom: Spacing.md },
-  inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
-  input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    fontSize: 16,
-    color: colors.dark,
-    ...Shadow.card,
   },
-  invitePreviewOk: { fontSize: 13, color: colors.primary, marginTop: 6 },
-  invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 6 },
-  invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
-  requestAccessLink: { color: colors.primary, textDecorationLine: 'underline' },
-  requestAccessFallbackText: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
+  errorText: { ...typography.bodySmall, color: colors.textPrimary },
+  noticeBox: {
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  noticeText: { ...typography.bodySmall, color: colors.textPrimary },
+  inputGroup: { marginBottom: Spacing.lg },
+  inputLabel: { ...typography.eyebrow, color: colors.textMuted, marginBottom: Spacing.xs },
+  input: {
+    ...typography.body,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingVertical: Spacing.sm,
+    color: colors.textPrimary,
+  },
+  invitePreviewOk: { ...typography.bodySmall, color: colors.textPrimary, marginTop: Spacing.sm },
+  invitePreviewBad: { ...typography.bodySmall, color: colors.textPrimary, marginTop: Spacing.sm },
+  invitePreviewMuted: { ...typography.bodySmall, color: colors.textMuted, marginTop: Spacing.sm },
+  requestAccessLink: { color: colors.accentText, textDecorationLine: 'underline' },
+  requestAccessFallbackText: { ...typography.bodySmall, color: colors.textMuted },
   registerButton: {
-    backgroundColor: colors.primary,
-    borderRadius: Radius.md,
+    backgroundColor: colors.accent,
+    borderRadius: Radius.lg,
+    minHeight: 52,
     padding: Spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: Spacing.sm,
-    ...Shadow.button,
   },
-  buttonDisabled: { opacity: 0.6 },
-  registerButtonText: { ...Typography.button, color: colors.white },
+  buttonDisabled: { backgroundColor: colors.disabledBg },
+  registerButtonText: { ...typography.bodyMd, color: colors.textOnAccent },
   secondaryButton: {
-    borderRadius: Radius.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.primary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    minHeight: 48,
     padding: Spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: Spacing.md,
   },
-  secondaryButtonText: { ...Typography.button, color: colors.primary },
-  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: Spacing.sm },
+  secondaryButtonText: { ...typography.bodyMd, color: colors.accentText },
+  supportLink: { ...typography.bodySmall, color: colors.accentText, textDecorationLine: 'underline', minHeight: 44, paddingVertical: Spacing.sm, marginTop: Spacing.sm },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: Spacing.lg,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { marginHorizontal: Spacing.sm, color: colors.textMuted, fontSize: 14 },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
+  dividerText: { ...typography.bodySmall, marginHorizontal: Spacing.sm, color: colors.textMuted },
   googleButton: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.md,
+    minHeight: 52,
     padding: Spacing.md,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    ...Shadow.card,
   },
-  googleG: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', marginRight: Spacing.sm, color: colors.dark },
-  googleButtonText: { ...Typography.button, color: colors.dark },
+  googleG: { ...typography.bodyMd, marginRight: Spacing.sm, color: colors.textPrimary },
+  googleButtonText: { ...typography.bodyMd, color: colors.textPrimary },
   appleButtonWrap: { marginTop: Spacing.md, minHeight: 48 },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
     marginTop: Spacing.xl,
     marginBottom: Spacing.xl,
   },
-  signupText: { color: colors.textMuted, fontSize: 15 },
-  legalText: { color: colors.textMuted, fontSize: 13, lineHeight: 19, marginTop: Spacing.md, textAlign: 'center' },
-  legalLink: { color: colors.primary, fontWeight: '600', textDecorationLine: 'underline' },
-  signupLink: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+  signupText: { ...typography.bodySmall, color: colors.textMuted },
+  legalText: { ...typography.bodySmall, color: colors.textMuted, marginVertical: Spacing.md },
+  legalLink: { color: colors.accentText, textDecorationLine: 'underline' },
+  signInTarget: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.sm },
+  signupLink: { ...typography.bodyMd, color: colors.accentText },
   verifyContent: {
     flex: 1,
     padding: Spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  verifyTitle: { ...Typography.h2, marginBottom: Spacing.md, textAlign: 'center' },
+  verifyTitle: { ...typography.h1, color: colors.textPrimary, marginBottom: Spacing.md, textAlign: 'center' },
   verifyBody: {
-    fontSize: 16,
+    ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Spacing.sm,
-    lineHeight: 24,
   },
-  emailHighlight: { color: colors.primary, fontWeight: '600' },
+  emailHighlight: { ...typography.bodyMd, color: colors.textPrimary },
   verifySubBody: {
-    fontSize: 14,
+    ...typography.bodySmall,
     color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Spacing.xl,
-    lineHeight: 22,
   },
   verifyButton: {
-    backgroundColor: colors.primary,
-    borderRadius: Radius.md,
+    backgroundColor: colors.accent,
+    borderRadius: Radius.lg,
+    minHeight: 52,
     padding: Spacing.md,
     alignItems: 'center',
+    justifyContent: 'center',
     width: '100%',
-    ...Shadow.button,
   },
-  verifyButtonText: { ...Typography.button, color: colors.white },
-  backLink: { marginTop: Spacing.lg },
-  backLinkText: { color: colors.textMuted, fontSize: 14 },
+  verifyButtonText: { ...typography.bodyMd, color: colors.textOnAccent },
+  backLink: { minHeight: 44, justifyContent: 'center', marginTop: Spacing.lg },
+  backLinkText: { ...typography.bodySmall, color: colors.textMuted },
 
   });

@@ -148,7 +148,7 @@ export function upcomingCaption(drop: ScheduledDropView): string {
       ? `Unlocks at ${drop.display_caption}`
       : 'Unlocks at the next milestone';
   }
-  return 'Unlocks soon';
+  return 'Not unlocked yet.';
 }
 
 /**
@@ -274,7 +274,7 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
     variant === 'delivered'
       ? drop.fired_at
         ? formatDeliveredAt(drop.fired_at)
-        : deliveredFallbackCaption(drop.asset_type)
+        : tappable ? deliveredFallbackCaption(drop.asset_type) : 'Delivered'
       : upcomingCaption(drop);
 
   const a11yLabel =
@@ -283,17 +283,12 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
       : `${typeLabel}, ${title}. ${caption}. Locked.`;
 
   const Inner = (
-    <View style={[styles.row, variant === 'upcoming' && styles.rowLocked]}>
-      <View
-        style={[
-          styles.iconWrap,
-          variant === 'upcoming' && styles.iconWrapLocked,
-        ]}
-      >
+    <View style={styles.row}>
+      <View style={styles.iconWrap}>
         <Ionicons
           name={variant === 'upcoming' ? 'lock-closed-outline' : icon}
           size={20}
-          color={variant === 'upcoming' ? semanticColors.textMuted : semanticColors.accent}
+          color={semanticColors.textMuted}
         />
       </View>
       <View style={styles.rowBody}>
@@ -303,19 +298,18 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
             styles.rowTitle,
             variant === 'upcoming' && styles.rowTitleLocked,
           ]}
-          numberOfLines={2}
         >
           {title}
         </Text>
         {drop.display_caption && variant === 'delivered' ? (
-          <Text style={styles.rowDesc} numberOfLines={2}>
+          <Text style={styles.rowDesc}>
             {drop.display_caption}
           </Text>
         ) : null}
         <Text style={styles.rowMeta}>{caption}</Text>
       </View>
       {variant === 'delivered' && tappable ? (
-        <Ionicons name="chevron-forward" size={18} color={semanticColors.textMuted} />
+        <Ionicons name="open-outline" size={20} color={semanticColors.textPrimary} />
       ) : null}
     </View>
   );
@@ -349,51 +343,39 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     rowTouchable: {
-      borderRadius: 12,
-      marginBottom: 10,
+      minHeight: 44,
     },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      backgroundColor: semanticColors.bgSurface,
-      borderRadius: 12,
-      borderWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
-      padding: 12,
-    },
-    rowLocked: {
-      backgroundColor: semanticColors.bgPrimary,
-      borderStyle: 'dashed',
+      paddingVertical: 20,
     },
     iconWrap: {
       width: 36,
       height: 36,
-      borderRadius: 18,
-      backgroundColor: tokens.brand[50],
       alignItems: 'center',
       justifyContent: 'center',
     },
-    iconWrapLocked: {
-      backgroundColor: semanticColors.bgSurface,
-    },
     rowBody: { flex: 1 },
     rowTypeLabel: {
-      fontSize: 10,
+      ...tokens.typography.eyebrow,
       color: semanticColors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 2,
+      marginBottom: 6,
     },
-    rowTitle: { fontSize: 15, fontWeight: '600', color: semanticColors.textPrimary },
+    rowTitle: { ...tokens.typography.bodyMd, color: semanticColors.textPrimary },
     rowTitleLocked: { color: semanticColors.textMuted },
     rowDesc: {
-      fontSize: 12,
+      ...tokens.typography.bodySmall,
       color: semanticColors.textMuted,
       marginTop: 2,
-      lineHeight: 16,
     },
-    rowMeta: { fontSize: 12, color: semanticColors.textMuted, marginTop: 4 },
+    rowMeta: {
+      ...tokens.typography.bodySmall, color: semanticColors.textMuted, marginTop: 6,
+      fontVariant: ['tabular-nums'],
+    },
   });
 
 // Test surface — pure helpers exposed for unit tests.
