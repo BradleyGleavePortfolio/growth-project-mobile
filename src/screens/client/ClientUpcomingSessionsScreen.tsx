@@ -1,8 +1,12 @@
 /**
  * ClientUpcomingSessionsScreen — confirmed upcoming sessions, with a
- * lockout-aware Cancel button (disabled when < 4h before start).
+ * server-aware Cancel button (device cutoff is a legacy fallback).
  *
  * Filters `useMyUpcomingSessions` to `status === 'scheduled'`.
+ * Quiet layout: semantic bone canvas, hairline rows, the first available
+ * Join as the single forest primary, and text-only move/cancel. Join,
+ * RescheduleSheet, cancellation confirmation and retry retain their effects.
+ * Server lockout and cancellation errors use factual copy.
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -22,8 +26,9 @@ import {
 } from '../../hooks/useScheduling';
 import type { CoachingSession } from '../../api/schedulingApi';
 import { resolveVideoUrl } from '../../api/schedulingApi';
-import { spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import { calendarErrorMessage } from '../../calendar/schedulingErrors';
 import RescheduleSheet from './RescheduleSheet';
 
 const LOCKOUT_MS = 4 * 60 * 60 * 1000;
@@ -49,8 +54,7 @@ export function isSessionLocked(
 }
 
 export default function ClientUpcomingSessionsScreen() {
-  const { colors } = useTheme();
-  const oxblood = colors.error;
+  const { semanticColors: sc } = useTheme();
   const { data, isLoading, isError, refetch } = useMyUpcomingSessions(50);
   const cancel = useCancelSession();
   const [rescheduling, setRescheduling] = useState<CoachingSession | null>(
@@ -86,26 +90,28 @@ export default function ClientUpcomingSessionsScreen() {
     [cancel],
   );
 
+  const primaryJoinId = upcoming.find((s) => resolveVideoUrl(s.video_url))?.id;
   if (isLoading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={oxblood} />
+      <View style={[styles.centered, { backgroundColor: sc.bgPrimary }]}>
+        <ActivityIndicator color={sc.accent} />
+        <Text style={[typography.bodySmall, { color: sc.textMuted, marginTop: spacing.md }]}>Loading upcoming sessions.</Text>
       </View>
     );
   }
 
   if (isError) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[typography.body, { color: colors.textPrimary }]}>
-          Could not load sessions.
+      <View style={[styles.centered, { backgroundColor: sc.bgPrimary }]}>
+        <Text style={[typography.body, { color: sc.textPrimary }]}>
+          Sessions could not be loaded. Refresh to try again.
         </Text>
         <TouchableOpacity
           accessibilityRole="button"
           onPress={() => refetch()}
-          style={[styles.primaryBtn, { backgroundColor: oxblood }]}
+          style={[styles.primaryBtn, { backgroundColor: sc.accent }]}
         >
-          <Text style={[typography.body, { color: colors.textOnPrimary }]}>
+          <Text style={[typography.body, { color: sc.textOnAccent }]}>
             Retry
           </Text>
         </TouchableOpacity>
@@ -115,19 +121,20 @@ export default function ClientUpcomingSessionsScreen() {
 
   return (
     <ScrollView
-      style={{ backgroundColor: colors.background }}
+      style={{ backgroundColor: sc.bgPrimary }}
       contentContainerStyle={styles.container}
     >
-      <Text style={[typography.h2, { color: colors.textPrimary }]}>
+      <Text style={[typography.h1, { color: sc.textPrimary }]} accessibilityRole="header">
         Upcoming sessions
       </Text>
+      {upcoming.length > 0 ? <Text style={[typography.h3, { color: sc.textPrimary, marginTop: spacing.md }]}>{`${upcoming.length} confirmed session${upcoming.length === 1 ? '' : 's'}.`}</Text> : null}
 
       {upcoming.length === 0 ? (
         <Text
           style={[
             typography.body,
             {
-              color: colors.textMuted,
+              color: sc.textMuted,
               marginTop: spacing.lg,
               textAlign: 'center',
             },
@@ -137,6 +144,7 @@ export default function ClientUpcomingSessionsScreen() {
         </Text>
       ) : null}
 
+      {cancel.isError ? <Text style={[typography.bodySmall, { color: sc.textMuted }]} accessibilityLiveRegion="polite">{calendarErrorMessage(cancel.error, 'cancel the session')}</Text> : null}
       {upcoming.map((s) => {
         const locked = isSessionLocked(s);
         const busy = cancel.isPending && cancel.variables?.id === s.id;
@@ -145,16 +153,16 @@ export default function ClientUpcomingSessionsScreen() {
             key={s.id}
             style={[
               styles.card,
-              { backgroundColor: colors.surface, borderColor: colors.border },
+              { borderColor: sc.border },
             ]}
           >
-            <Text style={[typography.h3, { color: colors.textPrimary }]}>
+            <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>
               {s.title}
             </Text>
             <Text
               style={[
                 typography.bodySmall,
-                { color: colors.textMuted, marginTop: spacing.xs },
+                { color: sc.textMuted, marginTop: spacing.xs, fontVariant: ['tabular-nums'] },
               ]}
             >
               {new Date(s.start_at).toLocaleString()}
@@ -176,17 +184,17 @@ export default function ClientUpcomingSessionsScreen() {
                   Linking.openURL(url).catch(() => {
                     Alert.alert(
                       'Could not open link',
-                      'Copy the link from your email or message your coach.',
+                      'Open the session from Calendar or message your coach for the call link.',
                     );
                   });
                 }}
                 style={[
                   styles.joinBtn,
-                  { backgroundColor: oxblood, marginTop: spacing.sm },
+                  { backgroundColor: s.id === primaryJoinId ? sc.accent : sc.bgPrimary, marginTop: spacing.sm },
                 ]}
               >
                 <Text
-                  style={[typography.body, { color: colors.textOnPrimary }]}
+                  style={[typography.body, { color: s.id === primaryJoinId ? sc.textOnAccent : sc.textPrimary }]}
                 >
                   Join session
                   {s.video_provider && s.video_provider !== 'stub'
@@ -204,12 +212,11 @@ export default function ClientUpcomingSessionsScreen() {
                 style={[
                   styles.rescheduleBtn,
                   {
-                    borderColor: oxblood,
                     opacity: locked || busy ? 0.5 : 1,
                   },
                 ]}
               >
-                <Text style={[typography.body, { color: oxblood }]}>
+                <Text style={[typography.body, { color: sc.textPrimary }]}>
                   Reschedule
                 </Text>
               </TouchableOpacity>
@@ -217,12 +224,12 @@ export default function ClientUpcomingSessionsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={
                   locked
-                    ? `Cancel disabled: less than 4 hours before start`
+                    ? `Cancel disabled for ${s.title}`
                     : `Cancel ${s.title}`
                 }
                 accessibilityHint={
                   locked
-                    ? 'Cancellations close 4 hours before the session starts.'
+                    ? 'This session can no longer be changed here.'
                     : undefined
                 }
                 disabled={locked || busy}
@@ -230,13 +237,12 @@ export default function ClientUpcomingSessionsScreen() {
                 style={[
                   styles.cancelBtn,
                   {
-                    backgroundColor: oxblood,
                     opacity: locked || busy ? 0.4 : 1,
                   },
                 ]}
               >
                 <Text
-                  style={[typography.body, { color: colors.textOnPrimary }]}
+                  style={[typography.body, { color: sc.textPrimary }]}
                 >
                   Cancel
                 </Text>
@@ -246,10 +252,10 @@ export default function ClientUpcomingSessionsScreen() {
               <Text
                 style={[
                   typography.bodySmall,
-                  { color: colors.textMuted, marginTop: spacing.xs },
+                  { color: sc.textMuted, marginTop: spacing.xs },
                 ]}
               >
-                Cancellations close 4h before the session.
+                This session can no longer be changed here. Message your coach if you need help.
               </Text>
             ) : null}
           </View>
@@ -267,19 +273,16 @@ export default function ClientUpcomingSessionsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: spacing.md, paddingBottom: spacing.xl },
+  container: { padding: spacing.lg, paddingBottom: spacing['3xl'] },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   card: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: spacing.md,
-    marginTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.xl,
+    marginTop: spacing.lg,
   },
   actions: { flexDirection: 'row', marginTop: spacing.md },
   rescheduleBtn: {
     flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginRight: spacing.xs,
@@ -288,7 +291,6 @@ const styles = StyleSheet.create({
   },
   cancelBtn: {
     flex: 1,
-    borderRadius: 10,
     paddingVertical: spacing.sm,
     alignItems: 'center',
     marginLeft: spacing.xs,
@@ -297,7 +299,7 @@ const styles = StyleSheet.create({
   },
   primaryBtn: {
     marginTop: spacing.md,
-    borderRadius: 10,
+    borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     alignItems: 'center',
@@ -305,7 +307,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   joinBtn: {
-    borderRadius: 10,
+    borderRadius: radius.lg,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     alignItems: 'center',

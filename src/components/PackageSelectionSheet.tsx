@@ -341,7 +341,7 @@ export default function PackageSelectionSheet({
               accessibilityState={{ disabled: ctaDisabled, busy }}
               testID="select-plan-btn"
             >
-              <Text style={styles.ctaBtnText}>{ctaLabel}</Text>
+              <Text style={[styles.ctaBtnText, ctaDisabled && styles.ctaBtnTextDisabled]}>{ctaLabel}</Text>
             </TouchableOpacity>
           )}
 
@@ -367,7 +367,7 @@ export default function PackageSelectionSheet({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     sheet: {
       flex: 1,
@@ -389,14 +389,14 @@ const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
       marginBottom: 24,
     },
     heading: {
-      fontFamily: 'CormorantGaramond_400Regular',
+      fontFamily: tokens.typography.h1.fontFamily,
       fontSize: 28,
       lineHeight: 32,
       color: semanticColors.textPrimary,
       marginBottom: 8,
     },
     subtext: {
-      fontFamily: 'Inter_400Regular',
+      fontFamily: tokens.typography.body.fontFamily,
       fontSize: 15,
       color: semanticColors.textMuted,
       lineHeight: 22,
@@ -404,48 +404,44 @@ const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
     },
     // Package cards
     packageCard: {
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
-      borderRadius: 2,
-      padding: 16,
+      paddingVertical: 20, paddingHorizontal: 8, minHeight: 44,
       marginBottom: 12,
-      backgroundColor: semanticColors.bgSurface,
+      backgroundColor: semanticColors.bgPrimary,
     },
-    // B-343-5: the selected card keeps the theme surface, so its payment
-    // terms stay AA-readable in light and dark; selection shows as a 2 px
-    // accent border (padding keeps the content from shifting).
+    // Selected terms stay AA-readable on the page, with an accent hairline.
     packageCardSelected: {
       borderColor: semanticColors.accent,
-      borderWidth: 2,
-      padding: 15,
-      backgroundColor: semanticColors.bgSurface,
+      borderTopWidth: 2,
+      paddingTop: 20 + StyleSheet.hairlineWidth - 2,
+      backgroundColor: semanticColors.bgPrimary,
     },
     packageName: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 15,
+      fontFamily: tokens.typography.h2.fontFamily,
+      fontSize: 24,
       color: semanticColors.textPrimary,
       marginBottom: 4,
     },
     packagePrice: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
+      fontFamily: tokens.typography.h2.fontFamily,
+      fontSize: 24, fontVariant: ['tabular-nums'],
       color: semanticColors.textMuted,
       marginBottom: 6,
     },
     packageDesc: {
-      fontFamily: 'Inter_400Regular',
+      fontFamily: tokens.typography.bodySmall.fontFamily,
       fontSize: 13,
       color: semanticColors.textMuted,
       lineHeight: 19,
     },
     // Skeleton
     skeletonCard: {
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
-      borderRadius: 2,
       padding: 16,
       marginBottom: 12,
-      backgroundColor: semanticColors.bgSurface,
+      backgroundColor: semanticColors.bgPrimary,
     },
     skeletonLine: {
       borderRadius: 2,
@@ -457,13 +453,14 @@ const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
       paddingVertical: 16,
       alignItems: 'center',
       marginTop: 8,
+      minHeight: 44, borderRadius: tokens.radius.lg,
     },
-    ctaBtnDisabled: { opacity: 0.5 },
+    ctaBtnDisabled: { backgroundColor: semanticColors.disabledBg },
+    ctaBtnTextDisabled: { color: semanticColors.textOnDisabled },
     ctaBtnText: {
-      fontFamily: 'Inter_600SemiBold',
+      fontFamily: tokens.typography.bodyMd.fontFamily,
       fontSize: 14,
       color: semanticColors.textOnAccent,
-      letterSpacing: 1.2,
     },
     // Skip
     skipBtn: {
@@ -471,7 +468,7 @@ const makeStyles = (semanticColors: SemanticTokens, _tokens: Tokens) =>
       alignItems: 'center',
     },
     skipText: {
-      fontFamily: 'Inter_400Regular',
+      fontFamily: tokens.typography.bodySmall.fontFamily,
       fontSize: 13,
       color: semanticColors.textMuted,
     },
