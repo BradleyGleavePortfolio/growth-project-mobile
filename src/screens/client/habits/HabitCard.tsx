@@ -2,7 +2,6 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import type { IoniconName } from '../../../types/common';
 import { DAY_LABELS, type HabitView } from './constants';
 import type { HabitsStyles } from './styles';
 
@@ -30,13 +29,6 @@ export function HabitCard({
       activeOpacity={0.7}
     >
       <View style={styles.habitLeft}>
-        <View style={[styles.habitIconBox, { backgroundColor: habit.color + '20' }]}>
-          <Ionicons
-            name={(habit.icon || 'checkmark-circle') as IoniconName}
-            size={22}
-            color={habit.color}
-          />
-        </View>
         <View style={styles.habitInfo}>
           <Text style={[styles.habitName, habit.log?.completed && styles.habitNameDone]}>
             {habit.name}
@@ -59,7 +51,7 @@ export function HabitCard({
                   accessibilityLabel={`${DAY_LABELS[i]}: ${done ? 'completed' : 'not completed'}`}
                   style={[
                     styles.weekDot,
-                    done && { backgroundColor: habit.color },
+                    done && { backgroundColor: colors.primary },
                   ]}
                 />
                 <Text style={styles.weekDotLabel}>{DAY_LABELS[i]}</Text>
@@ -71,11 +63,11 @@ export function HabitCard({
       <View
         style={[
           styles.checkCircle,
-          habit.log?.completed && { backgroundColor: habit.color, borderColor: habit.color },
+          habit.log?.completed && { borderColor: colors.primary },
         ]}
       >
         {habit.log?.completed && (
-          <Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />
+          <Ionicons name="checkmark-outline" size={22} color={colors.primary} />
         )}
       </View>
     </TouchableOpacity>

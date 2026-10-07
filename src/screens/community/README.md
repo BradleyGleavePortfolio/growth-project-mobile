@@ -1,5 +1,12 @@
 # Client Community
 
+CommunityComposerScreen uses a serif heading, Inter hairline inputs, DTO character
+limits and one forest Post/Send action. Workspace failures retry; rejected drafts stay.
+CommunitySpaceScreen uses a serif space name and unfilled hairline post rows.
+Post, coach-message, safety and flag-gated voice-note pathways remain reachable.
+CommunityThreadScreen reads posts in Inter 17 pt, separates replies with hairlines,
+distinguishes loading/failure/empty, and focuses the reply input from its empty action.
+
 Today is a calm date-led column on the theme background: small-caps sections,
 text-first hairline rows and one forest action. The server supplies cohort name
 and count, pinned title, event start and challenge end; no author name, post body,

@@ -27,7 +27,7 @@ import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
-import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
+import ClientTutorialSetting from './settings/ClientTutorialSetting';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -193,7 +193,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Account */}
-        <SettingsSection title={<Text style={styles.sectionLabel}>Account</Text>} id="account">
+        <SettingsSection title="Account" id="account">
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
@@ -213,6 +213,47 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowLabel}>Change Password</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* Appearance remains on this screen, with light rendering for launch. */}
+          <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
+            <Text style={styles.rowLabel}>Appearance</Text>
+            <View style={styles.appearanceRow}>
+              {(['light', 'system'] as const).map((option: AppearanceOverride) => (
+                <HapticPressable
+                  key={option}
+                  intent="light"
+                  style={styles.radioOption}
+                  onPress={() => setAppearanceOverride(option)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={option.charAt(0).toUpperCase() + option.slice(1)}
+                  accessibilityState={{ checked: appearanceOverride === option }}
+                >
+                  <View style={[styles.radioCircle, appearanceOverride === option && styles.radioCircleActive]}>
+                    {appearanceOverride === option && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={[styles.radioLabel, appearanceOverride === option && styles.radioLabelActive]}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </HapticPressable>
+              ))}
+            </View>
+            <Text style={styles.rowValue}>Light appearance is used for both options.</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Haptics enabled</Text>
+            <Switch
+              value={settings.hapticsEnabled}
+              onValueChange={(v) => updateSetting('hapticsEnabled', v)}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
+              accessibilityLabel="Haptics enabled"
+              accessibilityRole="switch"
+            />
+          </View>
+          <BiometricUnlockSetting />
+          <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
+            <Text style={styles.rowLabel}>Reset Onboarding</Text>
+            <Ionicons name="refresh-outline" size={18} color={colors.warning} />
+          </HapticPressable>
           {/* Settings > Account > Delete account (D2 contract wording). */}
           <HapticPressable
             intent="warning"
@@ -226,13 +267,13 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
             <Ionicons name="trash-outline" size={18} color={colors.error} />
           </HapticPressable>
+          <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
+            <Ionicons name="log-out-outline" size={20} color={colors.error} />
+            <Text style={styles.signOutText}>Sign Out</Text>
+          </HapticPressable>
         </SettingsSection>
 
-        {/* Clinic tutorial: resume or rerun Roman's tour (flag-gated). */}
-        <TutorialSettingsRow />
-
-        {/* Nutrition Preferences */}
-        <SettingsSection title="Nutrition Preferences" id="nutrition">
+        <SettingsSection title="Training and food" id="training-food">
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Meals Per Day</Text>
             <View style={styles.stepper}>
@@ -307,58 +348,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               thumbColor={colors.textOnPrimary}
             />
           </View>
-        </SettingsSection>
-
-        {/* App Preferences */}
-        <SettingsSection title="App Preferences" id="app">
-          {/* Appearance — coherent light rendering for launch */}
-          <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
-            <Text style={styles.rowLabel}>Appearance</Text>
-            <View style={styles.appearanceRow}>
-              {(['light', 'system'] as const).map((option: AppearanceOverride) => (
-                <HapticPressable
-                  key={option}
-                  intent="light"
-                  style={styles.radioOption}
-                  onPress={() => setAppearanceOverride(option)}
-                  accessibilityRole="radio"
-                  accessibilityLabel={option.charAt(0).toUpperCase() + option.slice(1)}
-                  accessibilityState={{ checked: appearanceOverride === option }}
-                >
-                  <View style={[styles.radioCircle, appearanceOverride === option && styles.radioCircleActive]}>
-                    {appearanceOverride === option && <View style={styles.radioInner} />}
-                  </View>
-                  <Text style={[styles.radioLabel, appearanceOverride === option && styles.radioLabelActive]}>
-                    {option.charAt(0).toUpperCase() + option.slice(1)}
-                  </Text>
-                </HapticPressable>
-              ))}
-            </View>
-            <Text style={styles.rowValue}>Light appearance is used for both options.</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Haptics enabled</Text>
-            <Switch
-              value={settings.hapticsEnabled}
-              onValueChange={(v) => updateSetting('hapticsEnabled', v)}
-              trackColor={{ false: colors.border, true: colors.primary }}
-              thumbColor={colors.textOnPrimary}
-              accessibilityLabel="Haptics enabled"
-              accessibilityRole="switch"
-            />
-          </View>
-        </SettingsSection>
-
-
-        {/* Security */}
-        <SettingsSection title="Security" id="security">
-          <BiometricUnlockSetting />
-        </SettingsSection>
-
-        {/* AUDIT-12-125: the Personalization row is not offered. Nothing in the
-            app or on the server reads those choices (home modules, cadence
-            incl. "Off", tone, units, week start), so they had no effect. */}
-        <SettingsSection title="Notification settings" id="notification-details">
           {/* Audit P1: surface the canonical NotificationPreferences screen
               from Settings. The local Notifications switches above only
               control the legacy useSettings flags; full channel + quiet-hour
@@ -379,26 +368,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </HapticPressable>
         </SettingsSection>
 
-        {/* Support */}
-        <SettingsSection title="Support" id="support">
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('SupportInbox')}
-            accessibilityRole="button"
-            accessibilityLabel="Support inbox"
-            accessibilityHint="Opens the live support chat"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Support</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
-        </SettingsSection>
-
-        {/* Privacy (D2 contract wording: Settings > Privacy > Roman and AI) */}
-        <SettingsSection title={<Text style={styles.sectionLabel}>Privacy</Text>} id="privacy">
+        <SettingsSection title="Privacy and data" id="privacy">
           {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
           <HapticPressable
             intent="light"
@@ -430,26 +400,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
-          {/* D2 (Opus A-05): the optional Roman and AI choice from the
-              onboarding agreement can be allowed or withdrawn here. Shown
-              in builds where that choice can be made. */}
-          {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
-            <HapticPressable
-              intent="light"
-              style={styles.row}
-              onPress={() => navigation.navigate('RomanAiConsent')}
-              accessibilityRole="button"
-              accessibilityLabel="Roman and AI"
-              accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
-              testID="settings-roman-ai"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
-                <Text style={styles.rowLabel}>Roman and AI</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </HapticPressable>
-          ) : null}
           {/* iMessage-grade DM — Apple 1.2 compliance. Users must be able to
               view and undo their blocks from Settings. */}
           <HapticPressable
@@ -481,24 +431,52 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
-          <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
-            <Text style={styles.rowLabel}>Reset Onboarding</Text>
-            <Ionicons name="refresh-outline" size={18} color={colors.warning} />
-          </HapticPressable>
         </SettingsSection>
 
-        {/* Sign Out */}
-        <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={20} color={colors.error} />
-          <Text style={styles.signOutText}>Sign Out</Text>
-        </HapticPressable>
+        {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
+          <SettingsSection title="Roman" id="roman">
+            <HapticPressable
+              intent="light"
+              style={styles.row}
+              onPress={() => navigation.navigate('RomanAiConsent')}
+              accessibilityRole="button"
+              accessibilityLabel="Roman and AI"
+              accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
+              testID="settings-roman-ai"
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+                <Text style={styles.rowLabel}>Roman and AI</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </HapticPressable>
+          </SettingsSection>
+        ) : null}
+
+        <SettingsSection title="Support" id="support">
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('SupportInbox')}
+            accessibilityRole="button"
+            accessibilityLabel="Support inbox"
+            accessibilityHint="Opens the live support chat"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
+          <ClientTutorialSetting />
+        </SettingsSection>
 
         {/* About */}
         <SettingsSection title="About" id="about">
-        <View style={styles.about}>
-          <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
-          <Text style={styles.aboutSub}>A daily practice.</Text>
-        </View>
+          <View style={styles.about}>
+            <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
+            <Text style={styles.aboutSub}>A daily practice.</Text>
+          </View>
         </SettingsSection>
       </ScrollView>
 
@@ -595,12 +573,6 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 24,
     paddingBottom: 40,
   },
-  sectionLabel: {
-    ...typography.eyebrow,
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
-  },
   avatar: {
     alignSelf: 'center',
     width: 60,
@@ -685,7 +657,6 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 32,
     paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,

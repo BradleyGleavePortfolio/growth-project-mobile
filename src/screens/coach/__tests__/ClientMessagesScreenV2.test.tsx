@@ -18,7 +18,10 @@ afterAll(() => {
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => originalOS });
 });
 
-jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }) }));
+jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({
+  colors: new Proxy({}, { get: () => '#000000' }),
+  semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+}) }));
 jest.mock('../../../storage/mmkv', () => {
   const store = { getString: () => undefined, getStringAsync: async () => undefined, set: async () => undefined, delete: async () => undefined };
   return { prefsStorage: store, cacheStorage: store };
@@ -55,11 +58,13 @@ jest.mock('../../../hooks/useFeatureFlags', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => undefined) }));
+const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
 jest.mock('@react-navigation/native', () => {
   const actual = jest.requireActual('@react-navigation/native');
   return {
     ...actual,
-    useNavigation: () => ({ goBack: jest.fn(), navigate: jest.fn() }),
+    useNavigation: () => ({ goBack: mockGoBack, navigate: mockNavigate }),
     useRoute: () => ({ params: { clientId: 'client-1', clientName: 'Alice Smith' } }),
     useFocusEffect: (cb: () => () => void) => {
       const R = require('react');
@@ -98,6 +103,27 @@ const sentRow = (body: Record<string, unknown>) => ({
 });
 
 describe('ClientMessagesScreen with messaging_core_v2 ON', () => {
+  it('parity: shared quiet parts retain back, contact, copy and reply cancellation', async () => {
+    const u = await render(<ClientMessagesScreen />);
+    await u.findByLabelText(/Message: from the client/);
+    await fireEvent.press(u.getByLabelText('Go back'));
+    expect(mockGoBack).toHaveBeenCalled();
+    await fireEvent.press(u.getByLabelText(/contact details/));
+    expect(mockNavigate).toHaveBeenCalledWith('ContactView', { contactId: 'client-1', displayName: 'Alice Smith', role: 'client' });
+    await fireEvent(u.getByLabelText(/Message: from the client/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Reply')));
+    await fireEvent.press(u.getByLabelText('Cancel reply'));
+    expect(u.queryByLabelText('Cancel reply')).toBeNull();
+    await fireEvent(u.getByLabelText(/Message: from the client/), 'longPress');
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Copy')));
+    expect(jest.requireMock('expo-clipboard').setStringAsync).toHaveBeenCalledWith('from the client');
+    const put = api.put as jest.Mock;
+    put.mockResolvedValue({ data: { muted: true, muted_until: null, pinned: false } });
+    await fireEvent.press(u.getByTestId('thread-mute-button'));
+    await fireEvent.press(await waitFor(() => u.getByLabelText('Mute for 1 hour')));
+    await waitFor(() => expect(put).toHaveBeenCalledWith(`${BASE}/mute`, { duration: '1h' }, expect.anything()));
+  });
+
   it('a client message that arrives while the thread is open is marked read (AUDIT-03-125 U1)', async () => {
     mockSubs.length = 0;
     await render(<ClientMessagesScreen />);
