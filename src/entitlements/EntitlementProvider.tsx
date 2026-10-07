@@ -7,6 +7,7 @@ import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
 import { PaywallSheet } from './PaywallSheet';
 import { dunningLockoutStore } from './dunning/dunningLockoutStore';
+import { useCoachlessClient } from '../hooks/useCoachlessClient';
 
 export type EntitlementStatus =
   | 'unknown'
@@ -52,12 +53,14 @@ interface EntitlementProviderProps {
   /**
    * Navigate to the client's thread with their coach. Used by the iOS
    * coach-managed gate (audit #304 B1) instead of a package purchase.
+   * Coachless recovery passes true to open the existing code sheet there.
    */
-  onMessageCoach?: () => void;
+  onMessageCoach?: (openCoachCode?: boolean) => void;
 }
 
 export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: EntitlementProviderProps) {
   const user = useCurrentUser();
+  const noCoach = useCoachlessClient();
   const [status, setStatus] = useState<EntitlementStatus>('unknown');
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
@@ -109,8 +112,9 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
 
   const messageCoach = useCallback(() => {
     setPaywallVisible(false);
-    if (onMessageCoach) onMessageCoach();
-  }, [onMessageCoach]);
+    if (noCoach) onMessageCoach?.(true);
+    else onMessageCoach?.();
+  }, [onMessageCoach, noCoach]);
 
   // Bootstrap on login
   useEffect(() => {

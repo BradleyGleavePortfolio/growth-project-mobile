@@ -188,7 +188,7 @@ export type HomeStackParamList = {
   Habits: undefined;
   /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
-  Messages: undefined;
+  Messages: { openCoachCode?: boolean } | undefined;
   /** Phase 9 — Global notification center. */
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */
