@@ -44,7 +44,10 @@ import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { homeCells, type HomeCell } from '../../macros/macroDisplay';
 import { workoutApi } from '../../services/api';
 import { workoutBuilderApi } from '../../api/workoutBuilderApi';
-import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
+import {
+  loadActiveWorkoutSession,
+  type PersistedActiveWorkoutSession,
+} from '../../storage/activeWorkoutSession';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -176,8 +179,9 @@ export default function HomeScreen() {
   // the home line never claims a workout was done when we couldn't verify.
   const [workoutDone, setWorkoutDone] = useState<boolean>(false);
   const [pendingPlanName, setPendingPlanName] = useState<string | null>(null);
+  const [pendingAssignmentId, setPendingAssignmentId] = useState<string | null>(null);
   const [hasCoachPlan, setHasCoachPlan] = useState(false);
-  const [workoutInProgress, setWorkoutInProgress] = useState(false);
+  const [activeWorkout, setActiveWorkout] = useState<PersistedActiveWorkoutSession | null>(null);
   // History or a pending coach assignment makes Continue useful. Only show
   // Explore once both reads confirm empty; a failed read keeps workouts reachable.
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
@@ -198,13 +202,15 @@ export default function HomeScreen() {
         const done = isWorkoutDoneToday(rows, getTodayString());
         const pending = assignments.status === 'fulfilled'
           ? assignments.value.find((assignment) => !assignment.completed_at) : undefined;
+        const savedWorkout = active.status === 'fulfilled' ? active.value?.session ?? null : null;
         if (!cancelled) {
           setWorkoutDone(done);
           setPendingPlanName(pending?.workout_plan?.name?.trim() || null);
+          setPendingAssignmentId(pending?.id ?? null);
           setHasCoachPlan(assignments.status === 'fulfilled' && assignments.value.some((assignment) => !!assignment.workout_plan));
-          setWorkoutInProgress(active.status === 'fulfilled' && !!active.value);
+          setActiveWorkout(savedWorkout);
           setWorkoutExists(
-            rows.length > 0 || !!pending
+            rows.length > 0 || !!pending || !!savedWorkout
             || history.status === 'rejected' || assignments.status === 'rejected',
           );
         }
@@ -221,6 +227,7 @@ export default function HomeScreen() {
     };
   }, [currentUser?.id, refreshing]));
 
+  const workoutInProgress = !!activeWorkout;
   const datePoetry = buildDateAsPoetry(today);
   const progressLine = buildProgressLine(mealsLogged, workoutDone, pendingPlanName, workoutInProgress);
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
@@ -309,8 +316,24 @@ export default function HomeScreen() {
 
   const onContinue = () => {
     track('home_continue_tapped', { surface: 'home_hero' });
-    // Wire to workout tab — same destination as the old HeroAction log_workout state
-    navigation.navigate('WorkoutTab');
+    if (activeWorkout) {
+      navigation.navigate('WorkoutTab', {
+        screen: 'ActiveWorkout',
+        params: {
+          routineName: activeWorkout.routineName,
+          exercises: activeWorkout.exercisesJson,
+          assignmentId: activeWorkout.assignmentId,
+          resume: true,
+        },
+      });
+    } else if (!workoutDone && pendingPlanName && pendingAssignmentId) {
+      navigation.navigate('MoreTab', {
+        screen: 'WorkoutAssignmentDetail',
+        params: { assignmentId: pendingAssignmentId },
+      });
+    } else {
+      navigation.navigate('WorkoutTab');
+    }
   };
 
   const goToLog = () => {
@@ -401,7 +424,9 @@ export default function HomeScreen() {
             onPress={onContinue}
             accessibilityRole="button"
             accessibilityLabel={workoutLabel}
-            accessibilityHint="Opens Train"
+            accessibilityHint={workoutInProgress
+              ? 'Opens your saved workout'
+              : !workoutDone && pendingPlanName ? 'Opens the assigned workout' : 'Opens Train'}
             testID="home-continue-cta"
           >
             <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>{workoutLabel}</Text>
