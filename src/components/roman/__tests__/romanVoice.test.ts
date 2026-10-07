@@ -116,29 +116,40 @@ describe('romanVoice — every client Roman string passes the §1.4 forbidden-mo
 
 describe('romanVoice — greeting interpolation (surface + first-open aware)', () => {
   it('uses the §2.1 self-introduction on first open, on BOTH surfaces', () => {
-    expect(romanGreeting({ surface: 'client', isFirstOpen: true, firstName: 'Sam' })).toContain('My name is Roman');
-    expect(romanGreeting({ surface: 'coach', isFirstOpen: true, firstName: 'Sam' })).toContain('My name is Roman');
+    for (const surface of ['client', 'coach'] as const) {
+      expect(romanGreeting({ surface, isFirstOpen: true, firstName: 'Sam' })).toBe(
+        'Good day. My name is Roman. Ask about training, food or recovery at any time.',
+      );
+    }
   });
 
   it('uses the named §2.2 returning register on the client surface', () => {
     const g = romanGreeting({ surface: 'client', isFirstOpen: false, firstName: 'Sam' });
-    expect(g).toContain('Sam');
-    expect(g).toMatch(/^Welcome back, Sam\./);
+    expect(g).toBe('Welcome back, Sam. Where shall we begin?');
   });
 
   it('falls back to the nameless §2.1 register (never "Welcome back, .") for a nameless returning client', () => {
-    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: null })).not.toMatch(/Welcome back,\s*\./);
-    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: '  ' })).not.toMatch(/Welcome back,\s*\./);
+    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: null })).toBe('Good day. Where shall we begin?');
+    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: '  ' })).toBe('Good day. Where shall we begin?');
   });
 
   it('uses the coach operational §2.3 register on the coach surface (never the client copy)', () => {
     const named = romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: 'Sam' });
-    expect(named).toMatch(/^Good morning, Sam\./);
+    expect(named).toMatch(/^Good (morning|afternoon|evening), Sam\./);
     expect(named).toContain('What needs attention');
     expect(named).not.toContain('Welcome back');
     const nameless = romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: null });
     expect(nameless).not.toMatch(/Good morning,\s*\./);
     expect(nameless).toContain('What needs attention');
+  });
+
+  it.each([[9, 'morning'], [14, 'afternoon'], [20, 'evening']])('coach greeting follows the device clock at %s:00', (hour, period) => {
+    jest.useFakeTimers().setSystemTime(new Date(2026, 9, 7, Number(hour)));
+    try {
+      expect(romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: 'Sam' })).toBe(
+        `Good ${period}, Sam. I am ready. What needs attention?`,
+      );
+    } finally { jest.useRealTimers(); }
   });
 });
 

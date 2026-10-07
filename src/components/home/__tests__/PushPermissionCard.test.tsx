@@ -16,7 +16,8 @@ jest.mock('../../../storage/mmkv', () => ({
     set: async (k: string, v: string) => void mockStore.set(k, v),
   },
 }));
-jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'u1' }) }));
+const mockUser = { id: 'u1', coach_id: '' };
+jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: new Proxy({}, { get: () => '#000000' }) }),
 }));
@@ -27,6 +28,17 @@ describe('PushPermissionCard (deferred OS prompt)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockStore.clear();
+    mockUser.coach_id = '';
+  });
+
+  it.each([false, true])('keeps both permission actions with honest linked-coach copy: %s', async (linked) => {
+    mockUser.coach_id = linked ? 'c1' : '';
+    mockGetPerms.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
+    const { findByTestId, getByText, getByLabelText } = await render(<PushPermissionCard />);
+    await findByTestId('push-permission-card');
+    expect(getByText(linked ? /plan updates from your coach/ : /community messages/)).toBeTruthy();
+    expect(getByLabelText('Turn on notifications')).toBeTruthy();
+    expect(getByLabelText('Not now')).toBeTruthy();
   });
 
   it('shows when permission is undetermined and prompts only on tap', async () => {
