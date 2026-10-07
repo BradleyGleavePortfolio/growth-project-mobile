@@ -9,6 +9,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { StyleSheet } from 'react-native';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ jest.mock('../../../lib/userCache', () => ({
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: require('../../../theme/tokens').lightTokens,
     colors: {
       background: '#F5EFE4',
       surface: '#F1E8D5',
@@ -91,6 +93,8 @@ import {
   completeDayOne,
 } from '../api';
 import { registerForPushNotifications } from '../../../services/pushNotifications';
+import { authEvents } from '../../../utils/authEvents';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 const mockedPair = pairWithCoach as jest.Mock;
 const mockedSaveGoals = saveGoals as jest.Mock;
@@ -136,11 +140,17 @@ describe('WelcomeScreen', () => {
     });
   });
 
-  it('renders 1/6 step text', async () => {
-    const { getByTestId } = await render(
+  it('shows readable progress and a sentence-case forest action', async () => {
+    jest.mocked(useCurrentUser).mockReturnValueOnce(null);
+    const { getByTestId, getByText } = await render(
       <WelcomeScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('1/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 1 of 6');
+    const cta = getByTestId('day-one-welcome-cta');
+    expect(StyleSheet.flatten(cta.props.style).backgroundColor).toBe(require('../../../theme/tokens').colors.forest);
+    expect(StyleSheet.flatten(getByText('Get started').props.style).textTransform).not.toBe('uppercase');
+    expect(StyleSheet.flatten(getByTestId('day-one-progress-track').props.style).height).toBe(StyleSheet.hairlineWidth);
+    expect(getByText('Welcome')).toBeTruthy();
   });
 });
 
@@ -160,14 +170,16 @@ describe('CoachPairingScreen', () => {
 
   it('renders 2/6 step text', async () => {
     const { getByTestId } = await renderPairing();
-    expect(getByTestId('day-one-step-text').props.children).toBe('2/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 2 of 6');
   });
 
   it('prefills the input from route.params.prefillCode and hides the skip button', async () => {
-    const { getByTestId, queryByTestId } = await renderPairing('TGP-ABCD');
+    const { getByTestId, queryByTestId, queryByText } = await renderPairing('TGP-ABCD');
     const input = getByTestId('day-one-invite-input');
     expect(input.props.value).toBe('TGP-ABCD');
     expect(queryByTestId('day-one-invite-skip')).toBeNull();
+    expect(queryByText('Pairing with the invite from your link…')).toBeNull();
+    expect(StyleSheet.flatten(input.props.style).backgroundColor).toBeUndefined();
   });
 
   it('submits to pairWithCoach and navigates to Goals on success', async () => {
@@ -179,6 +191,8 @@ describe('CoachPairingScreen', () => {
     });
     expect(mockedPair).toHaveBeenCalledWith('XYZ9', null);
     await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('Goals'));
+    await fireEvent.press(getByTestId('day-one-back'));
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
   });
 
   it('shows structured copy when the backend returns an invite_expired error', async () => {
@@ -219,7 +233,7 @@ describe('GoalsScreen', () => {
     const { getByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('3/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 3 of 6');
   });
 
   it('selecting a goal then continuing saves and advances', async () => {
@@ -228,6 +242,18 @@ describe('GoalsScreen', () => {
     const { getByTestId } = await render(
       <GoalsScreen navigation={nav as never} />,
     );
+    for (const key of ['fitness', 'business', 'personal_growth', 'relationships', 'mental_health', 'custom']) {
+      const row = getByTestId(`day-one-goal-${key}`);
+      const style = StyleSheet.flatten(row.props.style);
+      expect(style.backgroundColor).toBeUndefined();
+      expect(style.borderBottomWidth).toBe(StyleSheet.hairlineWidth);
+      await fireEvent.press(row);
+      expect(getByTestId(`day-one-goal-${key}`).props.accessibilityState.checked).toBe(true);
+      await fireEvent.press(row);
+      expect(getByTestId(`day-one-goal-${key}`).props.accessibilityState.checked).toBe(false);
+    }
+    await fireEvent.press(getByTestId('day-one-back'));
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
     await fireEvent.press(getByTestId('day-one-goal-fitness'));
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-goals-continue'));
@@ -272,17 +298,23 @@ describe('GoalsScreen', () => {
       expect(state?.pendingSync[0].kind).toBe('goals');
     });
     expect(nav.navigate).toHaveBeenCalledWith('Notifications');
+    await fireEvent.press(getByTestId('day-one-goals-skip'));
+    expect(nav.navigate).toHaveBeenLastCalledWith('Notifications');
   });
 
   it('rehydrates the prior selection from the resume checkpoint', async () => {
     await writeResumeState({ draft: { goals: ['mental_health'] } });
-    const { findByTestId } = await render(
+    const { findByTestId, getByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
     const row = await findByTestId('day-one-goal-mental_health');
     await waitFor(() =>
       expect(row.props.accessibilityState?.checked).toBe(true),
     );
+    mockedSaveGoals.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    await act(async () => fireEvent.press(getByTestId('day-one-goals-continue')));
+    await act(async () => fireEvent.press(getByTestId('day-one-goals-retry')));
+    expect(mockedSaveGoals).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -293,7 +325,7 @@ describe('NotificationsScreen', () => {
     const { getByTestId } = await render(
       <NotificationsScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('4/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 4 of 6');
   });
 
   it('navigates to CheckInTime after permission grant', async () => {
@@ -332,7 +364,7 @@ describe('CheckInTimeScreen', () => {
     const { getByTestId } = await render(
       <CheckInTimeScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('5/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 5 of 6');
   });
 
   it('save includes the IANA timezone in the payload', async () => {
@@ -341,6 +373,18 @@ describe('CheckInTimeScreen', () => {
     const { getByTestId } = await render(
       <CheckInTimeScreen navigation={nav as never} />,
     );
+    for (const unit of ['hour', 'minute']) {
+      for (const direction of ['up', 'down']) {
+        const control = getByTestId(`day-one-checkin-${unit}-${direction}`);
+        expect(StyleSheet.flatten(control.props.style).minHeight).toBeGreaterThanOrEqual(44);
+        await fireEvent.press(control);
+      }
+    }
+    await fireEvent.press(getByTestId('day-one-checkin-pm'));
+    expect(getByTestId('day-one-checkin-pm').props.accessibilityState.selected).toBe(true);
+    await fireEvent.press(getByTestId('day-one-checkin-am'));
+    await fireEvent.press(getByTestId('day-one-back'));
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-checkin-continue'));
     });
@@ -351,6 +395,8 @@ describe('CheckInTimeScreen', () => {
       );
     });
     expect(nav.navigate).toHaveBeenCalledWith('Ready');
+    await fireEvent.press(getByTestId('day-one-checkin-skip'));
+    expect(nav.navigate).toHaveBeenLastCalledWith('Ready');
   });
 
   it('offline path enqueues a checkin sync item with the timezone', async () => {
@@ -391,6 +437,10 @@ describe('CheckInTimeScreen', () => {
       expect(hour.props.children).toBe('6');
       expect(minute.props.children).toBe('30');
     });
+    mockedSaveCheckIn.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined);
+    await act(async () => fireEvent.press(await findByTestId('day-one-checkin-continue')));
+    await act(async () => fireEvent.press(await findByTestId('day-one-checkin-retry')));
+    expect(mockedSaveCheckIn).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -398,10 +448,12 @@ describe('CheckInTimeScreen', () => {
 
 describe('ReadyScreen', () => {
   it('renders 6/6 step text', async () => {
-    const { getByTestId } = await render(
+    const { getByTestId, queryByText, queryByLabelText } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('6/6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 6 of 6');
+    expect(queryByText('Your setup is done. The work starts now.')).toBeNull();
+    expect(queryByLabelText('Onboarding complete')).toBeNull();
   });
 
   it('happy path: completes, clears the resume checkpoint, and emits auth', async () => {
@@ -419,6 +471,7 @@ describe('ReadyScreen', () => {
       expect(state).toBeNull();
       expect(await AsyncStorage.getItem('day_one_completed')).toBe('true');
     });
+    expect(authEvents.emit).toHaveBeenCalledTimes(1);
   });
 
   // B-441-1: the backend has no field for the goals or the check-in time, so
@@ -451,9 +504,11 @@ describe('ReadyScreen', () => {
 
   it('failure surfaces the retry banner with the Continue offline CTA', async () => {
     mockedComplete.mockRejectedValue(new Error('network'));
-    const { getByTestId } = await render(
+    jest.mocked(useCurrentUser).mockReturnValueOnce(null);
+    const { getByTestId, getByText } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
+    expect(getByText('Welcome to TGP.')).toBeTruthy();
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-ready-cta'));
     });
@@ -461,6 +516,10 @@ describe('ReadyScreen', () => {
       expect(getByTestId('day-one-ready-error')).toBeTruthy();
       expect(getByTestId('day-one-ready-offline')).toBeTruthy();
     });
+    mockedComplete.mockResolvedValueOnce(undefined);
+    await act(async () => fireEvent.press(getByTestId('day-one-ready-cta')));
+    expect(mockedComplete).toHaveBeenCalledTimes(2);
+    expect(authEvents.emit).toHaveBeenCalledTimes(1);
   });
 
   it('Continue offline enqueues a complete sync item and emits auth', async () => {
