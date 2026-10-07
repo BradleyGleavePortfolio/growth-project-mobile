@@ -31,12 +31,12 @@ import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { typography } from '../../theme/tokens';
+import { typography, withAlpha } from '../../theme/tokens';
 import SettingsSection from './settings/SettingsSection';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
-  const { colors, semanticColors, appearanceOverride, setAppearanceOverride } = useTheme();
-  const styles = useMemo(() => makeStyles(colors, semanticColors.overlay), [colors, semanticColors.overlay]);
+  const { colors, appearanceOverride, setAppearanceOverride } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   // signOut + refreshProfile imported directly — no store wiring needed.
   const { settings, updateSetting } = useSettings();
@@ -193,7 +193,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {/* Account */}
-        <SettingsSection title="Account" id="account">
+        <SettingsSection title={<Text style={styles.sectionLabel}>Account</Text>} id="account">
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
               {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
@@ -398,7 +398,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         </SettingsSection>
 
         {/* Privacy (D2 contract wording: Settings > Privacy > Roman and AI) */}
-        <SettingsSection title="Privacy" id="privacy">
+        <SettingsSection title={<Text style={styles.sectionLabel}>Privacy</Text>} id="privacy">
           {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
           <HapticPressable
             intent="light"
@@ -567,7 +567,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   );
 }
 
-const makeStyles = (colors: ThemeColors, overlay: string) =>
+const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: {
     flex: 1,
@@ -594,6 +594,12 @@ const makeStyles = (colors: ThemeColors, overlay: string) =>
   content: {
     paddingHorizontal: 24,
     paddingBottom: 40,
+  },
+  sectionLabel: {
+    ...typography.eyebrow,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
   },
   avatar: {
     alignSelf: 'center',
@@ -707,7 +713,7 @@ const makeStyles = (colors: ThemeColors, overlay: string) =>
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: overlay,
+    backgroundColor: withAlpha(colors.textPrimary, 0.4),
     justifyContent: 'flex-end',
   },
   modalSheet: {

@@ -6,14 +6,14 @@ import { typography } from '../../../theme/tokens';
 /** A visible group, never a disclosure control or another navigation step. */
 export default function SettingsSection({
   title, id, children,
-}: { title: string; id: string; children: React.ReactNode }) {
-  const { semanticColors: sc } = useTheme();
+}: { title: React.ReactNode; id: string; children: React.ReactNode }) {
+  const { colors } = useTheme();
   return (
     <View style={styles.section} testID={`settings-section-${id}`}>
-      <Text accessibilityRole="header" style={[styles.title, { color: sc.textMuted }]}>
+      <Text accessibilityRole="header" style={[styles.title, { color: colors.textMuted }]}>
         {title}
       </Text>
-      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border }}>
+      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
         {children}
       </View>
     </View>
