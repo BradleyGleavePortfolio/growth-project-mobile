@@ -37,8 +37,8 @@ import SettingsSection from './settings/SettingsSection';
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
 
 // Same rules and wording as ResetPasswordScreen checkPassword and sign-up
-// (backend RegisterDto); first failure only. m#504 edits ResetPasswordScreen,
-// so its copy is not imported from there yet.
+// (backend RegisterDto); first failure only. checkPassword is local to that
+// screen, so the four rules are repeated here.
 function newPasswordProblem(value: string): string | null {
   if (value.length < 8) return 'At least 8 characters.';
   if (!/[A-Z]/.test(value)) return 'At least one uppercase letter.';
