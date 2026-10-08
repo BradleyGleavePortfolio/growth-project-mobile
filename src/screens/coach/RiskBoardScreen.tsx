@@ -20,9 +20,9 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
 import { SkeletonList } from '../../ui/skeletons/Skeleton';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import HapticPressable from '../../components/HapticPressable';
 import RiskDot from '../../components/RiskDot';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -97,9 +97,8 @@ export default function RiskBoardScreen() {
           mode === 'next' ? [...prev, ...res.data.items] : res.data.items,
         );
       } catch (err) {
-        setError(
-          err instanceof Error ? err.message : 'Could not load the risk board.',
-        );
+        // QA-COACH-STATES-131: words only, never the raw error text.
+        setError(loadFailureMessage(err, 'The risk board'));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -238,25 +237,24 @@ export default function RiskBoardScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.4}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>
-                {error ? 'Could not load risk data' : 'No risk data yet'}
-              </Text>
-              <Text style={styles.emptyBody}>
-                {error
-                  ? error
-                  : 'Risk levels update every night once clients start logging.'}
-              </Text>
-            </View>
+            error ? (
+              <QuietError
+                message={error}
+                onRetry={() => void fetchPage('initial', filter)}
+                retryHint="Loads the risk board again"
+                testID="risk-board-error"
+              />
+            ) : (
+              <View style={styles.empty}>
+                <Text style={styles.emptyTitle}>No risk data yet</Text>
+                <Text style={styles.emptyBody}>
+                  Risk levels update every night once clients start logging.
+                </Text>
+              </View>
+            )
           }
           ListFooterComponent={
-            loadingMore ? (
-              <ActivityIndicator
-                size="small"
-                color={colors.primary}
-                style={styles.footerLoader}
-              />
-            ) : null
+            loadingMore ? <QuietLoading label="Loading more clients" rows={1} /> : null
           }
         />
       )}
@@ -361,7 +359,6 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textMuted,
     },
     loader: { marginTop: 40 },
-    footerLoader: { paddingVertical: 16 },
     empty: {
       paddingTop: 60,
       alignItems: 'center',

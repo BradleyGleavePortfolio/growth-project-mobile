@@ -25,6 +25,7 @@ import {
   View,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import { QuietError, QuietLoading } from '../../ui/states/QuietStates';
 import {
   useApproveSession,
   useDeclineSession,
@@ -239,21 +240,16 @@ export default function CoachBookingInboxScreen() {
     return <SkeletonScreen count={5} />;
   }
 
+  // QA-COACH-STATES-131: one calm error (words, forest Try again text action).
   if (isError) {
     return (
       <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <Text style={[typography.body, { color: colors.textPrimary }]}>
-          {calendarErrorMessage(error, 'load booking requests', 'coach')}
-        </Text>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => void refetch()}
-          style={[styles.primaryBtn, { backgroundColor: oxblood }]}
-        >
-          <Text style={[typography.body, { color: colors.textOnPrimary }]}>
-            Retry
-          </Text>
-        </TouchableOpacity>
+        <QuietError
+          message={calendarErrorMessage(error, 'load booking requests', 'coach')}
+          onRetry={() => void refetch()}
+          retrying={requestsQ.isFetching}
+          testID="coach-requests-error"
+        />
       </View>
     );
   }
@@ -366,9 +362,13 @@ export default function CoachBookingInboxScreen() {
         Upcoming sessions
       </Text>
       {agendaQ.isError ? (
-        <Text style={[typography.body, { color: colors.error, marginTop: spacing.md }]} testID="coach-agenda-error">
-          {calendarErrorMessage(agendaQ.error, 'load upcoming sessions', 'coach')}
-        </Text>
+        <QuietError
+          layout="inline"
+          message={calendarErrorMessage(agendaQ.error, 'load upcoming sessions', 'coach')}
+          onRetry={() => void agendaQ.refetch()}
+          retrying={agendaQ.isFetching}
+          testID="coach-agenda-error"
+        />
       ) : confirmed.length === 0 ? (
         <Text
           style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}
@@ -415,13 +415,15 @@ export default function CoachBookingInboxScreen() {
         </Text>
       ) : null}
       {endedQ.isLoading ? (
-        <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]} testID="coach-ended-loading">
-          Loading past sessions.
-        </Text>
+        <QuietLoading label="Loading past sessions" rows={2} testID="coach-ended-loading" />
       ) : endedQ.isError ? (
-        <Text style={[typography.body, { color: colors.error, marginTop: spacing.md }]} testID="coach-ended-error">
-          {calendarErrorMessage(endedQ.error, 'load past sessions', 'coach')}
-        </Text>
+        <QuietError
+          layout="inline"
+          message={calendarErrorMessage(endedQ.error, 'load past sessions', 'coach')}
+          onRetry={() => void endedQ.refetch()}
+          retrying={endedQ.isFetching}
+          testID="coach-ended-error"
+        />
       ) : ended.length === 0 ? (
         <Text style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]} testID="coach-ended-empty">
           No past sessions waiting for an outcome.

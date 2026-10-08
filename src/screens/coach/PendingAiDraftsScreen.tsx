@@ -51,6 +51,7 @@ import {
   type CoachAiDraftCapability,
 } from '../../api/types/coachAiExecution';
 import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 
 /** Roles allowed to see + decide AI drafts. Mirrors backend
  *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
@@ -148,7 +149,9 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             />
           )}
           contentContainerStyle={
-            renderable.length === 0 ? styles.emptyContainer : styles.listContainer
+            renderable.length === 0 && !query.isLoading
+              ? styles.emptyContainer
+              : styles.listContainer
           }
           refreshControl={
             <RefreshControl
@@ -158,19 +161,15 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
             />
           }
           ListEmptyComponent={
+            // QA-COACH-STATES-131: the shared skeleton and the calm error.
             query.isLoading ? (
-              <EmptyState
-                styles={styles}
-                colors={colors}
-                title="Loading pending drafts…"
-                body=""
-              />
+              <QuietLoading label="Loading pending drafts" testID="pending-ai-drafts-loading" />
             ) : query.isError ? (
-              <EmptyState
-                styles={styles}
-                colors={colors}
-                title="Could not load drafts"
-                body="Pull down to retry."
+              <QuietError
+                message={loadFailureMessage(query.error, 'Pending AI drafts')}
+                onRetry={() => void query.refetch()}
+                retrying={query.isFetching}
+                testID="pending-ai-drafts-error"
               />
             ) : (
               <EmptyState
