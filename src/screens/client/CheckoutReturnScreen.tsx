@@ -422,8 +422,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       textAlign: 'center',
     },
     title: {
-      fontSize: 22,
-      fontWeight: '600',
+      ...tokens.typography.h2,
       color: semanticColors.textPrimary,
       marginTop: 8,
       textAlign: 'center',

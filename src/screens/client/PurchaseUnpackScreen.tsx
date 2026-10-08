@@ -567,8 +567,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginBottom: 8,
     },
     celebrateText: {
-      fontSize: 22,
-      fontWeight: '600',
+      ...tokens.typography.h2,
       color: semanticColors.textPrimary,
     },
     packageName: {

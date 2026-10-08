@@ -18,7 +18,7 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | --- | --- |
 | `HapticPressable.tsx` | Pressable that fires a haptic on press. The right primitive for any tap that commits state. |
 | `FadeInView.tsx` | Mount-time fade-in wrapper. Used for hero copy and milestone tiles. |
-| `EmptyState.tsx` | Bone-on-bone empty state with serif headline + caption. |
+| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, radius 4, 44 pt, Inter 16, HapticPressable). |
 | `ErrorBoundary.tsx` | Top-level error boundary. Reports to Sentry, renders a soft error card. |
 | `SkeletonLoader.tsx` | Shimmering placeholder for list / card load. |
 | `OfflineBanner.tsx` | Hairline banner shown when `useNetworkStatus` reports offline. Mounted by `RootNavigator`. |

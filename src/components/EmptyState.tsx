@@ -1,7 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useMemo } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+import HapticPressable from './HapticPressable';
+import { useTheme } from '../theme/ThemeProvider';
+import { radius, typography, type SemanticTokens } from '../theme/tokens';
 
 interface Props {
   icon: keyof typeof Ionicons.glyphMap;
@@ -11,50 +13,60 @@ interface Props {
   onCta?: () => void;
 }
 
+/** Bone empty state: Cormorant title, one muted Inter line, the same calm CTA as ui/empty-states. */
 export default function EmptyState({ icon, title, subtitle, ctaLabel, onCta }: Props) {
+  const { semanticColors } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
   return (
     <View style={styles.container}>
-      <Ionicons name={icon} size={48} color={Colors.textMuted} />
+      <Ionicons name={icon} size={48} color={semanticColors.textMuted} />
       <Text style={styles.title}>{title}</Text>
       {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
       {ctaLabel && onCta ? (
-        <TouchableOpacity style={styles.cta} onPress={onCta} activeOpacity={0.8}>
+        <HapticPressable
+          intent="light"
+          style={styles.cta}
+          onPress={onCta}
+          accessibilityRole="button"
+          accessibilityLabel={ctaLabel}
+        >
           <Text style={styles.ctaText}>{ctaLabel}</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       ) : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 32,
-    gap: 8,
-  },
-  title: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  cta: {
-    marginTop: 12,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 2, // radius.md
-  },
-  ctaText: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: Colors.textOnPrimary,
-  },
-});
+const makeStyles = (sc: SemanticTokens) =>
+  StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      paddingVertical: 48,
+      paddingHorizontal: 32,
+      gap: 8,
+    },
+    title: {
+      ...typography.h3,
+      color: sc.textPrimary,
+      textAlign: 'center',
+    },
+    subtitle: {
+      ...typography.bodySmall,
+      color: sc.textMuted,
+      textAlign: 'center',
+    },
+    cta: {
+      marginTop: 12,
+      backgroundColor: sc.accent,
+      paddingHorizontal: 24,
+      paddingVertical: 8,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.lg,
+    },
+    ctaText: {
+      ...typography.bodyMd,
+      color: sc.textOnAccent,
+    },
+  });

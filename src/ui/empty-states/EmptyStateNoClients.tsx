@@ -20,8 +20,9 @@ import {
   Share,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import * as Haptics from 'expo-haptics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { HapticService } from '../haptics/haptics.service';
 import { prefsStorage } from '../../storage/mmkv';
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -35,7 +36,7 @@ interface InviteCode {
 }
 
 interface Props {
-  /** Called when "Set up your invite code in Settings" CTA is pressed */
+  /** Called when the "Open invite codes" CTA is pressed (no code yet) */
   onGoToSettings?: () => void;
   /**
    * Alias for the primary invite CTA. Equivalent to `onGoToSettings`
@@ -55,8 +56,8 @@ const MMKV_CODE_KEY_BASE = 'coach.wizard.step_2_invite_code';
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors: legacy, semanticColors } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, legacy), [semanticColors, legacy]);
   const handleInviteCta = onGoToSettings ?? onInvite;
   const currentUser = useCurrentUser();
   const cacheKey = useMemo(
@@ -129,28 +130,25 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
       // best-effort copy; if expo-clipboard is unavailable we silently skip
       // rather than crash the empty-state render
     }
-    try {
-      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    } catch {
-      // haptics not available (simulator / older device)
-    }
+    // HapticService honours the Haptics switch and no-ops where unsupported.
+    await HapticService.softImpact();
   }, [code]);
 
-  // ── Not found — nudge to Settings ─────────────────────────────────────────
+  // ── Not found — nudge to invite codes ─────────────────────────────────────
   if (state === 'notfound') {
     return (
       <View style={styles.container}>
         <Text style={styles.headline}>Your first client is one link away.</Text>
-        <Text style={styles.body}>Set up your invite code in Settings to get started.</Text>
+        <Text style={styles.body}>Set up your invite code to get started.</Text>
         {handleInviteCta ? (
           <TouchableOpacity
             style={styles.primaryBtn}
             onPress={handleInviteCta}
             accessibilityRole="button"
-            accessibilityLabel="Go to Settings to create an invite code"
+            accessibilityLabel="Open invite codes"
             testID="empty-no-clients-settings-btn"
           >
-            <Text style={styles.primaryBtnText}>GO TO SETTINGS</Text>
+            <Text style={styles.primaryBtnText}>Open invite codes</Text>
           </TouchableOpacity>
         ) : null}
       </View>
@@ -194,7 +192,7 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
         accessibilityLabel="Share your invite code"
         testID="share-code-btn"
       >
-        <Text style={styles.primaryBtnText}>SHARE YOUR CODE</Text>
+        <Text style={styles.primaryBtnText}>Share your code</Text>
       </TouchableOpacity>
 
       {/* Copy link */}
@@ -213,7 +211,7 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
   StyleSheet.create({
     container: {
       alignItems: 'center',
@@ -221,9 +219,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingHorizontal: 24,
     },
     headline: {
-      fontFamily: 'CormorantGaramond_400Regular',
-      fontSize: 28,
-      lineHeight: 34,
+      ...typography.h2,
       color: colors.textPrimary,
       textAlign: 'center',
       marginBottom: 24,
@@ -231,20 +227,20 @@ const makeStyles = (colors: ThemeColors) =>
     body: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       textAlign: 'center',
       lineHeight: 22,
       marginBottom: 16,
     },
+    // Unfilled (bone shows through) with the theme hairline.
     codeBlock: {
       width: '100%',
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 2,
+      borderRadius: radius.lg,
       paddingVertical: 12,
       paddingHorizontal: 16,
       alignItems: 'center',
-      backgroundColor: colors.surface,
       marginBottom: 8,
     },
     codeText: {
@@ -262,19 +258,22 @@ const makeStyles = (colors: ThemeColors) =>
     },
     primaryBtn: {
       width: '100%',
-      backgroundColor: colors.primary,
-      paddingVertical: 16,
+      backgroundColor: colors.accent,
+      paddingVertical: 12,
+      minHeight: 44,
       alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.lg,
       marginTop: 8,
     },
     primaryBtnText: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 14,
-      color: colors.textOnPrimary,
-      letterSpacing: 1.2,
+      ...typography.bodyMd,
+      color: colors.textOnAccent,
     },
     copyBtn: {
       paddingVertical: 12,
+      minHeight: 44,
+      justifyContent: 'center',
       marginTop: 4,
     },
     copyBtnText: {
@@ -286,19 +285,19 @@ const makeStyles = (colors: ThemeColors) =>
     skeletonCode: {
       width: '100%',
       height: 44,
-      borderRadius: 2,
-      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      backgroundColor: legacy.surface,
     },
     skeletonLine: {
       height: 12,
       borderRadius: 2,
-      backgroundColor: colors.surface,
+      backgroundColor: legacy.surface,
     },
     skeletonBtn: {
       width: '100%',
       height: 48,
-      borderRadius: 2,
-      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+      backgroundColor: legacy.surface,
     },
   });
 
