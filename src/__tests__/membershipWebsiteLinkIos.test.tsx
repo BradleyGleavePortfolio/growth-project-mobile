@@ -31,6 +31,7 @@ jest.mock('expo-haptics', () => ({
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), getParent: () => ({ navigate: jest.fn() }) }),
+  useFocusEffect: jest.fn(),
 }));
 jest.mock('../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'u1', coach_id: 'c1', createdAt: '2026-01-01T00:00:00Z' }),

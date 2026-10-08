@@ -16,7 +16,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // Security: sign-out now flows through authActions which clears tokens,
 // AsyncStorage, and notifies the auth event emitter — replacing the old
 // useAuthStore.signOut() which only cleared tokens as a side effect.
-import { signOut, refreshProfile } from '../../services/authActions';
+import { signOut, refreshProfile, prepareSignOutConfirm } from '../../services/authActions';
 import { useSettings } from '../../hooks/useSettings';
 import { readDayOneAnswers, type DayOneCheckInTime } from '../day-one/answers';
 import { profileApi, notificationsApi } from '../../services/api';
@@ -179,8 +179,12 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     ]);
   };
 
-  const handleSignOut = () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+  const handleSignOut = async () => {
+    // SESSION-KEEP-130: one try to send what is waiting on this phone first;
+    // the confirm names anything still unsent (sign-out removes it).
+    const message = await prepareSignOutConfirm(currentUser?.id);
+    if (message === null) return; // a confirm is already on its way
+    Alert.alert('Sign out', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',

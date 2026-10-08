@@ -21,6 +21,7 @@ jest.mock('../../../services/api', () => ({
 }));
 jest.mock('../../../services/authActions', () => ({
   signOut: jest.fn(), refreshProfile: jest.fn(),
+  prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?'),
 }));
 jest.mock('../../../utils/supabaseAuth', () => ({ updateSupabasePassword: jest.fn(async () => ({ ok: true })) }));
 jest.mock('../../../components/BiometricUnlockSetting', () => () => null);
@@ -89,6 +90,7 @@ describe('Settings uses this account’s retained Day-1 check-in choice', () => 
     await resetButtons.find((button) => button.text === 'Redo setup')!.onPress!();
     expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
     await fireEvent.press(view.getByText('Sign out'));
+    await waitFor(() => expect(alert).toHaveBeenLastCalledWith('Sign out', 'Are you sure you want to sign out?', expect.any(Array)));
     const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
     buttons.find((button) => button.text === 'Sign out')!.onPress!();
     expect(signOut).toHaveBeenCalled();
