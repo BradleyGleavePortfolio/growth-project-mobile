@@ -46,11 +46,12 @@ More → **Meal plan** opens `Plan`; its neutral “View meal plans” descripti
 
 | File | What it does |
 | --- | --- |
+| `ClientDailyMealPlanScreen.tsx` | Quiet assigned-day list preserving date and delivered `assignmentId` selection, all meal macros, descriptions and plan notes, plus one tabular day-total line (a nutrient is totalled only when every slot supplies it). Missing selected assignments are unavailable, not claimed ended. Pull-to-refresh, skeleton loading and a real retry action; recipe/list/prep navigation remains unchanged in More. |
 | `ClientMacrosScreen.tsx` | Read-only daily target: Cormorant/tabular calorie hero, monochrome QuietBar rows, fiber, notes and recorded effective date. Current targets use `/me/macros/current`; consumed values use today's `/log/daily` totals, never assumed zero on failure. “Set by” appears only when `/v1/clients/me/coach` matches the target's coach ID; otherwise “Your target”. Pull-to-refresh reloads targets and food totals; native back and simple/full visibility are unchanged. Follows `docs/QUIET_LUXURY_DOCTRINE.md`. |
 | `ClientWorkoutViewerScreen.tsx` | Scheduled-date overlines, serif plan names and hairline exercise rows with catalog names and prescribed sets/reps or seconds/weights, including coach-approved set adjustments. Pending and completed assignments both open `WorkoutAssignmentDetail`; refresh and honest loading/error/empty states remain. Coach names and previous-session numbers are not returned by this list API and are not invented. Start/resume and exercise details stay on the unchanged assignment detail route. |
 | `ExerciseDetailScreen.tsx` | Exercise instructions with a serif name and hairline Muscles / Equipment / How to sections, rendered only when data exists. Signed video retains native playback, fullscreen and PiP; legacy GIF fallback remains. Missing/failed media copy reflects the current state and never assumes instructions exist. Retry reloads the same exercise. No fabricated history or records. |
 | `ExerciseLibraryScreen.tsx` | Search-on-submit library that lists GET /exercises/search (the ExerciseDB proxy the coach builder uses; the /exercise-catalog table is empty in production) with two horizontally scrollable text-filter groups (body part, equipment), selected underlines and 44-point targets. Hairline rows show name, target muscle, equipment and body part. Cursor pagination, detail navigation and retry are unchanged; all colours use semantic theme tokens. |
-| `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned. Reads from BOTH `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical) and merges them so a coach assigning via either path lands on the same screen (P0-1 unification). |
+| `PlanScreen.tsx` | Read-only meal-plan overview merging `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical). Quiet hairline lists retain every structured day, legacy meal and note; complete-data nutrient totals only. Created uses the real plan creation time (for the `/meal-plans` canonical fallback row, `source: 'real-meal-plans'`, that is `updated_at`, not the assignment start). A canonical plan returned by both sources is shown once, as its today row. Pull/focus refresh remains; failed loads show an honest retry, not an empty-plan claim. Theme semantic colours and Cormorant/Inter follow the [quiet-luxury doctrine](../../../docs/QUIET_LUXURY_DOCTRINE.md). Undated plans keep ordinal day labels rather than inventing a calendar week. |
 | `DeliverablesScreen.tsx`, `deliverables/dropRow.tsx` | Purchased content: unlocked items first in unfilled hairline rows with an outline open icon; upcoming items muted with their real unlock date/trigger, otherwise “Not unlocked yet.” Cormorant heading, Inter details, complete coach captions, semantic theme colours. Missing viewer references never invite a tap; empty and unavailable lists do not infer coach activity. Workout, meal-plan, message, signed PDF/video, retry, refresh and platform back paths are unchanged; a 44-point Back control now stays visible in every state above safe-area content. The shared row also styles PurchaseUnpack without changing its navigation. Tests: `src/__tests__/deliverablesScreen.test.tsx`. |
 | `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`) in semantic-themed hairline rows with text filters, stored-only per-serving nutrition and time, and no decorative image placeholders. Detail keeps stored images, description, tags, all four nutrition values, ingredients and numbered Inter method steps; save/unsave, back, retry, pull refresh and the allergy prompt remain reachable. A `Saved` filter lists `recipesApi.listSaved` (GET /recipes/saved). The list passes only `{ recipeId }`; detail paints from the React Query list cache but always refetches `recipesApi.getById(recipeId)` for the saved state (the list has no `isSaved`), and a save/unsave updates the detail cache and refreshes the Saved list. New recipe-aware screens must follow this serialisable id-only param pattern. |
 | `RoutineBuilderScreen.tsx` | Create/edit routines from Train. Hairline serif name and exercise rows; drag grip plus labelled move-up/down, edit-focus and remove controls; sets, reps and rest remain inline. Search/muscle picker keeps loading, retry and empty states. Save is the sole forest primary; existing routines keep confirmed deletion. Uses the shared routine query/mutations and local exercise catalog; no new endpoint or route. |
@@ -63,7 +64,7 @@ More → **Meal plan** opens `Plan`; its neutral “View meal plans” descripti
 
 | File | What it does |
 | --- | --- |
-| `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
+| `ProfileScreen.tsx` / `profileDisplay.ts` | Identity, saved personal details and daily targets. On every focus (including returning from Edit), reads `GET /profile`; server values take precedence over the cached profile and use the same field resolver as completion. Server and legacy names render with readable labels and explicit lbs/cm units, including height and allergies. Canonical gym membership does not imply equipment or frequency; canonical goals do not imply a loss pace. `GET /me/macros/current` is authoritative for daily targets (as on Food), then saved `macro_target_*` / legacy values stand in while the read is pending or failed. A confirmed null clears old targets; zero gram targets stay visible. TDEE is omitted because it is not a saved server target. Loading/failed/confirmed-empty target states are distinct. Reads `usersApi.getFoundingNumber` for founding-member context. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe confirmed coach sharing; `owner_access` preserves owner-coach visibility. Absent coach or unconfirmed access shows no sharing sentence; never claims exclusive access. Settings, report, widgets, learning, all personal rows, Edit and confirmed sign-out remain reachable. Follows [Quiet-Luxury Doctrine section 8](../../../docs/QUIET_LUXURY_DOCTRINE.md#8-every-pr-updates-the-corresponding-readme). |
 | `SettingsScreen.tsx` | Seven visible groups on one screen, no added taps: Account, Training and food, Notifications, Privacy and data, Roman, Support, About. Every existing row/control stays; see [settings/README.md](settings/README.md). |
 | `PreferencesScreen.tsx` | Personalisation choices persisted via `preferencesApi`. Semantic-theme page, unfilled hairline groups, Cormorant title, Inter labels and 44 pt options. Home-module switches, cadence, tone samples, units, week-start choices and back remain reachable. Each section explicitly states its stored-only limitation; Notification settings opens the existing `NotificationSettings` route for real delivery controls. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
@@ -100,6 +101,12 @@ Rules and persistence: `src/macros/README.md`.
 
 Roman's tour runs over these real screens. See `src/tutorial/README.md`.
 
+### Connected devices copy for a client with no coach (FW-BODY U10)
+
+`wearables/ConnectionsScreen.tsx` reads `useCoachlessClient()` and passes `coachless` to `ConnectProviderSheet`
+(`onDeviceDisclosure`) and `DisconnectConfirmDialog` (`disconnectConfirmCopy`). A client with no coach is not told about a
+coach; the Connect line says what the data is for and that a coach they join can see it. Coached copy is unchanged.
+
 ## Data flow
 
 ```
@@ -127,6 +134,7 @@ AIGuideScreen ──► aiApi.chat { message, history? }
 
 ## App-store / deep-link dependencies
 
+- Profile uses the existing authenticated self-read endpoints `GET /profile` and `GET /me/macros/current`; no new endpoint, release flag, environment variable or write is required.
 - None of these screens are reachable from a deep link. Universal links land on `CreateAccount` only.
 - Push notifications surface on the Notifications screen in-app and as native banners. The runtime permission is requested once at boot; see `utils/notifications.ts`.
 - `RoutineBuilderScreen` and `RecipeDetailScreen` are referenced by share intents in a future iteration but are not registered as deep-link targets today.
@@ -146,6 +154,7 @@ These screens do not read env directly; they go through `services/api.ts` (which
 
 | Symptom | Cause | Recovery |
 | --- | --- | --- |
+| Profile cannot refresh saved answers or targets | A self-read failed | Keep cached/saved values; if no targets are available, show a target-specific error and reopen Profile to retry. Only a successful null target response says "No daily targets yet." |
 | Log screen freezes after tapping a search result while offline | The food doesn't yet exist server-side and the queue write needs a network round-trip to resolve | Queue stores both the food payload and the log; flush creates the food first, then logs it. The optimistic UI row appears immediately. |
 | Messages screen shows "No coach yet" | User signed up codeless and never attached an invite | They can paste a code on the screen; calls `authApi.attachInviteCode`. |
 | AI Guide says "I'm offline at the moment" | Backend `/ai/chat` returned non-200 or network error | Retry; conversation history is preserved locally. |
@@ -153,6 +162,8 @@ These screens do not read env directly; they go through `services/api.ts` (which
 | Home shows zeros after fresh install | `useClientStore.loadDayData` not yet called for today's date | Auto-runs on focus; pull-to-refresh forces a reload. |
 
 ## Tests
+
+Profile saved-server values, return-from-Edit refresh, cached fallback, truthful target states and every route/row/sign-out handler are covered by `__tests__/ProfileScreen.savedValues.test.tsx`; `__tests__/profileDisplay.test.ts` covers column aliases, readable labels, target precedence and zero gram targets. Sharing-copy parity remains in `src/__tests__/quietLuxuryDoctrine.test.ts` and `src/__tests__/truthfulCopy.guard.test.ts`.
 
 Unit tests live for the helpers these screens lean on (`hooks/__tests__`, `utils/__tests__`, `services/__tests__`). The screens themselves are exercised by the smoke matrix in `docs/RELEASE_SMOKE.md`. Run:
 
@@ -167,6 +178,7 @@ npm run typecheck
 - The ranked `Leaderboard` tab inside `CommunityScreen` was excised in the streak/badge/trophy doctrine sweep. Ranked competition is incompatible with the quiet-luxury voice; the Wins feed is the only social surface.
 - `TrophyShareScreen`, the `FirstWinCelebration` overlay, and the `IdentityBadge` / `TrophyArtifact` components were deleted in the wave-5b cleanup (#63). They are not registered as screens, not imported anywhere, and are explicitly forbidden by the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`).
 - The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind are gone. The dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
+- More → **Shopping list** is gone (owner 10-07: one list; CF-ONE-LIST-128). `GroceryListScreen` reads `/lists/grocery`, then `/lists/shopping`, and shows both as one list: shopping rows keep check, uncheck and remove, Clear checked also clears `/lists/shopping` when a checked row came from it, new rows go to grocery, and one muted line says "Includes items from your shopping list." only while such rows exist. `ShoppingListScreen` and its `ShoppingList` route are still registered but have no entry point (delete them once the open PRs on `ClientNavigator.tsx` and `GroceryPrep.parity.test.tsx` land). Tests: `__tests__/GroceryOneList.test.tsx`, `__tests__/MoreScreen.reach.test.tsx`.
 
 ## Release notes
 

@@ -25,6 +25,8 @@ export interface DisconnectConfirmDialogProps {
   canRetry: boolean;
   onCancel: () => void;
   onConfirm: () => void;
+  /** The client has no coach: the body names no coach (FW-BODY U10). */
+  coachless?: boolean;
 }
 
 export default function DisconnectConfirmDialog({
@@ -36,9 +38,10 @@ export default function DisconnectConfirmDialog({
   canRetry,
   onCancel,
   onConfirm,
+  coachless = false,
 }: DisconnectConfirmDialogProps) {
   if (provider == null) return null;
-  const copy = disconnectConfirmCopy(provider, name);
+  const copy = disconnectConfirmCopy(provider, name, coachless);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <Pressable

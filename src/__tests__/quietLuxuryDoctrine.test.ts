@@ -314,8 +314,8 @@ describe('Truthful client copy and routes/actions parity', () => {
       await fireEvent.press(row); expect(mockNavigate).toHaveBeenLastCalledWith('EditProfile');
     }
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await fireEvent.press(s.getByText('Sign Out'));
-    const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign Out');
+    await fireEvent.press(s.getByText('Sign out'));
+    const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign out');
     await confirm?.onPress?.();
     expect(require('../services/authActions').signOut).toHaveBeenCalled(); alert.mockRestore();
     mockUser = { ...mockUser, coach_id: 'coach' };
