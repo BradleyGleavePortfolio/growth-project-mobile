@@ -95,7 +95,10 @@ function pressAlertButton(text: string) {
 }
 
 async function renderThread() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  // gcTime Infinity: no 5-minute cache timer keeps jest alive after the run.
+  const qc = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false, gcTime: Infinity } },
+  });
   const view = await render(
     <QueryClientProvider client={qc}><CommunityThreadScreen /></QueryClientProvider>,
   );
