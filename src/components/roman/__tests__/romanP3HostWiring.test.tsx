@@ -102,10 +102,13 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
     expect(WORKOUT).toContain('<RomanWorkoutCompleteCard mode="default" testID="roman-workout-card" />');
   });
 
-  it('§2.10 RomanErrorBanner → WorkoutScreen error state (kept visible flag-off)', () => {
-    expect(WORKOUT).toContain("import RomanErrorBanner from '../../components/roman/RomanErrorBanner'");
-    expect(WORKOUT).toMatch(/featureFlags\.romanChat \?\s*\(\s*<RomanErrorBanner mode="error" surface="screen"/);
-    expect(WORKOUT).toContain('Could not load workout data.');
+  it('§2.10 WorkoutScreen load failure: CoachErrorState with a true line, flag on or off (TRAIN-TAB-FIN-130)', () => {
+    // The banner said retries had run and failed; nothing retries this load
+    // (services/api.ts retries only 401s). Home, Log and Progress use the same
+    // CoachErrorState surface.
+    expect(WORKOUT).not.toContain("import RomanErrorBanner from '../../components/roman/RomanErrorBanner'");
+    expect(WORKOUT).toContain("import CoachErrorState from '../../components/community/coach/CoachErrorState'");
+    expect(WORKOUT).toContain('Your routines and history did not load. Check the connection, then try again.');
   });
 
   it('§2.9 RomanVoiceLogReadback → ActiveWorkoutScreen', () => {

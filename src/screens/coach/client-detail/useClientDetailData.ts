@@ -45,7 +45,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       setLoadError(null);
       const today = getTodayString();
 
-      const res = await coachApi.getClientSummary(clientId);
+      const res = await coachApi.getClientSummary(clientId, today);
       const data = res.data;
       if (data.error) return;
       setFoodShared(data.consent?.food_macros !== false);
@@ -293,8 +293,9 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           const dateStr = (meal.date || meal.logged_at || '').slice(0, 10);
           if (!dateStr) continue;
           const week = ensureWeek(dateStr);
-          week.totalCalories += meal.calories || meal.food_item?.calories || 0;
-          week.totalProtein += meal.protein || meal.food_item?.protein || 0;
+          const quantity = meal.quantity_multiplier ?? 1;
+          week.totalCalories += (meal.food_item?.calories || 0) * quantity;
+          week.totalProtein += (meal.food_item?.protein_g || 0) * quantity;
         }
       }
 
@@ -305,16 +306,13 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
           if (!dateStr) continue;
           const week = ensureWeek(dateStr);
           week.workoutCount += 1;
-          // Sum volume from exercises
+          // Saved workouts carry only recorded sets in these parallel arrays.
           if (Array.isArray(session.exercises)) {
             for (const ex of session.exercises) {
-              const sets = ex.sets || [];
-              if (Array.isArray(sets)) {
-                for (const set of sets) {
-                  if (set.completed) {
-                    week.totalWeightMoved += (set.weight || 0) * (set.reps || 0);
-                  }
-                }
+              const weights = ex.weight_per_set || [];
+              const reps = ex.reps_per_set || [];
+              for (let i = 0; i < weights.length; i++) {
+                week.totalWeightMoved += (weights[i] || 0) * (reps[i] || 0);
               }
             }
           }

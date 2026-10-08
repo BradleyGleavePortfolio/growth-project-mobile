@@ -52,7 +52,7 @@ export function WeeklySummaryTab({
                   {week.latestWeight !== null && (
                     <View style={[wsStyles.pill, wsStyles.pillGrey]}>
                       <Ionicons name="scale" size={10} color={colors.textSecondary} />
-                      <Text style={[wsStyles.pillText, { color: colors.textSecondary }]}>{week.latestWeight} lbs</Text>
+                      <Text style={[wsStyles.pillText, { color: colors.textSecondary }]}>{week.latestWeight} lb</Text>
                     </View>
                   )}
                 </View>
@@ -78,7 +78,7 @@ export function WeeklySummaryTab({
                 <Text style={[wsStyles.statValue, { color: colors.accent }]}>
                   {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()}` : '—'}
                 </Text>
-                <Text style={wsStyles.statLabel}>vol (lbs)</Text>
+                <Text style={wsStyles.statLabel}>Volume (lb)</Text>
               </View>
             </View>
 
@@ -105,14 +105,14 @@ export function WeeklySummaryTab({
                   <Ionicons name="trending-up-outline" size={14} color={colors.accent} />
                   <Text style={wsStyles.detailLabel}>Weight Moved</Text>
                   <Text style={wsStyles.detailValue}>
-                    {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()} lbs` : 'N/A'}
+                    {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()} lb` : 'N/A'}
                   </Text>
                 </View>
                 <View style={wsStyles.detailRow}>
                   <Ionicons name="scale-outline" size={14} color={colors.info} />
                   <Text style={wsStyles.detailLabel}>Weight Logged</Text>
                   <Text style={wsStyles.detailValue}>
-                    {week.latestWeight !== null ? `${week.latestWeight} lbs` : 'Not logged'}
+                    {week.latestWeight !== null ? `${week.latestWeight} lb` : 'Not logged'}
                   </Text>
                 </View>
               </View>

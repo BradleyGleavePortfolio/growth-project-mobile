@@ -1,4 +1,5 @@
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import { Colors } from '../constants/colors';
 
@@ -94,10 +95,24 @@ export async function cancelWaterReminders(): Promise<void> {
   scheduledWaterIds.clear();
 }
 
+// Settings > Notifications > Fasting alerts (useSettings 'gp_client_settings',
+// on unless switched off). Every caller of scheduleFastingAlert honours it.
+async function fastingAlertsOn(): Promise<boolean> {
+  try {
+    const raw = await AsyncStorage.getItem('gp_client_settings');
+    const stored: { fastingAlerts?: unknown } | null = raw ? JSON.parse(raw) : null;
+    return stored?.fastingAlerts !== false;
+  } catch (err) {
+    console.warn('notifications: settings unreadable, fasting alert kept on', err);
+    return true;
+  }
+}
+
 export async function scheduleFastingAlert(fastEndTime: Date): Promise<string | null> {
   try {
     const now = new Date();
     if (fastEndTime <= now) return null;
+    if (!(await fastingAlertsOn())) return null;
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {

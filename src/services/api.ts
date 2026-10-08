@@ -77,6 +77,7 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { getTodayString } from '../utils/date';
 import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
 import {
   dunningGenerationOf,
@@ -832,8 +833,8 @@ export const coachApi = {
   unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
   getClientTimeline: (clientId: string, days?: number) =>
     api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
-  getClientSummary: (clientId: string) =>
-    api.get(`/coach/clients/${clientId}/summary`),
+  getClientSummary: (clientId: string, date = getTodayString()) =>
+    api.get(`/coach/clients/${clientId}/summary?date=${encodeURIComponent(date)}`),
   getGuidelines: (clientId: string) =>
     api.get(`/coach/guidelines/${clientId}`),
   getMyGuidelines: () =>

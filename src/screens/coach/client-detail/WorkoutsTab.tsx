@@ -123,7 +123,7 @@ export function WorkoutsTab({
                   <Text style={heading}>
                     {Math.round(exList.reduce((s, e) => s + e.sets.reduce((ss, st) => ss + (st.completed ? st.weight * st.reps : 0), 0), 0))}
                   </Text>
-                  <Text style={meta}>Volume (lbs)</Text>
+                  <Text style={meta}>Volume (lb)</Text>
                 </View>
               </View>
               {/* FU-WORKLOG2-126: the coach used to see only counts and a
