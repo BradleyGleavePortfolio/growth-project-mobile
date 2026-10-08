@@ -1,4 +1,5 @@
 import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { AxiosHeaders } from 'axios';
@@ -48,8 +49,9 @@ const patchCategories = jest.mocked(notificationsApi.updatePreferences);
 const getChannels = jest.mocked(fetchNotificationPreferences);
 const patchChannels = jest.mocked(saveNotificationPreferences);
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
+  await AsyncStorage.clear();
   mockPalette = lightTokens;
   mockPrefs = { ...DEFAULT_PREFERENCES };
   getCategories.mockResolvedValue(response({}));
@@ -65,15 +67,16 @@ beforeEach(() => {
   });
 });
 
-it('category copy matches the exact fields and all five actions remain reachable', async () => {
+it('category copy matches the exact fields and all four working actions remain reachable', async () => {
   const screen = await render(<CategoryScreen navigation={navigation} />);
   await screen.findByLabelText('Workout reminders');
-  expect(screen.getByText('Meal reminder preference.')).toBeTruthy();
+  expect(screen.queryByText('Meal reminder preference.')).toBeNull();
+  expect(screen.queryByLabelText('Reminders')).toBeNull();
+  expect(screen.getAllByRole('switch')).toHaveLength(4);
   expect(screen.getByText('Daily and weekly summary email.')).toBeTruthy();
   expect(screen.queryByText(/critical billing and security/)).toBeNull();
   const cases: Array<[string, Record<string, boolean>]> = [
     ['Coach Messages', { message_push: false, message_inapp: false }],
-    ['Reminders', { eat_enabled: false }],
     ['Workout reminders', { workout_reminder_push: false, workout_reminder_inapp: false }],
     ['Milestones', { milestone_push: false, milestone_inapp: false }],
     ['System', { digest_email: false }],
@@ -90,9 +93,22 @@ it('category copy matches the exact fields and all five actions remain reachable
 it('all category switches show the server values, not a default claim', async () => {
   getCategories.mockResolvedValue(response({ message_push: false, eat_enabled: false, milestone_push: false, digest_email: false, weekly_summary_enabled: true }));
   const screen = await render(<CategoryScreen navigation={navigation} />);
-  for (const label of ['Coach Messages', 'Reminders', 'Milestones', 'System']) {
+  for (const label of ['Coach Messages', 'Milestones', 'System']) {
     expect((await screen.findByLabelText(label)).props.value).toBe(false);
   }
+});
+
+it.each([true, false])('keeps a saved client_bot=%s harmless without exposing or sending it', async (saved) => {
+  await AsyncStorage.setItem('gp_notif_category_prefs', JSON.stringify({ client_bot: saved }));
+  getCategories.mockResolvedValue(response({ eat_enabled: !saved, message_push: true }));
+  const screen = await render(<CategoryScreen navigation={navigation} />);
+  await screen.findByLabelText('Coach Messages');
+  expect(screen.queryByLabelText('Reminders')).toBeNull();
+  await fireEvent(screen.getByLabelText('Coach Messages'), 'valueChange', false);
+  expect(patchCategories).toHaveBeenCalledTimes(1);
+  expect(patchCategories).toHaveBeenCalledWith({ message_push: false, message_inapp: false });
+  expect(JSON.parse((await AsyncStorage.getItem('gp_notif_category_prefs')) ?? '{}'))
+    .toMatchObject({ client_bot: saved, coach_direct: false });
 });
 
 it('every mapped kind retains push, in-app and email actions; mute and back remain', async () => {

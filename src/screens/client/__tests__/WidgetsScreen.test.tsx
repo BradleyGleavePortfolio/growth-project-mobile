@@ -40,6 +40,9 @@ describe('Shortcuts (WidgetsScreen): every action still works', () => {
 
   it('Back goes back and Quick log opens the food log', async () => {
     const screen = await render(<WidgetsScreen />);
+    expect(screen.getByText('Shortcuts')).toBeTruthy();
+    expect(screen.getByText('Open the food log')).toBeTruthy();
+    expect(screen.queryByText('Open the food log from anywhere')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Back'));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     await fireEvent.press(screen.getByText('Quick log'));
@@ -69,12 +72,18 @@ describe('Shortcuts (WidgetsScreen): every action still works', () => {
   });
 
   it('a failed start says so and neither schedules nor navigates', async () => {
-    mockStart.mockRejectedValue(new Error('A fast is already in progress.'));
+    mockStart.mockRejectedValueOnce(new Error('Request failed with status code 500'));
     const screen = await render(<WidgetsScreen />);
     await fireEvent.press(screen.getByText('Start fast'));
     await confirmStart();
-    await waitFor(() => expect(Alert.alert).toHaveBeenLastCalledWith('Could not start fast', 'A fast is already in progress.'));
+    await waitFor(() => expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Could not start fast', 'The fast did not start. Check the connection and try again.',
+    ));
     expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
     expect(mockNavigate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Start fast'));
+    await confirmStart();
+    expect(mockStart).toHaveBeenCalledTimes(2);
+    expect(mockNavigate).toHaveBeenCalledWith('Fast');
   });
 });

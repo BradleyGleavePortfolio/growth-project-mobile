@@ -52,6 +52,41 @@ beforeEach(async () => {
 });
 afterEach(() => jest.restoreAllMocks());
 
+it('uses fixed start-failure copy, leaves the start action available and schedules no alert', async () => {
+  jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  jest.mocked(fastingApi.getHistory).mockResolvedValue(response([]));
+  jest.mocked(fastingApi.start).mockRejectedValueOnce(new Error('Request failed with status code 500'));
+  await render(<FastingScreen />);
+  await fireEvent.press(await screen.findByLabelText('Start fast'));
+  expect(Alert.alert).toHaveBeenLastCalledWith(
+    "Couldn't start fast", 'The fast did not start. Check the connection and try again.',
+  );
+  expect(fastingApi.start).toHaveBeenCalledWith({ protocol: '16:8' });
+  expect(require('../../../utils/notifications').scheduleFastingAlert).not.toHaveBeenCalled();
+  expect(screen.getByLabelText('Start fast').props.accessibilityState.disabled).toBe(false);
+  expect(fastingApi.getHistory).toHaveBeenCalledTimes(1);
+});
+
+it('uses fixed end-failure copy and retains the active fast and its end alert', async () => {
+  jest.spyOn(console, 'error').mockImplementation(() => undefined);
+  await AsyncStorage.setItem(alertKey, 'notification-active');
+  jest.mocked(fastingApi.getHistory).mockResolvedValue(response([active]));
+  jest.mocked(fastingApi.end).mockRejectedValueOnce(new Error('Request failed with status code 500'));
+  await render(<FastingScreen />);
+  await fireEvent.press(await screen.findByLabelText('End fast'));
+  const end = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'End anyway');
+  expect(end).toBeTruthy();
+  await act(async () => { await end?.onPress?.(); });
+  expect(Alert.alert).toHaveBeenLastCalledWith(
+    "Couldn't end fast", 'The fast did not end. Check the connection and try again.',
+  );
+  expect(fastingApi.end).toHaveBeenCalledTimes(1);
+  expect(fastingApi.getHistory).toHaveBeenCalledTimes(2);
+  expect(screen.getByLabelText('End fast').props.accessibilityState.disabled).toBe(false);
+  expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
+  expect(await AsyncStorage.getItem(alertKey)).toBe('notification-active');
+});
+
 it('requires confirmation, removes the selected ended fast, and clears statistics for empty history', async () => {
   await render(<FastingScreen />);
   await screen.findByTestId('remove-fast-ended-fast');

@@ -17,7 +17,6 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { scheduleFastEndAlert } from '../../utils/fastingAlert';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { errorMessage } from '../../types/common';
 
 // Wave 5b: WidgetsScreen reduced to the actions that actually work today.
 // Per the no-placeholder doctrine, "Coming Soon" widgets, wearables and
@@ -37,7 +36,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   {
     id: 'quick-log',
     title: 'Quick log',
-    description: 'Open the food log from anywhere',
+    description: 'Open the food log',
     icon: 'add-circle-outline',
   },
   {
@@ -76,10 +75,8 @@ export default function WidgetsScreen() {
                 await scheduleFastEndAlert(currentUser.id, hours);
               }
               navigation.navigate('Fast');
-            } catch (err) {
-              const msg =
-                errorMessage(err, 'Could not start fast. A fast may already be in progress.');
-              Alert.alert('Could not start fast', msg);
+            } catch {
+              Alert.alert('Could not start fast', 'The fast did not start. Check the connection and try again.');
             } finally {
               setStartingFast(false);
             }
