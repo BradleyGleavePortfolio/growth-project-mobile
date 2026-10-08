@@ -71,6 +71,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     loadError,
     refreshing,
     isArchived,
+    archiveStatusError,
+    loadArchiveStatus,
     setIsArchived,
     setTimeline,
     setWeekSummaries,
@@ -83,7 +85,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     loadTimeline,
     markCheckInReviewed,
     loadWeeklySummaries,
-  } = useClientDetailData(clientId, colors);
+  } = useClientDetailData(clientId, colors, currentUser?.id);
 
   const [activeTab, setActiveTab] = useState<TabKey>(route.params.initialTab ?? 'summary');
   // AIB-6: Workouts tab "Build a program with AI" opens the Coach AI program generator (Summary tab) once.
@@ -260,9 +262,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     setPlanReloadKey((k) => k + 1);
-    await loadData();
+    await Promise.all([loadData(), loadArchiveStatus(true)]);
     setRefreshing(false);
-  }, [loadData, setRefreshing]);
+  }, [loadData, loadArchiveStatus, setRefreshing]);
 
   const sendNudge = async () => {
     setNudgeError('');
@@ -302,7 +304,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     { key: 'weekly', label: 'Weekly', icon: 'stats-chart-outline' },
   ];
 
-  const handleToggleArchive = async () => {
+  const performToggleArchive = async () => {
     setArchiveBusy(true);
     try {
       if (isArchived) {
@@ -315,10 +317,29 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         Alert.alert('Archived', `${clientName} has been archived.`);
       }
     } catch (err) {
-      Alert.alert('Error', errorMessage(err, 'Failed to update client status.'));
+      Alert.alert('Client status could not update', errorMessage(err, 'Try again to update this client’s archive status.'));
     } finally {
       setArchiveBusy(false);
     }
+  };
+
+  const handleToggleArchive = () => {
+    if (archiveBusy || isArchived === null) return;
+    if (isArchived) {
+      void performToggleArchive();
+      return;
+    }
+    const billingDirection = serverFlags.flags.coach_payment_actions
+      ? 'Manage billing in Payments, or ask the client to use End my plan in Your plans.'
+      : 'The client can use End my plan in Your plans.';
+    Alert.alert(
+      'Archive this client?',
+      `Archiving removes ${clientName} from the active client list. It does not stop recurring payments. If a plan is billing, payments continue until billing is paused or the plan is ended separately. ${billingDirection}`,
+      [
+        { text: 'Keep active', style: 'cancel' },
+        { text: 'Archive client', onPress: performToggleArchive },
+      ],
+    );
   };
 
   if (isLoading && !refreshing) {
@@ -387,7 +408,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <View>
             <Text style={styles.clientName}>{clientName}</Text>
             <Text style={styles.clientStatus}>
-              {profile?.primaryGoal?.replace(/_/g, ' ') || 'Active client'}
+              {[
+                isArchived === true ? 'Archived client' : isArchived === false ? 'Active client' : null,
+                profile?.primaryGoal?.replace(/_/g, ' '),
+              ].filter(Boolean).join(' · ') || 'Client'}
             </Text>
           </View>
         </View>
@@ -404,7 +428,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         >
           <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
         </TouchableOpacity>
-        <TouchableOpacity
+        {isArchived !== null && <TouchableOpacity
           style={[styles.msgIconBtn, { marginLeft: 4 }]}
           onPress={handleToggleArchive}
           disabled={archiveBusy}
@@ -416,8 +440,14 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             size={20}
             color={isArchived ? colors.warning : colors.textSecondary}
           />
-        </TouchableOpacity>
+        </TouchableOpacity>}
       </View>
+
+      {archiveStatusError ? (
+        <Text accessibilityRole="alert" style={[typography.body, { color: colors.textSecondary, marginHorizontal: 20, marginBottom: 12 }]}>
+          {archiveStatusError}
+        </Text>
+      ) : null}
 
       {/* Tabs */}
       <ScrollView
