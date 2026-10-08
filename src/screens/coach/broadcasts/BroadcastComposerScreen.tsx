@@ -12,7 +12,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import { useNavigation, usePreventRemove, type NavigationProp, type ParamListBase } from '@react-navigation/native';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { broadcastErrorMessage, broadcastsApi, broadcastsOff, type SegmentOptions } from '../../../api/broadcastsApi';
 import { spacing, typography } from '../../../theme/tokens';
@@ -82,7 +82,20 @@ export default function BroadcastComposerScreen() {
   const [repeat, setRepeat] = useState<RepeatChoice>({ kind: 'none', localTime: '09:00', weekdays: [new Date().getDay()], monthDay: new Date().getDate() });
   const [picker, setPicker] = useState<'date' | 'time' | 'repeatTime' | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const keyRef = useRef(newIdempotencyKey());
+
+  usePreventRemove(body.length > 0 && !sent, ({ data }) => {
+    Alert.alert('Discard this message?', 'Leaving removes the text from this message.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+    ]);
+  });
+
+  // Leave only after the successful send has disabled the native-stack guard.
+  useEffect(() => {
+    if (sent) navigation.goBack();
+  }, [sent, navigation]);
 
   const options = useQuery({ queryKey: ['broadcasts', 'segment-options'], queryFn: () => broadcastsApi.segmentOptions() });
   const segment = useMemo(() => segmentFor(audience), [audience]);
@@ -108,7 +121,7 @@ export default function BroadcastComposerScreen() {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: broadcastsListKey });
-      navigation.goBack();
+      setSent(true);
     },
     onError: (err) => setFormError(broadcastErrorMessage(err, repeat.kind === 'none' && !later ? 'sent' : 'scheduled')),
   });
