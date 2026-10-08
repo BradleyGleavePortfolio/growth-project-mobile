@@ -70,7 +70,7 @@ describe('FastingScreen — P0-3 double-start + notification cancel', () => {
     // not let user A's scheduled end-alert id leak to user B.
     expect(ALERT_SRC).toMatch(/fasting:scheduled_notification_id:\$\{userId\}/);
     expect(ALERT_SRC).toMatch(/AsyncStorage\.setItem\(fastingNotifIdKey\(userId\), notifId\)/);
-    expect(extractFunctionBody(SRC, 'handleStart')).toMatch(/scheduleFastEndAlert\(currentUser\.id, selectedProtocol, settings\.fastingAlerts\)/);
+    expect(extractFunctionBody(SRC, 'handleStart')).toMatch(/scheduleFastEndAlert\(currentUser\.id, selectedProtocol\)/);
   });
 
   it('doEndFast cancels and removes the persisted notification id (user-scoped)', () => {

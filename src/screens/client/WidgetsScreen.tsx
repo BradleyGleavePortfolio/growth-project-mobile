@@ -14,7 +14,6 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import FadeInView from '../../components/FadeInView';
 import { fastingApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useSettings } from '../../hooks/useSettings';
 import { scheduleFastEndAlert } from '../../utils/fastingAlert';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -57,7 +56,6 @@ export default function WidgetsScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [startingFast, setStartingFast] = useState(false);
   const currentUser = useCurrentUser();
-  const { settings } = useSettings();
 
   const handleStartFast = useCallback(async () => {
     if (startingFast) return;
@@ -75,7 +73,7 @@ export default function WidgetsScreen() {
               // Same end alert as a fast started on the Fasting screen.
               if (currentUser) {
                 const hours = Number(DEFAULT_FAST_PROTOCOL.split(':')[0]);
-                await scheduleFastEndAlert(currentUser.id, hours, settings.fastingAlerts);
+                await scheduleFastEndAlert(currentUser.id, hours);
               }
               navigation.navigate('Fast');
             } catch (err) {
@@ -89,7 +87,7 @@ export default function WidgetsScreen() {
         },
       ],
     );
-  }, [startingFast, navigation, currentUser, settings.fastingAlerts]);
+  }, [startingFast, navigation, currentUser]);
 
   const handlePress = useCallback(
     (id: QuickActionId) => {

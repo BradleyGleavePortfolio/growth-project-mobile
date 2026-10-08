@@ -25,8 +25,8 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   calorieDisplay: 'net',
   dailyCheckin: true,
   mealReminders: true,
-  // On by default, like the backend's fasting_enabled: the Fasting screen and
-  // Shortcuts schedule the end-of-fast alert only while this is on.
+  // On by default, like the backend's fasting_enabled: scheduleFastingAlert
+  // (utils/notifications.ts) schedules the end-of-fast alert only while this is on.
   fastingAlerts: true,
   weeklySummary: true,
   hapticsEnabled: true,

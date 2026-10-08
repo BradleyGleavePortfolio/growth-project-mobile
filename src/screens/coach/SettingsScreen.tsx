@@ -661,14 +661,14 @@ export default function SettingsScreen() {
                 onPress={() => navigation.navigate('RomanChat')}
                 accessibilityRole="button"
                 accessibilityLabel="Open a conversation with Roman"
-                accessibilityHint="Ask for a brief, a client read, or the next step"
+                accessibilityHint="Ask about programming, nutrition or running your practice."
               >
                 <RomanAvatar crop="neutral" size={28} testID="coach-roman-entry-avatar" />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowLabel}>Roman</Text>
                   {/* Coach register: operational, not the generic "ask anything"
                       client copy (R1 UX finding P2). */}
-                  <Text style={styles.rowSubLabel}>Ask for a brief, a client read, or the next step.</Text>
+                  <Text style={styles.rowSubLabel}>Ask about programming, nutrition or running your practice.</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
               </TouchableOpacity>

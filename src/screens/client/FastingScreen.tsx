@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useSettings } from '../../hooks/useSettings';
 import { fastingApi } from '../../services/api';
 import { logger } from '../../utils/logger';
 
@@ -60,7 +59,6 @@ export default function FastingScreen() {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const { settings } = useSettings();
 
   const [activeFast, setActiveFast] = useState<FastSession | null>(null);
   const [selectedProtocol, setSelectedProtocol] = useState(16);
@@ -195,9 +193,10 @@ export default function FastingScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
-      // Only while Settings > Fasting Alerts is on. The id is persisted so
-      // doEndFast can cancel the alert even after a cold start.
-      await scheduleFastEndAlert(currentUser.id, selectedProtocol, settings.fastingAlerts);
+      // Scheduled only while Settings > Fasting alerts is on (scheduleFastingAlert
+      // checks). The id is persisted so doEndFast can cancel the alert even
+      // after a cold start.
+      await scheduleFastEndAlert(currentUser.id, selectedProtocol);
     } catch (err) {
       // Destructive write: surface so the user knows the fast didn't start.
       console.error('FastingScreen: handleStart failed', err);

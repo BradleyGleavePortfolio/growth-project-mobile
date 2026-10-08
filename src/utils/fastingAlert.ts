@@ -1,7 +1,11 @@
 /**
- * The local "Fasting window ended" alert for a client's fast. Both start paths
- * (the Fasting screen and Shortcuts) schedule it here, only while Settings >
- * Fasting Alerts is on, and remember its id so ending the fast cancels it.
+ * The local "Fasting window ended" alert for a client's current fast. Both
+ * start paths (the Fasting screen and Shortcuts) schedule it with
+ * scheduleFastEndAlert, which saves the alert's id under fastingNotifIdKey;
+ * scheduleFastingAlert (utils/notifications.ts) schedules nothing while
+ * Settings > Fasting alerts is off. Cancelling it here is how ending or
+ * removing the fast, or switching Fasting alerts off, stops the alert for a
+ * fast that is already running.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -12,12 +16,7 @@ import { scheduleFastingAlert } from './notifications';
 export const fastingNotifIdKey = (userId: string) =>
   `fasting:scheduled_notification_id:${userId}`;
 
-export async function scheduleFastEndAlert(
-  userId: string,
-  targetHours: number,
-  alertsOn: boolean,
-): Promise<void> {
-  if (!alertsOn) return;
+export async function scheduleFastEndAlert(userId: string, targetHours: number): Promise<void> {
   const notifId = await scheduleFastingAlert(new Date(Date.now() + targetHours * 60 * 60 * 1000));
   if (!notifId) return;
   try {

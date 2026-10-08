@@ -48,8 +48,12 @@ jest.mock('../../../utils/date', () => ({
 jest.mock('../../../config/featureFlags', () => ({ featureFlags: { romanCompetencePill: false } }));
 jest.mock('../../../components/roman/CompetencePill', () => () => null);
 jest.mock('../../../utils/logger', () => ({ logger: { error: jest.fn() } }));
-jest.mock('../../../utils/notifications', () => ({
-  scheduleFastingAlert: jest.fn(async () => 'notification-1'),
+// The real scheduleFastingAlert runs, so Settings > Fasting alerts is checked
+// by the app's own gate (utils/notifications.ts reads gp_client_settings).
+jest.mock('expo-notifications', () => ({
+  scheduleNotificationAsync: jest.fn(async () => 'notification-1'),
+  cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  SchedulableTriggerInputTypes: { TIME_INTERVAL: 'timeInterval', DATE: 'date' },
 }));
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
@@ -66,7 +70,6 @@ jest.mock('../../../components/FadeInView', () => {
 import HabitsScreen from '../HabitsScreen';
 import { makeStyles } from '../habits/styles';
 import FastingScreen from '../FastingScreen';
-import { scheduleFastingAlert } from '../../../utils/notifications';
 import type { ApiHabitLog } from '../../../hooks/useApi';
 
 let queryClient: QueryClient;
@@ -254,6 +257,8 @@ describe('Habits — production DTO, check-off and server history', () => {
 describe('Fasting — production protocol and completed status', () => {
   beforeEach(() => AsyncStorage.clear());
   const ALERT_KEY = 'fasting:scheduled_notification_id:client-1';
+  const alertTimes = () => jest.mocked(Notifications.scheduleNotificationAsync).mock.calls
+    .map(([request]) => new Date((request.trigger as { date: Date | number }).date).getTime());
   const runningFast = (hoursAgo: number, protocol = '16:8') => mockGetHistory.mockResolvedValue({ data: [{
     id: 'active', start_time: new Date(Date.now() - hoursAgo * 3600000).toISOString(), end_time: null, protocol,
   }] });
@@ -343,9 +348,8 @@ describe('Fasting — production protocol and completed status', () => {
     const screen = await render(<FastingScreen />);
     await waitFor(() => expect(screen.getByLabelText('Start fast')).toBeTruthy());
     await fireEvent.press(screen.getByLabelText('Start fast'));
-    await waitFor(() => expect(scheduleFastingAlert).toHaveBeenCalledTimes(1));
-    const at = jest.mocked(scheduleFastingAlert).mock.calls[0][0].getTime();
-    expect(Math.abs(at - (Date.now() + 16 * 3600000))).toBeLessThan(60000);
+    await waitFor(() => expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1));
+    expect(Math.abs(alertTimes()[0] - (Date.now() + 16 * 3600000))).toBeLessThan(60000);
     await waitFor(async () => expect(await AsyncStorage.getItem(ALERT_KEY)).toBe('notification-1'));
   });
 
@@ -353,10 +357,11 @@ describe('Fasting — production protocol and completed status', () => {
     await AsyncStorage.setItem('gp_client_settings', JSON.stringify({ fastingAlerts: false, waterGoalOz: 100 }));
     const screen = await render(<FastingScreen />);
     await waitFor(() => expect(screen.getByLabelText('Start fast')).toBeTruthy());
-    await act(async () => { await Promise.resolve(); });
     await fireEvent.press(screen.getByLabelText('Start fast'));
     await waitFor(() => expect(mockStartFast).toHaveBeenCalledWith({ protocol: '16:8' }));
-    expect(scheduleFastingAlert).not.toHaveBeenCalled();
+    // The reload after the start runs once the alert step has finished.
+    await waitFor(() => expect(mockGetHistory).toHaveBeenCalledTimes(2));
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
     expect(await AsyncStorage.getItem(ALERT_KEY)).toBeNull();
   });
 
