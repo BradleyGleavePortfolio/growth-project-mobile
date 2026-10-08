@@ -3,7 +3,7 @@
  * (AI_BUTLER_ROMAN_IDENTITY_SPEC §1) and the Quiet Luxury doctrine §4, and
  * every number it speaks is the real one from the payload.
  */
-import { buildTutorialSteps, TUTORIAL_STEPS, wearableName, type CopyContext } from '../tutorialSteps';
+import { buildTutorialSteps, stepRequirements, TUTORIAL_STEPS, wearableName, type CopyContext } from '../tutorialSteps';
 
 const CTX: CopyContext = {
   firstName: 'Maya',
@@ -15,6 +15,8 @@ const CTX: CopyContext = {
     { id: 's2', name: 'Foundations group' },
   ],
   platform: 'ios',
+  coachLinked: true,
+  outcomes: { plan: 'done', macros: 'done', first_message: 'done' },
 };
 
 const SPARSE: CopyContext = {
@@ -175,7 +177,7 @@ describe('S-SCHED Calendar steps', () => {
 
   it('uses the assigned coach name, never a hardcoded one', () => {
     const lines = steps
-      .filter((s) => s.requires === 'calendar')
+      .filter((s) => stepRequirements(s).includes('calendar'))
       .flatMap((s) => s.gates.map((g) => g.line({ ...CTX, coachName: 'Ana' })))
       .join(' ');
     expect(lines).toContain('Ana');
@@ -183,7 +185,7 @@ describe('S-SCHED Calendar steps', () => {
   });
 
   it('flag off: the default build has neither Calendar step', () => {
-    expect(TUTORIAL_STEPS.some((s) => s.requires === 'calendar')).toBe(false);
+    expect(TUTORIAL_STEPS.some((s) => stepRequirements(s).includes('calendar'))).toBe(false);
     expect(buildTutorialSteps(false).map((s) => s.id)).toEqual(TUTORIAL_STEPS.map((s) => s.id));
   });
 });

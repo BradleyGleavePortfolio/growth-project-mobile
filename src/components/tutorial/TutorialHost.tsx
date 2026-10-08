@@ -3,7 +3,8 @@
  *
  * Responsibilities (all no-ops when featureFlags.clientTutorial is off, in
  * which case it renders its children only):
- *   - hydrate the per-user tour state once the signed-in user resolves;
+ *   - hydrate the per-user tour state once the signed-in user resolves,
+ *     with whether a coach is linked (`user.coach_id`, as Home reads it);
  *   - subscribe the step machine to real-world signals (tutorialEvents);
  *   - feed live `/me/macros/current` numbers to the macro card and step;
  *   - fall back to `GET /me/onboarding` for the payload when the tour was
@@ -62,9 +63,10 @@ function TutorialEffects(): null {
   const connections = useWearableConnections();
 
   const firstName = user?.firstName ?? user?.name?.split(' ')[0] ?? null;
+  const coachLinked = !!user?.coach_id;
   useEffect(() => {
-    if (user?.id) void hydrateTutorial(user.id, firstName);
-  }, [user?.id, firstName]);
+    if (user?.id) void hydrateTutorial(user.id, firstName, coachLinked);
+  }, [user?.id, firstName, coachLinked]);
 
   useEffect(() => attachTutorialSignals(), []);
 

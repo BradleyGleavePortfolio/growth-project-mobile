@@ -42,21 +42,29 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 1 | welcome | Begin | button |
 | 2 | plan | focus Train, then open "Why this plan" on the pinned plan card | route `WorkoutMain`; `plan_card_opened` |
 | 3 | macros | focus Home, then open "How to use these numbers" on the pinned macro card | route `HomeMain`; `macro_card_opened` |
-| 4 | community | focus Community, then Continue | route `CommunityTab` |
-| 5 | coach_messages | open the coach thread from Home's "Message your coach", then Continue | route `Messages` |
+| 4 | community (coach linked) | focus Community, then Continue | route `CommunityTab` |
+| 5 | coach_messages (coach linked) | open the coach thread from Home's "Message your coach", then Continue | route `Messages` |
 | 6 | wearables | open Connected devices; connect Apple Health (iOS) or Health Connect (Android), **or tap Later**; open Health and sleep; Continue | route `Connections`; `wearable_connected` (on-device grant, OAuth success, or a `connected` row in the connections list) or DEFER; route `Health` |
 | 7 | first_meal (teach-back) | focus Log, then save a food entry | `meal_logged`: `POST /log/food` 2xx, or an entry the offline queue accepts |
-| 8 | first_message (teach-back) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
+| 8 | first_message (teach-back, coach linked) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
 | 9 | complete | Done | button |
 
 With `clientCalendar` ON (S-SCHED, owner decisions 2026-10-01):
 
 | After | Step | Gates | Detected by |
 |---|---|---|---|
-| coach_messages | calendar | focus Calendar, then Continue | route `CalendarHome` |
-| first_message | welcome_call | "Book your welcome call with {coach}" opens booking, preselecting the day-1 seeded Quick initialization offering; renamed offerings can be selected explicitly; book, **or tap Later** | `welcome_call_booked` from `CalendarBookScreen` on a successful booking, or DEFER |
+| coach_messages | calendar (coach linked) | focus Calendar, then Continue | route `CalendarHome` |
+| first_message | welcome_call (coach linked) | "Book your welcome call with {coach}" opens booking, preselecting the day-1 seeded Quick initialization offering; renamed offerings can be selected explicitly; book, **or tap Later** | `welcome_call_booked` from `CalendarBookScreen` on a successful booking, or DEFER |
 
 The welcome call never blocks finishing. With no preselected welcome type the client can choose an active appointment type; with no open times the screen offers refresh, Calendar and "Message your coach". Phone calendar exports are user-controlled copies and do not auto-sync.
+
+## Truthful tour (FW-ONB-128 B2)
+
+- "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`, and it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). A step can name several requirements (`requires: ['calendar', 'coach']`); the first one that is not met decides the outcome.
+- Without a coach, the five steps marked "coach linked" above are recorded as `unavailable` and skipped, with no done line. Community spaces live in the coach's workspace and Calendar shows the coach's open times, so those two need the coach as well.
+- Welcome: with a coach, "I work with {coach} to help you get the most from your plan" ("your training" when no plan is set), then "you will try two things yourself". Without a coach Roman names none: "This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself."
+- Complete: built from this tour's outcomes. "Your plan is set" only when the plan step ended `done`, "your numbers are set" only when the macros step did, and "{coach} has your message" only when the first message was sent. With none of them: "That is everything. One thing at a time. Consistency matters more than perfection."
+- Settings > Tutorial reads "Take the tour" until a tour has been completed on this device, then "Take the tour again".
 
 The two teach-back steps have no button and no "Later". The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).
 
@@ -91,4 +99,4 @@ The overlay renders `RomanAvatar crop="neutral"`, which resolves `romanFaceAsset
 
 ## Tests
 
-`src/tutorial/__tests__/` (machine, store/persistence, completion detection, copy voice) and `src/components/tutorial/__tests__/` (overlay, cards, Home slot, Settings row). `ConnectProviderSheet.test.tsx` also asserts the wearable signal.
+`src/tutorial/__tests__/` (machine, store/persistence, completion detection, copy voice, and `tutorialTruth.test.tsx` for clients without a coach or a plan) and `src/components/tutorial/__tests__/` (overlay, cards, Home slot, Settings row). `ConnectProviderSheet.test.tsx` also asserts the wearable signal.
