@@ -78,9 +78,10 @@ export interface AIBudgetTutorialModalProps {
   testID?: string;
 }
 
-/** Roman's coach-method learning (playbook refresh) is paid from the AI pool. */
+/** Roman's coach-method learning (playbook refresh) is paid from the AI pool. B-513-SOL-129-1: a refresh
+ *  runs when the set of sources Roman reads changes (added, archived or no longer shared), not only on an addition. */
 const ROMAN_LEARNING_LINE =
-  'When Roman learns your coaching method, each refresh uses a few cents of credit. Refreshes run a few times a day, only when something new was added.';
+  'When Roman learns your coaching method, each refresh uses a few cents of credit. Refreshes run up to a few times a day, and only when something Roman learns from has changed.';
 
 type Card = {
   title: string;

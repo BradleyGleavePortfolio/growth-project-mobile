@@ -184,12 +184,15 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
       );
       expect(
         getByText(
-          /When Roman learns your coaching method, each refresh uses a few cents of credit\. Refreshes run a few times a day, only when something new was added\./,
+          /When Roman learns your coaching method, each refresh uses a few cents of credit\. Refreshes run up to a few times a day, and only when something Roman learns from has changed\./,
         ),
       ).toBeTruthy();
       // FIX-RC-128 B1: the backend also refreshes after every restart, so
       // the card must not promise a hard daily maximum.
       expect(queryByText(/at most/)).toBeNull();
+      // B-513-SOL-129-1: archiving a template also triggers a paid refresh,
+      // so the card must not say refreshes need something new.
+      expect(queryByText(/something new|was added/)).toBeNull();
     },
   );
 });
