@@ -24,6 +24,7 @@ import { authEvents } from '../../utils/authEvents';
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
+import { cancelFastEndAlert } from '../../utils/fastingAlert';
 import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
@@ -229,6 +230,13 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     }
   };
 
+  // Off also cancels the alert already set for a fast that is running now
+  // (new fasts are gated in utils/notifications.ts scheduleFastingAlert).
+  const handleFastingAlertsToggle = (value: boolean) => {
+    handleNotificationToggle('fastingAlerts', value);
+    if (!value && currentUser?.id) void cancelFastEndAlert(currentUser.id);
+  };
+
   const serverSwitchOn = (key: ServerSwitchKey) => serverSwitches[key] ?? settings[key];
 
   // A failed save puts the switch back and says so (FW-ACCOUNT U9).
@@ -406,7 +414,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
           ) : null}
           {renderSwitch('Fasting alerts', 'A notification on this phone when your fasting window ends.',
-            settings.fastingAlerts, (v) => handleNotificationToggle('fastingAlerts', v))}
+            settings.fastingAlerts, handleFastingAlertsToggle)}
           {renderSwitch('Summary emails', 'Progress summaries sent to your email.',
             serverSwitchOn('weeklySummary'), (v) => { void handleServerToggle('weeklySummary', v); })}
           {notificationError ? (

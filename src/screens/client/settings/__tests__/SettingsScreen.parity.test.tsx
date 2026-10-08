@@ -247,6 +247,25 @@ it('shows the saved server values and puts a switch back with a plain line when 
   expect(mockUpdateSetting).not.toHaveBeenCalled();
 });
 
+it('switching Fasting alerts off cancels the alert already set for this account\'s current fast', async () => {
+  const notifications = jest.requireMock('expo-notifications') as { cancelScheduledNotificationAsync: jest.Mock };
+  // The Fasting screen saves the scheduled alert id per account (FastingScreen.tsx fastingNotifIdKey).
+  await AsyncStorage.setItem('fasting:scheduled_notification_id:settings-client', 'fast-end-1');
+  await AsyncStorage.setItem('fasting:scheduled_notification_id:other-client', 'fast-end-2');
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  await fireEvent(view.getByLabelText('Fasting alerts'), 'valueChange', false);
+  await waitFor(() => expect(notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('fast-end-1'));
+  await waitFor(async () => expect(
+    await AsyncStorage.getItem('fasting:scheduled_notification_id:settings-client')).toBeNull());
+  expect(await AsyncStorage.getItem('fasting:scheduled_notification_id:other-client')).toBe('fast-end-2');
+  expect(mockUpdateSetting).toHaveBeenLastCalledWith('fastingAlerts', false);
+  expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith({ fasting_enabled: false });
+  // Switching it back on cancels nothing else.
+  await fireEvent(view.getByLabelText('Fasting alerts'), 'valueChange', true);
+  expect(mockUpdateSetting).toHaveBeenLastCalledWith('fastingAlerts', true);
+  expect(notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
+});
+
 it('keeps the existing Roman consent visibility gate', async () => {
   mockRomanEnabled = false;
   const view = await render(<SettingsScreen navigation={navigation} />);

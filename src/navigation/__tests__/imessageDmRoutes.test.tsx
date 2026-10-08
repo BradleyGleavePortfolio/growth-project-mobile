@@ -136,12 +136,12 @@ beforeEach(() => {
 });
 
 describe('Settings UI — Apple 1.2 discoverable blocked-users entry', () => {
-  it('client SettingsScreen Blocked Users row calls navigation.navigate("BlockedUsers")', async () => {
+  it('client SettingsScreen Blocked users row calls navigation.navigate("BlockedUsers")', async () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ClientSettings = require('../../screens/client/SettingsScreen').default;
     const navProp = { navigate: mockNavigate, goBack: jest.fn() };
     const { getByLabelText } = await render(<ClientSettings navigation={navProp} />);
-    await fireEvent.press(getByLabelText('Blocked Users'));
+    await fireEvent.press(getByLabelText('Blocked users'));
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
   });
 
