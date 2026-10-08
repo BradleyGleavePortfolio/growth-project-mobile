@@ -6,6 +6,14 @@ CommunitySpaceScreen uses a serif space name and unfilled hairline post rows.
 Post, coach-message, safety and flag-gated voice-note pathways remain reachable.
 CommunityThreadScreen reads posts in Inter 17 pt, separates replies with hairlines,
 distinguishes loading/failure/empty, and focuses the reply input from its empty action.
+A Back row returns (or opens the Community tab when a link opened the thread). The post
+and each reply carry a muted author/time line: "You" and "Your coach" come from ids, any
+other name only from the server's `author_name` (first name), otherwise only the time.
+Reactions show the server's summary (the post's `reactions`, else the state the last tap
+returned), flip while a tap is in flight, and a second tap removes the reaction. The
+author deletes their own post from its "..." menu after a confirm
+(DELETE /community/posts/:postId); replies have no delete endpoint. Pull to refresh
+reloads the post and its replies. Tests: `CommunityThreadScreen.test.tsx`.
 
 Today is a calm date-led column on the theme background: small-caps sections,
 text-first hairline rows and one forest action. The server supplies cohort name

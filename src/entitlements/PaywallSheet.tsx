@@ -42,8 +42,10 @@ import { useCoachlessClient } from '../hooks/useCoachlessClient';
 export const COACH_MANAGED_TITLE = 'Your coach manages your access';
 export const COACH_MANAGED_BODY =
   'Your coach sets up what is included in your coaching. Send them a message and they will take it from here.';
-export const COACHLESS_TITLE = 'Join a coach to start logging';
-export const COACHLESS_BODY = 'Enter the code your coach gave you.';
+// Joining alone starts logging only when the coach's code includes a plan, and
+// a coachless client may not have a coach or a code yet (AUD-FIN-FOOD-129 G1).
+export const COACHLESS_TITLE = 'Logging comes with coaching';
+export const COACHLESS_BODY = 'Join a coach with their code. Each coach sets up what their coaching includes.';
 export const COACHLESS_CTA = 'Enter a coach code';
 
 export interface PaywallSheetProps {
