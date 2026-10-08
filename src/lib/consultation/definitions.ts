@@ -438,7 +438,7 @@ export const SCREENS: readonly ScreenDef[] = [
     eyebrow: chapterEyebrow(6),
     timeLeft: 'About 2 minutes left',
     question: "Anything you can't or won't eat?",
-    why: 'So nothing suggested is something you avoid.',
+    why: 'So your coach knows what you avoid.',
     options: [
       { value: 'nothing', label: 'Nothing' },
       { value: 'dairy', label: 'Dairy' },
