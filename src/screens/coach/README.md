@@ -42,6 +42,8 @@ Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
 
 The coach Settings Roman row and its accessibility hint both read “Ask about programming, nutrition or running your practice.” The existing flag-gated `RomanChat` destination is unchanged.
 
+COACH-SETTINGS-131: *Active Clients* reads one 50-row page of `GET /coach/clients` (active clients; the route returns 20 rows unless `take` is sent, 50 at most) and shows the count, "50+" for a full page, and "—" while it loads or after a failed load, never 0. *Notification preferences* opens `ClientsStack → NotificationPreferences`, the only place the coach navigator registers that screen (the push router uses the same target); the old bare name from the Settings stack reached no navigator. Payments ends with a text-only *AI credits* row (`settings/AICreditsRow.tsx`, `useAIBudget`, polled only while Settings is focused): percent left, what uses the credits and the renewal day, a low-credit note from 80 percent used and a paused note at 100 percent. It sells nothing. It is hidden for a `sub_coach` (the budget route answers 403), and a failed read says so and tries again on tap. Tests: `__tests__/SettingsScreen.coachSettings131.test.tsx`.
+
 ### Stream 2 — AI execution drafts
 
 The coach can ask the AI to propose a side-effecting action (message, workout assignment, meal plan assignment, push notification) and review every draft before it materialises. The flow is:

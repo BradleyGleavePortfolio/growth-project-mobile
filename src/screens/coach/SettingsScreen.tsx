@@ -46,7 +46,19 @@ import { SettingsToggles } from './settings/SettingsToggles';
 import { BillingSection } from './settings/BillingSection';
 import { DangerZone } from './settings/DangerZone';
 import { BookingOptionsEntry } from './settings/BookingOptionsEntry';
+import { AICreditsRow } from './settings/AICreditsRow';
 import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
+
+/**
+ * COACH-SETTINGS-131: GET /coach/clients is paged (20 rows unless `take` is
+ * sent, 50 at most), so the count reads one 50-row page and a full page shows
+ * "50+" instead of a capped number. null = not loaded or failed: "—", never 0.
+ */
+export const CLIENT_COUNT_PAGE = 50;
+export function formatClientCount(count: number | null): string {
+  if (count === null) return '—';
+  return count >= CLIENT_COUNT_PAGE ? `${CLIENT_COUNT_PAGE}+` : String(count);
+}
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -56,7 +68,7 @@ export default function SettingsScreen() {
   const headCoachHandlesMoney = useHeadCoachHandlesMoney();
   // signOut imported directly — no store wiring needed.
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
-  const [clientCount, setClientCount] = useState(0);
+  const [clientCount, setClientCount] = useState<number | null>(null);
   const [bioText, setBioText] = useState('');
   const [showBioModal, setShowBioModal] = useState(false);
   const [bioSaveError, setBioSaveError] = useState('');
@@ -115,14 +127,9 @@ export default function SettingsScreen() {
         const localBio = await AsyncStorage.getItem('gp_coach_bio_' + userId);
         if (localBio) setBioText(localBio);
       }
-      if (userId) {
-        const res = await coachApi.getClients();
-        const clients = res.data;
-        setClientCount(Array.isArray(clients) ? clients.length : 0);
-      }
     } catch (err) {
-      // Best-effort read: coach settings fall back to defaults, bio stays empty,
-      // client count stays 0. No user action is useful here.
+      // Best-effort read: coach settings fall back to defaults and the bio
+      // stays empty. No user action is useful here.
       console.error('coach SettingsScreen: loadSettings failed', err);
     }
   }, [userId]);
@@ -130,6 +137,23 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  // Its own request, so a failed settings or bio read never hides the count.
+  const loadClientCount = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const res = await coachApi.getClients('active', undefined, CLIENT_COUNT_PAGE);
+      const clients = res.data;
+      setClientCount(Array.isArray(clients) ? clients.length : null);
+    } catch (err) {
+      setClientCount(null);
+      console.warn('coach SettingsScreen: client count failed', errorMessage(err));
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    loadClientCount();
+  }, [loadClientCount]);
 
   const loadAccountStatus = useCallback(async () => {
     setAccountStatusLoading(true);
@@ -272,6 +296,15 @@ export default function SettingsScreen() {
     navigation.navigate('Billing');
   };
 
+  // NotificationPreferences is registered in ClientsStack only
+  // (CoachNavigator.tsx). React Navigation 7 does not hand a bare name from
+  // this stack to a sibling tab's stack, so navigate('NotificationPreferences')
+  // did nothing. Same target as the coach push router (pushTapRouter.ts).
+  const handleOpenNotificationPreferences = () => {
+    mediumTap();
+    navigation.navigate('ClientsStack', { screen: 'NotificationPreferences', initial: false });
+  };
+
   // Payments surface — packages marketplace, Connect onboarding, earnings.
   const handleOpenPackages = () => {
     mediumTap();
@@ -410,10 +443,19 @@ export default function SettingsScreen() {
       {/* Client Management */}
       <Text style={styles.sectionHeader}>Client Management</Text>
       <View style={styles.section}>
-        <View style={styles.row}>
+        <View
+          style={styles.row}
+          accessible
+          accessibilityLabel={
+            clientCount === null ? 'Active clients, not loaded' : `Active clients, ${formatClientCount(clientCount)}`
+          }
+          testID="settings-active-clients"
+        >
           <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Active Clients</Text>
-          <Text style={styles.rowValueHighlight}>{clientCount}</Text>
+          <Text style={styles.rowValueHighlight} testID="settings-active-clients-value">
+            {formatClientCount(clientCount)}
+          </Text>
         </View>
         <View style={styles.divider} />
         {/* Importer v0.3 — coach-facing Import Data entry. Rendered ONLY when
@@ -519,6 +561,13 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </>
         )}
+        {/* COACH-SETTINGS-131: GET /coach/ai/budget answers 403 for a sub_coach. */}
+        {currentUser?.role !== 'sub_coach' ? (
+          <>
+            <View style={styles.divider} />
+            <AICreditsRow styles={styles} colors={colors} />
+          </>
+        ) : null}
       </View>
 
       {/* Coach Tools — surfaces the per-coach building tools that previously
@@ -632,7 +681,7 @@ export default function SettingsScreen() {
       <SettingsToggles
         settings={settings}
         onUpdateSetting={updateSetting}
-        onOpenNotificationPreferences={() => navigation.navigate('NotificationPreferences')}
+        onOpenNotificationPreferences={handleOpenNotificationPreferences}
         colors={colors}
         styles={styles}
       />
