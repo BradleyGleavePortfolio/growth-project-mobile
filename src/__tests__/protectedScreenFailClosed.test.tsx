@@ -82,15 +82,19 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('paid-content')).toBeNull();
   });
 
-  it('entitlementActive=null after first settle (status=unavailable) → renders paywall (FAIL CLOSED)', async () => {
-    mockEntitlement({ entitlementActive: null, status: 'unavailable' });
+  it('entitlementActive=null after first settle (status=unavailable) → check failed + Try again (FAIL CLOSED)', async () => {
+    const refreshEntitlement = jest.fn(async () => false);
+    mockEntitlement({ entitlementActive: null, status: 'unavailable', refreshEntitlement });
     const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
     );
-    expect(getByTestId('protected-screen-paywall')).toBeTruthy();
+    expect(getByTestId('protected-screen-check-failed')).toBeTruthy();
+    expect(queryByTestId('protected-screen-paywall')).toBeNull();
     expect(queryByTestId('paid-content')).toBeNull();
+    await fireEvent.press(getByTestId('protected-screen-try-again'));
+    expect(refreshEntitlement).toHaveBeenCalledTimes(1);
   });
 
   it('status=loading on first fetch → renders spinner (no paywall flash)', async () => {
