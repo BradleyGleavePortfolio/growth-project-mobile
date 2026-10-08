@@ -156,7 +156,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
   const status = errorStatus(err);
   const { code, message, stripeCode } = readBody(err);
   const requestId = extractRequestId(err);
-  const base = { requestId, code };
+  const base = { requestId: null, code };
 
   if (isNetworkError(err)) {
     return {
@@ -170,7 +170,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       title: "Your session ended",
-      body: "Sign in again to continue. Nothing you finished has been lost.",
+      body: "Sign in again to continue.",
       retryable: false,
     };
   }
@@ -187,16 +187,12 @@ export function describeError(err: unknown, action: string): FriendlyError {
     stripeCode === "configuration_missing" ||
     code === "STRIPE_NOT_CONFIGURED"
   ) {
-    // A server configuration state (Connect not configured for this
-    // environment), not an app-version state: tell the coach what still
-    // works, where to connect later, and how to reach support.
+    // Configuration is not an account failure or a promised launch date. agent 132
     return {
       ...base,
-      title: "Payouts are not switched on for your account yet",
-      body:
-        "You cannot connect Stripe right now because payouts are not switched on for your account yet. " +
-        "Finish the rest of setup, then connect Stripe later from Get paid on the Overview tab. " +
-        `Free packages work today.${referenceSentence(requestId, "If this has not changed by tomorrow")}`,
+      code: "CONNECT_NOT_CONFIGURED",
+      title: "Payouts are not available yet",
+      body: "Finish setup now and connect Stripe later from Get paid.",
       retryable: false,
     };
   }
@@ -227,8 +223,8 @@ export function describeError(err: unknown, action: string): FriendlyError {
   if (code === "STEP_OUT_OF_ORDER") {
     return {
       ...base,
-      title: "Your setup moved on another device",
-      body: "Setup picked up where you left off. Continue from here.",
+      title: "Setup needs a refresh",
+      body: "Try again to continue from the saved step.",
       retryable: true,
     };
   }
@@ -245,7 +241,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       title: "Your package was already saved",
-      body: `Tap Create package again to finish it with the details you see now.${referenceSentence(requestId)}`,
+      body: "Tap Create package again to finish with the details shown.",
       retryable: true,
     };
   }
@@ -273,8 +269,9 @@ export function describeError(err: unknown, action: string): FriendlyError {
     captureError(err, { area: "coach_money", action, status, code, requestId });
     return {
       ...base,
+      requestId,
       title: "These money figures could not be checked",
-      body: `TGP received figures for this that did not add up, so it is not showing them. Try again in a minute.${referenceSentence(requestId)}`,
+      body: `These figures could not be confirmed. Try again.${supportSentence()}`,
       retryable: true,
     };
   }
@@ -315,8 +312,8 @@ export function describeError(err: unknown, action: string): FriendlyError {
     return {
       ...base,
       requestId: reference,
-      title: "TGP had a problem on its side",
-      body: `TGP could not ${action} just now. Try again in a few minutes.${referenceSentence(reference)}`,
+      title: `TGP could not ${action}`,
+      body: `Try again in a minute.${supportSentence()}`,
       retryable: true,
     };
   }
@@ -325,16 +322,11 @@ export function describeError(err: unknown, action: string): FriendlyError {
     ...base,
     requestId: reference,
     title: `TGP could not ${action}`,
-    body: `Try again. If it keeps happening, write to ${COACH_SUPPORT_EMAIL} and mention reference ${reference}.`,
+    body: `Try again.${supportSentence()}`,
     retryable: true,
   };
 }
 
-function referenceSentence(
-  requestId: string | null,
-  lead = "If it keeps happening",
-): string {
-  return requestId
-    ? ` ${lead}, write to ${COACH_SUPPORT_EMAIL} and mention reference ${requestId}.`
-    : ` ${lead}, write to ${COACH_SUPPORT_EMAIL}.`;
+function supportSentence(): string {
+  return ` If it keeps happening, contact ${COACH_SUPPORT_EMAIL}.`;
 }

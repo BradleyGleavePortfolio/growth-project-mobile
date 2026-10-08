@@ -210,8 +210,8 @@ describe("describeError", () => {
       ),
     ];
     expect(cases.map((c) => c.title)).toEqual([
-      "Payouts are not switched on for your account yet",
-      "Payouts are not switched on for your account yet",
+      "Payouts are not available yet",
+      "Payouts are not available yet",
       "Finish Stripe setup first",
       "Too many tries in a row",
       "Your session ended",
@@ -233,7 +233,7 @@ describe("describeError", () => {
       "load your payout setup",
     );
     expect(e.requestId).toBe("req_123");
-    expect(e.body).toContain("req_123");
+    expect(e.body).not.toContain("req_123");
     expect(e.body).toContain(COACH_SUPPORT_EMAIL);
     expect(mockCapture).toHaveBeenCalledTimes(1);
     const u = describeError(
@@ -241,7 +241,8 @@ describe("describeError", () => {
       "save this step",
     );
     expect(u.title).toBe("TGP could not save this step");
-    expect(u.body).toContain("req_9");
+    expect(u.requestId).toBe("req_9");
+    expect(u.body).not.toContain("req_9");
   });
 });
 
@@ -435,7 +436,7 @@ describe("GetPaidPanel", () => {
     const { findByText, getByTestId } = await render(<GetPaidPanel />);
     await findByText("Get paid with Stripe");
     await fireEvent.press(getByTestId("get-paid-open"));
-    await findByText("Payouts are not switched on for your account yet");
+    await findByText("Payouts are not available yet. Finish setup now and connect Stripe later from Get paid.");
     expect(mockOpenAuth).not.toHaveBeenCalled();
   });
 });

@@ -26,11 +26,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   ScrollView,
   TextInput,
   ActivityIndicator,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { authEvents } from "../utils/authEvents";
@@ -73,6 +73,18 @@ export type CoachWizardParamList = {
 
 const UI_STEPS = 5;
 const BACKEND_FINAL_STEP = 6;
+
+/** A cold resume has no earlier stack entry; replace avoids a Back loop. agent 132 */
+function backToStep(
+  navigation: Pick<
+    NativeStackNavigationProp<CoachWizardParamList>,
+    "getState" | "goBack" | "replace"
+  >,
+  previous: keyof CoachWizardParamList,
+) {
+  if (navigation.getState().index > 0) navigation.goBack();
+  else navigation.replace(previous);
+}
 
 export const PRACTICE_FOCUS_OPTIONS = [
   "Strength",
@@ -171,13 +183,18 @@ function StepLayout({
   children,
 }: StepLayoutProps) {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View
+      style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}
+      testID={`wizard-step-${stepNumber}-safe-area`}
+    >
       <ScrollView
         contentContainerStyle={styles.inner}
         keyboardShouldPersistTaps="handled"
+        testID={`wizard-step-${stepNumber}-scroll`}
       >
         {/* Step indicator */}
         <View style={styles.stepIndicator}>
@@ -227,7 +244,7 @@ function StepLayout({
           </TouchableOpacity>
         ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -340,18 +357,19 @@ function CoachWizardStep2({ navigation }: Step2Props) {
       stepNumber={2}
       totalSteps={UI_STEPS}
       heading="Get paid"
-      body="Clients pay you by card. Stripe, the payments provider TGP uses, holds your bank and ID details so TGP never sees them."
-      ctaLabel={ready ? "Continue" : "Continue without payouts for now"}
+      body="Stripe handles card payments and collects your bank and ID details."
+      ctaLabel={ready ? "Continue" : "Continue setup"}
       ctaDisabled={saving}
       onCta={next}
-      onBack={() => navigation.goBack()}
+      onBack={() => backToStep(navigation, "CoachWizardStep1")}
     >
       <GetPaidPanel
         onChange={(v) => patch({ connect: v })}
+        secondaryAction
         testID="wizard-get-paid"
       />
       {!ready ? (
-        <SmallNote text="You can finish this later from the checklist on the Overview tab. Free packages work without Stripe." />
+        <SmallNote text="Free packages work without Stripe." />
       ) : null}
       {error ? (
         <SetupNotice error={error} testID="wizard-step-2-error" />
@@ -447,7 +465,7 @@ function CoachWizardStep3({ navigation }: Step3Props) {
       ctaLabel={done ? "Continue" : "Skip for now"}
       ctaDisabled={saving}
       onCta={goNext}
-      onBack={() => navigation.goBack()}
+      onBack={() => backToStep(navigation, "CoachWizardStep2")}
     >
       {checking ? (
         <ActivityIndicator accessibilityLabel="Checking your packages" />
@@ -548,7 +566,7 @@ function CoachWizardStep4({ navigation }: Step4Props) {
           navigation.navigate("CoachWizardStep5"),
         )
       }
-      onBack={() => navigation.goBack()}
+      onBack={() => backToStep(navigation, "CoachWizardStep3")}
     >
       <InviteShareCard
         onShared={() => patch({ invited: true })}
@@ -641,7 +659,7 @@ function CoachWizardStep5({ navigation }: Step5Props) {
       ctaLabel="Go to your dashboard"
       ctaDisabled={submitting}
       onCta={finish}
-      onBack={() => navigation.goBack()}
+      onBack={() => backToStep(navigation, "CoachWizardStep4")}
     >
       {checking ? (
         <ActivityIndicator
@@ -800,7 +818,7 @@ const makeStyles = (colors: ThemeColors) =>
     inner: {
       flexGrow: 1,
       paddingHorizontal: 24,
-      paddingTop: 32,
+      paddingTop: 36,
       paddingBottom: 24,
     },
     stepIndicator: { flexDirection: "row", gap: 8, marginBottom: 28 },
@@ -829,6 +847,8 @@ const makeStyles = (colors: ThemeColors) =>
     childrenContainer: { marginBottom: 16 },
     primaryBtn: {
       backgroundColor: colors.primary,
+      borderRadius: 4,
+      minHeight: 48,
       paddingVertical: 16,
       alignItems: "center",
       marginTop: 16,
@@ -847,6 +867,8 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 1.2,
     },
     backBtn: {
+      minHeight: 44,
+      minWidth: 44,
       paddingVertical: 12,
       alignSelf: "flex-start",
       marginTop: 4,
