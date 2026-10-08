@@ -6,6 +6,14 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 
 Meal-plan empty-state directions name the client’s **Meal plan** entry under More, not a Plan tab. After AI meal-plan approval, `ClientDetail` opens its coach-side Plan tab via `initialTab: 'mealplan'`, including on return to an already-mounted client detail.
 
+Client-detail Summary requests the device's calendar day using the existing `date` query.
+Weekly totals multiply food nutrition by recorded portions, read `protein_g`, and sum
+saved workout `weight_per_set × reps_per_set` volume before display rounding. Weekly
+and Workouts use `lb` captions. Food review formats the recorded eat day and meal label
+without changing portions, notes, targets or sharing states. Weekly disclosure,
+7/14/30-day food filters, feedback, meal plans, refresh and workout AI actions remain.
+Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
+
 - Show the coach the state of every client they own: streaks, last log, last check-in, alerts.
 - Let the coach issue invite codes that bind new signups to their account, and revoke codes they no longer want to honour.
 - Talk to clients (per-thread DMs) and ship lightweight nudges (push notifications + in-app banners).
@@ -18,6 +26,7 @@ Meal-plan empty-state directions name the client’s **Meal plan** entry under M
 | --- | --- |
 | `ClientsListScreen.tsx` | Searchable, filterable list of clients (`coachApi.getClients`). Routes to `ClientDetail`, `ClientMessages`, and `InviteCodes`. |
 | `ClientDetailScreen.tsx` | Per-client timeline — workouts, weight logs, food logs, check-ins. Nine text tabs retain their destinations with an active underline. Workouts counts only shared recorded sessions this week; an empty visible list says “No shared workout sessions to show”, not that the client never trained. Hairline rows keep recorded date/duration, sets, volume, weight/reps and both note levels visible; RPE appears only if supplied. The top-recorded-load trajectory requires two same-exercise points, not an estimated 1RM. Build-with-AI, copy-and-adjust, back, messages, archive/unarchive and refresh remain reachable. Parity: `src/__tests__/coachClientWorkoutsMakeover127.test.tsx`; styling: `docs/QUIET_LUXURY_DOCTRINE.md`. Surfaces guidelines + the "send nudge" form. Reads `coachApi.getClientTimeline`, `getClientCheckIns`, `getClientSummary`. |
+| `ClientPaymentsScreen.tsx` | COACH-PAY-M-130: one client's payments for their coach, opened from Summary > Payments only while `/me/feature-flags` reports `coach_payment_actions` (backend `FEATURE_COACH_PAYMENT_ACTIONS`, CF-COACH-PAY-BE-128). Per plan: price, billing state in words and only the actions the server allows (Pause billing, Resume billing, Restart plan, Cancel plan, each confirmed first); per payment: paid date, refunded and in-progress amounts, Refund. The refund sheet defaults to what is left, says whether access ends, and keeps one idempotency key per amount across retries. Reads `coachClientPaymentsApi` (`GET /v1/coach/clients/:clientId/payments`, `POST .../:purchaseId/refund|pause|resume|cancel`); copy in `src/lib/money/clientPaymentsCopy.ts`. Tests: `__tests__/ClientPayments.test.tsx`. |
 | `ClientMessagesScreen.tsx` | One-on-one thread with a single client. Realtime ping + 60 s safety poll, same shape as the client side. |
 | `MessagesScreen.tsx` | Inbox across all clients. Pulls `coachApi.getUnreadCounts`. |
 | `CoachHomeScreen.tsx` | Dashboard — `coachApi.getDashboard` + `coachApi.getAlerts`. The coach's first-open screen. Renders weight-trend / missed-check-in alerts as the activity feed when alerts exist; renders an explicit empty state explaining what *would* appear here when they don't. There is no "Activity feed coming soon" placeholder — the doctrine forbids it. |
@@ -29,6 +38,8 @@ Meal-plan empty-state directions name the client’s **Meal plan** entry under M
 | `payments/CoachPackagesListScreen.tsx` | Package list, create/edit routes and refresh. Unavailable packages use neutral version-availability copy, without promising a future release. |
 | `CreditPackCheckoutScreen.tsx` | Stripe-webview entry point for AI credit packs (Stream 1). Two-phase flow: selection (pack tiers + custom amount, bounded by `pack_options_cents` / `custom_pack_bounds_cents` from the budget query) then webview (`react-native-webview` pointing at the minted Stripe Checkout URL with the same origin allow-list + deep-link parser as `BrandedCheckoutWebViewScreen`). Not a 1:1 service: on iOS the route is replaced by the neutral hidden state (`withNonP2PPurchaseGate`, see `src/config/purchaseSurfaces.ts`); elsewhere billed via Stripe. Success state is `SuccessReceipt` (quiet-luxury — see "Success state" below). |
 | `PendingAiDraftsScreen.tsx` | Stream 2 inbox of pending AI execution drafts. Lists `AiActionDraft` rows in `status='pending'` for the current coach across the four Stream 2 capabilities (`draft.client_message`, `draft.assign_workout`, `draft.assign_meal_plan`, `draft.send_notification`). Per-capability card variants render the appropriate preview (message body / workout name + weeks + day-1 exercise count / meal plan macro summary / notification title + body). Approve + Reject buttons call the existing approval endpoints. Focus-gated 30s polling via `usePendingAiDrafts` composed with `useIsFocused()`. Reached from any client-detail screen via the `<AskAiActionSheet>` flow (`Summary tab → Ask AI pill → pick capability → submit prompt → navigate here`). |
+
+The coach Settings Roman row and its accessibility hint both read “Ask about programming, nutrition or running your practice.” The existing flag-gated `RomanChat` destination is unchanged.
 
 ### Stream 2 — AI execution drafts
 
@@ -67,7 +78,7 @@ If you add another purchase-confirm surface (e.g. a future subscription upgrade 
 Coach signs in (same flow as client) ─► role='coach' ─► CoachNavigator mounts
 
 ClientsListScreen ──► coachApi.getClients(status?)            (server-filtered)
-ClientDetailScreen ─► coachApi.getClientSummary(clientId)
+ClientDetailScreen ─► coachApi.getClientSummary(clientId, deviceCalendarDay)
                   ─► coachApi.getClientTimeline(clientId, days)
                   ─► coachApi.getClientCheckIns(clientId, ...)
                   ─► coachApi.getMyGuidelines() / postGuidelines

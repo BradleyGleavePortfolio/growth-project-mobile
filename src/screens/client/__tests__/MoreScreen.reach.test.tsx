@@ -201,7 +201,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     ["Timeline", "Timeline"], ["Guidance", "AIGuide"], ["Membership", "Membership"],
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
-    ["Learn", "Learn"], ["Widgets", "Widgets"], ["Grocery list", "GroceryList"],
+    ["Learn", "Learn"], ["Shortcuts", "Widgets"], ["Grocery list", "GroceryList"],
     ["Prep guide", "PrepGuide"],
   ];
   afterEach(() => {
@@ -252,7 +252,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
       "Meal plan", "Macro targets", "Progress", "Habits and check-in", "Timeline",
       "Exercise library", "Membership", "Report", ...(!tutorial ? healthLabels : []),
       ...(!roman ? guidanceLabels : []), "Recipes", "Fasting", "Grocery list",
-      "Prep guide", "Profile", "Settings", "Widgets", "Learn",
+      "Prep guide", "Profile", "Settings", "Shortcuts", "Learn",
     ]);
   });
 
@@ -270,7 +270,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     await render(<MoreScreen />);
     for (const copy of ["View meal plans", "View daily calorie and nutrient targets",
       "Browse exercise instructions", "Open AI guidance", "View timeline entries",
-      "Membership and access details", "Widget setup and options", "View meal preparation guidance",
+      "Membership and access details", "Quick log and start a fast", "View meal preparation guidance",
       "View weight trends and daily totals"]) {
       expect(screen.getByText(copy)).toBeTruthy();
     }

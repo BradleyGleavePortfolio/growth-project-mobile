@@ -10,7 +10,7 @@
  * offline reads, and the server is the single source of truth for writes.
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -74,6 +74,7 @@ export default function HabitsScreen() {
   // Server writes
   const logHabit = useLogHabit();
   const createHabit = useCreateHabit();
+  const createHabitInFlight = useRef(false);
   const deleteHabit = useDeleteHabit();
   const saveCheckIn = useSaveCheckIn();
 
@@ -207,7 +208,8 @@ export default function HabitsScreen() {
   };
 
   const handleAddHabit = () => {
-    if (!newName.trim()) return;
+    if (createHabitInFlight.current || !newName.trim()) return;
+    createHabitInFlight.current = true;
     createHabit.mutate(
       {
         name: newName.trim(),
@@ -224,6 +226,9 @@ export default function HabitsScreen() {
         },
         onError: (err) => {
           Alert.alert("Couldn't create habit", errorMessage(err, 'The habit was not created. Try again.'));
+        },
+        onSettled: () => {
+          createHabitInFlight.current = false;
         },
       },
     );
@@ -440,6 +445,7 @@ export default function HabitsScreen() {
         newUnit={newUnit}
         setNewUnit={setNewUnit}
         onAdd={handleAddHabit}
+        isSaving={createHabit.isPending}
         colors={colors}
         styles={styles}
       />

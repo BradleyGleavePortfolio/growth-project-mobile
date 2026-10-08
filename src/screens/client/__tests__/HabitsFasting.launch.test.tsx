@@ -125,6 +125,71 @@ describe('Habits — production DTO, check-off and server history', () => {
     expect(screen.queryByText('Color')).toBeNull();
   });
 
+  it('ignores a second create tap while the first request is pending', async () => {
+    let resolveCreate!: (value: { data: { id: string } }) => void;
+    const pendingCreate = new Promise<{ data: { id: string } }>((resolve) => {
+      resolveCreate = resolve;
+    });
+    mockCreateHabit.mockReturnValue(pendingCreate);
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Add habit'));
+    await fireEvent.changeText(screen.getByLabelText('Habit name'), 'Walk daily');
+    await fireEvent.press(screen.getByText('Create habit'));
+    await waitFor(() => expect(mockCreateHabit).toHaveBeenCalledTimes(1));
+    await fireEvent.press(screen.getByText(/^(Create|Creating) habit$/));
+    expect(mockCreateHabit).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Creating habit' })).toBeDisabled());
+    expect(screen.getByRole('button', { name: 'Creating habit' }).props.accessibilityState.busy).toBe(true);
+
+    await act(async () => { resolveCreate({ data: { id: 'new-habit' } }); });
+    await waitFor(() => expect(screen.queryByText('New habit')).toBeNull());
+    await fireEvent.press(screen.getByText('Add habit'));
+    expect(screen.getByLabelText('Habit name').props.value).toBe('');
+    expect(screen.getByLabelText('Habit target').props.value).toBe('1');
+    expect(screen.getByLabelText('Habit unit').props.value).toBe('times');
+    expect(screen.getByRole('button', { name: 'Create habit' })).toBeDisabled();
+  });
+
+  it('re-enables create after a failed save, retaining the values for another attempt', async () => {
+    let rejectCreate!: (reason: Error) => void;
+    const pendingCreate = new Promise<{ data: { id: string } }>((_resolve, reject) => {
+      rejectCreate = reject;
+    });
+    mockCreateHabit.mockReturnValueOnce(pendingCreate);
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Add habit'));
+    await fireEvent.changeText(screen.getByLabelText('Habit name'), 'Walk daily');
+    await fireEvent.changeText(screen.getByLabelText('Habit target'), '3');
+    await fireEvent.changeText(screen.getByLabelText('Habit unit'), 'times');
+    await fireEvent.press(screen.getByText('Create habit'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Creating habit' })).toBeDisabled());
+    await act(async () => { rejectCreate(new Error('Network unavailable')); });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Create habit' })).toBeEnabled());
+    expect(Alert.alert).toHaveBeenCalledWith("Couldn't create habit", expect.any(String));
+    expect(screen.getByLabelText('Habit name').props.value).toBe('Walk daily');
+    expect(screen.getByLabelText('Habit target').props.value).toBe('3');
+    expect(screen.getByLabelText('Habit unit').props.value).toBe('times');
+    expect(screen.getByRole('button', { name: 'Create habit' }).props.accessibilityState.busy).toBe(false);
+    await fireEvent.press(screen.getByText('Create habit'));
+    await waitFor(() => expect(mockCreateHabit).toHaveBeenCalledTimes(2));
+    expect(mockCreateHabit).toHaveBeenLastCalledWith({
+      name: 'Walk daily', category: 'custom', target_value: 3, unit: 'times',
+    });
+    await waitFor(() => expect(screen.queryByText('New habit')).toBeNull());
+  });
+
+  it.each(['', '   '])('does not submit a blank habit name (%p)', async (name) => {
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Add habit'));
+    await fireEvent.changeText(screen.getByLabelText('Habit name'), name);
+    expect(screen.getByText('Create habit')).toBeDisabled();
+    await fireEvent.press(screen.getByText('Create habit'));
+    expect(mockCreateHabit).not.toHaveBeenCalled();
+  });
+
   it('check-off shows the saved quantity, and undo persists zero and clears today', async () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());

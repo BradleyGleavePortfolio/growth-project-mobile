@@ -8,8 +8,12 @@
  *     of the sets already logged. Tapping Resume reopens the same workout
  *     (same name, same coach assignment) with every logged set.
  *   - "Waiting to send": workouts finished without signal. They are stored
- *     on the phone and sent automatically; the card says so and disappears
+ *     on the phone and sent automatically; the row says so and disappears
  *     once they are on the server.
+ *
+ * TRAIN-TAB-FIN-130: hairline rows instead of cream boxes with a forest
+ * border, and the queued line no longer names a coach the client may not
+ * have (a coachless client's workouts go to the client's own history).
  *
  * Every focus of the tab also sends queued workouts (a cold start online has
  * no reconnect event to do it).
@@ -24,7 +28,9 @@ import {
   ParamListBase,
 } from '@react-navigation/native';
 import HapticPressable from '../HapticPressable';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { typography, type SemanticTokens } from '../../theme/tokens';
+import { QuietOverline } from '../../ui/sections/QuietSection';
 import {
   loadActiveWorkoutSession,
   type PersistedActiveWorkoutSession,
@@ -110,8 +116,8 @@ export default function WorkoutSyncCards({
   userId: string | undefined;
   onSynced?: () => void;
 }) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { session, queuedCount } = useWorkoutSyncState(userId, onSynced);
 
@@ -134,7 +140,7 @@ export default function WorkoutSyncCards({
           testID="workout-resume-card"
         >
           <View style={{ flex: 1 }}>
-            <Text style={styles.label}>Workout in progress</Text>
+            <QuietOverline>Workout in progress</QuietOverline>
             <Text style={styles.title}>{session.routineName || 'Workout'}</Text>
             <Text style={styles.detail}>
               {`${startedAgo(session.startedAtMs, Date.now())} · ${loggedSets} ${
@@ -143,20 +149,20 @@ export default function WorkoutSyncCards({
             </Text>
           </View>
           <Text style={styles.action}>Resume</Text>
-          <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          <Ionicons name="chevron-forward" size={18} color={sc.textMuted} />
         </HapticPressable>
       ) : null}
       {queuedCount > 0 ? (
         <View
-          style={[styles.card, styles.noticeCard]}
+          style={styles.card}
           accessibilityRole="text"
           testID="workout-queued-notice"
         >
-          <Ionicons name="cloud-upload-outline" size={20} color={colors.textSecondary} />
+          <Ionicons name="cloud-upload-outline" size={20} color={sc.textMuted} />
           <Text style={styles.notice}>
             {queuedCount === 1
-              ? '1 workout is saved on this phone and will be sent to your coach once the phone is back online.'
-              : `${queuedCount} workouts are saved on this phone and will be sent to your coach once the phone is back online.`}
+              ? '1 workout is saved on this phone and will be sent once the phone is back online.'
+              : `${queuedCount} workouts are saved on this phone and will be sent once the phone is back online.`}
           </Text>
         </View>
       ) : null}
@@ -164,49 +170,39 @@ export default function WorkoutSyncCards({
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
     card: {
       flexDirection: 'row',
       alignItems: 'center',
       marginHorizontal: 24,
-      marginBottom: 16,
-      paddingHorizontal: 16,
+      marginBottom: 24,
+      minHeight: 56,
       paddingVertical: 14,
-      borderRadius: 4,
-      backgroundColor: colors.surface,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      gap: 8,
-    },
-    noticeCard: {
-      borderColor: colors.border,
-    },
-    label: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
-      marginBottom: 2,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderColor: sc.border,
+      gap: 12,
     },
     title: {
-      fontSize: 15,
-      fontWeight: '500',
-      color: colors.textPrimary,
+      ...typography.h4,
+      color: sc.textPrimary,
     },
     detail: {
+      ...typography.bodySmall,
       fontSize: 13,
-      color: colors.textSecondary,
+      color: sc.textMuted,
       marginTop: 2,
+      fontVariant: ['tabular-nums'],
     },
     action: {
-      fontSize: 15,
-      fontWeight: '500',
-      color: colors.primary,
+      ...typography.bodyMd,
+      color: sc.accentText,
     },
     notice: {
+      ...typography.bodySmall,
       flex: 1,
       fontSize: 13,
-      color: colors.textSecondary,
+      color: sc.textMuted,
     },
   });

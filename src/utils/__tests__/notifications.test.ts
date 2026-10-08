@@ -19,6 +19,9 @@ jest.mock('expo-notifications', () => ({
 }));
 
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
+import { useSettings } from '../../hooks/useSettings';
 
 describe('utils/notifications — Hunt P0-4 / P3-2', () => {
   beforeEach(() => {
@@ -52,5 +55,42 @@ describe('utils/notifications — Hunt P0-4 / P3-2', () => {
     expect(Notifications.cancelAllScheduledNotificationsAsync).not.toHaveBeenCalled();
     expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
     expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('water-id-1');
+  });
+});
+
+// CF-SETTINGS-128: Settings > Fasting alerts is the switch for the end-of-fast
+// alert. The real useSettings hook writes it; scheduleFastingAlert reads it.
+describe('scheduleFastingAlert follows Settings > Fasting alerts', () => {
+  const inAnHour = () => new Date(Date.now() + 60 * 60 * 1000);
+  const savedFastingAlerts = async () =>
+    JSON.parse((await AsyncStorage.getItem('gp_client_settings')) ?? '{}').fastingAlerts;
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await AsyncStorage.clear();
+  });
+
+  it('schedules the alert when nothing is saved on this phone (on by default)', async () => {
+    (Notifications.scheduleNotificationAsync as jest.Mock).mockResolvedValueOnce('fast-id-1');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { scheduleFastingAlert } = require('../notifications');
+    await expect(scheduleFastingAlert(inAnHour())).resolves.toBe('fast-id-1');
+    expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('schedules nothing while the switch is off, and schedules again once it is back on', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { scheduleFastingAlert } = require('../notifications');
+    const { result } = await renderHook(() => useSettings());
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+    await act(async () => { result.current.updateSetting('fastingAlerts', false); });
+    await waitFor(async () => expect(await savedFastingAlerts()).toBe(false));
+    await expect(scheduleFastingAlert(inAnHour())).resolves.toBeNull();
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+
+    (Notifications.scheduleNotificationAsync as jest.Mock).mockResolvedValueOnce('fast-id-2');
+    await act(async () => { result.current.updateSetting('fastingAlerts', true); });
+    await waitFor(async () => expect(await savedFastingAlerts()).toBe(true));
+    await expect(scheduleFastingAlert(inAnHour())).resolves.toBe('fast-id-2');
   });
 });
