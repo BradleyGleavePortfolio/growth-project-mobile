@@ -269,7 +269,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     const s = await render(React.createElement(WorkoutScreen));
     await waitFor(() => expect(s.getByText('Full body')).toBeTruthy());
     await press(s, 'Open assigned workout: Strength');
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assigned' } });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'assigned' }, initial: false });
     await fireEvent.press(s.getByText('Full body'));
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineId: 'routine', routineName: 'Full body', exercises: '[]' });
     await press(s, 'Edit routine Full body'); expect(mockNavigate).toHaveBeenLastCalledWith('RoutineBuilder', { routineId: 'routine' });
