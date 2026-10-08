@@ -192,7 +192,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
       ...base,
       code: "CONNECT_NOT_CONFIGURED",
       title: "Payouts are not available yet",
-      body: "Finish setup now and connect Stripe later from Get paid.",
+      body: "Finish setup now and connect Stripe later from Get paid on the Overview tab.",
       retryable: false,
     };
   }
@@ -271,7 +271,7 @@ export function describeError(err: unknown, action: string): FriendlyError {
       ...base,
       requestId,
       title: "These money figures could not be checked",
-      body: `These figures could not be confirmed. Try again.${supportSentence()}`,
+      body: `TGP is not showing them. Try again.${supportSentence()}`,
       retryable: true,
     };
   }

@@ -436,7 +436,7 @@ describe("GetPaidPanel", () => {
     const { findByText, getByTestId } = await render(<GetPaidPanel />);
     await findByText("Get paid with Stripe");
     await fireEvent.press(getByTestId("get-paid-open"));
-    await findByText("Payouts are not available yet. Finish setup now and connect Stripe later from Get paid.");
+    await findByText("Payouts are not available yet. Finish setup now and connect Stripe later from Get paid on the Overview tab.");
     expect(mockOpenAuth).not.toHaveBeenCalled();
   });
 });

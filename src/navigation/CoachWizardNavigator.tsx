@@ -369,7 +369,7 @@ function CoachWizardStep2({ navigation }: Step2Props) {
         testID="wizard-get-paid"
       />
       {!ready ? (
-        <SmallNote text="Free packages work without Stripe." />
+        <SmallNote text="You can finish this later from the checklist on the Overview tab. Free packages work without Stripe." />
       ) : null}
       {error ? (
         <SetupNotice error={error} testID="wizard-step-2-error" />

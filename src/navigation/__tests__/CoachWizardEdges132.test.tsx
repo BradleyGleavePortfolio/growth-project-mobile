@@ -197,7 +197,7 @@ describe("B06/B10 calm, non-blocking configuration state", () => {
   it("unavailable Stripe has one neutral explanation, no retry trap, and setup continues", async () => {
     const ui = await wizard(2);
     await ui.findByText(
-      "Payouts are not available yet. Finish setup now and connect Stripe later from Get paid.",
+      "Payouts are not available yet. Finish setup now and connect Stripe later from Get paid on the Overview tab.",
     );
     expect(ui.queryByTestId("wizard-get-paid-open")).toBeNull();
     expect(ui.queryByTestId("wizard-get-paid-error")).toBeNull();
