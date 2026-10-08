@@ -277,6 +277,9 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
     // receipt says it is on its way, never that it is already on the account.
     expect(screen.getByText('Payment complete')).toBeTruthy();
     expect(screen.getByText(/of AI credit is on its way to your account/i)).toBeTruthy();
+    // FIX-OPUS-B-131 (B2): a pack can leave the meter hidden, so no Coach Home claim.
+    expect(screen.getByText(/It is added to your AI credits once Stripe confirms the payment\./)).toBeTruthy();
+    expect(screen.queryByText(/Coach Home/)).toBeNull();
     expect(screen.queryByText(/is now on your account/i)).toBeNull();
     expect(screen.getByText('New balance')).toBeTruthy();
     // formatCents uses USD_WHOLE (no trailing zeros) for whole-dollar

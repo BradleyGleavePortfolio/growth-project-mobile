@@ -8,7 +8,8 @@
  *   60 ≤ pct_used < 80   → meter chip (passthrough via `meterSlot` prop)
  *   80 ≤ pct_used < 95   → BLOCKING tutorial modal (once per period_start)
  *   95 ≤ pct_used < 100  → persistent banner above content
- *   pct_used ≥ 100       → hard pause modal (dismissible) + banner-rest state
+ *   pct_used ≥ 100       → hard pause modal (dismissible) + banner-rest state;
+ *                          once closed, a build that sells packs shows the tappable chip
  *
  * Why one orchestrator: keeps Coach Home's diff to a single line, centralises
  * the AsyncStorage "seen-this-period" logic for the tutorial, and ensures
@@ -125,7 +126,7 @@ export function AIBudgetMount({
   }
 
   const chip =
-    surface === 'chip' ? (
+    surface === 'chip' || (surface === 'paused' && hardPauseDismissed && !purchasesHidden) ? (
       <AIBudgetMeter
         budget={budget}
         onPress={purchasesHidden ? undefined : () => goToCheckout('custom')}

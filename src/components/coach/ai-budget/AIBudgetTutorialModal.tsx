@@ -131,7 +131,7 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean, paysI
     },
     {
       title: 'Buy credits',
-      body: `Pick a pack to keep AI features running. Or tap "Not now": this guide appears once a month, and the Coach Home meter opens the packs any time.${paysInBrowser ? ' You pay TGP the pack price through Stripe checkout, which opens in your browser.' : ''}`,
+      body: `Pick a pack to keep AI features running. Or tap "Not now": this guide appears once a month.${paysInBrowser ? ' You pay TGP the pack price through Stripe checkout, which opens in your browser.' : ''}`,
       icon: 'card-outline',
     },
   ];

@@ -147,6 +147,11 @@ describe('US-link build: credit-pack checkout in the system browser', () => {
     expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
     expect(screen.queryByTestId('credit-pack-webview-mock')).toBeNull();
     expect(screen.getByTestId('credit-pack-external')).toHaveTextContent(/You pay TGP \$10\./);
+    // FIX-OPUS-B-131 (B2): below 60% Coach Home shows no meter, so the copy names AI credits, not Coach Home.
+    expect(screen.getByTestId('credit-pack-external')).toHaveTextContent(
+      /It is added to your AI credits once Stripe confirms the payment\./,
+    );
+    expect(screen.getByTestId('credit-pack-external')).not.toHaveTextContent(/Coach Home/);
   });
 
   it('Stripe success link shows the receipt and refetches the budget', async () => {
@@ -157,6 +162,11 @@ describe('US-link build: credit-pack checkout in the system browser', () => {
       urlListener?.({ url: 'tgp://checkout/success?session_id=cs_live_abc' });
     });
     expect(screen.getByTestId('credit-pack-success')).toBeTruthy();
+    // FIX-OPUS-B-131 (B2): the receipt names AI credits, not Coach Home.
+    expect(screen.getByTestId('credit-pack-success')).toHaveTextContent(
+      /It is added to your AI credits once Stripe confirms the payment\./,
+    );
+    expect(screen.getByTestId('credit-pack-success')).not.toHaveTextContent(/Coach Home/);
     expect(mockInvalidate).toHaveBeenCalledWith({ queryKey: ['coachAIBudget'] });
   });
 

@@ -166,6 +166,17 @@ describe('iOS store build, US link on', () => {
     );
   });
 
+  it('after Close on the pause sheet, the meter chip stays and opens the packs (U2)', async () => {
+    mockBudget = budget(100);
+    const utils = await render(<AIBudgetMount />);
+    expect(utils.queryByTestId('ai-budget-mount-chip')).toBeNull();
+    await fireEvent.press(utils.getByTestId('ai-hard-pause-close'));
+    const chip = utils.getByTestId('ai-budget-mount-chip');
+    expect(chip.props.accessibilityRole).toBe('button');
+    await fireEvent.press(chip);
+    expect(mockNavigate).toHaveBeenCalledWith('SettingsStack', { screen: 'CreditPackCheckout', params: { preselect: 'custom' } });
+  });
+
   it('tutorial last card: packs, who is paid, and "Not now" (no first person)', async () => {
     jest.useFakeTimers();
     try {
@@ -183,6 +194,9 @@ describe('iOS store build, US link on', () => {
       expect(text).toMatch(/You pay TGP the pack price through Stripe checkout/);
       expect(utils.getByTestId('ai-tutorial-later')).toHaveTextContent('Not now');
       expect(text).not.toMatch(/I'll|I&apos;ll|\bI\b/);
+      // FIX-OPUS-B-131 (B1): Coach Home shows no meter at 80-94%, so the guide never points to one.
+      expect(text).toMatch(/this guide appears once a month\./);
+      expect(text).not.toMatch(/meter/i);
     } finally {
       jest.useRealTimers();
     }
@@ -200,5 +214,14 @@ describe('the switch never shows packs where it does not apply', () => {
     const row = await render(<PackOptionsRow options={[1000]} onSelect={jest.fn()} />);
     expect(row.queryByTestId('ai-pack-option-1000')).toBeNull();
     expect(COACH_PUSH_ROUTES.CreditPackCheckout()).toEqual({ root: 'SettingsStack', screen: 'SettingsHome' });
+  });
+
+  it('iOS store build, switch off: closing the pause sheet adds no chip', async () => {
+    setRow('ios', false);
+    mockBudget = budget(100);
+    const utils = await render(<AIBudgetMount />);
+    await fireEvent.press(utils.getByTestId('ai-hard-pause-close'));
+    expect(utils.queryByTestId('ai-hard-pause-close')).toBeNull();
+    expect(utils.queryByTestId('ai-budget-mount-chip')).toBeNull();
   });
 });

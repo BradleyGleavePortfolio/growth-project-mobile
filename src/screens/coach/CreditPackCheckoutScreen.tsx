@@ -415,7 +415,7 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
           <Text style={styles.errorTitle}>Finish paying in your browser</Text>
           <Text style={styles.errorBody}>
             Stripe checkout for {formatCents(phase.amountCents)} is open in your browser. You pay
-            TGP {formatCents(phase.amountCents)}. The credit shows on Coach Home once Stripe
+            TGP {formatCents(phase.amountCents)}. It is added to your AI credits once Stripe
             confirms the payment.
           </Text>
           <HapticPressable
@@ -596,8 +596,8 @@ function SuccessReceipt({
         </Animated.View>
         <Text style={styles.successTitle}>Payment complete</Text>
         <Text style={styles.successBody}>
-          {formatCents(amountCents)} of AI credit is on its way to your account. It shows on
-          Coach Home once Stripe confirms the payment.
+          {formatCents(amountCents)} of AI credit is on its way to your account. It is added to
+          your AI credits once Stripe confirms the payment.
         </Text>
 
         <View style={styles.metaHairline} />
