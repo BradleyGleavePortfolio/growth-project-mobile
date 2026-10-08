@@ -16,8 +16,8 @@ describe('FU-COPY-126 dead rows and action-specific alerts', () => {
     const src = read('screens/client/SettingsScreen.tsx');
     expect(src).not.toContain('>Units<');
     expect(src).not.toContain('Calorie Display');
-    expect(src).toContain('Meals Per Day');
-    expect(src).toContain('Water Goal (fl oz)');
+    expect(src).toContain('Meals per day');
+    expect(src).toContain('Water goal (fl oz)');
   });
 
   it.each(['GroceryListScreen', 'ShoppingListScreen', 'PrepGuideScreen', 'RecipeDetailScreen'])(

@@ -31,7 +31,10 @@ jest.mock('../../../day-one/answers', () => ({
 }));
 jest.mock('../../../../services/api', () => ({
   profileApi: { update: jest.fn(async () => ({})) },
-  notificationsApi: { updatePreferences: jest.fn(async () => ({})) },
+  notificationsApi: {
+    updatePreferences: jest.fn(async () => ({})),
+    getPreferences: jest.fn(async () => ({ data: { digest_email: true } })),
+  },
 }));
 jest.mock('../../../../services/authActions', () => ({ signOut: jest.fn(), refreshProfile: jest.fn(),
   prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?') }));
@@ -80,13 +83,18 @@ it('groups every existing row into seven ordered sections without disclosure tap
   await view.findByText('7:30 AM');
   // Part-1 row inventory, regrouped only. Existing action tests below prove effects.
   const groups = [
-    ['account', 'Account', ['Name', 'Email', 'Change Password', 'Appearance',
-      'Light', 'System', 'Haptics enabled', 'Biometric unlock', 'Reset Onboarding',
-      'Delete account', 'Sign Out']],
-    ['training-food', 'Training and food', ['Meals Per Day', 'Water Goal (fl oz)']],
-    ['notifications', 'Notifications', ['Daily Check-in', 'Check-in Time',
-      'Meal Reminders', 'Fasting Alerts', 'Weekly Summary', 'Notification preferences']],
-    ['privacy', 'Privacy and data', ['Trust & Privacy', 'Coach sharing', 'Blocked Users', 'My data']],
+    ['account', 'Account', ['Name', 'Email', 'Change password', 'Appearance',
+      'Light', 'System', 'Haptics enabled', 'Biometric unlock', 'Redo profile setup',
+      'Delete account', 'Sign out']],
+    ['training-food', 'Training and food', ['Meals per day', 'Water goal (fl oz)']],
+    // CF-SETTINGS-128: each switch names what it controls; Meal Reminders is gone
+    // (rule 2: no meal reminder is ever sent, eat_enabled is read by nothing).
+    ['notifications', 'Notifications', ['Check-in reminders',
+      'A reminder after two days without a check-in.', 'Check-in time',
+      'The time you plan to check in each day.', 'Fasting alerts',
+      'A notification on this phone when your fasting window ends.', 'Summary emails',
+      'Progress summaries sent to your email.', 'Notification preferences']],
+    ['privacy', 'Privacy and data', ['Trust & Privacy', 'Coach sharing', 'Blocked users', 'My data']],
     ['roman', 'Roman', ['Roman and AI']],
     ['support', 'Support', ['Resume the tour']],
     ['about', 'About', ['The Growth Project v1.0.0', 'A daily practice.']],
@@ -102,7 +110,8 @@ it('groups every existing row into seven ordered sections without disclosure tap
   const training = within(view.getByTestId('settings-section-training-food'));
   for (const label of ['Decrease meals per day', 'Increase meals per day',
     'Decrease water goal', 'Increase water goal']) expect(training.getByLabelText(label)).toBeTruthy();
-  for (const label of ['Nutrition Preferences', 'App Preferences', 'Security', 'Notification settings', 'Tutorial']) {
+  for (const label of ['Nutrition Preferences', 'App Preferences', 'Security', 'Notification settings', 'Tutorial',
+    'Meal Reminders', 'Daily Check-in', 'Weekly Summary']) {
     expect(view.queryByText(label)).toBeNull();
   }
 });
@@ -134,7 +143,7 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
     ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
     ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
     ['Coach sharing', 'CoachSharing'], ['Roman and AI', 'RomanAiConsent'],
-    ['Blocked Users', 'BlockedUsers'], ['Request my data export', 'DataExport'],
+    ['Blocked users', 'BlockedUsers'], ['Request my data export', 'DataExport'],
   ]) {
     await fireEvent.press(view.getByLabelText(label));
     expect(navigationStub.navigate).toHaveBeenLastCalledWith(route);
@@ -149,16 +158,23 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
     expect(mockUpdateSetting).toHaveBeenLastCalledWith(key, value);
     expect(profileApi.update).toHaveBeenLastCalledWith(payload);
   }
-  for (const [label, key, backendKey] of [
-    ['Daily Check-in', 'dailyCheckin', 'daily_checkin_enabled'],
-    ['Meal Reminders', 'mealReminders', 'eat_enabled'],
-    ['Fasting Alerts', 'fastingAlerts', 'fasting_enabled'],
-    ['Weekly Summary', 'weeklySummary', 'weekly_summary_enabled'],
-  ]) {
+  // Each switch writes the columns the backend reads (digest_email gates the
+  // summary emails; nudge_missed_checkin_* gate the missed check-in reminder).
+  for (const [label, key, payload] of [
+    ['Check-in reminders', 'dailyCheckin', { nudge_missed_checkin_push: false,
+      nudge_missed_checkin_inapp: false, nudge_missed_checkin_email: false, daily_checkin_enabled: false }],
+    ['Fasting alerts', 'fastingAlerts', { fasting_enabled: false }],
+    ['Summary emails', 'weeklySummary', { digest_email: false, weekly_summary_enabled: false }],
+  ] as const) {
     await fireEvent(view.getByLabelText(label), 'valueChange', false);
-    expect(mockUpdateSetting).toHaveBeenLastCalledWith(key, false);
-    expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith({ [backendKey]: false });
+    await waitFor(() => expect(mockUpdateSetting).toHaveBeenLastCalledWith(key, false));
+    expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith(payload);
+    // Server-backed switches hold the saved value (the local one comes from the mocked hook).
+    if (key !== 'fastingAlerts') expect(view.getByLabelText(label).props.value).toBe(false);
   }
+  await fireEvent(view.getByLabelText('Check-in reminders'), 'valueChange', true);
+  expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith({ nudge_missed_checkin_push: true,
+    nudge_missed_checkin_inapp: true, daily_checkin_enabled: true });
   await fireEvent(view.getByLabelText('Haptics enabled'), 'valueChange', false);
   expect(mockUpdateSetting).toHaveBeenLastCalledWith('hapticsEnabled', false);
   for (const [label, stored] of [['System', 'system'], ['Light', 'light']]) {
@@ -185,16 +201,25 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
 it('keeps password inputs, close, validation, save and confirmed reset/sign-out handlers', async () => {
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   const view = await render(<SettingsScreen navigation={navigation} />);
-  await fireEvent.press(view.getByText('Change Password'));
+  await fireEvent.press(view.getByText('Change password'));
+  expect(view.getByText('At least 8 characters, with an uppercase letter, a number and a special character.')).toBeTruthy();
   await fireEvent.press(view.getByLabelText('Update password'));
-  expect(view.getByText('Password must be at least 8 characters.')).toBeTruthy();
+  expect(view.getByText('At least 8 characters.')).toBeTruthy();
+  // The sign-up and reset rules, not only a length check (FW-ACCOUNT U7).
+  for (const [weak, rule] of [['test-password', 'At least one uppercase letter.'],
+    ['Test-password', 'At least one number.'], ['Testpassw0rd', 'At least one special character.']]) {
+    await fireEvent.changeText(view.getByLabelText('New password'), weak);
+    await fireEvent.press(view.getByLabelText('Update password'));
+    expect(view.getByText(rule)).toBeTruthy();
+  }
+  expect(updateSupabasePassword).not.toHaveBeenCalled();
   await fireEvent.press(view.getByLabelText('Close'));
-  await fireEvent.press(view.getByText('Change Password'));
-  await fireEvent.changeText(view.getByLabelText('New password'), 'test-password');
-  await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'test-password');
+  await fireEvent.press(view.getByText('Change password'));
+  await fireEvent.changeText(view.getByLabelText('New password'), 'Test-passw0rd');
+  await fireEvent.changeText(view.getByLabelText('Confirm new password'), 'Test-passw0rd');
   await fireEvent.press(view.getByLabelText('Update password'));
-  expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
-  for (const [label, confirm] of [['Reset Onboarding', 'Reset'], ['Sign Out', 'Sign Out']]) {
+  expect(updateSupabasePassword).toHaveBeenCalledWith('Test-passw0rd');
+  for (const [label, confirm] of [['Redo profile setup', 'Redo setup'], ['Sign out', 'Sign out']]) {
     await fireEvent.press(view.getByText(label));
     await waitFor(() => expect(alert.mock.calls.at(-1)?.[2]?.some((button) => button.text === confirm)).toBe(true));
     const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
@@ -203,7 +228,46 @@ it('keeps password inputs, close, validation, save and confirmed reset/sign-out 
   }
   expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
   expect(signOut).toHaveBeenCalled();
+  expect(alert).toHaveBeenCalledWith('Redo profile setup',
+    'Answer the setup questions again. Your logs and coach plans are kept.',
+    expect.any(Array));
+  // B1 (LN-OPUS-B-130): targets a coach set do not change, so the confirm promises nothing about targets.
+  expect(alert).not.toHaveBeenCalledWith('Redo profile setup', expect.stringMatching(/target/i), expect.any(Array));
   alert.mockRestore();
+});
+
+it('shows the saved server values and puts a switch back with a plain line when a save fails', async () => {
+  (notificationsApi.getPreferences as jest.Mock).mockResolvedValueOnce({ data: {
+    digest_email: false, nudge_missed_checkin_push: false, nudge_missed_checkin_inapp: false } });
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  // This phone's cached values say on; the account says off.
+  await waitFor(() => expect(view.getByLabelText('Summary emails').props.value).toBe(false));
+  expect(view.getByLabelText('Check-in reminders').props.value).toBe(false);
+  (notificationsApi.updatePreferences as jest.Mock).mockRejectedValueOnce({ isAxiosError: true });
+  await fireEvent(view.getByLabelText('Summary emails'), 'valueChange', true);
+  expect(await view.findByText('Your summary email setting was not saved because the app could not reach the server, '
+    + 'so it was left as it was. Check your connection, then try again.')).toBeTruthy();
+  expect(view.getByLabelText('Summary emails').props.value).toBe(false);
+  expect(mockUpdateSetting).not.toHaveBeenCalled();
+});
+
+it('switching Fasting alerts off cancels the alert already set for this account\'s current fast', async () => {
+  const notifications = jest.requireMock('expo-notifications') as { cancelScheduledNotificationAsync: jest.Mock };
+  // The Fasting screen saves the scheduled alert id per account (FastingScreen.tsx fastingNotifIdKey).
+  await AsyncStorage.setItem('fasting:scheduled_notification_id:settings-client', 'fast-end-1');
+  await AsyncStorage.setItem('fasting:scheduled_notification_id:other-client', 'fast-end-2');
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  await fireEvent(view.getByLabelText('Fasting alerts'), 'valueChange', false);
+  await waitFor(() => expect(notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('fast-end-1'));
+  await waitFor(async () => expect(
+    await AsyncStorage.getItem('fasting:scheduled_notification_id:settings-client')).toBeNull());
+  expect(await AsyncStorage.getItem('fasting:scheduled_notification_id:other-client')).toBe('fast-end-2');
+  expect(mockUpdateSetting).toHaveBeenLastCalledWith('fastingAlerts', false);
+  expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith({ fasting_enabled: false });
+  // Switching it back on cancels nothing else.
+  await fireEvent(view.getByLabelText('Fasting alerts'), 'valueChange', true);
+  expect(mockUpdateSetting).toHaveBeenLastCalledWith('fastingAlerts', true);
+  expect(notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
 });
 
 it('keeps the existing Roman consent visibility gate', async () => {
