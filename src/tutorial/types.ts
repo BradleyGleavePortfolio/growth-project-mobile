@@ -64,7 +64,8 @@ export type TutorialStepId =
  *  - deferred:    the client explicitly chose "Later" (wearables only).
  *  - pending:     data the step explains is not ready yet (no plan / no
  *                 macros); resumable once it lands.
- *  - unavailable: the surface is not in this build (community tab flag off).
+ *  - unavailable: the surface is not in this build (community tab flag off),
+ *                 or not for this client (no coach linked).
  */
 export type TutorialStepOutcome = 'done' | 'deferred' | 'pending' | 'unavailable';
 
@@ -97,4 +98,9 @@ export interface TutorialContext {
   communityAvailable: boolean;
   /** S-SCHED: featureFlags.clientCalendar. Absent means off. */
   calendarAvailable?: boolean;
+  /**
+   * A coach is linked to this client (`user.coach_id`, the signal Home uses
+   * for its Message your coach row). Absent means no coach.
+   */
+  coachLinked?: boolean;
 }

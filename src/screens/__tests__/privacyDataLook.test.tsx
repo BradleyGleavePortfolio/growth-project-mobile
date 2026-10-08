@@ -24,6 +24,8 @@ jest.mock('../../services/api', () => ({
   __esModule: true,
   default: { get: jest.fn(() => Promise.reject(new Error('offline'))) },
 }));
+// No account read here: the coach line is pinned in trustCenterTruth.test.tsx.
+jest.mock('../../hooks/useCurrentUser', () => ({ useCurrentUser: () => null }));
 const mockRequestExport = jest.fn();
 jest.mock('../../services/dataExportApi', () => ({
   dataExportApi: { requestExport: (...a: unknown[]) => mockRequestExport(...a) },
@@ -89,14 +91,14 @@ describe('Trust Center parity (routes/actions before -> after)', () => {
   });
   afterEach(() => alertSpy.mockRestore());
 
-  it('back, export, delete and the three policy links all stay reachable', async () => {
+  it('back, export, delete and the four policy links all stay reachable', async () => {
     const navigation = { goBack: jest.fn(), navigate: jest.fn() };
     mockRequestExport.mockResolvedValue({});
     const screen = await render(<TrustCenterScreen navigation={navigation} />);
     await waitFor(() => expect(screen.getByTestId('trust-link-privacy')).toBeTruthy());
 
     expect(screen.getByText('Trust & Privacy')).toBeTruthy();
-    for (const id of ['trust-link-privacy', 'trust-link-consumer-health', 'trust-link-help']) {
+    for (const id of ['trust-link-privacy', 'trust-link-consumer-health', 'trust-link-terms', 'trust-link-help']) {
       expect(screen.getByTestId(id)).toBeTruthy();
     }
 
@@ -108,7 +110,7 @@ describe('Trust Center parity (routes/actions before -> after)', () => {
     expect(mockTrack).toHaveBeenCalledWith('data_export_requested');
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
     expect(alertSpy.mock.calls[0][0]).toBe('Export requested');
-    expect(alertSpy.mock.calls[0][1]).toContain('Open Privacy in Settings to track progress');
+    expect(alertSpy.mock.calls[0][1]).toContain('Open My data in Settings to track progress');
 
     await fireEvent.press(screen.getByLabelText('Delete account'));
     expect(navigation.navigate).toHaveBeenCalledWith('DeleteAccount');

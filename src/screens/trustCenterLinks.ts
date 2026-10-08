@@ -5,14 +5,15 @@
  * pages at the site root (see PRIVACY_POLICY_URL in config/env.ts). The
  * consumer health policy must be reachable from the app's settings (RCW
  * 19.373.010 counts in-app settings links as part of an app's homepage), so it
- * sits here next to the Privacy Policy.
+ * sits here next to the Privacy Policy. The Terms of Service (TERMS_URL) is
+ * linked here too, so it stays reachable after sign-up (FW-ACCOUNT-128 U4).
  *
  * When a link does not open, trustCenterLinkFailure.ts names the page
  * (`pageName`) and says why and what to do next (OR-112-15).
  */
-import { CONSUMER_HEALTH_POLICY_URL, PRIVACY_POLICY_URL, helpUrl } from '../config/env';
+import { CONSUMER_HEALTH_POLICY_URL, PRIVACY_POLICY_URL, TERMS_URL, helpUrl } from '../config/env';
 
-export type TrustCenterLinkId = 'privacy_policy' | 'consumer_health_policy' | 'help_centre';
+export type TrustCenterLinkId = 'privacy_policy' | 'consumer_health_policy' | 'terms_of_service' | 'help_centre';
 
 export interface TrustCenterLink {
   /** Stable id for diagnostics (Sentry), never shown. */
@@ -42,6 +43,14 @@ export function trustCenterLinks(): TrustCenterLink[] {
       accessibilityLabel: 'Open the Consumer Health Data Privacy Policy',
       testID: 'trust-link-consumer-health',
       pageName: 'Consumer Health Data Privacy Policy',
+    },
+    {
+      id: 'terms_of_service',
+      label: 'Terms of Service',
+      url: TERMS_URL,
+      accessibilityLabel: 'Open the Terms of Service',
+      testID: 'trust-link-terms',
+      pageName: 'Terms of Service',
     },
     {
       id: 'help_centre',

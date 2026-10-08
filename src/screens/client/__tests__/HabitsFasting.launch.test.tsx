@@ -34,6 +34,11 @@ jest.mock('../../../services/api', () => ({
   },
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({
+    entitlementActive: true, status: 'active', confirmedActive: true, refreshEntitlement: jest.fn(),
+  }),
+}));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: require('../../../constants/colors').default,

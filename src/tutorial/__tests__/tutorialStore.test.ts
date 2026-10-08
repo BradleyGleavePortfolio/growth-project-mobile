@@ -148,7 +148,7 @@ describe('persistence', () => {
 
 describe('signals and feedback', () => {
   async function toFirstMeal() {
-    await hydrateTutorial('u1', 'Maya');
+    await hydrateTutorial('u1', 'Maya', true);
     attachTutorialSignals();
     startClientTutorial(PAYLOAD);
     dispatchTutorial({ type: 'ACK' });
@@ -208,7 +208,7 @@ describe('signals and feedback', () => {
 
   it('marks community unavailable when the tab flag is off', async () => {
     mockFlags.communityTab = false;
-    await hydrateTutorial('u1', 'Maya');
+    await hydrateTutorial('u1', 'Maya', true);
     startClientTutorial(PAYLOAD);
     dispatchTutorial({ type: 'ACK' });
     setTutorialRoute(['WorkoutTab', 'WorkoutMain']);

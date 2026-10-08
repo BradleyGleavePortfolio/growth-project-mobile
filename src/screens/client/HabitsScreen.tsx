@@ -45,6 +45,8 @@ import { buildCheckInPayload } from './habits/checkInPayload';
 import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
 
 export default function HabitsScreen() {
   const { colors: themeColors, semanticColors: sc } = useTheme();
@@ -65,11 +67,15 @@ export default function HabitsScreen() {
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
+  const { entitlementActive, status, confirmedActive, refreshEntitlement } = useEntitlement();
+  // Match ProtectedScreen's confirmed-access policy before making a paid read.
+  const checkInAccessible = entitlementActive === true ||
+    (confirmedActive && (status === 'checking' || status === 'unavailable'));
 
   // Server reads (React Query)
   const habitsQ = useHabits();
   const logsQ = useHabitLogs(today);
-  const todayCheckInQ = useTodayCheckIn(today);
+  const todayCheckInQ = useTodayCheckIn(today, checkInAccessible);
 
   // Server writes
   const logHabit = useLogHabit();
@@ -164,7 +170,8 @@ export default function HabitsScreen() {
   const onRefresh = () => {
     habitsQ.refetch();
     logsQ.refetch();
-    todayCheckInQ.refetch();
+    if (checkInAccessible) todayCheckInQ.refetch();
+    else if (tab === 'checkin') void refreshEntitlement();
   };
 
   const checkInSaved = !!todayCheckInQ.data;
@@ -356,79 +363,92 @@ export default function HabitsScreen() {
               <Text style={styles.addBtnText}>Add habit</Text>
             </TouchableOpacity>
           </>
-        ) : todayCheckInQ.isLoading ? (
-          <View style={styles.progressCard}>
-            <ActivityIndicator color={sc.accent} accessibilityLabel="Loading check-in" />
-            <Text style={styles.progressStatLabel}>Loading check-in</Text>
-          </View>
-        ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (
-          <View style={styles.checkInCard}>
-            <Text style={styles.progressStatLabel}>Today's check-in could not be loaded.</Text>
-            <TouchableOpacity style={styles.addBtn} onPress={() => todayCheckInQ.refetch()} accessibilityRole="button">
-              <Text style={styles.addBtnText}>Retry check-in</Text>
-            </TouchableOpacity>
-          </View>
         ) : (
           <>
-            {checkInToast && (
-              <View style={styles.savedBanner} accessibilityLiveRegion="polite">
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.savedBannerText}>Check-in saved</Text>
-              </View>
-            )}
-            {!checkInToast && checkInSaved && (
-              <View style={styles.savedBanner}>
-                <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.savedBannerText}>Saved.</Text>
-              </View>
-            )}
-            {lastCheckInDate && lastCheckInDate !== today && (
-              <View style={styles.lastCheckInRow}>
-                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                <Text style={styles.lastCheckInText}>
-                  Last check-in: {new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
+            {status === 'inactive' && (
+              <View style={styles.checkInCard}>
+                <Text style={styles.progressStatLabel}>
+                  Daily check-ins need active coaching access.
                 </Text>
               </View>
             )}
+            <ProtectedScreen>
+              {todayCheckInQ.isLoading ? (
+                <View style={styles.progressCard}>
+                  <ActivityIndicator color={sc.accent} accessibilityLabel="Loading check-in" />
+                  <Text style={styles.progressStatLabel}>Loading check-in</Text>
+                </View>
+              ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (
+                <View style={styles.checkInCard}>
+                  <Text style={styles.progressStatLabel}>Today's check-in could not be loaded.</Text>
+                  <TouchableOpacity style={styles.addBtn} onPress={() => todayCheckInQ.refetch()} accessibilityRole="button">
+                    <Text style={styles.addBtnText}>Retry check-in</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  {checkInToast && (
+                    <View style={styles.savedBanner} accessibilityLiveRegion="polite">
+                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+                      <Text style={styles.savedBannerText}>Check-in saved</Text>
+                    </View>
+                  )}
+                  {!checkInToast && checkInSaved && (
+                    <View style={styles.savedBanner}>
+                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
+                      <Text style={styles.savedBannerText}>Saved.</Text>
+                    </View>
+                  )}
+                  {lastCheckInDate && lastCheckInDate !== today && (
+                    <View style={styles.lastCheckInRow}>
+                      <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+                      <Text style={styles.lastCheckInText}>
+                        Last check-in: {new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                      </Text>
+                    </View>
+                  )}
 
-            {/* ED.6 — coach-is-watching micro-signal below the check-in body.
-                Gated by the mobile flag; only renders once a coach has reviewed
-                today's check-in (coachReviewedAt non-null, which the backend
-                only stamps when its own flag is ON). placement=bottom draws the
-                hairline above the pill so it reads as a quiet seam under the
-                body it annotates. */}
-            {featureFlags.romanCompetencePill && checkInSaved ? (
-              <CompetencePill
-                reviewedAt={coachReviewedAt}
-                surface="checkIn"
-                placement="bottom"
-                testID="checkin-competence-pill"
-              />
-            ) : null}
+                  {/* ED.6 — coach-is-watching micro-signal below the check-in body.
+                      Gated by the mobile flag; only renders once a coach has reviewed
+                      today's check-in (coachReviewedAt non-null, which the backend
+                      only stamps when its own flag is ON). placement=bottom draws the
+                      hairline above the pill so it reads as a quiet seam under the
+                      body it annotates. */}
+                  {featureFlags.romanCompetencePill && checkInSaved ? (
+                    <CompetencePill
+                      reviewedAt={coachReviewedAt}
+                      surface="checkIn"
+                      placement="bottom"
+                      testID="checkin-competence-pill"
+                    />
+                  ) : null}
 
-            <MoodEnergyPicker
-              mood={mood}
-              setMood={setMood}
-              energy={energy}
-              setEnergy={setEnergy}
-              sleepHours={sleepHours}
-              setSleepHours={setSleepHours}
-              notes={notes}
-              setNotes={setNotes}
-              colors={colors}
-              styles={styles}
-            />
+                  <MoodEnergyPicker
+                    mood={mood}
+                    setMood={setMood}
+                    energy={energy}
+                    setEnergy={setEnergy}
+                    sleepHours={sleepHours}
+                    setSleepHours={setSleepHours}
+                    notes={notes}
+                    setNotes={setNotes}
+                    colors={colors}
+                    styles={styles}
+                  />
 
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn} disabled={saveCheckIn.isPending}>
-              <Ionicons name="checkmark-circle-outline" size={20} color={sc.textOnAccent} />
-              <Text style={styles.saveBtnText}>
-                {saveCheckIn.isPending ? 'Saving check-in' : checkInSaved ? 'Update check-in' : 'Save check-in'}
-              </Text>
-            </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn} disabled={saveCheckIn.isPending}>
+                    <Ionicons name="checkmark-circle-outline" size={20} color={sc.textOnAccent} />
+                    <Text style={styles.saveBtnText}>
+                      {saveCheckIn.isPending ? 'Saving check-in' : checkInSaved ? 'Update check-in' : 'Save check-in'}
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </ProtectedScreen>
           </>
         )}
 
