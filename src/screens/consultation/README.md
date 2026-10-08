@@ -36,7 +36,7 @@ The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling 
 
 W1 welcome; P0 "Before we start", two boxes (before any question); G1 goal; G2 why it matters; B1 formula; B2 date of birth (16 to 100); B3 height and weight (unit tabs convert in place); B4 goal weight (optional, soft notes only); L1 activity; L2 sleep; T1 experience; T2 enjoyed; T3 injury check (yes expands areas and a note); T4 session length; S1 days per week; S2 preferred time; S3 where you train; S3b home equipment (only for "At home, with some equipment"); N1 to N5 nutrition; P1 to P7 screening (no consent box in this chapter) (yes reveals an optional note, never blocks); P8 message (only when any P answer is yes); C1 first session (tomorrow preselected); SUM; PREP; MACRO; PLAN.
 
-N2 explains food avoidances as information for the coach: "So your coach knows what you avoid." It does not promise automatic filtering of food suggestions. Its choices include Sesame after Soy (ALLERGY-CHOICES-131; the backend accepts it from growth-project-backend#880); validation and the Continue action are unchanged.
+N2 explains food avoidances as information for the coach: "So your coach knows what you avoid." It does not promise automatic filtering of food suggestions. Its choices include Sesame after Soy (ALLERGY-CHOICES-131; the backend accepts it from growth-project-backend#880) and Fish after Sesame (FISH-CONSULT-132; accepted from growth-project-backend#881); validation and the Continue action are unchanged.
 
 ## P0: two boxes on one screen (D2, ops/CONSENT_D2_CONTRACT.md)
 

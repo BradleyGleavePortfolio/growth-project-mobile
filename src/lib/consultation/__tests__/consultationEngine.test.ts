@@ -462,3 +462,17 @@ describe('N2 sesame', () => {
     );
   });
 });
+
+// FISH-CONSULT-132: N2 offers Fish after Sesame, in the backend's order. The backend accepts it from
+// growth-project-backend#881 (consultation-answers.ts N2) and maps the saved answer to the fish allergen.
+describe('N2 fish', () => {
+  it('offers Fish after Sesame, accepts it and names it in the summary', () => {
+    const values = (def('N2').options ?? []).map((o) => o.value);
+    expect(values.indexOf('fish')).toBe(values.indexOf('sesame') + 1);
+    expect(def('N2').options).toContainEqual({ value: 'fish', label: 'Fish' });
+    expect(validateScreen(def('N2'), { N2: ['sesame', 'fish'] }, NOW).valid).toBe(true);
+    expect(buildSummary(fullAnswers({ N2: ['soy', 'sesame', 'fish'] }), NOW)[4].body).toBe(
+      'No particular pattern, avoiding soy, sesame and fish, three meals a day.',
+    );
+  });
+});
