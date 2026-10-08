@@ -17,6 +17,11 @@ import {
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile } from '../../../types';
 import type { ClientDetailStyles } from './styles';
+import { formatDate } from '../../../utils/date';
+
+const mealLabels: Record<string, string> = {
+  breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack: 'Snack',
+};
 
 export function FoodLogReviewSection({
   clientId,
@@ -169,7 +174,7 @@ export function FoodLogReviewSection({
             return (
               <View key={day} style={styles.foodReviewDayCard}>
                 <View style={styles.foodReviewDayHeader}>
-                  <Text style={styles.foodReviewDayDate}>{day}</Text>
+                  <Text style={styles.foodReviewDayDate}>{formatDate(day)}</Text>
                   <Text style={styles.foodReviewDayTotal}>{Math.round(totals.calories)} kcal</Text>
                 </View>
                 <Text style={[styles.logMacros, { marginBottom: 8 }]}>
@@ -185,7 +190,7 @@ export function FoodLogReviewSection({
                   return (
                     <View key={meal.id} style={styles.logItem}>
                       <View style={styles.logHeader}>
-                        <Text style={styles.logMeal}>{meal.meal_type}</Text>
+                        <Text style={styles.logMeal}>{mealLabels[meal.meal_type] ?? 'Meal'}</Text>
                         <Text style={styles.logCalories}>{Math.round(macros.calories)} kcal</Text>
                       </View>
                       <Text style={styles.logFood}>{meal.food_item.name}</Text>
