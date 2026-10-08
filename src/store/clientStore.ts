@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { logApi, waterApi } from '../services/api';
+import { logApi, waterApi, type WaterEntry } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 import { logger } from '../utils/logger';
@@ -17,6 +17,7 @@ interface ClientStore {
   foodLogs: FoodLog[];
   dailyTotals: DailyTotals;
   waterOz: number;
+  waterEntries: WaterEntry[];
   hasLoadedDay: boolean;
   isLoading: boolean;
   loadError: string | null;
@@ -33,6 +34,7 @@ interface ClientStore {
     notes?: string;
   }) => Promise<void>;
   logWater: (userId: string, coachId: string, amount: number) => Promise<void>;
+  removeWaterEntry: (entryId: string) => Promise<void>;
   // Drops an entry from the day on screen and takes its nutrition off the
   // day's totals straight away, before the server confirms the delete.
   removeFoodLogLocally: (entryId: string) => void;
@@ -46,6 +48,7 @@ const initialClientState = {
   foodLogs: [] as FoodLog[],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
+  waterEntries: [] as WaterEntry[],
   hasLoadedDay: false,
   isLoading: false,
   loadError: null as string | null,
@@ -59,6 +62,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     foodLogs: [],
     dailyTotals: { ...initialClientState.dailyTotals },
     waterOz: 0,
+    waterEntries: [],
     hasLoadedDay: false,
     loadError: null,
   }),
@@ -152,6 +156,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           fat: data.total_fat_g || 0,
         },
         waterOz,
+        waterEntries: waterResponse ? waterResponse.data.logs || [] : get().waterEntries,
         selectedDate: d,
         hasLoadedDay: true,
         isLoading: false,
@@ -210,7 +215,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     try {
       const amountMl = Math.round(amountOz * 29.5735);
       const date = get().selectedDate;
-      await waterApi.log({ amount_ml: amountMl, date });
+      const response = await waterApi.log({ amount_ml: amountMl, date });
+      if (response.data.id) {
+        set((state) => ({ waterEntries: [...state.waterEntries, response.data] }));
+      }
       set((state) => state.loadError?.endsWith(' oz of water was not saved. Check the connection, then add it again.')
         ? { loadError: null }
         : {});
@@ -223,5 +231,17 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         loadError: `${amountOz} oz of water was not saved. Check the connection, then add it again.`,
       }));
     }
+  },
+
+  removeWaterEntry: async (entryId: string) => {
+    await waterApi.deleteEntry(entryId);
+    set((state) => {
+      if (!state.waterEntries.some((entry) => entry.id === entryId)) return {};
+      const waterEntries = state.waterEntries.filter((entry) => entry.id !== entryId);
+      return {
+        waterEntries,
+        waterOz: Math.round(waterEntries.reduce((total, entry) => total + entry.amount_ml, 0) / 29.5735),
+      };
+    });
   },
 }));

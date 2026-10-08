@@ -44,10 +44,12 @@
 //   3. Refresh endpoint itself returns 401 (stale refresh token) → all queued
 //      requests reject, `authEvents.emit('logout')` fires EXACTLY ONCE, token
 //      keys are cleared once.
-//   4. Refresh throws a network error (offline, timeout) → same as (3): all
-//      queued requests reject with the error; logout emitted once. The user
-//      data / onboarding keys are NOT cleared — see the security/critical-
-//      fixes-round-1 branch for why we kept that behavior.
+//   4. Refresh gets no answer (offline, timeout, the sign-in service busy or
+//      down: see isNoAnswerRefreshFailure) → all queued requests reject as a
+//      request with no answer ("Cannot reach server", no response), nobody
+//      is signed out and the stored session is kept, so the next 401 renews
+//      again (SESSION-KEEP-130: sign-out deletes the workouts and foods still
+//      waiting on the phone). Only a refused refresh, (3) and (6), signs out.
 //   5. A 401 arrives AFTER a refresh has already completed → a fresh refresh
 //      kicks off. With the cycle counter this is now a first-class case, not
 //      an "acceptable side-effect": a request that retried with cycle-N's
@@ -113,6 +115,9 @@ const API_BASE = env.API_URL;
 // hardcoded duplicates.
 const SUPABASE_URL = env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
+
+/** error.message for a request that got no answer from the server. */
+const NO_ANSWER_MESSAGE = 'Cannot reach server. Please check your connection and try again.';
 
 /** error.message for a 403 LOCKED_DUNNING (payment lockout); exported for tests. */
 export const LOCKED_DUNNING_MESSAGE =
@@ -227,6 +232,38 @@ type RetryableConfig = AxiosRequestConfig & {
 
 /** Request options for a request bound to one account (see accountBinding.ts). */
 export type BoundRequestConfig = AxiosRequestConfig & { accountBinding: AccountBinding };
+
+/**
+ * SESSION-KEEP-130: true when a failed refresh says nothing about the sign-in
+ * itself: no answer (supabase-js AuthRetryableFetchError: status 0 for no
+ * signal or a timeout, 502-530 for a gateway; supabase-js keeps its own
+ * session for these), or the sign-in service answering 429 or 5xx. Anything
+ * else (an invalid, expired or revoked refresh token, no refresh token) is a
+ * refused refresh and signs out as before.
+ */
+function isNoAnswerRefreshFailure(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false;
+  const { name, status } = err as { name?: unknown; status?: unknown };
+  if (name === 'AuthRetryableFetchError') return true;
+  return typeof status === 'number' && (status === 0 || status === 429 || status >= 500);
+}
+
+/** A refresh that got no answer; the session is kept (see isNoAnswerRefreshFailure). */
+class RefreshNoAnswerError extends Error {
+  constructor() {
+    super('Session refresh got no answer');
+    this.name = 'RefreshNoAnswerError';
+  }
+}
+
+/** The request's own error, shaped as a request that got no answer. */
+function asNoAnswer(error: AxiosError): AxiosError {
+  error.message = NO_ANSWER_MESSAGE;
+  error.code = 'ERR_NETWORK';
+  error.response = undefined;
+  error.status = undefined;
+  return error;
+}
 
 async function performRefresh(startGeneration: number): Promise<string> {
   // Read refresh token from the SAME store the writers use (SecureStore via
@@ -378,7 +415,7 @@ api.interceptors.response.use(
     // Network error — no response from server (cold start, no wifi, etc.).
     // Do NOT log the user out; just surface a friendly message.
     if (!error.response) {
-      error.message = 'Cannot reach server. Please check your connection and try again.';
+      error.message = NO_ANSWER_MESSAGE;
       return Promise.reject(error);
     }
 
@@ -465,7 +502,11 @@ api.interceptors.response.use(
         } catch (err) {
           // A refresh overtaken by a sign-out or sign-in is not a failed
           // session: the new session must not be signed out for it.
-          if (!isAccountChangedError(err)) await handleRefreshFailure(startGeneration);
+          if (isAccountChangedError(err)) throw err;
+          // SESSION-KEEP-130: no answer is not a refused sign-in. The session
+          // is kept; the next 401 renews again.
+          if (isNoAnswerRefreshFailure(err)) throw new RefreshNoAnswerError();
+          await handleRefreshFailure(startGeneration);
           throw err;
         }
       })()
@@ -505,6 +546,10 @@ api.interceptors.response.use(
       // original 401 (already mapped to signed-out copy by callers); only a
       // bound request reports AccountChangedError.
       if (!binding && isAccountChangedError(refreshErr)) return Promise.reject(error);
+      // The refresh got no answer: this request failed like one with no
+      // answer at all (offline queues keep their rows, screens say there is
+      // no connection). A replay's own failure is passed on as it came.
+      if (refreshErr instanceof RefreshNoAnswerError) return Promise.reject(asNoAnswer(error));
       return Promise.reject(refreshErr);
     }
   },
@@ -748,6 +793,8 @@ export const fastingApi = {
     api.post('/fasting/end', { notes }),
   getHistory: (limit = 10) =>
     api.get(`/fasting/history?limit=${limit}`),
+  deleteFast: (id: string) =>
+    api.delete(`/fasting/${encodeURIComponent(id)}`),
 };
 
 export const weightApi = {
@@ -981,13 +1028,21 @@ export const communityApi = {
     api.post('/community/wins', data),
 };
 
+export interface WaterEntry {
+  id: string;
+  amount_ml: number;
+  logged_at: string;
+}
+
 export const waterApi = {
   log: (data: { amount_ml: number; date?: string }) =>
-    api.post('/nutrition/water', data),
+    api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
-    api.get(`/nutrition/water?date=${date}`),
+    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>
     api.get(`/nutrition/water/weekly?start_date=${startDate}`),
+  deleteEntry: (id: string) =>
+    api.delete(`/nutrition/water/${encodeURIComponent(id)}`),
 };
 
 export const lessonsApi = {
@@ -1033,6 +1088,8 @@ export const recipesApi = {
   list: () => api.get('/recipes'),
   listSaved: () => api.get('/recipes/saved'),
   getById: (id: string) => api.get(`/recipes/${id}`),
+  // The allergen list and this account's saved allergens that hide shared recipes (ALLERGY-M-130).
+  allergens: () => api.get('/recipes/allergens'),
   create: (data: Record<string, unknown>) => api.post('/recipes', data),
   save: (id: string) => api.post(`/recipes/${id}/save`),
   unsave: (id: string) => api.delete(`/recipes/${id}/save`),

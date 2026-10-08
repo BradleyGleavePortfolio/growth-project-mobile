@@ -31,7 +31,9 @@ jest.mock('../../../services/api', () => ({
   __esModule: true, default: { get: jest.fn() }, profileApi: { get: () => mockProfileGet() },
 }));
 jest.mock('../../../api/macrosApi', () => ({ macrosApi: { currentForSelf: () => mockMacroGet() } }));
-jest.mock('../../../services/authActions', () => ({ signOut: jest.fn() }));
+jest.mock('../../../services/authActions', () => ({
+  signOut: jest.fn(), prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?'),
+}));
 jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn() } }));
 jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
@@ -125,9 +127,23 @@ it('keeps all quick routes, every personal row, Edit and confirmed sign-out reac
   }
   const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   await fireEvent.press(view.getByText('Sign out'));
+  await waitFor(() => expect(alert).toHaveBeenCalledWith('Sign out', 'Are you sure you want to sign out?', expect.any(Array)));
   expect(require('../../../services/authActions').signOut).not.toHaveBeenCalled();
   expect(alert.mock.calls[0][2]?.find((button) => button.text === 'Cancel')?.style).toBe('cancel');
   alert.mock.calls[0][2]?.find((button) => button.text === 'Sign out')?.onPress?.();
   expect(require('../../../services/authActions').signOut).toHaveBeenCalledTimes(1);
+  alert.mockRestore();
+});
+
+it('SESSION-KEEP-130: the sign-out confirm names what has not synced and would be removed from this phone', async () => {
+  const actions = require('../../../services/authActions') as { prepareSignOutConfirm: jest.Mock; signOut: jest.Mock };
+  const left = '2 workouts and 1 food have not synced yet and will be removed from this phone.';
+  actions.prepareSignOutConfirm.mockResolvedValueOnce(left);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const view = await render(<ProfileScreen />);
+  await fireEvent.press(view.getByText('Sign out'));
+  await waitFor(() => expect(alert).toHaveBeenCalledWith('Sign out', left, expect.any(Array)));
+  expect(actions.prepareSignOutConfirm).toHaveBeenCalledWith('client');
+  expect(actions.signOut).not.toHaveBeenCalled();
   alert.mockRestore();
 });

@@ -250,9 +250,10 @@ export function useSendDm(
 }
 
 /**
- * Toggle a reaction on a post. Optimistic in the sense that the server emits a
- * `community.reaction.changed` ping and the client refetches authoritative
- * state; on failure the posts query is invalidated to re-sync.
+ * Toggle a reaction on a post. The server answers with the post's whole
+ * reaction summary, which is written into the cached post at once (the thread
+ * also reads it from the mutation's data when the post itself carries none);
+ * the post and the feed are then refetched.
  */
 export function useReactToPost(workspaceId: string) {
   const qc = useQueryClient();
@@ -269,8 +270,40 @@ export function useReactToPost(workspaceId: string) {
       active
         ? communityApi.unreactToPost(postId, emoji)
         : communityApi.reactToPost(postId, emoji),
+    onSuccess: (state, { postId }) => {
+      if (!state) return;
+      qc.setQueryData<CommunityPost>(communityKeys.post(postId), (prev) =>
+        prev ? { ...prev, reactions: state.reactions } : prev,
+      );
+    },
+    onSettled: (_state, _err, { postId }) => {
+      qc.invalidateQueries({ queryKey: communityKeys.posts(workspaceId) });
+      qc.invalidateQueries({ queryKey: communityKeys.post(postId) });
+    },
+  });
+}
+
+/**
+ * Delete the caller's own post. It leaves the cached feed at once; the feed and
+ * Today refetch, and the cached post is marked stale (not refetched while the
+ * thread that deleted it is closing) so any later visit reloads it.
+ */
+export function useDeletePost(workspaceId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (postId: string) => communityApi.deletePost(postId),
+    onSuccess: (_res, postId) => {
+      qc.setQueryData<CommunityPost[]>(communityKeys.posts(workspaceId), (prev) =>
+        prev?.filter((p) => p.id !== postId),
+      );
+      qc.invalidateQueries({
+        queryKey: communityKeys.post(postId),
+        refetchType: 'none',
+      });
+    },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: communityKeys.posts(workspaceId) });
+      qc.invalidateQueries({ queryKey: communityKeys.today() });
     },
   });
 }

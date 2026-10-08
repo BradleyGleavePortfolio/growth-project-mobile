@@ -223,7 +223,9 @@ jest.mock('../hooks/useWorkoutBuilder', () => ({
 }));
 jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ data: null }) }));
-jest.mock('../services/authActions', () => ({ signOut: jest.fn() }));
+jest.mock('../services/authActions', () => ({
+  signOut: jest.fn(), prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?'),
+}));
 jest.mock('../screens/day-one/api', () => ({ saveNotifPermission: jest.fn(async () => ({})) }));
 jest.mock('../services/pushNotifications', () => ({ registerForPushNotifications: jest.fn(async () => ({ granted: true })) }));
 jest.mock('../lib/analytics', () => ({ track: jest.fn() }));
@@ -315,6 +317,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     }
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await fireEvent.press(s.getByText('Sign out'));
+    await waitFor(() => expect(alert).toHaveBeenCalledTimes(1));
     const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign out');
     await confirm?.onPress?.();
     expect(require('../services/authActions').signOut).toHaveBeenCalled(); alert.mockRestore();

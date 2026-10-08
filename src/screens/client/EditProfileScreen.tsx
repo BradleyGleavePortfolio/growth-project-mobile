@@ -35,6 +35,8 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { useCurrentUser, CurrentUser } from '../../hooks/useCurrentUser';
 import { profileApi } from '../../services/api';
+import { queryClient } from '../../services/queryClient';
+import { refreshRecipeReads } from '../../lib/recipeAllergens';
 import { errorMessage } from '../../types/common';
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
@@ -365,6 +367,8 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       await profileApi.update(payload);
+      // Saved allergies decide which shared recipes are hidden: read the recipe lists again.
+      if (Array.isArray(payload.diet_restrictions)) refreshRecipeReads(queryClient);
 
       // If we just recomputed macros, persist them locally so Home picks
       // them up immediately on the next render.

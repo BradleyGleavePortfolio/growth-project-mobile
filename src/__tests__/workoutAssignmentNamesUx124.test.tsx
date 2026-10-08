@@ -88,6 +88,7 @@ describe('coach-assigned workout names (B: client saw "Push 001" / "Exercise")',
     expect(mockStackNavigate).not.toHaveBeenCalled();
     expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab', {
       screen: 'ActiveWorkout',
+      initial: false,
       params: expect.objectContaining({ assignmentId: 'asg-1', routineId: 'plan-1' }),
     });
     const params = mockNavigate.mock.calls[0][1].params;

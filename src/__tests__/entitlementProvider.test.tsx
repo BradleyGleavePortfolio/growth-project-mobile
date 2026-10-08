@@ -138,8 +138,8 @@ describe('EntitlementProvider', () => {
       </EntitlementProvider>,
     );
     await waitFor(() => expect(latest?.status).toBe('unavailable'));
-    // entitlementActive null means ProtectedScreen renders the paywall (verified
-    // separately in protectedScreenFailClosed.test.tsx).
+    // entitlementActive null keeps ProtectedScreen closed with Try again (verified
+    // separately in protectedScreenFailClosed.test.tsx and foodGateRetry.test.tsx).
     expect((latest as EntitlementContextValue | null)?.entitlementActive).toBeNull();
   });
 

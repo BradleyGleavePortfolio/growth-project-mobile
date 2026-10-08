@@ -16,6 +16,7 @@ Network, auth, observability, and offline-queue glue. The screens never call `ax
 | File | What it does |
 | --- | --- |
 | `api.ts` | Axios instance, auth interceptor, single-flight refresh, all typed API surfaces (`authApi`, `profileApi`, `foodApi`, `logApi`, `aiApi`, `workoutApi`, `coachApi`, `messagesApi`, `nudgesApi`, `recipesApi`, `listsApi`, …). |
+| `api.ts` water/fast removal | `waterApi.deleteEntry(id)` calls `DELETE /nutrition/water/:id`; `fastingApi.deleteFast(id)` calls `DELETE /fasting/:id`. Both use the existing authenticated instance and the deployed [backend #858](https://github.com/BradleyGleavePortfolio/growth-project-backend/pull/858) caller-owned deletion contract. `WaterEntry` describes the saved id, ml amount and logged date returned by water reads/adds. No new auth, flag or dependency. |
 | `accountBinding.ts` | Binds a request to one account and sign-in (`AccountBinding`: token subject + auth epoch). The request interceptor sends a bound request only with that account's credential and sign-in, every `authEvents` emit bumps the epoch and aborts bound reads in flight. Used by the Roman chat history and delete calls (mobile #331). |
 | `sessionFence.ts` | One ordering rule for every write of the session credential pair (`supabase_token` / `supabase_refresh_token`): sign-in and sign-out writes, the token refresh commit, the refresh-failure sign-out and the one-time legacy AsyncStorage copy each hold the fence for their whole native write; a session generation moves on every sign-in / sign-out write, so a refresh or copy started under an older session publishes nothing (mobile #331). |
 | `authActions.ts` | `signOut()` and `refreshProfile()` — the only callers that touch `SIGN_OUT_KEYS` directly. Emits `authEvents`. |
@@ -39,7 +40,8 @@ Screen ──► api.<surface>.<method>(...)
             ├─ 401 + !_retry ─► coalesce into refreshPromise
             │                  │
             │                  ├─ success ─► retry original with new token
-            │                  └─ failure ─► clear token, emit logout (once)
+            │                  ├─ no answer ─► reject as "Cannot reach server", session kept
+            │                  └─ refused ─► sign out (once)
             └─ otherwise ─► reject
 
 Realtime:
@@ -62,7 +64,9 @@ Sentry:
 The header comment in `api.ts` is the canonical write-up. Short version:
 
 - One `refreshPromise` is in flight at a time. Concurrent 401s queue on it.
-- Refresh failure clears the access token and emits `authEvents.emit('logout')` exactly once. `user_data` and `onboarding_complete` are intentionally preserved so a re-login lands the user back on Home, not on the welcome screen.
+- A refresh the sign-in service refuses (invalid, expired or revoked refresh token) signs out exactly once (`signOut()`, which emits `authEvents.emit('logout')`).
+- A refresh that gets no answer (no signal, a timeout, a gateway error, the sign-in service answering 429 or 5xx) never signs out (SESSION-KEEP-130): the waiting requests reject like a request with no answer ("Cannot reach server", no `response`), the stored session is kept and the next 401 tries the refresh again. Sign-out removes the workouts and foods still waiting on the phone, so it is never triggered by a weak signal.
+- A voluntary sign-out first makes one bounded try (4 s) to send the foods saved offline and the finished workouts waiting on the phone (`sendUnsyncedLogs`). The client Settings and Profile confirms come from `prepareSignOutConfirm`, which names anything still unsent, for example "2 workouts and 1 food have not synced yet and will be removed from this phone."; a second tap while it sends opens no second confirm. The sign-out after a refused refresh skips the send: that session can no longer send anything.
 - The `_retry` flag prevents an infinite loop if the retried request also returns 401.
 
 ## App-store / deep-link dependencies
@@ -98,6 +102,7 @@ Missing required env throws at module load — see `src/config/env.ts`.
 | --- | --- | --- |
 | Every request fails with "Cannot reach server" | Backend cold start (Fly.io free tier) or no network | The 30 s axios timeout covers cold starts. The interceptor surfaces the message but does not log the user out — `error.response` is undefined for network errors. |
 | One 401 logs the user out | `_retry` was already set on a request that came back 401 the second time | Expected: the server rejected the refreshed token. User must sign in again. |
+| "Cannot reach server" right after a 401, still signed in | The session refresh got no answer (signal dropped, sign-in service down) | Expected (SESSION-KEEP-130): the session is kept; the next request renews it once the signal is back. |
 | Burst of 401s logs the user out | Should not happen — `loggedOutOnce` guards the emit. If you see it, check `refreshPromise` is being cleared correctly in `.finally`. | File a bug; the contract is documented in the `api.ts` header. |
 | Realtime ping never arrives | WebSocket dropped (background → foreground), or the backend never broadcast | The screens that use Realtime keep a 60 s safety poll; foreground transition refetches. |
 | Food log queue grows but never flushes | `flushFoodLogQueue` only runs on offline → online transition or on explicit caller invocation | Trigger a network change; a future round will add a periodic flush. |
