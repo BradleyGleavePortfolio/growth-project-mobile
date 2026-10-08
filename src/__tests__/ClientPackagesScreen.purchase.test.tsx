@@ -120,11 +120,12 @@ beforeEach(() => {
   mockInitPaymentSheet.mockResolvedValue({});
 });
 
-it.each([false, true])('names the refund team and the existing support path (renewing plan: %s)', async (hasPlan) => {
+it.each([false, true])('names the refund team and its support action (renewing plan: %s)', async (hasPlan) => {
   plans = hasPlan ? [PLAN] : [];
   const r = await render(<ClientPackagesScreen />);
   await waitFor(() => expect(r.getByTestId('buy-plan-pkg-monthly')).toBeTruthy());
-  expect(r.getByText(/Refunds are issued by The Growth Project team; to ask, go to You > Settings > Support\./)).toBeTruthy();
+  expect(r.getByText(/Refunds are issued by The Growth Project team; to ask for one, email support\./)).toBeTruthy();
+  expect(r.getByTestId('plans-refund-support')).toBeTruthy();
   expect(r.queryByText(/refunds are handled by your coach/i)).toBeNull();
 });
 
@@ -186,9 +187,11 @@ it('keeps Back, message-coach, coach-code and list retry paths reachable', async
   });
   await r.unmount();
   const retry = await render(<ClientPackagesScreen />);
-  await waitFor(() => expect(retry.getByText('Plans did not load. Tap to retry.')).toBeTruthy());
+  const plain = "Your coach's plans could not load. Check your connection, then tap to try again.";
+  await waitFor(() => expect(retry.getByText(plain)).toBeTruthy());
+  expect(retry.queryByText(/Plans did not load/)).toBeNull();
   jest.mocked(clientPaymentsApi.getPackages).mockClear();
-  await fireEvent.press(retry.getByText('Plans did not load. Tap to retry.'));
+  await fireEvent.press(retry.getByText(plain));
   expect(clientPaymentsApi.getPackages).toHaveBeenCalled();
 });
 
@@ -202,6 +205,7 @@ it('keeps current-plan inclusions and native card-update destinations', async ()
   await waitFor(() => expect(r.getByLabelText('Update card')).toBeTruthy());
   await fireEvent.press(r.getByLabelText('Update card'));
   expect(mockNavigate).toHaveBeenCalledWith('UpdateCard', { autostart: true });
+  await waitFor(() => expect(r.getByTestId('view-deliverables-cta')).toBeTruthy());
   await fireEvent.press(r.getByTestId('view-deliverables-cta'));
   expect(mockNavigate).toHaveBeenCalledWith('Deliverables', {
     purchaseId: 'purchase-1', packageName: 'Monthly coaching',

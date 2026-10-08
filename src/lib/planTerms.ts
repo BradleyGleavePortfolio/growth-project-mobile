@@ -66,6 +66,21 @@ function positiveInt(v: unknown, fallback: number): number {
 }
 
 /**
+ * FW-MONEY-128 U-3: the client list and detail carry `trial_offer` for THIS
+ * client (backend packages.controller.ts, one free trial per client per
+ * coach). A trial is advertised only when that offer is available; a row
+ * without an offer (coach previews, older payloads) keeps its trial days.
+ */
+function offeredTrialDays(r: Record<string, unknown>): number {
+  const offer = r.trial_offer;
+  if (!offer || typeof offer !== "object") return positiveInt(r.trial_days, 0);
+  const o = offer as Record<string, unknown>;
+  return o.available === true
+    ? positiveInt(o.trial_days, positiveInt(r.trial_days, 0))
+    : 0;
+}
+
+/**
  * Adapt a raw backend `CoachPackage` row (GET /v1/clients/me/coach/packages,
  * GET /v1/clients/me/coach/packages/:id). Returns null for rows that cannot be
  * sold honestly (no id, no whole-cent price, renewing without a cadence), so a
@@ -104,7 +119,7 @@ export function purchasableFromCoachPackage(
       interval,
       intervalCount: positiveInt(r.interval_count, 1),
       oneTimeCents: 0,
-      trialDays: positiveInt(r.trial_days, 0),
+      trialDays: offeredTrialDays(r),
     };
   }
   if (isCombo) {
