@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { errorMessage } from '../../../types/common';
 import { successTap, warningTap } from '../../../utils/haptics';
+import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import type { TimelineEvent } from './types';
 
 /**
@@ -88,6 +89,8 @@ export function TimelineTab({
   days,
   viewerId,
   onMarkReviewed,
+  loading = false,
+  error = null,
 }: {
   events: TimelineEvent[];
   onLoad: () => void;
@@ -95,12 +98,17 @@ export function TimelineTab({
   /** Signed-in coach id; check-in review is offered only for their rows. */
   viewerId?: string | null;
   onMarkReviewed?: (checkInId: string) => Promise<void>;
+  loading?: boolean;
+  error?: string | null;
 }) {
   const { colors } = useTheme();
   const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
   React.useEffect(() => {
     onLoad();
   }, [days]);
+
+  if (loading) return <QuietLoading label="Loading timeline" testID="client-timeline-loading" />;
+  if (error) return <QuietError message={error} onRetry={onLoad} testID="client-timeline-error" />;
 
   const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);

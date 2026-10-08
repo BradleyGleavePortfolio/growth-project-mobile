@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
 import type { WeekSummary } from './types';
 
 export function WeeklySummaryTab({
@@ -9,14 +10,22 @@ export function WeeklySummaryTab({
   days,
   expandedWeeks,
   onToggleWeek,
+  loading = false,
+  error = null,
+  onRetry,
 }: {
   summaries: WeekSummary[];
   days: number;
   expandedWeeks: Set<string>;
   onToggleWeek: (weekStart: string) => void;
+  loading?: boolean;
+  error?: string | null;
+  onRetry?: () => void;
 }) {
   const { colors } = useTheme();
   const wsStyles = useMemo(() => makeWsStyles(colors), [colors]);
+  if (loading) return <QuietLoading label="Loading weekly summary" testID="client-weekly-loading" />;
+  if (error) return <QuietError message={error} onRetry={onRetry} testID="client-weekly-error" />;
   if (summaries.length === 0) {
     return (
       <View style={wsStyles.empty}>

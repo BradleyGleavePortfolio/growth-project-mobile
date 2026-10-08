@@ -14,6 +14,13 @@ without changing portions, notes, targets or sharing states. Weekly disclosure,
 7/14/30-day food filters, feedback, meal plans, refresh and workout AI actions remain.
 Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
 
+Timeline and Weekly have independent loading, failure and verified-empty states.
+Failed reads say which tab could not load, without showing raw server text or
+claiming that no activity exists. Try again reloads that tab's selected 7/30/90-day
+period. The shared QuietLoading skeleton and QuietError forest text action leave
+check-in review and weekly disclosure unchanged. Regression and action parity:
+`src/__tests__/coachTimelineStates132.test.tsx` (agent 132).
+
 - Show the coach the state of every client they own: streaks, last log, last check-in, alerts.
 - Let the coach issue invite codes that bind new signups to their account, and revoke codes they no longer want to honour.
 - Talk to clients (per-thread DMs) and ship lightweight nudges (push notifications + in-app banners).

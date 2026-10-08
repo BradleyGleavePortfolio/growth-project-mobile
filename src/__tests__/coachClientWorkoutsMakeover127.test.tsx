@@ -42,6 +42,7 @@ jest.mock('../services/api', () => ({ coachApi: {
 } }));
 const mockDetail = {
   profile: {}, totals: {}, foodShared: true, workoutSessions: [], weightLogs: [], timeline: [], weekSummaries: [],
+  timelineLoading: false, timelineError: null as string | null, weeklyLoading: false, weeklyError: null as string | null,
   isLoading: false, refreshing: false, isArchived: false, serverMealPlans: [],
   loadData: jest.fn(async () => undefined), loadTimeline: jest.fn(), loadWeeklySummaries: jest.fn(),
   loadServerMealPlans: jest.fn(), setIsArchived: jest.fn(), setRefreshing: jest.fn(),
@@ -54,8 +55,12 @@ jest.mock('../screens/coach/client-detail/MealPlanTab', () => ({ MealPlanTab: ()
 jest.mock('../screens/coach/client-detail/ProgressTab', () => ({ ProgressTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Progress content') }));
 jest.mock('../screens/coach/client-detail/HealthFitnessTab', () => ({ HealthFitnessTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Fitness content') }));
 jest.mock('../screens/coach/client-detail/SleepRecoveryTab', () => ({ SleepRecoveryTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Recovery content') }));
-jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Timeline content') }));
-jest.mock('../screens/coach/client-detail/WeeklySummaryTab', () => ({ WeeklySummaryTab: () => jest.requireActual('react').createElement(jest.requireActual('react-native').Text, null, 'Weekly content') }));
+const mockTimelineTab = jest.fn((_props: { days: number; loading?: boolean; error?: string | null; onLoad: () => void }) =>
+  React.createElement(require('react-native').Text, null, 'Timeline content'));
+const mockWeeklyTab = jest.fn((_props: { days: number; loading?: boolean; error?: string | null; onRetry: () => void }) =>
+  React.createElement(require('react-native').Text, null, 'Weekly content'));
+jest.mock('../screens/coach/client-detail/TimelineTab', () => ({ TimelineTab: (props: Parameters<typeof mockTimelineTab>[0]) => mockTimelineTab(props) }));
+jest.mock('../screens/coach/client-detail/WeeklySummaryTab', () => ({ WeeklySummaryTab: (props: Parameters<typeof mockWeeklyTab>[0]) => mockWeeklyTab(props) }));
 jest.mock('../screens/coach/client-detail/DateRangeSelector', () => ({ DateRangeSelector: () => null }));
 jest.mock('../screens/coach/client-detail/PlanFormModal', () => ({ PlanFormModal: () => null }));
 jest.mock('../screens/coach/client-detail/NudgeModal', () => ({ NudgeModal: () => null }));
@@ -169,6 +174,27 @@ it('preserves all nine tab destinations and both AI actions, including client-co
   await waitFor(() => expect(navigate).toHaveBeenCalledWith('CoachWorkoutBuilder', {
     planId: 'copy-1', openAi: true, clientId: 'client-1', clientName: 'Sam Lee',
   }));
+});
+
+it('wires independent Timeline and Weekly load states and retries the selected period (agent 132)', async () => {
+  const props = screenProps(jest.fn(), jest.fn());
+  const s = await render(<ClientDetailScreen {...props} />);
+  mockDetail.timelineError = 'Timeline could not load.';
+  mockDetail.weeklyError = 'Weekly summary could not load.';
+  mockDetail.weeklyLoading = true;
+  await fireEvent.press(s.getByText('Timeline'));
+  const timeline = mockTimelineTab.mock.calls.at(-1)![0];
+  expect(timeline).toMatchObject({ days: 90, error: mockDetail.timelineError, loading: false });
+  timeline.onLoad();
+  expect(mockDetail.loadTimeline).toHaveBeenLastCalledWith(90);
+  await fireEvent.press(s.getByText('Weekly'));
+  const weekly = mockWeeklyTab.mock.calls.at(-1)![0];
+  expect(weekly).toMatchObject({ days: 90, error: mockDetail.weeklyError, loading: true });
+  weekly.onRetry();
+  expect(mockDetail.loadWeeklySummaries).toHaveBeenLastCalledWith(90);
+  mockDetail.timelineError = null;
+  mockDetail.weeklyError = null;
+  mockDetail.weeklyLoading = false;
 });
 
 it('preserves the surrounding header actions and refresh handler', async () => {
