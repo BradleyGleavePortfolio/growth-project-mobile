@@ -1,11 +1,11 @@
 /**
  * PACKS-BOTH-131 (owner 10-08: AI packs must be purchasable on Android and
- * iOS). With EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on (eas.json preview
- * profile only, the Android test app), an Android release build shows the AI
+ * iOS). With EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on (eas.json preview and
+ * clinic-apk profiles only, the Android test apps), an Android release build shows the AI
  * credit packs and opens Stripe Checkout in the system browser, like the iOS
  * US link. Everything else sold stays hidden on Android. The eas.json profiles
  * go through the real flag reader: iOS clinic 'external', iOS default
- * 'hidden', Android preview 'external', Android store profiles 'hidden'.
+ * 'hidden', Android preview and clinic-apk 'external', Android store profiles 'hidden'.
  */
 import React from 'react';
 import { Platform } from 'react-native';
@@ -162,6 +162,7 @@ describe('eas.json profiles through the real flag reader (release bundle)', () =
     ['ios', 'preview', 'hidden'],
     ['ios', null, 'hidden'],
     ['android', 'preview', 'external'],
+    ['android', 'clinic-apk', 'external'],
     ['android', 'production', 'hidden'],
     ['android', 'clinic', 'hidden'],
     ['android', null, 'hidden'],
@@ -169,8 +170,9 @@ describe('eas.json profiles through the real flag reader (release bundle)', () =
     expect(modeFor(os, profile)).toBe(mode);
   });
 
-  it('the Android switch is set only in the preview profile', () => {
+  it('the Android switch is set only in the preview and clinic-apk profiles (never a store profile)', () => {
     expect(eas.build.preview.env?.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK).toBe('true');
+    expect(eas.build['clinic-apk'].env?.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK).toBe('true');
     for (const name of ['development', 'production', 'clinic']) {
       expect(profileEnv(name)).not.toHaveProperty('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK');
     }

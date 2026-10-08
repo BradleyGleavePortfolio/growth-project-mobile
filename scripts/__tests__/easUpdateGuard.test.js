@@ -120,7 +120,7 @@ describe('eas-update-guard', () => {
       expect(guard.checkArgs({ channel: 'production', message: 'fix' }).join()).toMatch(/--environment is required/);
       expect(guard.checkArgs({ channel: 'production', environment: 'preview', message: 'fix' }).join()).toMatch(/must equal eas\.json build\.production\.environment/);
       expect(guard.checkArgs({ channel: 'clinic', environment: 'clinic', message: 'fix' }).join()).toMatch(/must equal eas\.json build\.clinic\.environment \("production"\)/);
-      expect(guard.checkArgs({ channel: 'main', environment: 'main', message: 'fix' }).join()).toMatch(/--channel must be one of clinic, preview, production/);
+      expect(guard.checkArgs({ channel: 'main', environment: 'main', message: 'fix' }).join()).toMatch(/--channel must be one of clinic, clinic-apk, preview, production/);
       expect(guard.checkArgs({ channel: 'production', environment: 'production', message: ' ' }).join()).toMatch(/--message/);
     });
 
@@ -131,7 +131,9 @@ describe('eas-update-guard', () => {
 
     it('reads the clinic channel from eas.json with the production flags merged under the clinic flags', () => {
       const c = guard.loadChannels();
-      expect(Object.keys(c).sort()).toEqual(['clinic', 'preview', 'production']);
+      expect(Object.keys(c).sort()).toEqual(['clinic', 'clinic-apk', 'preview', 'production']);
+      expect(c['clinic-apk']).toMatchObject({ profiles: ['clinic-apk'], environment: 'production' });
+      expect(c['clinic-apk'].env).toEqual({ ...c.clinic.env, EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: 'true' });
       expect(c.clinic.environment).toBe('production');
       expect(c.clinic.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
       expect(c.clinic.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES).toBe('true');

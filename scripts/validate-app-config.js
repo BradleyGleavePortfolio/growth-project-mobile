@@ -700,7 +700,9 @@ const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER
 // for that channel is exported with (resolved through `extends`). The clinic
 // binary has its own channel: it is built with clinic-only EXPO_PUBLIC_FF_*
 // values in eas.json, and an update exported for `production` would turn
-// those features off on clinic devices.
+// those features off on clinic devices. The clinic-apk binary (the directly
+// installed Android test app: clinic plus the Android credit-pack link) has
+// its own channel for the same reason.
 // S-RELEASE-3 (owner: an update must never interrupt a session or
 // onboarding, and must never brick a build): runtime code never drives
 // expo-updates. A downloaded update then applies only on the next cold start
@@ -737,6 +739,7 @@ const EXPECTED_CHANNELS = {
   preview: { channel: 'preview', environment: 'preview' },
   production: { channel: 'production', environment: 'production' },
   clinic: { channel: 'clinic', environment: 'production' },
+  'clinic-apk': { channel: 'clinic-apk', environment: 'production' },
 };
 
 function validateUpdates(app) {

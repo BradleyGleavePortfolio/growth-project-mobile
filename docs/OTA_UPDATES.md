@@ -15,6 +15,7 @@ builds without a new App Store review.
 | `expo.updates.fallbackToCacheTimeout` | `0` | never block launch on the network; a downloaded update applies on the next launch |
 | `eas.json build.production.channel` | `production` | store builds read the `production` channel |
 | `eas.json build.clinic.channel` | `clinic` (environment `production`) | the clinic binary reads its own channel; it is built with clinic-only `EXPO_PUBLIC_FF_*` values, so it must never receive a `production` update |
+| `eas.json build.clinic-apk.channel` | `clinic-apk` (environment `production`) | the Android test APK (clinic flags plus the Android credit-pack link) reads its own channel, so a `clinic` update never reaches it |
 | `eas.json build.preview.channel` | `preview` | internal builds read the `preview` channel |
 | `development` profile | no channel | dev client loads from Metro |
 
@@ -30,8 +31,8 @@ builds without a new App Store review.
 - `fallbackToCacheTimeout` is not 0.
 - A wrong updates URL or channel.
 - `updates.enabled` is not `true`, or `checkAutomatically` is not `ON_LOAD` (audit C4).
-- `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is not `"true"` in the preview/production/clinic build profiles (after `extends`).
-- The `preview`/`production`/`clinic` build profile is missing, its channel is wrong, or its `environment` is not `preview`/`production`/`production`.
+- `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is not `"true"` in the preview/production/clinic/clinic-apk build profiles (after `extends`).
+- The `preview`/`production`/`clinic`/`clinic-apk` build profile is missing, its channel is wrong, or its `environment` is not `preview`/`production`/`production`/`production`.
 - Two build profiles share a channel (each channel is one binary population).
 - `fingerprint.config.js` is missing, fails to load, or no longer lists `src/config/purchaseSurfaces.ts` in `extraSources`.
 

@@ -126,6 +126,10 @@ eas build --platform android --profile production
 # Clinic launch build: production plus the clinic flags (Roman tutorial,
 # Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
 eas build --platform ios --profile clinic
+
+# Android test app with the iPhone feature set: clinic plus the Android
+# credit-pack link, an APK installed directly (internal, not Google Play).
+eas build --platform android --profile clinic-apk
 ```
 
 ### Apple Health permission messages
@@ -428,7 +432,7 @@ Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). A
 - The feature paywall (`ProtectedScreen` + `PaywallSheet`, in front of Roman, Community, Log, Workouts, Booking and the other protected screens) never lists packages or shows a Subscribe CTA on a hidden iOS build. It shows "Your coach manages your access" with a "Message your coach" action (Guideline 3.1.1). Purchases happen only on the 1:1 coaching screen (`ClientPackages`, labelled by `oneToOneCoachingLabel`), reached from More.
 - The unsolicited package sheet (after Day-1 and the 24h re-surface) is never shown on a hidden iOS build; on iOS a client buys only on the labelled 1:1 coaching screen. Purchase-flow copy does not describe the purchase as unlocking app features or access.
 - On hidden iOS builds AI credit top-ups are not purchasable: every entry point is hidden, an AI budget push lands on Settings, and the gated checkout route says the packs are not sold in this version of the app, with no link or URL (there is no web checkout).
-- Exception (owner decision 10 fallback): a build with `EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK` on (only the `clinic` profile) shows the packs and opens Stripe Checkout in the system browser (Guideline 3.1.1(a), US storefront). That build must be offered only on the US App Store, and the App Review notes must describe the link. Android release builds keep the packs hidden, except a build with `EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK` on (only the `preview` profile, the directly installed Android test app), which shows them the same way and sends `X-Client-Purchase-Policy: p2p-and-ai-credits`. Wherever pack prices show, the app says "Credit packs are non-refundable."
+- Exception (owner decision 10 fallback): a build with `EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK` on (only the `clinic` profile) shows the packs and opens Stripe Checkout in the system browser (Guideline 3.1.1(a), US storefront). That build must be offered only on the US App Store, and the App Review notes must describe the link. Android release builds keep the packs hidden, except a build with `EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK` on (only the `preview` and `clinic-apk` profiles, the directly installed Android test apps), which shows them the same way and sends `X-Client-Purchase-Policy: p2p-and-ai-credits`. Wherever pack prices show, the app says "Credit packs are non-refundable."
 - `app.json` `ios.supportsTablet` is false (iPhone only for v1, so no iPad screenshots or iPad review).
 - Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
 - The Membership screen's website link is not rendered on hidden iOS builds.
