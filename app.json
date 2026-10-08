@@ -26,8 +26,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
-        "NSHealthShareUsageDescription": "The Growth Project uses your Apple Health data so your coach can personalize training, recovery, and check-ins around real signals (sleep, heart rate, workouts).",
-        "NSHealthUpdateUsageDescription": "The Growth Project may write workouts you log to Apple Health so all your activity stays in one place.",
+        "NSHealthShareUsageDescription": "The Growth Project reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
+        "NSHealthUpdateUsageDescription": "The Growth Project does not write data to Apple Health.",
         "NSMotionUsageDescription": "The Growth Project reads motion and step activity so your coach can track daily movement and progress.",
         "NSCameraUsageDescription": "The Growth Project uses the camera only when you choose to take a photo to send in a support chat.",
         "NSPhotoLibraryUsageDescription": "The Growth Project opens your photo library only when you choose a photo to send in a support chat.",
@@ -192,8 +192,8 @@
       [
         "react-native-health",
         {
-          "healthSharePermission": "The Growth Project uses your Apple Health data so your coach can personalize training, recovery, and check-ins around real signals (sleep, heart rate, workouts).",
-          "healthUpdatePermission": "The Growth Project may write workouts you log to Apple Health so all your activity stays in one place."
+          "healthSharePermission": "The Growth Project reads your Apple Health data for training, recovery, and check-ins. Your coach can use data you share, and Roman can use daily summaries when you allow AI access.",
+          "healthUpdatePermission": "The Growth Project does not write data to Apple Health."
         }
       ],
       "react-native-health-connect",

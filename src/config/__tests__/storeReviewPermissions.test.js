@@ -108,3 +108,48 @@ describe('IOS-RELEASE-129: the Face ID purpose string names what Face ID does', 
     expect(text).not.toMatch(/!|\b(we|our|us|I)\b/);
   });
 });
+
+describe('HEALTH-STRINGS-130: Apple Health purpose strings match read-only use', () => {
+  const healthEntry = (config) =>
+    config.plugins.find((p) => Array.isArray(p) && p[0] === 'react-native-health');
+  const purposeKeys = [
+    ['NSHealthShareUsageDescription', 'healthSharePermission'],
+    ['NSHealthUpdateUsageDescription', 'healthUpdatePermission'],
+  ];
+
+  test('the read purpose names shared coach data and conditional Roman summaries', () => {
+    const text = app.ios.infoPlist.NSHealthShareUsageDescription;
+    expect(text).toMatch(/Roman.*daily summaries.*when you allow AI access/);
+    expect(text).toMatch(/your coach.*data you share/i);
+    expect(text).not.toMatch(/!|\b(we|our|us|I)\b/);
+  });
+
+  test('the update purpose makes no promise to write workouts or other data', () => {
+    const text = app.ios.infoPlist.NSHealthUpdateUsageDescription;
+    expect(text).toMatch(/does not write data to Apple Health/);
+    expect(text).not.toMatch(/may write|write workouts|!|\b(we|our|us|I)\b/);
+  });
+
+  test.each(purposeKeys)('%s matches the react-native-health plugin option', (key, option) => {
+    expect(healthEntry(app)[1][option]).toBe(app.ios.infoPlist[key]);
+  });
+
+  test.each([undefined, '1'])(
+    'the real plugin generates the same iOS strings (TGP_ANDROID_HEALTH_CONNECT=%s)',
+    async (value) => {
+      if (value === undefined) delete process.env.TGP_ANDROID_HEALTH_CONNECT;
+      else process.env.TGP_ANDROID_HEALTH_CONNECT = value;
+      const result = JSON.parse(JSON.stringify(configure()));
+      const withHealthKit = require('react-native-health/app.plugin.js');
+      const generated = withHealthKit(result, healthEntry(result)[1]);
+      const { modResults } = await generated.mods.ios.infoPlist({
+        ...generated,
+        modResults: {},
+        modRequest: {},
+      });
+      for (const [key] of purposeKeys) {
+        expect(modResults[key]).toBe(app.ios.infoPlist[key]);
+      }
+    },
+  );
+});
