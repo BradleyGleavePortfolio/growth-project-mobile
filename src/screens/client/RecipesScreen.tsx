@@ -30,6 +30,7 @@ import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, SemanticTokens } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
 
 const ALLERGY_PROMPT_FLAG = 'allergy_prompt_shown';
@@ -174,20 +175,10 @@ export default function RecipesScreen() {
         await profileApi.update({ diet_restrictions: restrictions });
         // Read the library again: recipes declaring a newly saved allergen leave it.
         refreshRecipeReads(queryClient);
-        // Refresh local user_data so Home + Recipes filters see the new value.
+        // Save the answer in the user cache that useCurrentUser reads, so Edit Profile shows it
+        // and its next save keeps it (B-569-SOL-M-131-1).
         try {
-          const raw = await AsyncStorage.getItem('user_data');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            const nextProfile = {
-              ...(parsed.profile ?? {}),
-              diet_restrictions: restrictions,
-            };
-            await AsyncStorage.setItem(
-              'user_data',
-              JSON.stringify({ ...parsed, profile: nextProfile }),
-            );
-          }
+          await patchUserCache({ profile: { diet_restrictions: restrictions } });
         } catch {
           // Cache refresh is best-effort.
         }

@@ -59,7 +59,7 @@ it('keeps all eleven fields and every choice reachable, then saves the same payl
     await fireEvent.press(button); expect(button.props.accessibilityState.selected).toBe(true);
   }
   for (const label of ['None', 'Nut Allergy', 'Peanut Allergy', 'Shellfish Allergy', 'Egg Allergy', 'Dairy Allergy',
-    'Soy', 'Sesame', 'Gluten-Free', 'Vegetarian', 'Vegan', 'Pescatarian', 'No Pork', 'No Beef', 'No Fish', 'No Spicy']) {
+    'Soy', 'Sesame', 'Fish', 'Gluten-Free', 'Vegetarian', 'Vegan', 'Pescatarian', 'No Pork', 'No Beef', 'No Fish', 'No Spicy']) {
     const button = screen.getAllByLabelText(label)[0]; await fireEvent.press(button);
     expect(button.props.accessibilityState.selected).toBe(true);
   }
@@ -159,4 +159,14 @@ it('offers Soy and Sesame and keeps every saved answer when one is added (ALLERG
   await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
   expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ diet_restrictions: ['Nut Allergy', 'nuts', 'Sesame', 'Soy'] }));
   for (const queryKey of [['recipes'], ['recipe'], ['prep-guide']]) expect(mockInvalidate).toHaveBeenCalledWith({ queryKey });
+});
+
+it('shows a Fish answer saved from the Recipes sheet and lets the client remove it', async () => {
+  mockUser = { id: 'client', email: 'client@example.test', profile: { diet_restrictions: ['Fish', 'No Fish'] } };
+  await render(<EditProfileScreen />);
+  expect(screen.getByLabelText('Fish').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByLabelText('No Fish').props.accessibilityState.selected).toBe(true);
+  await fireEvent.press(screen.getByLabelText('Fish'));
+  await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
+  expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ diet_restrictions: ['No Fish'] }));
 });

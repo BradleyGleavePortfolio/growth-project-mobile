@@ -126,7 +126,7 @@ const GOAL_OPTIONS: { value: PrimaryGoal; label: string; description: string }[]
 ];
 
 // The allergy chips of AllergySafetyPrompt plus diet exclusions, saved as typed (the backend
-// maps the allergy ones, Soy and Sesame included). Includes "None"
+// maps the allergy ones, Soy, Sesame and Fish included). Includes "None"
 // as an explicit answer so an empty selection still records intent.
 const RESTRICTION_OPTIONS = [
   'None',
@@ -137,6 +137,7 @@ const RESTRICTION_OPTIONS = [
   'Dairy Allergy',
   'Soy',
   'Sesame',
+  'Fish',
   'Gluten-Free',
   'Vegetarian',
   'Vegan',

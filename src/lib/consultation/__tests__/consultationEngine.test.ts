@@ -448,3 +448,17 @@ describe('copy helpers', () => {
     expect(JSON.stringify(yes)).not.toMatch(/private/);
   });
 });
+
+// ALLERGY-CHOICES-131 follow-up: N2 offers Sesame. The backend accepts it from growth-project-backend#880
+// (consultation-answers.ts N2) and maps the saved answer to the sesame allergen, so recipes declaring it are hidden.
+describe('N2 sesame', () => {
+  it('offers Sesame after Soy, accepts it and names it in the summary', () => {
+    const values = (def('N2').options ?? []).map((o) => o.value);
+    expect(values.indexOf('sesame')).toBe(values.indexOf('soy') + 1);
+    expect(def('N2').options).toContainEqual({ value: 'sesame', label: 'Sesame' });
+    expect(validateScreen(def('N2'), { N2: ['soy', 'sesame'] }, NOW).valid).toBe(true);
+    expect(buildSummary(fullAnswers({ N2: ['soy', 'sesame'] }), NOW)[4].body).toBe(
+      'No particular pattern, avoiding soy and sesame, three meals a day.',
+    );
+  });
+});
