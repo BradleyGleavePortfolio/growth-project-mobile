@@ -26,6 +26,7 @@ jest.mock('@react-navigation/native', () => {
   return {
     ...actual,
     useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
+    usePreventRemove: jest.fn(),
     useFocusEffect: (cb: () => void | (() => void)) => {
       const R = jest.requireActual('react');
       R.useEffect(() => cb(), [cb]);
