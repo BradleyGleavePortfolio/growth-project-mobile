@@ -167,6 +167,7 @@ npm run typecheck
 - The ranked `Leaderboard` tab inside `CommunityScreen` was excised in the streak/badge/trophy doctrine sweep. Ranked competition is incompatible with the quiet-luxury voice; the Wins feed is the only social surface.
 - `TrophyShareScreen`, the `FirstWinCelebration` overlay, and the `IdentityBadge` / `TrophyArtifact` components were deleted in the wave-5b cleanup (#63). They are not registered as screens, not imported anywhere, and are explicitly forbidden by the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`).
 - The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind are gone. The dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
+- More → **Shopping list** is gone (owner 10-07: one list; CF-ONE-LIST-128). `GroceryListScreen` reads `/lists/grocery`, then `/lists/shopping`, and shows both as one list: shopping rows keep check, uncheck and remove, Clear checked also clears `/lists/shopping` when a checked row came from it, new rows go to grocery, and one muted line says "Includes items from your shopping list." only while such rows exist. `ShoppingListScreen` and its `ShoppingList` route are still registered but have no entry point (delete them once the open PRs on `ClientNavigator.tsx` and `GroceryPrep.parity.test.tsx` land). Tests: `__tests__/GroceryOneList.test.tsx`, `__tests__/MoreScreen.reach.test.tsx`.
 
 ## Release notes
 
