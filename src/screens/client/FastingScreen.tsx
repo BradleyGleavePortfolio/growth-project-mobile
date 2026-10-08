@@ -9,6 +9,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useSettings } from '../../hooks/useSettings';
@@ -16,6 +17,7 @@ import { fastingApi } from '../../services/api';
 import { logger } from '../../utils/logger';
 
 import FadeInView from '../../components/FadeInView';
+import HapticPressable from '../../components/HapticPressable';
 import QuietBar from '../../ui/progress/QuietBar';
 import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAlert';
 import { bucketDateLocal } from '../../utils/date';
@@ -72,6 +74,7 @@ export default function FastingScreen() {
   // submitting locks Start/End buttons across the in-flight network round-trip
   // so a double-tap can't create two server-side fasts (P0-3).
   const [submitting, setSubmitting] = useState(false);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setProtocol = (hours: number) => setSelectedProtocol(hours);
@@ -121,6 +124,8 @@ export default function FastingScreen() {
         const longestHours = Math.max(...hours);
         const averageHours = hours.reduce((a, b) => a + b, 0) / hours.length;
         setStats({ longestHours, averageHours, totalCompleted: completed.filter((s) => s.completed).length });
+      } else {
+        setStats({ longestHours: 0, averageHours: 0, totalCompleted: 0 });
       }
 
       // Compute streak from consecutive days with completed fasts.
@@ -256,6 +261,53 @@ export default function FastingScreen() {
     await doEndFast();
   };
 
+  const doRemoveFast = async (session: FastSession) => {
+    if (!currentUser || submitting) return;
+    setSubmitting(true);
+    setRemovingId(session.id);
+    try {
+      await fastingApi.deleteFast(session.id);
+      // Only the running fast has a scheduled end alert to cancel.
+      if (session.id === activeFast?.id) await cancelFastEndAlert(currentUser.id);
+      await loadAll();
+    } catch {
+      Alert.alert("Couldn't remove fast", 'The fast could not be removed. Check the connection and try again.');
+    } finally {
+      setRemovingId(null);
+      setSubmitting(false);
+    }
+  };
+
+  const handleRemoveFast = (session: FastSession) => {
+    if (!currentUser || submitting) return;
+    Alert.alert(
+      'Remove this fast?',
+      session.endTime
+        ? 'This fast will be removed from history.'
+        : 'This fast will be removed and the running timer will stop.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => doRemoveFast(session) },
+      ],
+    );
+  };
+
+  const removeFastControl = (session: FastSession) => (
+    <HapticPressable
+      disableAnimation
+      intent="warning"
+      style={styles.removeButton}
+      onPress={() => handleRemoveFast(session)}
+      disabled={submitting}
+      accessibilityLabel={session.endTime ? `Remove fast from ${new Date(session.startTime).toLocaleDateString()}` : 'Remove this fast'}
+      accessibilityState={{ disabled: submitting, busy: removingId === session.id }}
+      testID={`remove-fast-${session.id}`}
+    >
+      <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+      <Text style={styles.removeLabel}>{removingId === session.id ? 'Removing…' : 'Remove this fast'}</Text>
+    </HapticPressable>
+  );
+
   if (isLoading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgPrimary }}>
@@ -364,7 +416,7 @@ export default function FastingScreen() {
             accessibilityLabel="End fast"
           >
             <Text style={styles.actionBtnText}>
-              {submitting ? 'Ending…' : 'End fast'}
+              {submitting && !removingId ? 'Ending…' : 'End fast'}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -377,7 +429,7 @@ export default function FastingScreen() {
             accessibilityLabel="Start fast"
           >
             <Text style={styles.actionBtnText}>
-              {submitting ? 'Starting…' : 'Start fast'}
+              {submitting && !removingId ? 'Starting…' : 'Start fast'}
             </Text>
           </TouchableOpacity>
         )}
@@ -405,6 +457,7 @@ export default function FastingScreen() {
             current={elapsed}
             target={targetMs}
           />
+          {removeFastControl(activeFast)}
         </View>
       )}
 
@@ -447,7 +500,10 @@ export default function FastingScreen() {
                     {`${session.targetHours}h target · ${session.completed ? 'Completed' : 'Ended early'}`}
                   </Text>
                 </View>
-                <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
+                <View style={styles.historyRight}>
+                  <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
+                  {removeFastControl(session)}
+                </View>
               </View>
             );
           })}
@@ -651,6 +707,22 @@ const makeStyles = (colors: SemanticTokens) =>
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
+  },
+  historyRight: {
+    alignItems: 'flex-end',
+  },
+  removeButton: {
+    minHeight: 44,
+    minWidth: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  removeLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: colors.textMuted,
   },
 
   });
