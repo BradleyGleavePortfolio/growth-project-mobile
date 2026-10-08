@@ -15,13 +15,14 @@ import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } fro
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
 import { errorStatus } from '../../types/common';
+import { RecipeAllergenFields, isHiddenForAllergens, recipeAllergenDetail } from '../../lib/recipeAllergens';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, SemanticTokens } from '../../theme/tokens';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Recipe {
+interface Recipe extends RecipeAllergenFields {
   id: string;
   title: string;
   description?: string;
@@ -116,12 +117,18 @@ export default function RecipeDetailScreen() {
     return <SkeletonScreen count={6} />;
   }
 
-  if (!recipe) {
-    const unavailable = !recipeId || errorStatus(error) === 404 || !isError;
+  // A 404 wins over a cached copy (list cache or an earlier open): the recipe is
+  // gone, or now declares an allergen saved on the profile. Other failures keep
+  // the cached copy on screen.
+  const gone = isError && errorStatus(error) === 404;
+  if (!recipe || gone) {
+    const unavailable = !recipeId || gone || !isError;
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>
-          {unavailable
+          {isHiddenForAllergens(error)
+            ? 'This recipe is hidden because it lists an allergen saved on your profile.'
+            : unavailable
             ? 'This recipe is no longer available.'
             : 'Could not load this recipe. Check your connection and try again.'}
         </Text>
@@ -223,6 +230,15 @@ export default function RecipeDetailScreen() {
             <MacroCard label="Carbs" value={recipe.carbs} unit="g" />
             <MacroCard label="Fat" value={recipe.fat} unit="g" />
           </View>
+        </View>
+      </FadeInView>
+
+      {/* Allergens: only what the recipe's author declared, never guessed from the text */}
+      <FadeInView duration={250}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>ALLERGENS</Text>
+          <Text style={styles.listItemText}>{recipeAllergenDetail(recipe)}</Text>
+          <Text style={styles.recipeDesc}>Check the ingredients below before you cook.</Text>
         </View>
       </FadeInView>
 
