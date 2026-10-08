@@ -14,10 +14,9 @@
 // overwritten; once the workout is finished or cancelled, the entry is
 // cleared.
 //
-// Staleness: sessions older than ACTIVE_WORKOUT_STALE_MS are treated
-// as abandoned. We still hand them to the screen so it can render a
-// "Resume?" prompt, but the helpers expose `isSessionStale` so the
-// screen can phrase the prompt differently for stale data.
+// Staleness: sessions not changed for ACTIVE_WORKOUT_STALE_MS are still
+// handed to the screen, flagged `isStale`; the screen reopens them with the
+// clock counted only up to their last change (`pausedMs`).
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -58,6 +57,9 @@ export interface PersistedActiveWorkoutSession {
   startedAtMs: number;
   // Last time we wrote to storage. Used to compute staleness.
   updatedAtMs: number;
+  // WORKOUT-RESUME-131: wall-clock time left out of the workout's clock (the
+  // gap before a stale reopen), so a later reopen keeps it out. Absent = 0.
+  pausedMs?: number;
   // Route params we need to rebuild the screen on resume.
   routineName: string;
   exercisesJson: string;
