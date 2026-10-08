@@ -244,7 +244,7 @@ export default function HomeScreen() {
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
 
   // The Food Log uses approximate ml because day reads round to ounces.
-  const waterValue = !dayReady || !settingsLoaded ? '—' : settings.unit === 'kg'
+  const waterValue = !dayReady || !settingsLoaded || loadError ? '—' : settings.unit === 'kg'
     ? `≈ ${Math.round(waterOz * 29.5735)} ml`
     : `${Math.round(waterOz * 10) / 10} oz`;
 

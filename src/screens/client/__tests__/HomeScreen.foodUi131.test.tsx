@@ -141,6 +141,17 @@ it('an initial day-read failure keeps intake unknown and retry/food navigation r
   expect(mockNavigate).toHaveBeenCalledWith('Log');
 });
 
+it.each(['lbs', 'kg'] as const)('%s: a failed water read stays unknown after food loads', async (unit) => {
+  mockSettings.unit = unit;
+  mockDay.hasLoadedDay = true;
+  mockDay.dailyTotals.protein = 40;
+  mockDay.loadError = 'Water data could not refresh. Check your connection and try again.';
+  await render(<HomeScreen />);
+  expect(screen.getByText(mockDay.loadError)).toBeTruthy();
+  expect(screen.getByTestId('home-value-PROTEIN').props.children).toBe('40g');
+  expect(screen.getByTestId('home-value-WATER').props.children).toBe('—');
+});
+
 it('uses approximate whole milliliters for kilogram users, like the Food Log', async () => {
   mockDay.hasLoadedDay = true;
   mockDay.waterOz = 17;
