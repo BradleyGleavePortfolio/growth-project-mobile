@@ -7,8 +7,9 @@
  *      which resolved to /help/privacy (store-package review, gap HP15).
  *   2. The Consumer Health Data Privacy Policy is linked from the screen
  *      (RCW 19.373.010/.020: in-app settings link counts as the homepage).
- *   3. The help-centre link still goes to the help centre.
- *   4. Rendering the screen shows all three links and tapping each one calls
+ *   3. The Terms of Service is linked (FW-ACCOUNT-128 U4) and the help-centre
+ *      link still goes to the help centre.
+ *   4. Rendering the screen shows all four links and tapping each one calls
  *      Linking.openURL with its URL.
  *   5. The unsupported data-residency and "only meals and workouts" claims
  *      are gone.
@@ -77,6 +78,10 @@ jest.mock('../../theme/ThemeProvider', () => {
 });
 
 jest.mock('../../lib/analytics', () => ({ track: jest.fn() }));
+// A client with a coach (the coach line itself is pinned in trustCenterTruth.test.tsx).
+jest.mock('../../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => ({ id: 'client-1', email: 'client@example.test', role: 'student', coach_id: 'coach-1' }),
+}));
 
 jest.mock('../../services/api', () => ({
   __esModule: true,
@@ -110,16 +115,18 @@ describe('policy URLs', () => {
 });
 
 describe('trustCenterLinks', () => {
-  it('lists Privacy Policy, Consumer Health Data Privacy Policy and the help centre, in that order', () => {
+  it('lists Privacy Policy, Consumer Health Data Privacy Policy, Terms of Service and the help centre, in that order', () => {
     const links = trustCenterLinks();
     expect(links.map((l) => l.url)).toEqual([
       PRIVACY_POLICY_URL,
       CONSUMER_HEALTH_POLICY_URL,
+      TERMS_URL,
       helpUrl(),
     ]);
     expect(links.map((l) => l.label)).toEqual([
       'Privacy Policy',
       'Consumer Health Data Privacy Policy',
+      'Terms of Service',
       'Visit the help centre',
     ]);
     for (const l of links) {
@@ -191,7 +198,9 @@ describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete ac
     expect(SCREEN_SRC).toContain("navigation?.navigate?.('DeleteAccount')");
     expect(SCREEN_SRC).not.toContain('deletionApi.requestDeletion');
     expect(SCREEN_SRC).not.toMatch(/Delete my account|Delete My Account/);
-    expect(SCREEN_SRC).toContain('Open Privacy in Settings to track progress');
+    // FW-ACCOUNT-128 U5: the export alert names the real Settings row.
+    expect(SCREEN_SRC).toContain('Open My data in Settings to track progress');
+    expect(SCREEN_SRC).not.toContain('Open Privacy in Settings');
     expect(SCREEN_SRC).not.toContain('Data & Privacy');
   });
 
@@ -246,22 +255,26 @@ describe('TrustCenterScreen render', () => {
     return screen.getByTestId('trust-link-failure-message').props.children;
   }
 
-  it('shows the three links and opens each URL, with no failure notice and nothing reported', async () => {
+  it('shows the four links and opens each URL, with no failure notice and nothing reported', async () => {
     const screen = await renderScreen();
 
     expect(screen.getByText('Privacy Policy')).toBeTruthy();
     expect(screen.getByText('Consumer Health Data Privacy Policy')).toBeTruthy();
+    expect(screen.getByText('Terms of Service')).toBeTruthy();
     expect(screen.getByText('Visit the help centre')).toBeTruthy();
 
     await tap(screen, 'trust-link-privacy');
     await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(1));
     await tap(screen, 'trust-link-consumer-health');
     await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(2));
-    await tap(screen, 'trust-link-help');
+    await tap(screen, 'trust-link-terms');
     await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(3));
+    await tap(screen, 'trust-link-help');
+    await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(4));
     expect(openUrl.mock.calls.map((c) => c[0])).toEqual([
       'https://app.trygrowthproject.com/privacy',
       'https://app.trygrowthproject.com/consumer-health-privacy',
+      'https://app.trygrowthproject.com/terms',
       helpUrl(),
     ]);
     expect(screen.queryByTestId('trust-link-failure')).toBeNull();
@@ -546,6 +559,7 @@ describe('link failure copy rules (OR-112-15)', () => {
     expect(trustCenterLinks().map((l) => l.pageName)).toEqual([
       'Privacy Policy',
       'Consumer Health Data Privacy Policy',
+      'Terms of Service',
       'help centre',
     ]);
   });
