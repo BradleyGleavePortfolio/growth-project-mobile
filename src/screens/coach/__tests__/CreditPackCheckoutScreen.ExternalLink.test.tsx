@@ -85,6 +85,11 @@ import CreditPackCheckoutScreen, {
 
 const CHECKOUT_URL = 'https://checkout.stripe.com/c/pay/cs_live_abc';
 let urlListener: ((event: { url: string }) => void) | null = null;
+// The RN preset makes Linking.addEventListener a jest.fn: reuse its
+// implementation so the spy returns a real EmitterSubscription.
+const addUrlListener =
+  jest.mocked(Linking.addEventListener).getMockImplementation() ??
+  Linking.addEventListener.bind(Linking);
 let appListener: ((state: AppStateStatus) => void) | null = null;
 const g = globalThis as { __DEV__?: boolean };
 const realDev = g.__DEV__;
@@ -102,9 +107,9 @@ beforeEach(() => {
   openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
   urlListener = null;
   appListener = null;
-  jest.spyOn(Linking, 'addEventListener').mockImplementation((_type, listener) => {
+  jest.spyOn(Linking, 'addEventListener').mockImplementation((type, listener) => {
     urlListener = listener;
-    return { remove: jest.fn() };
+    return addUrlListener(type, listener);
   });
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, listener) => {
     appListener = listener;
