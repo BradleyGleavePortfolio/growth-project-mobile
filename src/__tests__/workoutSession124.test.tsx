@@ -31,7 +31,8 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({ invalidateQueries: mockInvalidate }),
 }));
 jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: jest.requireActual('../theme/tokens').lightTokens }),
+  useTheme: () => ({ colors: jest.requireActual('../theme/tokens').lightTokens,
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens }),
 }));
 jest.mock('../services/api', () => ({ __esModule: true, default: { put: jest.fn() } }));
 jest.mock('../api/exerciseLibraryApi', () => ({ exerciseLibraryApi: { getById: jest.fn() } }));

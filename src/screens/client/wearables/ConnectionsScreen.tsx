@@ -59,6 +59,7 @@ import DisconnectConfirmDialog from './DisconnectConfirmDialog';
 import { disconnectFailureMessage } from './disconnectCopy';
 import { isOnDeviceStop } from '../../../services/health/sessionFence';
 import { useConnectableCloudProviders } from '../../../hooks/useConnectableCloudProviders';
+import { useCoachlessClient } from '../../../hooks/useCoachlessClient';
 import { cloudBenefit } from './cloudCopy';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
@@ -347,6 +348,8 @@ export default function ConnectionsScreen() {
     [deviceSource, localAuth.data],
   );
   const cloud = useConnectableCloudProviders();
+  // FW-BODY U10: the Connect and Disconnect lines name a coach only when there is one.
+  const coachless = useCoachlessClient();
   const rows = useMemo(
     () => buildRows(data ?? [], local, deviceSource, cloud),
     [data, local, deviceSource, cloud],
@@ -474,6 +477,7 @@ export default function ConnectionsScreen() {
         visible={sheetVisible}
         onClose={closeSheet}
         onConnected={closeSheet}
+        coachless={coachless}
       />
       <DisconnectConfirmDialog
         provider={confirmProvider}
@@ -484,6 +488,7 @@ export default function ConnectionsScreen() {
         canRetry={disconnectError?.canRetry ?? true}
         onCancel={cancelDisconnect}
         onConfirm={confirmDisconnect}
+        coachless={coachless}
       />
     </SafeAreaView>
   );

@@ -24,7 +24,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 import StepTransitionView from '../../components/onboarding/StepTransitionView';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -36,12 +37,12 @@ export type TodayIntent = 'workout' | 'track_meals' | 'explore';
 
 const INTENTS: { key: TodayIntent; label: string; sub: string; identity: string }[] = [
   { key: 'workout',     label: 'Log a workout',  sub: 'Begin your first session.',          identity: 'Athlete' },
-  { key: 'track_meals', label: 'Track my meals', sub: 'Log what you eat. Hit your targets.', identity: 'Nutrition Pro' },
+  { key: 'track_meals', label: 'Track meals',    sub: 'Log what you eat.',                   identity: 'Nutrition Pro' },
   { key: 'explore',     label: 'Just explore',   sub: 'Take a look around.',                 identity: 'Explorer' },
 ];
 
 export default function LeanQ3IntentScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<TodayIntent | null>(null);
   const [loading, setLoading] = useState(false);
@@ -95,15 +96,10 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.stepIndicator}>
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-          </View>
+          <Text style={styles.stepIndicator}>Step 3 of 6</Text>
           <Text style={styles.headline}>Where does it begin?</Text>
           <Text style={styles.subtext}>
-            Your home screen is set up to make it instant.
+            Choose what you want to do.
           </Text>
         </View>
 
@@ -124,17 +120,10 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
                 <Text style={styles.optionSub}>{i.sub}</Text>
               </View>
               {selected === i.key && loading && (
-                <ActivityIndicator size="small" color={colors.primary} />
+                <ActivityIndicator size="small" color={colors.accent} />
               )}
             </TouchableOpacity>
           ))}
-        </View>
-
-        {/* Identity teaser */}
-        <View style={styles.identityHint}>
-          <Text style={styles.identityHintText}>
-            Your title begins with your first session
-          </Text>
         </View>
 
         {/* Back + Skip */}
@@ -145,7 +134,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
             activeOpacity={0.6}
             disabled={loading}
           >
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={handleSkip}
@@ -153,7 +142,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
             activeOpacity={0.6}
             disabled={loading}
           >
-            <Text style={styles.skipText}>Skip — I'll set this later</Text>
+            <Text style={styles.skipText}>Skip for now</Text>
           </TouchableOpacity>
         </View>
       </StepTransitionView>
@@ -165,7 +154,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   inner: {
     flex: 1,
@@ -177,8 +166,10 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 32,
   },
   stepIndicator: {
-    flexDirection: 'row',
-    gap: 8,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
     marginBottom: 24,
   },
   dot: {
@@ -188,11 +179,11 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.border,
   },
   dotActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     width: 24,
   },
   dotComplete: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   headline: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -206,7 +197,7 @@ const makeStyles = (colors: ThemeColors) =>
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 22,
   },
   options: {
@@ -216,7 +207,7 @@ const makeStyles = (colors: ThemeColors) =>
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 4, // radius.lg
@@ -224,9 +215,9 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 22,
   },
   optionSelected: {
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderWidth: 1.5,
-    backgroundColor: 'rgba(44, 74, 54, 0.04)',
+    backgroundColor: colors.bgPrimary,
   },
   optionText: {
     flex: 1,
@@ -240,12 +231,12 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
   },
   optionLabelSelected: {
-    color: colors.primary,
+    color: colors.accentText,
   },
   optionSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 19,
   },
   identityHint: {
@@ -261,7 +252,7 @@ const makeStyles = (colors: ThemeColors) =>
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: colors.primary,
+    color: colors.accentText,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -276,7 +267,7 @@ const makeStyles = (colors: ThemeColors) =>
   backText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontWeight: '500',
     letterSpacing: 0.3,
   },

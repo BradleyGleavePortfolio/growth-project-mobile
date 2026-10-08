@@ -145,7 +145,7 @@ describe('WelcomeScreen', () => {
     const { getByTestId, getByText } = await render(
       <WelcomeScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 1 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 1 of 5');
     const cta = getByTestId('day-one-welcome-cta');
     expect(StyleSheet.flatten(cta.props.style).backgroundColor).toBe(require('../../../theme/tokens').colors.forest);
     expect(StyleSheet.flatten(getByText('Get started').props.style).textTransform).not.toBe('uppercase');
@@ -168,9 +168,9 @@ describe('CoachPairingScreen', () => {
     return { nav, ...utils };
   }
 
-  it('renders 2/6 step text', async () => {
+  it('renders 2/5 step text', async () => {
     const { getByTestId } = await renderPairing();
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 2 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 2 of 5');
   });
 
   it('prefills the input from route.params.prefillCode and hides the skip button', async () => {
@@ -229,11 +229,11 @@ describe('CoachPairingScreen', () => {
 // ─── Goals ───────────────────────────────────────────────────────────────────
 
 describe('GoalsScreen', () => {
-  it('renders 3/6 step text', async () => {
+  it('renders 3/5 step text', async () => {
     const { getByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 3 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 3 of 5');
   });
 
   it('selecting a goal then continuing saves and advances', async () => {
@@ -321,14 +321,14 @@ describe('GoalsScreen', () => {
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 describe('NotificationsScreen', () => {
-  it('renders 4/6 step text', async () => {
+  it('renders 4/5 step text', async () => {
     const { getByTestId } = await render(
       <NotificationsScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 4 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 4 of 5');
   });
 
-  it('navigates to CheckInTime after permission grant', async () => {
+  it('navigates directly to Ready after permission grant', async () => {
     mockedRegister.mockResolvedValue({ granted: true });
     const nav = makeNav();
     const { getByTestId } = await render(
@@ -337,7 +337,7 @@ describe('NotificationsScreen', () => {
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-notifications-enable'));
     });
-    await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('CheckInTime'));
+    await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('Ready'));
   });
 
   it('does NOT block onboarding when permission is denied', async () => {
@@ -353,18 +353,18 @@ describe('NotificationsScreen', () => {
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-notifications-continue'));
     });
-    expect(nav.navigate).toHaveBeenCalledWith('CheckInTime');
+    expect(nav.navigate).toHaveBeenCalledWith('Ready');
   });
 });
 
 // ─── CheckInTime ─────────────────────────────────────────────────────────────
 
 describe('CheckInTimeScreen', () => {
-  it('renders 5/6 step text', async () => {
+  it('renders 5/5 step text', async () => {
     const { getByTestId } = await render(
       <CheckInTimeScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 5 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 5 of 5');
   });
 
   it('save includes the IANA timezone in the payload', async () => {
@@ -447,11 +447,11 @@ describe('CheckInTimeScreen', () => {
 // ─── Ready ───────────────────────────────────────────────────────────────────
 
 describe('ReadyScreen', () => {
-  it('renders 6/6 step text', async () => {
+  it('renders 5/5 step text', async () => {
     const { getByTestId, queryByText, queryByLabelText } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
-    expect(getByTestId('day-one-step-text').props.children).toBe('Step 6 of 6');
+    expect(getByTestId('day-one-step-text').props.children).toBe('Step 5 of 5');
     expect(queryByText('Your setup is done. The work starts now.')).toBeNull();
     expect(queryByLabelText('Onboarding complete')).toBeNull();
   });

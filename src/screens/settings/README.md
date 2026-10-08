@@ -118,6 +118,15 @@ deleted (owner 2026-10-07 11:46, backend #845); there is no control that deletes
 
 **Tests:** `src/services/__tests__/accountBinding.transport.test.ts` (real axios client and interceptors, paused credential read, logout/login, 401 refresh and replay), `src/services/__tests__/sessionFence.refresh.test.ts` (real secureStorage over a pausable SecureStore: a sign-in or sign-out at each awaited refresh, receipt and sign-out boundary), `src/services/__tests__/authActions.signOut.fence.test.ts`, `src/api/__tests__/romanChatsApi.test.ts`, `src/screens/settings/__tests__/RomanConversationsScreen.test.tsx`, `src/screens/settings/__tests__/RomanConversationScreen.test.tsx`, `src/components/roman/__tests__/RomanConversationsButton.test.tsx`, `src/navigation/__tests__/romanConversationsReachable.test.ts`.
 
+### CoachSharingScreen
+
+`CoachSharingScreen.tsx` (Settings > Privacy > Coach sharing): four switches (Workouts, Food logs, Weigh-ins, Check-ins and
+habits), each saved at once via `POST /consent/grant | revoke`. Under them one line says connected devices (Apple Health,
+Health Connect) are not covered by the switches: the coach reads that data through the coach link only (backend
+`wearable-samples.service.ts`), and data already shared stays after a disconnect (FW-BODY B2). The **Connected devices** row
+opens `Connections` on the same More stack and shows where the More screen shows that row (iPhone, Health Connect builds,
+tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`.
+
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
 Client Settings > Notifications shows per-category switches (coach messages,

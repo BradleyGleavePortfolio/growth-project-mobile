@@ -6,30 +6,32 @@ import {
   TouchableOpacity,
   StatusBar,
   SafeAreaView,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 // All colors from central theme — never hardcode hex values here
 import { Spacing, Radius, typographyTokens } from '../../theme/index';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { lightTokens, type SemanticTokens } from '../../theme/tokens';
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
 };
 
 export default function WelcomeScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors = lightTokens, colorScheme } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
-      <View style={styles.container}>
+      <StatusBar barStyle={colorScheme === 'dark' ? 'light-content' : 'dark-content'} backgroundColor={colors.bgPrimary} />
+      <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.logoContainer}>
           <View style={styles.logoIcon}>
             <Text style={styles.logoIconText}>GP</Text>
           </View>
           <Text style={styles.title}>The Growth Project</Text>
           <Text style={styles.tagline}>
-            The work is quiet. The results are not.
+            Sign in or create an account.
           </Text>
         </View>
 
@@ -37,24 +39,24 @@ export default function WelcomeScreen({ navigation }: Props) {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
-            onPress={() => navigation.navigate('CreateAccount')}
+            onPress={() => navigation.navigate('Login')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Get started"
-            accessibilityHint="Opens account creation"
+            accessibilityLabel="Sign in"
+            accessibilityHint="Opens sign-in screen"
           >
-            <Text style={styles.primaryButtonText}>Get Started</Text>
+            <Text style={styles.primaryButtonText}>Sign in</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.secondaryButton}
-            onPress={() => navigation.navigate('Login')}
+            onPress={() => navigation.navigate('CreateAccount')}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Log in"
-            accessibilityHint="Opens sign-in screen"
+            accessibilityLabel="Create account"
+            accessibilityHint="Opens account creation"
           >
-            <Text style={styles.secondaryButtonText}>Log In</Text>
+            <Text style={styles.secondaryButtonText}>Create account</Text>
           </TouchableOpacity>
 
           {/* Owner 2026-10-01 13:28: signup is open for every role; a code
@@ -63,20 +65,20 @@ export default function WelcomeScreen({ navigation }: Props) {
             Have a code from your coach? You can add it now or later.
           </Text>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   container: {
-    flex: 1,
-    backgroundColor: colors.background,
+    flexGrow: 1,
+    backgroundColor: colors.bgPrimary,
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingTop: 80,
@@ -90,18 +92,19 @@ const makeStyles = (colors: ThemeColors) =>
     width: 80,
     height: 80,
     borderRadius: Radius.lg,
-    backgroundColor: colors.primary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
   logoIconText: {
     ...typographyTokens.h2,
-    color: colors.white,
+    color: colors.textPrimary,
   },
   title: {
     ...typographyTokens.h1,
-    color: colors.dark,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
@@ -114,7 +117,7 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -123,29 +126,24 @@ const makeStyles = (colors: ThemeColors) =>
     fontFamily: 'Inter_600SemiBold',
     fontSize: 15,
     fontWeight: '600',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.white,
+    color: colors.textOnAccent,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.border,
   },
   secondaryButtonText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
     fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.dark,
+    color: colors.textPrimary,
   },
   accessNote: {
     marginTop: Spacing.md,
-    fontSize: 12,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,

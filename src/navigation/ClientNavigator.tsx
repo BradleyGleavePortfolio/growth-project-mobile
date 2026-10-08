@@ -49,6 +49,7 @@ import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
+import { workoutLeaveGuard } from './workoutLeaveGuard';
 import WorkoutHistoryEditScreen from '../screens/client/WorkoutHistoryEditScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
@@ -446,7 +447,10 @@ function WorkoutStackNavigator() {
       }}
     >
       <WorkoutStackNav.Screen name="WorkoutMain"     component={ProtectedWorkoutScreen} />
-      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} />
+      {/* m#521 Opus B1: native-stack cannot hold the iOS swipe-back for the leave question
+          (beforeRemove runs after UIKit has popped), so the live workout leaves by its Leave
+          chevron, Android back or a tab press, which all ask first. */}
+      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} options={{ gestureEnabled: false }} />
       <WorkoutStackNav.Screen name="WorkoutHistoryEdit" component={ProtectedWorkoutHistoryEditScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
@@ -691,12 +695,18 @@ export default function ClientNavigator() {
           height: 64 + insets.bottom,
         },
       }}
-      screenListeners={({ navigation }) => {
+      screenListeners={({ navigation, route }) => {
         if (featureFlags.clientTutorial) tabNavRef.current = navigation;
         return {
-          tabPress: () => {
+          tabPress: (e) => {
             // Phase 11 / Track 3: haptic selection feedback on tab switch
             HapticService.selection();
+            // TRAIN-GATE-128: a live workout asks whether to log it before
+            // another tab opens; the workout itself is never closed here.
+            const guard = route.name === 'WorkoutTab' ? null : workoutLeaveGuard();
+            if (!guard) return;
+            e.preventDefault();
+            guard(() => navigation.navigate(route.name));
           },
           // Clinic tutorial: report the focused route path so route gates
           // (e.g. "tap Train") are satisfied by real navigation only.

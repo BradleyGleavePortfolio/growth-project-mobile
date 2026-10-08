@@ -30,7 +30,8 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import { track } from '../../lib/analytics';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ4'>;
@@ -58,13 +59,14 @@ function lbsToKg(lbs: number): number {
 }
 
 export default function LeanQ4MetricsScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [units, setUnits] = useState<'imperial' | 'metric'>(defaultUnits());
   const [heightFt, setHeightFt] = useState('');
   const [heightIn, setHeightIn] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [weight, setWeight] = useState(''); // lbs or kg depending on units
+  const [sex, setSex] = useState<'female' | 'male' | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isValid = useMemo(() => {
@@ -93,6 +95,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
     setSubmitting(true);
     try {
       const payload: Parameters<typeof saveOnboardingData>[0] = {};
+      if (sex) payload.sex = sex;
       if (units === 'imperial') {
         const ft = parseFloat(heightFt);
         const inches = parseFloat(heightIn || '0');
@@ -136,16 +139,31 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
         <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.stepIndicator}>
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotActive]} />
-            </View>
+            <Text style={styles.stepIndicator}>Step 4 of 6</Text>
             <Text style={styles.headline}>A measure to begin.</Text>
             <Text style={styles.subtext}>
-              These guide your targets. Add what you know — or skip and add later.
+              Sex, height, weight and birth year are used to estimate daily targets. Each is optional.
             </Text>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={styles.fieldLabel}>SEX FOR CALORIE ESTIMATES (OPTIONAL)</Text>
+            <View style={styles.unitRow}>
+              {(['female', 'male'] as const).map((value) => (
+                <TouchableOpacity
+                  key={value}
+                  style={[styles.unitChip, sex === value && styles.unitChipActive]}
+                  onPress={() => setSex(sex === value ? null : value)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={value === 'female' ? 'Female' : 'Male'}
+                  accessibilityState={{ checked: sex === value }}
+                >
+                  <Text style={[styles.unitChipText, sex === value && styles.unitChipTextActive]}>
+                    {value === 'female' ? 'Female' : 'Male'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           {/* Unit toggle */}
@@ -259,7 +277,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
             accessibilityLabel="Save and continue"
             testID="lean-q4-save-continue"
           >
-            <Text style={styles.primaryBtnText}>SAVE AND CONTINUE</Text>
+            <Text style={styles.primaryBtnText}>Save and continue</Text>
           </TouchableOpacity>
 
           <View style={styles.bottomRow}>
@@ -272,7 +290,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               accessibilityLabel="Go back"
               testID="lean-q4-back"
             >
-              <Text style={styles.backText}>← Back</Text>
+              <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => finishOnboarding(true)}
@@ -283,7 +301,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               accessibilityLabel="Skip metrics, add later"
               testID="lean-q4-skip"
             >
-              <Text style={styles.skipText}>Skip — I’ll add later</Text>
+              <Text style={styles.skipText}>Skip for now</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
@@ -294,7 +312,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
   inner: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -302,10 +320,10 @@ const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 16,
   },
   header: { marginBottom: 28 },
-  stepIndicator: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+  stepIndicator: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 1.2, color: colors.textMuted, marginBottom: 24 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
-  dotActive: { backgroundColor: colors.primary, width: 24 },
-  dotComplete: { backgroundColor: colors.primary },
+  dotActive: { backgroundColor: colors.accent, width: 24 },
+  dotComplete: { backgroundColor: colors.accent },
   headline: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 32,
@@ -318,7 +336,7 @@ const makeStyles = (colors: ThemeColors) =>
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 22,
   },
   unitRow: {
@@ -327,6 +345,8 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 20,
   },
   unitChip: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 999,
@@ -334,15 +354,15 @@ const makeStyles = (colors: ThemeColors) =>
     borderColor: colors.border,
   },
   unitChipActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryPale,
+    borderColor: colors.accent,
+    backgroundColor: colors.bgPrimary,
   },
   unitChipText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
-  unitChipTextActive: { color: colors.primary },
+  unitChipTextActive: { color: colors.accentText },
   fieldGroup: { marginBottom: 16 },
   fieldLabel: {
     fontFamily: 'Inter_500Medium',
@@ -355,7 +375,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 8,
   },
   input: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 2,
@@ -368,7 +388,7 @@ const makeStyles = (colors: ThemeColors) =>
   row2: { flexDirection: 'row', gap: 12 },
   inputHalf: { flex: 1 },
   primaryBtn: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 16,
@@ -377,7 +397,7 @@ const makeStyles = (colors: ThemeColors) =>
   primaryBtnText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    color: colors.textOnPrimary,
+    color: colors.textOnAccent,
     letterSpacing: 1.2,
     fontWeight: '600',
   },
@@ -392,7 +412,7 @@ const makeStyles = (colors: ThemeColors) =>
   backText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontWeight: '500',
     letterSpacing: 0.3,
   },

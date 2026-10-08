@@ -34,6 +34,7 @@ import {
   getLeaderboard,
   setLeaderboardOptIn,
 } from '../../services/leaderboardApi';
+import { contentRejectedMessage } from '../../api/communitySafetyApi';
 
 // ─── Explainer component ──────────────────────────────────────────────────────
 
@@ -133,10 +134,10 @@ export default function LeaderboardSettingsScreen() {
         enabled: value,
         displayName: value && displayName.trim() ? displayName.trim() : undefined,
       });
-    } catch {
-      // Revert optimistic update
+    } catch (err) {
+      // Revert optimistic update; a name the community filter refuses says why.
       setIsOptedIn(!value);
-      setError('Could not save your preference. Try again.');
+      setError(contentRejectedMessage(err) ?? 'Could not save your preference. Try again.');
     } finally {
       setSaving(false);
     }
@@ -152,8 +153,8 @@ export default function LeaderboardSettingsScreen() {
         displayName: displayName.trim() || undefined,
       });
       setSavedName(displayName.trim());
-    } catch {
-      setError('Could not save your display name. Try again.');
+    } catch (err) {
+      setError(contentRejectedMessage(err) ?? 'Could not save your display name. Try again.');
     } finally {
       setSaving(false);
     }
