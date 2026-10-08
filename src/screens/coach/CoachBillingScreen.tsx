@@ -223,7 +223,10 @@ export default function CoachBillingScreen({ navigation }: Props) {
     }
 
     const s = status || { state: 'none' as const };
-    const copy = STATE_COPY[s.state];
+    // Never throw on a state the copy table does not know.
+    const copy = Object.prototype.hasOwnProperty.call(STATE_COPY, s.state)
+      ? STATE_COPY[s.state]
+      : STATE_COPY.none;
     const periodEnd = formatDate(s.currentPeriodEnd);
     const trialEnd = formatDate(s.trialEndsAt);
 
