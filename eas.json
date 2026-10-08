@@ -72,5 +72,15 @@
         "EXPO_PUBLIC_FF_ROMAN_CHAT": "true"
       }
     }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "6765847915"
+      }
+    },
+    "clinic": {
+      "extends": "production"
+    }
   }
 }

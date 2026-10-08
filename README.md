@@ -423,7 +423,7 @@ Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). A
 - Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
 - The Membership screen's website link is not rendered on hidden iOS builds.
 - API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
-- `app.json` `ios.buildNumber` is 6, the native anchor. `scripts/validate-app-config.js` fails anything below 6.
+- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 7 (build 6 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
 New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.
@@ -774,7 +774,7 @@ The fitness mobile app ships from this repo to TestFlight (iOS) and Play Interna
 
 - [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
 - [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
-- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "6"`, `expo.android.versionCode = 4`. iOS is 6 because `IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6` (`src/config/purchaseSurfaces.ts`): every iOS binary from build 6 up keeps non-P2P purchases hidden whatever an OTA bundle's flag says, and `scripts/validate-app-config.js` fails below 6. Android versionCode is unchanged (iOS ships first; no Play upload is pending). Bump both together on every subsequent release where both platforms are being submitted — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "7"` (one above the last upload), `expo.android.versionCode = 5`. iOS must stay at or above 6 because `IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6` (`src/config/purchaseSurfaces.ts`): every iOS binary from build 6 up keeps non-P2P purchases hidden whatever an OTA bundle's flag says, and `scripts/validate-app-config.js` fails below 6. Android versionCode is unchanged (iOS ships first; no Play upload is pending). Bump both together on every subsequent release where both platforms are being submitted — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
 - [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
 - [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
 - [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.
@@ -795,8 +795,13 @@ The `production` profile is defined in [`eas.json`](eas.json) and sets `distribu
 
 ```bash
 # Upload the latest production build to App Store Connect
-npx eas-cli submit --platform ios --latest
+npx eas-cli submit --platform ios --profile production --latest
+
+# Or build and upload in one step (uses the submit profile named like the build profile)
+npx eas-cli build --platform ios --profile clinic --auto-submit
 ```
+
+`eas.json` `submit.production` sets only `ios.ascAppId` (the App Store Connect Apple ID); `submit.clinic` extends it. No Apple ID, API key or key path is in the repo: the App Store Connect API key, signing and the push key stay in Expo. `scripts/__tests__/easSubmitProfile.test.js` pins this.
 
 App Store Connect destination: [The Growth Project, id 6765847915](https://apps.apple.com/us/app/the-growth-project/id6765847915).
 
