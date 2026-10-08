@@ -14,6 +14,7 @@ export function AddHabitSheet({
   newUnit,
   setNewUnit,
   onAdd,
+  isSaving,
   colors,
   styles,
 }: {
@@ -26,9 +27,12 @@ export function AddHabitSheet({
   newUnit: string;
   setNewUnit: (s: string) => void;
   onAdd: () => void;
+  isSaving: boolean;
   colors: ThemeColors;
   styles: HabitsStyles;
 }) {
+  const isDisabled = isSaving || !newName.trim();
+
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
@@ -78,11 +82,15 @@ export function AddHabitSheet({
           </View>
 
           <TouchableOpacity
-            style={[styles.modalSaveBtn, !newName.trim() && styles.modalSaveBtnDisabled]}
+            style={[styles.modalSaveBtn, isDisabled && styles.modalSaveBtnDisabled]}
             onPress={onAdd}
-            disabled={!newName.trim()}
+            disabled={isDisabled}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: isDisabled, busy: isSaving }}
           >
-            <Text style={[styles.modalSaveBtnText, !newName.trim() && { color: colors.textMuted }]}>Create habit</Text>
+            <Text style={[styles.modalSaveBtnText, isDisabled && { color: colors.textMuted }]}>
+              {isSaving ? 'Creating habit' : 'Create habit'}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>

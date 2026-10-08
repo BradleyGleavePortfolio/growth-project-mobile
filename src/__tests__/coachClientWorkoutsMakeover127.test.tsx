@@ -97,7 +97,7 @@ it('uses the honest weekly fallback, hairline rows, and preserves all recorded d
   expect(s.queryByText(/\d+ of \d+ workouts/)).toBeNull();
   expect(s.getAllByText('Done')).toHaveLength(2);
   expect(s.getByTestId('coach-session-a')).toHaveStyle({ backgroundColor: testColors.background, borderBottomWidth: StyleSheet.hairlineWidth });
-  for (const text of ['Exercises', 'Sets', 'Volume (lbs)', 'Bench press', '1 set · 135 lb x 8', 'Client note: Shoulder fine', 'Workout note: Felt strong', 'RPE 8']) {
+  for (const text of ['Exercises', 'Sets', 'Volume (lb)', 'Bench press', '1 set · 135 lb x 8', 'Client note: Shoulder fine', 'Workout note: Felt strong', 'RPE 8']) {
     expect(s.getAllByText(text).length).toBeGreaterThan(0);
   }
   expect(s.getAllByText(/· 45 min$/)).toHaveLength(2);

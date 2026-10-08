@@ -25,6 +25,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 const ROOT = path.resolve(__dirname, '..', '..');
@@ -595,6 +596,17 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-empty')).toBeTruthy());
     expect(getByText('Nothing released yet.')).toBeTruthy();
+  });
+
+  it("titles the receipt's You're in in the brand serif (Cormorant h2), not the system font at 600 (QA-EMPTY-131)", async () => {
+    const { h2 } = jest.requireActual('../theme/tokens').typography;
+    mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
+    const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
+    await waitFor(() => expect(getByTestId('purchase-unpack-receipt')).toBeTruthy());
+    const title = StyleSheet.flatten(getByText("You're in").props.style);
+    expect(title.fontFamily).toBe(h2.fontFamily);
+    expect(title.fontSize).toBe(h2.fontSize);
+    expect(title.fontWeight).toBe('400');
   });
 
   it('pull-to-refresh refetches getPurchaseDrops', async () => {

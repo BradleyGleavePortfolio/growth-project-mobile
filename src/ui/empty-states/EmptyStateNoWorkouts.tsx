@@ -5,8 +5,10 @@
  */
 
 import React from 'react';
-import { Text, TouchableOpacity } from 'react-native';
+import { Text } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { useTheme } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
 import EmptyState from './EmptyState';
 import { IconClipboard } from './icons';
 
@@ -21,10 +23,10 @@ export function EmptyStateNoWorkouts({ onCreate }: { onCreate?: () => void }) {
       body="Save a set of exercises as a routine to start it in one tap."
       />
       {onCreate ? (
-        <TouchableOpacity onPress={onCreate} accessibilityRole="button" accessibilityLabel="Create a routine"
+        <HapticPressable intent="light" onPress={onCreate} accessibilityRole="button" accessibilityLabel="Create a routine"
           style={{ minHeight: 44, alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ color: colors.primary }}>Create a routine</Text>
-        </TouchableOpacity>
+          <Text style={{ ...typography.bodyMd, color: colors.primary }}>Create a routine</Text>
+        </HapticPressable>
       ) : null}
     </>
   );

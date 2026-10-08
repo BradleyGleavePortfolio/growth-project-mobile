@@ -2,7 +2,9 @@
 //
 // This is the new top-level coach landing screen. It hosts a top-tab
 // navigator with 5 tabs:
-//   Overview | At-Risk | Win Streaks | Inbox | Action Queue
+//   Overview | At risk | Streaks | Inbox | Actions
+// QA-COACH-HOME-131: sentence-case 14 pt labels in theme colours (textMuted
+// inactive, AA on bone; accentText active) on 44 pt tall tabs.
 //
 // Navigation into client-level detail (ClientDetail, ClientMessages) is
 // handled by navigating up to the ClientsStack in CoachNavigator via the
@@ -20,7 +22,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, spacing, typography } from '../../../theme/tokens';
+import { spacing, typography } from '../../../theme/tokens';
+import { useTheme } from '../../../theme/useTheme';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
 import OverviewScreen from './OverviewScreen';
 import AtRiskScreen from './AtRiskScreen';
@@ -38,7 +41,7 @@ export type CommandCenterTab =
 
 const TABS: { key: CommandCenterTab; label: string }[] = [
   { key: 'overview',      label: 'Overview' },
-  { key: 'at-risk',       label: 'At-Risk' },
+  { key: 'at-risk',       label: 'At risk' },
   { key: 'win-streaks',   label: 'Streaks' },
   { key: 'inbox',         label: 'Inbox' },
   { key: 'action-queue',  label: 'Actions' },
@@ -64,6 +67,7 @@ export default function CommandCenterScreen({
   // (`initial: false` keeps the Clients list under it for Back).
   const navigation = useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
   const insets = useSafeAreaInsets();
+  const { semanticColors: sc } = useTheme();
   const selectClient =
     onSelectClient ??
     ((clientId: string, clientName: string) =>
@@ -105,11 +109,17 @@ export default function CommandCenterScreen({
   };
 
   return (
-    <View style={styles.container} testID="command-center-root">
+    <View style={[styles.container, { backgroundColor: sc.bgPrimary }]} testID="command-center-root">
       {/* Top tab bar */}
       {/* AUDIT-13-125: no header above this tab, so keep the tab row out
           of the status bar / Dynamic Island on iOS. */}
-      <View style={[styles.tabBarWrapper, { paddingTop: insets.top + (Platform.OS === 'ios' ? 0 : spacing.sm) }]}>
+      <View
+        style={[
+          styles.tabBarWrapper,
+          { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
+          { paddingTop: insets.top + (Platform.OS === 'ios' ? 0 : spacing.sm) },
+        ]}
+      >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -121,14 +131,14 @@ export default function CommandCenterScreen({
               <TouchableOpacity
                 key={tab.key}
                 onPress={() => setActiveTab(tab.key)}
-                style={[styles.tab, isActive && styles.tabActive]}
+                style={[styles.tab, isActive && { borderBottomColor: sc.accent }]}
                 accessibilityRole="tab"
                 accessibilityLabel={`${tab.label} tab`}
                 accessibilityState={{ selected: isActive }}
                 testID={`command-center-tab-${tab.key}`}
               >
                 <Text
-                  style={[styles.tabLabel, isActive && styles.tabLabelActive]}
+                  style={[styles.tabLabel, { color: isActive ? sc.accentText : sc.textMuted }]}
                 >
                   {tab.label}
                 </Text>
@@ -147,12 +157,9 @@ export default function CommandCenterScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bone,
   },
   tabBarWrapper: {
-    backgroundColor: colors.bone,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.camel,
     paddingTop: Platform.OS === 'ios' ? 0 : spacing.sm,
   },
   tabBar: {
@@ -161,21 +168,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
   },
   tab: {
+    minHeight: 44,
+    justifyContent: 'center',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     marginBottom: -1,  // overlap the hairline divider when active
   },
-  tabActive: {
-    borderBottomColor: colors.forest,
-  },
   tabLabel: {
-    ...typography.caption,
-    color: colors.stone,
-  },
-  tabLabelActive: {
-    color: colors.forest,
+    ...typography.bodySmall,
   },
   content: {
     flex: 1,
