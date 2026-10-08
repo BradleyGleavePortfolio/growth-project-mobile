@@ -80,8 +80,8 @@ import { useCoachlessClient } from '../hooks/useCoachlessClient';
 import { pairWithCoach } from '../screens/day-one/api';
 import { claimPendingInviteCode } from '../lib/pendingInviteCode';
 
-const TITLE = 'Join a coach to start logging';
-const BODY = 'Enter the code your coach gave you.';
+const TITLE = 'Logging comes with coaching';
+const BODY = 'Join a coach with their code. Each coach sets up what their coaching includes.';
 const CTA = 'Enter a coach code';
 function CoachlessProbe() {
   return <Text testID="coachless-probe">{useCoachlessClient() ? 'coachless' : 'connected'}</Text>;

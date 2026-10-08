@@ -9,13 +9,15 @@
  * server-side).
  *
  * Policy:
- *   - status='loading' or 'checking' on the very first fetch → centered
- *     spinner. We never flash the paywall before we know the answer.
+ *   - status='unknown', 'loading' or 'checking' → centered spinner. We
+ *     never flash the paywall before we know the answer.
  *   - status='active' → render children.
- *   - status='inactive' / 'unknown' / 'unavailable' (after first fetch
- *     has settled) → render the paywall. `unavailable` (transport /
- *     server error) intentionally fails CLOSED, not open: a 5xx must
- *     not leak a paid surface.
+ *   - status='inactive' → render the paywall (or the coach-managed /
+ *     coachless gate).
+ *   - status='unavailable' (the check itself failed: weak signal, 5xx) →
+ *     "Your access could not be checked" with Try again, which re-runs
+ *     the check (FOOD-GATE-RETRY-130). It still fails CLOSED, not open:
+ *     a 5xx must not leak a paid surface.
  *   - TRAIN-GATE-128 exception: once the server has confirmed 'active' in
  *     this app session (`confirmedActive`), a re-check ('checking') or a
  *     failed re-check ('unavailable') keeps the children mounted, so a live
@@ -38,7 +40,9 @@ interface ProtectedScreenProps {
 }
 
 export function ProtectedScreen({ children }: ProtectedScreenProps) {
-  const { entitlementActive, status, confirmedActive, openPlans, messageCoach } = useEntitlement();
+  const {
+    entitlementActive, status, confirmedActive, refreshEntitlement, openPlans, messageCoach,
+  } = useEntitlement();
   const { colors, tokens } = useTheme();
   const noCoach = useCoachlessClient();
 
@@ -53,6 +57,42 @@ export function ProtectedScreen({ children }: ProtectedScreenProps) {
         testID="protected-screen-loading"
       >
         <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  // The check failed and access was not confirmed in this session (the
+  // confirmed case returned above). Say so instead of a plan or coach gate
+  // the client may not need, and let them re-run the check.
+  if (status === 'unavailable') {
+    return (
+      <View
+        style={[styles.center, { backgroundColor: colors.background }]}
+        testID="protected-screen-check-failed"
+      >
+        <Text style={[styles.title, { color: colors.textPrimary, ...tokens.typography.h2 }]}>
+          Your access could not be checked
+        </Text>
+        <Text style={[styles.body, { color: colors.textSecondary, ...tokens.typography.body }]}>
+          Check the connection, then try again.
+        </Text>
+        <TouchableOpacity
+          style={[styles.coachButton, { backgroundColor: colors.primary }]}
+          onPress={() => {
+            void refreshEntitlement();
+          }}
+          accessibilityRole="button"
+          testID="protected-screen-try-again"
+        >
+          <Text
+            style={[
+              styles.coachButtonText,
+              { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
+            ]}
+          >
+            Try again
+          </Text>
+        </TouchableOpacity>
       </View>
     );
   }

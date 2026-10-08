@@ -172,6 +172,17 @@ export type CommunityCohortListResponse = z.infer<
   typeof CommunityCohortListResponseSchema
 >;
 
+export const CommunityReactionSummarySchema = z
+  .object({
+    emoji: z.string(),
+    count: z.number().int().nonnegative(),
+    reacted_by_me: z.boolean(),
+  })
+  .passthrough();
+export type CommunityReactionSummary = z.infer<
+  typeof CommunityReactionSummarySchema
+>;
+
 export const CommunityPostSchema = z
   .object({
     id: z.string().uuid(),
@@ -186,6 +197,10 @@ export const CommunityPostSchema = z
     created_at: z.string(),
     updated_at: z.string(),
     deleted: z.boolean(),
+    // Optional: older backends do not send these. author_name is the
+    // author's first name; reactions is the post's reaction summary.
+    author_name: z.string().nullable().optional(),
+    reactions: z.array(CommunityReactionSummarySchema).optional(),
   })
   .passthrough();
 export type CommunityPost = z.infer<typeof CommunityPostSchema>;
@@ -211,6 +226,8 @@ export const CommunityCommentSchema = z
     author_user_id: z.string().uuid(),
     body: z.string(),
     created_at: z.string(),
+    // Optional first name; older backends do not send it.
+    author_name: z.string().nullable().optional(),
   })
   .passthrough();
 export type CommunityComment = z.infer<typeof CommunityCommentSchema>;
@@ -223,17 +240,6 @@ export const CommunityCommentResponseSchema = z
   .object({ comment: CommunityCommentSchema })
   .passthrough();
 
-export const CommunityReactionSummarySchema = z
-  .object({
-    emoji: z.string(),
-    count: z.number().int().nonnegative(),
-    reacted_by_me: z.boolean(),
-  })
-  .passthrough();
-export type CommunityReactionSummary = z.infer<
-  typeof CommunityReactionSummarySchema
->;
-
 export const CommunityReactionStateSchema = z
   .object({
     target_type: z.enum(['message', 'post', 'comment']),
@@ -244,6 +250,13 @@ export const CommunityReactionStateSchema = z
 export type CommunityReactionState = z.infer<
   typeof CommunityReactionStateSchema
 >;
+
+// The reaction write already succeeded when this runs, so a drifted body
+// yields null (the screen keeps what it knows) instead of a false failure.
+function reactionStateOrNull(body: unknown): CommunityReactionState | null {
+  const parsed = CommunityReactionStateSchema.safeParse(body);
+  return parsed.success ? parsed.data : null;
+}
 
 export const CommunityDmThreadSchema = z
   .object({
@@ -374,21 +387,33 @@ export const communityApi = {
 
   /**
    * POST /community/posts/:postId/reactions — react with one allowlisted emoji.
-   * The backend broadcasts `community.reaction.changed` (a delta ping only);
-   * the client refetches the aggregated state via getReactionState below.
+   * Answers with the post's aggregated reaction state (null if it drifted).
    */
-  reactToPost(postId: string, emoji: CommunityReactionEmoji): Promise<void> {
+  reactToPost(
+    postId: string,
+    emoji: CommunityReactionEmoji,
+  ): Promise<CommunityReactionState | null> {
     return call(z.unknown(), () =>
       api.post<unknown>(`/community/posts/${postId}/reactions`, { emoji }),
-    ).then(() => undefined);
+    ).then(reactionStateOrNull);
   },
 
   /** DELETE /community/posts/:postId/reactions — remove the caller's reaction. */
-  unreactToPost(postId: string, emoji: CommunityReactionEmoji): Promise<void> {
+  unreactToPost(
+    postId: string,
+    emoji: CommunityReactionEmoji,
+  ): Promise<CommunityReactionState | null> {
     return call(z.unknown(), () =>
       api.delete<unknown>(`/community/posts/${postId}/reactions`, {
         data: { emoji },
       }),
+    ).then(reactionStateOrNull);
+  },
+
+  /** DELETE /community/posts/:postId — the author removes their own post. */
+  deletePost(postId: string): Promise<void> {
+    return call(z.unknown(), () =>
+      api.delete<unknown>(`/community/posts/${postId}`),
     ).then(() => undefined);
   },
 
