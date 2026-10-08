@@ -1,22 +1,30 @@
 // B1 / B-524-SOL-129-1: keep the lazy tab roots below Home's workout targets.
-// Real ClientNavigator, Home and ActiveWorkout; unrelated leaf screens are shallow.
+// Real ClientNavigator, Home, assignment detail and ActiveWorkout; other leaves are shallow.
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import { Pressable, Text } from 'react-native';
+import { Text } from 'react-native';
 import {
   createNavigationContainerRef,
   NavigationContainer,
-  useNavigation,
-  type NavigationProp,
   type ParamListBase,
 } from '@react-navigation/native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadActiveWorkoutSession, saveActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 
 const mockUser = { id: 'home-entry-client', role: 'client', coach_id: 'coach', profile: {} };
 const mockAssignments = jest.fn();
+const mockAssignment = {
+  id: 'pending-assignment', completed_at: null, post_rpe: null,
+  workout_plan: {
+    id: 'plan-130', name: 'Foundations', type: 'strength', duration_estimate_minutes: 30,
+    exercises: [{
+      id: 'prescribed-push', exercise_external_id: 'push', order: 1, sets: 3,
+      reps_or_duration_seconds: 8, weight_lbs: null, rest_seconds: 60, notes: null,
+    }],
+  },
+};
 const mockDay = {
   foodLogs: [], dailyTotals: {}, waterOz: 0, isLoading: false, loadError: null,
   loadDayData: jest.fn(), loadProfile: jest.fn(),
@@ -31,6 +39,14 @@ jest.mock('../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null })
 jest.mock('../../hooks/useAiWithdrawalDrain', () => ({ useAiWithdrawalDrain: () => {} }));
 jest.mock('../../hooks/useCommunity', () => ({ useCommunityBadge: () => ({ total: 0 }) }));
 jest.mock('../../hooks/useApi', () => ({ useCreateWorkout: () => ({ mutate: jest.fn() }) }));
+jest.mock('../../hooks/useWorkoutBuilder', () => ({
+  useMyWorkoutAssignment: () => ({
+    data: mockAssignment, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn(),
+  }),
+}));
+jest.mock('../../hooks/useExerciseNames', () => ({
+  useExerciseNames: () => ({ names: { push: 'Push-up' }, loading: false }),
+}));
 jest.mock('../../store/clientStore', () => ({ useClientStore: () => mockDay }));
 jest.mock('../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => 'full' }));
 jest.mock('../../services/api', () => ({ workoutApi: { getAll: async () => ({ data: [] }) } }));
@@ -71,22 +87,12 @@ jest.mock('../../ui/haptics/haptics.service', () => ({
 const navSource = fs.readFileSync(path.join(__dirname, '..', 'ClientNavigator.tsx'), 'utf8');
 for (const match of navSource.matchAll(/^import (?!type\b)[^;]*? from '(\.\.\/screens\/[^']+)'/gm)) {
   const modulePath = match[1];
-  if (modulePath.endsWith('/HomeScreen') || modulePath.endsWith('/ActiveWorkoutScreen')) continue;
+  if (['/HomeScreen', '/ActiveWorkoutScreen', '/WorkoutAssignmentDetailScreen']
+    .some((screen) => modulePath.endsWith(screen))) continue;
   jest.doMock(`../${modulePath}`, () => ({
     __esModule: true, default: function LeafScreen() { return <Text>{modulePath}</Text>; },
   }));
 }
-jest.doMock('../../screens/client/WorkoutAssignmentDetailScreen', () => ({
-  __esModule: true,
-  default: function AssignmentDetail() {
-    const navigation = useNavigation<NavigationProp<ParamListBase>>();
-    return (
-      <Pressable accessibilityLabel="Back to You" onPress={() => navigation.goBack()}>
-        <Text>Assigned workout</Text>
-      </Pressable>
-    );
-  },
-}));
 jest.doMock('../CommunityNavigator', () => ({
   __esModule: true, default: function Community() { return null; },
 }));
@@ -131,13 +137,33 @@ it('Start → Back → You retains the unopened You menu below the assignment', 
   expect(navigation.getRootState().routes.find((route) => route.name === 'MoreTab')?.state).toBeUndefined();
 
   await fireEvent.press(await view.findByLabelText('Start Foundations'));
-  expect(await view.findByText('Assigned workout')).toBeTruthy();
-  await fireEvent.press(view.getByLabelText('Back to You'));
+  expect(await view.findByTestId('assignment-start')).toBeTruthy();
+  await act(async () => navigation.goBack()); // Native Back/gesture uses this same router action.
   await fireEvent.press(view.getByLabelText('Profile and more'));
 
   await waitFor(() => expect(
     navigation.getRootState().routes.find((route) => route.name === 'MoreTab')?.state?.routes.map((route) => route.name),
   ).toEqual(['MoreIndex']));
   expect(await view.findByText('../screens/client/MoreScreen')).toBeTruthy();
-  expect(view.queryByText('Assigned workout')).toBeNull();
+  expect(view.queryByTestId('assignment-start')).toBeNull();
+});
+
+it('Home Start → real assignment Start → Leave → Train opens the workout list', async () => {
+  mockAssignments.mockResolvedValue([mockAssignment]);
+  const navigation = createNavigationContainerRef<ParamListBase>();
+  const view = await render(<NavigationContainer ref={navigation}><ClientNavigator /></NavigationContainer>);
+  expect(navigation.getRootState().routes.find((route) => route.name === 'WorkoutTab')?.state).toBeUndefined();
+
+  await fireEvent.press(await view.findByLabelText('Start Foundations'));
+  await fireEvent.press(await view.findByTestId('assignment-start'));
+  expect(await view.findByText('Push-up')).toBeTruthy();
+  await fireEvent.press(view.getByLabelText('Leave workout'));
+  await waitFor(async () => expect(await loadActiveWorkoutSession(mockUser.id)).toBeNull());
+  await fireEvent.press(view.getByLabelText('Train'));
+
+  await waitFor(() => expect(
+    navigation.getRootState().routes.find((route) => route.name === 'WorkoutTab')?.state?.routes.map((route) => route.name),
+  ).toEqual(['WorkoutMain']));
+  expect(await view.findByText('../screens/client/WorkoutScreen')).toBeTruthy();
+  expect(view.queryByLabelText('Leave workout')).toBeNull();
 });

@@ -166,6 +166,7 @@ describe('U-V1-8: assigned workout Start and Resume labels', () => {
     await fireEvent.press(screen.getByTestId('assignment-start'));
     expect(mockTabNavigate).toHaveBeenCalledWith('WorkoutTab', {
       screen: 'ActiveWorkout',
+      initial: false,
       params: expect.objectContaining({ assignmentId: PLAN.id, routineId: 'plan-127' }),
     });
     expect(JSON.parse(mockTabNavigate.mock.calls[0][1].params.exercises)[0].exerciseName)
