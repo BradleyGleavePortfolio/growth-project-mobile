@@ -13,7 +13,7 @@
 //      (not the generic "Could not save").
 
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';
 
 // ── Theme mock ──────────────────────────────────────────────────────────────
@@ -68,6 +68,7 @@ jest.mock('../services/authActions', () => ({
 const mockUpdate = jest.fn();
 const mockPublish = jest.fn();
 const mockUnpublish = jest.fn();
+const mockArchive = jest.fn();
 jest.mock('../api/packagesApi', () => {
   const actual = jest.requireActual('../api/packagesApi');
   return {
@@ -75,7 +76,7 @@ jest.mock('../api/packagesApi', () => {
     coachPackagesApi: {
       update: (...a: unknown[]) => mockUpdate(...a),
       create: jest.fn(),
-      archive: jest.fn(),
+      archive: (...a: unknown[]) => mockArchive(...a),
       publish: (...a: unknown[]) => mockPublish(...a),
       unpublish: (...a: unknown[]) => mockUnpublish(...a),
     },
@@ -368,12 +369,21 @@ describe('CoachPackageEditScreen — save failures (B-321-1)', () => {
     expect(mockSignOut).toHaveBeenCalled();
   });
 
-  it('403 plan not active: Open billing', async () => {
+  it('legacy 403 refusal: Open Money, not the retired Billing screen', async () => {
     const { props } = await saveWith({
       response: { status: 403, data: { statusCode: 403, error: 'SUBSCRIPTION_INACTIVE', message: 'Subscription inactive' } },
     });
-    press(lastAlert().buttons, 'Open billing');
-    expect(props.nav.navigate).toHaveBeenCalledWith('Billing');
+    const a = lastAlert();
+    expect(a.title).toBe('Package change was not allowed');
+    expect(a.message).toBe(
+      'The server did not allow this package change. Your changes are still here. Open Money to review payment setup, or contact support.',
+    );
+    expect(a.buttons.map((b) => b.text)).toEqual(['Open Money', 'Contact support', 'Close']);
+    press(a.buttons, 'Open Money');
+    expect(props.nav.navigate).toHaveBeenCalledWith('CoachMoney');
+    press(a.buttons, 'Contact support');
+    expect(props.nav.navigate).toHaveBeenCalledWith('SupportInbox');
+    expect(props.nav.navigate).not.toHaveBeenCalledWith('Billing');
   });
 
   it('404: package gone, Back to packages', async () => {
@@ -679,5 +689,64 @@ describe('CoachPackageEditScreen — round 5 (B-321-4, B-321-5, C-321-3..6)', ()
     expect(
       getByText(/This package is archived\. It cannot be sold or changed\. Create a\s+new package instead\./),
     ).toBeTruthy();
+  });
+});
+
+describe('CoachPackageEditScreen — archive guidance', () => {
+  it.each([true, false])('names only a visible alternative in the confirmation (live=%s)', async (live) => {
+    const props = makeProps(pkg({ status: live ? 'active' : 'draft', publishedAt: live ? '2026-01-01T00:00:00Z' : null }));
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Archive package'));
+    const confirmation = jest.mocked(Alert.alert).mock.calls.at(-1);
+    expect(confirmation?.[1]).toBe(
+      'Archived packages cannot be sold again. TGP checks for clients with access or ongoing payments before archiving.' +
+        (live ? ' To stop new sales while keeping existing clients, use Unpublish package instead.' : ''),
+    );
+    expect(confirmation?.[2]?.map((button) => button.text)).toEqual(['Cancel', 'Archive']);
+    expect(Boolean(screen.queryByLabelText('Unpublish package'))).toBe(live);
+    expect(mockArchive).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { live: true, field: 'error' },
+    { live: true, field: 'code' },
+    { live: false, field: 'code' },
+  ])('maps an archive refusal to plain, reachable guidance (live=$live, field=$field)', async ({ live, field }) => {
+    mockArchive.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          [field]: 'PACKAGE_HAS_ACTIVE_SUBSCRIBERS',
+          message: 'End their access and cancel any subscriptions before archiving.',
+        },
+      },
+    });
+    const props = makeProps(pkg({ status: live ? 'active' : 'draft', publishedAt: live ? '2026-01-01T00:00:00Z' : null, subscriberCount: 1 }));
+    const screen = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(screen.getByLabelText('Archive package'));
+    const confirm = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Archive')?.onPress;
+    if (!confirm) throw new Error('Archive confirmation is missing');
+    await act(async () => { await confirm(); });
+    expect(mockArchive).toHaveBeenCalledWith('pkg_1');
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Could not archive',
+      'This package has clients with access or ongoing payments, so it cannot be archived. ' +
+        (live
+          ? "Use Unpublish package to stop new sales without changing current clients' access."
+          : 'It is already off sale. Use View subscribers to review its clients.'),
+    );
+    expect(screen.getByLabelText('Archive package')).toBeEnabled();
+    if (live) {
+      mockUnpublish.mockResolvedValueOnce({ data: pkg({ status: 'draft', publishedAt: null }) });
+      await fireEvent.press(screen.getByLabelText('Unpublish package'));
+      await waitFor(() => expect(mockUnpublish).toHaveBeenCalledWith('pkg_1'));
+    } else {
+      await fireEvent.press(screen.getByLabelText('View subscribers'));
+      expect(props.nav.navigate).toHaveBeenCalledWith('CoachPackageSubscribers', { packageId: 'pkg_1', title: 'Strength Builder' });
+    }
   });
 });

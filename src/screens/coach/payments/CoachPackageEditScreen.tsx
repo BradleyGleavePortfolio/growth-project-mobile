@@ -78,6 +78,7 @@ import {
 } from "../../../utils/packageTrial";
 import { signOut } from "../../../services/authActions";
 import { buildPackageShareUrl } from "../../../utils/packageShare";
+import { toAuthErrorDetail } from "../../../utils/authErrorDetail";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import PackageDetailSurface, {
   type PackageDetailViewModel,
@@ -271,7 +272,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       retry: () => void = () => void handleSaveRef.current(),
     ) => {
       warningTap();
-      setError(f.message);
+      const legacyBilling = f.action === "billing";
+      const title = legacyBilling ? "Package change was not allowed" : f.title;
+      const message = legacyBilling
+        ? "The server did not allow this package change. Your changes are still here. Open Money to review payment setup, or contact support."
+        : f.message;
+      setError(message);
       const close = { text: "Close", style: "cancel" as const };
       const support = {
         text: "Contact support",
@@ -293,7 +299,8 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           break;
         case "billing":
           buttons.push(
-            { text: "Open billing", onPress: () => navigation.navigate("Billing") },
+            { text: "Open Money", onPress: () => navigation.navigate("CoachMoney") },
+            support,
             close,
           );
           break;
@@ -308,7 +315,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         default:
           buttons.push({ text: "OK" });
       }
-      Alert.alert(f.title, f.message, buttons);
+      Alert.alert(title, message, buttons);
     },
     [navigation],
   );
@@ -496,10 +503,14 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
   const handleArchive = useCallback(() => {
     if (!original) return;
+    const onSale = isLivePackage(original);
     warningTap();
     Alert.alert(
       "Archive this package?",
-      "Archived packages cannot be sold again. TGP checks for clients with access before archiving. To stop new sales while keeping existing clients, use Take off sale instead.",
+      "Archived packages cannot be sold again. TGP checks for clients with access or ongoing payments before archiving." +
+        (onSale
+          ? " To stop new sales while keeping existing clients, use Unpublish package instead."
+          : ""),
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -515,10 +526,15 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             } catch (err) {
               Alert.alert(
                 "Could not archive",
-                errorMessage(
-                  err,
-                  "The package could not be archived. Check your connection, then tap Archive again.",
-                ),
+                toAuthErrorDetail(err).code === "PACKAGE_HAS_ACTIVE_SUBSCRIBERS"
+                  ? "This package has clients with access or ongoing payments, so it cannot be archived. " +
+                    (onSale
+                      ? "Use Unpublish package to stop new sales without changing current clients' access."
+                      : "It is already off sale. Use View subscribers to review its clients.")
+                  : errorMessage(
+                      err,
+                      "The package could not be archived. Check your connection, then tap Archive again.",
+                    ),
               );
             } finally {
               setArchiving(false);
