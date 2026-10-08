@@ -793,6 +793,8 @@ export const fastingApi = {
     api.post('/fasting/end', { notes }),
   getHistory: (limit = 10) =>
     api.get(`/fasting/history?limit=${limit}`),
+  deleteFast: (id: string) =>
+    api.delete(`/fasting/${encodeURIComponent(id)}`),
 };
 
 export const weightApi = {
@@ -1026,13 +1028,21 @@ export const communityApi = {
     api.post('/community/wins', data),
 };
 
+export interface WaterEntry {
+  id: string;
+  amount_ml: number;
+  logged_at: string;
+}
+
 export const waterApi = {
   log: (data: { amount_ml: number; date?: string }) =>
-    api.post('/nutrition/water', data),
+    api.post<WaterEntry>('/nutrition/water', data),
   getDaily: (date: string) =>
-    api.get(`/nutrition/water?date=${date}`),
+    api.get<{ total_ml: number; logs?: WaterEntry[] }>(`/nutrition/water?date=${date}`),
   getWeekly: (startDate: string) =>
     api.get(`/nutrition/water/weekly?start_date=${startDate}`),
+  deleteEntry: (id: string) =>
+    api.delete(`/nutrition/water/${encodeURIComponent(id)}`),
 };
 
 export const lessonsApi = {

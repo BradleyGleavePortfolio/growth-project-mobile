@@ -140,12 +140,21 @@ export default function YourPlansPanel({
   reloadKey = 0,
   onUpdateCard,
   onPlanChanged,
+  onShownPlans,
+  renderPlanExtra,
 }: {
   reloadKey?: number;
   /** Opens the native Update card screen; absent keeps the coach copy. */
   onUpdateCard?: () => void;
   /** B-402-1: End / Keep succeeded, so the screen's own plan summary re-reads. */
   onPlanChanged?: () => void;
+  /**
+   * FW-MONEY-128 U-7: the purchase ids shown as plan cards (null until the
+   * first read answers), so the screen shows each plan in one place.
+   */
+  onShownPlans?: (purchaseIds: string[] | null) => void;
+  /** U-7: an extra action at the end of a plan's card (What's included). */
+  renderPlanExtra?: (plan: ClientPlan) => React.ReactNode;
 }) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
@@ -338,6 +347,11 @@ export default function YourPlansPanel({
   const visible = plans.filter(
     (p) => p.state !== "ended" || outcomes[p.purchaseId],
   );
+  const shownIds =
+    list.kind === "loading" ? null : visible.map((p) => p.purchaseId).join(" ");
+  useEffect(() => {
+    onShownPlans?.(shownIds === null ? null : shownIds.split(" ").filter(Boolean));
+  }, [onShownPlans, shownIds]);
   if (visible.length === 0) {
     if (list.kind !== "unavailable" && list.kind !== "failed") return null;
     return (
@@ -464,6 +478,7 @@ export default function YourPlansPanel({
                 </Text>
               </Pressable>
             ) : null}
+            {renderPlanExtra?.(plan)}
           </View>
         );
       })}
