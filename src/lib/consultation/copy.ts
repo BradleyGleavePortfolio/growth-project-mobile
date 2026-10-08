@@ -193,6 +193,7 @@ const AVOID: Record<string, string> = {
   shellfish: 'shellfish',
   eggs: 'eggs',
   soy: 'soy',
+  sesame: 'sesame',
   pork: 'pork',
   halal: 'halal only',
   kosher: 'kosher only',
