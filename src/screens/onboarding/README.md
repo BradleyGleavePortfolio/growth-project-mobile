@@ -2,10 +2,10 @@
 
 Two flows live here. Only one is active at a time, and `RootNavigator` decides which one a new client sees.
 
-When `featureFlags.consultationOnboarding` is on (`EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING`, on only in the `clinic` EAS profile), neither flow here is mounted: new clients get the consultation in `src/screens/consultation/` instead, and the lean flow's skip-to-finish path is not reachable. With the flag off, everything below applies unchanged.
+With the consultation flag on, clients whose server onboarding state does not report `consultation_available: false` get `src/screens/consultation/` instead. Coachless clients and clients whose coach has no clinic program set use lean onboarding.
 
-- **Lean (4 screens, < 90 s)** — `LeanQ1`, `LeanQ2`, `LeanQ3`, `LeanQ4`. Default for new accounts. Optimised for time-to-first-win, not data completeness. Drives the activation funnel tracked in PostHog. `LeanQ4` is the optional body-metric capture step — height + current weight, imperial / metric toggle, both fields independently skippable. The legacy 10-step flow is **not** reintroduced; LeanQ4 exists so Home renders without macro blanks for users who do enter their weight.
-- **Long (10 steps)** — `OnboardingStep1`–`OnboardingStep10` plus `OnboardingResults`. Kept intact for the legacy `OnboardingNavigator`, used by accounts whose `onboarding_complete` flag predates the lean flow. Not reachable from a fresh signup today.
+- **Lean (6 screens)** — `LeanQ1`–`LeanQ6`, with one truthful `Step n of 6` label per screen. Q4 collects optional sex, height and current weight; Q5 collects an explicitly chosen birth year and optional target weight; Q6 saves dietary preferences and finishes.
+- **Long (10 steps)** — `OnboardingStep1`–`OnboardingStep10` plus `OnboardingResults`. Preserved legacy code, not mounted by RootNavigator.
 
 Both flows write to the same AsyncStorage key (`onboarding_data`) via `utils/onboardingStore.ts`. Whatever the user enters is sent to the backend as a single `PUT /profile` payload at the end.
 
@@ -22,12 +22,14 @@ Both flows write to the same AsyncStorage key (`onboarding_data`) via `utils/onb
 | --- | --- |
 | `LeanQ1GoalScreen.tsx` | Goal — lose / build / maintain. First screen, fires `onboarding_started`. |
 | `LeanQ2ExperienceScreen.tsx` | Self-rated experience level. |
-| `LeanQ3IntentScreen.tsx` | Intent — what they want from the app (track, learn, accountability). Routes onward to `LeanQ4` (formerly the final screen; no longer marks the flow complete itself). |
-| `LeanQ4MetricsScreen.tsx` | Body-metric capture: height + current weight, imperial / metric toggle, both fields skippable. Persists `currentWeight` (kg) and `heightCm` to the onboarding store. Final screen — calls `markOnboardingComplete` when the user continues or skips. |
+| `LeanQ3IntentScreen.tsx` | Intent — log a workout, track meals or explore. Saves the answer and routes to `LeanQ4`; does not promise an intent-specific Home layout. |
+| `LeanQ4MetricsScreen.tsx` | Optional sex for calorie estimates, height (cm), current weight (kg), and imperial / metric controls. Save/skip both continue to Q5. |
+| `LeanQ5Screen.tsx` | Optional birth year and target weight. An untouched wheel never writes a birth date; only drafts marked `birthYearChosen` restore a chosen year. Save/skip continue to Q6. |
+| `LeanQ6Screen.tsx` | Dietary preferences. Calls `finalizeLeanOnboarding`, sets local completion flags and emits `authEvents`. |
 | `OnboardingStep1.tsx`–`OnboardingStep10.tsx` | Long-flow steps: name & sex, dob, weights, activity, goal, eating habits, diet type, restrictions, gym/fitness level, snacks. |
 | `OnboardingResults.tsx` | TDEE / target preview that closes the long flow. |
 
-The visual chrome lives in `components/OnboardingLayout.tsx` (header, progress, continue button). Each lean screen draws its own layout because the lean flow does not show progress dots in the same shape — only a 3-dot indicator.
+The legacy visual chrome lives in `components/OnboardingLayout.tsx`. Lean screens use their own semantic-token layout, a six-step text overline and sentence-case controls.
 
 ## Data flow
 
@@ -35,14 +37,17 @@ The visual chrome lives in `components/OnboardingLayout.tsx` (header, progress, 
 LeanQ1 ─► saveOnboardingData({ primaryGoal })           ┐
 LeanQ2 ─► saveOnboardingData({ fitnessLevel })          ├─ AsyncStorage('onboarding_data')
 LeanQ3 ─► saveOnboardingData({ intent })                │
-LeanQ4 ─► saveOnboardingData({ heightCm?, currentWeight? }) ┘   // both optional, imperial→metric conversion
+LeanQ4 ─► saveOnboardingData({ sex?, height?, currentWeight? }) │
+LeanQ5 ─► saveOnboardingData({ dob?, targetWeight? })          │ // explicitly selected birth year only
+LeanQ6 ─► saveOnboardingData({ restrictions })                ┘
+        ─► finalizeLeanOnboarding() // PUT /profile, targets when required inputs exist
         ─► AsyncStorage.setItem('onboarding_complete', 'true')
         ─► AsyncStorage.setItem('lean_onboarding_intent', intent)
         ─► authEvents.emit()           // root re-bootstraps
         ─► RootNavigator routes to ClientNavigator (Home)
 ```
 
-The backend is updated lazily on the first authenticated screen that calls `profileApi.update`, not from inside the onboarding flow itself. This keeps onboarding fully offline-tolerant — a user with flaky network still finishes the flow.
+The existing finalizer updates `/profile` and calculates targets when sex, height, weight and birth year are available. Failed profile sync is retried by `useLeanOnboardingReconcile`; local completion still bypasses a second Day-1 onboarding flow. The first-win screen remains separate and skippable.
 
 ## App-store / deep-link dependencies
 
@@ -50,7 +55,7 @@ None. Onboarding is post-auth and is not addressable from a deep link. The only 
 
 ## Security and tenancy
 
-- Nothing the user enters here is sensitive. Names, weights, and goals are stored locally in AsyncStorage and synced when the next authenticated request runs.
+- Personal health answers are stored locally and sent through the existing authenticated profile update. No auth, sharing-consent or backend access rule changes here.
 - The flow never touches the JWT or refresh token. It runs entirely between the auth check and the first profile sync.
 - A returning user with a stored profile (`profileDone === true` from the backend) skips this flow even if the local `onboarding_complete` flag is missing — `RootNavigator` reconciles the two sources before deciding.
 
@@ -68,7 +73,7 @@ None. The screens are env-free; the `profileApi.update` call inherits whatever `
 
 ## Tests
 
-The flows are covered indirectly by the smoke matrix (`docs/RELEASE_SMOKE.md`). The 4-screen lean navigator has explicit guards in `src/screens/onboarding/__tests__/leanOnboardingFlow.test.ts` — it asserts the route list, the LeanQ3 → LeanQ4 transition, that LeanQ4 writes the optional metrics to the onboarding store, and the imperial → metric conversion arithmetic. Unit tests live for the underlying helpers in `utils/onboardingStore.ts` (read/write round-trip).
+`__tests__/leanHonest.test.tsx` renders all six screens and exercises choices, Back, skip, optional sex, explicit birth year, units, dietary selections and the existing final macro calculation. `leanOnboardingFlow.test.ts` pins structural wiring; `LeanQ1CoachSharing.test.tsx` retains the unchanged sharing-notice contract.
 
 ```bash
 npm test
@@ -76,7 +81,7 @@ npm test
 
 ## Release notes
 
-- Reviewers reaching this flow will see the lean 4-screen version. They can tap through it in under 90 seconds, with `LeanQ4` either skipped wholesale or filled in either unit system. The analytics events fire silently. No screenshots in the listing should show the long flow — it is not the new-user experience.
+- Reviewers reaching this flow see six optional steps, not the legacy long flow. No completion-duration promise is made.
 - The "Skip" affordance on `LeanQ1` writes `lean_onboarding_intent: 'explore'` and bypasses the rest of the flow. This is intentional — Play guidelines disallow forcing data entry before letting a user explore the app.
-- `LeanQ4` skips both fields independently. A user who fills neither is fine — Home renders **Log to see** prompts in the macro grid (see `src/screens/client/__tests__/homeMacroDisplay.test.ts`). A user who fills weight but skips height is also fine; the missing field is sent as `null` and the backend recomputes targets when it can.
+- Unanswered fields are omitted, not replaced with invented values. Q1's skip confirmation points to Profile > Edit profile for later setup.
 - If the activation funnel ever needs to be replaced by a different first-run experience, the change is a one-line route swap in `navigation/RootNavigator.tsx` (`LeanOnboardingNavigator` → something else); the legacy `OnboardingNavigator` is preserved as a known-good fallback.

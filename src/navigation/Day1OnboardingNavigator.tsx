@@ -1,8 +1,8 @@
 /**
  * Day1OnboardingNavigator — the final Day-1 first-run experience.
  *
- * Stack order (matches the 1/6 → 6/6 progress bar; Welcome is the cover):
- *   Welcome → CoachPairing → Goals → Notifications → CheckInTime → Ready
+ * Retained legacy stack, not mounted after lean or consultation onboarding.
+ *   Welcome → CoachPairing → Goals → Notifications → Ready
  *
  * Deep-link path: when the universal-link handler captures an invite code,
  * RootNavigator pushes this navigator with `initialParams={{ prefillCode }}`
@@ -26,7 +26,6 @@ import WelcomeScreen from '../screens/day-one/WelcomeScreen';
 import CoachPairingScreen from '../screens/day-one/CoachPairingScreen';
 import GoalsScreen from '../screens/day-one/GoalsScreen';
 import NotificationsScreen from '../screens/day-one/NotificationsScreen';
-import CheckInTimeScreen from '../screens/day-one/CheckInTimeScreen';
 import ReadyScreen from '../screens/day-one/ReadyScreen';
 import {
   readResumeState,
@@ -39,7 +38,7 @@ export type Day1OnboardingParamList = {
   CoachPairing: { prefillCode?: string } | undefined;
   Goals: undefined;
   Notifications: undefined;
-  CheckInTime: undefined;
+  CheckInTime: undefined; // Retired route type for the unmounted legacy screen.
   Ready: undefined;
 };
 
@@ -65,7 +64,9 @@ export default function Day1OnboardingNavigator({ initialPrefillCode }: Props = 
       if (cancelled) return;
       // Don't resume into Ready — that screen owns the terminal POST and
       // re-running it on every boot would loop a finished user.
-      setInitialRoute(state && state.step !== 'Ready' ? state.step : 'Welcome');
+      setInitialRoute(state?.step === 'CheckInTime'
+        ? 'Ready'
+        : state && state.step !== 'Ready' ? state.step : 'Welcome');
     })();
     return () => {
       cancelled = true;
@@ -99,7 +100,6 @@ export default function Day1OnboardingNavigator({ initialPrefillCode }: Props = 
       />
       <Stack.Screen name="Goals" component={GoalsScreen} />
       <Stack.Screen name="Notifications" component={NotificationsScreen} />
-      <Stack.Screen name="CheckInTime" component={CheckInTimeScreen} />
       <Stack.Screen
         name="Ready"
         component={ReadyScreen}

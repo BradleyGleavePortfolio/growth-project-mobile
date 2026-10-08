@@ -17,7 +17,7 @@
   "welcome": {
     "greetingWithName": "Welcome, {firstName}",
     "greetingFallback": "Welcome",
-    "subtitle": "Setup takes 6 short steps.",
+    "subtitle": "Setup takes 5 short steps.",
     "cta": "Get started",
     "logoA11y": "The Growth Project logo"
   },
