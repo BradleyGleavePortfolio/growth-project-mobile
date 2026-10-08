@@ -73,6 +73,19 @@
         "EXPO_PUBLIC_FF_ROMAN_CHAT": "true",
         "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": "true"
       }
+    },
+    "clinic-apk": {
+      "extends": "clinic",
+      "distribution": "internal",
+      "channel": "clinic-apk",
+      "environment": "production",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "TGP_ANDROID_HEALTH_CONNECT": "1",
+        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
+      }
     }
   },
   "submit": {

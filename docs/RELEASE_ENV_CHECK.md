@@ -7,7 +7,7 @@ binary needs is missing, a placeholder, or the wrong kind of key. It never print
 
 - **On every EAS build**, as the `eas-build-pre-install` npm hook (`node scripts/check-expected-env.js --eas-hook`).
   It reads `EAS_BUILD_PROFILE`:
-  - A release profile (`clinic`, `production`, `preview`): runs the checks below; any problem fails the build.
+  - A release profile (`clinic`, `clinic-apk`, `production`, `preview`): runs the checks below; any problem fails the build.
   - Any other profile (`development`): skipped.
   - No profile name: fails (closed).
   - The hook runs before `npm install`, so it skips the TypeScript source scan. CI runs that scan on every PR.
@@ -20,6 +20,7 @@ binary needs is missing, a placeholder, or the wrong kind of key. It never print
 | Profile | Values that must be set and real | Stripe key |
 |---|---|---|
 | `clinic` | `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_ANON_KEY`, `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_SENTRY_DSN` | `pk_live_` |
+| `clinic-apk` | same five (the Android test APK uses the production environment) | `pk_live_` |
 | `production` | same five | `pk_live_` |
 | `preview` | the four `kind: "required"` names (no Sentry requirement) | `pk_live_` or `pk_test_` |
 

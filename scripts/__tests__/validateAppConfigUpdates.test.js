@@ -69,8 +69,11 @@ describe('validate-app-config — EAS Update gate', () => {
     expect(eas.build.preview.channel).toBe('preview');
     expect(eas.build.clinic.channel).toBe('clinic');
     expect(eas.build.clinic.environment).toBe('production');
+    expect(eas.build['clinic-apk'].channel).toBe('clinic-apk');
+    expect(eas.build['clinic-apk'].environment).toBe('production');
     expect(app.ios.buildNumber).toBe('7');
-    expect(app.android.versionCode).toBe(5);
+    // CLINIC-APK-132: 6 installs over the versionCode 5 Android test app.
+    expect(app.android.versionCode).toBe(6);
     withWorkspace((dir) => {
       const r = run(dir);
       expect(r.status).toBe(0);
@@ -147,6 +150,10 @@ describe('validate-app-config — EAS Update gate', () => {
       ['clinic overrides the hide flag', 'eas.json', (j) => { j.build.clinic.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES = 'false'; }, /build\.clinic\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
       ['clinic extends a missing profile', 'eas.json', (j) => { j.build.clinic.extends = 'store'; }, /build\.clinic cannot be resolved/],
       ['a dev profile joins a store channel', 'eas.json', (j) => { j.build.development.channel = 'clinic'; }, /channel "clinic" is used by development, clinic/],
+      // CLINIC-APK-132: the Android test APK extends clinic but reads its own channel.
+      ['clinic-apk profile deleted', 'eas.json', (j) => { delete j.build['clinic-apk']; }, /build\.clinic-apk is required/],
+      ['clinic-apk inherits the clinic channel', 'eas.json', (j) => { delete j.build['clinic-apk'].channel; }, /channel "clinic" is used by clinic, clinic-apk/],
+      ['clinic-apk on the preview environment', 'eas.json', (j) => { j.build['clinic-apk'].environment = 'preview'; }, /build\.clinic-apk\.environment must be "production"/],
       // Audit #305 C4: the accepted launch behaviour is enforced, not just "valid".
       ['updates disabled', 'app.json', (j) => { j.expo.updates.enabled = false; }, /expo\.updates\.enabled must be true/],
       ['update check only on Wi-Fi', 'app.json', (j) => { j.expo.updates.checkAutomatically = 'WIFI_ONLY'; }, /checkAutomatically must be "ON_LOAD"/],

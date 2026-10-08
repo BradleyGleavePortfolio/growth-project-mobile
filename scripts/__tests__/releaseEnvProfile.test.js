@@ -42,6 +42,8 @@ describe('release profiles in config/expected-env.json', () => {
   it('clinic and production are store profiles that require Sentry and live Stripe; preview allows test Stripe', () => {
     const rp = MANIFEST.releaseProfiles;
     expect(rp.clinic).toMatchObject({ require: ['EXPO_PUBLIC_SENTRY_DSN'], stripe: 'live' });
+    // CLINIC-APK-132: the Android test APK uses the production environment, like clinic.
+    expect(rp['clinic-apk']).toMatchObject({ require: ['EXPO_PUBLIC_SENTRY_DSN'], stripe: 'live' });
     expect(rp.production).toMatchObject({ require: ['EXPO_PUBLIC_SENTRY_DSN'], stripe: 'live' });
     expect(rp.preview).toMatchObject({ require: [], stripe: 'any' });
     expect(rp.development).toBeUndefined();
@@ -279,6 +281,13 @@ describe('checkReleaseEnv with a release profile', () => {
     expect(errors.join('\n')).toMatch(/EXPO_PUBLIC_SUPABASE_URL is a placeholder/);
     expect(errors.join('\n')).toMatch(/EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY is a Stripe TEST key/);
     expect(errors.join('\n')).toMatch(/EXPO_PUBLIC_FF_CLIENT_TUTORIAL is "true" in eas\.json build\.clinic\.env/);
+  });
+
+  it('clinic-apk passes with real values and fails when the Android pack link is overridden', () => {
+    expect(guard.checkReleaseEnv(ROOT, GOOD, { profile: 'clinic-apk' }).errors).toEqual([]);
+    const { errors } = guard.checkReleaseEnv(ROOT, { ...GOOD, EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: 'false' }, { profile: 'clinic-apk' });
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatch(/EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK is "true" in eas\.json build\.clinic-apk\.env/);
   });
 
   it('preview accepts a Stripe test key and does not require Sentry', () => {

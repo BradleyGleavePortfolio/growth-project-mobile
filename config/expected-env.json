@@ -64,7 +64,7 @@
     "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": {
       "kind": "flag",
       "default": "off",
-      "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview profile (the Android test app): credit packs open Stripe Checkout in the system browser on Android."
+      "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview and clinic-apk profiles (the directly installed Android test apps): credit packs open Stripe Checkout in the system browser on Android."
     },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
@@ -344,6 +344,13 @@
       ],
       "stripe": "live",
       "reason": "Clinic store binary: crash and unknown-error reporting must work (owner rule), and real clients pay."
+    },
+    "clinic-apk": {
+      "require": [
+        "EXPO_PUBLIC_SENTRY_DSN"
+      ],
+      "stripe": "live",
+      "reason": "Android test APK with the clinic flags plus the Android credit-pack link (installed directly, not Google Play): same production environment as clinic, so crash reporting must work and real coaches pay for AI credit packs."
     },
     "production": {
       "require": [
