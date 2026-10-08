@@ -103,6 +103,21 @@ describe('AllergySafetyPrompt copy (ALLERGY-128)', () => {
     await waitFor(() => expect(onDismiss).toHaveBeenCalledTimes(2));
   });
 
+  // ALLERGY-CHOICES-131: Soy and Sesame were missing, so a sesame allergy could not be saved. They are saved
+  // as shown, the allergen names the backend maps (src/recipes/allergens.ts 'soy' / 'sesame').
+  it('offers Soy and Sesame beside every earlier choice and saves them as shown', async () => {
+    const { onSubmit } = await renderPrompt('on');
+    for (const label of ['None', 'Nut Allergy', 'Peanut Allergy', 'Shellfish Allergy', 'Egg Allergy', 'Dairy Allergy',
+      'Soy', 'Sesame', 'Gluten-Free', 'Vegetarian', 'Vegan', 'Pescatarian']) {
+      expect(screen.getByLabelText(label)).toBeTruthy();
+    }
+    await fireEvent.press(screen.getByLabelText('Sesame'));
+    await fireEvent.press(screen.getByLabelText('Soy'));
+    expect(screen.getByLabelText('Sesame').props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(screen.getByLabelText('Save restrictions'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['Sesame', 'Soy']));
+  });
+
   it('saves None as an empty list', async () => {
     const { onSubmit } = await renderPrompt();
     await fireEvent.press(screen.getByLabelText('None'));

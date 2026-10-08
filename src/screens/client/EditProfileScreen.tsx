@@ -125,7 +125,8 @@ const GOAL_OPTIONS: { value: PrimaryGoal; label: string; description: string }[]
   { value: 'mobility',      label: 'Mobility & wellness', description: 'Maintenance calorie target' },
 ];
 
-// Restriction chip set mirrors OnboardingStep6 for parity. Includes "None"
+// The allergy chips of AllergySafetyPrompt plus diet exclusions, saved as typed (the backend
+// maps the allergy ones, Soy and Sesame included). Includes "None"
 // as an explicit answer so an empty selection still records intent.
 const RESTRICTION_OPTIONS = [
   'None',
@@ -134,6 +135,8 @@ const RESTRICTION_OPTIONS = [
   'Shellfish Allergy',
   'Egg Allergy',
   'Dairy Allergy',
+  'Soy',
+  'Sesame',
   'Gluten-Free',
   'Vegetarian',
   'Vegan',
