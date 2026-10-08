@@ -65,9 +65,10 @@ it('requires confirmation, removes the selected ended fast, and clears statistic
   jest.mocked(fastingApi.getHistory).mockResolvedValue(response([]));
   await confirmRemoval();
   expect(fastingApi.deleteFast).toHaveBeenCalledWith('ended-fast');
-  await waitFor(() => expect(screen.getByText('No fasting history')).toBeTruthy());
-  expect(screen.getByTestId('fasting-completed-count').props.children).toBe(0);
-  expect(screen.queryByText('12.0')).toBeNull();
+  // Calm Fasting (FAST-CALM-FIN-130): with no fast left the stats are hidden, not zeros.
+  await waitFor(() => expect(screen.getByText('Each fast you end is saved here.')).toBeTruthy());
+  expect(screen.queryByTestId('fasting-completed-count')).toBeNull();
+  expect(screen.queryByText('12.0h')).toBeNull();
   expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
   expect(screen.getByLabelText('Start fast')).toBeTruthy();
 });

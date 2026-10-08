@@ -111,6 +111,7 @@ describe('wired screens always show a way back (S-REACH)', () => {
     ['MoreStackNav', 'Progress'],
     ['MoreStackNav', 'Timeline'],
     ['MoreStackNav', 'ClientMacros'],
+    ['MoreStackNav', 'Fast'],
     ['HomeStackNav', 'Habits'],
   ])('%s %s registers with the back-only header', (stack, route) => {
     const re = new RegExp(`<${stack}\\.Screen\\s+name="${route}"\\s+component=\\{\\w+\\}\\s+options=\\{backOnlyHeader\\(`);

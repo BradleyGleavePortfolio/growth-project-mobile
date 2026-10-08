@@ -13,6 +13,8 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 
 import FadeInView from '../../components/FadeInView';
 import { fastingApi } from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { scheduleFastEndAlert } from '../../utils/fastingAlert';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
@@ -53,6 +55,7 @@ export default function WidgetsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [startingFast, setStartingFast] = useState(false);
+  const currentUser = useCurrentUser();
 
   const handleStartFast = useCallback(async () => {
     if (startingFast) return;
@@ -67,6 +70,11 @@ export default function WidgetsScreen() {
             setStartingFast(true);
             try {
               await fastingApi.start({ protocol: DEFAULT_FAST_PROTOCOL });
+              // Same end alert as a fast started on the Fasting screen.
+              if (currentUser) {
+                const hours = Number(DEFAULT_FAST_PROTOCOL.split(':')[0]);
+                await scheduleFastEndAlert(currentUser.id, hours);
+              }
               navigation.navigate('Fast');
             } catch (err) {
               const msg =
@@ -79,7 +87,7 @@ export default function WidgetsScreen() {
         },
       ],
     );
-  }, [startingFast, navigation]);
+  }, [startingFast, navigation, currentUser]);
 
   const handlePress = useCallback(
     (id: QuickActionId) => {
@@ -101,7 +109,12 @@ export default function WidgetsScreen() {
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Shortcuts</Text>
@@ -161,8 +174,8 @@ const makeStyles = (colors: ThemeColors) =>
     gap: spacing.md,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
   },
   title: {
