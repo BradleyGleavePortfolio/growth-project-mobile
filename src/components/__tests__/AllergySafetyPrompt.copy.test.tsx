@@ -1,4 +1,7 @@
 // ALLERGY-128 — the allergy prompt must not promise filtering that does not exist.
+// ALLERGY-M-130 — once the backend hides shared recipes by declared allergens (rule 'on', read from
+// GET /recipes/allergens by the caller), the prompt says so; without the rule ('off', the default) it keeps
+// the copy below; unconfirmed ('unknown') it claims neither. Every state keeps the check-ingredients line.
 //
 // Evidence (backend main 0d179edb): GET /recipes (src/recipes/recipes.service.ts
 // list -> visibleRecipesWhere in recipe-access.ts) selects recipes by creator and
@@ -32,7 +35,7 @@ function allText(): string {
   return out.join(' ').replace(/\s+/g, ' ');
 }
 
-async function renderPrompt() {
+async function renderPrompt(rule?: 'on' | 'off' | 'unknown') {
   const onDismiss = jest.fn();
   const onSubmit = jest.fn();
   const onLater = jest.fn();
@@ -42,6 +45,7 @@ async function renderPrompt() {
       onDismiss={onDismiss}
       onSubmit={onSubmit}
       onLater={onLater}
+      rule={rule}
     />,
   );
   return { onDismiss, onSubmit, onLater };
@@ -64,9 +68,27 @@ describe('AllergySafetyPrompt copy (ALLERGY-128)', () => {
     expect(text).toContain("check each recipe's ingredients before you cook");
   });
 
-  it('uses no first person in product copy', async () => {
-    await renderPrompt();
+  it.each([undefined, 'on', 'off', 'unknown'] as const)('uses no first person or exclamation in product copy (%s)', async (rule) => {
+    await renderPrompt(rule);
     expect(allText()).not.toMatch(/\b(we|our|us|I|my)\b/i);
+    expect(allText()).not.toContain('!');
+    expect(allText()).toMatch(/check each recipe's ingredients before you cook/i);
+  });
+
+  it('says hiding is on only for rule on, and that undeclared recipes and diets do not hide', async () => {
+    await renderPrompt('on');
+    const text = allText();
+    expect(text).toContain('Recipes that list an allergen you choose are hidden.');
+    expect(text).toContain('Vegetarian, Vegan and Pescatarian are saved but do not hide recipes.');
+    expect(text).toContain('Recipes without declared allergens still show');
+    expect(text).not.toMatch(/not filtered/);
+  });
+
+  it('claims neither hiding nor no filtering while the rule is unconfirmed', async () => {
+    await renderPrompt('unknown');
+    const text = allText();
+    expect(text).toContain('This is saved to your profile.');
+    expect(text).not.toMatch(/\bhid(e|den)\b|not filtered/i);
   });
 
   it('keeps save, later and dismiss working', async () => {

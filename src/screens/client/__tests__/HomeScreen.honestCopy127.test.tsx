@@ -10,6 +10,21 @@ const mockAssignments = jest.fn();
 const mockActive = jest.fn();
 let mockMacroMode = 'full';
 const mockUser = { id: 'u1', coach_id: 'c1', profile: {} };
+const mockSavedWorkout = {
+  routineName: 'Saved strength',
+  exercisesJson: '[{"exerciseId":"seed:push-001","exerciseName":"Push-up","sets":3,"reps":8}]',
+  assignmentId: 'saved-assignment',
+};
+const mockResumeDestination = ['WorkoutTab', {
+  screen: 'ActiveWorkout',
+  initial: false,
+  params: {
+    routineName: mockSavedWorkout.routineName,
+    exercises: mockSavedWorkout.exercisesJson,
+    assignmentId: mockSavedWorkout.assignmentId,
+    resume: true,
+  },
+}] as const;
 const mockDay = { foodLogs: [{ mealType: 'lunch' }], dailyTotals: {}, waterOz: 24,
   loadDayData: jest.fn(), loadProfile: jest.fn(), isLoading: false, loadError: null };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
@@ -53,28 +68,53 @@ it('keeps Messages registered on Home and reachable from More/Membership', () =>
   expect(read('../MembershipScreen.tsx')).toContain("parent.navigate('Home', { screen: 'Messages' })");
 });
 it.each([
-  ['assigned', 'One meal logged. Foundations is ready.', 'Start Foundations', 'WorkoutTab'],
-  ['active', 'One meal logged. A workout is in progress.', 'Resume workout', 'WorkoutTab'],
-  ['active-only', 'One meal logged. A workout is in progress.', 'Log a meal', 'Log'],
-  ['done', 'One meal logged. Workout complete.', 'Open Train', 'WorkoutTab'],
-  ['empty', 'One meal logged.', 'Log a meal', 'Log'],
-  ['coachless', 'One meal logged.', 'Log a meal', 'Log'],
-] as const)('%s: truthful line and the same CTA destination', async (state, line, label, destination) => {
-  if (state === 'assigned' || state === 'done') mockAssignments.mockResolvedValue([
-    { completed_at: null, workout_plan: { name: 'Foundations' } },
+  ['assigned', 'One meal logged. Foundations is ready.', 'Start Foundations',
+    ['MoreTab', { screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'pending-assignment' } }]],
+  ['active', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
+  ['active-only', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
+  ['active-assigned', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
+  ['done', 'One meal logged. Workout complete.', 'Open Train', ['WorkoutTab']],
+  ['empty', 'One meal logged.', 'Log a meal', ['Log']],
+  ['coachless', 'One meal logged.', 'Log a meal', ['Log']],
+] as const)('%s: truthful line and a CTA that opens what it names', async (state, line, label, destination) => {
+  if (state === 'assigned' || state === 'done' || state === 'active-assigned') mockAssignments.mockResolvedValue([
+    { id: 'pending-assignment', completed_at: null, workout_plan: { name: 'Foundations' } },
   ]);
-  if (state === 'active') {
+  if (state === 'active' || state === 'active-assigned') {
     mockHistory.mockResolvedValue({ data: [{ date: '2026-09-01' }] });
-    mockActive.mockResolvedValue({ session: {} });
   }
-  if (state === 'active-only') mockActive.mockResolvedValue({ session: {} });
+  if (state.startsWith('active')) mockActive.mockResolvedValue({ session: mockSavedWorkout });
   if (state === 'done') mockHistory.mockResolvedValue({ data: [{ date: getTodayString() }] });
   if (state === 'coachless') mockUser.coach_id = '';
   await render(<HomeScreen />);
   expect(await screen.findByText(line)).toBeTruthy();
-  await fireEvent.press(await screen.findByLabelText(label));
-  expect(mockNavigate).toHaveBeenCalledWith(destination);
+  const button = await screen.findByLabelText(label);
+  await fireEvent.press(button);
+  expect(mockNavigate).toHaveBeenCalledWith(...destination);
+  if (label !== 'Log a meal') {
+    expect(button.props.accessibilityHint).toBe(label === 'Resume workout'
+      ? 'Opens your saved workout' : label === 'Open Train' ? 'Opens Train' : 'Opens the assigned workout');
+  }
   expect(screen.queryByText(/One workout to go|Explore the app/)).toBeNull();
+});
+it('opens the first unfinished assignment, not a completed workout or a different plan', async () => {
+  mockAssignments.mockResolvedValue([
+    { id: 'completed-assignment', completed_at: 'done', workout_plan: { name: 'Finished' } },
+    { id: 'next-assignment', completed_at: null, workout_plan: { name: '  Next session  ' } },
+    { id: 'later-assignment', completed_at: null, workout_plan: { name: 'Later session' } },
+  ]);
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Start Next session'));
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
+    screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'next-assignment' },
+  });
+});
+it.each(['history', 'assignments'] as const)('keeps Train reachable when the %s read fails', async (failedRead) => {
+  (failedRead === 'history' ? mockHistory : mockAssignments).mockRejectedValueOnce(new Error('Offline'));
+  await render(<HomeScreen />);
+  await fireEvent.press(await screen.findByLabelText('Open Train'));
+  expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab');
+  expect(screen.queryByText(/is ready|Workout complete/)).toBeNull();
 });
 it.each([false, true])('profile copy reflects coach plan presence: %s', async (hasPlan) => {
   mockAssignments.mockResolvedValue(hasPlan ? [{ completed_at: 'done', workout_plan: { name: 'Foundations' } }] : []);
