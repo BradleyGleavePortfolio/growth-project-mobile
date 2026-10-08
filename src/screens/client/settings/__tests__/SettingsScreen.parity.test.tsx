@@ -33,7 +33,8 @@ jest.mock('../../../../services/api', () => ({
   profileApi: { update: jest.fn(async () => ({})) },
   notificationsApi: { updatePreferences: jest.fn(async () => ({})) },
 }));
-jest.mock('../../../../services/authActions', () => ({ signOut: jest.fn(), refreshProfile: jest.fn() }));
+jest.mock('../../../../services/authActions', () => ({ signOut: jest.fn(), refreshProfile: jest.fn(),
+  prepareSignOutConfirm: jest.fn(async () => 'Are you sure you want to sign out?') }));
 jest.mock('../../../../utils/supabaseAuth', () => ({
   updateSupabasePassword: jest.fn(async () => ({ ok: true })),
 }));
@@ -195,6 +196,7 @@ it('keeps password inputs, close, validation, save and confirmed reset/sign-out 
   expect(updateSupabasePassword).toHaveBeenCalledWith('test-password');
   for (const [label, confirm] of [['Reset Onboarding', 'Reset'], ['Sign Out', 'Sign Out']]) {
     await fireEvent.press(view.getByText(label));
+    await waitFor(() => expect(alert.mock.calls.at(-1)?.[2]?.some((button) => button.text === confirm)).toBe(true));
     const buttons = alert.mock.calls[alert.mock.calls.length - 1][2]!;
     expect(buttons.find((button) => button.text === 'Cancel')?.style).toBe('cancel');
     await buttons.find((button) => button.text === confirm)!.onPress!();

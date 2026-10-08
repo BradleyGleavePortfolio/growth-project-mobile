@@ -8,10 +8,13 @@
  * `restrictions` chip set. This prompt asks for it again and saves it to
  * `profile.diet_restrictions` (backend `dietary_restrictions`).
  *
- * ALLERGY-128: nothing filters the recipe library by this answer (GET
- * /recipes selects by creator and coach only; RecipesScreen filters by
- * search and tag only). The copy therefore promises nothing about hiding
- * recipes and tells the client to check each recipe's ingredients.
+ * ALLERGY-M-130: what the copy says about hiding follows `rule` (the caller
+ * reads GET /recipes/allergens, src/lib/recipeAllergens.ts). 'on': the server
+ * hides shared recipes whose author declared one of the saved allergens, so
+ * the copy says so and that undeclared recipes still show. 'off' (a backend
+ * without the rule, ALLERGY-128): recipes are not filtered. 'unknown': no
+ * claim either way. Every state tells the client to check each recipe's
+ * ingredients.
  *
  * Trigger conditions (managed by the caller — useAllergySafetyPrompt):
  *   - User completed the lean flow (lean_onboarding_done === 'true')
@@ -27,6 +30,19 @@
 import React from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { colors, typography, spacing, radius } from '../theme/tokens';
+import type { RecipeAllergenRule } from '../lib/recipeAllergens';
+
+const LEDE: Record<RecipeAllergenRule, string> = {
+  on:
+    'This is saved to your profile. Recipes that list an allergen you choose are hidden. ' +
+    'Vegetarian, Vegan and Pescatarian are saved but do not hide recipes. Recipes without declared ' +
+    "allergens still show, so check each recipe's ingredients before you cook. Choose None if you have no restrictions.",
+  off:
+    "This is saved to your profile. Recipes are not filtered by it, so check each recipe's ingredients " +
+    'before you cook. Choose None if you have no restrictions.',
+  unknown:
+    "This is saved to your profile. Check each recipe's ingredients before you cook. Choose None if you have no restrictions.",
+};
 
 const RESTRICTION_OPTIONS = [
   'None',
@@ -48,6 +64,8 @@ interface Props {
   onSubmit: (restrictions: string[]) => Promise<void> | void;
   /** Called when the user chooses "Set this up later" without selecting. */
   onLater: () => Promise<void> | void;
+  /** Whether the server hides recipes by saved allergens; absent = 'off' (the copy before the rule). */
+  rule?: RecipeAllergenRule;
 }
 
 export default function AllergySafetyPrompt({
@@ -55,6 +73,7 @@ export default function AllergySafetyPrompt({
   onDismiss,
   onSubmit,
   onLater,
+  rule = 'off',
 }: Props) {
   const [selected, setSelected] = React.useState<string[]>([]);
   const [submitting, setSubmitting] = React.useState(false);
@@ -108,11 +127,7 @@ export default function AllergySafetyPrompt({
         <View style={styles.sheet} accessibilityViewIsModal>
           <Text style={styles.eyebrow}>BEFORE YOU BROWSE</Text>
           <Text style={styles.headline}>Anything to avoid?</Text>
-          <Text style={styles.lede}>
-            This is saved to your profile. Recipes are not filtered by it,
-            so check each recipe&apos;s ingredients before you cook. Choose
-            None if you have no restrictions.
-          </Text>
+          <Text style={styles.lede}>{LEDE[rule]}</Text>
 
           <ScrollView
             style={styles.chipsScroll}

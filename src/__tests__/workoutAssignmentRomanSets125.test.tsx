@@ -70,6 +70,7 @@ async function openAndStart() {
   expect(mockStackNavigate).not.toHaveBeenCalled();
   expect(mockNavigate).toHaveBeenCalledWith('WorkoutTab', {
     screen: 'ActiveWorkout',
+    initial: false,
     params: expect.objectContaining({ assignmentId: 'asg-1', routineId: 'plan-1' }),
   });
   const started = JSON.parse(mockNavigate.mock.calls[0][1].params.exercises) as Array<{ sets: number }>;
