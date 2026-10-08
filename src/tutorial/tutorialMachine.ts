@@ -11,14 +11,21 @@
  *     the matching SIGNAL (or DEFER where `allowDefer`). Anything else is a
  *     no-op, so stray taps and unrelated signals never move the tour.
  *   - Entering a step whose data is missing marks it `pending` (no plan or no
- *     macros yet) or `unavailable` (community not in this build) and moves on;
- *     it never blocks the client (owner decision T-3).
+ *     macros yet) or `unavailable` (community not in this build, or no coach
+ *     linked for a step about the coach) and moves on; it never blocks the
+ *     client (owner decision T-3).
  *   - A route gate that is already satisfied by where the client is standing
  *     advances immediately (no pointless "tap Home" while on Home).
  *   - PAUSE is the "Skip the tour" action: progress is kept, and RESUME picks
  *     up at the same gate. START with `restart` begins again from step one.
  */
-import { TUTORIAL_STEPS, type TutorialGate, type TutorialStepDef } from './tutorialSteps';
+import {
+  stepRequirements,
+  TUTORIAL_STEPS,
+  type StepRequirement,
+  type TutorialGate,
+  type TutorialStepDef,
+} from './tutorialSteps';
 import type {
   TutorialContext,
   TutorialSignal,
@@ -66,11 +73,11 @@ export function currentGate(state: TutorialState): TutorialGate | null {
   return step ? step.gates[state.gateIndex] ?? null : null;
 }
 
-function requirementOutcome(
-  step: TutorialStepDef,
+function missingOutcome(
+  need: StepRequirement,
   env: TutorialContext,
 ): TutorialStepOutcome | null {
-  switch (step.requires) {
+  switch (need) {
     case 'program':
       return env.hasProgram ? null : 'pending';
     case 'macros':
@@ -79,9 +86,23 @@ function requirementOutcome(
       return env.communityAvailable ? null : 'unavailable';
     case 'calendar':
       return env.calendarAvailable ? null : 'unavailable';
+    case 'coach':
+      return env.coachLinked ? null : 'unavailable';
     default:
       return null;
   }
+}
+
+/** The first unmet requirement decides how a skipped step is recorded. */
+function requirementOutcome(
+  step: TutorialStepDef,
+  env: TutorialContext,
+): TutorialStepOutcome | null {
+  for (const need of stepRequirements(step)) {
+    const missing = missingOutcome(need, env);
+    if (missing) return missing;
+  }
+  return null;
 }
 
 function routeSatisfied(gate: TutorialGate | null, path: string[]): boolean {

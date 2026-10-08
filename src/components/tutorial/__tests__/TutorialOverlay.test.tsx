@@ -53,7 +53,7 @@ const PAYLOAD: OnboardingCompletePayload = {
 const TABS = ['Home', 'WorkoutTab', 'Log', 'MoreTab', 'CommunityTab'];
 
 async function begin() {
-  await hydrateTutorial('u1', 'Maya');
+  await hydrateTutorial('u1', 'Maya', true);
   setTutorialRoute(['Home', 'HomeMain']);
   startClientTutorial(PAYLOAD);
 }

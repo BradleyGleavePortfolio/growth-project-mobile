@@ -7,14 +7,18 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import { typography } from '../../../theme/tokens';
 import { dispatchTutorial, startClientTutorial, useTutorialStore } from '../../../tutorial/tutorialStore';
 
-/** The existing tour actions, presented as one row inside Support. */
+/**
+ * The existing tour actions, presented as one row inside Support. "Take the
+ * tour again" only once a tour has been completed; before that, "Take the tour".
+ */
 export default function ClientTutorialSetting() {
   const { colors } = useTheme();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const status = useTutorialStore((s) => s.tutorial.status);
   if (!featureFlags.clientTutorial) return null;
   const label = status === 'paused' ? 'Resume the tour'
-    : status === 'active' ? 'The tour is in progress' : 'Take the tour again';
+    : status === 'active' ? 'The tour is in progress'
+      : status === 'completed' ? 'Take the tour again' : 'Take the tour';
   const onPress = () => {
     if (status === 'paused') dispatchTutorial({ type: 'RESUME' });
     else if (status !== 'active') startClientTutorial(null, { restart: true });
