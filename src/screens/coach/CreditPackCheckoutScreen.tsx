@@ -21,7 +21,7 @@
  * Round-3 fix: the success state was previously a particle burst that
  * violated QUIET_LUXURY_DOCTRINE.md §3 (no celebrations). It is now a
  * quiet receipt — opacity fade-in + a single icon pulse, two metadata
- * rows ("New balance" + "Receipt sent to your inbox"), auto-dismiss
+ * rows ("New balance" + "Paid to TGP, through Stripe"), auto-dismiss
  * after 1800ms. Same confidence as an Amex statement.
  *
  * US-link builds (creditPackCheckoutMode 'external', owner decision 10
@@ -579,7 +579,9 @@ function SuccessReceipt({
   // a11y label so screen readers say "New balance, twelve fifty" rather
   // than landing on disjoint nodes.
   const balanceA11y = `New balance, ${balanceDisplay}`;
-  const receiptA11y = 'Receipt, sent to your inbox.';
+  // Who was paid, not a receipt-email claim: whether Stripe emails a receipt
+  // depends on a Stripe account setting the app cannot see.
+  const receiptA11y = 'Paid to TGP, through Stripe.';
 
   return (
     <Animated.View
@@ -592,9 +594,10 @@ function SuccessReceipt({
         >
           <Ionicons name="checkmark-circle" size={56} color={colors.success} />
         </Animated.View>
-        <Text style={styles.successTitle}>Credits added</Text>
+        <Text style={styles.successTitle}>Payment complete</Text>
         <Text style={styles.successBody}>
-          {formatCents(amountCents)} of AI credit is now on your account.
+          {formatCents(amountCents)} of AI credit is on its way to your account. It shows on
+          Coach Home once Stripe confirms the payment.
         </Text>
 
         <View style={styles.metaHairline} />
@@ -617,8 +620,8 @@ function SuccessReceipt({
           accessibilityLabel={receiptA11y}
           testID="credit-pack-success-receipt-row"
         >
-          <Text style={styles.metaLabel}>Receipt</Text>
-          <Text style={styles.metaValue}>Sent to your inbox</Text>
+          <Text style={styles.metaLabel}>Paid to</Text>
+          <Text style={styles.metaValue}>TGP, through Stripe</Text>
         </View>
       </View>
     </Animated.View>

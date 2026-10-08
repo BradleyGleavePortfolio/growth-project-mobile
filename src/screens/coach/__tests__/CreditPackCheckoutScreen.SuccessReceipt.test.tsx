@@ -273,8 +273,11 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
     await render(<CreditPackCheckoutScreen />);
     await driveToSuccessPhase();
 
-    expect(screen.getByText('Credits added')).toBeTruthy();
-    expect(screen.getByText(/of AI credit is now on your account/i)).toBeTruthy();
+    // CREDIT-PAY-131: the credit lands by webhook after Stripe's return, so the
+    // receipt says it is on its way, never that it is already on the account.
+    expect(screen.getByText('Payment complete')).toBeTruthy();
+    expect(screen.getByText(/of AI credit is on its way to your account/i)).toBeTruthy();
+    expect(screen.queryByText(/is now on your account/i)).toBeNull();
     expect(screen.getByText('New balance')).toBeTruthy();
     // formatCents uses USD_WHOLE (no trailing zeros) for whole-dollar
     // amounts — 6000c → '$60', not '$60.00'. Assert what the helper
@@ -282,8 +285,10 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
     expect(
       screen.getByTestId('credit-pack-success-balance-value'),
     ).toHaveTextContent('$60');
-    expect(screen.getByText('Receipt')).toBeTruthy();
-    expect(screen.getByText('Sent to your inbox')).toBeTruthy();
+    // Who was paid; no receipt-email claim (a Stripe account setting decides).
+    expect(screen.getByText('Paid to')).toBeTruthy();
+    expect(screen.getByText('TGP, through Stripe')).toBeTruthy();
+    expect(screen.queryByText(/inbox/i)).toBeNull();
 
     // Side-effect: budget query invalidated.
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
