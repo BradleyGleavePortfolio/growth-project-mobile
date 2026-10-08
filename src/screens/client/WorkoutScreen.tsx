@@ -623,9 +623,11 @@ export default function WorkoutScreen() {
     showAllHistory && historySessions.length > recentSessions.length ? historySessions : recentSessions;
   const completedAssignments = assignmentsList.length - pendingAssignments.length;
   // Cross-tab navigate: WorkoutScreen lives in WorkoutTab; the assignment
-  // screens live in MoreTab. Same shape as the W-4 fix.
+  // screens live in MoreTab. `initial: false` keeps the You menu (MoreIndex)
+  // under them when You has not been opened yet (the tab is lazy), so Back
+  // and a second tap on You return to the menu (B1 / B-542-SOL-130-1).
   const openInMoreTab = (screen: 'WorkoutAssignmentDetail' | 'ClientWorkoutViewer', params?: { assignmentId: string }) => {
-    navigation.getParent()?.navigate('MoreTab', params ? { screen, params } : { screen });
+    navigation.getParent()?.navigate('MoreTab', { screen, ...(params ? { params } : {}), initial: false });
   };
   const openAssignedList = () => {
     if (pendingAssignments.length === 1) openInMoreTab('WorkoutAssignmentDetail', { assignmentId: pendingAssignments[0].id });

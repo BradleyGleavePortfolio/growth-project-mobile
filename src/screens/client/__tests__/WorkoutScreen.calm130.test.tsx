@@ -143,10 +143,10 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     await waitFor(() => expect(view.getByText('Upper body A')).toBeTruthy());
     expect(forestButtons(view)).toEqual(['Open assigned workout: Upper body A']);
     await fireEvent.press(view.getByLabelText('Open assigned workout: Upper body A'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'a1' } });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'a1' }, initial: false });
     expect(view.getByText('1 completed')).toBeTruthy();
     await fireEvent.press(view.getByLabelText('All coach workouts'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer' });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
     await fireEvent.press(view.getByLabelText('Quick workout'));
     expect(mockNavigate).toHaveBeenLastCalledWith(...QUICK);
   });
@@ -158,7 +158,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     await waitFor(() => expect(view.getByText('2 workouts waiting')).toBeTruthy());
     expect(forestButtons(view)).toEqual(['View 2 coach-assigned workouts']);
     await fireEvent.press(view.getByLabelText('View 2 coach-assigned workouts'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer' });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
     expect(view.queryByLabelText('All coach workouts')).toBeNull();
   });
 
@@ -169,7 +169,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     await waitFor(() => expect(view.getByText('2 completed')).toBeTruthy());
     expect(forestButtons(view)).toEqual(['Quick workout']);
     await fireEvent.press(view.getByLabelText('All coach workouts'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer' });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
   });
 
   it('a load failure keeps the header, Quick workout and Create a routine, says what failed, and Try again reloads', async () => {
@@ -202,7 +202,7 @@ describe('Train tab: one forest action and every route kept (TRAIN-TAB-FIN-130)'
     await waitFor(() => expect(view.getByText(FAILED_LINE)).toBeTruthy());
     expect(forestButtons(view)).toEqual(['Try again']);
     await fireEvent.press(view.getByLabelText('Open assigned workout: Upper body A'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'a1' } });
+    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'a1' }, initial: false });
   });
 
   it('routine and history actions keep their routes', async () => {
