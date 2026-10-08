@@ -60,10 +60,14 @@ const SERVER_SWITCHES: Record<ServerSwitchKey, {
   dailyCheckin: {
     noun: 'check-in reminder',
     read: (row) => row.nudge_missed_checkin_push !== false || row.nudge_missed_checkin_inapp !== false,
-    patch: (on) => (on
-      ? { nudge_missed_checkin_push: true, nudge_missed_checkin_inapp: true, daily_checkin_enabled: true }
-      : { nudge_missed_checkin_push: false, nudge_missed_checkin_inapp: false,
-        nudge_missed_checkin_email: false, daily_checkin_enabled: false }),
+    patch: (on) => {
+      const fields: Record<string, boolean> = {
+        nudge_missed_checkin_push: on, nudge_missed_checkin_inapp: on, daily_checkin_enabled: on,
+      };
+      // Off also stops the email copy; on leaves that choice as it was.
+      if (!on) fields.nudge_missed_checkin_email = false;
+      return fields;
+    },
   },
   weeklySummary: {
     noun: 'summary email',
