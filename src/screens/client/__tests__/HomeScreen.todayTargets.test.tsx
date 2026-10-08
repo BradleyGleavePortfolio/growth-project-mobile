@@ -8,13 +8,17 @@ const mockDayState = {
   foodLogs: [],
   dailyTotals: { calories: 600, protein: 40, carbs: 70, fat: 20 },
   waterOz: 0,
-  selectedDate: '2026-10-01',
+  selectedDate: getTodayString(),
+  hasLoadedDay: true,
   isLoading: false,
   loadError: null as string | null,
   loadDayData: jest.fn().mockResolvedValue(undefined),
   loadProfile: jest.fn().mockResolvedValue(undefined),
 };
 let mockServerTargets: { calories: number; protein: number; carbs: number; fat: number } | null = null;
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
+}));
 
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({
@@ -49,7 +53,7 @@ import { __resetMacroDisplayStoreForTests } from '../../../macros/macroDisplaySt
 beforeEach(async () => {
   jest.clearAllMocks();
   mockServerTargets = null;
-  mockDayState.selectedDate = '2026-10-01';
+  mockDayState.selectedDate = getTodayString();
   await AsyncStorage.clear();
   __resetMacroDisplayStoreForTests();
 });
@@ -65,6 +69,7 @@ describe('Home food numbers', () => {
   });
 
   it("reloads today when the Food Log was left on an earlier day", async () => {
+    mockDayState.selectedDate = '2026-10-01';
     await render(<HomeScreen />);
     const today = getTodayString();
     expect(mockDayState.loadDayData).toHaveBeenCalledWith('u1', today);

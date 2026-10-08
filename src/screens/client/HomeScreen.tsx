@@ -17,6 +17,8 @@ import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
+import { useSettings } from '../../hooks/useSettings';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
 import { typography } from '../../theme/tokens';
@@ -150,11 +152,14 @@ function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberC
 export default function HomeScreen() {
   const { semanticColors: sc } = useTheme();
   const currentUser = useCurrentUser();
+  const { settings, loaded: settingsLoaded } = useSettings();
+  const { entitlementActive, confirmedActive, status, refreshEntitlement } = useEntitlement();
   const {
     foodLogs,
     dailyTotals,
     waterOz,
     selectedDate,
+    hasLoadedDay,
     isLoading,
     loadError,
     loadDayData,
@@ -163,12 +168,17 @@ export default function HomeScreen() {
 
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [refreshing, setRefreshing] = useState(false);
+  const canLoadDay = entitlementActive === true || (confirmedActive && status !== 'inactive');
+  const accessPending = !canLoadDay && status !== 'inactive' && status !== 'unavailable';
+  const needsAccess = !canLoadDay && !accessPending;
+  const dayReady = canLoadDay && hasLoadedDay && selectedDate === getTodayString();
 
   // Stable today date
   const today = new Date();
 
   // Derive state
   const mealsLogged = (() => {
+    if (!dayReady) return 0;
     const mealTypes = new Set(foodLogs.map((f) => f.mealType));
     return mealTypes.size;
   })();
@@ -187,7 +197,7 @@ export default function HomeScreen() {
   const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
   useFocusEffect(useCallback(() => {
     let cancelled = false;
-    if (!currentUser) return;
+    if (!currentUser || !canLoadDay) return;
     setWorkoutExists('loading');
     (async () => {
       try {
@@ -225,15 +235,18 @@ export default function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id, refreshing]));
+  }, [currentUser?.id, refreshing, canLoadDay]));
 
   const workoutInProgress = !!activeWorkout;
   const datePoetry = buildDateAsPoetry(today);
-  const progressLine = buildProgressLine(mealsLogged, workoutDone, pendingPlanName, workoutInProgress);
+  const progressLine = buildProgressLine(mealsLogged, canLoadDay && workoutDone,
+    canLoadDay ? pendingPlanName : null, canLoadDay && workoutInProgress);
   const workoutLabel = workoutInProgress ? 'Resume workout' : !workoutDone && pendingPlanName ? `Start ${pendingPlanName}` : 'Open Train';
 
-  // Same unit and logged value as the Food Log.
-  const waterValue = `${waterOz} oz`;
+  // The Food Log uses approximate ml because day reads round to ounces.
+  const waterValue = !dayReady || !settingsLoaded || loadError ? '—' : settings.unit === 'kg'
+    ? `≈ ${Math.round(waterOz * 29.5735)} ml`
+    : `${Math.round(waterOz * 10) / 10} oz`;
 
   // Macro display: prefer logged value; fall back to "0 of {target}g" when a
   // coach/onboarding target exists; fall back to a "Log to see" prompt only
@@ -248,6 +261,9 @@ export default function HomeScreen() {
   const fatTarget     = macroTargets?.fat ?? currentUser?.profile?.fat_target;
 
   const buildMacro = (logged: number | undefined, target: number | undefined) => {
+    if (!dayReady) {
+      return { value: '—', hint: target ? `of ${Math.round(target)}g` : undefined, prompt: true };
+    }
     if (logged && logged > 0) {
       return {
         value: `${Math.round(logged)}g`,
@@ -273,6 +289,9 @@ export default function HomeScreen() {
   const macroMode = useMacroDisplayMode(currentUser?.id ?? null);
   const calorieTarget = macroTargets?.calories ?? currentUser?.profile?.calorie_target;
   const calories = (() => {
+    if (!dayReady) {
+      return { value: '—', hint: calorieTarget ? `of ${Math.round(calorieTarget)} kcal` : undefined, prompt: true };
+    }
     const logged = dailyTotals?.calories;
     if (logged && logged > 0) {
       return {
@@ -290,29 +309,34 @@ export default function HomeScreen() {
 
   // Home always shows today, even after the Food Log (shared store) moved to another day.
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && canLoadDay) {
       loadDayData(currentUser.id, getTodayString());
       loadProfile(currentUser.id);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, canLoadDay]);
 
   useFocusEffect(
     useCallback(() => {
-      if (currentUser && selectedDate && selectedDate !== getTodayString()) {
+      if (currentUser && canLoadDay && selectedDate && selectedDate !== getTodayString()) {
         void loadDayData(currentUser.id, getTodayString());
       }
-    }, [currentUser?.id, selectedDate]),
+    }, [currentUser?.id, selectedDate, canLoadDay]),
   );
 
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
     setRefreshing(true);
-    await Promise.all([
-      loadDayData(currentUser.id, getTodayString()),
-      loadProfile(currentUser.id),
-    ]);
-    setRefreshing(false);
-  }, [currentUser?.id]);
+    try {
+      if (canLoadDay || await refreshEntitlement()) {
+        await Promise.all([
+          loadDayData(currentUser.id, getTodayString()),
+          loadProfile(currentUser.id),
+        ]);
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [currentUser?.id, canLoadDay, refreshEntitlement]);
 
   const onContinue = () => {
     track('home_continue_tapped', { surface: 'home_hero' });
@@ -338,9 +362,12 @@ export default function HomeScreen() {
     }
   };
 
+  const goToAccess = () => navigation.navigate('MoreTab', { screen: 'Membership', initial: false });
+
   const goToLog = () => {
     track('home_macro_tapped', { surface: 'home_macro_grid' });
-    navigation.navigate('Log');
+    if (canLoadDay) navigation.navigate('Log');
+    else goToAccess();
   };
 
   const completion = getProfileCompletion(currentUser);
@@ -383,7 +410,7 @@ export default function HomeScreen() {
         }
       >
         <HomeHeaderActions />
-        {loadError ? (
+        {canLoadDay && loadError ? (
           <CoachErrorState
             message={loadError}
             onRetry={() => void onRefresh()}
@@ -400,9 +427,16 @@ export default function HomeScreen() {
             {progressLine}
           </Text>
         ) : null}
+        {needsAccess ? (
+          <Text testID="home-access-note" style={{ ...typography.bodySmall, color: sc.textMuted, marginBottom: 16 }}>
+            {entitlementActive === false
+              ? 'Food and water logging need active access.'
+              : 'Your access could not be checked.'}
+          </Text>
+        ) : null}
 
         {/* Single CTA — conditional on whether workouts exist */}
-        {workoutExists === 'loading' ? (
+        {accessPending || (!needsAccess && workoutExists === 'loading') ? (
           // Skeleton placeholder while loading — no ActivityIndicator
           <View
             style={{
@@ -412,7 +446,7 @@ export default function HomeScreen() {
             }}
             testID="cta-skeleton"
           />
-        ) : workoutExists ? (
+        ) : !needsAccess && workoutExists ? (
           <Pressable
             style={({ pressed }) => ({
               backgroundColor: sc.accent,
@@ -434,21 +468,28 @@ export default function HomeScreen() {
             <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>{workoutLabel}</Text>
           </Pressable>
         ) : (
-          // Without a workout, food logging is the primary action.
+          // With access and no workout, food logging is the primary action.
           <Pressable
-            onPress={() => navigation.navigate('Log')}
+            onPress={needsAccess ? goToAccess : () => navigation.navigate('Log')}
             accessibilityRole="button"
-            accessibilityLabel="Log a meal"
-            testID="home-explore-cta"
+            accessibilityLabel={needsAccess ? 'View access' : 'Log a meal'}
+            testID={needsAccess ? 'home-access-cta' : 'home-explore-cta'}
             style={({ pressed }) => ({
               backgroundColor: sc.accent, minHeight: 44, borderRadius: 4,
               paddingVertical: 16, paddingHorizontal: 16, alignItems: 'center', opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>Log a meal →</Text>
+            <Text style={{ ...typography.bodyMd, color: sc.textOnAccent }}>
+              {needsAccess ? 'View access' : 'Log a meal →'}
+            </Text>
           </Pressable>
         )}
 
+        {canLoadDay && !dayReady && !loadError ? (
+          <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 16 }}>
+            Loading today's food and water…
+          </Text>
+        ) : null}
         {/* All current metrics in one row, without the former 96 pt gap. */}
         <View
           style={{
@@ -471,7 +512,7 @@ export default function HomeScreen() {
                 onPress={m.prompt ? goToLog : undefined}
                 accessibilityLabel={
                   m.prompt
-                    ? `Log a meal to see your ${word}`
+                    ? !canLoadDay ? 'View access to log food' : `Log a meal to see your ${word}`
                     : `${title}: ${m.value}${m.hint ? `, ${m.hint}` : ''}`
                 }
               />

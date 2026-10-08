@@ -26,7 +26,11 @@ const mockResumeDestination = ['WorkoutTab', {
   },
 }] as const;
 const mockDay = { foodLogs: [{ mealType: 'lunch' }], dailyTotals: {}, waterOz: 24,
+  selectedDate: getTodayString(), hasLoadedDay: true,
   loadDayData: jest.fn(), loadProfile: jest.fn(), isLoading: false, loadError: null };
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
+}));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
