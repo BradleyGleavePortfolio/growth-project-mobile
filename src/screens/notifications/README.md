@@ -105,7 +105,11 @@ All calls go through `src/services/notificationsApi.ts`. The mock flag is `NOTIF
 | `Messages` | `HomeStack → Messages` (client) or `CoachNavigator → Messages` (coach) | Direct messages |
 | `NotificationCenter` | `HomeStack → NotificationCenter` | Informational — stays on this screen |
 | `MoreIndex` | `MoreStack → MoreIndex` | Build-week gate approvals |
+| `Deliverables` | `MoreStack → Deliverables` | "New content" rows (`drip_released`), with `purchaseId` from `payload.client_purchase_id` so the screen lists that purchase |
+| `UpdateCard` | `MoreStack → UpdateCard` (More index kept beneath) | The Day 3, Day 7 and dispute payment blocker (`dunning_blocker` with `payload.headline`); the full-refund notice of the same kind has no destination |
 | `undefined` | No navigation | Informational only |
+
+Rows without `payload.title` use their kind's push title: "New content" (`drip_released`), "Your free trial" (`trial_ending`), "Payment" (`dunning_blocker`; the blocker shows its `payload.headline`), "New purchase" (`coach_new_purchase`). Other kinds fall back to "Update".
 
 ---
 
@@ -154,6 +158,7 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 | | Preferences screen calls `saveNotificationPreferences` on mute-all toggle |
 | | Badge renders "99+" for count > 99 |
 | | Badge renders nothing for count = 0 |
+| `src/__tests__/moneyInboxRows.test.tsx` | Backend money rows (content unlocked, trial ending, payment blocker, full refund, new purchase) get real titles; "New content" opens Deliverables for its purchase and lists it; the blocker row and an `UpdateCard` push open the card screen; a coach never does |
 
 ---
 
@@ -170,5 +175,6 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 - `installNotificationResponseHandler(routePushTap)` is installed once in `App.tsx` (skipped in screenshot mode). It handles live taps and the cold-start tap from `getLastNotificationResponseAsync`, de-duplicated by notification id.
 - `src/services/pushTapRouter.ts` delivers a tap only when RootNavigator reports an explicit app session (`setPushSession(pushSessionFor(authState, userId))`): `student`/`package_prompt` mount the client navigator, `coach` the coach navigator. Bootstrap and every onboarding root (lean questions, Day-1, Day-1 win, coach wizard) hold the tap. Sign-out drops it, a tap that arrives while signed out is dropped, and a session for a different user id drops it.
 - Destinations are a role-aware allow-list of real nested routes. Client: `Messages`, `NotificationCenter`, `Habits` -> `Home`; `Timeline`, `MoreIndex`, `Membership`, `Deliverables` -> `MoreTab`; `WorkoutMain` -> `WorkoutTab`; `CommunityEventDetail` -> `CommunityTab` (community + events flags). Coach: `Messages` (root tab); `NotificationCenter`, `NotificationPreferences` -> `ClientsStack`; `CreditPackCheckout` -> `SettingsStack` (gated wrapper, neutral copy on hidden iOS); `CommunityEventDetail` -> `CommunityStack/CoachCommunityEvents` (coach community + events flags). Unknown or unavailable names land on the role's notification center.
+- Client `UpdateCard` -> `MoreTab` opens the card screen with the More index kept beneath (`initial: false`): the payment blocker row, and the dunning "Payment" push once the backend sends `actionScreen: 'UpdateCard'`. A coach naming it lands on the notification center.
 - Push params are decoded to at most 8 string values (200 chars each); the delivered-id dedupe set keeps the last 200 ids.
 - The OS permission prompt is no longer shown at sign-in. `registerForPushNotifications({ requestPermission: false })` only registers the token when permission is already granted. The prompt comes from `components/home/PushPermissionCard.tsx` on client Home and on the coach Clients landing screen (`audience="coach"`, C-S-PUSH-3), and only when the user taps "Turn on".
