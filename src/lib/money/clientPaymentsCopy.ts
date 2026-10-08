@@ -82,11 +82,17 @@ export function refundConsequence(
   name: string,
 ): { text: string; endsAccess: boolean } {
   const live = plan.billing === "running" || plan.billing === "paused";
-  if (!live && plan.billing !== "one_time") {
+  // B-545-1: when the billing read failed, a refund of all of a payment still
+  // ends access, so say that, with no claim about billing either way.
+  const unread = plan.billing === "unknown";
+  if (!live && !unread && plan.billing !== "one_time") {
     return { text: "Access and billing on this plan stay as they are.", endsAccess: false };
   }
   const before = p.refundedCents + sum(p, (s) => IN_FLIGHT.has(s));
   if (before + cents < p.amountCents) {
+    if (unread) {
+      return { text: `A partial refund leaves ${who(name)}'s access to ${plan.packageName} as it is.`, endsAccess: false };
+    }
     const keeps = live ? "keeps access, and billing carries on as before" : `keeps access to ${plan.packageName}`;
     return { text: `${cap(who(name))} ${keeps}.`, endsAccess: false };
   }

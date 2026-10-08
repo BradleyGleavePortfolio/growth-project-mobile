@@ -147,6 +147,17 @@ describe("ClientPaymentsScreen (COACH-PAY-M-130)", () => {
     expect(screen.getByText("Refund $49.99")).toBeTruthy();
   });
 
+  it("B-545-1: when billing could not be read, a full refund still says it ends access, and a partial one makes no billing claim", async () => {
+    await open(plan({ billing: "unknown" }));
+    expect(screen.getByTestId("plan-state-pur-1").props.children).toBe("The billing state could not be read just now. Pull down to refresh.");
+    await fireEvent.press(await screen.findByTestId("payment-refund-ch-1"));
+    expect(screen.getByTestId("refund-consequence").props.children).toBe("Refunding all of this payment ends Jane's access to Strength 12.");
+    expect(screen.getByText("Refund $50.00 and end access")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("refund-amount"), "20");
+    expect(screen.getByTestId("refund-consequence").props.children).toBe("A partial refund leaves Jane's access to Strength 12 as it is.");
+    expect(screen.getByText("Refund $20.00")).toBeTruthy();
+  });
+
   it("a partial refund keeps access; an amount above what is left cannot be sent", async () => {
     await open(plan());
     await fireEvent.press(await screen.findByTestId("payment-refund-ch-1"));
