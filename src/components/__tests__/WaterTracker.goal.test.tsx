@@ -106,4 +106,23 @@ describe('WaterTracker', () => {
     });
     expect(StyleSheet.flatten(screen.getByLabelText('Add 8 ounces of water').props.style).minHeight).toBe(44);
   });
+
+  it.each([lightTokens, darkTokens])('shows exact metric entries and a working, theme-coloured 44 pt remove action', async (colours) => {
+    mockSemanticColors = colours;
+    await AsyncStorage.setItem('gp_client_settings', JSON.stringify({ unit: 'kg' }));
+    const entry = { id: 'water-1', amount_ml: 250, logged_at: '2026-10-07T00:00:00.000Z' };
+    const remove = jest.fn();
+    const { rerender } = await render(<WaterTracker currentOz={8} onAdd={jest.fn()} entries={[entry]} onRemove={remove} />);
+    await screen.findByText('250 ml');
+    expect(screen.queryByText(/oz|ounces/)).toBeNull();
+    expect(StyleSheet.flatten(screen.getByText('Remove').props.style)).toMatchObject({
+      color: colours.textMuted, fontFamily: 'Inter_400Regular', fontSize: 13,
+    });
+    expect(StyleSheet.flatten(screen.getByTestId('remove-water-water-1').props.style).minHeight).toBe(44);
+    await fireEvent.press(screen.getByTestId('remove-water-water-1'));
+    expect(remove).toHaveBeenCalledWith(entry);
+    await rerender(<WaterTracker currentOz={8} onAdd={jest.fn()} entries={[entry]} onRemove={remove} removingId={entry.id} />);
+    expect(screen.getByText('Removing…')).toBeTruthy();
+    expect(screen.getByTestId('remove-water-water-1').props.accessibilityState).toEqual({ disabled: true, busy: true });
+  });
 });

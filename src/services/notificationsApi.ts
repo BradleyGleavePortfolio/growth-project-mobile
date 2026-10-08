@@ -275,6 +275,11 @@ function defaultTitleFor(kind: string): string {
   if (kind === 'workout_assigned') return 'New workout';
   if (kind.startsWith('booking_reminder')) return 'Session reminder';
   if (kind.startsWith('booking_')) return 'Calendar update';
+  // MONEY-INBOX-130: money rows carry no payload.title; each gets its push title.
+  if (kind === 'drip_released') return 'New content';
+  if (kind === 'trial_ending') return 'Your free trial';
+  if (kind === 'dunning_blocker') return 'Payment';
+  if (kind === 'coach_new_purchase') return 'New purchase';
   return 'Update';
 }
 
@@ -312,12 +317,19 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
   if (!r || typeof r.id !== 'string' || r.id.length === 0) return null;
   const rawKind = typeof r.kind === 'string' ? r.kind : 'system';
   const payload = asRecord(r.payload) ?? {};
+  // MONEY-INBOX-130: the Day 3, Day 7 and dispute payment blocker names
+  // itself in payload.headline and opens the card screen. The full-refund
+  // notice (same kind, no headline) stays a plain row.
+  const blockerHeadline =
+    rawKind === 'dunning_blocker' && typeof payload.headline === 'string' && payload.headline.trim()
+      ? payload.headline
+      : null;
   const title =
     typeof r.title === 'string' && r.title.trim()
       ? r.title
       : typeof payload.title === 'string' && payload.title.trim()
         ? payload.title
-        : defaultTitleFor(rawKind);
+        : blockerHeadline ?? defaultTitleFor(rawKind);
   const body = typeof r.body === 'string' ? r.body : '';
   const read =
     typeof r.read === 'boolean' ? r.read : r.read_at !== null && r.read_at !== undefined;
@@ -330,8 +342,16 @@ export function normalizeNotification(raw: unknown): AppNotification | null {
   const actionScreen =
     typeof screenRaw === 'string' && SCREEN_NAME.test(screenRaw)
       ? screenRaw
-      : inboxScreenForKind(rawKind);
-  const actionParams = stringParams(r.actionParams ?? payload.actionParams);
+      : blockerHeadline
+        ? 'UpdateCard'
+        : inboxScreenForKind(rawKind);
+  // MONEY-INBOX-130: "New content unlocked" opens that purchase's
+  // Deliverables; without the id the screen says no content is listed.
+  const actionParams =
+    stringParams(r.actionParams ?? payload.actionParams) ??
+    (rawKind === 'drip_released' && actionScreen === 'Deliverables'
+      ? stringParams({ purchaseId: payload.client_purchase_id })
+      : undefined);
   return {
     id: r.id,
     kind: appKindFor(rawKind),

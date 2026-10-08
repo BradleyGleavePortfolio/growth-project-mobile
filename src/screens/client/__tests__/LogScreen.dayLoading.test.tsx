@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { AxiosHeaders, type AxiosResponse } from 'axios';
 import LogScreen from '../LogScreen';
@@ -21,7 +22,7 @@ jest.mock('../../../services/foodLogSync', () => ({ syncFoodLogQueue: jest.fn() 
 jest.mock('../../../services/api', () => ({
   foodApi: { search: jest.fn(), create: jest.fn() },
   logApi: { getDaily: jest.fn(), updateEntry: jest.fn(), deleteEntry: jest.fn() },
-  waterApi: { getDaily: jest.fn(), log: jest.fn() },
+  waterApi: { getDaily: jest.fn(), log: jest.fn(), deleteEntry: jest.fn() },
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../components/FoodImage', () => ({ __esModule: true, default: () => null }));
@@ -41,14 +42,21 @@ const foodDay = {
     total_calories: 420,
   },
 };
+const waterEntries = [
+  { id: 'water-1', amount_ml: 237, logged_at: `${date}T00:00:00.000Z` },
+  { id: 'water-2', amount_ml: 473, logged_at: `${date}T00:00:00.000Z` },
+];
 
 beforeEach(() => {
   jest.clearAllMocks();
+  jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   useClientStore.getState().reset();
   useClientStore.getState().setSelectedDate(date);
   jest.mocked(logApi.getDaily).mockResolvedValue(foodDay);
   jest.mocked(waterApi.getDaily).mockResolvedValue({ ...ok, data: { total_ml: 591.47 } });
 });
+
+afterEach(() => jest.restoreAllMocks());
 
 it('shows a skeleton, not zero totals or empty-meal claims, until the first day arrives', async () => {
   let resolveDay: ((value: AxiosResponse) => void) | undefined;
@@ -107,4 +115,62 @@ it('retains verified foods and totals while refreshing the same day', async () =
     resolveDay?.(foodDay);
     await reload;
   });
+});
+
+it('confirms water removal, keeps the entry while pending, and updates only water on success', async () => {
+  jest.mocked(waterApi.getDaily).mockResolvedValue({ ...ok, data: { total_ml: 710, logs: waterEntries } });
+  let resolveDelete: ((value: AxiosResponse) => void) | undefined;
+  jest.mocked(waterApi.deleteEntry).mockReturnValue(new Promise((resolve) => { resolveDelete = resolve; }));
+  await render(<LogScreen />);
+  await screen.findByTestId('remove-water-water-2');
+  await fireEvent.press(screen.getByTestId('remove-water-water-2'));
+  expect(Alert.alert).toHaveBeenLastCalledWith(
+    'Remove water entry?', expect.any(String),
+    expect.arrayContaining([expect.objectContaining({ text: 'Cancel', style: 'cancel' })]),
+  );
+  expect(waterApi.deleteEntry).not.toHaveBeenCalled();
+  const remove = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Remove');
+  await act(async () => { remove?.onPress?.(); });
+  expect(waterApi.deleteEntry).toHaveBeenCalledWith('water-2');
+  expect(useClientStore.getState().waterOz).toBe(24);
+  expect(screen.getByTestId('remove-water-water-1').props.accessibilityState.disabled).toBe(true);
+  await act(async () => resolveDelete?.({ ...ok, data: { id: 'water-2', deleted: true } }));
+  await waitFor(() => expect(screen.queryByTestId('remove-water-water-2')).toBeNull());
+  expect(useClientStore.getState()).toMatchObject({
+    selectedDate: date, waterOz: 8, waterEntries: [waterEntries[0]],
+    dailyTotals: { calories: 420 }, foodLogs: [expect.objectContaining({ id: 'entry' })],
+  });
+  expect(screen.getByText('Rolled oats')).toBeTruthy();
+  expect(screen.getAllByText(/^Add food$/i)).toHaveLength(4);
+  expect(screen.getByLabelText('Previous day')).toBeTruthy();
+});
+
+it('keeps saved water and its total after a failed removal, and permits another attempt', async () => {
+  jest.mocked(waterApi.getDaily).mockResolvedValue({ ...ok, data: { total_ml: 710, logs: waterEntries } });
+  jest.mocked(waterApi.deleteEntry).mockRejectedValueOnce(new Error('Offline'));
+  await render(<LogScreen />);
+  await screen.findByTestId('remove-water-water-1');
+  await fireEvent.press(screen.getByTestId('remove-water-water-1'));
+  const remove = jest.mocked(Alert.alert).mock.calls.at(-1)?.[2]?.find((button) => button.text === 'Remove');
+  await act(async () => { await remove?.onPress?.(); });
+  expect(Alert.alert).toHaveBeenLastCalledWith(
+    "Couldn't remove water", 'The water entry could not be removed. Check the connection and try again.',
+  );
+  expect(useClientStore.getState()).toMatchObject({ waterOz: 24, waterEntries });
+  expect(screen.getByTestId('remove-water-water-1').props.accessibilityState.disabled).toBe(false);
+});
+
+it('makes a newly saved quick add removable without another day read, and clears entries on day change/reset', async () => {
+  const newEntry = { id: 'water-new', amount_ml: 237, logged_at: `${date}T00:00:00.000Z` };
+  jest.mocked(waterApi.log).mockResolvedValue({ ...ok, data: newEntry });
+  await render(<LogScreen />);
+  await screen.findByText('Rolled oats');
+  await fireEvent.press(screen.getByLabelText('Add 8 ounces of water'));
+  await screen.findByTestId('remove-water-water-new');
+  expect(waterApi.log).toHaveBeenCalledWith({ date, amount_ml: 237 });
+  await act(async () => useClientStore.getState().setSelectedDate('2026-10-05'));
+  expect(useClientStore.getState().waterEntries).toEqual([]);
+  await act(async () => useClientStore.setState({ waterEntries: [newEntry] }));
+  await act(async () => useClientStore.getState().reset());
+  expect(useClientStore.getState().waterEntries).toEqual([]);
 });
