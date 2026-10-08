@@ -7,7 +7,6 @@ import {
   RefreshControl,
   Dimensions,
   ActivityIndicator,
-  TouchableOpacity,
   Alert,
   AppState,
 } from 'react-native';
@@ -33,7 +32,11 @@ import {
 import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { typography, type SemanticTokens } from '../../theme/tokens';
+import { QuietOverline } from '../../ui/sections/QuietSection';
+import QuietBar from '../../ui/progress/QuietBar';
+import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // W-3: client needs an entry point to coach-assigned workouts. The
 // ClientWorkoutViewer + WorkoutAssignmentDetail screens have been
@@ -45,11 +48,13 @@ import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import PlanExplanationCard from '../../components/tutorial/PlanExplanationCard';
 import WorkoutSyncCards from '../../components/workout/WorkoutSyncCards';
 import { featureFlags } from '../../config/featureFlags';
-// §2.8 Workout complete + §2.10 generic error — Roman speaks beside his face
-// (both components co-locate <RomanAvatar />). Gated behind
-// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+// §2.8 Workout complete — Roman speaks beside his face (the card co-locates
+// <RomanAvatar />). Gated behind featureFlags.romanChat (default OFF), the
+// dedicated Roman flag. TRAIN-TAB-FIN-130: a load failure shows CoachErrorState
+// (Roman's neutral face, a true line, Try again). The §2.10 banner said retries
+// had run and failed, but nothing retries this load (services/api.ts retries
+// only 401s).
 import RomanWorkoutCompleteCard from '../../components/roman/RomanWorkoutCompleteCard';
-import RomanErrorBanner from '../../components/roman/RomanErrorBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -67,8 +72,8 @@ interface MuscleVolume {
 // ── Pure-RN Bar Chart ─────────────────────────────────────────────────────
 
 function BarChart({ data }: { data: WeeklyVolume[] }) {
-  const { colors } = useTheme();
-  const chart = useMemo(() => makeChart(colors), [colors]);
+  const { semanticColors: sc } = useTheme();
+  const chart = useMemo(() => makeChart(sc), [sc]);
   if (!data.length) return null;
   const maxVol = Math.max(...data.map((d) => d.volume), 1);
   const BAR_HEIGHT = 160;
@@ -102,7 +107,7 @@ function BarChart({ data }: { data: WeeklyVolume[] }) {
                       {
                         width: BAR_WIDTH,
                         height: barH,
-                        backgroundColor: i === data.length - 1 ? colors.primary : colors.primaryLight,
+                        backgroundColor: i === data.length - 1 ? sc.accent : sc.textMuted,
                       },
                     ]}
                   />
@@ -120,8 +125,6 @@ function BarChart({ data }: { data: WeeklyVolume[] }) {
 // ── Muscle Progress Bars ──────────────────────────────────────────────────
 
 function MuscleBreakdown({ data }: { data: MuscleVolume[] }) {
-  const { colors } = useTheme();
-  const muscle = useMemo(() => makeMuscle(colors), [colors]);
   if (!data.length) return null;
   const maxVol = Math.max(...data.map((d) => d.volume), 1);
   const MUSCLES_DISPLAY = ['chest', 'back', 'shoulders', 'arms', 'legs', 'core'];
@@ -129,23 +132,42 @@ function MuscleBreakdown({ data }: { data: MuscleVolume[] }) {
   const displayData = MUSCLES_DISPLAY.map((m) => {
     const found = data.find((d) => d.muscle.toLowerCase().includes(m) || m.includes(d.muscle.toLowerCase()));
     return { muscle: m.charAt(0).toUpperCase() + m.slice(1), volume: found?.volume || 0 };
-  }).filter((d) => d.volume > 0 || true);
+  });
 
+  // TRAIN-TAB-FIN-130: the shared QuietBar row (13 pt tabular label and value).
   return (
-    <View style={muscle.container}>
-      {displayData.map((item) => {
-        const pct = maxVol > 0 ? item.volume / maxVol : 0;
-        return (
-          <View key={item.muscle} style={muscle.row}>
-            <Text style={muscle.label}>{item.muscle}</Text>
-            <View style={muscle.track}>
-              <View style={[muscle.fill, { width: `${Math.round(pct * 100)}%` }]} />
-            </View>
-            <Text style={muscle.value}>{item.volume > 0 ? `${item.volume.toLocaleString()} lbs` : '–'}</Text>
-          </View>
-        );
-      })}
+    <View style={{ gap: 12, marginTop: 12 }}>
+      {displayData.map((item) => (
+        <QuietBar
+          key={item.muscle}
+          label={item.muscle}
+          value={item.volume > 0 ? `${item.volume.toLocaleString()} lb` : '–'}
+          current={item.volume}
+          target={maxVol}
+        />
+      ))}
     </View>
+  );
+}
+
+/** TRAIN-TAB-FIN-130: a hairline row for an action that is not the screen's one forest action. */
+function QuietRow({ title, meta, label, onPress, testID, styles, iconColor }: {
+  title: string;
+  meta: string;
+  label: string;
+  onPress: () => void;
+  testID?: string;
+  styles: ReturnType<typeof makeStyles>;
+  iconColor: string;
+}) {
+  return (
+    <HapticPressable intent="light" onPress={onPress} accessibilityRole="button" accessibilityLabel={label} testID={testID} style={styles.quietRow}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.routineName}>{title}</Text>
+        <Text style={styles.routineExCount}>{meta}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={iconColor} />
+    </HapticPressable>
   );
 }
 
@@ -325,8 +347,8 @@ export function useJustCompletedOneShot(
 }
 
 export default function WorkoutScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const currentUser = useCurrentUser();
   const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
   const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
@@ -337,6 +359,7 @@ export default function WorkoutScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   // FU-WORKLOG-126: workouts in the last 7 days, counted from the 50-workout
   // window the chart reads. The "This Week" tile used to count only the 5
   // most recent workouts, so a 6th session in a week still showed 5.
@@ -430,6 +453,8 @@ export default function WorkoutScreen() {
       ]);
       setRoutines(rRes.data || []);
       setRecentSessions(sRes.data || []);
+      // A later load that succeeds clears an earlier failure.
+      setLoadError(false);
     } catch (err) {
       // Read-only data load for the workout landing screen; error state shown.
       logger.error('WorkoutScreen', 'loadData failed', err);
@@ -538,7 +563,8 @@ export default function WorkoutScreen() {
   const confirmDeleteSession = (session: ApiSession) => {
     Alert.alert(
       'Delete this workout?',
-      `${session.workout_name || session.notes || 'This workout'} will be removed from your history and from what your coach sees.`,
+      // TRAIN-TAB-FIN-130 (U5): only a coached client has a coach who sees it.
+      `${session.workout_name || session.notes || 'This workout'} will be removed from your history${currentUser?.coach_id ? ' and from what your coach sees' : ''}.`,
       [
         { text: 'Keep', style: 'cancel' },
         {
@@ -595,55 +621,47 @@ export default function WorkoutScreen() {
   const pendingAssignments = assignmentsList.filter((a) => !a.completed_at);
   const historyRows =
     showAllHistory && historySessions.length > recentSessions.length ? historySessions : recentSessions;
+  const completedAssignments = assignmentsList.length - pendingAssignments.length;
+  // Cross-tab navigate: WorkoutScreen lives in WorkoutTab; the assignment
+  // screens live in MoreTab. Same shape as the W-4 fix.
+  const openInMoreTab = (screen: 'WorkoutAssignmentDetail' | 'ClientWorkoutViewer', params?: { assignmentId: string }) => {
+    navigation.getParent()?.navigate('MoreTab', params ? { screen, params } : { screen });
+  };
   const openAssignedList = () => {
-    // Cross-tab navigate: WorkoutScreen lives in WorkoutTab; the assignment
-    // viewer lives in MoreTab. Same shape as the W-4 fix.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parentAny = (navigation as any).getParent?.();
-    if (parentAny?.navigate) {
-      parentAny.navigate('MoreTab', {
-        screen:
-          pendingAssignments.length === 1
-            ? 'WorkoutAssignmentDetail'
-            : 'ClientWorkoutViewer',
-        params:
-          pendingAssignments.length === 1
-            ? { assignmentId: pendingAssignments[0].id }
-            : undefined,
-      });
-    }
+    if (pendingAssignments.length === 1) openInMoreTab('WorkoutAssignmentDetail', { assignmentId: pendingAssignments[0].id });
+    else openInMoreTab('ClientWorkoutViewer');
+  };
+  const retryLoad = async () => {
+    setRetrying(true);
+    await loadData();
+    setRetrying(false);
   };
 
   if (isLoading) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={sc.accent} />
       </View>
     );
   }
 
-  if (loadError) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        {/* §2.10 Roman generic-error — voiced beside his face on the full error
-            screen. Only when the Roman flag is on; otherwise the plain copy
-            below carries the message (the failure is never swallowed). */}
-        {featureFlags.romanChat ? (
-          <RomanErrorBanner mode="error" surface="screen" testID="roman-workout-error" />
-        ) : (
-          <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
-            Could not load workout data.
-          </Text>
-        )}
-        <TouchableOpacity
-          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
-          onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
-        >
-          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+  // TRAIN-TAB-FIN-130: one forest action per state. After a failed load it is
+  // Try again; with a pending coach workout it is that workout; otherwise it
+  // is Quick workout. Every other action is a hairline row. A failed load no
+  // longer replaces the tab: the header, sync rows, coach workouts, Quick
+  // workout and Create a routine stay; only what did not load is replaced.
+  const assignedLabel =
+    pendingAssignments.length === 1
+      ? `Open assigned workout: ${pendingAssignments[0].workout_plan?.name ?? 'Coach-assigned workout'}`
+      : `View ${pendingAssignments.length} coach-assigned workouts`;
+  const assignedTitle =
+    pendingAssignments.length === 1
+      ? (pendingAssignments[0].workout_plan?.name ?? 'New workout assigned')
+      : `${pendingAssignments.length} workouts waiting`;
+  const assignedLeads = !loadError && pendingAssignments.length > 0;
+  const quickLeads = !loadError && pendingAssignments.length === 0;
+  // U10: completed coach workouts were reachable only with 2+ pending.
+  const showAllCoachRow = completedAssignments > 0 && pendingAssignments.length < 2;
 
   return (
     <View style={styles.container}>
@@ -651,7 +669,7 @@ export default function WorkoutScreen() {
         testID="workout-scroll"
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={sc.accent} colors={[sc.accent]} />}
       >
         <View style={styles.header}>
           <Text style={styles.title}>Workouts</Text>
@@ -660,21 +678,21 @@ export default function WorkoutScreen() {
             <HapticPressable
               intent="light"
               onPress={() => navigation.navigate('ExerciseLibrary')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
               accessibilityRole="button"
               accessibilityLabel="Exercise library"
               testID="workout-exercise-library"
             >
-              <Ionicons name="library-outline" size={22} color={colors.textSecondary} />
+              <Ionicons name="library-outline" size={22} color={sc.textMuted} />
             </HapticPressable>
             <HapticPressable
               intent="light"
               onPress={() => navigation.navigate('CoachGuidelines')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
               accessibilityRole="button"
               accessibilityLabel="Coach guidelines"
             >
-              <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
+              <Ionicons name="clipboard-outline" size={22} color={sc.textMuted} />
             </HapticPressable>
           </View>
         </View>
@@ -683,28 +701,20 @@ export default function WorkoutScreen() {
 
         <WorkoutSyncCards userId={currentUser?.id} onSynced={loadData} />
 
-        {pendingAssignments.length > 0 ? (
-          <HapticPressable
-            intent="medium"
-            onPress={openAssignedList}
-            accessibilityRole="button"
-            accessibilityLabel={
-              pendingAssignments.length === 1
-                ? `Open assigned workout: ${pendingAssignments[0].workout_plan?.name ?? 'Coach-assigned workout'}`
-                : `View ${pendingAssignments.length} coach-assigned workouts`
-            }
-            style={styles.assignedCta}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.assignedCtaLabel}>From your coach</Text>
-              <Text style={styles.assignedCtaTitle}>
-                {pendingAssignments.length === 1
-                  ? (pendingAssignments[0].workout_plan?.name ?? 'New workout assigned')
-                  : `${pendingAssignments.length} workouts waiting`}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
-          </HapticPressable>
+        {assignedLeads ? (
+          <View style={styles.hero}>
+            <QuietOverline>From your coach</QuietOverline>
+            <Text style={styles.heroTitle}>{assignedTitle}</Text>
+            <HapticPressable
+              intent="medium"
+              onPress={openAssignedList}
+              accessibilityRole="button"
+              accessibilityLabel={assignedLabel}
+              style={styles.primaryButton}
+            >
+              <Text style={styles.primaryLabel}>{pendingAssignments.length === 1 ? 'Open workout' : 'See workouts'}</Text>
+            </HapticPressable>
+          </View>
         ) : null}
 
         {/* §2.8 Roman workout-complete — voiced beside his face ONLY after a
@@ -722,38 +732,56 @@ export default function WorkoutScreen() {
           </FadeInView>
         ) : null}
 
-        {/* Quick Start */}
-        <HapticPressable intent="medium" style={styles.quickStart} onPress={startQuickWorkout}>
-          <View style={styles.quickStartLeft}>
-            <View style={styles.quickStartIcon}>
-              <Ionicons name="flash" size={24} color={colors.textOnPrimary} />
-            </View>
-            <View>
-              <Text style={styles.quickStartTitle}>Quick Workout</Text>
-              <Text style={styles.quickStartSub}>Start an empty session</Text>
-            </View>
+        {/* Quick workout leads when nothing from the coach waits and the load
+            worked; otherwise it is a hairline row beside the coach rows. */}
+        {quickLeads ? (
+          <View style={styles.hero}>
+            <HapticPressable intent="medium" onPress={startQuickWorkout} accessibilityRole="button" accessibilityLabel="Quick workout" style={styles.primaryButton} testID="workout-quick-start">
+              <Text style={styles.primaryLabel}>Quick workout</Text>
+            </HapticPressable>
+            <Text style={styles.heroNote}>Start an empty session</Text>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-        </HapticPressable>
+        ) : null}
+        {showAllCoachRow || !quickLeads ? (
+          <View style={styles.rows}>
+            {loadError && pendingAssignments.length > 0 ? (
+              <QuietRow title={assignedTitle} meta="From your coach" label={assignedLabel} onPress={openAssignedList} styles={styles} iconColor={sc.textMuted} />
+            ) : null}
+            {showAllCoachRow ? (
+              <QuietRow title="All coach workouts" meta={`${completedAssignments} completed`} label="All coach workouts" onPress={() => openInMoreTab('ClientWorkoutViewer')} testID="workout-all-coach-workouts" styles={styles} iconColor={sc.textMuted} />
+            ) : null}
+            {quickLeads ? null : (
+              <QuietRow title="Quick workout" meta="Start an empty session" label="Quick workout" onPress={startQuickWorkout} testID="workout-quick-start" styles={styles} iconColor={sc.textMuted} />
+            )}
+          </View>
+        ) : null}
 
-        {/* My Routines */}
+        {/* My routines. After a failed load the error stands in for the
+            routines, history and charts; Create a routine stays. */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>My Routines</Text>
+          <QuietOverline style={{ marginBottom: 0 }}>My routines</QuietOverline>
           <HapticPressable intent="medium" onPress={() => navigation.navigate('RoutineBuilder')} accessibilityLabel="Create a routine" hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="add-circle" size={24} color={colors.primary} />
+            <Ionicons name="add-circle-outline" size={24} color={sc.accentText} />
           </HapticPressable>
         </View>
 
-        {routines.length === 0 ? (
+        {loadError ? (
+          <CoachErrorState
+            message="Your routines and history did not load. Check the connection, then try again."
+            onRetry={() => void retryLoad()}
+            retrying={retrying}
+            testID="workout-load-error"
+          />
+        ) : routines.length === 0 ? (
           <EmptyStateNoWorkouts onCreate={() => navigation.navigate('RoutineBuilder')} />
         ) : (
-          routines.map((routine) => {
+          routines.map((routine, index) => {
             const exList = routine.exercises || [];
             return (
               <HapticPressable
                 key={routine.id}
                 intent="medium"
-                style={styles.routineCard}
+                style={[styles.routineCard, index > 0 && styles.rowDivider]}
                 onPress={() => startRoutine(routine)}
               >
                 <View style={styles.routineTop}>
@@ -769,11 +797,11 @@ export default function WorkoutScreen() {
                       accessibilityRole="button"
                       accessibilityLabel={`Edit routine ${routine.name}`}
                     >
-                      <Ionicons name="create-outline" size={18} color={colors.textMuted} />
+                      <Ionicons name="create-outline" size={18} color={sc.textMuted} />
                     </HapticPressable>
                   )}
                 </View>
-                <Text style={styles.routineExCount}>{exList.length} exercises</Text>
+                <Text style={styles.routineExCount}>{exList.length} {exList.length === 1 ? 'exercise' : 'exercises'}</Text>
                 <Text style={styles.routineExList} numberOfLines={1}>
                   {exList.map((e) => e.exercise_name).join(' · ')}
                 </Text>
@@ -782,19 +810,19 @@ export default function WorkoutScreen() {
           })
         )}
 
-        {/* Recent Workouts */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Workouts</Text>
-        {historyRows.length === 0 ? (
+        {/* Recent workouts */}
+        {loadError ? null : <QuietOverline style={styles.sectionOverline}>Recent workouts</QuietOverline>}
+        {loadError ? null : historyRows.length === 0 ? (
           <EmptyStateNoData
             headline="No recent workouts"
             body="Complete a workout to see your history here."
           />
         ) : (
-          historyRows.map((session) => (
-            <View key={session.id} style={styles.historyCard}>
+          historyRows.map((session, index) => (
+            <View key={session.id} style={[styles.historyCard, index > 0 && styles.rowDivider]}>
               <View style={styles.historyHeader}>
                 <Text style={styles.historyTitle}>{session.workout_name || session.notes || 'Workout'}</Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
                   <Text style={styles.historyDate}>
                     {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}
                   </Text>
@@ -805,17 +833,17 @@ export default function WorkoutScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`Edit workout ${session.workout_name || session.notes || ''}`.trim()}
                   >
-                    <Ionicons name="create-outline" size={18} color={colors.primary} />
+                    <Ionicons name="create-outline" size={18} color={sc.textMuted} />
                   </HapticPressable>
                   <HapticPressable
                     intent="warning"
                     onPress={() => confirmDeleteSession(session)}
-                    hitSlop={{ top: 13, bottom: 13, left: 13, right: 13 }}
+                    hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
                     accessibilityRole="button"
                     accessibilityLabel={`Delete workout ${session.workout_name || session.notes || ''}`.trim()}
                     testID={`delete-workout-${session.id}`}
                   >
-                    <Ionicons name="trash-outline" size={16} color={colors.textMuted} />
+                    <Ionicons name="trash-outline" size={16} color={sc.textMuted} />
                   </HapticPressable>
                 </View>
               </View>
@@ -837,48 +865,48 @@ export default function WorkoutScreen() {
             </View>
           ))
         )}
-        {historySessions.length > recentSessions.length ? (
+        {!loadError && historySessions.length > recentSessions.length ? (
           <HapticPressable
             intent="light"
             onPress={() => setShowAllHistory((v) => !v)}
             accessibilityRole="button"
             accessibilityLabel={showAllHistory ? 'Show recent workouts only' : 'Show older workouts'}
             testID="workout-history-toggle"
-            style={{ paddingVertical: 12, alignItems: 'center' }}
+            style={{ minHeight: 44, justifyContent: 'center', alignItems: 'center', marginBottom: 24 }}
           >
-            <Text style={{ color: colors.primary, fontWeight: '500' }}>
+            <Text style={{ ...typography.bodyMd, color: sc.accentText }}>
               {showAllHistory ? 'Show recent workouts only' : 'Show older workouts'}
             </Text>
           </HapticPressable>
         ) : null}
         {/* Charts follow every training action; empty charts are one sentence. */}
-        {historySessions.length > 0 || recentSessions.length > 0 || routines.length > 0 || assignmentsList.length > 0 ? <FadeInView>
+        {!loadError && (historySessions.length > 0 || recentSessions.length > 0 || routines.length > 0 || assignmentsList.length > 0) ? <FadeInView>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: colors.primary }]} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
-              <Text style={styles.statLabel}>This Week</Text>
+              <QuietOverline>This week</QuietOverline>
+              <Text style={styles.statValue} testID="workout-week-count">{weekSessionCount ?? weekSessions.length}</Text>
             </View>
             <View style={styles.statCard}>
+              <QuietOverline>Routines</QuietOverline>
               <Text style={styles.statValue}>{routines.length}</Text>
-              <Text style={styles.statLabel}>Routines</Text>
             </View>
             {currentUser?.coach_id ? <View style={styles.statCard}>
+              <QuietOverline>From coach</QuietOverline>
               <Text style={styles.statValue}>{pendingAssignments.length}</Text>
-              <Text style={styles.statLabel}>From coach</Text>
             </View> : null}
           </View>
         </FadeInView> : null}
-        <FadeInView delay={80}>
+        {loadError ? null : <FadeInView delay={80}>
           {weeklyVolume.some((w) => w.volume > 0) ? (
             <View style={styles.chartCard}>
               <View style={styles.chartHeader}>
-                <View>
-                  <Text style={styles.chartTitle}>Training Volume</Text>
-                  <Text style={styles.chartSubtitle}>Last 8 weeks (lbs lifted)</Text>
+                <View style={{ flex: 1 }}>
+                  <QuietOverline>Training volume</QuietOverline>
+                  <Text style={styles.chartSubtitle}>Last 8 weeks, lb lifted</Text>
                 </View>
                 {totalVolumeThisWeek > 0 && (
                   <View style={styles.chartBadge}>
-                    <Text style={styles.chartBadgeText}>{totalVolumeThisWeek.toLocaleString()} lbs</Text>
+                    <Text style={styles.chartBadgeText}>{totalVolumeThisWeek.toLocaleString()} lb</Text>
                     <Text style={styles.chartBadgeSub}>this week</Text>
                   </View>
                 )}
@@ -886,16 +914,16 @@ export default function WorkoutScreen() {
               <BarChart data={weeklyVolume} />
             </View>
           ) : <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>}
-        </FadeInView>
-        <FadeInView delay={120}>
+        </FadeInView>}
+        {loadError ? null : <FadeInView delay={120}>
           {muscleVolume.length > 0 ? (
             <View style={styles.muscleCard}>
-              <Text style={styles.chartTitle}>Muscle Breakdown</Text>
+              <QuietOverline>Muscle breakdown</QuietOverline>
               <Text style={styles.chartSubtitle}>This week's volume by muscle group</Text>
               <MuscleBreakdown data={muscleVolume} />
             </View>
           ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
-        </FadeInView>
+        </FadeInView>}
       </ScrollView>
     </View>
   );
@@ -903,7 +931,11 @@ export default function WorkoutScreen() {
 
 // ── Chart Styles ──────────────────────────────────────────────────────────
 
-const makeChart = (colors: ThemeColors) =>
+// TRAIN-TAB-FIN-130: chart labels at 11 pt (the overline size) with tabular
+// figures; they were 8-9 pt.
+const chartLabel = { ...typography.eyebrow, letterSpacing: 0, textTransform: 'none' as const, fontVariant: ['tabular-nums' as const] };
+
+const makeChart = (sc: SemanticTokens) =>
   StyleSheet.create({
   container: {
     flexDirection: 'row',
@@ -919,9 +951,8 @@ const makeChart = (colors: ThemeColors) =>
     paddingBottom: 20,
   },
   yLabel: {
-    fontSize: 9,
-    color: colors.textMuted,
-    fontWeight: '600',
+    ...chartLabel,
+    color: sc.textMuted,
   },
   barsContainer: {
     flexDirection: 'row',
@@ -934,9 +965,9 @@ const makeChart = (colors: ThemeColors) =>
     gap: 2,
   },
   barLabel: {
-    fontSize: 8,
-    color: colors.textMuted,
-    height: 12,
+    ...chartLabel,
+    color: sc.textMuted,
+    height: 14,
     textAlign: 'center',
   },
   barTrack: {
@@ -947,60 +978,21 @@ const makeChart = (colors: ThemeColors) =>
     borderRadius: 2, // radius.md
   },
   weekLabel: {
-    fontSize: 9,
-    color: colors.textMuted,
-    fontWeight: '600',
+    ...chartLabel,
+    color: sc.textMuted,
     marginTop: 4,
     textAlign: 'center',
   },
 
   });
 
-const makeMuscle = (colors: ThemeColors) =>
-  StyleSheet.create({
-  container: {
-    gap: 10,
-    marginTop: 12,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    width: 70,
-  },
-  track: {
-    flex: 1,
-    height: 8,
-    backgroundColor: colors.border,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  fill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-    minWidth: 0,
-  },
-  value: {
-    fontSize: 11,
-    color: colors.textMuted,
-    width: 70,
-    textAlign: 'right',
-    fontWeight: '600',
-  },
-
-  });
-
 // ── Screen Styles ─────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) =>
+// TRAIN-TAB-FIN-130 (A23 calm look): bone page, hairlines instead of cream
+// boxes, one forest fill, Cormorant only for the title and the numbers.
+const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: sc.bgPrimary },
   content: { paddingBottom: 100 },
   romanWorkoutWrap: {
     marginHorizontal: 24,
@@ -1012,170 +1004,78 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingTop: 60,
-    marginBottom: 20,
+    marginBottom: 24,
   },
-  title: { fontSize: 28, fontWeight: '500', color: colors.textPrimary },
-  assignedCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 24,
-    marginBottom: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 4,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  assignedCtaLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 2,
-  },
-  assignedCtaTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
+  title: { ...typography.h1, color: sc.textPrimary },
+  hero: { marginHorizontal: 24, marginBottom: 24 },
+  heroTitle: { ...typography.h2, color: sc.textPrimary, marginBottom: 16 },
+  heroNote: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted, marginTop: 8 },
+  primaryButton: { minHeight: 48, borderRadius: 4, backgroundColor: sc.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  primaryLabel: { ...typography.bodyMd, color: sc.textOnAccent },
+  rows: { marginHorizontal: 24, marginBottom: 24, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
+  quietRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
+  rowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   statsRow: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
+    marginHorizontal: 24,
     gap: 8,
-    marginBottom: 20,
+    marginBottom: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: { fontSize: 22, fontWeight: '500', color: colors.textPrimary },
-  statLabel: { fontSize: 11, color: colors.textSecondary },
+  statCard: { flex: 1, paddingVertical: 16 },
+  statValue: { ...typography.h2, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
   // Charts
-  chartCard: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  muscleCard: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
+  chartCard: { marginHorizontal: 24, marginBottom: 24, paddingTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
+  muscleCard: { marginHorizontal: 24, marginBottom: 24, paddingTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: 12,
   },
-  chartTitle: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  chartSubtitle: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  chartBadge: {
-    backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    alignItems: 'center',
-  },
-  chartBadgeText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: colors.primary,
-  },
-  chartBadgeSub: {
-    fontSize: 9,
-    color: colors.textMuted,
-    fontWeight: '600',
-  },
+  chartSubtitle: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted },
+  chartBadge: { alignItems: 'flex-end' },
+  chartBadgeText: { ...typography.h3, color: sc.textPrimary, fontVariant: ['tabular-nums'] },
+  chartBadgeSub: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted },
   chartEmpty: {
     paddingVertical: 20,
     alignItems: 'center',
     gap: 8,
   },
   chartEmptyText: {
+    ...typography.bodySmall,
     fontSize: 13,
-    color: colors.textMuted,
+    color: sc.textMuted,
     textAlign: 'center',
-  },
-  // Existing styles
-  quickStart: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginHorizontal: 24,
     marginBottom: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
   },
-  quickStartLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  quickStartIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 2, // radius.md
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickStartTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
-  quickStartSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 12,
+    marginHorizontal: 24,
+    minHeight: 44,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    paddingHorizontal: 24,
-    marginBottom: 12,
-  },
-
+  sectionOverline: { marginHorizontal: 24, marginTop: 24, paddingTop: 18, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   routineCard: {
     marginHorizontal: 24,
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
+    paddingVertical: 14,
   },
   routineTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  routineName: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
-  routineExCount: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
-  routineExList: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+  routineName: { ...typography.h4, color: sc.textPrimary, flexShrink: 1 },
+  routineExCount: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted, marginTop: 2 },
+  routineExList: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted, marginTop: 2 },
   historyCard: {
     marginHorizontal: 24,
-    marginBottom: 10,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 14,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -1183,35 +1083,37 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   historyTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textPrimary,
+    ...typography.h4,
+    color: sc.textPrimary,
+    flexShrink: 1,
   },
   historyDate: {
+    ...typography.bodySmall,
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
+    color: sc.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   historyMeta: {
-    fontSize: 12,
-    color: colors.textMuted,
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 4,
   },
   historyExercise: {
     marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   exerciseName: {
+    ...typography.bodyMd,
     fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    lineHeight: 20,
+    color: sc.textPrimary,
   },
   exerciseSets: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    ...typography.bodySmall,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
 
   });

@@ -243,14 +243,14 @@ beforeEach(() => {
   mockConsent = [true, false]; mockOwnerAccess = false;
 });
 describe('Truthful client copy and routes/actions parity', () => {
-  it('puts Quick Workout, routines and history before both collapsed charts on day one', async () => {
+  it('puts Quick workout, routines and history before both collapsed charts on day one', async () => {
     const s = await render(React.createElement(WorkoutScreen));
     await waitFor(() => expect(s.getByText('No routines yet')).toBeTruthy());
     expect(s.queryByText('From coach')).toBeNull();
-    const tree = s.getAllByText(/Quick Workout|My Routines|Recent Workouts|Complete workouts to see volume data/).map((node) => node.props.children).join('|');
-    expect(tree.indexOf('Quick Workout')).toBeLessThan(tree.indexOf('My Routines'));
-    expect(tree.indexOf('Recent Workouts')).toBeLessThan(tree.indexOf('Complete workouts to see volume data'));
-    await fireEvent.press(s.getByText('Quick Workout'));
+    const tree = s.getAllByText(/Quick workout|My routines|Recent workouts|Complete workouts to see volume data/).map((node) => node.props.children).join('|');
+    expect(tree.indexOf('Quick workout')).toBeLessThan(tree.indexOf('My routines'));
+    expect(tree.indexOf('Recent workouts')).toBeLessThan(tree.indexOf('Complete workouts to see volume data'));
+    await fireEvent.press(s.getByText('Quick workout'));
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
     await fireEvent.press(s.getByText('Create a routine'));
     expect(mockNavigate).toHaveBeenLastCalledWith('RoutineBuilder');
