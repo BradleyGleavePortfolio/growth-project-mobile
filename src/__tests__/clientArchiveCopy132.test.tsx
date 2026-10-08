@@ -49,8 +49,10 @@ const row = () => ({
   id: 'client-test', name: 'Test client', role: 'student',
   archived_at: archived ? '2026-10-08T09:00:00Z' : null,
 });
+const navigate: Props['navigation']['navigate'] = jest.fn();
+const goBack: Props['navigation']['goBack'] = jest.fn();
 const props: Props = {
-  navigation: { navigate: jest.fn(), goBack: jest.fn() } as Props['navigation'],
+  navigation: { navigate, goBack } as Props['navigation'],
   route: { key: 'detail-test', name: 'ClientDetail', params: { clientId: 'client-test', clientName: 'Test client' } },
 };
 const archive = coachApi.archiveClient as jest.Mock;
