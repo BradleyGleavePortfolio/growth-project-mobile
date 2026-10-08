@@ -17,7 +17,7 @@ React hooks shared across screens. Two flavours: thin `useQuery` / `useMutation`
 | --- | --- |
 | `useCurrentUser.ts` | Reads `user_data` from AsyncStorage. Listens to `authEvents` so logout / login re-runs the read. Tags Sentry with the user id (never the email). |
 | `useIdentity.ts` | `useFoundingNumber` and `useCircleStats` — both degrade to `null` data on any failure. |
-| `useSettings.ts` | Generic settings hook backed by AsyncStorage. |
+| `useSettings.ts` | Client settings on this phone (AsyncStorage `gp_client_settings`); every mounted hook sees a save. Fasting alerts default on. When the phone has no water goal saved, the goal saved to the profile (`water_goal_oz`, `GET /profile`) is taken instead of the 100 oz starter goal: one read per app session, retried on the next load after a failure or while signed out. |
 | `usePreferences.ts` | Reads / writes the `/users/me/preferences` surface (Psych #4 personalisation toggles). |
 
 ### React Query layer

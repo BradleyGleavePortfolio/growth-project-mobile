@@ -497,7 +497,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
       <MoreStackNav.Screen name="ShoppingList" component={ShoppingListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
-      <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} />
+      <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />

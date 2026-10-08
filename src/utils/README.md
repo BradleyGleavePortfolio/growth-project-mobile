@@ -27,6 +27,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 | File | What it does |
 | --- | --- |
 | `notifications.ts` | Configures Expo notification handler, creates Android channels (`default`, `water`, `fasting`), requests runtime permission, schedules and cancels local notifications. |
+| `fastingAlert.ts` | The fast's end alert for both start paths (Fasting screen, Shortcuts): schedules it only while Fasting alerts is on, keeps its id under a user-scoped key, and cancels it when the fast is ended. |
 | `haptics.ts` | Named haptic helpers (`mediumTap`, `successTap`, `warningTap`, `errorTap`). |
 | `foodImages.ts` | Resolves remote food image URLs with a stable fallback. |
 

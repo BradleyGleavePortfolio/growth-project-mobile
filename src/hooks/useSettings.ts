@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { setHapticsEnabled } from '../ui/haptics/haptics.service';
+import { profileApi } from '../services/api';
+import { readUserCache } from '../lib/userCache';
 
 const SETTINGS_KEY = 'gp_client_settings';
 
@@ -23,13 +25,36 @@ export const DEFAULT_SETTINGS: ClientSettings = {
   calorieDisplay: 'net',
   dailyCheckin: true,
   mealReminders: true,
-  fastingAlerts: false,
+  // On by default, like the backend's fasting_enabled: the Fasting screen and
+  // Shortcuts schedule the end-of-fast alert only while this is on.
+  fastingAlerts: true,
   weeklySummary: true,
   hapticsEnabled: true,
 };
 
 // Every mounted useSettings() sees a save at once (e.g. Water Goal on the Food Log).
 const listeners = new Set<(s: ClientSettings) => void>();
+
+// Settings > Water Goal also saves the goal to the profile (water_goal_oz).
+// A phone with no goal saved on it (new install, second phone) takes the
+// profile's goal instead of showing the 100 oz default. At most one profile
+// read per app session; a failed read (offline, signed out) is tried again
+// the next time settings load.
+let profileSeed: Promise<ClientSettings | null> | null = null;
+
+async function seedWaterGoalFromProfile(): Promise<ClientSettings | null> {
+  if (!(await readUserCache())) throw new Error('not signed in');
+  const res = await profileApi.get();
+  const goal = (res.data as { water_goal_oz?: unknown } | undefined)?.water_goal_oz;
+  if (typeof goal !== 'number' || !Number.isFinite(goal) || goal <= 0) return null;
+  const stored = await AsyncStorage.getItem(SETTINGS_KEY);
+  const saved: Partial<ClientSettings> = stored ? JSON.parse(stored) : {};
+  // A goal saved on this phone in the meantime wins.
+  if (typeof saved.waterGoalOz === 'number') return null;
+  const next: ClientSettings = { ...DEFAULT_SETTINGS, ...saved, waterGoalOz: Math.round(goal) };
+  await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
 
 export function useSettings() {
   const [settings, setSettings] = useState<ClientSettings>(DEFAULT_SETTINGS);
@@ -46,11 +71,19 @@ export function useSettings() {
   const loadSettings = async () => {
     try {
       const stored = await AsyncStorage.getItem(SETTINGS_KEY);
-      if (stored) {
-        const parsed: ClientSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+      const saved: Partial<ClientSettings> | null = stored ? JSON.parse(stored) : null;
+      if (saved) {
+        const parsed: ClientSettings = { ...DEFAULT_SETTINGS, ...saved };
         setSettings(parsed);
         // Sync haptics service with persisted preference on load
         setHapticsEnabled(parsed.hapticsEnabled);
+      }
+      if (typeof saved?.waterGoalOz !== 'number' && !profileSeed) {
+        profileSeed = seedWaterGoalFromProfile();
+        void profileSeed.then(
+          (seeded) => { if (seeded) listeners.forEach((notify) => notify(seeded)); },
+          () => { profileSeed = null; },
+        );
       }
     } catch {
       await AsyncStorage.removeItem(SETTINGS_KEY);

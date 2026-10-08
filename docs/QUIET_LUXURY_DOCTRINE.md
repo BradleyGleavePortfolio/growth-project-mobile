@@ -73,6 +73,7 @@ The reviewer checklist below applies to UI changes; the doc rule above applies t
 | Surface | Current behaviour / module note |
 |---|---|
 | Food log (`LogScreen`, `clientStore`, `components/log`) | A first read for the selected day shows the shared skeleton, not zero totals or empty-meal claims. Changing date clears the prior day's foods, totals and water immediately; a failed new-day read shows retry without old numbers. A same-day refresh retains that day's verified data. A successfully empty day has one instruction, all four meal entry points stay reachable, action labels use sentence case, search failures use a neutral hairline, and the edit sheet uses theme colours and radius 4. Existing search, portion, manual, repeat, edit/move/delete, water and refresh handlers are unchanged. |
+| Fasting (`FastingScreen`, Shortcuts start in `WidgetsScreen`, `utils/fastingAlert.ts`) | Back-only header on `Fast`. One serif hero in hours and minutes (no ring, no ticking seconds), hairline protocol choices, one forest primary action (Start fast / End fast, never red), QuietBar progress, monochrome history ("Completed" / "Ended early"), stats only after a fast has ended with labels that say which fasts they cover, a run line only for two or more days in a row. The end alert follows Settings > Fasting alerts on both start paths and is cancelled on End fast. Every action is kept. |
 
 ## 9. Reviewer checklist (paste into PRs that touch UI)
 

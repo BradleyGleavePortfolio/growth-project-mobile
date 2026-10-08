@@ -9,27 +9,19 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useSettings } from '../../hooks/useSettings';
 import { fastingApi } from '../../services/api';
 import { logger } from '../../utils/logger';
 
-import * as Notifications from 'expo-notifications';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
-import { scheduleFastingAlert } from '../../utils/notifications';
+import QuietBar from '../../ui/progress/QuietBar';
+import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAlert';
 import { bucketDateLocal } from '../../utils/date';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { typography, type SemanticTokens } from '../../theme/tokens';
 import { errorMessage } from '../../types/common';
-
-// User-scoped per R15: a shared device must not let user A's scheduled
-// "Fast Complete" notification id be cancelled by user B's session, nor
-// leak across users on logout/login.
-const fastingNotifIdKey = (userId: string) =>
-  `fasting:scheduled_notification_id:${userId}`;
 
 type Protocol = { label: string; hours: number };
 
@@ -41,17 +33,17 @@ const PROTOCOLS: Protocol[] = [
   { label: '24h', hours: 24 },
 ];
 
-const TIMER_SIZE = 220;
-const STROKE_WIDTH = 12;
-const RADIUS = (TIMER_SIZE - STROKE_WIDTH) / 2;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+// Hours and minutes only (no ticking seconds), so a quarter-minute tick is enough.
+const TICK_MS = 15000;
 
 function formatDuration(ms: number): string {
-  const totalSec = Math.max(0, Math.floor(ms / 1000));
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const totalMin = Math.max(0, Math.floor(ms / 60000));
+  return `${Math.floor(totalMin / 60)}h ${(totalMin % 60).toString().padStart(2, '0')}m`;
+}
+
+// A run is two or more local days in a row; a single day is already in Recent fasts.
+function runLine(days: number): string | null {
+  return days >= 2 ? `${days} days in a row with a completed fast` : null;
 }
 
 interface FastSession {
@@ -63,9 +55,10 @@ interface FastSession {
 }
 
 export default function FastingScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
+  const { settings } = useSettings();
 
   const [activeFast, setActiveFast] = useState<FastSession | null>(null);
   const [selectedProtocol, setSelectedProtocol] = useState(16);
@@ -113,11 +106,12 @@ export default function FastingScreen() {
       const active = sessions.find((s) => !s.endTime) || null;
       setActiveFast(active);
 
-      // History = completed fasts
+      // History = every ended fast, completed or ended early
       const completed = sessions.filter((s) => s.endTime);
       setHistory(completed);
 
-      // Compute stats from completed sessions
+      // Average and longest cover every ended fast (labelled so on screen);
+      // the Completed count covers fasts that reached 90% of their target.
       if (completed.length > 0) {
         const hours = completed.map((s) => {
           const startMs = new Date(s.startTime).getTime();
@@ -176,7 +170,7 @@ export default function FastingScreen() {
         setElapsed(Date.now() - startMs);
       };
       tick();
-      timerRef.current = setInterval(tick, 1000);
+      timerRef.current = setInterval(tick, TICK_MS);
       return () => {
         if (timerRef.current) clearInterval(timerRef.current);
       };
@@ -196,21 +190,9 @@ export default function FastingScreen() {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
-      const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
-      const notifId = await scheduleFastingAlert(endTime);
-      // Persist the id so doEndFast can cancel the scheduled "Fast Complete"
-      // push even after the screen has been unmounted (cold start) before
-      // the user ends the fast.
-      if (notifId) {
-        try {
-          await AsyncStorage.setItem(fastingNotifIdKey(currentUser.id), notifId);
-        } catch (err) {
-          // Best-effort cache write. Failing here just means the worst case
-          // is a stale "Fast Complete" push once the target time arrives —
-          // not a destructive bug, so we don't surface it.
-          console.warn('FastingScreen: failed to persist notification id', err);
-        }
-      }
+      // Only while Settings > Fasting Alerts is on. The id is persisted so
+      // doEndFast can cancel the alert even after a cold start.
+      await scheduleFastEndAlert(currentUser.id, selectedProtocol, settings.fastingAlerts);
     } catch (err) {
       // Destructive write: surface so the user knows the fast didn't start.
       console.error('FastingScreen: handleStart failed', err);
@@ -231,21 +213,9 @@ export default function FastingScreen() {
     setSubmitting(true);
     try {
       await fastingApi.end();
-      // Cancel the scheduled "Fast Complete" push so the user doesn't get a
-      // notification hours after they manually ended the fast (P0-3). If the
-      // id was never persisted (cold start lost it, or scheduling failed),
-      // there's nothing to cancel — quietly skip.
-      try {
-        const key = fastingNotifIdKey(currentUser.id);
-        const notifId = await AsyncStorage.getItem(key);
-        if (notifId) {
-          await Notifications.cancelScheduledNotificationAsync(notifId);
-          await AsyncStorage.removeItem(key);
-        }
-      } catch (err) {
-        // Cancellation is best-effort; an orphan push is annoying, not broken.
-        console.warn('FastingScreen: failed to cancel scheduled notification', err);
-      }
+      // Cancel the scheduled end alert so it does not arrive hours after the
+      // fast was ended by hand (P0-3); nothing stored means nothing to cancel.
+      await cancelFastEndAlert(currentUser.id);
     } catch (err) {
       // Destructive write: surface so they know the fast wasn't ended. We
       // still call loadAll() so the UI reflects whatever the backend actually
@@ -262,7 +232,7 @@ export default function FastingScreen() {
 
   const handleEnd = async () => {
     if (!currentUser || !activeFast) return;
-    const elapsedHours = elapsed / (1000 * 60 * 60);
+    const elapsedHours = (Date.now() - new Date(activeFast.startTime).getTime()) / (1000 * 60 * 60);
     const pctDone = (elapsedHours / activeFast.targetHours) * 100;
     if (pctDone < 90) {
       Alert.alert(
@@ -288,23 +258,24 @@ export default function FastingScreen() {
 
   if (isLoading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgPrimary }}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   if (loadError) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 24 }}>
-        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
-          Could not load fasting data.
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.bgPrimary, padding: 24 }}>
+        <Text style={[typography.body, { color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }]}>
+          Fasting history did not load.
         </Text>
         <TouchableOpacity
-          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          style={{ backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 4 }}
           onPress={() => void loadAll()}
+          accessibilityRole="button"
         >
-          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
+          <Text style={[typography.bodyMd, { color: colors.textOnAccent }]}>Try again</Text>
         </TouchableOpacity>
       </View>
     );
@@ -313,12 +284,14 @@ export default function FastingScreen() {
   // Timer progress
   const targetMs = activeFast ? activeFast.targetHours * 60 * 60 * 1000 : selectedProtocol * 60 * 60 * 1000;
   const progress = activeFast ? Math.min(elapsed / targetMs, 1) : 0;
-  const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
 
   const remainingMs = activeFast ? Math.max(targetMs - elapsed, 0) : targetMs;
 
+  const run = runLine(streak);
+
   return (
     <ScrollView
+      testID="fasting-scroll"
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
@@ -326,16 +299,14 @@ export default function FastingScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.primary}
-          colors={[colors.primary]}
+          tintColor={colors.accent}
+          colors={[colors.accent]}
         />
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Fasting</Text>
-        {streak > 0 && (
-          <Text style={styles.runText}>Day {streak}</Text>
-        )}
+        <Text style={styles.title} accessibilityRole="header">Fasting</Text>
+        {run && <Text style={styles.runText}>{run}</Text>}
       </View>
 
       {/* Protocol Selector */}
@@ -346,6 +317,8 @@ export default function FastingScreen() {
               key={p.hours}
               style={[styles.protocolBtn, selectedProtocol === p.hours && styles.protocolBtnActive]}
               onPress={() => setProtocol(p.hours)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedProtocol === p.hours }}
             >
               <Text
                 style={[
@@ -360,50 +333,23 @@ export default function FastingScreen() {
         </View>
       )}
 
-      {/* Timer */}
+      {/* Timer: one serif hero number, no ring */}
       <View style={styles.timerContainer}>
-        <Svg width={TIMER_SIZE} height={TIMER_SIZE}>
-          {/* Background ring */}
-          <Circle
-            cx={TIMER_SIZE / 2}
-            cy={TIMER_SIZE / 2}
-            r={RADIUS}
-            stroke={colors.surfaceElevated}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-          />
-          {/* Progress ring */}
-          <Circle
-            cx={TIMER_SIZE / 2}
-            cy={TIMER_SIZE / 2}
-            r={RADIUS}
-            stroke={progress >= 0.9 ? colors.success : colors.primary}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-            strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round"
-            rotation="-90"
-            origin={`${TIMER_SIZE / 2}, ${TIMER_SIZE / 2}`}
-          />
-        </Svg>
-        <View style={styles.timerCenter}>
-          {activeFast ? (
-            <>
-              <Text style={styles.timerValue}>{formatDuration(elapsed)}</Text>
-              <Text style={styles.timerSub}>
-                {remainingMs > 0
-                  ? `${formatDuration(remainingMs)} remaining`
-                  : 'Target reached'}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.timerValue}>{selectedProtocol}h</Text>
-              <Text style={styles.timerSub}>fast</Text>
-            </>
-          )}
-        </View>
+        <Text style={styles.overline}>
+          {activeFast ? `${activeFast.targetHours}-hour fast` : 'Fasting window'}
+        </Text>
+        {activeFast ? (
+          <>
+            <Text style={styles.timerValue}>{formatDuration(elapsed)}</Text>
+            <Text style={styles.timerSub}>
+              {remainingMs > 0
+                ? `${formatDuration(remainingMs)} remaining`
+                : 'Target reached'}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.timerValue}>{selectedProtocol}h</Text>
+        )}
       </View>
 
       {/* Start / End Button */}
@@ -417,9 +363,8 @@ export default function FastingScreen() {
             accessibilityState={{ disabled: submitting }}
             accessibilityLabel="End fast"
           >
-            <Ionicons name="stop-circle" size={22} color={colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>
-              {submitting ? 'Ending…' : 'End Fast'}
+              {submitting ? 'Ending…' : 'End fast'}
             </Text>
           </TouchableOpacity>
         ) : (
@@ -431,9 +376,8 @@ export default function FastingScreen() {
             accessibilityState={{ disabled: submitting }}
             accessibilityLabel="Start fast"
           >
-            <Ionicons name="play-circle" size={22} color={colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>
-              {submitting ? 'Starting…' : 'Start Fast'}
+              {submitting ? 'Starting…' : 'Start fast'}
             </Text>
           </TouchableOpacity>
         )}
@@ -455,41 +399,40 @@ export default function FastingScreen() {
             <Text style={styles.activeLabel}>Target</Text>
             <Text style={styles.activeValue}>{activeFast.targetHours}h</Text>
           </View>
-          <View style={styles.activeRow}>
-            <Text style={styles.activeLabel}>Progress</Text>
-            <Text style={[styles.activeValue, { color: colors.primary }]}>
-              {Math.round(progress * 100)}%
-            </Text>
-          </View>
+          <QuietBar
+            label="Fasting"
+            value={`${Math.round(progress * 100)}%`}
+            current={elapsed}
+            target={targetMs}
+          />
         </View>
       )}
 
-      {/* Stats Row */}
+      {/* Stats: shown once a fast has ended; the labels say which fasts each covers */}
+      {history.length > 0 && (
       <FadeInView delay={100}>
       <View style={styles.statsRow}>
         <View style={styles.statCard}>
-          <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
           <Text style={styles.statLabel}>Completed</Text>
+          <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            {stats.averageHours > 0 ? stats.averageHours.toFixed(1) : '0'}
-          </Text>
-          <Text style={styles.statLabel}>Avg Hours</Text>
+          <Text style={styles.statLabel}>Average, all fasts</Text>
+          <Text style={styles.statValue}>{`${stats.averageHours.toFixed(1)}h`}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>
-            {stats.longestHours > 0 ? stats.longestHours.toFixed(1) : '0'}
-          </Text>
           <Text style={styles.statLabel}>Longest</Text>
+          <Text style={styles.statValue}>{`${stats.longestHours.toFixed(1)}h`}</Text>
         </View>
+        <Text style={styles.historyTarget}>A fast counts as completed at 90 percent of its target.</Text>
       </View>
       </FadeInView>
+      )}
 
       {/* History */}
       {history.length > 0 ? (
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Fasts</Text>
+          <Text style={styles.sectionTitle}>Recent fasts</Text>
           {history.slice(0, 10).map((session) => {
             const startMs = new Date(session.startTime).getTime();
             const endMs = session.endTime ? new Date(session.endTime).getTime() : 0;
@@ -497,19 +440,12 @@ export default function FastingScreen() {
             return (
               <View key={session.id} style={styles.historyRow}>
                 <View style={styles.historyLeft}>
-                  <Ionicons
-                    name={session.completed ? 'checkmark-circle' : 'close-circle'}
-                    size={20}
-                    color={session.completed ? colors.success : colors.error}
-                  />
-                  <View>
-                    <Text style={styles.historyDate}>
-                      {new Date(session.startTime).toLocaleDateString()}
-                    </Text>
-                    <Text style={styles.historyTarget}>
-                      {session.targetHours}h target
-                    </Text>
-                  </View>
+                  <Text style={styles.historyDate}>
+                    {new Date(session.startTime).toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.historyTarget}>
+                    {`${session.targetHours}h target · ${session.completed ? 'Completed' : 'Ended early'}`}
+                  </Text>
                 </View>
                 <Text style={styles.historyDuration}>{hours.toFixed(1)}h</Text>
               </View>
@@ -517,43 +453,39 @@ export default function FastingScreen() {
           })}
         </View>
       ) : (
-        <EmptyState
-          icon="timer-outline"
-          title="No fasting history"
-          subtitle="Start your first fast to begin tracking your progress"
-        />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recent fasts</Text>
+          <Text style={styles.historyTarget}>Each fast you end is saved here.</Text>
+        </View>
       )}
     </ScrollView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   content: {
     paddingBottom: 100,
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 24,
-    paddingTop: 60,
-    marginBottom: 20,
+    paddingTop: 16,
+    marginBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '500',
+    ...typography.h1,
     color: colors.textPrimary,
   },
   runText: {
-    fontSize: 13,
-    fontWeight: '400',
-    color: colors.textSecondary,
-    letterSpacing: 0.4,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+    color: colors.textMuted,
   },
   protocolRow: {
     flexDirection: 'row',
@@ -563,40 +495,46 @@ const makeStyles = (colors: ThemeColors) =>
   },
   protocolBtn: {
     flex: 1,
-    paddingVertical: 10,
+    minHeight: 44,
     alignItems: 'center',
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   protocolBtnActive: {
-    backgroundColor: colors.primary,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.textPrimary,
   },
   protocolText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 15,
+    fontVariant: ['tabular-nums'],
+    color: colors.textMuted,
   },
   protocolTextActive: {
-    color: colors.textOnPrimary,
+    fontFamily: 'Inter_500Medium',
+    color: colors.textPrimary,
   },
   timerContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 16,
     marginBottom: 24,
-    height: TIMER_SIZE,
   },
-  timerCenter: {
-    position: 'absolute',
-    alignItems: 'center',
+  overline: {
+    ...typography.eyebrow,
+    color: colors.textMuted,
+    marginBottom: 8,
   },
   timerValue: {
-    fontSize: 36,
-    fontWeight: '500',
+    ...typography.display,
+    fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
   },
   timerSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+    color: colors.textMuted,
     marginTop: 4,
   },
   actionRow: {
@@ -604,20 +542,18 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 24,
   },
   startBtn: {
-    flexDirection: 'row',
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
   endBtn: {
-    flexDirection: 'row',
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: colors.error,
+    backgroundColor: colors.accent,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
@@ -625,16 +561,15 @@ const makeStyles = (colors: ThemeColors) =>
     opacity: 0.6,
   },
   actionBtnText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textOnPrimary,
+    ...typography.bodyMd,
+    color: colors.textOnAccent,
   },
   activeCard: {
     marginHorizontal: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 16,
-    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: 16,
+    gap: 12,
     marginBottom: 24,
   },
   activeRow: {
@@ -642,73 +577,80 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'space-between',
   },
   activeLabel: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   activeValue: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
     fontWeight: '500',
+    fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
   },
   statsRow: {
-    flexDirection: 'row',
     paddingHorizontal: 24,
-    gap: 10,
     marginBottom: 24,
   },
   statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 4,
+    minHeight: 44,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
   statValue: {
-    fontSize: 20,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16,
     fontWeight: '500',
+    fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
   },
   statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: colors.textMuted,
   },
   section: {
     paddingHorizontal: 24,
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: colors.textPrimary,
+    ...typography.eyebrow,
+    color: colors.textMuted,
     marginBottom: 12,
   },
   historyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: 44,
     paddingVertical: 12,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   historyLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    gap: 2,
   },
   historyDate: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    fontWeight: '500',
     color: colors.textPrimary,
   },
   historyTarget: {
-    fontSize: 12,
-    color: colors.textSecondary,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: 2,
   },
   historyDuration: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 16,
     fontWeight: '500',
-    color: colors.primary,
+    fontVariant: ['tabular-nums'],
+    color: colors.textPrimary,
   },
 
   });
