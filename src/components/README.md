@@ -55,13 +55,14 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
 | `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
+| `mealplan/LogPlannedMealButton.tsx` | "Log this meal" on every planned meal (`PlanScreen`, `ClientDailyMealPlanScreen`). One tap adds the meal to today's food log when the plan gives calories, protein, carbs and fat and its slot is breakfast, lunch, dinner or a snack; otherwise a sheet asks only for what the plan does not say (the meal, a missing value), so a missing value is never logged as zero. Same write as the Food log's manual entry (`utils/log/logSubmit`): online it creates the food and the entry and offers Undo; offline it queues them like the Food log. Tests: `mealplan/__tests__/LogPlannedMealButton.test.tsx`, `screens/client/__tests__/MealPlanLogThisMeal.test.tsx`. |
 
 ### Domain-specific
 
 | File | What it does |
 | --- | --- |
 | `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
-| `WaterTracker.tsx` | Theme-coloured hairline progress and three quick-add actions. The unchanged 100 oz reference is labelled “Starter goal”; changed Settings goals and explicit targets retain their values. Metric (`kg`) settings show approximate ml totals, the equivalent glass size, and 250/350/500 ml buttons. Imperial 8/12/16 oz buttons and the ounce callback contract stay unchanged; metric callbacks convert back to ounces so the store writes the selected ml. Covered by `__tests__/WaterTracker.goal.test.tsx`. |
+| `WaterTracker.tsx` | Theme-coloured hairline progress and three quick-add actions. The unchanged 100 oz reference is labelled “Starter goal”; changed Settings goals and explicit targets retain their values. Metric (`kg`) settings show approximate ml totals, the equivalent glass size, and 250/350/500 ml buttons. Imperial 8/12/16 oz buttons and the ounce callback contract stay unchanged; metric callbacks convert back to ounces so the store writes the selected ml. Optional saved `entries` show their exact ml or approximate ounce amount and a 44 pt `onRemove(entry)` control. `removingId` labels only that entry as removing and disables water actions until it settles; the screen owns confirmation and API errors. Covered by `__tests__/WaterTracker.goal.test.tsx` and the Food log day-loading integration test. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 | `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |

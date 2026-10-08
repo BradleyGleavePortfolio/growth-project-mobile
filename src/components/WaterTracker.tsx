@@ -4,11 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { DEFAULT_SETTINGS, useSettings } from '../hooks/useSettings';
 import { useTheme } from '../theme/useTheme';
 import { QuietText as Text } from '../ui/progress/QuietBar';
+import HapticPressable from './HapticPressable';
+import type { WaterEntry } from '../services/api';
 
 interface WaterTrackerProps {
   currentOz: number;
   targetOz?: number;
   onAdd: (oz: number) => void;
+  entries?: WaterEntry[];
+  onRemove?: (entry: WaterEntry) => void;
+  removingId?: string | null;
 }
 
 const WATER_AMOUNTS = [8, 12, 16];
@@ -19,6 +24,9 @@ export default function WaterTracker({
   currentOz,
   targetOz: targetOzProp,
   onAdd,
+  entries = [],
+  onRemove,
+  removingId = null,
 }: WaterTrackerProps) {
   const { settings } = useSettings();
   const { semanticColors: sc } = useTheme();
@@ -68,6 +76,7 @@ export default function WaterTracker({
             key={amount}
             style={styles.addButton}
             onPress={() => onAdd(metric ? amount / ML_PER_OZ : amount)}
+            disabled={removingId !== null}
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={`Add ${amount} ${spokenUnit} of water`}
@@ -80,6 +89,32 @@ export default function WaterTracker({
       <Text style={styles.glasses}>
         {glasses === 1 ? `1 glass (${glassSize})` : `${glasses} glasses (${glassSize} each)`}
       </Text>
+      {entries.length > 0 && onRemove ? (
+        <View>
+          <Text style={styles.entriesTitle}>Logged water</Text>
+          {entries.map((entry, index) => {
+            const amount = metric ? `${entry.amount_ml} ml` : `≈ ${Math.round(entry.amount_ml / ML_PER_OZ * 10) / 10} oz`;
+            return (
+              <View key={entry.id} style={styles.entryRow}>
+                <Text style={styles.entryAmount}>{amount}</Text>
+                <HapticPressable
+                  disableAnimation
+                  intent="warning"
+                  style={styles.removeButton}
+                  onPress={() => onRemove(entry)}
+                  disabled={removingId !== null}
+                  accessibilityLabel={`Remove water entry ${index + 1}, ${amount}`}
+                  accessibilityState={{ disabled: removingId !== null, busy: removingId === entry.id }}
+                  testID={`remove-water-${entry.id}`}
+                >
+                  <Ionicons name="trash-outline" size={18} color={sc.textMuted} />
+                  <Text style={styles.removeLabel}>{removingId === entry.id ? 'Removing…' : 'Remove'}</Text>
+                </HapticPressable>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -150,5 +185,33 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     color: sc.textMuted,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
+  },
+  entriesTitle: {
+    fontSize: 13,
+    color: sc.textMuted,
+  },
+  entryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
+  },
+  entryAmount: {
+    fontSize: 13,
+    color: sc.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  removeButton: {
+    minHeight: 44,
+    minWidth: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  removeLabel: {
+    fontSize: 13,
+    color: sc.textMuted,
   },
 });

@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { typography, type SemanticTokens } from '../../theme/tokens';
 import FadeInView from '../../components/FadeInView';
 import HapticPressable from '../../components/HapticPressable';
+import LogPlannedMealButton, { plannedMealFromFoods } from '../../components/mealplan/LogPlannedMealButton';
 import { mealPlansApi } from '../../services/api';
 import {
   mealTemplatesApi,
@@ -40,6 +41,8 @@ interface MealItem {
   name: string;
   calories?: number | null;
   protein?: number | null;
+  carbs?: number | null;
+  fat?: number | null;
   notes?: string | null;
   time_of_day?: string | null;
 }
@@ -223,6 +226,8 @@ function assignmentToMealPlan(
     name: s.meal_template.name,
     calories: s.meal_template.calories_kcal,
     protein: s.meal_template.protein_g,
+    carbs: s.meal_template.carbs_g,
+    fat: s.meal_template.fats_g,
     notes: s.meal_template.description,
     time_of_day: slotToTimeOfDay(s.slot_label),
   }));
@@ -451,6 +456,7 @@ export default function PlanScreen() {
                                   </View>
                                 </View>
                               ))}
+                              <LogPlannedMealButton meal={plannedMealFromFoods(meal.items)} slot={meal.slot} />
                             </View>
                           ))}
                         </View>
@@ -474,6 +480,7 @@ export default function PlanScreen() {
                                       {it.notes}
                                     </Text>
                                   ) : null}
+                                  <LogPlannedMealButton meal={it} slot={g.key} />
                                 </View>
                                 <View style={styles.itemMacros}>
                                   {it.calories != null && (

@@ -25,8 +25,10 @@
  *
  * When no assignment is active for the chosen day we render an honest
  * empty state — no fabricated suggestions, no "ask your coach" CTA
- * that cannot do anything from here. The client-side surface is
- * read-only; the coach assigns plans from `CoachDailyMealPlanScreen`.
+ * that cannot do anything from here. The plan is read-only for the
+ * client (the coach assigns plans from `CoachDailyMealPlanScreen`); each
+ * slot offers "Log this meal" (components/mealplan/LogPlannedMealButton),
+ * which adds it to today's food log.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -47,6 +49,7 @@ import {
 import { useMealPlanToday } from '../../hooks/useMealTemplates';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
+import LogPlannedMealButton, { plannedMealFromSlot } from '../../components/mealplan/LogPlannedMealButton';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -194,6 +197,7 @@ function SlotGroup({
               {s.meal_template.description}
             </Text>
           ) : null}
+          <LogPlannedMealButton meal={plannedMealFromSlot(s)} slot={s.slot_label} />
         </View>
       ))}
     </View>
