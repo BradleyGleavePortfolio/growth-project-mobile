@@ -15,8 +15,15 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi, profileApi } from '../../services/api';
+import {
+  RecipeAllergenFields,
+  listWords,
+  recipeAllergenSummary,
+  refreshRecipeReads,
+  useRecipeAllergenGuide,
+} from '../../lib/recipeAllergens';
 
 import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
@@ -28,7 +35,7 @@ import { track } from '../../lib/analytics';
 const ALLERGY_PROMPT_FLAG = 'allergy_prompt_shown';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface Recipe {
+interface Recipe extends RecipeAllergenFields {
   id: string;
   title: string;
   description?: string;
@@ -91,6 +98,7 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
         </View>
         {nutrition ? <Text style={styles.cardMetaText}>{nutrition} per serving</Text> : null}
         {otherMacros ? <Text style={styles.cardMetaText}>{otherMacros} per serving</Text> : null}
+        <Text style={styles.cardMetaText}>{recipeAllergenSummary(recipe)}</Text>
         {recipe.tags.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsRow}>
             {recipe.tags.slice(0, 4).map((tag) => (
@@ -118,7 +126,10 @@ export default function RecipesScreen() {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const queryClient = useQueryClient();
   const currentUser = useCurrentUser();
+  // Whether the server hides shared recipes by saved allergens, and which ones.
+  const allergenGuide = useRecipeAllergenGuide();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('All');
   // Safety prompt: shown once when a lean-onboarded user opens Recipes
@@ -161,6 +172,8 @@ export default function RecipesScreen() {
     async (restrictions: string[]) => {
       try {
         await profileApi.update({ diet_restrictions: restrictions });
+        // Read the library again: recipes declaring a newly saved allergen leave it.
+        refreshRecipeReads(queryClient);
         // Refresh local user_data so Home + Recipes filters see the new value.
         try {
           const raw = await AsyncStorage.getItem('user_data');
@@ -185,7 +198,7 @@ export default function RecipesScreen() {
       }
       await dismissAllergyPromptForever();
     },
-    [dismissAllergyPromptForever],
+    [dismissAllergyPromptForever, queryClient],
   );
 
   const handleAllergyLater = useCallback(async () => {
@@ -306,6 +319,13 @@ export default function RecipesScreen() {
           maxToRenderPerBatch={8}
           windowSize={7}
           removeClippedSubviews
+          ListHeaderComponent={
+            allergenGuide.hiddenNames.length > 0 ? (
+              <Text style={styles.hiddenNote}>
+                {`Recipes that list ${listWords(allergenGuide.hiddenNames, 'or')} are hidden.`}
+              </Text>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -343,7 +363,8 @@ export default function RecipesScreen() {
 
       {/* One-time safety prompt for lean-onboarded users without restrictions. */}
       <AllergySafetyPrompt
-        visible={allergyPromptVisible}
+        visible={allergyPromptVisible && allergenGuide.settled}
+        rule={allergenGuide.rule}
         onDismiss={() => setAllergyPromptVisible(false)}
         onSubmit={handleAllergySubmit}
         onLater={handleAllergyLater}
@@ -401,6 +422,7 @@ const makeStyles = (colors: SemanticTokens) =>
 
   list: { flex: 1 },
   listContent: { paddingHorizontal: 24, paddingBottom: 40 },
+  hiddenNote: { ...typography.bodySmall, color: colors.textMuted, paddingVertical: 8 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
