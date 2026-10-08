@@ -143,6 +143,8 @@ describe("ClientPaymentsScreen (COACH-PAY-M-130)", () => {
       "This is an earlier payment, but refunding all of it still ends Jane's access to Strength 12 and pauses its billing until the plan is restarted.",
     );
     expect(screen.getByText("Refund $50.00 and end access")).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId("refund-amount"), "49.99");
+    expect(screen.getByText("Refund $49.99")).toBeTruthy();
   });
 
   it("a partial refund keeps access; an amount above what is left cannot be sent", async () => {

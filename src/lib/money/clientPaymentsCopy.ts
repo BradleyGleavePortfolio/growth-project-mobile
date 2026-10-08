@@ -85,16 +85,18 @@ export function refundConsequence(
   if (!live && plan.billing !== "one_time") {
     return { text: "Access and billing on this plan stay as they are.", endsAccess: false };
   }
-  if (p.refundedCents + sum(p, (s) => IN_FLIGHT.has(s)) + cents < p.amountCents) {
+  const before = p.refundedCents + sum(p, (s) => IN_FLIGHT.has(s));
+  if (before + cents < p.amountCents) {
     const keeps = live ? "keeps access, and billing carries on as before" : `keeps access to ${plan.packageName}`;
     return { text: `${cap(who(name))} ${keeps}.`, endsAccess: false };
   }
   const ends = `ends ${who(name)}'s access to ${plan.packageName}${live ? " and pauses its billing until the plan is restarted" : ""}`;
+  const part = before > 0 ? "the rest" : "all";
   const earlier = plan.payments.some((o) => Date.parse(o.paidAt) > Date.parse(p.paidAt));
   return {
     text: earlier
-      ? `This is an earlier payment, but refunding all of it still ${ends}.`
-      : `Refunding all of this payment ${ends}.`,
+      ? `This is an earlier payment, but refunding ${part} of it still ${ends}.`
+      : `Refunding ${part} of this payment ${ends}.`,
     endsAccess: true,
   };
 }
