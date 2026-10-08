@@ -64,6 +64,10 @@ describe('definitions', () => {
     }
   });
 
+  it('N2 explains coach awareness without promising automatic food filtering', () => {
+    expect(def('N2').why).toBe('So your coach knows what you avoid.');
+  });
+
   it('copy follows Quiet Luxury: no exclamation marks, no emoji, no em dashes', () => {
     const strings: string[] = [];
     for (const s of SCREENS) {
