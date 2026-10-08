@@ -1,6 +1,6 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import { WorkoutsTab } from '../screens/coach/client-detail/WorkoutsTab';
 import { makeStyles } from '../screens/coach/client-detail/styles';
@@ -46,6 +46,7 @@ const mockDetail = {
   isLoading: false, refreshing: false, isArchived: false, serverMealPlans: [],
   loadData: jest.fn(async () => undefined), loadTimeline: jest.fn(), loadWeeklySummaries: jest.fn(),
   loadServerMealPlans: jest.fn(), setIsArchived: jest.fn(), setRefreshing: jest.fn(),
+  loadArchiveStatus: jest.fn(async () => undefined),
 };
 jest.mock('../screens/coach/client-detail/useClientDetailData', () => ({ useClientDetailData: () => mockDetail }));
 jest.mock('../screens/coach/client-detail/SummaryTab', () => ({ SummaryTab: ({ openWorkoutRequest }: { openWorkoutRequest: boolean }) =>
@@ -203,7 +204,11 @@ it('preserves the surrounding header actions and refresh handler', async () => {
   const s = await render(<ClientDetailScreen {...props} />);
   await fireEvent.press(s.getByText('arrow-back')); expect(goBack).toHaveBeenCalledTimes(1);
   await fireEvent.press(s.getByText('chatbubble-outline')); expect(navigate).toHaveBeenCalledWith('ClientMessages', { clientId: 'client-1', clientName: 'Sam Lee' });
-  await fireEvent.press(s.getByLabelText('Archive client')); expect(mockArchive).toHaveBeenCalledWith('client-1');
+  await fireEvent.press(s.getByLabelText('Archive client'));
+  expect(mockArchive).not.toHaveBeenCalled();
+  const confirm = jest.mocked(Alert.alert).mock.calls.find(([title]) => title === 'Archive this client?')?.[2];
+  await act(async () => { await confirm?.find((button) => button.text === 'Archive client')?.onPress?.(); });
+  expect(mockArchive).toHaveBeenCalledWith('client-1');
   mockDetail.isArchived = true;
   await s.rerender(<ClientDetailScreen {...props} />);
   await fireEvent.press(s.getByLabelText('Unarchive client')); expect(mockUnarchive).toHaveBeenCalledWith('client-1');
@@ -212,4 +217,5 @@ it('preserves the surrounding header actions and refresh handler', async () => {
   expect(mockDetail.setRefreshing).toHaveBeenCalledWith(true);
   expect(mockDetail.setRefreshing).toHaveBeenCalledWith(false);
   expect(mockDetail.loadData).toHaveBeenCalledTimes(2);
+  expect(mockDetail.loadArchiveStatus).toHaveBeenCalledWith(true);
 });

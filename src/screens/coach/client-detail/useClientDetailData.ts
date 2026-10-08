@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
+import { useCoachStore } from '../../../store/coachStore';
 import { errorMessage } from '../../../types/common';
 import { loadFailureMessage } from '../../../ui/states/QuietStates';
 import { bucketDateLocal, getTodayString } from '../../../utils/date';
@@ -14,7 +15,7 @@ import {
 } from './types';
 import { mapCoachWorkoutSessions, workoutTimelineSubtitle } from '../../../utils/workout/workoutLogging';
 
-export function useClientDetailData(clientId: string, colors: ThemeColors) {
+export function useClientDetailData(clientId: string, colors: ThemeColors, coachId?: string) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
@@ -38,7 +39,28 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
   useEffect(() => {
     refreshingRef.current = refreshing;
   }, [refreshing]);
-  const [isArchived, setIsArchived] = useState(false);
+  const [isArchived, setIsArchived] = useState<boolean | null>(null);
+  const [archiveStatusError, setArchiveStatusError] = useState<string | null>(null);
+  const loadArchiveStatus = useCallback(async (refresh = false) => {
+    setArchiveStatusError(null);
+    const roster = useCoachStore.getState();
+    if (coachId && (refresh || !roster.clients.some((client) => client.id === clientId))) {
+      await roster.loadClients(coachId, 'all', { silent: true });
+      if (useCoachStore.getState().loadError) {
+        setArchiveStatusError('Client archive status could not load. Pull down to try again.');
+        return;
+      }
+    }
+    const client = useCoachStore.getState().clients.find((row) => row.id === clientId);
+    setIsArchived(client ? client.status === 'archived' : null);
+    if (!client && coachId) {
+      setArchiveStatusError('Client archive status could not load. Pull down to try again.');
+    }
+  }, [clientId, coachId]);
+  useEffect(() => {
+    setIsArchived(null);
+    void loadArchiveStatus();
+  }, [loadArchiveStatus]);
 
   const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
   const [mealPlansLoading, setMealPlansLoading] = useState(false);
@@ -54,9 +76,6 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       const data = res.data;
       if (data.error) return;
       setFoodShared(data.consent?.food_macros !== false);
-      // Reflect archived status from summary (client.archived_at)
-      if (data.client) setIsArchived(!!data.client.archived_at);
-
       // Set profile
       setProfile(data.profile ? {
         ...data.profile,
@@ -374,6 +393,8 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     loadError,
     refreshing,
     isArchived,
+    archiveStatusError,
+    loadArchiveStatus,
     setIsArchived,
     setTimeline,
     setWeekSummaries,
