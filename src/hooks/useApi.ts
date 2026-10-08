@@ -373,14 +373,14 @@ export function useWeightHistory(days = 30) {
 // Today's check-in is fetched as a single-row range scan against the list
 // endpoint. checkInsApi.save is an idempotent upsert by (user, date) so callers
 // can post freely on top of whatever this returns.
-export function useTodayCheckIn(date: string) {
+export function useTodayCheckIn(date: string, enabled = true) {
   return useQuery<unknown>({
     queryKey: ['check-ins', 'day', date],
     queryFn: async () => {
       const list = (await checkInsApi.list({ from: date, to: date, limit: 1 })).data as unknown[];
       return list[0] ?? null;
     },
-    enabled: !!date,
+    enabled: !!date && enabled,
   });
 }
 

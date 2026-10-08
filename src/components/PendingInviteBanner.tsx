@@ -1,7 +1,7 @@
 /**
  * PendingInviteBanner — surfaces an unread invite code that landed via deep
  * link while the user was already signed in. The user must explicitly tap
- * "Attach to my account" before we POST /auth/attach-invite-code — silent
+ * "Attach" before we POST /auth/attach-invite-code — silent
  * re-pairing would change the user's coach without their consent (B5).
  *
  * Reads from AsyncStorage on mount and on every authEvents tick so the
@@ -12,23 +12,30 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
-import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../theme/ThemeProvider';
 import { typography, type SemanticTokens } from '../theme/tokens';
 import {
   claimPendingInviteCode,
   clearPendingInviteCode,
+  previewPendingInviteCoachName,
   readPendingInviteCode,
   subscribePendingInviteCode,
 } from '../lib/pendingInviteCode';
 import { authEvents } from '../utils/authEvents';
 import { useCoachSharingNotice } from '../lib/coachSharingNotice';
 import CoachSharingNotice from './coachSharing/CoachSharingNotice';
+import { useEntitlement } from '../entitlements/EntitlementProvider';
+import { queryClient } from '../services/queryClient';
+import { logger } from '../utils/logger';
+import { QuietOverline, QuietSection, quietActions } from '../ui/sections/QuietSection';
 
 export default function PendingInviteBanner() {
   const { semanticColors: colors } = useTheme();
+  const { refreshEntitlement } = useEntitlement();
   const styles = makeStyles(colors);
   const [code, setCode] = useState<string | null>(null);
+  const [coachPreview, setCoachPreview] = useState<{ code: string; name: string | null } | null>(null);
+  const coachName = coachPreview?.code === code ? coachPreview.name : null;
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<'idle' | 'ok' | 'err'>('idle');
   const [errMessage, setErrMessage] = useState<string | null>(null);
@@ -64,6 +71,16 @@ export default function PendingInviteBanner() {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    let live = true;
+    if (code) {
+      void previewPendingInviteCoachName(code).then((name) => {
+        if (live) setCoachPreview({ code, name });
+      });
+    }
+    return () => { live = false; };
+  }, [code]);
+
   if (!code) return null;
 
   const handleClaim = async () => {
@@ -74,6 +91,14 @@ export default function PendingInviteBanner() {
     setBusy(false);
     if (result.ok) {
       setStatus('ok');
+      // The attach may grant a plan. Re-read the same shared gate checkout
+      // uses and Home's coachless state; never infer access from the code.
+      void refreshEntitlement().catch((err: unknown) =>
+        logger.warn('PendingInviteBanner', 'entitlement refresh after attach failed', err),
+      );
+      void queryClient.invalidateQueries({ queryKey: ['coachless', 'home'] }).catch((err: unknown) =>
+        logger.warn('PendingInviteBanner', 'Home refresh after attach failed', err),
+      );
       // refresh from storage so we hide the banner
       refreshTimerRef.current = setTimeout(refresh, 1500);
     } else {
@@ -90,78 +115,62 @@ export default function PendingInviteBanner() {
   };
 
   return (
-    <View style={styles.container} accessibilityLiveRegion="polite" testID="pending-invite-banner">
-      <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
-      <View style={styles.body}>
-        <Text style={styles.title}>Invite code received</Text>
-        <Text style={styles.subtitle} numberOfLines={2}>
-          {status === 'ok'
-            ? 'Code attached to your account.'
-            : status === 'err'
-            ? (errMessage ?? "Couldn't attach this code.")
-            : `Tap to attach "${code}" to your account.`}
-        </Text>
-        <CoachSharingNotice version={status === 'idle' ? sharingVersion : null} style={styles.sharing} />
-      </View>
-      {status === 'ok' ? (
-        <Ionicons name="checkmark-circle-outline" size={20} color={colors.accentText} />
-      ) : (
-        <View style={styles.actions}>
+    <QuietSection accessibilityLiveRegion="polite" testID="pending-invite-banner">
+      <QuietOverline>COACH INVITE</QuietOverline>
+      <Text style={styles.subtitle}>
+        {status === 'ok'
+          ? 'Invite attached to your account.'
+          : status === 'err'
+          ? (errMessage ?? 'The invite could not be attached right now. Try Attach again.')
+          : `${coachName ? `Invite from ${coachName}. ` : ''}Attach "${code}" to your account.`}
+      </Text>
+      <CoachSharingNotice
+        version={status === 'idle' ? sharingVersion : null}
+        coachName={coachName}
+        style={styles.sharing}
+      />
+      {status !== 'ok' ? (
+        <View style={quietActions.row}>
           <HapticPressable
             intent="medium"
-            style={styles.attachBtn}
+            style={[quietActions.action, styles.action]}
             onPress={handleClaim}
             disabled={busy}
+            accessibilityState={{ disabled: busy, busy }}
             accessibilityRole="button"
             accessibilityLabel="Attach invite code"
           >
             {busy ? (
-              <ActivityIndicator color={colors.accentText} />
+              <ActivityIndicator accessibilityLabel="Attaching invite code" color={colors.accentText} />
             ) : (
               <Text style={styles.attachText}>Attach</Text>
             )}
           </HapticPressable>
           <HapticPressable
             intent="light"
-            style={styles.dismissBtn}
+            style={[quietActions.action, styles.action]}
             onPress={handleDismiss}
+            disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Dismiss invite code"
           >
-            <Ionicons name="close" size={18} color={colors.textMuted} />
+            <Text style={styles.dismissText}>Dismiss</Text>
           </HapticPressable>
         </View>
-      )}
-    </View>
+      ) : null}
+    </QuietSection>
   );
 }
 
 function makeStyles(colors: SemanticTokens) {
   return StyleSheet.create({
-    container: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      // DES-K2-128: one hairline above, no box or fill (A23 section).
-      paddingVertical: 18,
-      marginBottom: 24,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
-    },
-    body: { flex: 1 },
-    title: { ...typography.bodyMd, color: colors.textPrimary },
     subtitle: {
       ...typography.bodySmall,
       color: colors.textMuted,
-      marginTop: 2,
     },
     sharing: { fontSize: 13, lineHeight: 19, marginTop: 4, marginBottom: 0 },
-    actions: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    attachBtn: { minHeight: 44, minWidth: 44, paddingHorizontal: 8, justifyContent: 'center' },
+    action: { minWidth: 44 },
     attachText: { ...typography.bodyMd, color: colors.accentText },
-    dismissBtn: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center' },
+    dismissText: { ...typography.bodySmall, color: colors.textMuted },
   });
 }

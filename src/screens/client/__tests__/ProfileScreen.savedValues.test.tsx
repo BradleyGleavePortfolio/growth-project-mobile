@@ -113,7 +113,9 @@ it('distinguishes loading and failed targets from a server-confirmed empty state
 
 it('keeps all quick routes, every personal row, Edit and confirmed sign-out reachable', async () => {
   const view = await render(<ProfileScreen />);
-  for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Widgets', 'Widgets'],
+  expect(view.queryByText('Widgets')).toBeNull();
+  expect(view.getByLabelText('Shortcuts').props.accessibilityHint).toBe('Opens quick actions');
+  for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Shortcuts', 'Widgets'],
     ['Learn', 'Learn'], ['Edit personal info', 'EditProfile']]) {
     await fireEvent.press(view.getByLabelText(label)); expect(mockNavigate).toHaveBeenLastCalledWith(route);
   }

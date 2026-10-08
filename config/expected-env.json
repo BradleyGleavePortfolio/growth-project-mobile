@@ -61,6 +61,11 @@
       "default": "on",
       "reason": "Feature flag read via aiGatewayFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key. On only for the preview profile (the Android test app): credit packs open Stripe Checkout in the system browser on Android."
+    },
     "EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT": {
       "kind": "flag",
       "default": "on in dev, off in release",

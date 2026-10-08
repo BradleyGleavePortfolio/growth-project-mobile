@@ -130,7 +130,7 @@ tutorial). Copy: `src/components/coachSharing/coachSharingCopy.ts`.
 ## Notification categories (`NotificationPreferencesScreen.tsx`)
 
 Client Settings > Notifications shows per-category switches (coach messages,
-reminders, workout reminders, milestones, system). Unfilled hairline rows use semantic-theme colours, 13 pt descriptions and 44 pt controls under a quiet category overline. Each switch PATCHes
+workout reminders, milestones, system). Unfilled hairline rows use semantic-theme colours, 13 pt descriptions and 44 pt controls under a quiet category overline. Each switch PATCHes
 `/notifications/preferences` with the mapped backend fields and rolls back on
 failure. A failed save shows an inline notice that names the setting and says
 what to do next, by status (`notificationPreferenceErrors.ts`): no response =
@@ -143,11 +143,13 @@ a Sentry report (status, machine code, reference only).
 Roman at the client's preferred training time (consultation S2) on their first
 session day and every plan day, in the client's local timezone, at most once a
 day, and not when that day's session is already logged. The switch reads the
-server value on mount, as do all other category switches. Descriptions match each mapped field (messages, meal-reminder preference, recorded milestones and daily/weekly summary email through `digest_email`); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
+server value on mount, as do all other category switches. Descriptions match each mapped field (messages, recorded milestones and summary email through `digest_email`); no billing/security delivery promise is made. Back, retry and support actions remain. The device timezone is synced to the backend by
 `src/services/timezoneSync.ts` (called from `App.tsx` after sign-in and each
 time the app returns to the foreground, sent only when the zone or account
 changed). Workout reminders go to clients only, so the switch is hidden for
 coach and owner accounts.
+
+Removed surface (SMALL-M-COPY-131): the `client_bot` Reminders row. Backend `eat_enabled` is stored but no sender consumes it, so the row offered no delivery control. Existing local `client_bot` values are preserved harmlessly when another preference is saved; the UI no longer maps or PATCHes `eat_enabled`. Rendered tests cover both saved values and the four retained category actions. ([Backend preference persistence](https://github.com/BradleyGleavePortfolio/growth-project-backend/blob/652b07a856fd807462da244c80f529eef39123c9/src/notifications/notifications.service.ts))
 
 ### DataExportScreen
 

@@ -8,6 +8,10 @@
  *
  * Custom pack opens a numeric input flow inside `CreditPackCheckoutScreen`;
  * the bounds ($10–$500) are enforced there + on the backend.
+ *
+ * PACKS-BOTH-131: the row carries the line "Credit packs are non-refundable."
+ * under the prices (owner 10-07 20:54), so every surface that shows the pack
+ * prices shows it.
  */
 
 import React, { useMemo } from 'react';
@@ -15,7 +19,7 @@ import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { formatCents } from '../../../api/types/coachAIBudget';
-import { creditPacksHidden } from '../../../config/purchaseSurfaces';
+import { CREDIT_PACK_NON_REFUNDABLE, creditPacksHidden } from '../../../config/purchaseSurfaces';
 
 export interface PackOptionsRowProps {
   /** Pack option face-values in cents (server-provided). */
@@ -34,35 +38,41 @@ export function PackOptionsRow({
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Store builds: credit packs are digital services (purchaseSurfaces.ts). Covers the
-  // tutorial and hard-pause modals, which both render this row. A US-link build
-  // (creditPackCheckoutMode 'external') shows it; checkout opens in the browser.
+  // tutorial and hard-pause modals, which both render this row. A link build (iOS
+  // US link or Android link: creditPackCheckoutMode 'external') shows it;
+  // checkout opens in the browser.
   if (creditPacksHidden()) return null;
 
   return (
-    <View style={[styles.row, style]} testID={testID ?? 'ai-pack-options'}>
-      {options.map((cents) => (
+    <View style={style} testID={testID ?? 'ai-pack-options'}>
+      <View style={styles.row}>
+        {options.map((cents) => (
+          <HapticPressable
+            key={cents}
+            intent="medium"
+            onPress={() => onSelect(cents)}
+            accessibilityRole="button"
+            accessibilityLabel={`Buy ${formatCents(cents)} credit pack`}
+            style={styles.btn}
+            testID={`ai-pack-option-${cents}`}
+          >
+            <Text style={styles.btnText}>{formatCents(cents)}</Text>
+          </HapticPressable>
+        ))}
         <HapticPressable
-          key={cents}
           intent="medium"
-          onPress={() => onSelect(cents)}
+          onPress={() => onSelect('custom')}
           accessibilityRole="button"
-          accessibilityLabel={`Buy ${formatCents(cents)} credit pack`}
-          style={styles.btn}
-          testID={`ai-pack-option-${cents}`}
+          accessibilityLabel="Buy custom credit pack"
+          style={[styles.btn, styles.btnGhost]}
+          testID="ai-pack-option-custom"
         >
-          <Text style={styles.btnText}>{formatCents(cents)}</Text>
+          <Text style={[styles.btnText, styles.btnGhostText]}>Custom</Text>
         </HapticPressable>
-      ))}
-      <HapticPressable
-        intent="medium"
-        onPress={() => onSelect('custom')}
-        accessibilityRole="button"
-        accessibilityLabel="Buy custom credit pack"
-        style={[styles.btn, styles.btnGhost]}
-        testID="ai-pack-option-custom"
-      >
-        <Text style={[styles.btnText, styles.btnGhostText]}>Custom</Text>
-      </HapticPressable>
+      </View>
+      <Text style={styles.terms} testID="ai-pack-non-refundable">
+        {CREDIT_PACK_NON_REFUNDABLE}
+      </Text>
     </View>
   );
 }
@@ -98,6 +108,12 @@ function makeStyles(colors: ThemeColors) {
     },
     btnGhostText: {
       color: colors.primary,
+    },
+    terms: {
+      marginTop: 8,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
     },
   });
 }

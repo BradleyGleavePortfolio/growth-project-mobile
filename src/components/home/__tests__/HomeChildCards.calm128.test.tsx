@@ -28,6 +28,7 @@ const mockClaim = jest.fn(async () => ({ ok: true }));
 const mockClear = jest.fn(async () => undefined);
 jest.mock('../../../lib/pendingInviteCode', () => ({
   readPendingInviteCode: async () => 'ABC123', claimPendingInviteCode: () => mockClaim(), clearPendingInviteCode: () => mockClear(),
+  previewPendingInviteCoachName: async () => null,
   subscribePendingInviteCode: () => () => undefined,
 }));
 jest.mock('../../../lib/coachSharingNotice', () => ({ ...jest.requireActual('../../../lib/coachSharingNotice'), useCoachSharingNotice: () => 'v1' }));
@@ -85,7 +86,7 @@ it('coachless banner and Roman card: hairline sections, every code action fires'
 
 it('invite, coach intro, insights, macro cards: hairline sections with their actions', async () => {
   await render(<PendingInviteBanner />);
-  await screen.findByText('Tap to attach "ABC123" to your account.');
+  await screen.findByText('Attach "ABC123" to your account.');
   expectSection('pending-invite-banner');
   await fireEvent.press(screen.getByLabelText('Attach invite code'));
   expect(mockClaim).toHaveBeenCalledTimes(1);

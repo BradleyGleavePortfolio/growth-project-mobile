@@ -309,7 +309,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     const s = await render(React.createElement(ProfileScreen));
     expect(s.queryByText('Day 7 of 30.')).toBeNull();
     expect(s.queryByText(/Workouts.*(?:visible|shared)/)).toBeNull();
-    for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Widgets', 'Widgets'], ['Learn', 'Learn'], ['Edit personal info', 'EditProfile']]) {
+    for (const [label, route] of [['Settings', 'Settings'], ['My report', 'Report'], ['Shortcuts', 'Widgets'], ['Learn', 'Learn'], ['Edit personal info', 'EditProfile']]) {
       await press(s, label); expect(mockNavigate).toHaveBeenLastCalledWith(route);
     }
     for (const row of s.getAllByLabelText(/Tap to edit/)) {

@@ -1,11 +1,10 @@
 /**
- * NotificationPreferencesScreen — per-category push notification controls.
+ * NotificationPreferencesScreen — per-category notification controls.
  *
  * Phase 11 / Push Notification Taxonomy.
  *
  * Exposes four per-category toggles matching the push-channels taxonomy:
  *   - Coach Messages  (coach_direct)  — direct messages from the assigned coach
- *   - Reminders       (client_bot)    — meal, water, check-in nudges
  *   - Milestones      (milestones)    — streak and PR celebrations
  *   - System          (system)        — billing and app updates
  *   - Workout reminders (workout_reminders) — C05 item 7: a note from Roman at
@@ -59,10 +58,11 @@ function usePreferenceColors() {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type NotifCategory = 'coach_direct' | 'client_bot' | 'workout_reminders' | 'milestones' | 'system';
+type NotifCategory = 'coach_direct' | 'workout_reminders' | 'milestones' | 'system';
 
 interface CategoryPrefs {
   coach_direct: boolean;
+  // Legacy storage only: no sender consumes this choice and no row exposes it.
   client_bot: boolean;
   workout_reminders: boolean;
   milestones: boolean;
@@ -87,7 +87,6 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   coach_direct: { message_push: true, message_inapp: true },
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { digest_email: true },
-  client_bot: { eat_enabled: true },
   workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
 };
 
@@ -137,13 +136,6 @@ const CATEGORIES: CategoryMeta[] = [
     label: 'Coach messages',
     description: 'Direct message push and in-app alerts.',
     icon: 'person-circle-outline',
-  },
-  {
-    id: 'client_bot',
-    noun: 'reminder',
-    label: 'Reminders',
-    description: 'Meal reminder preference.',
-    icon: 'alarm-outline',
   },
   {
     id: 'workout_reminders',
