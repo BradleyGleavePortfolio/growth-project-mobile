@@ -440,6 +440,7 @@ export default function HabitsScreen() {
         newUnit={newUnit}
         setNewUnit={setNewUnit}
         onAdd={handleAddHabit}
+        isSaving={createHabit.isPending}
         colors={colors}
         styles={styles}
       />
