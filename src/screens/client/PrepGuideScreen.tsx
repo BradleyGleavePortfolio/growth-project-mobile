@@ -19,6 +19,7 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 import { getLocalWeekStart } from '../../utils/date';
+import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
 function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
   const { semanticColors: sc } = useTheme();
@@ -26,7 +27,7 @@ function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-interface PrepRecipe {
+interface PrepRecipe extends RecipeAllergenFields {
   id: string;
   title: string;
   prep_time_min: number;
@@ -266,6 +267,7 @@ export default function PrepGuideScreen() {
                         <Text style={styles.recipeMetaDot}>·</Text>
                         <Text style={styles.recipeMetaText}>{Math.round(recipe.calories)} kcal</Text>
                       </View>
+                      <Text style={styles.recipeMetaText}>{recipeAllergenSummary(recipe)}</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                   </TouchableOpacity>

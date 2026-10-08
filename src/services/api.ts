@@ -1033,6 +1033,8 @@ export const recipesApi = {
   list: () => api.get('/recipes'),
   listSaved: () => api.get('/recipes/saved'),
   getById: (id: string) => api.get(`/recipes/${id}`),
+  // The allergen list and this account's saved allergens that hide shared recipes (ALLERGY-M-130).
+  allergens: () => api.get('/recipes/allergens'),
   create: (data: Record<string, unknown>) => api.post('/recipes', data),
   save: (id: string) => api.post(`/recipes/${id}/save`),
   unsave: (id: string) => api.delete(`/recipes/${id}/save`),
