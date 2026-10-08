@@ -29,7 +29,8 @@ import * as Localization from 'expo-localization';
 import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigator';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import { prefsStorage } from '../../storage/mmkv';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 import StepTransitionView from '../../components/onboarding/StepTransitionView';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -77,6 +78,7 @@ type Props = {
 
 interface DraftState {
   dob?: string; // 'YYYY-01-01' — partial ISO date from birth year
+  birthYearChosen?: boolean;
   target_weight_kg?: number;
 }
 
@@ -84,7 +86,7 @@ interface DraftState {
 
 interface WheelPickerProps {
   years: number[];
-  selectedYear: number;
+  selectedYear: number | null;
   onYearChange: (year: number) => void;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
@@ -92,7 +94,7 @@ interface WheelPickerProps {
 
 function WheelPicker({ years, selectedYear, onYearChange, styles, colors }: WheelPickerProps) {
   const flatListRef = useRef<FlatList<number>>(null);
-  const selectedIndex = years.indexOf(selectedYear);
+  const selectedIndex = years.indexOf(selectedYear ?? new Date().getFullYear() - 30);
 
   // Scroll to selected index on mount
   useEffect(() => {
@@ -193,7 +195,7 @@ function WheelPicker({ years, selectedYear, onYearChange, styles, colors }: Whee
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LeanQ5Screen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const draftKey = useMemo(
@@ -202,10 +204,8 @@ export default function LeanQ5Screen({ navigation }: Props) {
   );
 
   const years = useMemo(() => buildYearRange(), []);
-  const defaultYear = new Date().getFullYear() - 30;
-
   const [units, setUnits] = useState<'imperial' | 'metric'>(defaultUnits());
-  const [selectedYear, setSelectedYear] = useState<number>(defaultYear);
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [targetWeight, setTargetWeight] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [hydrated, setHydrated] = useState(false);
@@ -221,7 +221,8 @@ export default function LeanQ5Screen({ navigation }: Props) {
         const raw = await prefsStorage.getStringAsync(draftKey!);
         if (raw) {
           const draft: DraftState = JSON.parse(raw);
-          if (draft.dob) {
+          // Older drafts wrote the displayed default without a choice.
+          if (draft.birthYearChosen && draft.dob) {
             const year = parseInt(draft.dob.split('-')[0], 10);
             if (Number.isFinite(year)) setSelectedYear(year);
           }
@@ -248,7 +249,9 @@ export default function LeanQ5Screen({ navigation }: Props) {
   useEffect(() => {
     if (!hydrated) return;
     if (!draftKey) return;
-    const draft: DraftState = { dob: `${selectedYear}-01-01` };
+    const draft: DraftState = selectedYear === null
+      ? {}
+      : { dob: `${selectedYear}-01-01`, birthYearChosen: true };
     const raw = parseFloat(targetWeight);
     if (Number.isFinite(raw) && raw > 0) {
       draft.target_weight_kg =
@@ -271,17 +274,14 @@ export default function LeanQ5Screen({ navigation }: Props) {
     if (!isWeightValid || submitting) return;
     setSubmitting(true);
     try {
-      const payload: Parameters<typeof saveOnboardingData>[0] = {
-        // Store birth year as a partial ISO dob string (YYYY-01-01) so
-        // finalizeLeanOnboarding can compute age via calculateAge(dob).
-        dob: `${selectedYear}-01-01`,
-      };
+      const payload: Parameters<typeof saveOnboardingData>[0] = {};
+      if (selectedYear !== null) payload.dob = `${selectedYear}-01-01`;
       const raw = parseFloat(targetWeight);
       if (Number.isFinite(raw) && raw > 0) {
         payload.targetWeight =
           units === 'imperial' ? lbsToKg(raw) : Math.round(raw * 10) / 10;
       }
-      await saveOnboardingData(payload);
+      if (Object.keys(payload).length > 0) await saveOnboardingData(payload);
       navigation.navigate('LeanQ6');
     } catch {
       setSubmitting(false);
@@ -308,16 +308,10 @@ export default function LeanQ5Screen({ navigation }: Props) {
           >
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.stepIndicator}>
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotComplete]} />
-              <View style={[styles.dot, styles.dotActive]} />
-            </View>
+            <Text style={styles.stepIndicator}>Step 5 of 6</Text>
             <Text style={styles.headline}>A little more about you.</Text>
             <Text style={styles.subtext}>
-              Optional — these help personalise your targets.
+              Tap or move the wheel to choose a birth year. Both fields are optional.
             </Text>
           </View>
 
@@ -425,7 +419,7 @@ export default function LeanQ5Screen({ navigation }: Props) {
             accessibilityLabel="Save and continue"
             testID="save-continue-btn"
           >
-            <Text style={styles.primaryBtnText}>SAVE AND CONTINUE</Text>
+            <Text style={styles.primaryBtnText}>Save and continue</Text>
           </TouchableOpacity>
 
           {/* Bottom row */}
@@ -439,7 +433,7 @@ export default function LeanQ5Screen({ navigation }: Props) {
               accessibilityLabel="Go back"
               testID="back-btn"
             >
-              <Text style={styles.backText}>← Back</Text>
+              <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -451,7 +445,7 @@ export default function LeanQ5Screen({ navigation }: Props) {
               accessibilityLabel="Skip, add later"
               testID="skip-btn"
             >
-              <Text style={styles.skipText}>Skip — I'll add later</Text>
+              <Text style={styles.skipText}>Skip for now</Text>
             </TouchableOpacity>
           </View>
           </StepTransitionView>
@@ -465,7 +459,7 @@ export default function LeanQ5Screen({ navigation }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.bgPrimary },
     inner: {
       flexGrow: 1,
       paddingHorizontal: 24,
@@ -473,10 +467,10 @@ const makeStyles = (colors: ThemeColors) =>
       paddingBottom: 16,
     },
     header: { marginBottom: 28 },
-    stepIndicator: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+    stepIndicator: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 1.2, color: colors.textMuted, marginBottom: 24 },
     dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
-    dotActive: { backgroundColor: colors.primary, width: 24 },
-    dotComplete: { backgroundColor: colors.primary },
+    dotActive: { backgroundColor: colors.accent, width: 24 },
+    dotComplete: { backgroundColor: colors.accent },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 32,
@@ -489,7 +483,7 @@ const makeStyles = (colors: ThemeColors) =>
     subtext: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       lineHeight: 22,
     },
     fieldGroup: { marginBottom: 24 },
@@ -508,7 +502,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 2,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bgSurface,
       overflow: 'hidden',
       height: PICKER_HEIGHT,
     },
@@ -519,8 +513,8 @@ const makeStyles = (colors: ThemeColors) =>
       height: ITEM_HEIGHT,
       borderTopWidth: 1,
       borderBottomWidth: 1,
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryPale,
+      borderColor: colors.accent,
+      backgroundColor: colors.bgPrimary,
       zIndex: 1,
     },
     wheelItem: {
@@ -552,18 +546,18 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.border,
     },
     unitChipActive: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryPale,
+      borderColor: colors.accent,
+      backgroundColor: colors.bgPrimary,
     },
     unitChipText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
-      color: colors.textSecondary,
+      color: colors.textMuted,
     },
-    unitChipTextActive: { color: colors.primary },
+    unitChipTextActive: { color: colors.accentText },
     // Weight input
     input: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bgSurface,
       borderWidth: 1,
       borderColor: colors.border,
       borderRadius: 2,
@@ -574,11 +568,11 @@ const makeStyles = (colors: ThemeColors) =>
       fontFamily: 'Inter_400Regular',
     },
     inputError: {
-      borderColor: colors.error,
+      borderColor: colors.textPrimary,
     },
     // Buttons
     primaryBtn: {
-      backgroundColor: colors.primary,
+      backgroundColor: colors.accent,
       paddingVertical: 16,
       alignItems: 'center',
       marginTop: 16,
@@ -587,7 +581,7 @@ const makeStyles = (colors: ThemeColors) =>
     primaryBtnText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 14,
-      color: colors.textOnPrimary,
+      color: colors.textOnAccent,
       letterSpacing: 1.2,
       fontWeight: '600',
     },
@@ -602,7 +596,7 @@ const makeStyles = (colors: ThemeColors) =>
     backText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       fontWeight: '500',
       letterSpacing: 0.3,
     },

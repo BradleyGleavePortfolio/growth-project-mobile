@@ -31,7 +31,7 @@ const RESUME = read('screens/day-one/resume.ts');
 const STRINGS = JSON.parse(read('screens/day-one/i18n/en.json'));
 
 describe('Day1OnboardingNavigator', () => {
-  it('declares all six screens in the param list', () => {
+  it('keeps the legacy param list, including the retired check-in type', () => {
     const block = NAV.match(/Day1OnboardingParamList\s*=\s*\{([\s\S]*?)\};/);
     expect(block).not.toBeNull();
     const body = block![1];
@@ -43,10 +43,12 @@ describe('Day1OnboardingNavigator', () => {
     expect(body).toMatch(/Ready:\s*undefined/);
   });
 
-  it('registers all six screens as Stack.Screen entries', () => {
-    for (const name of ['Welcome', 'CoachPairing', 'Goals', 'Notifications', 'CheckInTime', 'Ready']) {
+  it('registers five screens without the ineffective check-in-time step', () => {
+    for (const name of ['Welcome', 'CoachPairing', 'Goals', 'Notifications', 'Ready']) {
       expect(NAV).toMatch(new RegExp(`Stack\\.Screen[\\s\\S]*?name=["']${name}["']`));
     }
+    expect(NAV).not.toMatch(/name=["']CheckInTime["']/);
+    expect(NOTIF).toMatch(/navigation\.navigate\('Ready'\)/);
   });
 
   it('disables back-gesture so users cannot swipe-out mid-flow', () => {
@@ -170,11 +172,11 @@ describe('Quality bar — no any, no @ts-ignore in Day-1 sources', () => {
 });
 
 describe('StepHeader contract', () => {
-  it('advertises a 6-step total (one per Day-1 screen)', () => {
-    expect(HEADER).toMatch(/DAY_ONE_TOTAL_STEPS\s*=\s*6/);
+  it('advertises a 5-step total (one per remaining Day-1 screen)', () => {
+    expect(HEADER).toMatch(/DAY_ONE_TOTAL_STEPS\s*=\s*5/);
   });
 
-  it('renders visible N/6 step text alongside the bar', () => {
+  it('renders visible progress text alongside the bar', () => {
     expect(HEADER).toMatch(/day-one-step-text/);
     expect(HEADER).toMatch(/DAY_ONE_TOTAL_STEPS/);
   });

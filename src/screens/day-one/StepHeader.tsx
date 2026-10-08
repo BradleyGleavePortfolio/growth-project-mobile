@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { t } from './i18n/strings';
 
-export const DAY_ONE_TOTAL_STEPS = 6;
+export const DAY_ONE_TOTAL_STEPS = 5;
 
 /** Shared semantic palette; the provider's legacy flat colors are fixed light. */
 export function useDayOneColors() {

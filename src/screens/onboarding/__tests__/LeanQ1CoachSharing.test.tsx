@@ -47,7 +47,7 @@ describe('coach sharing on the first lean onboarding screen', () => {
     expect(mockRead).toHaveBeenCalledWith(V1);
     expect(mockAccept).not.toHaveBeenCalled();
 
-    await fireEvent.press(screen.getByText('Build Muscle'));
+    await fireEvent.press(screen.getByText('Build muscle'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('LeanQ2'));
     expect(mockAccept).toHaveBeenCalledTimes(1);
     expect(mockAccept).toHaveBeenCalledWith(V1);
@@ -62,7 +62,7 @@ describe('coach sharing on the first lean onboarding screen', () => {
     const navigate = await renderQ1();
     await waitFor(() => expect(mockRead).toHaveBeenCalled());
     expect(screen.queryByText(SENTENCE)).toBeNull();
-    await fireEvent.press(screen.getByText('Lose Weight'));
+    await fireEvent.press(screen.getByText('Lose weight'));
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('LeanQ2'));
     expect(mockAccept).not.toHaveBeenCalled();
   });

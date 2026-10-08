@@ -410,6 +410,8 @@ src/
 
 ## Navigation
 
+New clients complete either LeanQ1–LeanQ6 or the available consultation. Completion never opens a second Day-1 onboarding flow, including while lean profile sync is pending. The retained legacy Day-1 stack no longer asks for an unscheduled check-in time; the separate first-win action remains skippable.
+
 Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
 
 **iOS purchase surfaces.** `src/config/purchaseSurfaces.ts` is the single gate.
