@@ -83,6 +83,16 @@ export async function readPendingInviteCode(): Promise<string | null> {
   }
 }
 
+/** Optional, read-only coach name. Preview failure never blocks explicit Attach. */
+export async function previewPendingInviteCoachName(code: string): Promise<string | null> {
+  try {
+    const { data } = await authApi.getInvitePreview(code);
+    return data?.valid === true ? clean(data.coach_name) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function writePendingInviteCode(code: string): Promise<void> {
   try {
     await AsyncStorage.setItem(KEY, code);
@@ -142,7 +152,11 @@ export async function claimPendingInviteCode(
     return {
       ok: false,
       reason: reason ?? (status ? `http_${status}` : 'network'),
-      message: message ?? 'Could not attach this invite code.',
+      message: message ?? (
+        status >= 400 && status < 500
+          ? 'This invite is not available. Ask the coach for a new code.'
+          : 'The invite could not be attached right now. Try Attach again.'
+      ),
     };
   }
 }
