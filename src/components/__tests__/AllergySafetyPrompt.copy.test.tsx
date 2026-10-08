@@ -118,6 +118,15 @@ describe('AllergySafetyPrompt copy (ALLERGY-128)', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['Sesame', 'Soy']));
   });
 
+  // A fish allergy could only be saved from Edit Profile. Fish is saved as shown; the backend maps 'fish'.
+  it('offers Fish and saves it as shown', async () => {
+    const { onSubmit } = await renderPrompt('on');
+    await fireEvent.press(screen.getByLabelText('Fish'));
+    expect(screen.getByLabelText('Fish').props.accessibilityState).toEqual({ selected: true });
+    await fireEvent.press(screen.getByLabelText('Save restrictions'));
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(['Fish']));
+  });
+
   it('saves None as an empty list', async () => {
     const { onSubmit } = await renderPrompt();
     await fireEvent.press(screen.getByLabelText('None'));

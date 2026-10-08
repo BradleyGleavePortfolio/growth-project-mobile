@@ -45,7 +45,7 @@ const LEDE: Record<RecipeAllergenRule, string> = {
 };
 
 // Each label is saved as typed; the backend (src/recipes/allergens.ts) maps the allergy ones to
-// its allergen codes. Soy and Sesame are the allergen names it maps (ALLERGY-CHOICES-131).
+// its allergen codes. Soy, Sesame and Fish are the allergen names it maps (ALLERGY-CHOICES-131).
 const RESTRICTION_OPTIONS = [
   'None',
   'Nut Allergy',
@@ -55,6 +55,7 @@ const RESTRICTION_OPTIONS = [
   'Dairy Allergy',
   'Soy',
   'Sesame',
+  'Fish',
   'Gluten-Free',
   'Vegetarian',
   'Vegan',
