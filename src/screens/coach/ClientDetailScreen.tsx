@@ -67,6 +67,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     workoutSessions,
     timeline,
     weekSummaries,
+    timelineLoading,
+    timelineError,
+    weeklyLoading,
+    weeklyError,
     isLoading,
     loadError,
     refreshing,
@@ -560,6 +564,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             />
             <TimelineTab
               events={timeline}
+              loading={timelineLoading}
+              error={timelineError}
               onLoad={() => loadTimeline(selectedDays)}
               days={selectedDays}
               viewerId={currentUser?.id ?? null}
@@ -580,6 +586,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             />
             <WeeklySummaryTab
               summaries={weekSummaries}
+              loading={weeklyLoading}
+              error={weeklyError}
+              onRetry={() => loadWeeklySummaries(selectedDays)}
               days={selectedDays}
               expandedWeeks={expandedWeeks}
               onToggleWeek={(weekStart) => {

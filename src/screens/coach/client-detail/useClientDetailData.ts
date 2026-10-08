@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import { errorMessage } from '../../../types/common';
+import { loadFailureMessage } from '../../../ui/states/QuietStates';
 import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
@@ -22,6 +23,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
   const [weekSummaries, setWeekSummaries] = useState<WeekSummary[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(true);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(true);
+  const [weeklyError, setWeeklyError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -133,10 +138,12 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
   }, [clientId]);
 
   const loadTimeline = useCallback(async (selectedDays: 7 | 30 | 90) => {
+    setTimelineLoading(true);
+    setTimelineError(null);
     try {
       const res = await coachApi.getClientTimeline(clientId, selectedDays);
       const data = res.data;
-      if (data.error) return;
+      if (data.error) throw new Error('Timeline unavailable');
 
       const events: TimelineEvent[] = [];
 
@@ -215,8 +222,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimeline(events);
     } catch (err) {
-      // Timeline is a read-only aggregate — empty state is acceptable here.
       console.error('ClientDetailScreen: loadTimeline failed', err);
+      setTimelineError(loadFailureMessage(err, 'Timeline'));
+    } finally {
+      setTimelineLoading(false);
     }
   }, [clientId, colors]);
 
@@ -235,12 +244,14 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
 
   // ── Weekly Summary ────────────────────────────────────────────────────────────
   const loadWeeklySummaries = useCallback(async (selectedDays: 7 | 30 | 90) => {
+    setWeeklyLoading(true);
+    setWeeklyError(null);
     try {
       // Use the backend API to get timeline data for the selected period
       const res = await coachApi.getClientTimeline(clientId, selectedDays);
       const data = res.data;
 
-      if (data.error) return;
+      if (data.error) throw new Error('Weekly summary unavailable');
 
       const { meals, workouts, weights } = data;
 
@@ -339,8 +350,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
 
       setWeekSummaries(sorted);
     } catch (err) {
-      // Read-only summary aggregation — partial state is acceptable.
       console.error('ClientDetailScreen: loadWeeklySummaries failed', err);
+      setWeeklyError(loadFailureMessage(err, 'Weekly summary'));
+    } finally {
+      setWeeklyLoading(false);
     }
   }, [clientId]);
 
@@ -353,6 +366,10 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     workoutSessions,
     timeline,
     weekSummaries,
+    timelineLoading,
+    timelineError,
+    weeklyLoading,
+    weeklyError,
     isLoading,
     loadError,
     refreshing,
