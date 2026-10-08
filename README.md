@@ -421,6 +421,8 @@ New clients complete either LeanQ1–LeanQ6 or the available consultation. Compl
 
 Coach `ClientDetail` accepts `initialTab: 'workouts' | 'mealplan'` (optional). AI meal-plan approval opens the Plan tab; clients find their plans at More → Meal plan, not a dedicated Plan tab.
 
+The orphan coach `CoachMealTemplates` route is not registered. No entry action or deep link used it; the meal-template API, hooks and existing daily meal-plan paths are retained (MEAL-TEMPLATES-ROUTE-132).
+
 **iOS purchase surfaces.** `src/config/purchaseSurfaces.ts` is the single gate.
 - Client 1:1 coach packages stay available on iOS (Guideline 3.1.3(d), Stripe).
 - Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.
