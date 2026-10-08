@@ -22,6 +22,14 @@ Quiet Luxury Doctrine.
 | `EmptyStateNoResults` | Search / filter — zero results, accepts `query` prop |
 | `EmptyStateOffline` | Network-down state with optional retry CTA |
 
+## Look (QA-EMPTY-131)
+
+One calm look across `EmptyState`, `EmptyStateNoClients` and `src/components/EmptyState.tsx`:
+
+- Headlines in Cormorant (`typography.h2`; the components variant uses `typography.h3`), body in Inter with the one muted grey (`textMuted`).
+- The CTA is a forest button with radius 4, at least 44 pt tall, with an Inter 16 sentence-case label (`typography.bodyMd`). The base and components variants press through `HapticPressable` (light).
+- `EmptyStateNoClients`: "Share your code" and "Open invite codes" (it opens the Invite codes screen, so it no longer says Settings); a 44 pt "Copy code" whose tap goes through `HapticService`, so the Haptics switch is honoured; the code box is unfilled with the theme hairline (`semanticColors.border`).
+
 ## Props
 
 ### `EmptyState` (base)
@@ -120,3 +128,7 @@ All icons live in `icons.tsx` and are exported from the `index.ts` barrel.
 Covers: headline renders, body renders, body omitted when absent, CTA fires
 `onCta`, no CTA without props, `accessibilityRole`, `accessibilityLabel`,
 all five variant headlines, query interpolation in `EmptyStateNoResults`.
+
+`src/ui/empty-states/__tests__/emptyStateLook.test.tsx` pins the look above:
+CTA size, radius, font and handler for both shared empty states, theme colours
+for the components variant, and the No-clients labels, code box and copy haptic.
