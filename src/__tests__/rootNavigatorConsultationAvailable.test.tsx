@@ -2,8 +2,8 @@
  * S-REVENUE-124 (B-REV-1), caller level: with the consultation flag on (the
  * clinic build), a new client the server cannot finish the consultation for
  * (GET /me/onboarding consultation_available: false: no coach yet, or a coach
- * without a clinic program set) gets the standard onboarding and then the
- * Day-1 flow, exactly as with the flag off, instead of a consultation that
+ * without a clinic program set) gets the standard onboarding, with no second
+ * Day-1 setup flow after completion, instead of a consultation that
  * ends on "not_attached" / "clinic_not_configured" forever. A missing field,
  * a 404 or a failed read keeps the consultation. Harness copied from
  * rootNavigatorConsultationComplete.test.tsx (real RootNavigator).
@@ -203,12 +203,25 @@ describe('B-REV-1: the consultation only where the server can finish it (flag on
     expect(await AsyncStorage.getItem(MARKER)).toBe('true');
   });
 
-  it('after the standard onboarding: the Day-1 flow, as with the flag off', async () => {
+  it.each([true, false])('after lean completion, never starts another Day-1 flow (profile synced: %s)', async (synced) => {
     await AsyncStorage.setItem(MARKER, 'true');
     await AsyncStorage.setItem('onboarding_complete', 'true');
+    await AsyncStorage.setItem('prefs:auth.user_data', JSON.stringify({
+      ...NEW_CLIENT, profile: { ...NEW_CLIENT.profile, onboardingCompleted: synced },
+    }));
     const r = await mount();
-    await r.findByTestId('nav-day1');
+    await r.findByTestId('day1-win');
+    expect(r.queryByTestId('nav-day1')).toBeNull();
     expect(onboardingReads()).toBe(0);
+  });
+
+  it('ignores an old Day-1 checkpoint after onboarding, with the consultation flag off', async () => {
+    mockConsultFlag = false;
+    await AsyncStorage.setItem('onboarding_complete', 'true');
+    await AsyncStorage.setItem('day_one_onboarding_state_v1', JSON.stringify({ step: 'Goals' }));
+    const r = await mount();
+    await r.findByTestId('day1-win');
+    expect(r.queryByTestId('nav-day1')).toBeNull();
   });
 
   it('a clinic client (server: available): the consultation, unchanged', async () => {

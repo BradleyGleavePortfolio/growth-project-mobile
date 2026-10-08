@@ -21,8 +21,6 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
 import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
-import Day1OnboardingNavigator from './Day1OnboardingNavigator';
-import { readResumeState as readDay1ResumeState } from '../screens/day-one/resume';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
@@ -61,7 +59,6 @@ type AuthState =
   | 'loading'
   | 'unauthenticated'
   | 'onboarding'
-  | 'day1onboarding'
   | 'day1win'
   | 'coach_wizard'
   | 'coach'
@@ -338,8 +335,8 @@ const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
  * runs only for a client the server can finish it for. GET /me/onboarding
  * `consultation_available: false` (no coach yet, or a coach without a clinic
  * program set: POST /complete would answer not_attached or
- * clinic_not_configured forever) means the standard onboarding and the Day-1
- * flow, exactly as with the flag off. A missing field (older server), a 404 or
+ * clinic_not_configured forever) means the standard onboarding.
+ * A missing field (older server), a 404 or
  * a failed read keeps the consultation, as before.
  */
 async function consultationApplies(): Promise<boolean> {
@@ -785,8 +782,8 @@ export default function RootNavigator() {
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
         // plan reveal and Roman's tutorial replace the Day-1 flow and the
         // Day-1 win, so a client who finished it goes straight to the app.
-        // B-REV-1: a client sent to the standard onboarding (consultation not
-        // available) also gets the Day-1 flow, exactly as with the flag off.
+        // A client who finished lean onboarding may still choose a first win,
+        // but never has to complete a second onboarding flow.
         let standardPath = !featureFlags.consultationOnboarding;
         if (!standardPath && standardKey) {
           try {
@@ -794,31 +791,6 @@ export default function RootNavigator() {
           } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         }
         if (standardPath) {
-          // Day-1 final onboarding gate. Decacorn-quality flow shown to every
-          // student who has not yet completed it. Backend source of truth is
-          // `profile.day_one_completed`; we also accept the legacy
-          // onboarding flag (`onboardingCompleted`, see lib/profileOnboarding) so existing users who already finished
-          // the old flow are not asked to redo it. A local AsyncStorage flag
-          // and an in-progress resume checkpoint keep the flow alive across
-          // reinstalls when the backend hasn't caught up (fail-open).
-          try {
-            const day1ServerDone = !!user?.profile?.day_one_completed;
-            const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
-            const legacyOnboardingDone = profileOnboardingCompleted(user?.profile);
-            const day1ResumeState = await readDay1ResumeState();
-            if (
-              !day1ServerDone &&
-              !day1LocalDone &&
-              (!legacyOnboardingDone || day1ResumeState !== null)
-            ) {
-              setAuthState('day1onboarding');
-              return;
-            }
-            if (day1ServerDone && !day1LocalDone) {
-              await AsyncStorage.setItem('day_one_completed', 'true');
-            }
-          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
-
           // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
           // error handling — if the API is unreachable, skip the win screen and
           // go straight to the client app. The screen can be shown on next boot.
@@ -993,11 +965,6 @@ export default function RootNavigator() {
         ) : (
           <LeanOnboardingNavigator />
         )
-      ) : authState === 'day1onboarding' ? (
-        // Day-1 final onboarding. Mounts after signup + lean for any student
-        // who has not yet flipped `profile.day_one_completed`. The Ready
-        // screen calls authEvents.emit() to bounce us back to bootstrapAuth.
-        <Day1OnboardingNavigator />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />
