@@ -2,8 +2,6 @@ import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { LeanOnboardingParamList } from '../../../navigation/LeanOnboardingNavigator';
 
 const mockDrafts: Record<string, string> = {};
 const mockUpdate = jest.fn(async (_payload: unknown) => ({ data: {} }));
@@ -46,10 +44,18 @@ import LeanQ6 from '../LeanQ6Screen';
 import { getOnboardingData } from '../../../utils/onboardingStore';
 import { authEvents } from '../../../utils/authEvents';
 
-const navigation = {
+type TestNavigation =
+  React.ComponentProps<typeof LeanQ1>['navigation'] &
+  React.ComponentProps<typeof LeanQ2>['navigation'] &
+  React.ComponentProps<typeof LeanQ3>['navigation'] &
+  React.ComponentProps<typeof LeanQ4>['navigation'] &
+  React.ComponentProps<typeof LeanQ5>['navigation'] &
+  React.ComponentProps<typeof LeanQ6>['navigation'];
+const navigationStub: Partial<TestNavigation> = {
   navigate: jest.fn(),
   goBack: jest.fn(),
-} as NativeStackNavigationProp<LeanOnboardingParamList>;
+};
+const navigation = navigationStub as TestNavigation;
 const screens = [LeanQ1, LeanQ2, LeanQ3, LeanQ4, LeanQ5, LeanQ6];
 const draftKey = 'onboarding.lean_q5_draft:lean-client';
 
