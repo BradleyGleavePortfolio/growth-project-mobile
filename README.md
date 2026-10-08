@@ -128,6 +128,13 @@ eas build --platform android --profile production
 eas build --platform ios --profile clinic
 ```
 
+### Apple Health permission messages
+
+Apple Health access is read-only: [HealthKitClient.requestAuth](src/services/health/healthkit/healthKitClient.ts) requests no write permissions.
+The [native purpose strings](app.json) name the coach's use of shared data and Roman's use of daily summaries when AI access is allowed.
+Both the Info.plist and `react-native-health` plugin update strings explicitly say the app does not write data, preventing the plugin's default update wording from replacing them; [store-review permission tests](src/config/__tests__/storeReviewPermissions.test.js) verify the generated strings.
+Purpose-string changes require a new iOS binary; an over-the-air update does not replace the installed Info.plist.
+
 ## Environment variables
 
 All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
