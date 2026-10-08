@@ -14,6 +14,13 @@ without changing portions, notes, targets or sharing states. Weekly disclosure,
 7/14/30-day food filters, feedback, meal plans, refresh and workout AI actions remain.
 Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
 
+Timeline and Weekly have independent loading, failure and verified-empty states.
+Failed reads say which tab could not load, without showing raw server text or
+claiming that no activity exists. Try again reloads that tab's selected 7/30/90-day
+period. The shared QuietLoading skeleton and QuietError forest text action leave
+check-in review and weekly disclosure unchanged. Regression and action parity:
+`src/__tests__/coachTimelineStates132.test.tsx` (agent 132).
+
 - Show the coach the state of every client they own: streaks, last log, last check-in, alerts.
 - Let the coach issue invite codes that bind new signups to their account, and revoke codes they no longer want to honour.
 - Talk to clients (per-thread DMs) and ship lightweight nudges (push notifications + in-app banners).
@@ -40,6 +47,7 @@ Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
 | `payments/CoachPackagesListScreen.tsx` | Package list, create/edit routes and refresh. Unavailable packages use neutral version-availability copy, without promising a future release. |
 | `CreditPackCheckoutScreen.tsx` | Stripe-webview entry point for AI credit packs (Stream 1). Two-phase flow: selection (pack tiers + custom amount, bounded by `pack_options_cents` / `custom_pack_bounds_cents` from the budget query) then webview (`react-native-webview` pointing at the minted Stripe Checkout URL with the same origin allow-list + deep-link parser as `BrandedCheckoutWebViewScreen`). Not a 1:1 service: on iOS the route is replaced by the neutral hidden state (`withNonP2PPurchaseGate`, see `src/config/purchaseSurfaces.ts`); elsewhere billed via Stripe. On a US-link build (`creditPackCheckoutMode() === 'external'`) the screen says the coach pays TGP the pack price, opens the minted Stripe Checkout URL in the system browser with `Linking.openURL` (never the WebView), sends `tgp://checkout/success` and `tgp://checkout/cancel` as the return links, and waits in an `external` phase ("Done", "Open checkout again"). The success link shows the receipt, the cancel link returns to the packs, and returning to the app refetches the budget. An Android build with `EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK` on (eas.json preview profile only) takes the same `external` path (PACKS-BOTH-131). `route.params.preselect` (from `AIBudgetMount`): a pack amount tapped on the tutorial or hard-pause card starts that pack's checkout once on open; `'custom'` opens with the custom-amount field focused; any other value shows the list. The pack row and the browser wait state say "Credit packs are non-refundable." A checkout that does not start says why in plain words (busy, offline, other) and that nothing was charged. Success state is `SuccessReceipt` (quiet-luxury — see "Success state" below). |
 | `PendingAiDraftsScreen.tsx` | Stream 2 inbox of pending AI execution drafts. Lists `AiActionDraft` rows in `status='pending'` for the current coach across the four Stream 2 capabilities (`draft.client_message`, `draft.assign_workout`, `draft.assign_meal_plan`, `draft.send_notification`). Per-capability card variants render the appropriate preview (message body / workout name + weeks + day-1 exercise count / meal plan macro summary / notification title + body). Approve + Reject buttons call the existing approval endpoints. Focus-gated 30s polling via `usePendingAiDrafts` composed with `useIsFocused()`. Reached from any client-detail screen via the `<AskAiActionSheet>` flow (`Summary tab → Ask AI pill → pick capability → submit prompt → navigate here`). |
+| `CoachMealTemplatesScreen.tsx` | Not mounted: the unused `CoachMealTemplates` route had no entry action and is intentionally removed (MEAL-TEMPLATES-ROUTE-132). The screen source, `mealTemplatesApi`, hooks, daily-plan authoring/assignment and client Meal plan flow remain. Route/API parity: `__tests__/coachSettingsTruthfulness.test.tsx`. |
 
 The coach Settings Roman row and its accessibility hint both read “Ask about programming, nutrition or running your practice.” The existing flag-gated `RomanChat` destination is unchanged.
 
