@@ -4,7 +4,8 @@
 // Streak types: check_in, workout, weight_log.
 //
 // State machine:
-//   idle → loading → (data | error)
+//   loading → (data | error); loading is the shared skeleton and a failed
+//   read is the calm LoadFailedNotice with Try again (QA-COACH-HOME-131).
 //   Pull-to-refresh transitions loading → data/error.
 //
 // Data source: commandCenterApi.getWinStreaks()
@@ -17,7 +18,6 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
 import { colors, spacing, typography, radius } from '../../../theme/tokens';
@@ -26,8 +26,10 @@ import {
   WinStreakEntry,
 } from '../../../services/commandCenterApi';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 
-type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
+type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
 const STREAK_TYPE_LABEL: Record<string, string> = {
   check_in:   'Check-in streak',
@@ -74,10 +76,9 @@ function StreakRow({
 }
 
 export default function WinStreaksScreen({ onSelectClient }: Props) {
-  const [state, setState] = useState<LoadState>('idle');
+  const [state, setState] = useState<LoadState>('loading');
   const [items, setItems] = useState<WinStreakEntry[]>([]);
   const [totalStreaks, setTotalStreaks] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
@@ -87,7 +88,6 @@ export default function WinStreaksScreen({ onSelectClient }: Props) {
       setTotalStreaks(res.data.total_active_streaks);
       setState('data');
     } catch {
-      setErrorMessage('Unable to load win streaks. Check your connection and try again.');
       setState('error');
     }
   }, []);
@@ -96,8 +96,8 @@ export default function WinStreaksScreen({ onSelectClient }: Props) {
 
   if (state === 'loading') {
     return (
-      <View style={styles.centred} testID="command-center-win-streaks">
-        <ActivityIndicator color={colors.forest} />
+      <View style={styles.container} testID="command-center-win-streaks">
+        <SkeletonScreen testID="command-center-win-streaks-loading" />
       </View>
     );
   }
@@ -105,15 +105,11 @@ export default function WinStreaksScreen({ onSelectClient }: Props) {
   if (state === 'error' && items.length === 0) {
     return (
       <View style={styles.centred} testID="command-center-win-streaks">
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          onPress={() => load(false)}
-          style={styles.retryButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading win streaks"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+        <LoadFailedNotice
+          message="Win streaks could not load."
+          onRetry={() => load(false)}
+          testID="command-center-win-streaks-error"
+        />
       </View>
     );
   }
@@ -248,23 +244,6 @@ const styles = StyleSheet.create({
   emptyBody: {
     ...typography.body,
     color: colors.stone,
-    textAlign: 'center',
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-  },
-  retryText: {
-    ...typography.caption,
-    color: colors.bone,
     textAlign: 'center',
   },
 });
