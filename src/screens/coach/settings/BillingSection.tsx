@@ -17,19 +17,19 @@ export function BillingSection({
 }) {
   return (
     <>
-      {/* Business — Stripe Connect-backed business metrics + team profile.
+      {/* Business — Stripe Connect-backed business metrics + business profile.
           Both screens render honest empty states when the backend hasn't
-          provisioned the relevant endpoints. */}
+          provisioned the relevant endpoints. agent 132 */}
       <Text style={styles.sectionHeader}>Business</Text>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
           onPress={onOpenTeamProfile}
           accessibilityRole="button"
-          accessibilityLabel="Open team profile"
+          accessibilityLabel="Open business profile"
         >
           <Ionicons name="business-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Team / Gym profile</Text>
+          <Text style={styles.rowLabel}>Business profile</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         {/* C-332-12 (Opus): Money opens from the Payments section only. */}

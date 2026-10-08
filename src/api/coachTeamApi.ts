@@ -19,6 +19,7 @@
 
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
+import { errorMessage } from '../types/common';
 
 export interface TeamProfile {
   id: string;
@@ -70,8 +71,7 @@ function wrap<T>(p: Promise<AxiosResponse<T>>): Promise<TeamResult<T>> {
       if (status === 404 || status === 501) {
         return { ok: false as const, reason: 'not_configured' as const };
       }
-      const message =
-        (err as { message?: string })?.message ?? 'Failed to load — try again.';
+      const message = errorMessage(err);
       return { ok: false as const, reason: 'error' as const, message };
     });
 }
