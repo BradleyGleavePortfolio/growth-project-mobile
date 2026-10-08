@@ -139,6 +139,18 @@ describe('Membership status is the real plan (B-3)', () => {
     expect(s.getByText('Plan details could not be loaded. Pull down to try again.')).toBeTruthy();
   });
 
+  // B-535-SOL-D-130-1 (Sol): a refund ends access while the app stays open. The fresh plan read finds no
+  // plan, and that wins over the entitlement the app read before the refund.
+  it('a fresh plan read with no plan wins over an earlier active entitlement', async () => {
+    mockPlan = NO_PLAN;
+    mockEntitlementActive = true;
+    const s = await renderScreen();
+    expect(s.getByText('No active plan')).toBeTruthy();
+    expect(s.getByText('To start one, open View coaching plans or message your coach.')).toBeTruthy();
+    expect(s.queryByText('Active')).toBeNull();
+    expect(s.queryByText(/Access provided by/)).toBeNull();
+  });
+
   it('when the plan read fails, an inactive entitlement reads No active plan', async () => {
     mockPlan = PLAN_FAILED;
     mockEntitlementActive = false;

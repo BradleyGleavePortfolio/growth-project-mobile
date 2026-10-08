@@ -97,7 +97,9 @@ export function membershipStatus(input: {
       hasPlan: true,
     };
   }
-  if (entitlementActive === true) {
+  // B-535-SOL-D-130-1 (Sol): a plan read that succeeded and found no plan is the truth. The entitlement the
+  // app already holds can predate a refund, so it decides only while the plan read is missing or failed.
+  if (entitlementActive === true && !plan?.ok) {
     return {
       value: 'Active',
       planName: null,
