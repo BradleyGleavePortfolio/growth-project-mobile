@@ -252,8 +252,8 @@ describe('SubCoachDetailScreen revoke action', () => {
 describe('CoachTeamProfileScreen honesty', () => {
   const src = readSrc('screens/coach/CoachTeamProfileScreen.tsx');
 
-  it('shows a "set up team" CTA when getProfile returns not_configured', () => {
-    expect(src).toMatch(/Set up your team/);
+  it('shows a business-profile setup CTA when getProfile returns not_configured', () => {
+    expect(src).toMatch(/Set up your business profile/);
     expect(src).toMatch(/team\.ok/);
   });
 

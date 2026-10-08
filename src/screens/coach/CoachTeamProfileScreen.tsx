@@ -1,21 +1,21 @@
 /**
  * CoachTeamProfileScreen
  *
- * The head coach's team / gym / organization profile. Renders the coach's
+ * The coach's business profile. Renders the coach's
  * permanent invite link (the code every sign-up path accepts) and the client
  * count. AUDIT-16-125: the stored team code (GP-TEAM-...) is not accepted by
  * any sign-up or join path, so it is no longer shown or shared; the invented
  * seat capacity and the unreachable sub-coach link are gone too.
  *
  * Renders an honest setup CTA when the backend has not provisioned the
- * /coach/team endpoint yet (404). Never invents data.
+ * /coach/team endpoint yet (404). Never invents data. agent 132
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +33,10 @@ import {
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import InviteShareCard from '../../components/coach/setup/InviteShareCard';
+import { QuietError } from '../../ui/states/QuietStates';
+import { typography, withAlpha } from '../../theme/tokens';
+
+const BUSINESS_NAME_MAX_LENGTH = 120;
 
 export default function CoachTeamProfileScreen() {
   const { colors } = useTheme();
@@ -49,6 +53,7 @@ export default function CoachTeamProfileScreen() {
   const [saveError, setSaveError] = useState('');
 
   const load = useCallback(async () => {
+    setTeam(null);
     const res = await coachTeamApi.getProfile();
     setTeam(res);
   }, []);
@@ -57,11 +62,15 @@ export default function CoachTeamProfileScreen() {
     void load();
   }, [load]);
 
-  const handleCreateTeam = async () => {
+  const handleSaveProfile = async () => {
     setSaveError('');
     const name = savingName.trim();
     if (!name) {
       setSaveError('Business name is required.');
+      return;
+    }
+    if (name.length > BUSINESS_NAME_MAX_LENGTH) {
+      setSaveError('Use 120 characters or fewer for the business name.');
       return;
     }
     setSaving(true);
@@ -71,7 +80,7 @@ export default function CoachTeamProfileScreen() {
       setSetupOpen(false);
       setSavingName('');
     } catch (err) {
-      setSaveError(errorMessage(err, 'Could not save. Please try again.'));
+      setSaveError(errorMessage(err, 'The business profile could not be saved. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -84,10 +93,8 @@ export default function CoachTeamProfileScreen() {
   if (!team.ok && team.reason === 'error') {
     return (
       <View style={styles.container}>
-        <Text style={styles.header}>Team</Text>
-        <TouchableOpacity onPress={load} accessibilityRole="button" accessibilityLabel="Retry">
-          <Text style={styles.errorText}>{team.message} Tap to retry.</Text>
-        </TouchableOpacity>
+        <Text style={styles.header}>Business profile</Text>
+        <QuietError message={team.message} onRetry={load} />
       </View>
     );
   }
@@ -96,32 +103,32 @@ export default function CoachTeamProfileScreen() {
   if (!team.ok) {
     return (
       <View style={styles.container}>
-        <Text style={styles.header}>Team</Text>
+        <Text style={styles.header}>Business profile</Text>
         <View style={styles.gate}>
           <Ionicons name="business-outline" size={36} color={colors.textMuted} />
-          <Text style={styles.gateTitle}>Set up your team</Text>
+          <Text style={styles.gateTitle}>Set up your business profile</Text>
           <Text style={styles.gateBody}>
-            Add a business name for your team profile. Clients join with your
-            invite link.
+            Add the name clients know your business by.
           </Text>
           <TouchableOpacity
             style={styles.cta}
             onPress={() => setSetupOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel="Set up team"
+            accessibilityLabel="Set up business profile"
           >
-            <Text style={styles.ctaText}>Set up team</Text>
+            <Text style={styles.ctaText}>Set up profile</Text>
           </TouchableOpacity>
         </View>
 
         <Modal visible={setupOpen} transparent animationType="fade" onRequestClose={() => setSetupOpen(false)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Set up team</Text>
+              <Text style={styles.modalTitle}>Business profile</Text>
               <Text style={styles.label}>Business name</Text>
               <TextInput
                 value={savingName}
                 onChangeText={setSavingName}
+                maxLength={BUSINESS_NAME_MAX_LENGTH}
                 placeholder="e.g. Atlas Coaching"
                 placeholderTextColor={colors.textMuted}
                 style={styles.input}
@@ -142,15 +149,15 @@ export default function CoachTeamProfileScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.cta, saving && styles.ctaDisabled]}
-                  onPress={handleCreateTeam}
+                  onPress={handleSaveProfile}
                   disabled={saving}
                   accessibilityRole="button"
-                  accessibilityLabel="Create team"
+                  accessibilityLabel="Save business profile"
                 >
                   {saving ? (
                     <ActivityIndicator color={colors.textOnPrimary} />
                   ) : (
-                    <Text style={styles.ctaText}>Create</Text>
+                    <Text style={styles.ctaText}>Save</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -164,9 +171,9 @@ export default function CoachTeamProfileScreen() {
   const profile = team.data;
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
       <Text style={styles.header}>{profile.business_name}</Text>
-      <Text style={styles.subheader}>Team profile</Text>
+      <Text style={styles.subheader}>Business profile</Text>
 
       <Text style={styles.codeLabel}>CLIENT INVITE LINK</Text>
       <InviteShareCard testID="team-invite-share" />
@@ -185,7 +192,7 @@ export default function CoachTeamProfileScreen() {
           accessibilityLabel="Payouts are not enabled. Connect Stripe"
           style={styles.warnBanner}
         >
-          <Ionicons name="warning-outline" size={16} color="#fff" />
+          <Ionicons name="warning-outline" size={16} color={colors.textMuted} />
           <Text style={styles.warnText}>
             Payouts are not enabled. Connect Stripe to enable revenue.
           </Text>
@@ -205,86 +212,80 @@ export default function CoachTeamProfileScreen() {
 
       <TouchableOpacity
         style={styles.linkRow}
-        onPress={() => {
-          // The Invite Codes screen is on the Clients stack — bounce via the
-          // parent navigator for that tab.
-          Alert.alert(
-            'Invite codes',
-            'Open the Clients tab → Invite codes to manage one-off invite codes.',
-            [{ text: 'OK' }],
-          );
-        }}
+        onPress={() => navigation.navigate('ClientsStack', { screen: 'InviteCodes', initial: false })}
         accessibilityRole="button"
-        accessibilityLabel="Invite codes help"
+        accessibilityLabel="Open invite codes"
       >
         <Ionicons name="key-outline" size={20} color={colors.primary} />
         <Text style={styles.linkText}>Invite codes</Text>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: 56 },
-    center: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background },
-    header: { fontSize: 26, fontWeight: '600', color: colors.textPrimary },
-    subheader: { fontSize: 13, color: colors.textSecondary, marginBottom: 16 },
-    codeLabel: { fontSize: 11, color: colors.textMuted, letterSpacing: 0.5, marginTop: 12, marginBottom: 8 },
+    page: { flex: 1, backgroundColor: colors.background },
+    content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 32 },
+    header: { ...typography.h1, color: colors.textPrimary },
+    subheader: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: 16 },
+    codeLabel: { ...typography.eyebrow, color: colors.textMuted, marginTop: 12, marginBottom: 8 },
     statsRow: { flexDirection: 'row', gap: 10, marginTop: 16 },
     statCard: {
       flex: 1,
-      backgroundColor: colors.surface,
-      borderRadius: 12,
       padding: 12,
       alignItems: 'center',
-      borderWidth: 1,
+      borderTopWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
     },
-    statValue: { fontSize: 22, fontWeight: '600', color: colors.textPrimary },
-    statLabel: { fontSize: 11, color: colors.textMuted, marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.4 },
+    statValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+    statLabel: { ...typography.bodySmall, color: colors.textMuted, marginTop: 4 },
     linkRow: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+      minHeight: 44,
       paddingVertical: 14,
-      borderBottomWidth: 1,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: colors.border,
     },
-    linkText: { flex: 1, fontSize: 15, color: colors.textPrimary },
+    linkText: { ...typography.bodySmall, flex: 1, color: colors.textPrimary },
     gate: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 16 },
-    gateTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary, marginTop: 12 },
-    gateBody: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 20 },
-    cta: { backgroundColor: colors.primary, borderRadius: 10, paddingHorizontal: 20, paddingVertical: 12, marginTop: 16 },
+    gateTitle: { ...typography.bodyMd, color: colors.textPrimary, marginTop: 12, textAlign: 'center' },
+    gateBody: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center', marginTop: 8 },
+    cta: { backgroundColor: colors.primary, borderRadius: 4, minHeight: 44, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 12, marginTop: 16 },
     ctaDisabled: { opacity: 0.5 },
-    ctaText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 14 },
-    cancelText: { color: colors.textSecondary, fontWeight: '500', paddingVertical: 12, paddingHorizontal: 16 },
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: colors.surface, borderRadius: 16, padding: 20 },
-    modalTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
-    label: { fontSize: 12, color: colors.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
+    ctaText: { ...typography.bodyMd, color: colors.textOnPrimary },
+    cancelText: { ...typography.bodySmall, color: colors.textSecondary, paddingVertical: 12, paddingHorizontal: 16 },
+    modalOverlay: { flex: 1, backgroundColor: withAlpha(colors.textPrimary, 0.4), justifyContent: 'center', padding: 20 },
+    modalContent: { backgroundColor: colors.background, borderRadius: 4, padding: 20 },
+    modalTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: 12 },
+    label: { ...typography.bodySmall, color: colors.textMuted, marginBottom: 6 },
     input: {
-      borderWidth: 1,
+      ...typography.bodySmall,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 10,
+      borderRadius: 4,
+      minHeight: 44,
       paddingHorizontal: 12,
       paddingVertical: 10,
-      fontSize: 15,
       color: colors.textPrimary,
       backgroundColor: colors.background,
     },
     modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, marginTop: 16, alignItems: 'center' },
-    errorText: { color: colors.error, fontSize: 13, marginTop: 8 },
+    errorText: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 8 },
     warnBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: colors.warning,
+      minHeight: 44,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
       paddingHorizontal: 12,
       paddingVertical: 10,
-      borderRadius: 8,
       marginTop: 12,
     },
-    warnText: { color: '#fff', fontSize: 13, flex: 1 },
+    warnText: { ...typography.bodySmall, color: colors.textPrimary, flex: 1 },
   });

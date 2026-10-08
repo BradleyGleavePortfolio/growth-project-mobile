@@ -94,7 +94,7 @@ describe('Coach Settings', () => {
     const view = await render(
       <BillingSection onOpenTeamProfile={jest.fn()} colors={mockColors as never} styles={{} as never} />,
     );
-    expect(view.getByText('Team / Gym profile')).toBeTruthy();
+    expect(view.getByText('Business profile')).toBeTruthy();
     expect(view.queryByText('Billing & access')).toBeNull();
     expect(view.queryByText('Subscription')).toBeNull();
   });
