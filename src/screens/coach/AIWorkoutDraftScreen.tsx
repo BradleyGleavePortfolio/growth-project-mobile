@@ -12,9 +12,6 @@
  *      navigate back to ClientDetail (workouts tab).
  *   5. "Reject" → reason modal → POST /coach/ai/drafts/:draftId/reject.
  *
- * Footer shows model + token + cost provenance for every draft so the
- * coach can see what they're paying for.
- *
  * Doctrine-clean: theme tokens, no emoji, no hex literals.
  */
 
@@ -30,7 +27,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, usePreventRemove, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -118,6 +115,13 @@ export default function AIWorkoutDraftScreen() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [rejecting, setRejecting] = useState(false);
+
+  usePreventRemove(dirty, ({ data }) => {
+    Alert.alert('Discard edits?', 'Changes that have not been saved will be removed.', [
+      { text: 'Keep editing', style: 'cancel' },
+      { text: 'Discard', style: 'destructive', onPress: () => navigation.dispatch(data.action) },
+    ]);
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -248,6 +252,7 @@ export default function AIWorkoutDraftScreen() {
     setApproving(true);
     try {
       const res = await coachAiApi.approveDraft(draftId);
+      setDirty(false);
       const copy = aiWorkoutApproveCopy(clientName, res?.data);
       fireAiHaptic('success'); // AIB-6: approve lands with the same haptic as Apply in the builder
       Alert.alert(
@@ -273,12 +278,13 @@ export default function AIWorkoutDraftScreen() {
     if (!draft) return;
     const reason = rejectReason.trim();
     if (!reason) {
-      Alert.alert('Reason required', 'Tell the system why this draft was rejected.');
+      Alert.alert('Reason required', 'Add a reason for rejecting this draft.');
       return;
     }
     setRejecting(true);
     try {
       await coachAiApi.rejectDraft(draftId, reason);
+      setDirty(false);
       fireAiHaptic('warning');
       setShowRejectModal(false);
       Alert.alert('Rejected', 'Draft rejected.', [
@@ -437,13 +443,8 @@ export default function AIWorkoutDraftScreen() {
         )}
       </ScrollView>
 
-      {/* Footer — provenance + actions */}
+      {/* Review actions */}
       <View style={styles.footer}>
-        <Text style={styles.provenance}>
-          {`Model used: ${draft.modelUsed} · ${draft.tokensIn}+${draft.tokensOut} tokens · $${(
-            draft.costCents / 100
-          ).toFixed(2)}`}
-        </Text>
         <View style={styles.footerBtns}>
           <TouchableOpacity
             style={[styles.btnSecondary, !dirty && { opacity: 0.5 }]}
@@ -493,7 +494,7 @@ export default function AIWorkoutDraftScreen() {
           <View style={styles.rejectCard}>
             <Text style={styles.rejectTitle}>Reject draft</Text>
             <Text style={styles.rejectDesc}>
-              Say what was wrong so future drafts improve.
+              Add a reason for rejecting this draft.
             </Text>
             <TextInput
               style={styles.rejectInput}
@@ -770,12 +771,6 @@ const makeStyles = (colors: ThemeColors) =>
       paddingTop: 12,
       paddingBottom: 20,
       gap: 10,
-    },
-    provenance: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 11,
-      color: colors.textMuted,
-      textAlign: 'center',
     },
     footerBtns: {
       flexDirection: 'row',
