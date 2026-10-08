@@ -16,7 +16,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Pressable,
@@ -38,6 +37,7 @@ import type {
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 
@@ -141,18 +141,21 @@ export default function CoachInvitesScreen({
       setInvites(next);
       setLoadError(null);
     } catch (err) {
-      setLoadError(
-        errorMessage(
-          err,
-          'Your invites did not load. Check your connection and try again.',
-        ),
-      );
+      // QA-COACH-STATES-131: words only; the connection is named only when
+      // the request got no answer, and server text is never shown.
+      setLoadError(loadFailureMessage(err, 'Your invites'));
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    void load();
+  }, [load]);
+
+  // Try again shows the loading skeleton while the list reloads.
+  const retry = useCallback(() => {
+    setLoading(true);
     void load();
   }, [load]);
 
@@ -282,14 +285,6 @@ export default function CoachInvitesScreen({
     );
   }, []);
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
@@ -355,29 +350,15 @@ export default function CoachInvitesScreen({
         }
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          loadError !== null ? (
-            <View
-              style={styles.empty}
-              accessibilityLiveRegion="polite"
+          loading ? (
+            <QuietLoading label="Loading invites" rows={6} testID="coach-invites-loading" />
+          ) : loadError !== null ? (
+            <QuietError
+              message={loadError}
+              onRetry={retry}
+              retryHint="Loads your invites again"
               testID="coach-invites-error-state"
-            >
-              <Ionicons
-                name="cloud-offline-outline"
-                size={42}
-                color={colors.error}
-              />
-              <Text style={styles.emptyTitle}>Couldn't load invites</Text>
-              <Text style={styles.emptyText}>{loadError}</Text>
-              <Pressable
-                onPress={() => void load()}
-                accessibilityRole="button"
-                accessibilityLabel="Retry loading invites"
-                testID="coach-invites-error-state-retry"
-                style={styles.errorRetryBtn}
-              >
-                <Text style={styles.errorRetryBtnText}>Retry</Text>
-              </Pressable>
-            </View>
+            />
           ) : (
             <View style={styles.empty} testID="coach-invites-empty">
               <Ionicons name="mail-outline" size={42} color={colors.textMuted} />
@@ -525,12 +506,6 @@ const badgeStyles = StyleSheet.create({
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
-      backgroundColor: colors.background,
-    },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -584,18 +559,6 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textPrimary,
     },
     emptyText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
-    errorRetryBtn: {
-      marginTop: 12,
-      paddingHorizontal: 18,
-      paddingVertical: 10,
-      borderRadius: 8,
-      backgroundColor: colors.primary,
-    },
-    errorRetryBtnText: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textOnPrimary,
-    },
     row: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -72,6 +72,7 @@ The reviewer checklist below applies to UI changes; the doc rule above applies t
 
 | Surface | Current behaviour / module note |
 |---|---|
+| Coach load states (`ui/states/QuietStates`: booking inbox, invites, pending AI drafts, risk board, Programs `FailureBox` / `LoadingRow`) | One calm error: a sentence in ink, no red, icon or box, then a forest "Try again" text action (44 pt); Contact support and Sign in again follow as text actions. Copy says "could not load"; "Check your connection" only when the request got no answer; raw server text never shows. One loading look: the shared skeleton with a spoken label. QA-COACH-STATES-131. |
 | Food log (`LogScreen`, `clientStore`, `components/log`) | A first read for the selected day shows the shared skeleton, not zero totals or empty-meal claims. Changing date clears the prior day's foods, totals and water immediately; a failed new-day read shows retry without old numbers. A same-day refresh retains that day's verified data. A successfully empty day has one instruction, all four meal entry points stay reachable, action labels use sentence case, search failures use a neutral hairline, and the edit sheet uses theme colours and radius 4. Existing search, portion, manual, repeat, edit/move/delete, water quick-add and refresh paths remain. Saved water now has confirmed 44 pt Remove controls in unfilled hairline rows; request failures keep the verified entries and total. |
 
 ## 9. Reviewer checklist (paste into PRs that touch UI)

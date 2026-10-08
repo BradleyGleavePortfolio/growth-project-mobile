@@ -21,6 +21,7 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `EmptyState.tsx` | Bone-on-bone empty state with serif headline + caption. |
 | `ErrorBoundary.tsx` | Top-level error boundary. Reports to Sentry, renders a soft error card. |
 | `SkeletonLoader.tsx` | Shimmering placeholder for list / card load. |
+| `../ui/states/QuietStates.tsx` | `QuietError` (calm sentence, forest "Try again" text action, muted extra steps, no red) and `QuietLoading` (shared skeleton rows, spoken label), plus `loadFailureMessage` ("Check your connection" only for no-answer failures). Used by the coach booking inbox, invites, pending AI drafts, risk board and Programs. |
 | `OfflineBanner.tsx` | Hairline banner shown when `useNetworkStatus` reports offline. Mounted by `RootNavigator`. |
 | `OptionCard.tsx`, `MultiSelectChip.tsx` | Onboarding selection primitives. |
 | `OnboardingLayout.tsx` | Header + progress + continue button frame for the legacy 10-step flow. |
