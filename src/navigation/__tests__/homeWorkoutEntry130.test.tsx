@@ -12,6 +12,8 @@ import {
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadActiveWorkoutSession, saveActiveWorkoutSession } from '../../storage/activeWorkoutSession';
+import { getTodayString } from '../../utils/date';
+import type { EntitlementStatus } from '../../entitlements/EntitlementProvider';
 
 const mockUser = { id: 'home-entry-client', role: 'client', coach_id: 'coach', profile: {} };
 const mockAssignments = jest.fn();
@@ -27,8 +29,17 @@ const mockAssignment = {
 };
 const mockDay = {
   foodLogs: [], dailyTotals: {}, waterOz: 0, isLoading: false, loadError: null,
+  selectedDate: getTodayString(), hasLoadedDay: true,
   loadDayData: jest.fn(), loadProfile: jest.fn(),
 };
+const mockEntitlement = {
+  entitlementActive: true,
+  confirmedActive: true,
+  status: 'active' as EntitlementStatus,
+};
+jest.mock('../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => mockEntitlement,
+}));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../config/featureFlags', () => ({
@@ -102,6 +113,20 @@ beforeEach(async () => {
   jest.clearAllMocks();
   await AsyncStorage.clear();
   mockAssignments.mockResolvedValue([]);
+  Object.assign(mockEntitlement, { entitlementActive: true, confirmedActive: true, status: 'active' });
+});
+
+it('inactive Home → View access → Membership → Back retains the You menu', async () => {
+  Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
+  const navigation = createNavigationContainerRef<ParamListBase>();
+  const view = await render(<NavigationContainer ref={navigation}><ClientNavigator /></NavigationContainer>);
+  await fireEvent.press(await view.findByLabelText('View access'));
+  expect(await view.findByText('../screens/client/MembershipScreen')).toBeTruthy();
+  expect(navigation.getRootState().routes.find((route) => route.name === 'MoreTab')?.state?.routes.map((route) => route.name))
+    .toEqual(['MoreIndex', 'Membership']);
+  await act(async () => navigation.goBack());
+  expect(await view.findByText('../screens/client/MoreScreen')).toBeTruthy();
+  expect(mockAssignments).not.toHaveBeenCalled();
 });
 
 it('Resume → discard the untouched session by leaving → Train opens the workout list', async () => {

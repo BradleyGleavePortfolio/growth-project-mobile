@@ -1,5 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { getTodayString as mockGetTodayString } from '../utils/date';
 
 const mockGetAll = jest.fn();
 const mockListAssignments = jest.fn();
@@ -26,9 +27,13 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
+jest.mock('../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
+}));
 jest.mock('../store/clientStore', () => ({
   useClientStore: () => ({
     foodLogs: [], dailyTotals: {}, waterOz: 0, isLoading: false, loadError: null,
+    selectedDate: mockGetTodayString(), hasLoadedDay: true,
     loadDayData: jest.fn(), loadProfile: jest.fn(),
   }),
 }));
