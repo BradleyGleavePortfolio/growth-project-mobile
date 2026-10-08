@@ -17,7 +17,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 | File | What it does |
 | --- | --- |
 | `googleAuth.ts` | Supabase OAuth via `expo-auth-session` + `expo-web-browser`. Builds the redirect URI (`tgp://auth/callback`), opens the consent screen, parses tokens out of the redirect URL (handles both error and success fragments), persists tokens through `secureStorage`, then calls `/auth/google` (with optional invite code, or with `intended_role` when codeless and the signup policy has `role_choice`) to upsert the backend user. Returns `invite_attached` + `invite_code` when a code was passed so the caller can carry an unattached code to the RoleSelection retry step; returns `error_code: 'coach_signup_unavailable'` (and drops the provider session) when a coach signup was refused before any account existed. For a coach request, any other backend failure returns `error_code: 'coach_signup_unconfirmed'` (session and `user_data` dropped, no claim either way); every result from a real server answer carries `server_confirmed: true`, the legacy non-coach fallback `server_confirmed: false`. `services/api` is imported statically so these branches run in Jest (`utils/__tests__/googleAuth.test.ts`). |
-| `supabaseAuth.ts` | Thin Supabase wrapper for password change. Only loaded when actually needed so `supabase-js` stays out of the cold-start path. |
+| `supabaseAuth.ts` | Thin Supabase wrapper for password change. Only loaded when actually needed so `supabase-js` stays out of the cold-start path. A refused or failed change returns plain copy from `passwordChangeFailureCopy` (same password, weak password, sign in again, rate limit, offline), never the provider's text (`utils/__tests__/supabaseAuth.test.ts`). |
 | `authEvents.ts` | Tiny event bus: `onAuthChange`, `on('logout' | 'login', …)`, `emit(event?)`. The single mechanism `RootNavigator` listens on. |
 | `authErrorMessage.ts` | `toFriendlyAuthError(err)` — single mapping from raw Supabase / Google OAuth / network / backend error strings (and `Error` instances, and `null` / `undefined`) into the quiet copy the auth screens render. Cancellations resolve to a sentinel that callers ignore so the UI stays silent. Wired into `LoginScreen` and `CreateAccountScreen`. Contract — including `access_denied`, `redirect_uri_mismatch`, invalid credentials, unconfirmed email, rate limiting, and unknown-error fallback — is asserted in `src/utils/__tests__/authErrorMessage.test.ts`. |
 | `rbac.ts` | `canAccessResource(currentUser, resourceUserId, resourceCoachId)` — client sees own data, coach sees their clients' data. Defensive client-side check; the backend enforces the same rule by JWT. |
@@ -26,7 +26,8 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 
 | File | What it does |
 | --- | --- |
-| `notifications.ts` | Configures Expo notification handler, creates Android channels (`default`, `water`, `fasting`), requests runtime permission, schedules and cancels local notifications. |
+| `notifications.ts` | Configures Expo notification handler, creates Android channels (`default`, `water`, `fasting`), requests runtime permission, schedules and cancels local notifications. `scheduleFastingAlert` schedules nothing while Settings > Fasting alerts is off (`gp_client_settings`). |
+| `fastingAlert.ts` | `fastingNotifIdKey(userId)` (where the Fasting screen saves the current fast's alert id) and `cancelFastEndAlert(userId)`, which Settings calls when Fasting alerts is switched off (`utils/__tests__/fastingAlert.test.ts`). |
 | `haptics.ts` | Named haptic helpers (`mediumTap`, `successTap`, `warningTap`, `errorTap`). |
 | `foodImages.ts` | Resolves remote food image URLs with a stable fallback. |
 
