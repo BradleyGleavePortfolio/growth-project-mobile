@@ -12,7 +12,8 @@
  * Blocking is two-way: neither person sees the other's posts, comments,
  * messages or voice notes, and DMs close both ways; the blocked person is not
  * told. Members cannot block their own coach, so Block is not offered on the
- * coach's content (no dead button); Report always is.
+ * coach's content (no dead button); Report always is. "Report sent" after
+ * "Self-harm or suicide" leads with 911 and the 988 Lifeline.
  * Failures use describeCommunityFailure: specific copy per server code and
  * status, a support reference (and a Sentry report) for anything unexpected.
  */
@@ -27,8 +28,8 @@ import { describeCommunityFailure } from '../../api/communityErrors';
 import {
   communitySafetyApi,
   COMMUNITY_REPORT_REASONS,
-  COMMUNITY_REPORT_SENT_MESSAGE,
   COMMUNITY_REPORT_SENT_TITLE,
+  communityReportSentMessage,
   type CommunityReportTargetType,
 } from '../../api/communitySafetyApi';
 
@@ -93,7 +94,7 @@ export default function SafetyMenu({
     try {
       await communitySafetyApi.report({ target_type: targetType, target_id: targetId, reason });
       close();
-      Alert.alert(COMMUNITY_REPORT_SENT_TITLE, COMMUNITY_REPORT_SENT_MESSAGE);
+      Alert.alert(COMMUNITY_REPORT_SENT_TITLE, communityReportSentMessage(reason));
     } catch (err) {
       const failure = describeCommunityFailure(err, 'report');
       Alert.alert(failure.title, failure.message);
