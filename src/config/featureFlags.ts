@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
+  EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
@@ -526,6 +527,21 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK
    */
   iosUsCreditPackLink: readFlag('EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK', false),
+
+  /**
+   * PACKS-BOTH-131 (owner 10-08: AI packs must be purchasable on Android and
+   * iOS): on an Android release build, coach AI credit packs show and their
+   * Stripe Checkout opens in the system browser with the same tgp:// return
+   * links as the iOS US link. Every other digital purchase stays hidden on
+   * Android (digitalPurchasesHidden is unchanged). OFF unless a build profile
+   * sets "true"; eas.json sets it only for the preview profile (the Android
+   * test app, installed directly). A Google Play build with it on is an owner
+   * decision (Google charges a fee on linked purchases in the US).
+   * Read through `src/config/purchaseSurfaces.ts` (creditPackCheckoutMode).
+   *
+   * env: EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK
+   */
+  androidCreditPackLink: readFlag('EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK', false),
 
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**
