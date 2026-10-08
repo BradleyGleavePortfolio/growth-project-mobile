@@ -448,6 +448,7 @@ export const SCREENS: readonly ScreenDef[] = [
       { value: 'eggs', label: 'Eggs' },
       { value: 'soy', label: 'Soy' },
       { value: 'sesame', label: 'Sesame' },
+      { value: 'fish', label: 'Fish' },
       { value: 'pork', label: 'Pork' },
       { value: 'halal', label: 'Halal only' },
       { value: 'kosher', label: 'Kosher only' },
