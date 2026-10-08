@@ -114,6 +114,53 @@ describe('SafetyMenu', () => {
     );
   });
 
+  // FWC-SAFE-128 U11: a bystander who reports self-harm gets the crisis lines
+  // in the moment, first, before the 24-hour review sentence.
+  const SENT =
+    'Thank you. Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.';
+
+  it('a self-harm report leads with 911 and the 988 Lifeline, then the review line', async () => {
+    const { getByTestId } = await renderMenu();
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    await fireEvent.press(getByTestId('sm-reason-self_harm'));
+    await waitFor(() =>
+      expect(mockReport).toHaveBeenCalledWith({
+        target_type: 'post',
+        target_id: 'post-1',
+        reason: 'self_harm',
+      }),
+    );
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Report sent',
+        `If someone is in immediate danger, call 911. To reach the 988 Suicide & Crisis Lifeline, call or text 988.\n\n${SENT}`,
+      ),
+    );
+  });
+
+  it('keeps every action reachable: Report, all eight reasons, Block and Cancel', async () => {
+    const { getByTestId, queryByTestId } = await renderMenu();
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-block')).toBeTruthy();
+    await fireEvent.press(getByTestId('sm-report'));
+    for (const code of [
+      'harassment',
+      'hate',
+      'sexual',
+      'violence',
+      'self_harm',
+      'spam',
+      'misinformation',
+      'other',
+    ]) {
+      expect(getByTestId(`sm-reason-${code}`)).toBeTruthy();
+    }
+    await fireEvent.press(getByTestId('sm-close'));
+    expect(queryByTestId('sm-reason-self_harm')).toBeNull();
+    expect(mockReport).not.toHaveBeenCalled();
+  });
+
   it('blocks only after confirmation, then refetches community data and calls onBlocked', async () => {
     const onBlocked = jest.fn();
     const { getByTestId, invalidate } = await renderMenu({ onBlocked });

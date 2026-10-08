@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, colors } from '../../theme/index';
+import { Radius } from '../../theme/index';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
@@ -113,7 +113,7 @@ export default function FoodSearchView({
           onChangeText={onSearchChange}
           autoFocus
         />
-        {searching && <ActivityIndicator size="small" color={Colors.primary} />}
+        {searching && <ActivityIndicator size="small" color={sc.accentText} />}
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
             <Ionicons name="close-circle" size={18} color={sc.textMuted} />
@@ -122,8 +122,8 @@ export default function FoodSearchView({
       </View>
 
       {searchError && (
-        <View style={styles.searchErrorBanner}>
-          <Ionicons name="warning-outline" size={16} color={Colors.error} />
+        <View style={styles.searchErrorBanner} accessibilityRole="alert" testID="food-search-error">
+          <Ionicons name="information-circle-outline" size={16} color={sc.textMuted} />
           <Text style={styles.searchErrorText}>{searchError}</Text>
         </View>
       )}
@@ -150,7 +150,7 @@ export default function FoodSearchView({
             accessibilityLabel={`${repeatMealTitle}: add all ${repeatMeal.entries.length} ${repeatMeal.entries.length === 1 ? 'food' : 'foods'}`}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={Colors.white} />
+              <ActivityIndicator size="small" color={sc.textOnAccent} />
             ) : (
               <Text style={styles.repeatButtonText}>Add all</Text>
             )}
@@ -219,7 +219,7 @@ export default function FoodSearchView({
               {browseUnavailable ? (
                 <>
                   <Text style={styles.emptyStateTitle}>Recent foods could not load</Text>
-                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Enter Manually to save this food now.</Text>
+                  <Text style={styles.emptyStateSubtitle}>Check the connection, or tap Enter manually to save this food now.</Text>
                 </>
               ) : (
                 <>
@@ -239,7 +239,7 @@ export default function FoodSearchView({
                 style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
                 onPress={onRetrySearch}
               >
-                <Text style={{ color: Colors.primary, fontWeight: '600', fontSize: 14 }}>Try again</Text>
+                <Text style={{ color: sc.accentText, fontWeight: '600', fontSize: 14 }}>Try again</Text>
               </TouchableOpacity>
             </View>
           ) : null
@@ -277,8 +277,8 @@ export default function FoodSearchView({
         activeOpacity={0.8}
       >
         {/* usePressFeedback not needed here — TouchableOpacity retained to avoid FlatList interaction conflict */}
-        <Ionicons name="create-outline" size={18} color={Colors.primary} />
-        <Text style={styles.manualButtonText}>Enter Manually</Text>
+        <Ionicons name="create-outline" size={18} color={sc.accentText} />
+        <Text style={styles.manualButtonText}>Enter manually</Text>
       </TouchableOpacity>
     </View>
   );
@@ -295,7 +295,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     gap: 12,
   },
   repeatText: { flex: 1 },
-  repeatTitle: { fontSize: 14, fontWeight: '600', color: Colors.dark },
+  repeatTitle: { fontSize: 14, fontWeight: '600', color: sc.textPrimary },
   repeatSubtitle: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
   repeatButton: {
     minHeight: 44,
@@ -304,9 +304,9 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: sc.accent,
   },
-  repeatButtonText: { color: Colors.white, fontWeight: '600', fontSize: 14 },
+  repeatButtonText: { color: sc.textOnAccent, fontWeight: '600', fontSize: 14 },
   logNote: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
   clearButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   modalBody: {
@@ -328,7 +328,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     minHeight: 44, fontFamily: 'Inter_400Regular',
     flex: 1,
     fontSize: 16,
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   searchErrorBanner: {
     flexDirection: 'row',
@@ -337,14 +337,12 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     marginHorizontal: 20,
     marginBottom: 8,
     padding: 10,
-    backgroundColor: colors.feedback.errorBg,
-    borderRadius: 0, // radius.sm
-    borderWidth: 1,
-    borderColor: Colors.error,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   searchErrorText: {
     fontSize: 13,
-    color: colors.feedback.errorText,
+    color: sc.textMuted,
     flex: 1,
   },
   slowSearchBanner: {
@@ -372,7 +370,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderColor: sc.border,
   },
   tabChipActive: {
-    borderBottomColor: Colors.primary,
+    borderBottomColor: sc.accent,
   },
   tabChipText: {
     fontSize: 13,
@@ -380,7 +378,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     color: sc.textMuted,
   },
   tabChipTextActive: {
-    color: Colors.primary,
+    color: sc.accentText,
   },
   didYouMeanContainer: {
     marginHorizontal: 20,
@@ -417,7 +415,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   emptyStateTitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.dark,
+    color: sc.textPrimary,
     marginTop: 8,
   },
   emptyStateSubtitle: {
@@ -457,7 +455,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   searchResultName: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   searchResultBrand: {
     fontSize: 13,
@@ -472,7 +470,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   searchResultCals: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.primary,
+    color: sc.accentText,
   },
   manualButton: {
     flexDirection: 'row',
@@ -488,6 +486,6 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   manualButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.primary,
+    color: sc.accentText,
   },
 });

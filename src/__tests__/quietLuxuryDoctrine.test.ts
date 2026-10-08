@@ -314,8 +314,8 @@ describe('Truthful client copy and routes/actions parity', () => {
       await fireEvent.press(row); expect(mockNavigate).toHaveBeenLastCalledWith('EditProfile');
     }
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
-    await fireEvent.press(s.getByText('Sign Out'));
-    const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign Out');
+    await fireEvent.press(s.getByText('Sign out'));
+    const confirm = alert.mock.calls[0][2]?.find((button) => button.text === 'Sign out');
     await confirm?.onPress?.();
     expect(require('../services/authActions').signOut).toHaveBeenCalled(); alert.mockRestore();
     mockUser = { ...mockUser, coach_id: 'coach' };
@@ -390,9 +390,9 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(s.getByText(paired ? 'Stay close to your coach' : 'Reminders and messages')).toBeTruthy();
     await fireEvent.press(s.getByTestId('day-one-notifications-enable'));
     expect(require('../services/pushNotifications').registerForPushNotifications).toHaveBeenCalled();
-    expect(mockNavigate).toHaveBeenLastCalledWith('CheckInTime');
+    expect(mockNavigate).toHaveBeenLastCalledWith('Ready');
     await fireEvent.press(s.getByTestId('day-one-notifications-skip'));
-    expect(mockNavigate).toHaveBeenLastCalledWith('CheckInTime');
+    expect(mockNavigate).toHaveBeenLastCalledWith('Ready');
     const strings = require('../screens/day-one/i18n/en.json');
     const navigator = fs.readFileSync(path.join(ROOT, 'navigation/Day1OnboardingNavigator.tsx'), 'utf8');
     expect(strings.welcome.subtitle).toBe(`Setup takes ${(navigator.match(/<Stack.Screen/g) ?? []).length} short steps.`);

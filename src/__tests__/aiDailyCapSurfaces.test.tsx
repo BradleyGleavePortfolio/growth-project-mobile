@@ -146,7 +146,7 @@ describe('RomanChatScreen — daily AI cap pop-up', () => {
 describe('AIGuideScreen — daily AI cap pop-up', () => {
   async function send(text: string) {
     const r = await render(<AIGuideScreen />);
-    await fireEvent.changeText(r.getByPlaceholderText('Ask me anything...'), text);
+    await fireEvent.changeText(r.getByPlaceholderText('Ask about training, food or recovery'), text);
     await fireEvent.press(r.getByLabelText('Send message'));
     return r;
   }
@@ -158,7 +158,7 @@ describe('AIGuideScreen — daily AI cap pop-up', () => {
     const r = await send('Plan for tomorrow');
     await waitFor(() => expect(r.getByTestId('ai-guide-daily-cap-title').props.children).toBe(AI_DAILY_CAP_TITLE));
     expect(String(r.getByTestId('ai-guide-daily-cap-body').props.children)).toMatch(/^AI help resets (today|tomorrow) at /);
-    expect(r.getByPlaceholderText('Ask me anything...').props.value).toBe('Plan for tomorrow');
+    expect(r.getByPlaceholderText('Ask about training, food or recovery').props.value).toBe('Plan for tomorrow');
     expect(mockSaveChatMessage).not.toHaveBeenCalled();
     expect(r.queryByText(/Guidance could not answer this time/)).toBeNull();
     await fireEvent.press(r.getByTestId('ai-guide-daily-cap-ok'));

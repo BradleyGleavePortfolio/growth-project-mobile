@@ -77,6 +77,21 @@ export const COMMUNITY_RESPONSE_COMMITMENT = `${COMMUNITY_REVIEW_WITHIN_24H} Con
 export const COMMUNITY_REPORT_SENT_TITLE = 'Report sent';
 export const COMMUNITY_REPORT_SENT_MESSAGE = `Thank you. ${COMMUNITY_REVIEW_WITHIN_24H} Content that breaks these guidelines is removed, and people who break them repeatedly lose access.`;
 
+/**
+ * Crisis lines for a "Self-harm or suicide" report (FWC-SAFE-128): the reporter
+ * gets 911 and the 988 Lifeline in the moment, before the 24-hour line. Same
+ * routing as guideline 7 and Roman's crisis replies.
+ */
+export const COMMUNITY_REPORT_CRISIS_LINE =
+  'If someone is in immediate danger, call 911. To reach the 988 Suicide & Crisis Lifeline, call or text 988.';
+
+/** "Report sent" body for the chosen reason: self-harm leads with the crisis lines. */
+export function communityReportSentMessage(reason: string): string {
+  return reason === 'self_harm'
+    ? `${COMMUNITY_REPORT_CRISIS_LINE}\n\n${COMMUNITY_REPORT_SENT_MESSAGE}`
+    : COMMUNITY_REPORT_SENT_MESSAGE;
+}
+
 export const CONTENT_REJECTED_CODE = 'community.content.rejected';
 export const CONTENT_REJECTED_FALLBACK =
   'This was not posted because it appears to contain abusive or explicit language. Please rephrase it.';

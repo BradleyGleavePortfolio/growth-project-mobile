@@ -12,9 +12,11 @@ import {
   blockErrorMessage,
   CONTENT_REJECTED_FALLBACK,
   COMMUNITY_GUIDELINES,
+  COMMUNITY_REPORT_CRISIS_LINE,
   COMMUNITY_REPORT_REASONS,
   COMMUNITY_REPORT_SENT_MESSAGE,
   COMMUNITY_RESPONSE_COMMITMENT,
+  communityReportSentMessage,
   COMMUNITY_REVIEW_WITHIN_24H,
   COMMUNITY_SAFETY_FALLBACK_EMAIL,
 } from '../communitySafetyApi';
@@ -201,8 +203,25 @@ describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
     ]);
   });
 
+  it('leads a self-harm report confirmation with 911 and 988 (FWC-SAFE-128)', () => {
+    expect(COMMUNITY_REPORT_CRISIS_LINE).toBe(
+      'If someone is in immediate danger, call 911. To reach the 988 Suicide & Crisis Lifeline, call or text 988.',
+    );
+    expect(communityReportSentMessage('self_harm')).toBe(
+      `${COMMUNITY_REPORT_CRISIS_LINE}\n\n${COMMUNITY_REPORT_SENT_MESSAGE}`,
+    );
+    const others = COMMUNITY_REPORT_REASONS.filter((r) => r.code !== 'self_harm');
+    expect(others).toHaveLength(7);
+    for (const r of others) expect(communityReportSentMessage(r.code)).toBe(COMMUNITY_REPORT_SENT_MESSAGE);
+  });
+
   it('has no exclamation marks in shipped safety copy', () => {
-    for (const line of [...COMMUNITY_GUIDELINES, COMMUNITY_RESPONSE_COMMITMENT, COMMUNITY_REPORT_SENT_MESSAGE]) {
+    for (const line of [
+      ...COMMUNITY_GUIDELINES,
+      COMMUNITY_RESPONSE_COMMITMENT,
+      COMMUNITY_REPORT_SENT_MESSAGE,
+      COMMUNITY_REPORT_CRISIS_LINE,
+    ]) {
       expect(line).not.toContain('!');
     }
   });

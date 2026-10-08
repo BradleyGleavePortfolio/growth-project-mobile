@@ -13,14 +13,16 @@ import {
   // TouchableOpacity retained for auth buttons — safe pattern
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Typography, Spacing, Radius, Shadow } from '../../theme';
+import { Spacing, Radius, Shadow, Typography as ProviderTypography } from '../../theme';
+import { lightTokens, typography as Typography, type SemanticTokens } from '../../theme/tokens';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import { describeSignInFailure, type AuthFailure } from '../../utils/authFailure';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import ResendVerificationLink from './ResendVerificationLink';
+import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
@@ -31,7 +33,6 @@ import { signInWithApple } from '../../utils/appleAuth';
 import { signInWithGoogle } from '../../utils/googleAuth';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
-import { Colors } from '../../constants/colors';
 import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
 import { profileOnboardingCompleted } from '../../lib/profileOnboarding';
 import {
@@ -95,7 +96,7 @@ function sanitisePrefillEmail(raw: unknown): string {
 }
 
 export default function LoginScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors = lightTokens } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState<string>(() =>
     sanitisePrefillEmail(route?.params?.email),
@@ -107,9 +108,13 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [error, setError] = useState('');
   // #306 r5 (owner 13:34): Contact support next to an unknown failure.
   const [errorSupport, setErrorSupport] = useState(false);
-  const showFailure = (failure: AuthFailure) => {
+  // FW-ONB-128 B1: an unconfirmed email-and-password sign-in offers Send a
+  // new link (never Apple / Google: no link was sent for those).
+  const [errorUnconfirmed, setErrorUnconfirmed] = useState(false);
+  const showFailure = (failure: AuthFailure, emailSignIn = false) => {
     setError(failure.message);
     setErrorSupport(failure.support);
+    setErrorUnconfirmed(emailSignIn && failure.kind === 'email_unconfirmed');
   };
   // B3: Google only when the shared signup policy advertises it (hidden
   // while unknown), same reader as CreateAccount.
@@ -287,7 +292,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     } catch (err) {
       // Status and backend message decide the copy; an unknown failure gets
       // a reference and Contact support (utils/authFailure).
-      showFailure(describeSignInFailure(err));
+      showFailure(describeSignInFailure(err), true);
     } finally {
       setLoading(false);
     }
@@ -425,7 +430,7 @@ export default function LoginScreen({ navigation, route }: Props) {
           <View style={styles.confirmBox} accessible accessibilityRole="alert" testID="login-coach-retry-notice">
             <Text style={styles.confirmBody}>{signupRoleNoticeMessage('coach_retry_not_applied')}</Text>
             <TouchableOpacity
-              style={[styles.confirmPrimary, recoveryBusy && styles.buttonDisabled]}
+              style={[styles.loginButton, recoveryBusy && styles.buttonDisabled]}
               onPress={acknowledgeRecovery}
               disabled={recoveryBusy}
               accessibilityRole="button"
@@ -433,7 +438,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               accessibilityState={{ disabled: recoveryBusy, busy: recoveryBusy }}
               testID="login-coach-retry-continue"
             >
-              <Text style={styles.confirmPrimaryText}>Continue as a client</Text>
+              <Text style={styles.loginButtonText}>Continue as a client</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.confirmSecondary}
@@ -459,7 +464,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         {/* Header */}
         {/* Round 3: accessibilityRole="header" for VoiceOver/TalkBack */}
         <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">Welcome back.</Text>
+          <Text style={styles.title} accessibilityRole="header">Sign in.</Text>
           <Text style={styles.subtitle}>Sign in to your account</Text>
         </View>
 
@@ -477,6 +482,9 @@ export default function LoginScreen({ navigation, route }: Props) {
               >
                 Contact support
               </Text>
+            ) : null}
+            {errorUnconfirmed && email.trim() ? (
+              <ResendVerificationLink email={email} testID="login-resend" />
             ) : null}
           </View>
         ) : null}
@@ -536,9 +544,9 @@ export default function LoginScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
-            <ActivityIndicator color={colors.white} />
+            <ActivityIndicator color={colors.textOnAccent} />
           ) : (
-            <Text style={styles.loginButtonText}>Sign In</Text>
+            <Text style={styles.loginButtonText}>Sign in</Text>
           )}
         </TouchableOpacity>
 
@@ -561,7 +569,7 @@ export default function LoginScreen({ navigation, route }: Props) {
               accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
             >
               {googleLoading ? (
-                <ActivityIndicator color={colors.dark} />
+                <ActivityIndicator color={colors.textPrimary} />
               ) : (
                 <>
                   <Text style={styles.googleG}>G</Text>
@@ -579,7 +587,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         <View style={styles.appleButtonWrap} pointerEvents={appleLoading ? 'none' : 'auto'}>
           <AppleSignInButton onPress={() => handleAppleLogin()} label="SIGN_IN" />
           {appleLoading ? (
-            <ActivityIndicator color={colors.dark} style={styles.appleSpinner} />
+            <ActivityIndicator color={colors.textPrimary} style={styles.appleSpinner} />
           ) : null}
         </View>
 
@@ -597,10 +605,10 @@ export default function LoginScreen({ navigation, route }: Props) {
               style={styles.confirmPrimary}
               onPress={() => (pendingProvider === 'apple' ? handleAppleLogin(true) : handleGoogleLogin(true))}
               accessibilityRole="button"
-              accessibilityLabel="Yes, sign me in"
+              accessibilityLabel="Sign in to existing account"
               testID="existing-account-continue"
             >
-              <Text style={styles.confirmPrimaryText}>Yes, sign me in</Text>
+              <Text style={styles.confirmPrimaryText}>Sign in to existing account</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.confirmSecondary}
@@ -609,10 +617,10 @@ export default function LoginScreen({ navigation, route }: Props) {
                 navigation.navigate('CreateAccount');
               }}
               accessibilityRole="button"
-              accessibilityLabel="I am new, create an account"
+              accessibilityLabel="Create a new account"
               testID="existing-account-create"
             >
-              <Text style={styles.confirmSecondaryText}>I am new, create an account</Text>
+              <Text style={styles.confirmSecondaryText}>Create a new account</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -634,56 +642,60 @@ export default function LoginScreen({ navigation, route }: Props) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bgPrimary },
   scroll: { flexGrow: 1, padding: Spacing.lg, justifyContent: 'center' },
   header: { marginBottom: Spacing.xl },
-  title: { ...Typography.h1, marginBottom: Spacing.xs },
-  subtitle: { ...Typography.body },
+  title: { ...Typography.h1, color: colors.textPrimary, marginBottom: Spacing.xs },
+  subtitle: { ...Typography.body, color: colors.textMuted },
   errorBox: {
-    backgroundColor: Colors.noticeCriticalBg,
+    backgroundColor: colors.bgPrimary,
     borderRadius: Radius.sm,
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: colors.error,
+    borderLeftColor: colors.textPrimary,
   },
-  errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  errorText: { color: colors.textPrimary, fontSize: 14, fontFamily: 'Inter_400Regular' },
   errorSupportLink: {
-    color: colors.primary,
+    color: colors.accentText,
     fontSize: 14,
     fontFamily: 'Inter_600SemiBold',
     textDecorationLine: 'underline',
     marginTop: Spacing.xs,
+    minHeight: 44,
+    paddingVertical: Spacing.sm,
   },
   inputGroup: { marginBottom: Spacing.md },
-  inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
+  inputLabel: { ...Typography.eyebrow, color: colors.textMuted, marginBottom: Spacing.xs },
   input: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
+    backgroundColor: colors.bgPrimary,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.md,
     padding: Spacing.md,
     fontSize: 16,
-    color: colors.dark,
-    ...Shadow.card,
+    color: colors.textPrimary,
+    fontFamily: 'Inter_400Regular',
   },
   forgotText: {
-    color: colors.primary,
+    color: colors.accentText,
     fontSize: 14,
     textAlign: 'right',
+    fontFamily: 'Inter_400Regular',
+    minHeight: 44,
+    paddingVertical: Spacing.sm,
     marginBottom: Spacing.lg,
   },
   loginButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
-    ...Shadow.button,
   },
   buttonDisabled: { opacity: 0.6 },
-  loginButtonText: { ...Typography.button, color: colors.white },
+  loginButtonText: { ...Typography.bodyMd, color: colors.textOnAccent },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -692,7 +704,7 @@ const makeStyles = (colors: ThemeColors) =>
   dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
   dividerText: { marginHorizontal: Spacing.sm, color: colors.textMuted, fontSize: 14 },
   googleButton: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgSurface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
@@ -701,34 +713,34 @@ const makeStyles = (colors: ThemeColors) =>
     borderWidth: 1,
     borderColor: colors.border,
     ...Shadow.card,
+    shadowColor: colors.textPrimary,
   },
   googleG: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 16,
     fontWeight: '600',
     marginRight: Spacing.sm,
-    color: colors.dark,
+    color: colors.textPrimary,
   },
-  googleButtonText: { ...Typography.button, color: colors.dark },
+  googleButtonText: { ...ProviderTypography.button, color: colors.textPrimary },
   confirmBox: {
     marginTop: Spacing.md,
     padding: Spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     borderRadius: Radius.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgPrimary,
   },
-  confirmTitle: { ...Typography.h3, marginBottom: Spacing.xs },
-  confirmBody: { ...Typography.body, color: colors.textSecondary, marginBottom: Spacing.md },
+  confirmTitle: { ...Typography.bodyMd, color: colors.textPrimary, marginBottom: Spacing.xs },
+  confirmBody: { ...Typography.body, color: colors.textPrimary, marginBottom: Spacing.md },
   confirmPrimary: {
-    backgroundColor: colors.primary,
     borderRadius: Radius.sm,
     padding: Spacing.md,
     alignItems: 'center',
   },
-  confirmPrimaryText: { ...Typography.button, color: colors.white },
+  confirmPrimaryText: { ...Typography.bodyMd, color: colors.accentText },
   confirmSecondary: { alignItems: 'center', paddingVertical: Spacing.md },
-  confirmSecondaryText: { ...Typography.body, color: colors.primary },
+  confirmSecondaryText: { ...Typography.body, color: colors.accentText },
   appleButtonWrap: {
     marginTop: Spacing.md,
     minHeight: 48,
@@ -739,8 +751,10 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: Spacing.xl,
+    alignItems: 'center',
+    minHeight: 44,
   },
-  signupText: { color: colors.textMuted, fontSize: 15 },
-  signupLink: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+  signupText: { color: colors.textMuted, fontSize: 15, fontFamily: 'Inter_400Regular' },
+  signupLink: { color: colors.accentText, fontSize: 15, fontFamily: 'Inter_500Medium', paddingVertical: Spacing.md },
 
   });

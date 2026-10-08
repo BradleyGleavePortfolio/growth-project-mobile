@@ -2,7 +2,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing } from '../../theme/index';
+import { Spacing } from '../../theme/index';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import { FoodLog, MealType } from '../../types';
@@ -36,12 +36,13 @@ export default function MealSectionCard({
   onEditPress,
   macroMode = 'full',
 }: Props) {
-  const styles = makeStyles(useTheme().semanticColors);
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   return (
     <View style={styles.mealSection}>
       <View style={styles.mealHeader}>
         <View style={styles.mealHeaderLeft}>
-          <Ionicons name={icon as IoniconName} size={18} color={Colors.primary} />
+          <Ionicons name={icon as IoniconName} size={18} color={sc.accentText} />
           <Text style={styles.mealTitle}>{label}</Text>
         </View>
         <Text style={styles.mealCals}>
@@ -49,9 +50,6 @@ export default function MealSectionCard({
         </Text>
       </View>
 
-      {logs.length === 0 && (
-        <Text style={styles.emptyMealText}>No foods logged. Use Add Food below.</Text>
-      )}
       {logs.length > 0 && onEditPress ? <Text style={styles.emptyMealText}>Tap an entry to edit, move or delete it.</Text> : null}
 
       {logs.map((log) => {
@@ -103,9 +101,11 @@ export default function MealSectionCard({
         intent="medium"
         style={styles.addFoodButton}
         onPress={() => onAddPress(mealType)}
+        accessibilityRole="button"
+        accessibilityLabel={`Add food to ${label.toLowerCase()}`}
       >
-        <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
-        <Text style={styles.addFoodText}>Add Food</Text>
+        <Ionicons name="add-circle-outline" size={18} color={sc.accentText} />
+        <Text style={styles.addFoodText}>Add food</Text>
       </HapticPressable>
     </View>
   );
@@ -133,7 +133,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   mealTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   mealCals: {
     fontSize: 13,
@@ -156,7 +156,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   foodName: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   foodQuantityMuted: {
     fontSize: 13,
@@ -171,7 +171,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   foodCals: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.dark,
+    color: sc.textPrimary,
   },
   addFoodButton: {
     minHeight: 44,
@@ -187,7 +187,7 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   addFoodText: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.primary,
+    color: sc.accentText,
   },
   emptyMealText: {
     fontSize: 13,

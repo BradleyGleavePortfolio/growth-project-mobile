@@ -12,7 +12,7 @@ jest.mock('../services/api', () => ({
   recipesApi: { getById: (...args: unknown[]) => mockRecipe(...args) },
 }));
 jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#123456' }), semanticColors: require('../theme/tokens').lightTokens }),
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ goBack: mockBack }),

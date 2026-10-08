@@ -186,14 +186,7 @@ const MORE_ITEMS: MoreItem[] = [
     target: { type: 'stack', screen: 'GroceryList' },
     a11yHint: 'Opens your grocery list',
   },
-  {
-    icon: 'bag-outline',
-    label: 'Shopping list',
-    description: 'Your synced shopping list',
-    section: 'Food and preparation',
-    target: { type: 'stack', screen: 'ShoppingList' },
-    a11yHint: 'Opens your shopping list',
-  },
+  // One list (owner 10-07, CF-ONE-LIST-128): no Shopping list row; its saved items show on the Grocery list.
   {
     icon: 'clipboard-outline',
     label: 'Prep guide',

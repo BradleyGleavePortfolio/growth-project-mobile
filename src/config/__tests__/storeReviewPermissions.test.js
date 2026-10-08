@@ -91,3 +91,20 @@ describe('B-PLAYREV-1: no Android microphone permission while voice notes are of
     expect(nav).toMatch(/featureFlags\.communityVoiceNotes \? \(\s*<CommunityStack\.Screen\s*name="CommunityVoiceComposer"/);
   });
 });
+
+describe('IOS-RELEASE-129: the Face ID purpose string names what Face ID does', () => {
+  const pluginText = () =>
+    app.plugins.find((p) => Array.isArray(p) && p[0] === 'expo-local-authentication')[1].faceIDPermission;
+
+  test('Info.plist and the expo-local-authentication plugin carry the same text', () => {
+    expect(app.ios.infoPlist.NSFaceIDUsageDescription).toBe(pluginText());
+  });
+
+  test('it names unlocking only: Face ID gates reopening the app (BiometricUnlockSetting), nothing else', () => {
+    const text = app.ios.infoPlist.NSFaceIDUsageDescription;
+    expect(text).toMatch(/^The Growth Project /);
+    expect(text).toMatch(/unlock the app/);
+    expect(text).not.toMatch(/sensitive actions|confirm/i);
+    expect(text).not.toMatch(/!|\b(we|our|us|I)\b/);
+  });
+});
