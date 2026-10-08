@@ -323,7 +323,7 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
   it('reopens an unfinished workout with no prompt and no delete choice (TRAIN-GATE-128)', () => {
     expect(SCREEN_SRC).not.toMatch(/Resume earlier workout\?|Resume workout\?/);
     expect(SCREEN_SRC).not.toMatch(/Start Fresh|Discard this workout\?|text: 'Discard'/);
-    expect(SCREEN_SRC).toMatch(/adoptPersistedSession\(session\);\s*setHydrated\(true\);/);
+    expect(SCREEN_SRC).toMatch(/adoptPersistedSession\(session, isStale\);\s*setHydrated\(true\);/);
   });
 
   // ───── Audit follow-up coverage ──────────────────────────────────────────
