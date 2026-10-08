@@ -4,7 +4,8 @@
 // Sorted by severity (red first), then by days_since_checkin desc.
 //
 // State machine:
-//   idle → loading → (data | error)
+//   loading → (data | error); loading is the shared skeleton and a failed
+//   read is the calm LoadFailedNotice with Try again (QA-COACH-HOME-131).
 //   Pull-to-refresh transitions loading → data/error.
 //
 // Data source: commandCenterApi.getAtRisk()
@@ -17,18 +18,18 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
-  TouchableOpacity,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../../theme/tokens';
+import { colors, spacing, typography } from '../../../theme/tokens';
 import {
   commandCenterApi,
   AtRiskEntry,
 } from '../../../services/commandCenterApi';
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 
-type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
+type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
 interface Props {
   /** Navigate to a client's detail screen. */
@@ -36,10 +37,9 @@ interface Props {
 }
 
 export default function AtRiskScreen({ onSelectClient }: Props) {
-  const [state, setState] = useState<LoadState>('idle');
+  const [state, setState] = useState<LoadState>('loading');
   const [items, setItems] = useState<AtRiskEntry[]>([]);
   const [totalAtRisk, setTotalAtRisk] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
@@ -49,7 +49,6 @@ export default function AtRiskScreen({ onSelectClient }: Props) {
       setTotalAtRisk(res.data.total_at_risk);
       setState('data');
     } catch {
-      setErrorMessage('Unable to load at-risk clients. Check your connection and try again.');
       setState('error');
     }
   }, []);
@@ -58,8 +57,8 @@ export default function AtRiskScreen({ onSelectClient }: Props) {
 
   if (state === 'loading') {
     return (
-      <View style={styles.centred} testID="command-center-at-risk">
-        <ActivityIndicator color={colors.forest} />
+      <View style={styles.container} testID="command-center-at-risk">
+        <SkeletonScreen testID="command-center-at-risk-loading" />
       </View>
     );
   }
@@ -67,15 +66,11 @@ export default function AtRiskScreen({ onSelectClient }: Props) {
   if (state === 'error' && items.length === 0) {
     return (
       <View style={styles.centred} testID="command-center-at-risk">
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          onPress={() => load(false)}
-          style={styles.retryButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading at-risk clients"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+        <LoadFailedNotice
+          message="At-risk clients could not load."
+          onRetry={() => load(false)}
+          testID="command-center-at-risk-error"
+        />
       </View>
     );
   }
@@ -177,23 +172,6 @@ const styles = StyleSheet.create({
   emptyBody: {
     ...typography.body,
     color: colors.stone,
-    textAlign: 'center',
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-  },
-  retryText: {
-    ...typography.caption,
-    color: colors.bone,
     textAlign: 'center',
   },
 });

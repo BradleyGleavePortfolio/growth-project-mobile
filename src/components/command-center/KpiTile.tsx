@@ -1,7 +1,8 @@
 // KpiTile — single metric tile for the Coach Command Center Overview screen.
 //
-// Displays a numeric value with a label. Supports an optional accent colour
-// for semantic colouring (e.g. red for alerts, green for active clients).
+// Displays a numeric value with a label. The value is always ink: data is
+// monochrome, and a need is said in words through `subtext` (QA-COACH-HOME-131
+// removed the red / gold value colours, which also failed contrast).
 //
 // Doctrine: numbers over adjectives. `value` must be a number or a formatted
 // string (e.g. "71%"). No emoji.
@@ -13,8 +14,6 @@ import { colors, spacing, typography, radius } from '../../theme/tokens';
 interface KpiTileProps {
   label: string;
   value: string | number;
-  /** Optional semantic colour for the value text. Defaults to ink. */
-  valueColor?: string;
   /** Optional descriptor below the value (e.g. "of 14 clients"). */
   subtext?: string;
   testID?: string;
@@ -24,7 +23,6 @@ interface KpiTileProps {
 export default function KpiTile({
   label,
   value,
-  valueColor,
   subtext,
   testID,
   style,
@@ -40,10 +38,7 @@ export default function KpiTile({
       <Text style={styles.label} numberOfLines={2}>
         {label}
       </Text>
-      <Text
-        style={[styles.value, valueColor ? { color: valueColor } : undefined]}
-        numberOfLines={1}
-      >
+      <Text style={styles.value} numberOfLines={1}>
         {value}
       </Text>
       {subtext ? (

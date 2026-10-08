@@ -5,7 +5,8 @@
 // Sorted by created_at desc. Dismissed alerts are hidden.
 //
 // State machine:
-//   idle → loading → (data | error)
+//   loading → (data | error); loading is the shared skeleton and a failed
+//   read is the calm LoadFailedNotice with Try again (QA-COACH-HOME-131).
 //   Dismissing an alert: optimistic removal, rolled back on error.
 //   Pull-to-refresh transitions loading → data/error.
 //
@@ -19,30 +20,29 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../../theme/tokens';
+import { colors, spacing, typography } from '../../../theme/tokens';
 import {
   commandCenterApi,
   ActionQueueItem,
 } from '../../../services/commandCenterApi';
 import AlertRow from '../../../components/command-center/AlertRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 import RomanAdjustmentsSection from '../../../components/roman/adjust/RomanAdjustmentsSection';
 
-type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
+type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
 interface Props {
   onSelectClient?: (userId: string, displayName: string) => void;
 }
 
 export default function ActionQueueScreen({ onSelectClient }: Props) {
-  const [state, setState] = useState<LoadState>('idle');
+  const [state, setState] = useState<LoadState>('loading');
   const [items, setItems] = useState<ActionQueueItem[]>([]);
   const [totalPending, setTotalPending] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
   // Pull-to-refresh also reloads Roman's workout suggestions.
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -54,7 +54,6 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
       setTotalPending(res.data.total_pending);
       setState('data');
     } catch {
-      setErrorMessage('Unable to load action queue. Check your connection and try again.');
       setState('error');
     }
   }, []);
@@ -83,8 +82,8 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
 
   if (state === 'loading') {
     return (
-      <View style={styles.centred} testID="command-center-action-queue">
-        <ActivityIndicator color={colors.forest} />
+      <View style={styles.container} testID="command-center-action-queue">
+        <SkeletonScreen testID="command-center-action-queue-loading" />
       </View>
     );
   }
@@ -92,15 +91,11 @@ export default function ActionQueueScreen({ onSelectClient }: Props) {
   if (state === 'error' && items.length === 0) {
     return (
       <View style={styles.centred} testID="command-center-action-queue">
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          onPress={() => load(false)}
-          style={styles.retryButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading action queue"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+        <LoadFailedNotice
+          message="The action queue could not load."
+          onRetry={() => load(false)}
+          testID="command-center-action-queue-error"
+        />
       </View>
     );
   }
@@ -206,23 +201,6 @@ const styles = StyleSheet.create({
   emptyBody: {
     ...typography.body,
     color: colors.stone,
-    textAlign: 'center',
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-  },
-  retryText: {
-    ...typography.caption,
-    color: colors.bone,
     textAlign: 'center',
   },
 });

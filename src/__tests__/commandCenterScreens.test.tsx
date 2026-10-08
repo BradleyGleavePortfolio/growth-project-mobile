@@ -278,7 +278,7 @@ describe('OverviewScreen', () => {
     (commandCenterApi.getOverview as jest.Mock) = mockRejected();
     const { getByText } = await render(<OverviewScreen />);
     await waitFor(() => {
-      expect(getByText(/unable to load/i)).toBeTruthy();
+      expect(getByText(/could not load/i)).toBeTruthy();
     });
   });
 });
@@ -311,7 +311,7 @@ describe('AtRiskScreen', () => {
     (commandCenterApi.getAtRisk as jest.Mock) = mockRejected();
     const { getByText } = await render(<AtRiskScreen />);
     await waitFor(() => {
-      expect(getByText(/unable to load/i)).toBeTruthy();
+      expect(getByText(/could not load/i)).toBeTruthy();
     });
   });
 });
@@ -344,7 +344,7 @@ describe('WinStreaksScreen', () => {
     (commandCenterApi.getWinStreaks as jest.Mock) = mockRejected();
     const { getByText } = await render(<WinStreaksScreen />);
     await waitFor(() => {
-      expect(getByText(/unable to load/i)).toBeTruthy();
+      expect(getByText(/could not load/i)).toBeTruthy();
     });
   });
 });
@@ -377,7 +377,7 @@ describe('InboxScreen', () => {
     (commandCenterApi.getInbox as jest.Mock) = mockRejected();
     const { getByText } = await render(<InboxScreen />);
     await waitFor(() => {
-      expect(getByText(/unable to load/i)).toBeTruthy();
+      expect(getByText(/could not load/i)).toBeTruthy();
     });
   });
 });
@@ -410,7 +410,7 @@ describe('ActionQueueScreen', () => {
     (commandCenterApi.getActionQueue as jest.Mock) = mockRejected();
     const { getByText } = await render(<ActionQueueScreen />);
     await waitFor(() => {
-      expect(getByText(/unable to load/i)).toBeTruthy();
+      expect(getByText(/could not load/i)).toBeTruthy();
     });
   });
 
