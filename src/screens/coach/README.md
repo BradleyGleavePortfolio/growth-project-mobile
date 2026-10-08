@@ -147,6 +147,7 @@ Same set as the client side — `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SUPABASE_URL
 | Invite code creation fails with a 4xx | Coach exceeded an account limit (set server-side) | Surface the backend error verbatim — the coach can revoke an unused code to free a slot. |
 | ClientDetail shows blank metrics | The client is new and has no logs yet | Expected. The screen renders an empty state, not zeros. |
 | Realtime ping silent on a coach phone | Backgrounded WebSocket or aggressive Doze | 60 s poll fallback fires; foreground transition refetches. |
+| Booking inbox, invites, pending AI drafts, risk board or a Programs list did not load | Network drop, timeout or a server failure | One calm sentence and a forest "Try again" text action (`ui/states/QuietStates`); "Check your connection" only when the request got no answer. Loading is the shared skeleton. |
 | Share sheet copies an invite URL but recipient's phone opens a browser | `assetlinks.json` not hosted yet, or fingerprint mismatch | Use the `tgp://` form for now, or chase the hosted-file deployment. |
 
 ## Tests

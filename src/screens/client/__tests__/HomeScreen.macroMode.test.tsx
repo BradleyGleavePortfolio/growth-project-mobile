@@ -7,16 +7,22 @@
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fireEvent, render, screen } from '@testing-library/react-native';
+import { getTodayString } from '../../../utils/date';
 
 const mockDayState = {
   foodLogs: [],
   dailyTotals: { calories: 600, protein: 40, carbs: 70, fat: 20 },
   waterOz: 0,
+  selectedDate: getTodayString(),
+  hasLoadedDay: true,
   isLoading: false,
   loadError: null as string | null,
   loadDayData: jest.fn().mockResolvedValue(undefined),
   loadProfile: jest.fn().mockResolvedValue(undefined),
 };
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
+}));
 
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({

@@ -1,96 +1,70 @@
 /**
  * S-MWB — small shared building blocks for the Programs screens: the failure
- * box (specific message, retry, support path, reference), chips and buttons.
+ * box (specific message, Try again, support path, reference; drawn by the
+ * shared QuietError), chips and buttons.
  * Touch targets are at least 44pt and every control has an accessible label
  * (WCAG 2.2 AA: 2.5.8 target size, 4.1.2 name/role/value).
  */
 import React from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Pressable, StyleSheet, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../../theme/ThemeProvider";
+import {
+  QuietError,
+  QuietLoading,
+  type QuietErrorAction,
+} from "../../../ui/states/QuietStates";
 import type { ProgramFailure } from "../../../utils/programErrors";
 import type { ProgramsNav } from "./types";
 
 export function FailureBox({
   failure,
   onRetry,
-  retryLabel = "Retry",
+  retryLabel = "Try again",
 }: {
   failure: ProgramFailure;
   onRetry?: () => void;
   retryLabel?: string;
 }) {
-  const { colors } = useTheme();
   const navigation = useNavigation<ProgramsNav>();
+  // QA-COACH-STATES-131: the shared calm error. Sign in again replaces
+  // Try again when the session ended; Contact support follows, muted.
+  const signIn = failure.recovery === "sign_in";
+  const actions: QuietErrorAction[] = [];
+  if (signIn) {
+    actions.push({
+      label: "Sign in again",
+      // Loaded on demand so the Programs screens do not pull the whole auth
+      // stack in at import time.
+      onPress: () => {
+        void import("../../../services/authActions").then((m) => m.signOut());
+      },
+      accessibilityHint: "Signs you out so you can sign back in",
+    });
+  }
+  if (failure.support) {
+    actions.push({
+      label: "Contact support",
+      onPress: () => navigation.navigate("SupportInbox"),
+      accessibilityHint: failure.reference
+        ? `Opens support chat. Quote reference ${failure.reference}`
+        : "Opens support chat",
+    });
+  }
   return (
-    <View
-      accessibilityRole="alert"
-      accessibilityLiveRegion="polite"
-      style={[
-        styles.failure,
-        {
-          backgroundColor: colors.noticeCriticalBg,
-          borderColor: colors.noticeCriticalAccent,
-        },
-      ]}
-    >
-      <Ionicons
-        name="alert-circle"
-        size={20}
-        color={colors.noticeCriticalText}
-      />
-      <View style={styles.failureBody}>
-        <Text
-          style={[styles.failureText, { color: colors.noticeCriticalText }]}
-        >
-          {failure.message}
-        </Text>
-        <View style={styles.failureActions}>
-          {failure.recovery === "sign_in" ? (
-            <SmallButton
-              tone="primary"
-              label="Sign in again"
-              onPress={() => {
-                // Loaded on demand so the Programs screens do not pull the
-                // whole auth stack in at import time.
-                void import("../../../services/authActions").then((m) =>
-                  m.signOut(),
-                );
-              }}
-              accessibilityHint="Signs you out so you can sign back in"
-            />
-          ) : onRetry ? (
-            <SmallButton
-              label={retryLabel}
-              onPress={onRetry}
-              accessibilityHint={
-                failure.recovery === "wait"
-                  ? "Runs the action again; wait a minute first"
-                  : "Runs the action again"
-              }
-            />
-          ) : null}
-          {failure.support ? (
-            <SmallButton
-              label="Contact support"
-              onPress={() => navigation.navigate("SupportInbox")}
-              accessibilityHint={
-                failure.reference
-                  ? `Opens support chat. Quote reference ${failure.reference}`
-                  : "Opens support chat"
-              }
-            />
-          ) : null}
-        </View>
-      </View>
-    </View>
+    <QuietError
+      layout="inline"
+      message={failure.message}
+      onRetry={signIn ? undefined : onRetry}
+      retryLabel={retryLabel}
+      retryHint={
+        failure.recovery === "wait"
+          ? "Runs the action again; wait a minute first"
+          : "Runs the action again"
+      }
+      actions={actions}
+    />
   );
 }
 
@@ -178,14 +152,9 @@ export function Chip({
   );
 }
 
+/** The shared skeleton; the label is spoken, not printed (QA-COACH-STATES-131). */
 export function LoadingRow({ label }: { label: string }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.loading} accessibilityLabel={label} accessible>
-      <ActivityIndicator color={colors.primary} />
-      <Text style={{ color: colors.textSecondary }}>{label}</Text>
-    </View>
-  );
+  return <QuietLoading label={label} />;
 }
 
 export function SectionTitle({ children }: { children: string }) {
@@ -210,17 +179,6 @@ export function plural(n: number, one: string, many: string): string {
 }
 
 const styles = StyleSheet.create({
-  failure: {
-    flexDirection: "row",
-    gap: 10,
-    padding: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginVertical: 8,
-  },
-  failureBody: { flex: 1, gap: 8 },
-  failureText: { fontSize: 14, lineHeight: 20 },
-  failureActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   smallButton: {
     minHeight: 44,
     minWidth: 44,
@@ -241,6 +199,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   chipText: { fontSize: 14, fontWeight: "600" },
-  loading: { flexDirection: "row", alignItems: "center", gap: 10, padding: 16 },
   section: { fontSize: 17, fontWeight: "600", marginTop: 16, marginBottom: 8 },
 });

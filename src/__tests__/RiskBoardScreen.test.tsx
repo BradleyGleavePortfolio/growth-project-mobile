@@ -237,10 +237,11 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
 
   it('renders the error state when the API rejects', async () => {
     mockGetMyRiskBoard.mockRejectedValueOnce(new Error('Network timeout'));
-    const { findByText } = await render(<RiskBoardScreen />);
-    // Error path sets error in state; ListEmptyComponent shows the error title + message.
-    expect(await findByText(/Could not load risk data/i)).toBeTruthy();
-    expect(await findByText(/Network timeout/i)).toBeTruthy();
+    const { findByText, queryByText, getByRole } = await render(<RiskBoardScreen />);
+    // QA-COACH-STATES-131: one calm sentence and Try again; the raw error text never shows.
+    expect(await findByText('The risk board could not load. Try again in a moment.')).toBeTruthy();
+    expect(queryByText(/Network timeout/i)).toBeNull();
+    expect(getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 });
 
