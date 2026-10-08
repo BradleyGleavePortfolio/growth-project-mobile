@@ -17,6 +17,7 @@ const mockSavedWorkout = {
 };
 const mockResumeDestination = ['WorkoutTab', {
   screen: 'ActiveWorkout',
+  initial: false,
   params: {
     routineName: mockSavedWorkout.routineName,
     exercises: mockSavedWorkout.exercisesJson,
@@ -68,7 +69,7 @@ it('keeps Messages registered on Home and reachable from More/Membership', () =>
 });
 it.each([
   ['assigned', 'One meal logged. Foundations is ready.', 'Start Foundations',
-    ['MoreTab', { screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'pending-assignment' } }]],
+    ['MoreTab', { screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'pending-assignment' } }]],
   ['active', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
   ['active-only', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
   ['active-assigned', 'One meal logged. A workout is in progress.', 'Resume workout', mockResumeDestination],
@@ -105,7 +106,7 @@ it('opens the first unfinished assignment, not a completed workout or a differen
   await render(<HomeScreen />);
   await fireEvent.press(await screen.findByLabelText('Start Next session'));
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
-    screen: 'WorkoutAssignmentDetail', params: { assignmentId: 'next-assignment' },
+    screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: 'next-assignment' },
   });
 });
 it.each(['history', 'assignments'] as const)('keeps Train reachable when the %s read fails', async (failedRead) => {

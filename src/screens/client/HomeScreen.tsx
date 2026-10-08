@@ -319,6 +319,7 @@ export default function HomeScreen() {
     if (activeWorkout) {
       navigation.navigate('WorkoutTab', {
         screen: 'ActiveWorkout',
+        initial: false,
         params: {
           routineName: activeWorkout.routineName,
           exercises: activeWorkout.exercisesJson,
@@ -329,6 +330,7 @@ export default function HomeScreen() {
     } else if (!workoutDone && pendingPlanName && pendingAssignmentId) {
       navigation.navigate('MoreTab', {
         screen: 'WorkoutAssignmentDetail',
+        initial: false,
         params: { assignmentId: pendingAssignmentId },
       });
     } else {

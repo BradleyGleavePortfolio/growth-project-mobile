@@ -101,7 +101,7 @@ describe('U-V1-5: assigned workout entry from Home', () => {
     expect(screen.queryByText(/Workout complete/)).toBeNull();
     await fireEvent.press(continueButton);
     expect(mockNavigate).toHaveBeenCalledWith('MoreTab', {
-      screen: 'WorkoutAssignmentDetail', params: { assignmentId: PLAN.id },
+      screen: 'WorkoutAssignmentDetail', initial: false, params: { assignmentId: PLAN.id },
     });
     expect(mockListAssignments).toHaveBeenCalledTimes(1);
   });
