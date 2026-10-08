@@ -66,6 +66,7 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 // S-REACH: coach read of a client's consultation answers (backend #607).
 import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
+import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -194,6 +195,8 @@ export type ClientsStackParamList = {
   CoachMacrosReview:    { clientId: string; clientName: string };
   /** S-REACH: consultation answers, from client detail > Summary. */
   ClientConsultation:   { clientId: string; clientName?: string };
+  /** COACH-PAY-M-130: payments, refund, pause and cancel, from client detail > Summary (server flag coach_payment_actions). */
+  ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
   CoachWorkoutBuilder:  { planId?: string; openAi?: boolean; clientId?: string; clientName?: string } | undefined;
   CoachMealTemplates:   undefined;
@@ -401,6 +404,8 @@ function ClientsStackNavigator() {
         component={ClientConsultationScreen}
         options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
       />
+      {/* COACH-PAY-M-130: draws its own Back; entry shown only while the server flag is on. */}
+      <ClientsStack.Screen name="ClientPayments" component={ClientPaymentsScreen} />
       <ClientsStack.Screen
         name="CoachWorkoutBuilder"
         component={CoachWorkoutBuilderScreen}

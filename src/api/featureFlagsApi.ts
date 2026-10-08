@@ -55,6 +55,9 @@ export const SERVER_FEATURE_FLAG_KEYS = [
   // sheet and scripted Roman card for a client with no coach. ON only for a
   // student while the env is on.
   'coachless_home',
+  // Coach payments of one client (backend FEATURE_COACH_PAYMENT_ACTIONS,
+  // CF-COACH-PAY-BE-128): refund, pause, resume, cancel. Coaches and owners.
+  'coach_payment_actions',
 ] as const;
 export type ServerFeatureFlagKey = (typeof SERVER_FEATURE_FLAG_KEYS)[number];
 

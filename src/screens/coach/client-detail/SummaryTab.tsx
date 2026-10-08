@@ -14,6 +14,8 @@ import { MacroCard } from './MacroCard';
 import { ProfileRow } from './ProfileRow';
 import { ConsultationSummaryCard } from './ConsultationSummaryCard';
 import { useCurrentMacrosForClient } from '../../../hooks/useMacros';
+import { useCoachTeamStatus } from '../../../hooks/useCoachRoleType';
+import { useHeadCoachHandlesMoney } from '../../../lib/money/headCoachRole';
 import { resolveCoachTargets } from '../../../utils/coach/foodReview';
 
 export function SummaryTab({
@@ -28,6 +30,7 @@ export function SummaryTab({
   onOpenMacrosReview,
   onOpenWorkoutBuilder,
   onOpenAskAi,
+  onOpenPayments,
   openWorkoutRequest,
   onWorkoutRequestHandled,
   colors,
@@ -50,6 +53,8 @@ export function SummaryTab({
    * omitted, the "Ask AI" pill is not shown.
    */
   onOpenAskAi?: () => void;
+  /** COACH-PAY-M-130: opens the client's payments; omitted (no pill) while coach_payment_actions is off. */
+  onOpenPayments?: () => void;
   /** AIB-6: open the AI program generator once (from the Workouts tab entry). */
   openWorkoutRequest?: boolean;
   onWorkoutRequestHandled?: () => void;
@@ -179,6 +184,7 @@ export function SummaryTab({
           <Ionicons name="barbell-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Workouts</Text>
         </TouchableOpacity>
+        {onOpenPayments ? <PaymentsPill onPress={onOpenPayments} colors={colors} styles={styles} /> : null}
         {/* Stream 2 — opens the Ask-AI sheet. Shown only when a caller wires
             it; ClientDetailScreen does not (see the note there). */}
         {onOpenAskAi ? (
@@ -212,5 +218,28 @@ export function SummaryTab({
         clientDietaryRestrictions={restrictions}
       />
     </>
+  );
+}
+
+/**
+ * COACH-PAY-M-130: hidden for an active sub-coach, whose head coach's practice
+ * handles money (every payments route answers 403 sub_coach_billing_blocked).
+ * Mounted only while coach_payment_actions is on, so the roster read runs then.
+ */
+function PaymentsPill({ onPress, colors, styles }: { onPress: () => void; colors: ThemeColors; styles: ClientDetailStyles }) {
+  const team = useCoachTeamStatus();
+  const headCoachHandlesMoney = useHeadCoachHandlesMoney();
+  if (team.role === 'sub_coach' || headCoachHandlesMoney) return null;
+  return (
+    <TouchableOpacity
+      style={styles.actionPill}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel="Open payments, refunds and billing"
+      testID="summary-tab-payments-pill"
+    >
+      <Ionicons name="card-outline" size={18} color={colors.primary} />
+      <Text style={styles.actionPillText}>Payments</Text>
+    </TouchableOpacity>
   );
 }

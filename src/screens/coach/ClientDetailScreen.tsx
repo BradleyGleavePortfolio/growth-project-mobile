@@ -480,6 +480,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+            onOpenPayments={
+              serverFlags.flags.coach_payment_actions
+                ? () => navigation.navigate('ClientPayments', { clientId, clientName: route.params.clientName })
+                : undefined
+            }
             openWorkoutRequest={aiProgramRequest}
             onWorkoutRequestHandled={clearAiProgramRequest}
             colors={colors}

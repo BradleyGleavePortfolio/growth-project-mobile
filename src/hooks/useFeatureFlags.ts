@@ -93,6 +93,7 @@ export function useFeatureFlags(): UseFeatureFlagsResult {
     community_events: resolve(data, 'community_events'),
     messaging_core_v2: resolve(data, 'messaging_core_v2'),
     coachless_home: resolve(data, 'coachless_home'),
+    coach_payment_actions: resolve(data, 'coach_payment_actions'),
   };
 
   return {
