@@ -40,6 +40,10 @@ ClientsListScreen ─► useCoachStore.loadClients(coachId, status?)
 Sign-out path ─► clientStore.reset() + coachStore.reset()
 ```
 
+`loadDayData` applies results and failure notices only while its requested date is still selected. Returning from an earlier Food Log day to Home therefore keeps today's foods, totals, water entries and loading state, even if the earlier read finishes afterward. Same-day refresh failures still retain the day's verified data.
+
+Failed water-add notices round ounces to a whole number for display, including amounts converted from metric quick-adds. The millilitre request and optimistic rollback keep the original amount; only the notice is rounded.
+
 The reset functions are not called automatically by `signOut` — they are wired into the screens that consume the stores so the reset happens at the right point in the navigation tree (after the unauthenticated navigator mounts). The contract: when a logout cycle completes, every store's `reset()` has run before the next signed-in user reaches the screen that reads it.
 
 ## App-store / deep-link dependencies
@@ -66,10 +70,10 @@ None.
 ## Tests
 
 ```bash
-npm test
+npm test -- --runInBand src/store/__tests__/clientStore.failureStates.test.ts
 ```
 
-The stores are simple enough that direct tests are not in the suite; they are exercised through the screens that consume them (Log, ClientsList).
+`clientStore.failureStates.test.ts` directly covers selected-day clearing, same-day refresh retention, earlier-day reads finishing after Home selects today, loading/error state, and failed water-add copy with unchanged request and rollback precision. Screen tests also exercise the stores through Log and ClientsList.
 
 ## Release notes
 

@@ -70,8 +70,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   reset: () => set({ ...initialClientState, selectedDate: getTodayString() }),
 
   loadDayData: async (_userId: string, date?: string) => {
+    const d = date || get().selectedDate;
     try {
-      const d = date || get().selectedDate;
       get().setSelectedDate(d);
       set({ isLoading: true, loadError: null });
 
@@ -83,6 +83,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           return null;
         }),
       ]);
+      if (get().selectedDate !== d) return;
       const data = foodResponse.data;
 
       // Wire shape returned by /v1/log/daily.
@@ -165,6 +166,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           : 'Water data could not refresh. Check your connection and try again.',
       });
     } catch (err) {
+      if (get().selectedDate !== d) return;
       // Preserve data only for a refresh of the same selected day.
       logger.error('ClientStore', 'loadDayData failed', err);
       set({
@@ -228,7 +230,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       logger.error('ClientStore', 'logWater failed', err);
       set((state) => ({
         waterOz: Math.max(0, state.waterOz - amountOz),
-        loadError: `${amountOz} oz of water was not saved. Check the connection, then add it again.`,
+        loadError: `${Math.round(amountOz)} oz of water was not saved. Check the connection, then add it again.`,
       }));
     }
   },
