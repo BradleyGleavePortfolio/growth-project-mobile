@@ -18,6 +18,7 @@ import {
   NavigationContainer,
   createNavigationContainerRef,
   type NavigationState,
+  type ParamListBase,
   type PartialState,
 } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -145,7 +146,7 @@ function budget(pct_used: number): CoachAIBudgetResponse {
 const Tab = createBottomTabNavigator();
 const Clients = createNativeStackNavigator();
 const Settings = createNativeStackNavigator();
-const ref = createNavigationContainerRef();
+const ref = createNavigationContainerRef<ParamListBase>();
 
 const ClientsList = () => <Text>Clients list</Text>;
 function PrefsStub({ navigation }: { navigation: { goBack: () => void } }) {
