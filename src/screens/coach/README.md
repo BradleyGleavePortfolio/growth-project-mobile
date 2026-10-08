@@ -6,6 +6,14 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 
 Meal-plan empty-state directions name the client’s **Meal plan** entry under More, not a Plan tab. After AI meal-plan approval, `ClientDetail` opens its coach-side Plan tab via `initialTab: 'mealplan'`, including on return to an already-mounted client detail.
 
+Client-detail Summary requests the device's calendar day using the existing `date` query.
+Weekly totals multiply food nutrition by recorded portions, read `protein_g`, and sum
+saved workout `weight_per_set × reps_per_set` volume before display rounding. Weekly
+and Workouts use `lb` captions. Food review formats the recorded eat day and meal label
+without changing portions, notes, targets or sharing states. Weekly disclosure,
+7/14/30-day food filters, feedback, meal plans, refresh and workout AI actions remain.
+Regression and action parity: `src/__tests__/coachWeekly131.test.tsx`.
+
 - Show the coach the state of every client they own: streaks, last log, last check-in, alerts.
 - Let the coach issue invite codes that bind new signups to their account, and revoke codes they no longer want to honour.
 - Talk to clients (per-thread DMs) and ship lightweight nudges (push notifications + in-app banners).
@@ -67,7 +75,7 @@ If you add another purchase-confirm surface (e.g. a future subscription upgrade 
 Coach signs in (same flow as client) ─► role='coach' ─► CoachNavigator mounts
 
 ClientsListScreen ──► coachApi.getClients(status?)            (server-filtered)
-ClientDetailScreen ─► coachApi.getClientSummary(clientId)
+ClientDetailScreen ─► coachApi.getClientSummary(clientId, deviceCalendarDay)
                   ─► coachApi.getClientTimeline(clientId, days)
                   ─► coachApi.getClientCheckIns(clientId, ...)
                   ─► coachApi.getMyGuidelines() / postGuidelines

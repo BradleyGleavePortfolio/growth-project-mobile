@@ -116,7 +116,7 @@ describe('FOOD-COACH-124 normal-day regressions', () => {
       data: { meals: [{ ...meal('one'), logged_at: '2026-10-06T18:00:00Z', notes: 'Before training' }] },
     });
     await render(<FoodLogReviewSection {...reviewProps} />);
-    await waitFor(() => expect(screen.getByText('2026-10-05')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Monday, October 5')).toBeTruthy());
     expect(screen.getByText(/33.3 g/)).toBeTruthy();
     expect(screen.getByText('Client note: Before training')).toBeTruthy();
   });
