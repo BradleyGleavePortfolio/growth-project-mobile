@@ -31,7 +31,13 @@
  * tgp://checkout/success or /cancel (sent inline, so it does not depend on
  * the server's return-URL env); a success link shows the receipt, a cancel
  * link goes back to the packs, and coming back to the app refetches the
- * budget either way.
+ * budget either way. PACKS-BOTH-131: an Android build with
+ * EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on takes the same path.
+ *
+ * Preselect (PACKS-BOTH-131): `route.params.preselect` comes from
+ * AIBudgetMount. A pack amount tapped on the tutorial or hard-pause card
+ * starts that pack's checkout once on open (no second tap on the list);
+ * 'custom' opens with the custom-amount field focused.
  *
  * Optimistic UI: NONE. Stripe Checkout is the source of truth for payment
  * success; the budget query is invalidated only after the webhook applies
@@ -60,7 +66,12 @@ import { Ionicons } from '@expo/vector-icons';
 import WebView, {
   type WebViewNavigation,
 } from 'react-native-webview';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import {
+  useNavigation,
+  type NavigationProp,
+  type ParamListBase,
+  type RouteProp,
+} from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
@@ -83,7 +94,8 @@ import {
   parseReturnDeepLink,
 } from '../client/BrandedCheckoutWebViewScreen';
 import { parseDollarsToCents } from './creditPackCheckoutHelpers';
-import { creditPackCheckoutMode } from '../../config/purchaseSurfaces';
+import { CREDIT_PACK_NON_REFUNDABLE, creditPackCheckoutMode } from '../../config/purchaseSurfaces';
+import type { SettingsStackParamList } from '../../navigation/CoachNavigator';
 
 // Re-export so consumers (tests, navigator) can verify allow-list parity.
 export { CHECKOUT_ALLOWED_HOSTS };
@@ -141,7 +153,14 @@ type Phase =
   | { kind: 'success'; amountCents: number; newBalanceCents: number | null }
   | { kind: 'error'; message: string };
 
-export default function CreditPackCheckoutScreen(): React.ReactElement {
+export interface CreditPackCheckoutScreenProps {
+  /** SettingsStack route; `preselect` is a pack amount or 'custom'. */
+  route?: RouteProp<SettingsStackParamList, 'CreditPackCheckout'>;
+}
+
+export default function CreditPackCheckoutScreen({
+  route,
+}: CreditPackCheckoutScreenProps = {}): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -152,7 +171,10 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
   const [customInput, setCustomInput] = useState<string>('');
   const external = creditPackCheckoutMode() === 'external';
 
-  const packOptions = budget?.pack_options_cents ?? [1000, 2500, 9900];
+  const packOptions = useMemo(
+    () => budget?.pack_options_cents ?? [1000, 2500, 9900],
+    [budget?.pack_options_cents],
+  );
   const bounds = budget?.custom_pack_bounds_cents ?? {
     min: CUSTOM_PACK_MIN_CENTS,
     max: CUSTOM_PACK_MAX_CENTS,
@@ -202,6 +224,18 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
     },
     [external],
   );
+
+  // Preselect: a pack tapped on the tutorial or hard-pause card starts its
+  // checkout here once. Unknown amounts land on the list.
+  const preselect = route?.params?.preselect;
+  const preselectHandled = useRef(false);
+  useEffect(() => {
+    if (preselectHandled.current) return;
+    preselectHandled.current = true;
+    if (typeof preselect === 'number' && packOptions.includes(preselect)) {
+      mintCheckout(preselect);
+    }
+  }, [preselect, packOptions, mintCheckout]);
 
   const handleSelect = useCallback(
     (choice: number | 'custom') => {
@@ -366,6 +400,7 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
                 placeholder="25.00"
                 placeholderTextColor={colors.textMuted}
                 style={styles.customInput}
+                autoFocus={preselect === 'custom'}
                 testID="credit-pack-custom-input"
                 accessibilityLabel="Custom credit pack amount in dollars"
               />
@@ -417,6 +452,9 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
             Stripe checkout for {formatCents(phase.amountCents)} is open in your browser. You pay
             TGP {formatCents(phase.amountCents)}. It is added to your AI credits once Stripe
             confirms the payment.
+          </Text>
+          <Text style={styles.errorBody} testID="credit-pack-external-non-refundable">
+            {CREDIT_PACK_NON_REFUNDABLE}
           </Text>
           <HapticPressable
             intent="medium"

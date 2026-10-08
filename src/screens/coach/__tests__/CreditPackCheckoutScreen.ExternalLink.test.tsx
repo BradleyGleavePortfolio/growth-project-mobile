@@ -8,12 +8,16 @@
  *   - Stripe's tgp://checkout/success shows the receipt, /cancel goes back to
  *     the packs, and returning to the app refetches the budget;
  *   - a failed start says why in plain words and that nothing was charged.
+ * PACKS-BOTH-131: the same runs on an Android build with only the Android
+ * link on; the packs and the browser wait state say packs are non-refundable;
+ * route.params.preselect starts the tapped pack's checkout ('custom' focuses
+ * the amount field).
  */
 import React from 'react';
 import { AppState, Linking, Platform, type AppStateStatus } from 'react-native';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react-native';
 
-const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true };
+const mockFlags = { iosHideNonP2PPurchases: true, iosUsCreditPackLink: true, androidCreditPackLink: false };
 jest.mock('../../../config/featureFlags', () => {
   const actual = jest.requireActual('../../../config/featureFlags');
   return {
@@ -81,7 +85,14 @@ import CreditPackCheckoutScreen, {
   EXTERNAL_CANCEL_URL,
   EXTERNAL_SUCCESS_URL,
   checkoutStartErrorMessage,
+  type CreditPackCheckoutScreenProps,
 } from '../CreditPackCheckoutScreen';
+
+const routeWith = (preselect: number | 'custom'): CreditPackCheckoutScreenProps['route'] => ({
+  key: 'CreditPackCheckout-1',
+  name: 'CreditPackCheckout',
+  params: { preselect },
+});
 
 const CHECKOUT_URL = 'https://checkout.stripe.com/c/pay/cs_live_abc';
 let urlListener: ((event: { url: string }) => void) | null = null;
@@ -98,6 +109,7 @@ let openURL: jest.SpyInstance;
 
 beforeEach(() => {
   g.__DEV__ = false;
+  Object.assign(mockFlags, { iosUsCreditPackLink: true, androidCreditPackLink: false });
   Object.defineProperty(Platform, 'OS', { configurable: true, get: () => 'ios' });
   mockCreateCheckout.mockReset().mockResolvedValue({
     data: { checkout_session_id: 'cs_live_abc', checkout_url: CHECKOUT_URL, amount_cents: 1000 },
@@ -132,10 +144,20 @@ async function tapFirstPack() {
   });
 }
 
-describe('US-link build: credit-pack checkout in the system browser', () => {
+describe.each([
+  ['US-link iOS build', 'ios', { iosUsCreditPackLink: true, androidCreditPackLink: false }],
+  ['Android link build', 'android', { iosUsCreditPackLink: false, androidCreditPackLink: true }],
+] as const)('%s: credit-pack checkout in the system browser', (_name, os, flags) => {
+  beforeEach(() => {
+    Object.assign(mockFlags, flags);
+    Object.defineProperty(Platform, 'OS', { configurable: true, get: () => os });
+  });
+
   it('says who is paid, opens Stripe in the browser with tgp return links, and never mounts the WebView', async () => {
     await render(<CreditPackCheckoutScreen />);
     expect(screen.getByTestId('credit-pack-pays-tgp')).toHaveTextContent(/You pay TGP the pack price through Stripe checkout/);
+    expect(screen.getByTestId('ai-pack-non-refundable')).toHaveTextContent('Credit packs are non-refundable.');
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(false);
     await tapFirstPack();
     expect(mockCreateCheckout).toHaveBeenCalledWith({
       tier: 'small',
@@ -152,9 +174,41 @@ describe('US-link build: credit-pack checkout in the system browser', () => {
       /It is added to your AI credits once Stripe confirms the payment\./,
     );
     expect(screen.getByTestId('credit-pack-external')).not.toHaveTextContent(/Coach Home/);
+    expect(screen.getByTestId('credit-pack-external-non-refundable')).toHaveTextContent(
+      'Credit packs are non-refundable.',
+    );
   });
 
-  it('Stripe success link shows the receipt and refetches the budget', async () => {
+  it('a pack tapped on the pause or tutorial card (preselect) starts its checkout with no second tap', async () => {
+    await render(<CreditPackCheckoutScreen route={routeWith(2500)} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockCreateCheckout).toHaveBeenCalledTimes(1);
+    expect(mockCreateCheckout).toHaveBeenCalledWith(
+      expect.objectContaining({ amount_cents: 2500, success_url: EXTERNAL_SUCCESS_URL }),
+    );
+    expect(openURL).toHaveBeenCalledWith(CHECKOUT_URL);
+    expect(screen.getByTestId('credit-pack-external')).toHaveTextContent(/You pay TGP \$25\./);
+  });
+
+  it("preselect 'custom' opens the list with the amount field focused", async () => {
+    await render(<CreditPackCheckoutScreen route={routeWith('custom')} />);
+    expect(screen.getByTestId('credit-pack-select')).toBeTruthy();
+    expect(screen.getByTestId('credit-pack-custom-input').props.autoFocus).toBe(true);
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+  });
+
+  it('a preselect that is not a pack starts nothing and shows the list', async () => {
+    await render(<CreditPackCheckoutScreen route={routeWith(1234)} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('credit-pack-select')).toBeTruthy();
+    expect(mockCreateCheckout).not.toHaveBeenCalled();
+  });
+
+  it('Stripe success link shows the receipt with the new balance and refetches the budget', async () => {
     await render(<CreditPackCheckoutScreen />);
     await tapFirstPack();
     expect(urlListener).not.toBeNull();
@@ -162,6 +216,7 @@ describe('US-link build: credit-pack checkout in the system browser', () => {
       urlListener?.({ url: 'tgp://checkout/success?session_id=cs_live_abc' });
     });
     expect(screen.getByTestId('credit-pack-success')).toBeTruthy();
+    expect(screen.getByLabelText('New balance, $10')).toBeTruthy();
     // FIX-OPUS-B-131 (B2): the receipt names AI credits, not Coach Home.
     expect(screen.getByTestId('credit-pack-success')).toHaveTextContent(
       /It is added to your AI credits once Stripe confirms the payment\./,

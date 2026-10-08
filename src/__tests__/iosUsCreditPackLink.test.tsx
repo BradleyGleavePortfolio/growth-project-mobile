@@ -164,6 +164,8 @@ describe('iOS store build, US link on', () => {
     expect(utils.getByTestId('ai-hard-pause-pays-tgp')).toHaveTextContent(
       'You pay TGP the pack price through Stripe checkout, which opens in your browser.',
     );
+    // PACKS-BOTH-131: the pack prices carry the non-refundable line.
+    expect(utils.getByTestId('ai-pack-non-refundable')).toHaveTextContent('Credit packs are non-refundable.');
   });
 
   it('after Close on the pause sheet, the meter chip stays and opens the packs (U2)', async () => {

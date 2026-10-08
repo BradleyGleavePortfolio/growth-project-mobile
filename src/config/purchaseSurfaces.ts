@@ -11,7 +11,9 @@
  *     CTA, meter chip tap, PackOptionsRow in the tutorial / hard-pause modals.
  *     Exception (owner decision 10 fallback): a build with
  *     EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK on shows them again and opens
- *     Stripe Checkout in the system browser (creditPackCheckoutMode below)
+ *     Stripe Checkout in the system browser (creditPackCheckoutMode below).
+ *     Android release builds do the same with
+ *     EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK (preview profile only)
  *   - coach subscription / seat CTAs: "Start subscription" / "Manage billing"
  *     and invoice links in CoachBillingScreen (there are no seat fees now)
  *   - one-to-many paid products (group, cohort, community). None is sold in
@@ -109,7 +111,12 @@ export function digitalPurchasesHidden(
  *              The app cannot read the storefront, so the switch stands in
  *              for it: it is on only for builds offered solely on the US
  *              App Store (an owner action in App Store Connect).
- *   'hidden'   everything else, including every Android release build.
+ *              Also an Android release build with
+ *              EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK on (PACKS-BOTH-131:
+ *              set only in the eas.json preview profile, the Android test
+ *              app; a Google Play build with it on is an owner decision).
+ *   'hidden'   everything else, including Android release builds without
+ *              that switch (production and clinic).
  * Only credit packs use this. Seat upgrades, subscriptions and one-to-many
  * products keep digitalPurchasesHidden / nonP2PPurchasesHidden.
  */
@@ -119,9 +126,12 @@ export function creditPackCheckoutMode(
   platform: string = Platform.OS,
   digitalHidden: boolean = digitalPurchasesHidden(),
   usLink: boolean = featureFlags.iosUsCreditPackLink,
+  androidLink: boolean = featureFlags.androidCreditPackLink,
 ): CreditPackCheckoutMode {
   if (!digitalHidden) return 'in-app';
-  return platform === 'ios' && usLink === true ? 'external' : 'hidden';
+  if (platform === 'ios' && usLink === true) return 'external';
+  if (platform === 'android' && androidLink === true) return 'external';
+  return 'hidden';
 }
 
 /** True when no credit-pack entry point may show. */
@@ -131,14 +141,15 @@ export function creditPacksHidden(): boolean {
 
 /**
  * Value for the X-Client-Purchase-Policy request header. 'p2p-and-ai-credits'
- * means 1:1 coaching plus AI credit packs through the system-browser link;
- * the backend may then tell a coach to add a credit pack. Android release
- * builds still send 'all' (this header describes the iOS posture), so the
- * backend trusts 'all' only from iOS.
+ * means 1:1 coaching plus AI credit packs through the system-browser link
+ * (an iOS US-link build or an Android build with the Android link on); the
+ * backend may then tell a coach to add a credit pack. Other Android release
+ * builds still send 'all' (that value describes the iOS posture), so the
+ * backend trusts 'all' only from iOS (backend ai-credits/client-purchase-policy.ts).
  */
 export function purchasePolicyHeader(): 'p2p-only' | 'p2p-and-ai-credits' | 'all' {
-  if (!nonP2PPurchasesHidden()) return 'all';
-  return creditPackCheckoutMode() === 'external' ? 'p2p-and-ai-credits' : 'p2p-only';
+  if (creditPackCheckoutMode() === 'external') return 'p2p-and-ai-credits';
+  return nonP2PPurchasesHidden() ? 'p2p-only' : 'all';
 }
 
 // Operator 2026-09-30 (store package P0): the hidden state has no link, URL or
@@ -149,6 +160,12 @@ export function purchasePolicyHeader(): 'p2p-only' | 'p2p-and-ai-credits' | 'all
 export const NON_P2P_HIDDEN_TITLE = 'Not available in this app';
 export const NON_P2P_HIDDEN_BODY =
   'AI credit packs are not sold in this version of the app. Your AI credits renew each month, and your account and anything you already have are unchanged.';
+
+/**
+ * Owner 10-07 20:54: AI credit packs are non-refundable. Shown beside the pack
+ * prices wherever they show (PackOptionsRow, the browser-checkout wait state).
+ */
+export const CREDIT_PACK_NON_REFUNDABLE = 'Credit packs are non-refundable.';
 
 /** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
 export function oneToOneCoachingLabel(coachName?: string | null): string {
