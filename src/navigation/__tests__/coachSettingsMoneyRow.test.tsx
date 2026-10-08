@@ -8,6 +8,7 @@ import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { Linking } from "react-native";
 import { act } from "@testing-library/react-native";
+import { featureFlags } from "../../config/featureFlags";
 // Required lazily so the Settings harness loads on a head without it.
 const noteHeadCoachHandlesMoney = (v: boolean): void => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -143,6 +144,37 @@ jest.mock("@react-navigation/native", () => {
 beforeEach(() => {
   mockNavigate.mockReset();
   mockRole = undefined;
+  jest.replaceProperty(featureFlags, "romanChat", false);
+});
+
+afterEach(() => jest.restoreAllMocks());
+
+describe("coach Settings Roman row", () => {
+  it("names the supported topics in its subtitle and hint and still opens Roman", async () => {
+    mockRole = "coach";
+    jest.replaceProperty(featureFlags, "romanChat", true);
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const CoachSettings = require("../../screens/coach/SettingsScreen").default;
+    const r = await render(<CoachSettings />);
+    const copy = "Ask about programming, nutrition or running your practice.";
+    const row = r.getByLabelText("Open a conversation with Roman");
+    expect(row.props.accessibilityHint).toBe(copy);
+    expect(r.getByText(copy)).toBeTruthy();
+    expect(r.queryByText(/client read/)).toBeNull();
+    expect(r.getByTestId("coach-roman-entry-avatar")).toBeTruthy();
+    await fireEvent.press(row);
+    expect(mockNavigate).toHaveBeenCalledWith("RomanChat");
+  });
+
+  it("keeps the entry hidden when Roman chat is off", async () => {
+    mockRole = "coach";
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const CoachSettings = require("../../screens/coach/SettingsScreen").default;
+    const r = await render(<CoachSettings />);
+    expect(r.queryByLabelText("Open a conversation with Roman")).toBeNull();
+    expect(r.queryByText("Ask about programming, nutrition or running your practice.")).toBeNull();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
 
 describe("coach Settings Money row", () => {
