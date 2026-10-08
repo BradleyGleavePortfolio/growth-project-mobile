@@ -16,7 +16,7 @@ Entry point for viewing the leaderboard.
 | State | What renders |
 |-------|-------------|
 | Loading | Centered activity indicator. |
-| Error | Error message + "Try again" button. |
+| Error | Error message + "Try again" button. A display name the community content filter refuses (422 `community.content.rejected`) shows the server's reason instead of the generic copy. |
 | Not opted in | Opt-in card (empty-state copy + toggle + display name input). |
 | Opted in, no peers | "No peers have opted in yet" copy. |
 | Populated | Ranked list of rows. |
@@ -41,7 +41,7 @@ Full opt-in management screen, accessible from the MoreStack.
 
 1. **Toggle** — opt in / out with a single Switch. Optimistic update; reverts on error.
 2. **Display name** — text input (max 40 chars), shown only when opted in. Save button
-   appears only when the name has changed.
+   appears only when the name has changed. A refused name shows the server's reason (toggle and Save).
 3. **Explainer** — plain-English breakdown of what is measured, what is never shared,
    and who can see the user.
 

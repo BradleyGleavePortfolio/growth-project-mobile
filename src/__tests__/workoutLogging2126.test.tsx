@@ -184,9 +184,9 @@ describe('Resume carries the saved workout name and coach assignment', () => {
     expect(resumedSessionRouteParams(stored, { routineName: 'Push A', exercises: '[]', assignmentId: 'asg-1' })).toBeNull();
   });
 
-  it('is applied on the Resume button of the prompt', () => {
+  it('is applied when the screen reopens the unfinished workout', () => {
     const screen = fs.readFileSync(path.join(ROOT, 'src', 'screens', 'client', 'ActiveWorkoutScreen.tsx'), 'utf8');
-    const resumeIdx = screen.indexOf("text: 'Resume',");
+    const resumeIdx = screen.indexOf('if (!resumeRequested) {');
     expect(resumeIdx).toBeGreaterThan(-1);
     const block = screen.slice(resumeIdx, resumeIdx + 1200);
     expect(block).toContain('resumedSessionRouteParams(session');

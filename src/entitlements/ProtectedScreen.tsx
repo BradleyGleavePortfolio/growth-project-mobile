@@ -16,6 +16,12 @@
  *     has settled) → render the paywall. `unavailable` (transport /
  *     server error) intentionally fails CLOSED, not open: a 5xx must
  *     not leak a paid surface.
+ *   - TRAIN-GATE-128 exception: once the server has confirmed 'active' in
+ *     this app session (`confirmedActive`), a re-check ('checking') or a
+ *     failed re-check ('unavailable') keeps the children mounted, so a live
+ *     workout survives leaving the app and weak gym signal. Only a confirmed
+ *     inactive result (or a 402) gates. The backend guard still answers
+ *     every paid call, so nothing new is exposed.
  */
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -32,9 +38,13 @@ interface ProtectedScreenProps {
 }
 
 export function ProtectedScreen({ children }: ProtectedScreenProps) {
-  const { entitlementActive, status, openPlans, messageCoach } = useEntitlement();
+  const { entitlementActive, status, confirmedActive, openPlans, messageCoach } = useEntitlement();
   const { colors, tokens } = useTheme();
   const noCoach = useCoachlessClient();
+
+  if (confirmedActive === true && (status === 'checking' || status === 'unavailable')) {
+    return <>{children}</>;
+  }
 
   if (status === 'loading' || status === 'checking' || status === 'unknown') {
     return (

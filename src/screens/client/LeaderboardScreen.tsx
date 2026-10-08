@@ -44,6 +44,7 @@ import {
   LeaderboardEntry,
   LeaderboardResponse,
 } from '../../services/leaderboardApi';
+import { contentRejectedMessage } from '../../api/communitySafetyApi';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -273,8 +274,9 @@ export default function LeaderboardScreen() {
         displayName: displayName.trim() || undefined,
       });
       await load();
-    } catch {
-      setError('Could not save your preference. Try again.');
+    } catch (err) {
+      // A name the community filter refuses: say why, not "try again".
+      setError(contentRejectedMessage(err) ?? 'Could not save your preference. Try again.');
     } finally {
       setSaving(false);
     }
