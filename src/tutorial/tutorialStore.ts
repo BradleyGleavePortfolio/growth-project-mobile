@@ -48,6 +48,8 @@ interface TutorialStoreState {
   userId: string | null;
   hydrated: boolean;
   firstName: string | null;
+  /** `user.coach_id` is set (TutorialHost passes it on hydration). */
+  coachLinked: boolean;
   tutorial: TutorialState;
   payload: OnboardingCompletePayload | null;
   /** Live `/me/macros/current` numbers, preferred over the payload snapshot. */
@@ -62,6 +64,7 @@ const initial = (): TutorialStoreState => ({
   userId: null,
   hydrated: false,
   firstName: null,
+  coachLinked: false,
   tutorial: initialTutorialState(),
   payload: null,
   liveMacros: null,
@@ -89,6 +92,7 @@ function envOf(s: TutorialStoreState): MachineEnv {
     hasMacros: !!resolveMacros(s),
     communityAvailable: featureFlags.communityTab,
     calendarAvailable: featureFlags.clientCalendar,
+    coachLinked: s.coachLinked,
     currentPath: s.currentPath,
     now: new Date().toISOString(),
   };
@@ -107,6 +111,8 @@ export function buildCopyContext(
     spaces: Array.isArray(s.payload?.spaces) ? (s.payload?.spaces ?? []) : [],
     platform: os === 'ios' ? 'ios' : os === 'android' ? 'android' : 'other',
     macroMode,
+    coachLinked: s.coachLinked,
+    outcomes: s.tutorial.outcomes,
   };
 }
 
@@ -170,14 +176,20 @@ export function startClientTutorial(
   return true;
 }
 
-/** Load the per-user state. Called by TutorialHost when the user resolves. */
+/**
+ * Load the per-user state. Called by TutorialHost when the user resolves,
+ * with `coachLinked` = `!!user.coach_id` (absent means no coach).
+ */
 export async function hydrateTutorial(
   userId: string,
   firstName: string | null,
+  coachLinked = false,
 ): Promise<void> {
   const before = useTutorialStore.getState();
   if (before.hydrated && before.userId === userId) {
-    if (firstName !== before.firstName) useTutorialStore.setState({ firstName });
+    if (firstName !== before.firstName || coachLinked !== before.coachLinked) {
+      useTutorialStore.setState({ firstName, coachLinked });
+    }
     return;
   }
   const saved = await loadTutorial(userId);
@@ -185,6 +197,7 @@ export async function hydrateTutorial(
   useTutorialStore.setState({
     userId,
     firstName,
+    coachLinked,
     hydrated: true,
     tutorial: saved?.state ?? initialTutorialState(),
     // A payload handed to startClientTutorial() before hydration wins; a

@@ -3,10 +3,15 @@
  *
  * "Trust & Privacy" screen accessible from Settings.
  *
- * Section 1: security metadata fetched from GET /api/system/trust-meta
+ * Section 1: security status — the encryption line only. The invented "Last
+ *   security update" date, the "Audit policy" version and their canned offline
+ *   values are gone (FW-ACCOUNT-128 U3), so nothing is fetched for it.
  * Section 2: User actions — data export + account deletion
- * Section 3: Bullet list — who has access, what's encrypted
- * Footer: Privacy Policy, Consumer Health Data Privacy Policy, help centre.
+ * Section 3: Bullet list — who has access, what's encrypted. The coach and
+ *   Roman lines follow the real coach link and the Coach sharing switches
+ *   (GET /consent/me, clients only; trustCenterSharing.ts, FW-ACCOUNT-128 U2).
+ * Footer: Privacy Policy, Consumer Health Data Privacy Policy, Terms of
+ *   Service, help centre.
  *   A link that does not open shows, under it, what happened and what to do
  *   next for that cause (offline / cannot open links / anything else), see
  *   trustCenterLinkFailure.ts (OR-112-15).
@@ -36,8 +41,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing } from '../theme/index';
 import { typography } from '../theme/tokens';
 import { track } from '../lib/analytics';
-import api from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
+import { readCoachSharing } from '../api/coachSharingApi';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { isCoachLikeRole } from '../lib/roleSelectionGate';
+import { trustCoachLine, trustRomanLine } from './trustCenterSharing';
+import type { TrustCoachView } from './trustCenterSharing';
 import { trustCenterLinks } from './trustCenterLinks';
 import type { TrustCenterLink } from './trustCenterLinks';
 import {
@@ -51,39 +60,6 @@ import { SupportEmailFallback, useSupportEmail } from '../components/support/Sup
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { deletionErrorCopy } from './settings/deletionErrors';
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface TrustMeta {
-  lastSecurityUpdate: string;
-  encryptionLevel: string;
-  dataResidency: string;
-  auditPolicyVersion: string;
-  dataExportSupported: boolean;
-  accountDeletionSupported: boolean;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatRelativeDate(isoString: string): string {
-  try {
-    const date = new Date(isoString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 30) return `${diffDays} days ago`;
-    const diffMonths = Math.floor(diffDays / 30);
-    if (diffMonths === 1) return '1 month ago';
-    if (diffMonths < 12) return `${diffMonths} months ago`;
-    const diffYears = Math.floor(diffMonths / 12);
-    return diffYears === 1 ? '1 year ago' : `${diffYears} years ago`;
-  } catch {
-    return isoString;
-  }
-}
 
 // ─── Metadata row component ───────────────────────────────────────────────────
 
@@ -306,9 +282,12 @@ const makeNoticeStyles = (colors: ThemeColors) =>
 export default function TrustCenterScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [meta, setMeta] = useState<TrustMeta | null>(null);
-  const [loading, setLoading] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
+  const user = useCurrentUser();
+  const userId = user?.id ?? null;
+  const coachAccount = isCoachLikeRole(user?.role);
+  const cachedCoach = Boolean(user?.coach_id);
+  const [coachView, setCoachView] = useState<TrustCoachView>({ kind: 'checking' });
   // The footer link that last failed to open, and why. `attempt` remounts the
   // notice on every new failure so its copy/email state starts fresh.
   const [linkFailure, setLinkFailure] = useState<
@@ -331,24 +310,27 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     track('trust_center_opened');
   }, []);
 
-  // Fetch trust-meta (no auth required)
+  // Who can see your data: the server's coach link and Coach sharing switches
+  // (400 = no coach). A coach account has no coach and /consent is for
+  // clients only, so nothing is read for it. If the read fails, the account's
+  // own coach link decides whether a coach line shows at all.
   useEffect(() => {
-    api
-      .get<TrustMeta>('/system/trust-meta')
-      .then((res) => setMeta(res.data))
-      .catch(() => {
-        // Fallback to static values if network fails
-        setMeta({
-          lastSecurityUpdate: '2026-04-25T20:00:00Z',
-          encryptionLevel: 'Encrypted in transit; secure token storage',
-          dataResidency: 'US East',
-          auditPolicyVersion: 'v1.0',
-          dataExportSupported: true,
-          accountDeletionSupported: true,
-        });
-      })
-      .finally(() => setLoading(false));
-  }, []);
+    if (!userId) return;
+    if (coachAccount) {
+      setCoachView({ kind: 'no_coach' });
+      return;
+    }
+    let alive = true;
+    void readCoachSharing().then((read) => {
+      if (!alive) return;
+      if (read.kind === 'ok') setCoachView({ kind: 'read', state: read.state });
+      else setCoachView(read.kind === 'no_coach' || !cachedCoach ? { kind: 'no_coach' } : { kind: 'unread' });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [userId, coachAccount, cachedCoach]);
+  const coachLine = trustCoachLine(coachView);
 
   const handleDataExport = useCallback(async () => {
     track('data_export_requested');
@@ -357,7 +339,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       await dataExportApi.requestExport();
       Alert.alert(
         'Export requested',
-        'Your data export has been queued. Open Privacy in Settings to track progress and download the file when ready.',
+        'Your data export has been queued. Open My data in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
     } catch (err) {
@@ -438,27 +420,11 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Security status</Text>
         <View style={styles.card}>
-          {loading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : meta ? (
-            <>
-              <MetaRow
-                icon="time-outline"
-                label="Last security update"
-                value={formatRelativeDate(meta.lastSecurityUpdate)}
-              />
-              <MetaRow
-                icon="lock-closed-outline"
-                label="Encryption"
-                value="Encrypted in transit; secure token storage"
-              />
-              <MetaRow
-                icon="document-text-outline"
-                label="Audit policy"
-                value={`Version ${meta.auditPolicyVersion}`}
-              />
-            </>
-          ) : null}
+          <MetaRow
+            icon="lock-closed-outline"
+            label="Encryption"
+            value="Encrypted in transit; secure token storage"
+          />
         </View>
       </View>
 
@@ -466,18 +432,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>What you can do</Text>
         <View style={styles.card}>
-          {/* Info row — no action */}
-          <View style={styles.actionInfoRow}>
-            <View style={styles.actionIconWrap}>
-              <Ionicons name="people-outline" size={18} color={colors.textMuted} />
-            </View>
-            <Text style={styles.actionInfoText}>
-              Your answers and logs are shared with your coach. Your Roman conversations stay private from your coach.
-            </Text>
-          </View>
-
-          <View style={styles.divider} />
-
           {/* Data export */}
           <HapticPressable
             intent="medium"
@@ -529,9 +483,9 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         <View style={styles.card}>
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
-          <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
+          {coachLine ? <BulletItem text={coachLine} /> : null}
           <BulletItem text="Members of your community spaces — the content you choose to share there. If you opt in to a leaderboard, other clients of your coach can also see your display name and participation score." />
-          <BulletItem text="Not your coach — your Roman conversations, which are kept until you delete them or your account" />
+          <BulletItem text={trustRomanLine(coachView)} />
           <BulletItem text="Service providers that run the app for The Growth Project, such as Anthropic for Roman, only as described in the Privacy Policy" />
           <BulletItem text="Your data is never sold, and your health data is never used for advertising" />
 
@@ -630,21 +584,9 @@ const makeStyles = (colors: ThemeColors) =>
     borderTopColor: colors.border,
     paddingVertical: Spacing.sm,
   },
-  actionInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 10,
-  },
   actionIconWrap: {
     width: 24,
     alignItems: 'center',
-  },
-  actionInfoText: {
-    flex: 1,
-    fontSize: typography.body.fontSize,
-    lineHeight: typography.body.lineHeight,
-    color: colors.textSecondary,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

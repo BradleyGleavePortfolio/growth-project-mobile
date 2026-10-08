@@ -12,7 +12,10 @@
  * complete sentences, no contractions, no exclamation points, no emoji, no
  * em dashes, no hype. The coach and client names and every number come from
  * the onboarding complete payload or the live macro endpoint; nothing is
- * invented. `tutorialCopy.test.ts` enforces the voice rules.
+ * invented. Steps about a coach run only when a coach is linked, and the
+ * closing line repeats only what this tour really did.
+ * `tutorialCopy.test.ts` enforces the voice rules; `tutorialTruth.test.tsx`
+ * the state-driven lines.
  */
 import { featureFlags } from '../config/featureFlags';
 import type { MacroDisplayMode } from '../macros/macroDisplay';
@@ -22,6 +25,7 @@ import type {
   OnboardingSpace,
   TutorialSignal,
   TutorialStepId,
+  TutorialStepOutcome,
 } from './types';
 
 export type TutorialTargetId =
@@ -57,6 +61,10 @@ export interface CopyContext {
    * Absent means 'full'.
    */
   macroMode?: MacroDisplayMode;
+  /** A coach is linked to this client. Absent means no coach. */
+  coachLinked?: boolean;
+  /** How each step of this tour ended so far (the closing line reads it). */
+  outcomes?: Partial<Record<TutorialStepId, TutorialStepOutcome>>;
 }
 
 type Line = (c: CopyContext) => string;
@@ -94,18 +102,26 @@ export interface SignalGate extends GateBase {
 
 export type TutorialGate = AckGate | RouteGate | SignalGate;
 
-export type StepRequirement = 'program' | 'macros' | 'community' | 'calendar';
+export type StepRequirement = 'program' | 'macros' | 'community' | 'calendar' | 'coach';
 
 export interface TutorialStepDef {
   id: TutorialStepId;
   /** Short accessible title, used by the progress indicator. */
   title: string;
-  requires?: StepRequirement;
+  /** Every requirement must hold, or the step is skipped (see tutorialMachine). */
+  requires?: StepRequirement | readonly StepRequirement[];
   gates: TutorialGate[];
   /** Roman's line on completion (shown with the check glyph). */
   doneLine?: Line;
   /** Shown instead of the step when its data is not ready yet. */
   pendingLine?: Line;
+}
+
+/** The requirements of a step as a list (none, one or several). */
+export function stepRequirements(step: Pick<TutorialStepDef, 'requires'>): readonly StepRequirement[] {
+  const r = step.requires;
+  if (!r) return [];
+  return typeof r === 'string' ? [r] : r;
 }
 
 const n = (v: number): string => Math.round(v).toLocaleString('en-US');
@@ -135,6 +151,34 @@ function macroLine(c: CopyContext): string {
   return `Each day: ${n(m.calories)} calories, ${n(m.protein_g)} grams of protein, ${n(m.carbs_g)} grams of carbohydrate and ${n(m.fat_g)} grams of fat. Tap How to use these numbers.`;
 }
 
+/** No coach linked: no coach is named and only the meal is the client's turn. */
+function welcomeLine(c: CopyContext): string {
+  const hello = c.firstName ? `Welcome, ${c.firstName}. ` : 'Welcome. ';
+  if (!c.coachLinked) {
+    return `${hello}I am Roman. This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself.`;
+  }
+  return `${hello}I am Roman. I work with ${c.coachName} to help you get the most from ${c.program ? 'your plan' : 'your training'}. This takes about three minutes. I will show you where everything lives, and then you will try two things yourself.`;
+}
+
+/** Each clause needs its step to have ended 'done' in this tour. */
+function completeLine(c: CopyContext): string {
+  const o = c.outcomes ?? {};
+  const facts: string[] = [];
+  if (o.plan === 'done') facts.push('your plan is set');
+  if (o.macros === 'done') facts.push('your numbers are set');
+  if (o.first_message === 'done') facts.push(`${c.coachName} has your message`);
+  const last = facts.pop();
+  const said = !last
+    ? ''
+    : facts.length === 0
+      ? last
+      : facts.length === 1
+        ? `${facts[0]} and ${last}`
+        : `${facts.join(', ')}, and ${last}`;
+  const summary = said ? `${said.charAt(0).toUpperCase()}${said.slice(1)}. ` : '';
+  return `That is everything${c.firstName ? `, ${c.firstName}` : ''}. ${summary}One thing at a time. Consistency matters more than perfection.`;
+}
+
 function planSummary(c: CopyContext): string {
   const p = c.program;
   if (!p) return '';
@@ -153,8 +197,7 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
         kind: 'ack',
         center: true,
         cta: 'Begin',
-        line: (c) =>
-          `${c.firstName ? `Welcome, ${c.firstName}. ` : 'Welcome. '}I am Roman. I work with ${c.coachName} to help you get the most from your plan. This takes about three minutes. I will show you where everything lives, and then you will try two things yourself.`,
+        line: welcomeLine,
       },
     ],
   },
@@ -207,7 +250,8 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'community',
     title: 'Community',
-    requires: 'community',
+    // Spaces live in the coach's workspace: no coach, no community to show.
+    requires: ['community', 'coach'],
     gates: [
       {
         kind: 'route',
@@ -228,6 +272,7 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'coach_messages',
     title: 'Messaging your coach',
+    requires: 'coach',
     gates: [
       {
         kind: 'route',
@@ -247,10 +292,11 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
     doneLine: () => 'Noted.',
   },
   {
-    // S-SCHED: only when featureFlags.clientCalendar is on.
+    // S-SCHED: only when featureFlags.clientCalendar is on. The open times
+    // it explains are the coach's, so it also needs a linked coach.
     id: 'calendar',
     title: 'Your calendar',
-    requires: 'calendar',
+    requires: ['calendar', 'coach'],
     gates: [
       {
         kind: 'route',
@@ -326,6 +372,7 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'first_message',
     title: 'Message your coach',
+    requires: 'coach',
     gates: [
       {
         kind: 'route',
@@ -345,10 +392,11 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
   },
   {
     // S-SCHED owner decision 2026-10-01: the tour ends with the welcome call.
-    // Skippable (Later), never blocks finishing. Only with clientCalendar on.
+    // Skippable (Later), never blocks finishing. Only with clientCalendar on
+    // and a linked coach.
     id: 'welcome_call',
     title: 'Your welcome call',
-    requires: 'calendar',
+    requires: ['calendar', 'coach'],
     gates: [
       {
         kind: 'signal',
@@ -373,8 +421,7 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
         kind: 'ack',
         center: true,
         cta: 'Done',
-        line: (c) =>
-          `That is everything${c.firstName ? `, ${c.firstName}` : ''}. Your plan is set, your numbers are set, and ${c.coachName} has your message. One thing at a time. Consistency matters more than perfection.`,
+        line: completeLine,
       },
     ],
   },
@@ -387,7 +434,7 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
  * exactly what they were before.
  */
 export function buildTutorialSteps(calendar: boolean): readonly TutorialStepDef[] {
-  return calendar ? ALL_STEPS : ALL_STEPS.filter((s) => s.requires !== 'calendar');
+  return calendar ? ALL_STEPS : ALL_STEPS.filter((s) => !stepRequirements(s).includes('calendar'));
 }
 
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = buildTutorialSteps(featureFlags.clientCalendar);
