@@ -139,7 +139,7 @@ describe('Habits — production DTO, check-off and server history', () => {
     await waitFor(() => expect(mockCreateHabit).toHaveBeenCalledTimes(1));
     await fireEvent.press(screen.getByText(/^(Create|Creating) habit$/));
     expect(mockCreateHabit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('button', { name: 'Creating habit' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Creating habit' })).toBeDisabled());
     expect(screen.getByRole('button', { name: 'Creating habit' }).props.accessibilityState.busy).toBe(true);
 
     await act(async () => { resolveCreate({ data: { id: 'new-habit' } }); });
