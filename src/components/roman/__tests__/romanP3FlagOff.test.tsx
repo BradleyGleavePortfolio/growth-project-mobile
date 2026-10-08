@@ -147,8 +147,9 @@ describe('P3 surfaces are gated behind featureFlags.romanChat in their hosts', (
     expect(ACTIVE).toMatch(/featureFlags\.romanChat && lastCompletedSet/);
   });
 
-  it('§2.10 workout error banner is gated on romanChat', () => {
-    expect(WORKOUT).toMatch(/featureFlags\.romanChat \?\s*\(\s*<RomanErrorBanner/);
+  it('§2.10 WorkoutScreen no longer mounts the error banner; its failure surface does not depend on romanChat (TRAIN-TAB-FIN-130)', () => {
+    expect(WORKOUT).not.toMatch(/<RomanErrorBanner/);
+    expect(WORKOUT).toMatch(/\{loadError \? \(\s*<CoachErrorState/);
   });
 
   it('§2.12 payout notice is gated on romanChat', () => {

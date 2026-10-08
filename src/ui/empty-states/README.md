@@ -17,7 +17,7 @@ Quiet Luxury Doctrine.
 |---|---|
 | `EmptyState` | Generic base — compose with any SVG icon, headline, body, optional CTA |
 | `EmptyStateNoClients` | Coach client roster — no clients enrolled yet |
-| `EmptyStateNoWorkouts` | Client workout screen — no routines assigned by coach |
+| `EmptyStateNoWorkouts` | Client Train tab — no routines of the client's own yet; optional Create a routine text action (HapticPressable, 44 pt) |
 | `EmptyStateNoData` | Generic data-not-yet-loaded fallback (charts, logs, analytics) |
 | `EmptyStateNoResults` | Search / filter — zero results, accepts `query` prop |
 | `EmptyStateOffline` | Network-down state with optional retry CTA |
