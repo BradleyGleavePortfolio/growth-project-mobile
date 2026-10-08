@@ -3,7 +3,7 @@ import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { darkTokens, lightTokens } from '../../../theme/tokens';
 
-const mockBack = jest.fn(), mockUpdate = jest.fn(), mockPatch = jest.fn();
+const mockBack = jest.fn(), mockUpdate = jest.fn(), mockPatch = jest.fn(), mockInvalidate = jest.fn();
 let mockColors = lightTokens;
 let mockUser: import('../../../hooks/useCurrentUser').CurrentUser | null = { id: 'client', email: 'client@example.test', profile: {} };
 jest.mock('../../../components/HapticPressable', () => {
@@ -17,6 +17,7 @@ jest.mock('../../../theme/useTheme', () => ({ useTheme: () => ({ semanticColors:
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 jest.mock('../../../services/api', () => ({ profileApi: { update: (...args: unknown[]) => mockUpdate(...args) } }));
 jest.mock('../../../lib/userCache', () => ({ patchUserCache: (...args: unknown[]) => mockPatch(...args) }));
+jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQueries: (...args: unknown[]) => mockInvalidate(...args) } }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../ui/haptics/haptics.service', () => ({
   HapticService: { warning: jest.fn(), success: jest.fn(), error: jest.fn() },
@@ -131,4 +132,18 @@ it('prefills saved details when the user cache finishes loading after mount', as
   expect(screen.getByLabelText('Height in centimetres').props.value).toBe('178');
   expect(screen.getByLabelText('Date of birth').props.value).toBe('1992-04-15');
   expect(screen.getByText('Save')).toBeTruthy();
+});
+
+it('reads the recipe lists again after saving allergies, so newly hidden recipes leave them (ALLERGY-M-130)', async () => {
+  await render(<EditProfileScreen />);
+  await fireEvent.press(screen.getByLabelText('Nut Allergy'));
+  await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
+  expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ diet_restrictions: ['Nut Allergy'] }));
+  for (const queryKey of [['recipes'], ['recipe'], ['prep-guide']]) expect(mockInvalidate).toHaveBeenCalledWith({ queryKey });
+  mockInvalidate.mockClear();
+  mockUpdate.mockRejectedValueOnce(new Error('offline'));
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
+  expect(mockInvalidate).not.toHaveBeenCalled();
+  alert.mockRestore();
 });
