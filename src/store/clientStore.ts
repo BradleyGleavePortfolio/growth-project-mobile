@@ -17,6 +17,7 @@ interface ClientStore {
   foodLogs: FoodLog[];
   dailyTotals: DailyTotals;
   waterOz: number;
+  hasLoadedDay: boolean;
   isLoading: boolean;
   loadError: string | null;
 
@@ -45,6 +46,7 @@ const initialClientState = {
   foodLogs: [] as FoodLog[],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
+  hasLoadedDay: false,
   isLoading: false,
   loadError: null as string | null,
 };
@@ -52,14 +54,22 @@ const initialClientState = {
 export const useClientStore = create<ClientStore>((set, get) => ({
   ...initialClientState,
 
-  setSelectedDate: (date: string) => set({ selectedDate: date }),
+  setSelectedDate: (date: string) => set((state) => state.selectedDate === date ? {} : {
+    selectedDate: date,
+    foodLogs: [],
+    dailyTotals: { ...initialClientState.dailyTotals },
+    waterOz: 0,
+    hasLoadedDay: false,
+    loadError: null,
+  }),
 
   reset: () => set({ ...initialClientState, selectedDate: getTodayString() }),
 
   loadDayData: async (_userId: string, date?: string) => {
     try {
-      set({ isLoading: true });
       const d = date || get().selectedDate;
+      get().setSelectedDate(d);
+      set({ isLoading: true, loadError: null });
 
       // Fetch food logs and water in parallel
       const [foodResponse, waterResponse] = await Promise.all([
@@ -143,14 +153,14 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         },
         waterOz,
         selectedDate: d,
+        hasLoadedDay: true,
         isLoading: false,
         loadError: waterResponse
           ? null
           : 'Water data could not refresh. Check your connection and try again.',
       });
     } catch (err) {
-      // Preserve the last data, but mark this as a failed read rather than
-      // presenting empty/stale values as a successfully loaded day.
+      // Preserve data only for a refresh of the same selected day.
       logger.error('ClientStore', 'loadDayData failed', err);
       set({
         isLoading: false,

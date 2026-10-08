@@ -96,7 +96,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
 
   it('searches, picks a portion in one sheet, cancels back, adds, edits, deletes and repeats', async () => {
     await render(<LogScreen />);
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), '60 g oats');
     await waitFor(() => expect(foodApi.search).toHaveBeenCalledWith('60 g oats', 50));
     await fireEvent.press(screen.getByText('Rolled oats'));
@@ -111,7 +111,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent(screen.getByTestId('food-search-sheet'), 'requestClose');
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('60 g oats');
     await fireEvent.press(screen.getByText('Rolled oats'));
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenCalledWith({
       food_item_id: 'oats', date: mockDate, meal_type: 'breakfast',
@@ -147,7 +147,7 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(useClientStore.getState().dailyTotals.calories).toBe(0);
     alert.mockRestore();
 
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(await screen.findByRole('button', { name: /Repeat .*breakfast: add all 1 food/ }));
     await waitFor(() => expect(useClientStore.getState().foodLogs).toHaveLength(1));
     expect(logApi.logFood).toHaveBeenLastCalledWith({
@@ -162,17 +162,17 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     jest.mocked(logApi.logFood).mockRejectedValueOnce(new Error('Network Error'));
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await render(<LogScreen />);
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(await screen.findByText('Rolled oats'));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '85');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(alert).toHaveBeenCalledWith("Couldn't log food", expect.any(String));
     expect(screen.getByLabelText('Food quantity').props.value).toBe('85');
     expect(screen.getByLabelText('Portion unit g').props.accessibilityState.selected).toBe(true);
     expect(screen.getByTestId('food-search-sheet').props.visible).toBe(true);
     expect(screen.queryByText('Added Rolled oats.')).toBeNull();
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
     expect(screen.getByPlaceholderText('Search foods...')).toBeTruthy();
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
@@ -183,33 +183,33 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
   it('adds two foods without reopening, updates totals and closes with Done', async () => {
     jest.mocked(foodApi.search).mockResolvedValue({ ...ok, data: { results: [mockFood, mockBanana] } });
     await render(<LogScreen />);
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'foods');
     await fireEvent.press(await screen.findByText('Banana'));
     await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Banana.')).toBeTruthy();
     expect(screen.getByPlaceholderText('Search foods...').props.value).toBe('foods');
     expect(useClientStore.getState().dailyTotals.calories).toBe(89);
     await fireEvent.press(screen.getByText('Rolled oats'));
     await fireEvent.press(screen.getByRole('button', { name: 'Portion unit g' }));
     await fireEvent.changeText(screen.getByLabelText('Food quantity'), '100');
-    await fireEvent.press(screen.getByRole('button', { name: 'Log Food' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Log food' }));
     expect(await screen.findByText('Added Rolled oats.')).toBeTruthy();
     expect(useClientStore.getState().foodLogs).toHaveLength(2);
     expect(useClientStore.getState().dailyTotals.calories).toBe(468);
     expect(logApi.logFood).toHaveBeenCalledTimes(2);
     await fireEvent.press(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     expect(screen.queryByText('Added Rolled oats.')).toBeNull();
   });
 
   it('retains browse tabs, retry, suggestions, clear, manual entry and close', async () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await render(<LogScreen />);
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
     await fireEvent.press(screen.getByText('Frequent'));
     expect(screen.getByText('Most logged, last 7 days')).toBeTruthy();
     await fireEvent.press(screen.getByText('Recent'));
@@ -224,18 +224,18 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(await screen.findByText('Banana'));
     await fireEvent.press(screen.getByText('Cancel'));
     await fireEvent.press(screen.getByLabelText('Clear food search'));
-    await fireEvent.press(screen.getByText('Enter Manually'));
+    await fireEvent.press(screen.getByText('Enter manually'));
     for (const input of screen.getAllByPlaceholderText('0')) await fireEvent.changeText(input, '0');
-    await fireEvent.press(screen.getByText('Log Food'));
+    await fireEvent.press(screen.getByText('Log food'));
     expect(alert).toHaveBeenCalledWith('Missing info', 'Enter at least a food name and calories.');
     await fireEvent.changeText(screen.getByPlaceholderText('Food name'), 'Lunch label');
     await fireEvent.changeText(screen.getByPlaceholderText('1'), '2');
     await fireEvent.changeText(screen.getByPlaceholderText('serving'), 'g');
-    await fireEvent.press(screen.getByText('Log Food'));
+    await fireEvent.press(screen.getByText('Log food'));
     expect(foodApi.create).toHaveBeenCalledWith(expect.objectContaining({ name: 'Lunch label', serving_size_grams: 2 }));
-    await fireEvent.press(screen.getAllByText('Add Food')[0]);
-    await fireEvent.press(screen.getByText('Enter Manually'));
-    await fireEvent.press(screen.getByText('Back to Search'));
+    await fireEvent.press(screen.getAllByText('Add food')[0]);
+    await fireEvent.press(screen.getByText('Enter manually'));
+    await fireEvent.press(screen.getByText('Back to search'));
     await fireEvent.press(screen.getByRole('button', { name: 'Close food search' }));
     expect(screen.queryByPlaceholderText('Search foods...')).toBeNull();
   });
@@ -251,13 +251,13 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     expect(waterApi.log).toHaveBeenCalledTimes(3);
     expect(useClientStore.getState().waterOz).toBe(36);
     const reads = jest.mocked(logApi.getDaily).mock.calls.length;
-    let scroll = screen.getByText('Food Log').parent;
+    let scroll = screen.getByText('Food log').parent;
     while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
     expect(scroll?.props.refreshControl).toBeTruthy();
     await act(async () => scroll?.props.refreshControl.props.onRefresh());
     expect(jest.mocked(logApi.getDaily).mock.calls.length).toBeGreaterThan(reads);
     for (const [index, meal] of ['Breakfast', 'Lunch', 'Dinner', 'Snacks'].entries()) {
-      await fireEvent.press(screen.getAllByText('Add Food')[index]);
+      await fireEvent.press(screen.getAllByText('Add food')[index]);
       expect(screen.getByText(`Add to ${meal}`)).toBeTruthy();
       await fireEvent(screen.getByTestId('food-search-sheet'), 'requestClose');
     }

@@ -37,11 +37,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import { lightTokens, type SemanticTokens } from '../../theme/tokens';
 import { env } from '../../config/env';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
@@ -65,7 +67,7 @@ function checkPassword(value: string): PasswordCheck {
 }
 
 export default function ResetPasswordScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors = lightTokens } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const accessToken = route.params?.access_token ?? '';
@@ -138,7 +140,7 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.navigate('Login')}
@@ -161,7 +163,7 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
 
       {done ? (
         <View style={styles.successContainer} accessible accessibilityRole="alert">
-          <Ionicons name="checkmark-circle" size={64} color={colors.primary} />
+          <Ionicons name="checkmark-circle-outline" size={32} color={colors.textMuted} />
           <TouchableOpacity
             style={styles.resetButton}
             onPress={() => navigation.navigate('Login')}
@@ -180,7 +182,7 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
                 style={[styles.input, styles.passwordInput]}
                 value={password}
                 onChangeText={setPassword}
-                placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
+                placeholder="New password"
                 placeholderTextColor={colors.textMuted}
                 secureTextEntry={!showPw}
                 autoCapitalize="none"
@@ -196,13 +198,15 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
                 style={styles.eyeBtn}
               >
                 <Ionicons
-                  name={showPw ? 'eye-off' : 'eye'}
+                  name={showPw ? 'eye-off-outline' : 'eye-outline'}
                   size={20}
                   color={colors.textMuted}
                 />
               </TouchableOpacity>
             </View>
           </View>
+
+          <Text style={styles.passwordHint}>At least 8 characters, one uppercase letter, one number and one special character.</Text>
 
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Confirm new password</Text>
@@ -241,28 +245,29 @@ export default function ResetPasswordScreen({ navigation, route }: Props) {
             accessibilityState={{ disabled: !tokensPresent || submitting, busy: submitting }}
           >
             {submitting ? (
-              <ActivityIndicator color={colors.textOnPrimary} />
+              <ActivityIndicator color={colors.textOnAccent} />
             ) : (
               <Text style={styles.resetButtonText}>Update password</Text>
             )}
           </TouchableOpacity>
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
     container: {
-      flex: 1,
-      backgroundColor: colors.background,
+      flexGrow: 1,
+      backgroundColor: colors.bgPrimary,
       paddingHorizontal: 24,
       paddingTop: 60,
+      paddingBottom: 40,
     },
     backButton: {
-      width: 40,
-      height: 40,
+      width: 44,
+      height: 44,
       justifyContent: 'center',
       marginBottom: 24,
     },
@@ -281,22 +286,24 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 16,
       lineHeight: 26,
       letterSpacing: -0.16,
-      color: colors.textSecondary,
+      color: colors.textPrimary,
     },
     form: { gap: 24 },
+    passwordHint: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 20, color: colors.textMuted },
     inputContainer: { gap: 8 },
-    label: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+    label: { fontFamily: 'Inter_500Medium', fontSize: 13, letterSpacing: 1.2, textTransform: 'uppercase', color: colors.textMuted },
     input: {
-      backgroundColor: colors.surface,
-      borderWidth: 1,
+      backgroundColor: colors.bgPrimary,
+      borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       borderRadius: 2,
       padding: 16,
       fontSize: 16,
+      fontFamily: 'Inter_400Regular',
       color: colors.textPrimary,
     },
     passwordRow: { flexDirection: 'row', alignItems: 'center' },
-    passwordInput: { flex: 1 },
+    passwordInput: { flex: 1, paddingRight: 56 },
     eyeBtn: {
       paddingHorizontal: 12,
       paddingVertical: 14,
@@ -305,7 +312,7 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'center',
     },
     resetButton: {
-      backgroundColor: colors.primary,
+      backgroundColor: colors.accent,
       paddingVertical: 16,
       borderRadius: 2,
       alignItems: 'center',
@@ -313,14 +320,13 @@ const makeStyles = (colors: ThemeColors) =>
     disabledButton: { opacity: 0.5 },
     resetButtonText: {
       fontFamily: 'Inter_600SemiBold',
-      color: colors.textOnPrimary,
+      color: colors.textOnAccent,
       fontSize: 14,
       fontWeight: '600',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
     },
     errorText: {
-      color: colors.error,
+      fontFamily: 'Inter_400Regular',
+      color: colors.textPrimary,
       fontSize: 14,
       lineHeight: 20,
     },

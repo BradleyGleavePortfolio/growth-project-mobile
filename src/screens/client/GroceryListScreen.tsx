@@ -35,10 +35,25 @@ interface ListItem {
   is_checked: boolean;
   added_at: string;
   source_recipe_id?: string;
+  list_type?: 'grocery' | 'shopping';
 }
 
 const LIST_TYPE = 'grocery' as const;
 const QUERY_KEY = ['lists', LIST_TYPE];
+
+// One list (owner 10-07, CF-ONE-LIST-128): More no longer opens a Shopping list, so rows a client saved
+// there are read here too and can be checked, removed and cleared like grocery rows. New rows go to grocery.
+// The shopping read runs only after the grocery read succeeds, so a failed load costs one request.
+async function fetchOneList(): Promise<ListItem[]> {
+  const grocery = (await listsApi.getList(LIST_TYPE)).data as ListItem[];
+  const shopping = (await listsApi.getList('shopping')).data as ListItem[];
+  const groceryIds = new Set(grocery.map((item) => item.id));
+  return [
+    ...grocery,
+    ...shopping.filter((item) => !groceryIds.has(item.id)).map((item) => ({ ...item, list_type: 'shopping' as const })),
+  ];
+}
+const fromShopping = (item: ListItem) => item.list_type === 'shopping';
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function GroceryListScreen() {
@@ -58,13 +73,15 @@ export default function GroceryListScreen() {
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: QUERY_KEY,
-    queryFn: () => listsApi.getList(LIST_TYPE).then((r) => r.data as ListItem[]),
+    queryFn: fetchOneList,
     staleTime: 60 * 1000,
   });
 
   const items = data ?? [];
   const unchecked = items.filter((i) => !i.is_checked);
   const checked = items.filter((i) => i.is_checked);
+  const hasShoppingItems = items.some(fromShopping);
+  const clearsShopping = checked.some(fromShopping);
 
   const addMutation = useMutation({
     mutationFn: (name: string) =>
@@ -118,7 +135,10 @@ export default function GroceryListScreen() {
   });
 
   const clearCheckedMutation = useMutation({
-    mutationFn: () => listsApi.clearChecked(LIST_TYPE),
+    mutationFn: (withShopping: boolean) => Promise.all([
+      listsApi.clearChecked(LIST_TYPE),
+      ...(withShopping ? [listsApi.clearChecked('shopping')] : []),
+    ]),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEY });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -154,10 +174,10 @@ export default function GroceryListScreen() {
       `Remove ${checked.length} checked item${checked.length > 1 ? 's' : ''}?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Clear', style: 'destructive', onPress: () => clearCheckedMutation.mutate() },
+        { text: 'Clear', style: 'destructive', onPress: () => clearCheckedMutation.mutate(clearsShopping) },
       ],
     );
-  }, [checked.length, clearCheckedMutation]);
+  }, [checked.length, clearsShopping, clearCheckedMutation]);
 
   const renderItem = ({ item }: { item: ListItem }) => (
     <View style={[styles.itemRow, item.is_checked && styles.itemRowChecked]}>
@@ -222,7 +242,8 @@ export default function GroceryListScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
-      {!isLoading && !isError && items.length > 0 ? <Text style={styles.summary}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
+      {!isLoading && !isError && items.length > 0 ? <Text style={[styles.summary, hasShoppingItems && styles.summaryWithNote]}>{unchecked.length > 0 ? `${unchecked.length} to get.` : 'All items checked.'}</Text> : null}
+      {!isLoading && !isError && hasShoppingItems ? <Text style={styles.note}>Includes items from your shopping list.</Text> : null}
 
       {/* Add item input */}
       <View style={styles.addRow}>
@@ -340,6 +361,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   backBtn: { width: 44, height: 44, justifyContent: 'center' },
   title: { ...typography.h1, color: colors.textPrimary, flex: 1 },
   summary: { ...typography.h2, color: colors.textPrimary, paddingHorizontal: 24, marginBottom: 24, fontVariant: ['tabular-nums'] },
+  summaryWithNote: { marginBottom: 4 },
+  note: { ...typography.bodySmall, color: colors.textMuted, paddingHorizontal: 24, marginBottom: 24 },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,

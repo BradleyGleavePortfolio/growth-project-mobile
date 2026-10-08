@@ -70,6 +70,10 @@ If a change is genuinely doc-free (CI-only, a one-line lint fix, a typo) the PR 
 
 The reviewer checklist below applies to UI changes; the doc rule above applies to *every* PR.
 
+| Surface | Current behaviour / module note |
+|---|---|
+| Food log (`LogScreen`, `clientStore`, `components/log`) | A first read for the selected day shows the shared skeleton, not zero totals or empty-meal claims. Changing date clears the prior day's foods, totals and water immediately; a failed new-day read shows retry without old numbers. A same-day refresh retains that day's verified data. A successfully empty day has one instruction, all four meal entry points stay reachable, action labels use sentence case, search failures use a neutral hairline, and the edit sheet uses theme colours and radius 4. Existing search, portion, manual, repeat, edit/move/delete, water and refresh handlers are unchanged. |
+
 ## 9. Reviewer checklist (paste into PRs that touch UI)
 
 - [ ] No `fontWeight: '700'` or `'800'` introduced.

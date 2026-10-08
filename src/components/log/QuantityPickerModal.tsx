@@ -148,13 +148,13 @@ export function QuantityPickerContent({
         <TouchableOpacity
           style={[styles.quantityLogButton, quantity == null && { opacity: 0.5 }]}
           accessibilityRole="button"
-          accessibilityLabel={saving ? 'Saving food' : 'Log Food'}
+          accessibilityLabel={saving ? 'Saving food' : 'Log food'}
           disabled={quantity == null || saving}
           onPress={onConfirm}
           activeOpacity={0.8}
         >
           <Ionicons name="add-circle" size={22} color={Colors.white} />
-          <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
+          <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log food'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity

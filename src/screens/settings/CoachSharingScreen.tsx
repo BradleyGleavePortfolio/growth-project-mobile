@@ -3,11 +3,17 @@
  * can see (GET /consent/me; each toggle saves at once via POST
  * /consent/grant | revoke and goes back with a specific line on failure).
  * Rows say "Shared" / "Not shared" in words. The owner-account line is
- * hidden only when the server says owner_access: false (B-451-1).
+ * hidden only when the server says owner_access: false (B-451-1). Under the
+ * switches, one line says connected devices are not covered by them, with the
+ * Connected devices row (FW-BODY B2).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
+import { featureFlags } from '../../config/featureFlags';
+import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { lightTap, warningTap } from '../../utils/haptics';
 import { COACH_SHARING_LABELS, COACH_SHARING_SCOPES, readCoachSharing, setCoachSharing } from '../../api/coachSharingApi';
@@ -16,9 +22,15 @@ import { coachSharingCopy as copy, ownerAccessNote } from '../../components/coac
 
 type Load = { kind: 'loading' } | CoachSharingRead;
 
+/** Same rule as the More screen's "Connected devices" row (MoreScreen.tsx showsWearableRows). */
+function showsConnectedDevices(): boolean {
+  return featureFlags.clientTutorial || Platform.OS === 'ios' || isAndroidHealthConnectEnabled();
+}
+
 export default function CoachSharingScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [load, setLoad] = useState<Load>({ kind: 'loading' });
   const [saving, setSaving] = useState<CoachSharingScope | null>(null);
   const [failed, setFailed] = useState<CoachSharingScope | null>(null);
@@ -105,6 +117,23 @@ export default function CoachSharingScreen() {
               );
             })}
           </View>
+          {showsConnectedDevices() ? (
+            <View testID="coach-sharing-devices">
+              <Text style={styles.caption}>{copy.devicesNote}</Text>
+              <HapticPressable
+                intent="light"
+                style={styles.link}
+                onPress={() => navigation.navigate('Connections')}
+                accessibilityRole="button"
+                accessibilityLabel={copy.devicesLink}
+                accessibilityHint={copy.devicesLinkHint}
+                testID="coach-sharing-devices-link"
+              >
+                <Text style={styles.rowLabel}>{copy.devicesLink}</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+              </HapticPressable>
+            </View>
+          ) : null}
         </>
       )}
     </ScrollView>
@@ -123,6 +152,7 @@ function makeStyles(c: ThemeColors) {
     caption: { ...text, fontSize: 13, lineHeight: 19, color: c.textSecondary },
     error: { ...text, fontSize: 13, lineHeight: 19, color: c.error, marginTop: 4 },
     divider: { height: 1, backgroundColor: c.divider, marginBottom: 12 },
+    link: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, marginTop: 8 },
     button: { minHeight: 44, borderRadius: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: c.border },
     buttonText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: c.textPrimary },
   });

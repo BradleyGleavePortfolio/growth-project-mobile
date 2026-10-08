@@ -15,7 +15,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens }),
 }));
 jest.mock('../../../api/exerciseCatalog', () => ({
-  exerciseCatalogApi: { list: jest.fn(), getDetail: jest.fn() },
+  exerciseCatalogApi: { browse: jest.fn(), getDetail: jest.fn() },
 }));
 const mockStatusListener = jest.fn();
 jest.mock('expo-video', () => ({
@@ -23,7 +23,7 @@ jest.mock('expo-video', () => ({
   VideoView: 'VideoView',
 }));
 const Stack = createNativeStackNavigator<WorkoutStackParamList>();
-const list = jest.mocked(exerciseCatalogApi.list);
+const list = jest.mocked(exerciseCatalogApi.browse);
 const getDetail = jest.mocked(exerciseCatalogApi.getDetail);
 const exercise: ExerciseDetail = {
   id: 'squat', slug: 'squat', name: 'Squat', primaryMuscle: 'quads', category: 'legs',
@@ -55,9 +55,8 @@ it('keeps search, every facet toggle, detail navigation and actual equipment rea
   await fireEvent(search, 'submitEditing');
   await waitFor(() => expect(list).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'squat' })));
   const facets = {
-    category: ['push', 'pull', 'legs', 'cardio', 'mobility', 'core'],
-    primaryMuscle: ['pectorals', 'lats', 'quads', 'hamstrings', 'front delts', 'biceps', 'triceps', 'glutes'],
-    equipment: ['barbell', 'dumbbell', 'body weight', 'machine', 'cable'],
+    category: ['chest', 'back', 'shoulders', 'upper arms', 'upper legs', 'lower legs', 'waist', 'cardio'],
+    equipment: ['barbell', 'dumbbell', 'body weight', 'cable', 'kettlebell', 'leverage machine'],
   };
   for (const [param, values] of Object.entries(facets)) {
     for (const value of values) {

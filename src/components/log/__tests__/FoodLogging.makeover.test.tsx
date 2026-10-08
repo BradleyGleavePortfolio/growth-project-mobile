@@ -9,7 +9,7 @@ import DaySelector from '../../DaySelector';
 import QuietBar from '../../../ui/progress/QuietBar';
 import type { FoodLog } from '../../../types';
 jest.mock('../../FoodImage', () => ({ __esModule: true, default: () => null })); jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
-jest.mock('../../../hooks/useSettings', () => ({ useSettings: () => ({ settings: { waterGoalOz: 64 } }) }));
+jest.mock('../../../hooks/useSettings', () => ({ ...jest.requireActual('../../../hooks/useSettings'), useSettings: () => ({ settings: { waterGoalOz: 64 } }) }));
 jest.mock('../../../theme/useTheme', () => ({ useTheme: () => ({ semanticColors: require('../../../theme/tokens').lightTokens }) }));
 let mockReduced = false;
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => mockReduced }));
@@ -24,14 +24,21 @@ beforeEach(() => { jest.clearAllMocks(); mockReduced = false; });
 it('preserves meal add, tap-to-edit and long-press-to-delete', async () => {
   const add = jest.fn(), edit = jest.fn();
   await render(<MealSectionCard label="Breakfast" icon="sunny-outline" mealType="breakfast" logs={[log]} mealCalories={300} onAddPress={add} onEditPress={edit} onDeletePress={action} />);
-  await press('Add Food', add, 'breakfast'); await press('Oats', edit, log);
+  await press('Add food', add, 'breakfast'); await press('Oats', edit, log);
   await fireEvent(screen.getByText('Oats'), 'longPress'); expect(action).toHaveBeenLastCalledWith(log); fonts(); });
 it('preserves search, clear, both tabs, food selection, repeat and manual entry', async () => {
   const { rerender } = await render(<FoodSearchView {...search} repeatMealTitle="Last breakfast" repeatMeal={{ date: '2026-10-06', calories: 300, entries: [{ foodItemId: 'oats', name: 'Oats', calories: 300, quantityMultiplier: 1 }] }} onRepeatMeal={action} />);
   await press('Add all', action); await press('Recent', search.onRecentTabChange, 'recent'); await press('Frequent', search.onRecentTabChange, 'frequent');
-  await press('Oats', search.onSelectFood, food); await press('Enter Manually', search.onEnterManualMode); fonts();
+  await press('Oats', search.onSelectFood, food); await press('Enter manually', search.onEnterManualMode); fonts();
   await fireEvent.changeText(screen.getByPlaceholderText('Search foods...'), 'oat'); expect(search.onSearchChange).toHaveBeenLastCalledWith('oat');
   await rerender(<FoodSearchView {...search} searchQuery="zz" searchError="Food search could not load" />);
+  expect(StyleSheet.flatten(screen.getByTestId('food-search-error').props.style)).toMatchObject({
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: require('../../../theme/tokens').lightTokens.border,
+  });
+  expect(StyleSheet.flatten(screen.getByText('Food search could not load').props.style).color)
+    .toBe(require('../../../theme/tokens').lightTokens.textMuted);
+  expect(StyleSheet.flatten(screen.getByTestId('food-search-error').props.style).backgroundColor).toBeUndefined();
   await fireEvent.press(screen.getByLabelText('Clear food search')); expect(search.onClearSearch).toHaveBeenCalled(); await press('Try again', search.onRetrySearch);
   await rerender(<FoodSearchView {...search} searchQuery="oat" didYouMean={[food]} />);
   await press('Oats', search.onSelectFood, food); });
@@ -39,7 +46,7 @@ it('preserves portion input, unit, log and cancel with the same macro values', a
   const confirm = jest.fn(), cancel = jest.fn(), unit = jest.fn();
   const props = { visible: true, selectedFood: { ...food, nutrient_basis: 'PER_100G' as const, serving_size_grams: 100, supports_volume_units: true, cup_grams: 100, tbsp_grams: 10, tsp_grams: 5 }, quantityInput: '1', selectedUnit: 'serving', onQuantityChange: action, onUnitChange: unit, onConfirm: confirm, onCancel: cancel }; await render(<QuantityPickerModal {...props} />);
   await fireEvent.changeText(screen.getByLabelText('Food quantity'), '2'); expect(action).toHaveBeenLastCalledWith('2');
-  for (const label of ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp']) await press(label, unit, label); await press('Log Food', confirm); await press('Cancel', cancel); cancel.mockClear(); QuantityPickerModal(props).props.onRequestClose(); expect(cancel).toHaveBeenCalled(); fonts();
+  for (const label of ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp']) await press(label, unit, label); await press('Log food', confirm); await press('Cancel', cancel); cancel.mockClear(); QuantityPickerModal(props).props.onRequestClose(); expect(cancel).toHaveBeenCalled(); fonts();
   for (const value of ['300', '12g', '54g', '6g']) expect(screen.getByText(value)).toBeTruthy(); });
 it('preserves all water quick-add amounts and displayed quantities', async () => {
   await render(<WaterTracker currentOz={8} onAdd={action} />);
