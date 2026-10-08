@@ -59,7 +59,7 @@ it('keeps all eleven fields and every choice reachable, then saves the same payl
     await fireEvent.press(button); expect(button.props.accessibilityState.selected).toBe(true);
   }
   for (const label of ['None', 'Nut Allergy', 'Peanut Allergy', 'Shellfish Allergy', 'Egg Allergy', 'Dairy Allergy',
-    'Gluten-Free', 'Vegetarian', 'Vegan', 'Pescatarian', 'No Pork', 'No Beef', 'No Fish', 'No Spicy']) {
+    'Soy', 'Sesame', 'Gluten-Free', 'Vegetarian', 'Vegan', 'Pescatarian', 'No Pork', 'No Beef', 'No Fish', 'No Spicy']) {
     const button = screen.getAllByLabelText(label)[0]; await fireEvent.press(button);
     expect(button.props.accessibilityState.selected).toBe(true);
   }
@@ -146,4 +146,17 @@ it('reads the recipe lists again after saving allergies, so newly hidden recipes
   await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
   expect(mockInvalidate).not.toHaveBeenCalled();
   alert.mockRestore();
+});
+
+it('offers Soy and Sesame and keeps every saved answer when one is added (ALLERGY-CHOICES-131)', async () => {
+  // A chip answer, a consultation answer and the new Sesame chip, all saved earlier.
+  mockUser = { id: 'client', email: 'client@example.test', profile: { diet_restrictions: ['Nut Allergy', 'nuts', 'Sesame'] } };
+  await render(<EditProfileScreen />);
+  expect(screen.getByLabelText('Sesame').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByLabelText('Nut Allergy').props.accessibilityState.selected).toBe(true);
+  expect(screen.getByLabelText('Soy').props.accessibilityState.selected).toBe(false);
+  await fireEvent.press(screen.getByLabelText('Soy'));
+  await act(async () => fireEvent.press(screen.getByLabelText('Save profile')));
+  expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ diet_restrictions: ['Nut Allergy', 'nuts', 'Sesame', 'Soy'] }));
+  for (const queryKey of [['recipes'], ['recipe'], ['prep-guide']]) expect(mockInvalidate).toHaveBeenCalledWith({ queryKey });
 });
