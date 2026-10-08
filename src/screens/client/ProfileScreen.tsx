@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { signOut } from '../../services/authActions';
+import { prepareSignOutConfirm, signOut } from '../../services/authActions';
 import api, { profileApi } from '../../services/api';
 import { macrosApi, type MacroTarget } from '../../api/macrosApi';
 import { logger } from '../../utils/logger';
@@ -108,8 +108,11 @@ export default function ProfileScreen() {
     weeksSinceJoin: 0,
   });
 
-  const handleSignOut = () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
+  const handleSignOut = async () => {
+    // SESSION-KEEP-130: one try to send what is waiting on this phone first;
+    // the confirm names anything still unsent (sign-out removes it).
+    const message = await prepareSignOutConfirm(currentUser?.id);
+    Alert.alert('Sign out', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
     ]);

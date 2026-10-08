@@ -18,7 +18,13 @@ import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
 import { clearUserCache, readUserCache, readUserCacheSync } from '../lib/userCache';
 import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
-import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
+import {
+  countQueuedWorkouts,
+  deleteWorkoutLogsForUser,
+  pushQueuedWorkouts,
+} from '../offline/sync/sync-engine';
+import { flush as flushFoodLogQueue, getQueueLength as foodQueueLength } from './foodLogQueue';
+import { activeWorkoutSessionKey } from '../storage/activeWorkoutSession';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
@@ -300,6 +306,74 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
   return null;
 }
 
+/** What is still only on this phone for one account (SESSION-KEEP-130). */
+export interface UnsyncedLogs {
+  /** Finished workouts waiting to be sent, plus a workout still open. */
+  workouts: number;
+  /** Foods saved offline. */
+  foods: number;
+}
+
+/** Upper bound of the one send attempt before a sign-out (weak signal). */
+const SIGN_OUT_SEND_TIMEOUT_MS = 4000;
+
+async function readUnsynced(userId: string): Promise<{ queued: number; open: number; foods: number }> {
+  const [queued, open, foods] = await Promise.all([
+    countQueuedWorkouts(userId),
+    AsyncStorage.getItem(activeWorkoutSessionKey(userId)),
+    foodQueueLength(),
+  ]);
+  return { queued, open: open ? 1 : 0, foods };
+}
+
+/**
+ * SESSION-KEEP-130: one bounded try to send the foods saved offline and the
+ * finished workouts waiting on this phone, then what is still unsent (a
+ * sign-out removes it). A workout still open cannot be sent and is counted.
+ * Nothing waiting means no network call. Never rejects.
+ */
+export async function sendUnsyncedLogs(userId?: string | null): Promise<UnsyncedLogs> {
+  try {
+    const id = await resolveSigningOutUserId(userId);
+    if (!id) return { workouts: 0, foods: 0 };
+    let left = await readUnsynced(id);
+    const sends: Array<Promise<unknown>> = [];
+    if (left.foods > 0) sends.push(flushFoodLogQueue());
+    if (left.queued > 0) sends.push(pushQueuedWorkouts());
+    if (sends.length > 0) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([
+        Promise.allSettled(sends),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, SIGN_OUT_SEND_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      left = await readUnsynced(id);
+    }
+    return { workouts: left.queued + left.open, foods: left.foods };
+  } catch (err) {
+    logger.warn('AuthActions', 'sendUnsyncedLogs: unsynced logs not read', err);
+    return { workouts: 0, foods: 0 };
+  }
+}
+
+/** "2 workouts and 1 food have not synced yet and will be removed from this phone.", or null. */
+export function unsyncedLogsMessage({ workouts, foods }: UnsyncedLogs): string | null {
+  const parts = [
+    workouts > 0 ? `${workouts} ${workouts === 1 ? 'workout' : 'workouts'}` : '',
+    foods > 0 ? `${foods} ${foods === 1 ? 'food' : 'foods'}` : '',
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  const verb = workouts + foods === 1 ? 'has' : 'have';
+  return `${parts.join(' and ')} ${verb} not synced yet and will be removed from this phone.`;
+}
+
+/** The sign-out confirm text, after one try to send what is waiting (sendUnsyncedLogs). */
+export async function prepareSignOutConfirm(userId?: string | null): Promise<string> {
+  return unsyncedLogsMessage(await sendUnsyncedLogs(userId)) ?? 'Are you sure you want to sign out?';
+}
+
 export interface SignOutOptions {
   /**
    * Mobile #331 B-331-8: set only by the API client's sign-out after a failed
@@ -343,6 +417,11 @@ async function signOutWhileHealthRetires(
   // a userId, we skip the per-user wipe rather than fall back to a global
   // sweep that would clobber bystander users on a shared device.
   const signingOutUserId = await resolveSigningOutUserId(userId);
+
+  // SESSION-KEEP-130: before anything is removed, one bounded try to send the
+  // foods and finished workouts waiting on this phone. Not after a refused
+  // session renewal (sessionFence): that session can no longer send anything.
+  if (!opts.sessionFence) await sendUnsyncedLogs(signingOutUserId);
 
   // Best-effort: clear the push token on the backend before wiping local auth
   // state so the PATCH /users/me/push-token request can still attach a JWT.
