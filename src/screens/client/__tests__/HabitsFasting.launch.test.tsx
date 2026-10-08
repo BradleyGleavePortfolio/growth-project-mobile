@@ -325,9 +325,25 @@ describe('Fasting — production protocol and completed status', () => {
     const screen = await render(<FastingScreen />);
     await waitFor(() => expect(screen.getByText('2 days in a row with a completed fast')).toBeTruthy());
     expect(screen.getByTestId('fasting-completed-count').props.children).toBe(2);
-    expect(screen.getByText('Average, all fasts')).toBeTruthy();
+    expect(screen.getByText('Average, recent fasts')).toBeTruthy();
     expect(screen.getByText('A fast counts as completed at 90 percent of its target.')).toBeTruthy();
     expect(screen.getAllByText('12h target · Completed')).toHaveLength(2);
+  });
+
+  // B-552-SOL-131-1 (LN-SOL-B-131 @ f41ea9b1): the stats come from the newest 50 fasts only
+  // (fastingApi.getHistory(50)), so the average says "recent fasts", never "all fasts".
+  it('B-552-SOL-131-1: the average is labelled recent fasts, read from the newest 50 only', async () => {
+    const start = new Date();
+    start.setHours(8, 0, 0, 0);
+    start.setDate(start.getDate() - 3);
+    mockGetHistory.mockResolvedValue({ data: [{
+      id: 'older', start_time: start.toISOString(), protocol: '16:8',
+      end_time: new Date(start.getTime() + 16 * 3600000).toISOString(),
+    }] });
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByText('Average, recent fasts')).toBeTruthy());
+    expect(mockGetHistory).toHaveBeenCalledWith(50);
+    expect(screen.queryByText(/all fasts/i)).toBeNull();
   });
 
   it('one day with a completed fast is not called a run or a program day', async () => {

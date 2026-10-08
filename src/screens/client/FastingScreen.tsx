@@ -111,8 +111,10 @@ export default function FastingScreen() {
       const completed = sessions.filter((s) => s.endTime);
       setHistory(completed);
 
-      // Average and longest cover every ended fast (labelled so on screen);
-      // the Completed count covers fasts that reached 90% of their target.
+      // Average and longest cover every ended fast loaded here, the newest 50
+      // (getHistory(50)), so the average is labelled "recent fasts" on screen
+      // (B-552-SOL-131-1); the Completed count covers fasts that reached 90%
+      // of their target.
       if (completed.length > 0) {
         const hours = completed.map((s) => {
           const startMs = new Date(s.startTime).getTime();
@@ -469,7 +471,7 @@ export default function FastingScreen() {
           <Text testID="fasting-completed-count" style={styles.statValue}>{stats.totalCompleted}</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statLabel}>Average, all fasts</Text>
+          <Text style={styles.statLabel}>Average, recent fasts</Text>
           <Text style={styles.statValue}>{`${stats.averageHours.toFixed(1)}h`}</Text>
         </View>
         <View style={styles.statCard}>
