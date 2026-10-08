@@ -7,12 +7,12 @@
  *   - Read a plain-English explainer of what is measured and what is private.
  *
  * Design doctrine:
- *   - Bone/ink/oxblood palette.
+ *   - Semantic theme palette.
  *   - Cormorant Garamond display, Inter body.
  *   - No emoji, no gamification.
  *   - Default state is opt-out — this screen exists to enable the feature.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -28,18 +28,17 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme/tokens';
-import { Colors } from '../../constants/colors';
+import { typography, type SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
 } from '../../services/leaderboardApi';
-
-const OXBLOOD = Colors.earningsAccent;
+import { contentRejectedMessage } from '../../api/communitySafetyApi';
 
 // ─── Explainer component ──────────────────────────────────────────────────────
 
-function MeasuredExplainer() {
+function MeasuredExplainer({ styles }: { styles: ReturnType<typeof makeStyles> }) {
   return (
     <View style={styles.explainerCard}>
       <Text style={styles.explainerHeading}>What is measured</Text>
@@ -71,16 +70,15 @@ function MeasuredExplainer() {
       <Text style={styles.explainerBody}>
         Your body weight, body fat percentage, income figures, financial account
         balances, and any health data you have not explicitly shared with your
-        coach are never surfaced on the leaderboard — not now, not in the future.
+        coach are never surfaced on this leaderboard.
       </Text>
 
       <View style={styles.explainerDivider} />
 
       <Text style={styles.explainerHeading}>Who can see you</Text>
       <Text style={styles.explainerBody}>
-        Only clients assigned to the same coach as you will see your display name
-        and score. The leaderboard is never platform-wide. You can opt out at any
-        time and your row disappears immediately.
+        Clients on your coach's roster can see your display name and score here.
+        Opting out removes your row from this leaderboard.
       </Text>
     </View>
   );
@@ -89,6 +87,8 @@ function MeasuredExplainer() {
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function LeaderboardSettingsScreen() {
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const [loading, setLoading]           = useState(true);
   const [saving, setSaving]             = useState(false);
   const [error, setError]               = useState<string | null>(null);
@@ -134,10 +134,10 @@ export default function LeaderboardSettingsScreen() {
         enabled: value,
         displayName: value && displayName.trim() ? displayName.trim() : undefined,
       });
-    } catch {
-      // Revert optimistic update
+    } catch (err) {
+      // Revert optimistic update; a name the community filter refuses says why.
       setIsOptedIn(!value);
-      setError('Could not save your preference. Try again.');
+      setError(contentRejectedMessage(err) ?? 'Could not save your preference. Try again.');
     } finally {
       setSaving(false);
     }
@@ -153,8 +153,8 @@ export default function LeaderboardSettingsScreen() {
         displayName: displayName.trim() || undefined,
       });
       setSavedName(displayName.trim());
-    } catch {
-      setError('Could not save your display name. Try again.');
+    } catch (err) {
+      setError(contentRejectedMessage(err) ?? 'Could not save your display name. Try again.');
     } finally {
       setSaving(false);
     }
@@ -170,15 +170,18 @@ export default function LeaderboardSettingsScreen() {
       accessibilityLabel="Back"
       testID="leaderboard-settings-back"
     >
-      <Ionicons name="chevron-back" size={22} color={OXBLOOD} />
+      <Ionicons name="chevron-back" size={22} color={sc.accentText} />
       <Text style={styles.backText}>Back</Text>
     </Pressable>
   ) : null;
 
   if (loading) {
     return (
-      <View style={styles.centered} testID="leaderboard-settings-loading">
-        <ActivityIndicator color={colors.ink} size="large" accessibilityLabel="Loading leaderboard settings" />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {backBar}
+        <View style={styles.centered} testID="leaderboard-settings-loading">
+          <ActivityIndicator color={sc.accent} size="large" accessibilityLabel="Loading leaderboard settings" />
+        </View>
       </View>
     );
   }
@@ -205,15 +208,15 @@ export default function LeaderboardSettingsScreen() {
             <View style={styles.toggleLeft}>
               <Text style={styles.toggleLabel}>Appear on leaderboard</Text>
               <Text style={styles.toggleSub}>
-                {isOptedIn ? 'Visible to your coach\'s roster.' : 'Hidden from all leaderboards.'}
+                {isOptedIn ? 'Visible to your coach\'s roster.' : 'Hidden from this leaderboard.'}
               </Text>
             </View>
             <Switch
               value={isOptedIn}
               onValueChange={handleToggle}
               disabled={saving}
-              trackColor={{ false: colors.stone, true: colors.forest }}
-              thumbColor={colors.bone}
+              trackColor={{ false: sc.border, true: sc.accent }}
+              thumbColor={sc.textOnAccent}
               testID="leaderboard-opt-in-switch"
               accessibilityLabel="Toggle leaderboard opt-in"
             />
@@ -233,7 +236,7 @@ export default function LeaderboardSettingsScreen() {
               value={displayName}
               onChangeText={setDisplayName}
               placeholder="e.g. Alex T."
-              placeholderTextColor={colors.stone}
+              placeholderTextColor={sc.textMuted}
               maxLength={40}
               autoCapitalize="words"
               testID="leaderboard-settings-name-input"
@@ -247,7 +250,7 @@ export default function LeaderboardSettingsScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Save display name"
               >
-                <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save name'}</Text>
+                <Text style={[styles.saveButtonText, saving && { color: sc.textOnDisabled }]}>{saving ? 'Saving…' : 'Save name'}</Text>
               </Pressable>
             )}
           </View>
@@ -261,7 +264,7 @@ export default function LeaderboardSettingsScreen() {
         )}
 
         {/* Explainer */}
-        <MeasuredExplainer />
+        <MeasuredExplainer styles={styles} />
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -270,47 +273,46 @@ export default function LeaderboardSettingsScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bone,
+    backgroundColor: sc.bgPrimary,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.bone,
+    backgroundColor: sc.bgPrimary,
   },
   scrollContent: {
     paddingBottom: 48,
   },
   backButton: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12 },
-  backText: { fontFamily: 'Inter-Medium', fontSize: 15, color: OXBLOOD },
+  backText: { fontFamily: 'Inter-Medium', fontSize: 15, color: sc.accentText },
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
+    borderBottomColor: sc.border,
   },
   title: {
-    fontFamily: 'Cormorant-SemiBold',
-    fontSize: 26,
-    color: colors.ink,
+    ...typography.h1,
+    color: sc.textPrimary,
     letterSpacing: 0.2,
     marginBottom: 6,
   },
   subtitle: {
     fontFamily: 'Inter-Regular',
     fontSize: 14,
-    color: colors.charcoal,
+    color: sc.textMuted,
     lineHeight: 21,
   },
   section: {
     paddingHorizontal: 20,
     paddingVertical: 20,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
+    borderBottomColor: sc.border,
   },
   toggleRow: {
     flexDirection: 'row',
@@ -324,88 +326,87 @@ const styles = StyleSheet.create({
   toggleLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 15,
-    color: colors.ink,
+    color: sc.textPrimary,
   },
   toggleSub: {
     fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: colors.stone,
+    fontSize: 13,
+    color: sc.textMuted,
     marginTop: 3,
   },
   sectionLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 14,
-    color: colors.ink,
+    color: sc.textPrimary,
     marginBottom: 4,
   },
   sectionSub: {
     fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: colors.stone,
+    fontSize: 13,
+    color: sc.textMuted,
     lineHeight: 18,
     marginBottom: 12,
   },
   nameInput: {
     borderWidth: 1,
-    borderColor: colors.stone,
+    borderColor: sc.border,
     padding: 12,
     fontFamily: 'Inter-Regular',
     fontSize: 14,
-    color: colors.ink,
-    backgroundColor: colors.bone,
+    color: sc.textPrimary,
+    backgroundColor: sc.bgPrimary,
     marginBottom: 12,
   },
   saveButton: {
-    backgroundColor: colors.ink,
+    backgroundColor: sc.accent,
+    borderRadius: 4,
+    minHeight: 48,
+    justifyContent: 'center',
     paddingVertical: 12,
     alignItems: 'center',
   },
   saveButtonDisabled: {
-    backgroundColor: colors.stone,
+    backgroundColor: sc.disabledBg,
   },
   saveButtonText: {
     fontFamily: 'Inter-Medium',
     fontSize: 14,
-    color: colors.bone,
+    color: sc.textOnAccent,
     letterSpacing: 0.4,
   },
   errorBanner: {
     marginHorizontal: 20,
     marginTop: 12,
-    backgroundColor: Colors.noticeCriticalUltraBg,
-    borderLeftWidth: 3,
-    borderLeftColor: OXBLOOD,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
     padding: 12,
   },
   errorText: {
     fontFamily: 'Inter-Regular',
     fontSize: 13,
-    color: OXBLOOD,
+    color: sc.textPrimary,
     lineHeight: 20,
   },
   explainerCard: {
     margin: 20,
-    padding: 20,
-    backgroundColor: colors.cream,
-    borderWidth: 0.5,
-    borderColor: colors.stone,
+    paddingVertical: 20,
   },
   explainerHeading: {
-    fontFamily: 'Cormorant-SemiBold',
+    fontFamily: 'Inter-Medium',
     fontSize: 18,
-    color: colors.ink,
+    color: sc.textPrimary,
     marginBottom: 10,
   },
   explainerBody: {
     fontFamily: 'Inter-Regular',
     fontSize: 13,
-    color: colors.charcoal,
+    color: sc.textMuted,
     lineHeight: 21,
     marginBottom: 14,
   },
   explainerDivider: {
     height: 0.5,
-    backgroundColor: colors.stone,
+    backgroundColor: sc.border,
     marginVertical: 16,
   },
   metricRow: {
@@ -419,19 +420,20 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontFamily: 'Inter-Medium',
     fontSize: 13,
-    color: colors.ink,
+    color: sc.textPrimary,
   },
   metricWeight: {
     fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: colors.forest,
+    fontSize: 13,
+    color: sc.textMuted,
+    fontVariant: ['tabular-nums'],
     marginTop: 1,
   },
   metricDesc: {
     flex: 1,
     fontFamily: 'Inter-Regular',
-    fontSize: 12,
-    color: colors.charcoal,
+    fontSize: 13,
+    color: sc.textMuted,
     lineHeight: 18,
   },
 });

@@ -42,7 +42,7 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
     >
       <HapticPressable intent="light" style={styles.backToSearch} onPress={onBack}>
         <Ionicons name="arrow-back" size={18} color={Colors.primary} />
-        <Text style={styles.backToSearchText}>Back to Search</Text>
+        <Text style={styles.backToSearchText}>Back to search</Text>
       </HapticPressable>
       <Text style={styles.portionHelp}>Enter nutrition for the whole portion below, not per serving.</Text>
 
@@ -131,7 +131,7 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
       {nutritionMessage && <Text style={styles.portionHelp} accessibilityRole="alert">{nutritionMessage}</Text>}
       <HapticPressable intent="success" style={styles.logButton} onPress={onSubmit} disabled={saving || missingMacros || missingCalories} accessibilityRole="button">
         <Ionicons name="add-circle" size={22} color={Colors.white} />
-        <Text style={styles.logButtonText}>{saving ? 'Saving food…' : 'Log Food'}</Text>
+        <Text style={styles.logButtonText}>{saving ? 'Saving food…' : 'Log food'}</Text>
       </HapticPressable>
     </ScrollView>
   );

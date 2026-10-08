@@ -66,6 +66,8 @@ const mockReportUnexpected = jest.fn();
 jest.mock('../../../../lib/consultation/report', () => ({
   reportUnexpected: (...args: unknown[]) => mockReportUnexpected(...args),
 }));
+let mockCoachless = false;
+jest.mock('../../../../hooks/useCoachlessClient', () => ({ useCoachlessClient: () => mockCoachless }));
 
 import ConnectionsScreen, { buildRows } from '../ConnectionsScreen';
 import { configFor, type WearableProvider } from '../../../../api/wearablesConnectionsApi';
@@ -193,6 +195,24 @@ describe('ConnectionsScreen — interactions', () => {
         'The Growth Project stops receiving new Oura data, and your coach stops seeing new Oura data. Data already shared stays with your coach. You can connect Oura again at any time.',
       ),
     ).toBeTruthy();
+  });
+
+  // FW-BODY U10 (failing on main): Connect and Disconnect told a client with no coach about "your coach".
+  it('a client with no coach: the sheet gets the coachless copy and Disconnect names no coach', async () => {
+    mockCoachless = true;
+    try {
+      mockUseWearableConnections.mockReturnValue(queryResult({ data: [connection('OURA', 'connected')] }));
+      await render(<ConnectionsScreen />);
+      expect(sheetProps.coachless).toBe(true);
+      await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
+      expect(
+        screen.getByText(
+          'The Growth Project stops receiving new Oura data. Data already brought in stays in your account. You can connect Oura again at any time.',
+        ),
+      ).toBeTruthy();
+    } finally {
+      mockCoachless = false;
+    }
   });
 });
 

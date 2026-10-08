@@ -32,7 +32,7 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | --- | --- |
 | `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
 | `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
-| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2). Member wins render in `screens/client/CommunityScreen.tsx`. |
+| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2); "Report sent" after "Self-harm or suicide" leads with 911 and the 988 Lifeline. Member wins render in `screens/client/CommunityScreen.tsx`. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
 ### Roman (AI butler) identity
@@ -60,7 +60,8 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 
 | File | What it does |
 | --- | --- |
-| `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
+| `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
+| `WaterTracker.tsx` | Theme-coloured hairline progress and three quick-add actions. The unchanged 100 oz reference is labelled “Starter goal”; changed Settings goals and explicit targets retain their values. Metric (`kg`) settings show approximate ml totals, the equivalent glass size, and 250/350/500 ml buttons. Imperial 8/12/16 oz buttons and the ounce callback contract stay unchanged; metric callbacks convert back to ounces so the store writes the selected ml. Covered by `__tests__/WaterTracker.goal.test.tsx`. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 | `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
@@ -68,8 +69,8 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `coach/ExtensionPairingPanel.tsx` | Import pairing lifecycle. Unavailable state says import is not enabled on the account without promising later enablement. Copy code, cancel, review-import navigation and retry/new-code handlers are retained. |
 | `invite/PasteInviteCodeButton.tsx` | "Paste invite code" text button used by CreateAccount and RoleSelection. It reads the clipboard only on tap and parses with `lib/inviteCodeInput.extractInviteCode`, which accepts a bare code, `/join/<code>`, `tgp://join/<code>` or `?code=`, and never truncates a token. It fills the field and never auto-attaches. |
 | `tutorial/` | Clinic launch Roman-led tutorial UI (featureFlags.clientTutorial, default OFF): `TutorialHost` (hydration, signals, live macros, overlay mount), `TutorialOverlay` (Roman coach-mark card, progress, spotlight, skip/resume, defer, done line, completion), `TutorialTarget` (spotlight measurement wrapper), the C08 `MacroExplanationCard` (Home) and `PlanExplanationCard` (Train), `TutorialHomeSlot` (re-offer line, macro card, Message your coach row), `TutorialSettingsRow` (Settings > Tutorial). Logic and flags: `src/tutorial/README.md`. |
-| `home/FullMacrosIntroCard.tsx` | One quiet Roman card on Home. It introduces carbohydrate and fat once, on the day a never-tracker's simple macro view ends. Dismissible and persisted per user. See `src/macros/README.md`. |
-| `home/HomeHeaderActions.tsx` | Unboxed coach-message entry and notification bell keep their unread badges. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar within a 44 pt target opens `MoreTab → RomanChat`. |
+| `home/FullMacrosIntroCard.tsx` | One quiet Roman card on Home. It introduces carbohydrate and fat once, on the day a never-tracker's simple macro view ends. Dismissible and persisted per user. See `src/macros/README.md`. Home's child cards (this one, `PushPermissionCard`, `CoachIntroductionBanner`, `HolisticInsightsTile`, `PendingInviteBanner`, the coachless banner and Roman card, `MacroExplanationCard`, `DunningBanner`) render as hairline sections through `src/ui/sections/QuietSection` (overline, Inter body, forest text action for the card's primary); `PushPermissionCard` and `DunningBanner` take `presentation="section"` on Home and keep their card elsewhere. |
+| `home/HomeHeaderActions.tsx` | Unboxed coach-message entry and notification bell keep their unread badges. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar within a 44 pt target opens `MoreTab → RomanChat` with `initial: false`, keeping the You menu underneath for Back and tab re-press. |
 | `log/DailySummaryBar.tsx`, `log/MealSectionCard.tsx` | Accept a `mode` / `macroMode` prop (`simple` or `full`, default `full`). `simple` shows calories and protein only. |
 | `AllergySafetyPrompt.tsx` | One-time Recipes sheet asking about allergies and restrictions; the answer is saved to `profile.diet_restrictions` (Save, Set this up later, or close). Nothing filters recipes by it, so the copy says so and asks the client to check each recipe's ingredients (ALLERGY-128). |
 | `messaging/MessageBubble.tsx`, `messaging/ThreadV2Parts.tsx` | Semantic colours through `thread/useThreadColors`: Inter message text on bone, a hairline for outgoing rows, readable metadata, quiet pins and 44 pt controls. Client timestamps are grouped; the coach keeps its existing rendering contract. Message menus and moderation handlers are unchanged. |
@@ -130,7 +131,7 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 | --- | --- |
 | `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
 | `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
-| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2). Member wins render in `screens/client/CommunityScreen.tsx`. |
+| `community/VoiceNotesSection.tsx`, `community/SafetyMenu.tsx` | Hall voice notes (Record, player) and the Report / Block / Delete menu every piece of community content carries (App Review 1.2); "Report sent" after "Self-harm or suicide" leads with 911 and the 988 Lifeline. Member wins render in `screens/client/CommunityScreen.tsx`. |
 | `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
 
 ### Logging primitives
@@ -147,7 +148,8 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 
 | File | What it does |
 | --- | --- |
-| `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
+| `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
+| `WaterTracker.tsx` | See the WaterTracker contract above: starter-reference label, unit-aware totals/progress and three working quick-add actions, with the existing ounce callback preserved. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 

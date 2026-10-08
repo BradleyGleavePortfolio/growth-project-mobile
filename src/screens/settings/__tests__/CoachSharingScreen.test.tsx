@@ -1,9 +1,20 @@
 /**
  * Settings > Privacy > Coach sharing (B-SHARE-127). Failing before (#451, Sol
  * B-451-1): an absent owner_access read as false and the owner line was hidden.
+ * FW-BODY B2 (failing on main): the screen said "Choose what your coach sees"
+ * with no word that Apple Health / Health Connect data is outside the switches.
  */
 import React from 'react';
+import * as fs from 'fs';
+import * as path from 'path';
+import { Platform } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+let mockHealthConnectBuild = false;
+jest.mock('../../../config/healthConnect', () => ({ isAndroidHealthConnectEnabled: () => mockHealthConnectBuild }));
 
 const mockGet = jest.fn();
 const mockPost = jest.fn();
@@ -86,4 +97,46 @@ it('a failed load offers a retry; no coach says so', async () => {
   mockGet.mockRejectedValueOnce(http400);
   await render(<CoachSharingScreen />);
   expect(await screen.findByText('Coach sharing applies once a coach is connected to this account.')).toBeTruthy();
+  expect(screen.queryByTestId('coach-sharing-devices')).toBeNull();
+});
+
+describe('connected devices are outside the switches (FW-BODY B2)', () => {
+  const DEVICES =
+    'Connected devices, such as Apple Health and Health Connect, are not covered by these switches. Your coach can see the data they bring in, and data already shared stays with your coach after you disconnect.';
+  const originalOS = Platform.OS;
+  const setOS = (os: string) => Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+  afterEach(() => {
+    setOS(originalOS);
+    mockHealthConnectBuild = false;
+  });
+
+  it('says which logs the switches cover, states connected devices, and opens Connected devices', async () => {
+    setOS('ios');
+    mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
+    await render(<CoachSharingScreen />);
+    expect(await screen.findByText('Choose which of these logs your coach sees. Each change saves right away.')).toBeTruthy();
+    expect(screen.queryByText('Choose what your coach sees. Each change saves right away.')).toBeNull();
+    expect(screen.getByText(DEVICES)).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Connected devices'));
+    expect(mockNavigate).toHaveBeenCalledWith('Connections');
+  });
+
+  it('the Connected devices target sits on the same More stack as Coach sharing (no dead row)', () => {
+    const nav = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'navigation', 'ClientNavigator.tsx'), 'utf8');
+    const more = Array.from(nav.matchAll(/<MoreStackNav\.Screen\s+name="(\w+)"/g), (m) => m[1]);
+    expect(more).toEqual(expect.arrayContaining(['CoachSharing', 'Connections']));
+  });
+
+  it.each([
+    ['an Android build with Health Connect: shown', true],
+    ['an Android build without Health Connect (More has no Connected devices row): hidden', false],
+  ])('%s', async (_name, healthConnect) => {
+    setOS('android');
+    mockHealthConnectBuild = healthConnect;
+    mockGet.mockResolvedValueOnce(shared({ owner_access: false }));
+    await render(<CoachSharingScreen />);
+    expect(await screen.findByTestId('coach-sharing-state-fitness.workouts')).toHaveTextContent('Shared');
+    expect(screen.queryByText(DEVICES) != null).toBe(healthConnect);
+    expect(screen.queryByLabelText('Connected devices') != null).toBe(healthConnect);
+  });
 });

@@ -155,6 +155,20 @@ beforeEach(() => {
   api.listChallenges.mockResolvedValue(page([]));
 });
 
+it('shows real dates in a challenge row and opens the same detail route', async () => {
+  api.listChallenges.mockResolvedValue(page([challenge({ starts_at: '2026-03-01T12:00:00Z', ends_at: '2026-03-31T12:00:00Z' })]));
+  await renderScreen();
+  expect(await screen.findByText(/^Starts /)).toHaveTextContent(/2026/);
+  expect(screen.getByText(/^Ends /)).toHaveTextContent(/2026/);
+  await fireEvent.press(screen.getByTestId('community-challenge-card-ch-1'));
+  expect(mockNavigate).toHaveBeenCalledWith('CommunityChallengeDetail', { challengeId: 'ch-1' });
+});
+it('does not invent dates, participant counts or a coach schedule', async () => {
+  await renderScreen();
+  expect(await screen.findByText('No challenges yet.')).toBeTruthy();
+  expect(screen.queryByText(/Your coach will/)).toBeNull();
+});
+
 describe('CommunityChallengesScreen — reachable discovery surface', () => {
   it('resolves the workspace id from useCommunityMe when no prop is supplied and fires a bounded list fetch', async () => {
     await renderScreen(); // NO workspaceId prop — must self-resolve

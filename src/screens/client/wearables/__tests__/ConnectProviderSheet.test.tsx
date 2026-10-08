@@ -581,4 +581,17 @@ describe('ConnectProviderSheet — on-device provider', () => {
     expect(onDeviceDisclosure('Apple Health')).toContain('Nothing is read or shared until you allow it.');
     expect(onDeviceDisclosure('Apple Health')).not.toMatch(/\bwe\b/i);
   });
+
+  // FW-BODY U10 (failing on main): a client with no coach was told a coach personalizes their training.
+  it('a client with no coach: no coach personalizes anything, and a coach they join can see the data', async () => {
+    const COACHLESS =
+      'When you continue, Apple Health asks for permission on this phone. The Growth Project then brings in your last 30 days of Apple Health data, and new data each time you open Health, so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too. Nothing is read or shared until you allow it.';
+    expect(onDeviceDisclosure('Apple Health', 'APPLE_HEALTHKIT', true)).toBe(COACHLESS);
+    const samsung = onDeviceDisclosure('Samsung Health', 'SAMSUNG_HEALTH', true);
+    expect(samsung).toContain('Health Connect data, from Samsung Health and every other app that shares with Health Connect,');
+    expect(samsung).not.toContain('personalize');
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible coachless onClose={jest.fn()} />);
+    expect(screen.getByText(COACHLESS)).toBeTruthy();
+    expect(screen.queryByText(/your coach can personalize/)).toBeNull();
+  });
 });

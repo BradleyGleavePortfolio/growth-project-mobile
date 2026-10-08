@@ -33,8 +33,8 @@ import * as Clipboard from 'expo-clipboard';
 import HapticPressable from '../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Spacing, Radius } from '../theme/index';
-import { typography, shadows } from '../theme/tokens';
+import { Spacing } from '../theme/index';
+import { typography } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
@@ -49,7 +49,6 @@ import {
 import type { LinkFailure } from './trustCenterLinkFailure';
 import { SupportEmailFallback, useSupportEmail } from '../components/support/SupportEmailFallback';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
-import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { deletionErrorCopy } from './settings/deletionErrors';
 
@@ -93,7 +92,7 @@ function MetaRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap;
   const metaStyles = useMemo(() => makeMetaStyles(colors), [colors]);
   return (
     <View style={metaStyles.row}>
-      <Ionicons name={icon} size={18} color={colors.primary} style={metaStyles.icon} />
+      <Ionicons name={icon} size={18} color={colors.textMuted} style={metaStyles.icon} />
       <View style={metaStyles.textGroup}>
         <Text style={metaStyles.label}>{label}</Text>
         <Text style={metaStyles.value}>{value}</Text>
@@ -119,17 +118,15 @@ const makeMetaStyles = (colors: ThemeColors) =>
     flex: 1,
   },
   label: {
-    fontSize: typography.caption.fontSize,
-    fontWeight: '600',
+    ...typography.eyebrow,
     color: colors.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 2,
+    marginBottom: 4,
   },
   value: {
     fontSize: typography.body.fontSize,
     fontWeight: '500',
     color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
 
   });
@@ -159,7 +156,7 @@ const makeBulletStyles = (colors: ThemeColors) =>
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.textMuted,
     marginTop: 7,
   },
   text: {
@@ -271,9 +268,9 @@ const makeNoticeStyles = (colors: ThemeColors) =>
     alignSelf: 'stretch',
     marginTop: 8,
     marginBottom: 4,
-    padding: Spacing.md,
-    borderRadius: Radius.lg,
-    backgroundColor: colors.surface,
+    paddingVertical: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
     gap: 8,
   },
   text: {
@@ -359,7 +356,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     try {
       await dataExportApi.requestExport();
       Alert.alert(
-        'Export Requested',
+        'Export requested',
         'Your data export has been queued. Open Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
@@ -424,7 +421,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.headerTitle}>Trust & Privacy</Text>
         <View style={styles.backBtn} />
@@ -432,9 +429,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
       {/* Hero lockup */}
       <View style={styles.heroSection}>
-        <View style={styles.heroIcon}>
-          <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
-        </View>
         <Text style={styles.heroSubtitle}>
           Your health data is sensitive. Here is exactly how it is protected.
         </Text>
@@ -442,7 +436,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
       {/* ── Section 1: Security metadata ─────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Security Status</Text>
+        <Text style={styles.sectionTitle}>Security status</Text>
         <View style={styles.card}>
           {loading ? (
             <ActivityIndicator color={colors.primary} />
@@ -470,12 +464,12 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
       {/* ── Section 2: User actions ───────────────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>What You Can Do</Text>
+        <Text style={styles.sectionTitle}>What you can do</Text>
         <View style={styles.card}>
           {/* Info row — no action */}
           <View style={styles.actionInfoRow}>
             <View style={styles.actionIconWrap}>
-              <Ionicons name="people-outline" size={18} color={colors.primary} />
+              <Ionicons name="people-outline" size={18} color={colors.textMuted} />
             </View>
             <Text style={styles.actionInfoText}>
               Your answers and logs are shared with your coach. Your Roman conversations stay private from your coach.
@@ -498,7 +492,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             </View>
             <View style={styles.actionBtnText}>
               <Text style={styles.actionBtnLabel}>Request data export</Text>
-              <Text style={styles.actionBtnSub}>Receive all your data within 24 hours</Text>
+              <Text style={styles.actionBtnSub}>Usually ready to download in about a minute</Text>
             </View>
             {exportBusy ? (
               <ActivityIndicator size="small" color={colors.primary} />
@@ -517,7 +511,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             accessibilityRole="button"
             accessibilityLabel="Delete account"
           >
-            <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
+            <View style={styles.actionIconWrap}>
               <Ionicons name="trash-outline" size={18} color={colors.error} />
             </View>
             <View style={styles.actionBtnText}>
@@ -531,7 +525,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
       {/* ── Section 3: Transparency bullets ──────────────────────────────── */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Full Transparency</Text>
+        <Text style={styles.sectionTitle}>Full transparency</Text>
         <View style={styles.card}>
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
@@ -596,12 +590,13 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.background,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
+    fontFamily: typography.h3.fontFamily,
     fontSize: typography.h3.fontSize,
     fontWeight: typography.h3.fontWeight,
     color: colors.textPrimary,
@@ -613,38 +608,27 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 24,
     gap: 12,
   },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.primaryPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   heroSubtitle: {
-    fontSize: typography.body.fontSize,
-    lineHeight: typography.body.lineHeight,
-    color: colors.textSecondary,
+    fontFamily: typography.h3.fontFamily,
+    fontSize: 22,
+    lineHeight: 30,
+    color: colors.textPrimary,
     textAlign: 'center',
-    maxWidth: 280,
+    maxWidth: 320,
   },
   section: {
     paddingHorizontal: Spacing.lg,
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...typography.eyebrow,
     color: colors.textMuted,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 10,
+    marginBottom: 4,
   },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    ...shadows.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingVertical: Spacing.sm,
   },
   actionInfoRow: {
     flexDirection: 'row',
@@ -653,15 +637,8 @@ const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 10,
   },
   actionIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.primaryPale,
-    justifyContent: 'center',
+    width: 24,
     alignItems: 'center',
-  },
-  actionIconDanger: {
-    backgroundColor: Colors.noticeCriticalFaintBg,
   },
   actionInfoText: {
     flex: 1,
@@ -685,24 +662,22 @@ const makeStyles = (colors: ThemeColors) =>
   },
   actionBtnLabel: {
     fontSize: typography.body.fontSize,
-    fontWeight: '600',
-    color: colors.textPrimary,
+    fontWeight: '500',
+    color: colors.primary,
   },
   actionBtnSub: {
     fontSize: typography.bodySmall.fontSize,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   dangerText: {
     color: colors.error,
   },
   bulletGroupLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    ...typography.eyebrow,
     color: colors.textMuted,
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    marginBottom: 10,
+    marginTop: 8,
+    marginBottom: 12,
   },
   footer: {
     paddingHorizontal: Spacing.lg,
@@ -711,14 +686,14 @@ const makeStyles = (colors: ThemeColors) =>
   },
   footerText: {
     fontSize: typography.bodySmall.fontSize,
-    color: colors.textMuted,
+    color: colors.textSecondary,
     textAlign: 'center',
   },
   footerLink: {
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '500',
     fontSize: typography.bodySmall.fontSize,
-    marginTop: 6,
+    paddingVertical: 12,
   },
 
   });

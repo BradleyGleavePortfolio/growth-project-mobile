@@ -37,6 +37,8 @@ import { logger } from '../../utils/logger';
 import type { AiRefusal } from '../../lib/ai/aiRefusal';
 import type { AiDailyCap } from '../../lib/ai/aiDailyCap';
 import { romanChatsEvents } from '../settings/romanChatsEvents';
+import { romanChatsApi } from '../../api/romanChatsApi';
+import { captureAccountBinding } from '../../services/accountBinding';
 
 /** Page size for the initial / "load older" message fetch (<= backend cap 100). */
 const PAGE_LIMIT = 30;
@@ -80,10 +82,9 @@ export interface UseRomanChatResult {
   phase: RomanChatPhase;
   session: RomanSession | null;
   /**
-   * True when the resumed session had no prior messages on open — i.e. this is
-   * the user's first encounter with Roman, so the greeting shows the §2.1
-   * self-introduction rather than returning-user copy (U1). Latched at open and
-   * not flipped by the optimistic append of the first turn.
+   * True only when the account had no earlier chats and the resumed session
+   * is empty. A history failure uses returning-user copy, never guesses that
+   * this is a first meeting. Latched at open, not on the first optimistic turn.
    */
   isFirstOpen: boolean;
   /** Oldest-first; presented newest-at-bottom and always scrolled into view. */
@@ -133,15 +134,25 @@ export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
   const runOpen = useCallback(async () => {
     if (active.current) setPhase('loading');
     try {
+      // Check before open-or-resume creates today's chat: an empty daily
+      // session alone does not mean this person has never met Roman.
+      let noEarlierChats = false;
+      try {
+        const binding = await captureAccountBinding();
+        if (binding) {
+          const history = await romanChatsApi.list(binding, { limit: 1 });
+          noEarlierChats = history.ok && history.value.sessions.length === 0;
+        }
+      } catch (err) {
+        // Greeting metadata must never prevent opening or sending a chat.
+        logger.warn('useRomanChat.greetingHistory', err);
+      }
       const s = await openOrResumeSession(surface);
       const page = await listMessages(s.id, { limit: PAGE_LIMIT });
       if (!active.current) return;
       sessionRef.current = s;
       setSession(s);
-      // First open = the resumed session carries no prior turns. Latched here so
-      // the greeting's §2.1 self-introduction is chosen on the empty state and
-      // does not flip mid-conversation (U1).
-      setIsFirstOpen(s.messageCount === 0 && page.messages.length === 0);
+      setIsFirstOpen(noEarlierChats && s.messageCount === 0 && page.messages.length === 0);
       // Backend returns newest-first; present oldest-first so the inverted
       // list reads naturally bottom-up.
       setMessages([...page.messages].reverse());

@@ -202,7 +202,7 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
     ["Recipes", "Recipes"], ["Fasting", "Fast"], ["Community", "Community"],
     ["Profile", "ProfileMain"], ["Settings", "Settings"], ["Report", "Report"],
     ["Learn", "Learn"], ["Widgets", "Widgets"], ["Grocery list", "GroceryList"],
-    ["Shopping list", "ShoppingList"], ["Prep guide", "PrepGuide"],
+    ["Prep guide", "PrepGuide"],
   ];
   afterEach(() => {
     Object.defineProperty(Platform, "OS", { configurable: true, value: originalOS });
@@ -252,8 +252,18 @@ describe("More: calm groups and complete route parity (DES-AJ-127)", () => {
       "Meal plan", "Macro targets", "Progress", "Habits and check-in", "Timeline",
       "Exercise library", "Membership", "Report", ...(!tutorial ? healthLabels : []),
       ...(!roman ? guidanceLabels : []), "Recipes", "Fasting", "Grocery list",
-      "Shopping list", "Prep guide", "Profile", "Settings", "Widgets", "Learn",
+      "Prep guide", "Profile", "Settings", "Widgets", "Learn",
     ]);
+  });
+
+  it("one list: Grocery list stays and no row opens the retired Shopping list (CF-ONE-LIST-128)", async () => {
+    jest.clearAllMocks();
+    await render(<MoreScreen />);
+    expect(screen.queryByLabelText("Shopping list")).toBeNull();
+    expect(screen.queryByText(/shopping list/i)).toBeNull();
+    await fireEvent.press(screen.getByLabelText("Grocery list"));
+    expect(mockNavigate).toHaveBeenLastCalledWith("GroceryList");
+    expect(mockNavigate).not.toHaveBeenCalledWith("ShoppingList");
   });
 
   it("does not assume a coach, assigned plan, targets or video", async () => {

@@ -452,10 +452,10 @@ export default function HomeScreen() {
           })}
         </View>
         {/* Supporting sections keep their original relative order. */}
-        <DunningBanner surface="HomeScreen" />
+        <DunningBanner surface="HomeScreen" presentation="section" />
         <CoachlessHomeSlot />
         <PendingInviteBanner />
-        <PushPermissionCard />
+        <PushPermissionCard presentation="section" />
         {showProfileNudge ? (
           <Pressable
             onPress={goToEditProfile}

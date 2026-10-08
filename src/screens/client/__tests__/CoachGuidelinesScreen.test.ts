@@ -20,7 +20,7 @@ describe('CoachGuidelinesScreen error path', () => {
 
   it('catches the API failure and stores a typed message', () => {
     expect(SRC).toMatch(/setError\(/);
-    expect(SRC).toMatch(/err instanceof Error/);
+    expect(SRC).toContain('Guidelines did not load. Check your connection and try again.');
   });
 
   it('renders an alert region when error is set', () => {
