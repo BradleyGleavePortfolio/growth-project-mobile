@@ -19,7 +19,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 import StepTransitionView from '../../components/onboarding/StepTransitionView';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -36,7 +37,7 @@ const LEVELS: { key: Level; label: string; sub: string }[] = [
 ];
 
 export default function LeanQ2ExperienceScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<Level | null>(null);
 
@@ -67,14 +68,9 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.stepIndicator}>
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
+          <Text style={styles.stepIndicator}>Step 2 of 6</Text>
           <Text style={styles.headline}>How long have you been at this?</Text>
-          <Text style={styles.subtext}>The first steps are shaped to fit.</Text>
+          <Text style={styles.subtext}>Choose the experience that fits.</Text>
         </View>
 
         {/* Options */}
@@ -99,10 +95,10 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
         {/* Back + Skip */}
         <View style={styles.bottomRow}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} activeOpacity={0.6}>
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleSkip} style={styles.skipBtn} activeOpacity={0.6}>
-            <Text style={styles.skipText}>Skip — I'll set this later</Text>
+            <Text style={styles.skipText}>Skip for now</Text>
           </TouchableOpacity>
         </View>
       </StepTransitionView>
@@ -114,7 +110,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   inner: {
     flex: 1,
@@ -126,8 +122,10 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 36,
   },
   stepIndicator: {
-    flexDirection: 'row',
-    gap: 8,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
     marginBottom: 24,
   },
   dot: {
@@ -137,11 +135,11 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.border,
   },
   dotActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     width: 24,
   },
   dotComplete: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
   },
   headline: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -155,7 +153,7 @@ const makeStyles = (colors: ThemeColors) =>
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 22,
   },
   options: {
@@ -165,7 +163,7 @@ const makeStyles = (colors: ThemeColors) =>
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 4, // radius.lg
@@ -173,9 +171,9 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 22,
   },
   optionSelected: {
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderWidth: 1.5,
-    backgroundColor: 'rgba(44, 74, 54, 0.04)',
+    backgroundColor: colors.bgPrimary,
   },
   optionText: {
     flex: 1,
@@ -189,12 +187,12 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
   },
   optionLabelSelected: {
-    color: colors.primary,
+    color: colors.accentText,
   },
   optionSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 19,
   },
   bottomRow: {
@@ -211,7 +209,7 @@ const makeStyles = (colors: ThemeColors) =>
   backText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     fontWeight: '500',
     letterSpacing: 0.3,
   },

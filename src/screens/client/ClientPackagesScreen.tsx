@@ -18,11 +18,10 @@
  * `current_period_end`, `package_id`) joined against the packages list
  * by `package_id` for the human-readable name. Fields the backend does
  * not expose (trial_ends_at, dunning) arrive as null and the UI omits
- * the corresponding rows rather than fabricating values. The "Current"
- * pill on each card now reads `status.data.package_id === pkg.id`
- * instead of a fabricated `pkg.is_current` field (round-3 audit fix —
- * the backend `CoachPackage` schema has no `is_current` column, so the
- * pill never rendered before).
+ * the corresponding rows rather than fabricating values. The disabled
+ * "Current plan" button on a card reads `status.data.package_id === pkg.id`
+ * instead of a fabricated `pkg.is_current` field (round-3 audit fix; the
+ * separate "Current" pill was removed by FW-MONEY-128 U-7).
  *
  * Behaviour contract:
  *  - 501 from packages OR entitlement => "Your coach has not enabled
@@ -76,6 +75,8 @@ import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentS
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
 import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
 import YourPlansPanel from '../../components/purchase/YourPlansPanel';
+import { SupportEmailFallback, useSupportEmail } from '../../components/support/SupportEmailFallback';
+import { PACKAGE_PAYMENT_COPY } from '../../lib/packagePayment';
 import { planTerms, priceLabel } from '../../lib/planTerms';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { COACHLESS_TITLE, COACHLESS_BODY, COACHLESS_CTA } from '../../entitlements/PaywallSheet';
@@ -196,6 +197,10 @@ export default function ClientPackagesScreen() {
   const [status, setStatus] = useState<PaymentsResult<ClientPaymentStatus> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [plansTick, setPlansTick] = useState(0);
+  // FW-MONEY-128 U-7: purchase ids Your plans shows (null until it answers).
+  const [shownPlanIds, setShownPlanIds] = useState<string[] | null>(null);
+  // FW-MONEY-128 B-1: the refund line's own support action.
+  const refundSupport = useSupportEmail('Refund request');
 
   const load = useCallback(async () => {
     const [pkgs, st] = await Promise.all([
@@ -327,6 +332,24 @@ export default function ClientPackagesScreen() {
   const statusNone = status.ok && status.data.state === 'none';
   const notConfigured =
     (packagesNotConfigured || packagesEmptyOk) && (statusUnavailable || statusNone);
+  const currentId = status.ok && status.data.state !== 'none' ? status.data.purchase_id : null;
+  // PR-13 buyer-facing Deliverables entry, on the plan's one place (U-7):
+  // gated by `featureFlags.deliverables` and a real purchase id.
+  const viewIncluded = (purchaseId: string, packageName: string | null) =>
+    featureFlags.deliverables ? (
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="View what's included in your plan"
+        testID="view-deliverables-cta"
+        onPress={() =>
+          navigation.navigate('Deliverables', { purchaseId, packageName: packageName ?? undefined })
+        }
+        style={styles.currentPlanCta}
+      >
+        <Text style={styles.currentPlanCtaText}>View what&apos;s included</Text>
+        <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
+      </TouchableOpacity>
+    ) : null;
 
   return (
     <ScrollView
@@ -372,56 +395,29 @@ export default function ClientPackagesScreen() {
           field is always null today. */}
       <SmartDunningBanner surface="ClientPackagesScreen" />
 
-      {/* Renewing plans: next charge, End my plan / Keep my plan */}
+      {/* Renewing plans: next charge, End my plan / Keep my plan, and (U-7)
+          what the current plan includes, so a renewing plan shows once. */}
       <YourPlansPanel
         reloadKey={plansTick}
         onUpdateCard={handleUpdateCard}
         onPlanChanged={onPlanChanged}
+        onShownPlans={setShownPlanIds}
+        renderPlanExtra={(plan) =>
+          currentId === plan.purchaseId ? viewIncluded(plan.purchaseId, plan.packageName) : null
+        }
       />
 
-      {/* Current plan summary */}
-      {status.ok && status.data.state !== 'none' && status.data.package_name ? (
-        <View style={styles.currentPlanCard}>
+      {/* Current plan summary, only for a plan Your plans does not show
+          (one-time or complimentary plans, or when that list did not load). */}
+      {status.ok && status.data.state !== 'none' && status.data.package_name &&
+      shownPlanIds !== null && !(currentId && shownPlanIds.includes(currentId)) ? (
+        <View style={styles.currentPlanCard} testID="current-plan-card">
           <Text style={styles.currentPlanLabel}>Current plan</Text>
           <Text style={styles.currentPlanName}>{status.data.package_name}</Text>
           <Text style={styles.currentPlanSub} testID="current-plan-line">
             {currentPlanLine(status.data)}
           </Text>
-          {/* PR-13 — buyer-facing Deliverables entry. Two gates:
-              (1) feature flag `deliverables` — OFF in production until
-                  the backend ships `GET /v1/checkout/purchases/:id/drops`
-                  (the screen exists but the data source does not). This
-                  prevents every paying user from landing on a 404 error
-                  state today. Flip via EXPO_PUBLIC_FF_DELIVERABLES=true.
-              (2) real `purchase_id` — when state === 'none' there is no
-                  purchase to list drops for, so the row is hidden
-                  rather than showing a dead-end. */}
-          {featureFlags.deliverables && status.data.purchase_id ? (
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel="View what's included in your plan"
-              testID="view-deliverables-cta"
-              onPress={() =>
-                (
-                  navigation as unknown as {
-                    navigate: (
-                      n: string,
-                      p: { purchaseId: string; packageName?: string },
-                    ) => void;
-                  }
-                ).navigate('Deliverables', {
-                  purchaseId: status.data.purchase_id as string,
-                  packageName: status.data.package_name ?? undefined,
-                })
-              }
-              style={styles.currentPlanCta}
-            >
-              <Text style={styles.currentPlanCtaText}>
-                View what&apos;s included
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
-            </TouchableOpacity>
-          ) : null}
+          {currentId ? viewIncluded(currentId, status.data.package_name) : null}
         </View>
       ) : null}
 
@@ -489,11 +485,6 @@ export default function ClientPackagesScreen() {
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>
                   <Text style={styles.pkgName}>{pkg.name}</Text>
-                  {current ? (
-                    <View style={styles.currentPill}>
-                      <Text style={styles.currentPillText}>Current</Text>
-                    </View>
-                  ) : null}
                 </View>
                 <Text style={styles.pkgPrice}>
                   {sellable ? priceLabel(sellable) : formatMoney(pkg.price ?? 0, pkg.currency)}
@@ -574,17 +565,41 @@ export default function ClientPackagesScreen() {
           })
         )
       ) : packages.reason === 'error' ? (
-        <TouchableOpacity onPress={load} style={styles.errorBanner}>
+        <TouchableOpacity
+          onPress={load}
+          style={styles.errorBanner}
+          accessibilityRole="button"
+          testID="client-packages-error"
+        >
           <Ionicons name="alert-circle-outline" size={18} color={semanticColors.textPrimary} />
-          <Text style={styles.errorBannerText}>{packages.message} Tap to retry.</Text>
+          {/* U-5: plain words; the transport text stays in the logs. */}
+          <Text style={styles.errorBannerText}>
+            Your coach&apos;s plans could not load. Check your connection, then tap to try again.
+          </Text>
         </TouchableOpacity>
       ) : null}
 
       <Text style={styles.fineprint}>
         Payments are processed securely by Stripe inside the app. A renewing
         plan can be ended at any time in Your plans when it shows End my
-        plan, or through your coach. Refunds are issued by The Growth Project team; to ask, go to You &gt; Settings &gt; Support.
+        plan. Refunds are issued by The Growth Project team; to ask for one, email support.
       </Text>
+      <TouchableOpacity
+        onPress={() => void refundSupport.open()}
+        style={styles.supportAction}
+        accessibilityRole="button"
+        accessibilityLabel={`${PACKAGE_PAYMENT_COPY.supportAction} about a refund`}
+        testID="plans-refund-support"
+      >
+        <Text style={styles.supportActionText}>{PACKAGE_PAYMENT_COPY.supportAction}</Text>
+      </TouchableOpacity>
+      <SupportEmailFallback
+        handle={refundSupport}
+        textStyle={styles.fineprint}
+        linkColor={semanticColors.accentText}
+        testID="plans-refund-support-fallback"
+        centered
+      />
     </ScrollView>
   );
 }
@@ -695,11 +710,6 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     pkgHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     pkgName: { ...tokens.typography.h2, color: semanticColors.textPrimary, flex: 1 },
-    currentPill: {
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-    },
-    currentPillText: { ...tokens.typography.eyebrow, color: semanticColors.textMuted },
     pkgPrice: { ...tokens.typography.h2, fontVariant: ['tabular-nums'], color: semanticColors.textPrimary, marginTop: 6 },
     pkgDesc: { ...tokens.typography.bodySmall, fontSize: 13, color: semanticColors.textMuted, marginTop: 8, lineHeight: 18 },
     pkgFeatures: { marginTop: 10, gap: 6 },
@@ -724,5 +734,11 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       textAlign: 'center',
       marginTop: 20,
       lineHeight: 20,
+    },
+    supportAction: { minHeight: 44, justifyContent: 'center', alignSelf: 'center' },
+    supportActionText: {
+      ...tokens.typography.bodySmall, fontSize: 13,
+      color: semanticColors.accentText,
+      textDecorationLine: 'underline',
     },
   });

@@ -199,3 +199,5 @@ Client packages are 1:1 person-to-person coaching (App Review Guideline 3.1.3(d)
 
 
 **Failed payments (S-DUNNING).** `HomeScreen` and `ClientPackagesScreen` render the inline `DunningBanner` (from `src/entitlements/dunning`) on Days 0-9 of a failed payment. It shows the amount, the failure date, the lock date, Update card (Stripe Billing Portal) and Message coach. It renders nothing unless `GET /v1/checkout/dunning` reports an active, unlocked v2 cycle. The legacy payment-status `dunning` banner on `ClientPackagesScreen` stays as it was, and is always null today.
+
+**One plan, one place (FW-MONEY-128 MONEY-PLANS).** A renewing plan shows once, in `YourPlansPanel`, which also carries its "View what's included" action; the Current plan card shows only for a plan Your plans does not list (one-time or complimentary plans, or when that list did not load), and package cards no longer carry a "Current" pill (the disabled "Current plan" button stays). A free trial is shown only when the package's per-client `trial_offer.available` is true. A failed list read says so in plain words, and the refund line names The Growth Project team with its own Email support action.

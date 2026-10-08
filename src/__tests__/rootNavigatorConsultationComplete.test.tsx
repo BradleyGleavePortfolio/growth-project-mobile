@@ -3,8 +3,9 @@
  * who finished the consultation (plan reveal and Roman's tutorial) goes
  * straight to the app on the next boot. The old Day-1 flow and the Day-1 win
  * are never mounted, even though the server does not set
- * profile.day_one_completed for the consultation. Flag off: the old path is
- * unchanged. Harness mirrors rootNavigatorPackagePromptGate.test.tsx (real
+ * profile.day_one_completed for the consultation. Flag off: completed
+ * onboarding can still offer the first win, but never starts a second setup.
+ * Harness mirrors rootNavigatorPackagePromptGate.test.tsx (real
  * RootNavigator, mocked native/network edges).
  */
 const mockSecure: Record<string, string | null> = {};
@@ -205,12 +206,14 @@ describe('RootNavigator after the consultation (flag on)', () => {
   });
 });
 
-describe('RootNavigator with the flag off (unchanged)', () => {
-  it('the same client still gets the Day-1 flow', async () => {
+describe('RootNavigator with the consultation flag off', () => {
+  it('onboarding complete locally, profile pending: first win, never another setup', async () => {
     mockConsultFlag = false;
     await seed({ ...CONSULTED, profile: { onboarding_completed: false, day_one_completed: false } }, true);
     const r = await mount();
-    await r.findByTestId('nav-day1');
+    await r.findByTestId('day1-win');
+    expect(r.queryByTestId('nav-day1')).toBeNull();
+    expect(mockFirstWin).toHaveBeenCalledTimes(1);
   });
 
   it('Day-1 done but the win not: the Day-1 win', async () => {
