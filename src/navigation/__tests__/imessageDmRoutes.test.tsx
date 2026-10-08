@@ -37,6 +37,10 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../screens/coach/settings/BookingOptionsEntry', () => ({
   BookingOptionsEntry: () => null,
 }));
+// COACH-SETTINGS-131: the AI credits row reads a query hook too (covered in SettingsScreen.coachSettings131.test.tsx).
+jest.mock('../../screens/coach/settings/AICreditsRow', () => ({
+  AICreditsRow: () => null,
+}));
 
 jest.mock('../../services/authActions', () => ({
   signOut: jest.fn(async () => undefined),
