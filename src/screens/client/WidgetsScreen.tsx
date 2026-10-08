@@ -17,6 +17,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { scheduleFastEndAlert } from '../../utils/fastingAlert';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorStatus } from '../../types/common';
 
 // Wave 5b: WidgetsScreen reduced to the actions that actually work today.
 // Per the no-placeholder doctrine, "Coming Soon" widgets, wearables and
@@ -75,8 +76,12 @@ export default function WidgetsScreen() {
                 await scheduleFastEndAlert(currentUser.id, hours);
               }
               navigation.navigate('Fast');
-            } catch {
-              Alert.alert('Could not start fast', 'The fast did not start. Check the connection and try again.');
+            } catch (err: unknown) {
+              const status = errorStatus(err);
+              const message = status === 400 || status === 409
+                ? 'A fast is already running. Open Fasting to see it.'
+                : 'The fast did not start. Check the connection and try again.';
+              Alert.alert('Could not start fast', message);
             } finally {
               setStartingFast(false);
             }

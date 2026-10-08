@@ -71,8 +71,11 @@ describe('Shortcuts (WidgetsScreen): every action still works', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Fast');
   });
 
-  it('a failed start says so and neither schedules nor navigates', async () => {
-    mockStart.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+  it.each([
+    { reason: 'a server failure', error: { response: { status: 500, data: { message: 'Internal server error' } } } },
+    { reason: 'no connection', error: new Error('Network Error') },
+  ])('a failed start ($reason) says so and neither schedules nor navigates', async ({ error }) => {
+    mockStart.mockRejectedValueOnce(error);
     const screen = await render(<WidgetsScreen />);
     await fireEvent.press(screen.getByText('Start fast'));
     await confirmStart();
@@ -85,5 +88,24 @@ describe('Shortcuts (WidgetsScreen): every action still works', () => {
     await confirmStart();
     expect(mockStart).toHaveBeenCalledTimes(2);
     expect(mockNavigate).toHaveBeenCalledWith('Fast');
+  });
+
+  it.each([400, 409])('a running fast gives an accurate next step after HTTP %s', async (status) => {
+    mockStart.mockRejectedValueOnce({
+      response: { status, data: { message: 'A fast is already in progress' } },
+    });
+    const screen = await render(<WidgetsScreen />);
+    await fireEvent.press(screen.getByText('Start fast'));
+    await confirmStart();
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Could not start fast', 'A fast is already running. Open Fasting to see it.',
+    );
+    expect(mockStart).toHaveBeenCalledTimes(1);
+    expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+    await fireEvent.press(screen.getByText('Start fast'));
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Start 16:8 fast', expect.any(String), expect.any(Array),
+    );
   });
 });

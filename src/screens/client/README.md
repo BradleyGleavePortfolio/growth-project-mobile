@@ -11,7 +11,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator` with
 
 ## Key files
 
-Shortcuts and fasting copy (SMALL-M-COPY-131): Profile uses the screen's own **Shortcuts** title and an "Opens quick actions" accessibility hint; the route stays `Widgets`. Quick log says "Open the food log" and still opens `Log`. Fasting Start and Shortcuts Start failures use "The fast did not start. Check the connection and try again."; Fasting End uses "The fast did not end. Check the connection and try again." Raw API error text never appears in those alerts. Existing protocol, confirmation, removal, alert scheduling, retry and navigation actions stay unchanged; rendered regression tests cover the copy and action parity.
+Shortcuts and fasting copy (SMALL-M-COPY-131): Profile uses the screen's own **Shortcuts** title and an "Opens quick actions" accessibility hint; the route stays `Widgets`. Quick log says "Open the food log" and still opens `Log`. Shortcuts Start responses with HTTP 400/409 use "A fast is already running. Open Fasting to see it."; other Shortcuts Start failures and Fasting Start failures use "The fast did not start. Check the connection and try again." Fasting End uses "The fast did not end. Check the connection and try again." Raw API error text never appears in those alerts. Existing protocol, confirmation, removal, alert scheduling, retry and navigation actions stay unchanged; rendered regression tests cover the copy and action parity.
 
 ### Tab roots
 
