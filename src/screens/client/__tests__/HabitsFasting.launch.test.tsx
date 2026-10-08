@@ -1,5 +1,7 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -64,6 +66,7 @@ jest.mock('../../../components/FadeInView', () => {
 import HabitsScreen from '../HabitsScreen';
 import { makeStyles } from '../habits/styles';
 import FastingScreen from '../FastingScreen';
+import { scheduleFastingAlert } from '../../../utils/notifications';
 import type { ApiHabitLog } from '../../../hooks/useApi';
 
 let queryClient: QueryClient;
@@ -249,6 +252,12 @@ describe('Habits — production DTO, check-off and server history', () => {
 });
 
 describe('Fasting — production protocol and completed status', () => {
+  beforeEach(() => AsyncStorage.clear());
+  const ALERT_KEY = 'fasting:scheduled_notification_id:client-1';
+  const runningFast = (hoursAgo: number, protocol = '16:8') => mockGetHistory.mockResolvedValue({ data: [{
+    id: 'active', start_time: new Date(Date.now() - hoursAgo * 3600000).toISOString(), end_time: null, protocol,
+  }] });
+
   it.each([12, 16, 18, 20, 24])('restores the selected %ih target on reopen', async (hours) => {
     mockGetHistory.mockResolvedValue({ data: [{
       id: 'active', start_time: new Date(Date.now() - 2 * 3600000).toISOString(),
@@ -256,7 +265,7 @@ describe('Fasting — production protocol and completed status', () => {
     }] });
     const screen = await render(<FastingScreen />);
     await waitFor(() => expect(screen.getByText(`${hours}h`)).toBeTruthy());
-    expect(screen.getByText(/02:00:\d{2}/)).toBeTruthy();
+    expect(screen.getByText('2h 00m')).toBeTruthy();
   });
 
   it('starting 12:12 sends the protocol and shows the same server-backed target', async () => {
@@ -291,10 +300,10 @@ describe('Fasting — production protocol and completed status', () => {
     expect(alert?.[1]).toContain('saved in history, but will not count as completed');
     const endAnyway = alert?.[2]?.find((button) => button.text === 'End anyway');
     await act(async () => { await endAnyway?.onPress?.(); });
-    await waitFor(() => expect(screen.getByText('Recent Fasts')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Recent fasts')).toBeTruthy());
     expect(mockEndFast).toHaveBeenCalledTimes(1);
     expect(screen.getByTestId('fasting-completed-count').props.children).toBe(0);
-    expect(screen.getByText('12h target')).toBeTruthy();
+    expect(screen.getByText('12h target · Ended early')).toBeTruthy();
   });
 
   it('counts consecutive qualifying days, excluding a short ended fast today', async () => {
@@ -309,7 +318,82 @@ describe('Fasting — production protocol and completed status', () => {
     });
     mockGetHistory.mockResolvedValue({ data: sessions });
     const screen = await render(<FastingScreen />);
-    await waitFor(() => expect(screen.getByText('Day 2')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('2 days in a row with a completed fast')).toBeTruthy());
     expect(screen.getByTestId('fasting-completed-count').props.children).toBe(2);
+    expect(screen.getByText('Average, all fasts')).toBeTruthy();
+    expect(screen.getByText('A fast counts as completed at 90 percent of its target.')).toBeTruthy();
+    expect(screen.getAllByText('12h target · Completed')).toHaveLength(2);
+  });
+
+  it('one day with a completed fast is not called a run or a program day', async () => {
+    const start = new Date();
+    start.setHours(12, 0, 0, 0);
+    start.setDate(start.getDate() - 1);
+    mockGetHistory.mockResolvedValue({ data: [{
+      id: 'yesterday', start_time: start.toISOString(), protocol: '12:12',
+      end_time: new Date(start.getTime() + 12 * 3600000).toISOString(),
+    }] });
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByText('12h target · Completed')).toBeTruthy());
+    expect(screen.getByTestId('fasting-completed-count').props.children).toBe(1);
+    expect(screen.queryByText(/in a row|^Day \d/)).toBeNull();
+  });
+
+  it('starting a fast schedules the end alert while Fasting Alerts is on (the default)', async () => {
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Start fast')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('Start fast'));
+    await waitFor(() => expect(scheduleFastingAlert).toHaveBeenCalledTimes(1));
+    const at = jest.mocked(scheduleFastingAlert).mock.calls[0][0].getTime();
+    expect(Math.abs(at - (Date.now() + 16 * 3600000))).toBeLessThan(60000);
+    await waitFor(async () => expect(await AsyncStorage.getItem(ALERT_KEY)).toBe('notification-1'));
+  });
+
+  it('starting a fast schedules nothing when Fasting Alerts is off', async () => {
+    await AsyncStorage.setItem('gp_client_settings', JSON.stringify({ fastingAlerts: false, waterGoalOz: 100 }));
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('Start fast')).toBeTruthy());
+    await act(async () => { await Promise.resolve(); });
+    await fireEvent.press(screen.getByLabelText('Start fast'));
+    await waitFor(() => expect(mockStartFast).toHaveBeenCalledWith({ protocol: '16:8' }));
+    expect(scheduleFastingAlert).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem(ALERT_KEY)).toBeNull();
+  });
+
+  it('ending a fast cancels its scheduled end alert', async () => {
+    await AsyncStorage.setItem(ALERT_KEY, 'notification-1');
+    runningFast(15);
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByLabelText('End fast')).toBeTruthy());
+    await fireEvent.press(screen.getByLabelText('End fast'));
+    await waitFor(() => expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('notification-1'));
+    expect(mockEndFast).toHaveBeenCalledTimes(1);
+    expect(await AsyncStorage.getItem(ALERT_KEY)).toBeNull();
+  });
+
+  it('a running fast reads in hours and minutes, with a progress bar and a forest End fast', async () => {
+    runningFast(2);
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByText('2h 00m')).toBeTruthy());
+    expect(screen.queryByText(/\d{2}:\d{2}:\d{2}/)).toBeNull();
+    expect(screen.getByLabelText('Fasting progress')).toBeTruthy();
+    const end = StyleSheet.flatten(screen.getByLabelText('End fast').props.style);
+    expect(end.backgroundColor).toBe(mockSemanticColors.accent);
+    expect(end.backgroundColor).not.toBe(require('../../../constants/colors').default.error);
+    // Serif only for the hero number; Inter for what is read.
+    expect(StyleSheet.flatten(screen.getByText('2h 00m').props.style).fontFamily).toBe('CormorantGaramond_400Regular');
+    expect(StyleSheet.flatten(screen.getByText('Started').props.style).fontFamily).toBe('Inter_400Regular');
+  });
+
+  it('keeps every action: a failed load offers Try again, and pull to refresh reloads', async () => {
+    mockGetHistory.mockRejectedValueOnce(new Error('offline'));
+    const screen = await render(<FastingScreen />);
+    await waitFor(() => expect(screen.getByText('Fasting history did not load.')).toBeTruthy());
+    await fireEvent.press(screen.getByText('Try again'));
+    await waitFor(() => expect(screen.getByLabelText('Start fast')).toBeTruthy());
+    expect(screen.getByText('Each fast you end is saved here.')).toBeTruthy();
+    expect(screen.queryByTestId('fasting-completed-count')).toBeNull();
+    await act(async () => { await screen.getByTestId('fasting-scroll').props.refreshControl.props.onRefresh(); });
+    expect(mockGetHistory).toHaveBeenCalledTimes(3);
   });
 });

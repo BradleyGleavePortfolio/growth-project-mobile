@@ -15,10 +15,9 @@
  *           consume it via `disabled={submitting}`, and `handleStart` /
  *           `doEndFast` flip it via setSubmitting(true) before the await.
  *
- *   P0-3b — `scheduleFastingAlert`'s returned id is persisted to
- *           AsyncStorage under FASTING_NOTIF_ID_KEY, and `doEndFast`
- *           reads it back and calls `cancelScheduledNotificationAsync`
- *           plus removeItem. This prevents the "Fast Complete" push from
+ *   P0-3b — the end alert's id is persisted to AsyncStorage under a
+ *           user-scoped key (utils/fastingAlert.ts), and `doEndFast`
+ *           cancels it via cancelFastEndAlert (cancel + removeItem). This prevents the "Fast Complete" push from
  *           firing hours after the user manually ended the fast.
  *
  *   P0-4  — Streak math uses `bucketDateLocal` instead of UTC
@@ -63,21 +62,24 @@ describe('FastingScreen — P0-3 double-start + notification cancel', () => {
     expect(handleStart).toMatch(/submitting\)\s*return/);
   });
 
+  // P0-3b now lives in utils/fastingAlert.ts (shared with Shortcuts' Start fast).
+  const ALERT_SRC = fs.readFileSync(path.join(ROOT, 'src', 'utils', 'fastingAlert.ts'), 'utf8');
+
   it('persists the scheduled notification id under a user-scoped key', () => {
     // R15: every persisted key is `${kind}:${userId}`. A shared device must
-    // not let user A's scheduled "Fast Complete" id leak to user B.
-    expect(SRC).toMatch(/fastingNotifIdKey/);
-    expect(SRC).toMatch(/fasting:scheduled_notification_id:\$\{userId\}/);
-    expect(SRC).toMatch(/AsyncStorage\.setItem\(fastingNotifIdKey\(currentUser\.id\)/);
+    // not let user A's scheduled end-alert id leak to user B.
+    expect(ALERT_SRC).toMatch(/fasting:scheduled_notification_id:\$\{userId\}/);
+    expect(ALERT_SRC).toMatch(/AsyncStorage\.setItem\(fastingNotifIdKey\(userId\), notifId\)/);
+    expect(extractFunctionBody(SRC, 'handleStart')).toMatch(/scheduleFastEndAlert\(currentUser\.id, selectedProtocol, settings\.fastingAlerts\)/);
   });
 
   it('doEndFast cancels and removes the persisted notification id (user-scoped)', () => {
     const doEndFast = extractFunctionBody(SRC, 'doEndFast');
-    expect(doEndFast).toMatch(/fastingNotifIdKey\(currentUser\.id\)/);
-    expect(doEndFast).toMatch(/AsyncStorage\.getItem\(key\)/);
-    expect(doEndFast).toMatch(/Notifications\.cancelScheduledNotificationAsync/);
-    expect(doEndFast).toMatch(/AsyncStorage\.removeItem\(key\)/);
+    expect(doEndFast).toMatch(/cancelFastEndAlert\(currentUser\.id\)/);
     expect(doEndFast).toMatch(/setSubmitting\(true\)/);
+    expect(ALERT_SRC).toMatch(/AsyncStorage\.getItem\(key\)/);
+    expect(ALERT_SRC).toMatch(/Notifications\.cancelScheduledNotificationAsync\(notifId\)/);
+    expect(ALERT_SRC).toMatch(/AsyncStorage\.removeItem\(key\)/);
   });
 });
 
