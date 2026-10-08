@@ -251,6 +251,21 @@ it('shows the saved server values and puts a switch back with a plain line when 
   expect(mockUpdateSetting).not.toHaveBeenCalled();
 });
 
+it('keeps truthful summary-email copy and controls digest_email rather than the legacy mirror', async () => {
+  (notificationsApi.getPreferences as jest.Mock).mockResolvedValueOnce({ data: {
+    digest_email: false, weekly_summary_enabled: true,
+  } });
+  const view = await render(<SettingsScreen navigation={navigation} />);
+  expect(view.getByText('Progress summaries sent to your email.')).toBeTruthy();
+  await waitFor(() => expect(view.getByLabelText('Summary emails').props.value).toBe(false));
+  await fireEvent(view.getByLabelText('Summary emails'), 'valueChange', true);
+  expect(notificationsApi.updatePreferences).toHaveBeenLastCalledWith({
+    digest_email: true, weekly_summary_enabled: true,
+  });
+  expect(mockUpdateSetting).toHaveBeenLastCalledWith('weeklySummary', true);
+  expect(view.getByLabelText('Summary emails').props.value).toBe(true);
+});
+
 it('switching Fasting alerts off cancels the alert already set for this account\'s current fast', async () => {
   const notifications = jest.requireMock('expo-notifications') as { cancelScheduledNotificationAsync: jest.Mock };
   // The Fasting screen saves the scheduled alert id per account (FastingScreen.tsx fastingNotifIdKey).

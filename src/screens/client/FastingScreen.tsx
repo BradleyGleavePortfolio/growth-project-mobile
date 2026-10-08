@@ -22,7 +22,6 @@ import { scheduleFastEndAlert, cancelFastEndAlert } from '../../utils/fastingAle
 import { bucketDateLocal } from '../../utils/date';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography, type SemanticTokens } from '../../theme/tokens';
-import { errorMessage } from '../../types/common';
 
 type Protocol = { label: string; hours: number };
 
@@ -202,7 +201,7 @@ export default function FastingScreen() {
     } catch (err) {
       // Destructive write: surface so the user knows the fast didn't start.
       console.error('FastingScreen: handleStart failed', err);
-      Alert.alert("Couldn't start fast", errorMessage(err, 'Please try again.'));
+      Alert.alert("Couldn't start fast", 'The fast did not start. Check the connection and try again.');
       setSubmitting(false);
       return;
     }
@@ -227,7 +226,7 @@ export default function FastingScreen() {
       // still call loadAll() so the UI reflects whatever the backend actually
       // recorded.
       console.error('FastingScreen: doEndFast failed', err);
-      Alert.alert("Couldn't end fast", errorMessage(err, 'Please try again.'));
+      Alert.alert("Couldn't end fast", 'The fast did not end. Check the connection and try again.');
     }
     try {
       await loadAll();

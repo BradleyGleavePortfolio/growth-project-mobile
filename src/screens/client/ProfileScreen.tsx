@@ -183,11 +183,11 @@ export default function ProfileScreen() {
           style={styles.actionBtn}
           onPress={() => navigation.navigate('Widgets')}
           accessibilityRole="button"
-          accessibilityLabel="Widgets"
-          accessibilityHint="Customize your dashboard widgets"
+          accessibilityLabel="Shortcuts"
+          accessibilityHint="Opens quick actions"
         >
           <Ionicons name="apps-outline" size={24} color={colors.primary} />
-          <Text style={styles.actionText}>Widgets</Text>
+          <Text style={styles.actionText}>Shortcuts</Text>
         </HapticPressable>
         <HapticPressable
           intent="light"
