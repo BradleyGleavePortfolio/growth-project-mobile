@@ -71,6 +71,7 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   MoreIndex: () => ({ root: 'MoreTab', screen: 'MoreIndex' }),
   Membership: () => ({ root: 'MoreTab', screen: 'Membership' }),
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
+  UpdateCard: () => ({ root: 'MoreTab', screen: 'UpdateCard', initial: false }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
   Log: () => ({ root: 'Log' }),
   // S-SCHED destination for the existing actionScreen/actionParams format.

@@ -217,10 +217,17 @@ export async function submitManualLogOffline(args: ManualLogArgs) {
   return foodPayload.name;
 }
 
-export async function submitManualLogOnline(args: ManualLogArgs) {
+// Same write as submitManualLogOnline, plus the new entry's id so a caller
+// can offer an in-place Undo (meal plan "Log this meal").
+export async function submitManualLogOnlineWithId(args: ManualLogArgs) {
   const { foodPayload, logPayload } = buildManualPayload(args);
   const createRes = await foodApi.create(foodPayload);
   const foodItemId = createRes.data.id;
-  await logApi.logFood({ ...logPayload, food_item_id: foodItemId });
-  return foodPayload.name;
+  const logRes = await logApi.logFood({ ...logPayload, food_item_id: foodItemId });
+  const id: unknown = logRes?.data?.id;
+  return { name: foodPayload.name, entryId: typeof id === 'string' ? id : null };
+}
+
+export async function submitManualLogOnline(args: ManualLogArgs) {
+  return (await submitManualLogOnlineWithId(args)).name;
 }
