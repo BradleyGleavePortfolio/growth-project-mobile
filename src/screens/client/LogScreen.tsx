@@ -16,7 +16,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { Spacing } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
-import { foodApi, logApi } from '../../services/api';
+import { foodApi, logApi, type WaterEntry } from '../../services/api';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
 import { usePendingFoodLogCount } from '../../hooks/useFoodLogQueueSync';
 import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
@@ -67,12 +67,14 @@ export default function LogScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
+    waterEntries,
     hasLoadedDay,
     isLoading,
     loadError,
     setSelectedDate,
     loadDayData,
     logWater,
+    removeWaterEntry,
     removeFoodLogLocally,
   } = useClientStore();
 
@@ -89,6 +91,7 @@ export default function LogScreen() {
   const [recentTab, setRecentTab] = useState<'recent' | 'frequent'>('recent');
   const [manualMode, setManualMode] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [removingWaterId, setRemovingWaterId] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
   const [didYouMean, setDidYouMean] = useState<SearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -504,6 +507,27 @@ export default function LogScreen() {
     }
   };
 
+  const handleRemoveWater = (entry: WaterEntry) => {
+    if (!currentUser || removingWaterId) return;
+    Alert.alert('Remove water entry?', "This entry will be removed from this day's water total.", [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          setRemovingWaterId(entry.id);
+          try {
+            await removeWaterEntry(entry.id);
+          } catch {
+            Alert.alert("Couldn't remove water", 'The water entry could not be removed. Check the connection and try again.');
+          } finally {
+            setRemovingWaterId(null);
+          }
+        },
+      },
+    ]);
+  };
+
   const getMealLogs = (mealType: MealType) =>
     foodLogs.filter((f) => f.mealType === mealType);
 
@@ -591,7 +615,13 @@ export default function LogScreen() {
             ))}
             {hasLoadedDay ? (
               <View style={styles.waterSection}>
-                <WaterTracker currentOz={waterOz} onAdd={handleAddWater} />
+                <WaterTracker
+                  currentOz={waterOz}
+                  onAdd={handleAddWater}
+                  entries={waterEntries}
+                  onRemove={handleRemoveWater}
+                  removingId={removingWaterId}
+                />
               </View>
             ) : null}
           </>
