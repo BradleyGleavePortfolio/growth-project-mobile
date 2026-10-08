@@ -227,8 +227,10 @@ it('keeps password inputs, close, validation, save and confirmed reset/sign-out 
   expect(profileApi.update).toHaveBeenLastCalledWith({ onboardingCompleted: false });
   expect(signOut).toHaveBeenCalled();
   expect(alert).toHaveBeenCalledWith('Redo profile setup',
-    'Answer the setup questions again. Your targets update from the new answers; your logs and coach plans are kept.',
+    'Answer the setup questions again. Your logs and coach plans are kept.',
     expect.any(Array));
+  // B1 (LN-OPUS-B-130): targets a coach set do not change, so the confirm promises nothing about targets.
+  expect(alert).not.toHaveBeenCalledWith('Redo profile setup', expect.stringMatching(/target/i), expect.any(Array));
   alert.mockRestore();
 });
 

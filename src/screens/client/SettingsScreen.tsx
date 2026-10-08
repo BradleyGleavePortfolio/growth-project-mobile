@@ -159,7 +159,8 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
   };
 
   const handleResetOnboarding = () => {
-    Alert.alert('Redo profile setup', 'Answer the setup questions again. Your targets update from the new answers; your logs and coach plans are kept.', [
+    // B1 (LN-OPUS-B-130): no promise about targets. Targets a coach set stay as they are (GET /me/macros/current).
+    Alert.alert('Redo profile setup', 'Answer the setup questions again. Your logs and coach plans are kept.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Redo setup',
