@@ -22,6 +22,13 @@ export interface EntitlementContextValue {
   checking: boolean;
   /** Raw status — needed by ProtectedScreen to distinguish first-fetch spinner from fail-closed. */
   status: EntitlementStatus;
+  /**
+   * TRAIN-GATE-128: true once the server has said "active" for this user in
+   * this app session, until it says "inactive" (or a 402 arrives, or the user
+   * changes). Lets ProtectedScreen keep a live workout mounted while a
+   * foreground re-check runs or fails on weak signal.
+   */
+  confirmedActive: boolean;
   refreshEntitlement: () => Promise<boolean>;
   openPlans: () => void;
   paywallVisible: boolean;
@@ -35,6 +42,7 @@ const EntitlementContext = createContext<EntitlementContextValue>({
   entitlementActive: null,
   checking: false,
   status: 'unknown',
+  confirmedActive: false,
   refreshEntitlement: async () => false,
   openPlans: () => {},
   paywallVisible: false,
@@ -62,6 +70,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
   const user = useCurrentUser();
   const noCoach = useCoachlessClient();
   const [status, setStatus] = useState<EntitlementStatus>('unknown');
+  const [confirmedActive, setConfirmedActive] = useState(false);
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
@@ -94,6 +103,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     }
     const active = result.data.active === true;
     setStatus(active ? 'active' : 'inactive');
+    setConfirmedActive(active);
     if (active) {
       setPaywallVisible(false);
       setPaywallMessage(null);
@@ -118,6 +128,8 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
 
   // Bootstrap on login
   useEffect(() => {
+    // A new identity never inherits the previous user's confirmation.
+    setConfirmedActive(false);
     if (isStudent) {
       void refreshEntitlement();
     } else {
@@ -143,6 +155,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     const unsub = entitlementEvents.onRequired((payload: EntitlementRequiredPayload) => {
       if (!isStudent) return; // coaches/owners never get paywalled
       setStatus('inactive');
+      setConfirmedActive(false);
       setPaywallMessage(payload.message);
       setPaywallVisible(true);
       // Invalidate paid query caches
@@ -167,6 +180,7 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
         entitlementActive,
         checking: status === 'checking' || status === 'loading',
         status,
+        confirmedActive,
         refreshEntitlement,
         openPlans,
         paywallVisible,

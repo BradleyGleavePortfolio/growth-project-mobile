@@ -41,6 +41,7 @@ function mockEntitlement(ctx: Partial<Ctx>) {
     entitlementActive: null,
     checking: false,
     status: 'unknown',
+    confirmedActive: false,
     refreshEntitlement: async () => false,
     openPlans: jest.fn(),
     paywallVisible: false,

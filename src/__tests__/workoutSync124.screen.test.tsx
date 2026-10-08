@@ -167,10 +167,12 @@ describe('DES-W-127 live screen route/action parity', () => {
     }] });
     const view = await render(<ActiveWorkoutScreen />);
     await waitFor(() => expect(view.getByText('Previous')).toBeTruthy());
-    expect(view.getByLabelText('Discard workout')).toBeTruthy();
+    expect(view.getByLabelText('Leave workout')).toBeTruthy();
     expect(view.getByLabelText('Finish workout')).toBeTruthy();
-    await fireEvent.press(view.getByLabelText('Discard workout'));
-    expect(alertSpy).toHaveBeenCalledWith('Discard this workout?', expect.any(String), expect.any(Array));
+    // TRAIN-GATE-128: nothing logged yet, so leaving asks nothing and deletes no logged set.
+    await fireEvent.press(view.getByLabelText('Leave workout'));
+    await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
+    expect(alertSpy).not.toHaveBeenCalledWith('Discard this workout?', expect.any(String), expect.any(Array));
     mockCatalog.mockResolvedValue([{ id: 'curl', name: 'Dumbbell Curl', muscle: 'biceps', equipment: 'dumbbell' }]);
     await fireEvent.press(view.getByText('Add Exercise'));
     const search = await view.findByPlaceholderText('Search exercises...');

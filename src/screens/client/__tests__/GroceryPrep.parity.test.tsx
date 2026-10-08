@@ -23,7 +23,7 @@ jest.mock('expo-haptics', () => ({
   NotificationFeedbackType: { Success: 'success' },
 }));
 jest.mock('../../../services/api', () => ({
-  listsApi: { getList: jest.fn(), addItem: jest.fn(), updateItem: jest.fn(), deleteItem: jest.fn(), clearChecked: jest.fn() },
+  listsApi: { getList: jest.fn(), addItem: jest.fn(), bulkAdd: jest.fn(), updateItem: jest.fn(), deleteItem: jest.fn(), clearChecked: jest.fn() },
   prepGuideApi: { getWeeklyGuide: jest.fn() },
 }));
 const items = [
@@ -35,6 +35,11 @@ const guide = {
   aggregated_ingredients: [{ name: 'Carrots', quantity: 2, unit: 'kg' }],
   prep_day_suggestions: ['Sunday'],
 };
+const planGuide = { ...guide, source: 'plan' };
+// A server that filters by week (NUTR-BE sends week_filter_applied: false for both sources today).
+const weekGuide = { ...planGuide, week_filter_applied: true };
+type GuideResponse = Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>;
+const respond = (data: object) => jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data } as GuideResponse);
 function mount(Screen: React.ComponentType) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
   return render(<QueryClientProvider client={client}><Screen /></QueryClientProvider>);
@@ -49,6 +54,7 @@ beforeEach(() => {
   jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   jest.mocked(listsApi.getList).mockResolvedValue({ data: items } as Awaited<ReturnType<typeof listsApi.getList>>);
   jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data: guide } as Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>);
+  jest.mocked(listsApi.bulkAdd).mockResolvedValue({ data: { added: 1 } } as Awaited<ReturnType<typeof listsApi.bulkAdd>>);
   for (const method of [listsApi.addItem, listsApi.updateItem, listsApi.deleteItem, listsApi.clearChecked]) jest.mocked(method).mockResolvedValue({ data: {} } as Awaited<ReturnType<typeof method>>);
 });
 describe.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]] as const)('%s action parity', (type, Screen) => {
@@ -92,6 +98,7 @@ describe.each([['grocery', GroceryListScreen], ['shopping', ShoppingListScreen]]
   });
 });
 it('preserves prep back, both week arrows, refresh, add/cancel and success grocery navigation', async () => {
+  respond(weekGuide);
   const view = await mount(PrepGuideScreen);
   await view.findByText('Soup');
   expect(view.getByText('Sunday')).toBeTruthy();
@@ -104,9 +111,9 @@ it('preserves prep back, both week arrows, refresh, add/cancel and success groce
   await act(async () => view.getByTestId('list-scroll').props.refreshControl.props.onRefresh());
   await fireEvent.press(await view.findByText('Add all'));
   await confirm('Cancel');
-  expect(listsApi.addItem).not.toHaveBeenCalled();
+  expect(listsApi.bulkAdd).not.toHaveBeenCalled();
   await confirm('Add');
-  await waitFor(() => expect(listsApi.addItem).toHaveBeenCalledWith('grocery', { name: 'Carrots', quantity: 2, unit: 'kg' }));
+  await waitFor(() => expect(listsApi.bulkAdd).toHaveBeenCalledWith('grocery', [{ name: 'Carrots', quantity: 2, unit: 'kg' }]));
   await waitFor(() => expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Added to Grocery List'));
   await confirm('View List');
   expect(mockNavigation.navigate).toHaveBeenCalledWith('GroceryList');
@@ -120,8 +127,9 @@ it('uses neutral empty/loading copy and disables Add all when there are no ingre
   await view.unmount();
   jest.mocked(prepGuideApi.getWeeklyGuide).mockResolvedValue({ data: { ...guide, recipes: [] } } as Awaited<ReturnType<typeof prepGuideApi.getWeeklyGuide>>);
   const empty = await mount(PrepGuideScreen);
-  await empty.findByText('No recipes to prep');
-  expect(empty.queryByText(/Ask your coach/)).toBeNull();
+  await empty.findByText('No recipes yet');
+  expect(empty.getByText('Recipes from a meal plan or available to this account appear here.')).toBeTruthy();
+  expect(empty.queryByText(/Ask your coach|selected week/)).toBeNull();
 });
 it('describes fetching the prep guide without claiming it is being built', async () => {
   jest.mocked(prepGuideApi.getWeeklyGuide).mockReturnValue(new Promise(() => {}));
@@ -132,4 +140,96 @@ it.each([GroceryListScreen, ShoppingListScreen, PrepGuideScreen])('uses semantic
   mockTokens = darkTokens;
   const view = await mount(Screen);
   expect(StyleSheet.flatten(view.getByTestId('grocery-prep-screen').props.style).backgroundColor).toBe(darkTokens.bgPrimary);
+});
+
+describe('prep guide says where its recipes come from (NUTR-AUD-128 B1)', () => {
+  it('library source: says none come from a meal plan, with no week or prep-day claims', async () => {
+    respond({ ...guide, source: 'library', week_filter_applied: false });
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    expect(view.getByText('1 recipe available to this account.')).toBeTruthy();
+    expect(view.getByText('None of these come from a meal plan.')).toBeTruthy();
+    expect(view.getByText('Recipes (1)')).toBeTruthy();
+    expect(view.queryByText(/for the week|Recipes to prep|from your meal plan/)).toBeNull();
+    expect(view.queryByText('Sunday')).toBeNull();
+    expect(view.queryByLabelText('Previous week')).toBeNull();
+    expect(view.queryByLabelText('Next week')).toBeNull();
+    await fireEvent.press(view.getByText('Add all'));
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('Add 1 ingredient from these recipes to your grocery list?');
+  });
+  it('unknown source (a backend that may return plan recipes without saying so): neutral, never denies a meal plan', async () => {
+    respond(guide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    expect(view.getByText('1 recipe available to this account.')).toBeTruthy();
+    expect(view.getByText('Recipes (1)')).toBeTruthy();
+    expect(view.queryByText(/None of these|from your meal plan|Recipes to prep|for the week/)).toBeNull();
+    expect(view.queryByText('Sunday')).toBeNull();
+    expect(view.queryByLabelText('Previous week')).toBeNull();
+  });
+  it('plan source: names the meal plan and keeps suggested days', async () => {
+    respond(planGuide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    expect(view.getByText('1 recipe from your meal plan.')).toBeTruthy();
+    expect(view.getByText('Recipes to prep (1)')).toBeTruthy();
+    expect(view.getByText('Sunday')).toBeTruthy();
+    expect(view.queryByText(/None of these/)).toBeNull();
+  });
+});
+describe('the week selector shows only where the server filters by week (Sol U1)', () => {
+  it.each([[undefined], [false]])('plan source with week_filter_applied %s: no week arrows (they would change nothing)', async (applied) => {
+    respond({ ...planGuide, week_filter_applied: applied });
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('1 recipe from your meal plan.');
+    expect(view.queryByLabelText('Previous week')).toBeNull();
+    expect(view.queryByLabelText('Next week')).toBeNull();
+    expect(view.queryByText('This week')).toBeNull();
+  });
+  it('week_filter_applied true: shows the week selector', async () => {
+    respond(weekGuide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    expect(view.getByLabelText('Previous week')).toBeTruthy();
+    expect(view.getByLabelText('Next week')).toBeTruthy();
+    expect(view.getByText('This week')).toBeTruthy();
+  });
+  it('keeps the week selector after leaving the current week so the client can come back', async () => {
+    respond(weekGuide);
+    const view = await mount(PrepGuideScreen);
+    await view.findByText('Soup');
+    respond({ ...guide, source: 'library', week_filter_applied: false });
+    await fireEvent.press(view.getByLabelText('Next week'));
+    await view.findByText('None of these come from a meal plan.');
+    await fireEvent.press(view.getByLabelText('Previous week'));
+    const calls = jest.mocked(prepGuideApi.getWeeklyGuide).mock.calls;
+    await waitFor(() => expect(calls.length).toBeGreaterThan(2));
+    expect(calls.at(-1)?.[0]).toBe(calls[0][0]);
+  });
+});
+describe('Add all adds once (NUTR-AUD-128 U3)', () => {
+  it('sends every ingredient in one bulk request and reports the server count', async () => {
+    respond({ ...guide, aggregated_ingredients: [{ name: 'Carrots', quantity: 2, unit: 'kg' }, { name: 'Salt', quantity: 0, unit: '' }] });
+    jest.mocked(listsApi.bulkAdd).mockResolvedValue({ data: { added: 2 } } as Awaited<ReturnType<typeof listsApi.bulkAdd>>);
+    const view = await mount(PrepGuideScreen);
+    await fireEvent.press(await view.findByText('Add all'));
+    await confirm('Add');
+    await waitFor(() => expect(listsApi.bulkAdd).toHaveBeenCalledTimes(1));
+    expect(listsApi.bulkAdd).toHaveBeenCalledWith('grocery', [{ name: 'Carrots', quantity: 2, unit: 'kg' }, { name: 'Salt', quantity: 0, unit: undefined }]);
+    expect(listsApi.addItem).not.toHaveBeenCalled();
+    await waitFor(() => expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('2 ingredients added to your grocery list.'));
+  });
+  it('says nothing was added when the single request fails', async () => {
+    jest.mocked(listsApi.bulkAdd).mockRejectedValue(new Error('offline'));
+    const view = await mount(PrepGuideScreen);
+    await fireEvent.press(await view.findByText('Add all'));
+    await confirm('Add');
+    await waitFor(() => expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[0]).toBe('Could not add the ingredients'));
+    expect(jest.mocked(Alert.alert).mock.calls.at(-1)?.[1]).toBe('Nothing was added to your grocery list. Try again.');
+  });
+});
+it('opens a prep recipe in Recipe detail', async () => {
+  const view = await mount(PrepGuideScreen);
+  await fireEvent.press(await view.findByLabelText('Open Soup'));
+  expect(mockNavigation.navigate).toHaveBeenCalledWith('RecipeDetail', { recipeId: 'soup' });
 });
