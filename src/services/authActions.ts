@@ -369,9 +369,21 @@ export function unsyncedLogsMessage({ workouts, foods }: UnsyncedLogs): string |
   return `${parts.join(' and ')} ${verb} not synced yet and will be removed from this phone.`;
 }
 
-/** The sign-out confirm text, after one try to send what is waiting (sendUnsyncedLogs). */
-export async function prepareSignOutConfirm(userId?: string | null): Promise<string> {
-  return unsyncedLogsMessage(await sendUnsyncedLogs(userId)) ?? 'Are you sure you want to sign out?';
+let signOutConfirmPending = false;
+
+/**
+ * The sign-out confirm text, after one try to send what is waiting
+ * (sendUnsyncedLogs). null while an earlier call is still sending, so a
+ * second tap on Sign out opens no second confirm.
+ */
+export async function prepareSignOutConfirm(userId?: string | null): Promise<string | null> {
+  if (signOutConfirmPending) return null;
+  signOutConfirmPending = true;
+  try {
+    return unsyncedLogsMessage(await sendUnsyncedLogs(userId)) ?? 'Are you sure you want to sign out?';
+  } finally {
+    signOutConfirmPending = false;
+  }
 }
 
 export interface SignOutOptions {

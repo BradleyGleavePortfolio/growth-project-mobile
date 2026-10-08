@@ -131,6 +131,23 @@ it('a send that hangs on a weak signal is cut off, so the confirm still appears'
   await expect(confirm).resolves.toBe('1 food has not synced yet and will be removed from this phone.');
 });
 
+it('a second tap on Sign out while the first send runs opens no second confirm', async () => {
+  await logFoodOffline();
+  foodApi.create.mockReturnValue(new Promise(() => undefined));
+  jest.useFakeTimers();
+
+  const first = prepareSignOutConfirm('user-A');
+  const second = prepareSignOutConfirm('user-A');
+  await jest.advanceTimersByTimeAsync(5000);
+
+  await expect(second).resolves.toBeNull();
+  await expect(first).resolves.toBe('1 food has not synced yet and will be removed from this phone.');
+  // Once the first confirm is ready, the next tap gets its own confirm.
+  const third = prepareSignOutConfirm('user-A');
+  await jest.advanceTimersByTimeAsync(5000);
+  await expect(third).resolves.toBe('1 food has not synced yet and will be removed from this phone.');
+});
+
 it('the sign-out after a refused renewal does not try to send: that session can no longer send', async () => {
   await logFoodOffline();
   engine.countQueuedWorkouts.mockResolvedValue(1);

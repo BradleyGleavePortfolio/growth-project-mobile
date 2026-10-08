@@ -112,6 +112,7 @@ export default function ProfileScreen() {
     // SESSION-KEEP-130: one try to send what is waiting on this phone first;
     // the confirm names anything still unsent (sign-out removes it).
     const message = await prepareSignOutConfirm(currentUser?.id);
+    if (message === null) return; // a confirm is already on its way
     Alert.alert('Sign out', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
