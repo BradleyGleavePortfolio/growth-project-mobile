@@ -25,7 +25,7 @@
  *    is bounded.
  */
 import { featureFlags } from '../config/featureFlags';
-import { digitalPurchasesHidden } from '../config/purchaseSurfaces';
+import { creditPacksHidden } from '../config/purchaseSurfaces';
 
 export interface PushNavigator {
   isReady(): boolean;
@@ -103,11 +103,11 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
     featureFlags.coachBrief
       ? { root: 'SettingsStack', screen: 'CoachBrief', initial: false }
       : null,
-  // Digital AI credit top-ups are not purchasable in store builds: a budget
-  // push lands on Settings, never on the checkout route (whose gated
-  // wrapper would only say "Managed on the web").
+  // Digital AI credit top-ups are not purchasable in store builds without the
+  // US link: a budget push lands on Settings, never on the checkout route
+  // (whose gated wrapper would only say the packs are not sold here).
   CreditPackCheckout: () =>
-    digitalPurchasesHidden()
+    creditPacksHidden()
       ? { root: 'SettingsStack', screen: 'SettingsHome' }
       : { root: 'SettingsStack', screen: 'CreditPackCheckout' },
   CommunityEventDetail: () =>

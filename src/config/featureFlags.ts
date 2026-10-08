@@ -52,6 +52,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
   EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
+  EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK: process.env.EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_MWB_PROGRAMS: process.env.EXPO_PUBLIC_FF_MWB_PROGRAMS,
@@ -509,6 +510,22 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
    */
   iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', !isDev),
+
+  /**
+   * Owner decision 10 fallback (09-30): on an iOS store build offered only on
+   * the US App Store, coach AI credit packs show again and their Stripe
+   * Checkout opens in the system browser (Guideline 3.1.1(a), US storefront
+   * external purchase link), never in the in-app WebView. The app cannot read
+   * the App Store storefront without a new native module, so this build-time
+   * switch stands in for it. OFF unless a build profile sets "true"; eas.json
+   * sets it only for the clinic (App Store) profile. Owner action before that
+   * build ships: offer the app only on the US storefront (App Store Connect)
+   * and mention the US external link in the App Review notes.
+   * Read through `src/config/purchaseSurfaces.ts` (creditPackCheckoutMode).
+   *
+   * env: EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK
+   */
+  iosUsCreditPackLink: readFlag('EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK', false),
 
   // ─── S14 — client AI wearable insight panel ──────────────────────────────
   /**

@@ -37,7 +37,7 @@ import { AIBudgetBanner } from './AIBudgetBanner';
 import { AIBudgetTutorialModal, tutorialSeenKey } from './AIBudgetTutorialModal';
 import { AIBudgetHardPauseModal } from './AIBudgetHardPauseModal';
 import { surfaceFor, type CoachAIBudgetResponse } from '../../../api/types/coachAIBudget';
-import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { creditPacksHidden } from '../../../config/purchaseSurfaces';
 
 export interface AIBudgetMountProps {
   /**
@@ -72,7 +72,8 @@ export function AIBudgetMount({
 
   const surface = useMemo(() => surfaceFor(budget), [budget]);
   // Store builds: AI credit packs are digital services, not human coaching.
-  const purchasesHidden = digitalPurchasesHidden();
+  // A US-link build shows them; its checkout opens in the system browser.
+  const purchasesHidden = creditPacksHidden();
 
   // Tutorial-seen state. Resolved per period_start: a new period (after
   // monthly rollover) resets the "seen" flag automatically because the key

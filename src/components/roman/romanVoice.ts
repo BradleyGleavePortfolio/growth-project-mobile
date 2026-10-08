@@ -180,7 +180,8 @@ export const ROMAN_STORED_NO_REPLY =
  * COACH_AI_BUDGET_EXHAUSTED, B-668-1). Sending again cannot help, so the copy
  * names what still works and offers no retry. A client never sees the
  * coach's credit figures; the coach copy names no purchase step, because
- * digital credit packs are not sold in the store builds.
+ * most store builds sell no credit packs (a US-link build offers them on the
+ * Coach Home meter, not here).
  */
 export function romanPoolEmpty(audience: 'client' | 'coach'): string {
   return audience === 'coach'

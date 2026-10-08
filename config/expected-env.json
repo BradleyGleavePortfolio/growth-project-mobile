@@ -171,6 +171,11 @@
       "default": "off in dev, on in release",
       "reason": "Feature flag read via featureFlags.ts with a literal key."
     },
+    "EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK": {
+      "kind": "flag",
+      "default": "off",
+      "reason": "Feature flag read via featureFlags.ts with a literal key. On only for builds offered solely on the US App Store (credit packs open Stripe Checkout in the system browser)."
+    },
     "EXPO_PUBLIC_FF_MWB_AUTOSAVE": {
       "kind": "flag",
       "default": "off",
