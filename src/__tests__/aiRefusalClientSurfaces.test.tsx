@@ -194,7 +194,7 @@ describe('RomanChatScreen — a refusal after the turn was stored (B-326-3)', ()
 describe('AIGuideScreen — R2b refusals', () => {
   async function send(text: string) {
     const r = await render(<AIGuideScreen />);
-    await fireEvent.changeText(r.getByPlaceholderText('Ask me anything...'), text);
+    await fireEvent.changeText(r.getByPlaceholderText('Ask about training, food or recovery'), text);
     await fireEvent.press(r.getByLabelText('Send message'));
     return r;
   }
@@ -205,7 +205,7 @@ describe('AIGuideScreen — R2b refusals', () => {
     await waitFor(() => expect(r.getByTestId('ai-guide-refusal')).toBeTruthy());
     expect(r.getByTestId('ai-guide-refusal-title').props.children).toBe('AI help is off');
     expect(r.getByTestId('ai-guide-refusal-allow')).toBeTruthy();
-    expect(r.getByPlaceholderText('Ask me anything...').props.value).toBe('What should I eat after training');
+    expect(r.getByPlaceholderText('Ask about training, food or recovery').props.value).toBe('What should I eat after training');
     expect(mockSaveChatMessage).not.toHaveBeenCalled();
     expect(r.queryByText(CLIENT_MESSAGE)).toBeNull();
   });

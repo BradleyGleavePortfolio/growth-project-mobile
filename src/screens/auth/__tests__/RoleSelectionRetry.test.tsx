@@ -11,12 +11,13 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 const mockGetSignupPolicy = jest.fn();
 const mockAttach = jest.fn();
 const mockSelectRole = jest.fn();
+const mockPreview = jest.fn();
 jest.mock('../../../services/api', () => ({
   authApi: {
     getSignupPolicy: (...a: unknown[]) => mockGetSignupPolicy(...a),
     attachInviteCode: (...a: unknown[]) => mockAttach(...a),
     selectRole: (...a: unknown[]) => mockSelectRole(...a),
-    getInvitePreview: jest.fn(() => Promise.resolve({ data: { valid: true } })),
+    getInvitePreview: (...a: unknown[]) => mockPreview(...a),
     validateInviteCode: jest.fn(() => Promise.resolve({ data: { valid: true } })),
   },
 }));
@@ -52,6 +53,26 @@ describe('RoleSelection retry step', () => {
     await AsyncStorage.clear();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
+    mockPreview.mockResolvedValue({ data: { valid: true } });
+  });
+
+  it.each([true, false])('coach preview is factual and serif only after resolution (valid=%s)', async valid => {
+    type Props = React.ComponentProps<typeof RoleSelectionScreen>;
+    mockPreview.mockResolvedValue({ data: { valid, coach_name: 'Coach Avery', reason: 'This code is not currently active.' } });
+    const view = await render(<RoleSelectionScreen navigation={{} as Props['navigation']} route={route()} />);
+    expect(view.queryByText(/You will be paired with/)).toBeNull();
+    expect(view.queryByText('Coach Avery')).toBeNull();
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST1');
+    await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
+    if (valid) {
+      const name = await view.findByText('Coach Avery');
+      expect(require('react-native').StyleSheet.flatten(name.props.style).fontFamily).toBe('CormorantGaramond_400Regular');
+    } else {
+      expect(await view.findByText('This code is not currently active.')).toBeTruthy();
+      expect(view.queryByText('Coach Avery')).toBeNull();
+      expect(view.queryByText(/You will be paired with/)).toBeNull();
+    }
+    expect(mockPreview).toHaveBeenCalledWith('GP-TEST1');
   });
 
   it('shows friendly retry copy with the code prefilled', async () => {
@@ -261,4 +282,3 @@ describe('RoleSelection retry step', () => {
     });
   });
 });
-

@@ -20,7 +20,7 @@ const mockOats: SearchResult = {
   last_quantity: 60, last_unit: 'g',
 };
 const mockStore = {
-  selectedDate: mockToday, foodLogs: [],
+  selectedDate: mockToday, foodLogs: [], hasLoadedDay: true,
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 }, waterOz: 0,
   isLoading: false, loadError: null as string | null,
   setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
@@ -95,13 +95,13 @@ describe('Food Log with foods saved offline', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     await render(<LogScreen />);
     await act(async () => {
-      fireEvent.press(screen.getAllByText('Add Food')[0]);
+      fireEvent.press(screen.getAllByText('Add food')[0]);
     });
     await act(async () => {
       fireEvent.press(screen.getByText('Rolled oats'));
     });
     await act(async () => {
-      fireEvent.press(screen.getByLabelText('Log Food'));
+      fireEvent.press(screen.getByLabelText('Log food'));
     });
     await waitFor(() => expect(enqueue).toHaveBeenCalledTimes(1));
     expect(mockNotify).toHaveBeenCalledTimes(1);
@@ -115,7 +115,7 @@ describe('Food Log with foods saved offline', () => {
     mockBrowse.browseUnavailable = true;
     await render(<LogScreen />);
     await act(async () => {
-      fireEvent.press(screen.getAllByText('Add Food')[0]);
+      fireEvent.press(screen.getAllByText('Add food')[0]);
     });
     expect(screen.getByText('Recent foods could not load')).toBeTruthy();
     expect(screen.queryByText('No foods logged in the last 7 days')).toBeNull();

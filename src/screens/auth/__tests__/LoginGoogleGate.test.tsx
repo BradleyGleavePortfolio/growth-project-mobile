@@ -3,7 +3,7 @@
  * advertises it (hidden while unknown or disabled), same as CreateAccount.
  */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockGetSignupPolicy = jest.fn();
 jest.mock('../../../services/api', () => ({
@@ -34,13 +34,26 @@ async function renderLogin() {
   const nav = { navigate: jest.fn(), replace: jest.fn() };
   const utils = await render(<LoginScreen navigation={nav as never} route={{ key: 'l', name: 'Login' } as never} />);
   await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
-  return utils;
+  return { ...utils, nav };
 }
 
 describe('Login Google gating', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     __resetSignupPolicyCacheForTests();
+  });
+
+  it('retains forgot-password, account creation and email-submit actions', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { providers: ['email'] } });
+    const view = await renderLogin();
+    await fireEvent.press(view.getByLabelText('Forgot password'));
+    expect(view.nav.navigate).toHaveBeenCalledWith('ForgotPassword');
+    await fireEvent.press(view.getByLabelText('Sign up'));
+    expect(view.nav.navigate).toHaveBeenCalledWith('CreateAccount');
+    await fireEvent.press(view.getByLabelText('Sign in'));
+    expect(view.getByText('Please enter email and password')).toBeTruthy();
+    expect(view.getByLabelText('Email')).toHaveStyle({ fontFamily: 'Inter_400Regular', borderWidth: undefined });
+    expect(view.getByText('Sign in.')).toBeTruthy();
   });
 
   it('live providers email+apple: no Google', async () => {

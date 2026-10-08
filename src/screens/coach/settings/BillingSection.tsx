@@ -6,12 +6,12 @@ import type { SettingsStyles } from './styles';
 
 export function BillingSection({
   onOpenTeamProfile,
-  onOpenBilling,
   colors,
   styles,
 }: {
   onOpenTeamProfile: () => void;
-  onOpenBilling: () => void;
+  /** Unused: the Subscription row is hidden, coaching needs no coach plan (owner 10-06). */
+  onOpenBilling?: () => void;
   colors: ThemeColors;
   styles: SettingsStyles;
 }) {
@@ -34,21 +34,9 @@ export function BillingSection({
         </TouchableOpacity>
         {/* C-332-12 (Opus): Money opens from the Payments section only. */}
       </View>
-
-      {/* Subscription & access */}
-      <Text style={styles.sectionHeader}>Subscription</Text>
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenBilling}
-          accessibilityRole="button"
-          accessibilityLabel="Open billing and subscription"
-        >
-          <Ionicons name="card-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Billing & access</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      </View>
+      {/* CF-COACH-BILLING-129: no Subscription / "Billing & access" row. Coach
+          plans were removed (owner 10-06), so the row would point every coach
+          at a plan that does not exist. */}
     </>
   );
 }

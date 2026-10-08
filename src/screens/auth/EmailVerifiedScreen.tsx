@@ -14,16 +14,18 @@
  *     signs in with the password already typed;
  *   - otherwise: Sign in opens Login.
  * An expired or already-used link (Supabase `error_code=otp_expired`) gets
- * its own copy plus a support route. The linking config strips the session
+ * its own copy, Send a new link (FW-ONB-128 B1) and a support route. The linking config strips the session
  * tokens from the URL, so this screen never sees or stores them.
  */
 import React, { useMemo } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
+import ResendVerificationLink from './ResendVerificationLink';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'EmailVerified'>;
@@ -44,17 +46,17 @@ export default function EmailVerifiedScreen({ navigation, route }: Props) {
 
   const title = linkProblem ? 'This link has expired or was already used' : 'Email confirmed';
   const body = linkProblem
-    ? 'If the email address is already confirmed, sign in to continue. If sign-in still asks for confirmation, contact support for a new link.'
+    ? 'If the email address is already confirmed, sign in to continue. If not, enter it below for a new link.'
     : backToSignup
       ? 'Continue to the sign-up screen and tap I verified my email to finish.'
       : 'Sign in with the email address and password used at sign-up to continue.';
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.page} contentContainerStyle={styles.container}>
       <View style={styles.content} accessible accessibilityRole="summary">
         <Ionicons
-          name={linkProblem ? 'alert-circle-outline' : 'checkmark-circle'}
-          size={64}
+          name={linkProblem ? 'alert-circle-outline' : 'checkmark-circle-outline'}
+          size={32}
           color={colors.primary}
         />
         <Text style={styles.title} accessibilityRole="header">
@@ -85,6 +87,8 @@ export default function EmailVerifiedScreen({ navigation, route }: Props) {
         </TouchableOpacity>
       )}
 
+      {linkProblem ? <ResendVerificationLink testID="link-problem-resend" /> : null}
+
       {linkProblem ? (
         <TouchableOpacity
           style={styles.secondaryButton}
@@ -95,17 +99,19 @@ export default function EmailVerifiedScreen({ navigation, route }: Props) {
           <Text style={styles.secondaryButtonText}>Contact support</Text>
         </TouchableOpacity>
       ) : null}
-    </View>
+    </ScrollView>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    page: { flex: 1, backgroundColor: colors.background },
     container: {
-      flex: 1,
+      flexGrow: 1,
       backgroundColor: colors.background,
       paddingHorizontal: 24,
-      paddingTop: 120,
+      justifyContent: 'center',
+      paddingVertical: 64,
     },
     content: {
       alignItems: 'center',
@@ -132,23 +138,26 @@ const makeStyles = (colors: ThemeColors) =>
     primaryButton: {
       backgroundColor: colors.primary,
       paddingVertical: 16,
-      borderRadius: 2,
+      borderRadius: 4,
+      minHeight: 52,
       alignItems: 'center',
     },
     primaryButtonText: {
-      fontFamily: 'Inter_600SemiBold',
+      ...typography.bodyMd,
       color: colors.textOnPrimary,
       fontSize: 14,
       fontWeight: '600',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
     },
     secondaryButton: {
-      marginTop: 20,
+      marginTop: 16,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.divider,
+      minHeight: 44,
       alignItems: 'center',
       paddingVertical: 12,
     },
     secondaryButtonText: {
+      ...typography.bodyMd,
       color: colors.primary,
       fontSize: 16,
       fontWeight: '600',
