@@ -61,14 +61,12 @@ import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
 import SubCoachDetailScreen from '../screens/coach/SubCoachDetailScreen';
 import ClientReassignModal from '../screens/coach/ClientReassignModal';
-// Sprint B-2 — coach surfaces. Macros review (PR #130), workout
-// builder + meal templates + bulk invite (this PR).
+// Sprint B-2 — macros review, workout builder and bulk invite. agent 132
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 // S-REACH: coach read of a client's consultation answers (backend #607).
 import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
 import ClientPaymentsScreen from '../screens/coach/ClientPaymentsScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
-import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
 // Email Pipeline v1 — bulk-invite + invites list (per-recipient delivery view).
 // These complement the legacy CoachBulkInviteScreen / InviteCodesScreen;
@@ -201,7 +199,6 @@ export type ClientsStackParamList = {
   ClientPayments:       { clientId: string; clientName?: string };
   /** AIB-FINISH-127 job 6: clientId/clientName open a client's copy with Ask AI using that client's context. */
   CoachWorkoutBuilder:  { planId?: string; openAi?: boolean; clientId?: string; clientName?: string } | undefined;
-  CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
   /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */
   BulkInvite:           undefined;
@@ -411,10 +408,6 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachWorkoutBuilder"
         component={CoachWorkoutBuilderScreen}
-      />
-      <ClientsStack.Screen
-        name="CoachMealTemplates"
-        component={CoachMealTemplatesScreen}
       />
       <ClientsStack.Screen
         name="CoachBulkInvite"

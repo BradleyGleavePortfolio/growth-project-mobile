@@ -10,6 +10,22 @@ describe('coach Settings truthfulness', () => {
     expect(settingsSource).toContain('Workout Builder');
   });
 
+  it('removes only the orphan meal-template route, retaining adjacent coach routes', () => {
+    const navigator = fs.readFileSync(path.join(__dirname, '../../../navigation/CoachNavigator.tsx'), 'utf8');
+    expect(navigator.includes('CoachMealTemplates')).toBe(false);
+    for (const route of ['CoachMacrosReview', 'ClientConsultation', 'CoachWorkoutBuilder', 'CoachBulkInvite', 'InviteCodes']) {
+      expect(navigator.includes(`name="${route}"`)).toBe(true);
+    }
+  });
+
+  it('keeps the meal-template API and the client meal-plan hooks', () => {
+    const hooks = fs.readFileSync(path.join(__dirname, '../../../hooks/useMealTemplates.ts'), 'utf8');
+    const api = fs.readFileSync(path.join(__dirname, '../../../api/mealTemplatesApi.ts'), 'utf8');
+    expect(api).toContain('export const mealTemplatesApi');
+    expect(hooks).toContain('export function useMealTemplates()');
+    expect(hooks).toContain('export function useMealPlanToday(');
+  });
+
   it('caches and confirms a bio only after the API accepts it', () => {
     const saveBody = settingsSource.match(/const handleSaveBio = async \(\) => \{([\s\S]*?)\n {2}\};/)?.[1];
     expect(saveBody).toBeDefined();
