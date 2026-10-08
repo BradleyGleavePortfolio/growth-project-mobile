@@ -139,6 +139,7 @@ export default function WorkoutAssignmentDetailScreen() {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (tabNav as any).navigate('WorkoutTab', {
         screen: 'ActiveWorkout',
+        initial: false,
         params,
       });
       return;

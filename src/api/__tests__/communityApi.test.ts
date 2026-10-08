@@ -332,6 +332,46 @@ describe('communityApi.reactToPost / unreactToPost', () => {
       communityApi.reactToPost(POST, COMMUNITY_REACTION_EMOJI[0]),
     ).rejects.toMatchObject({ kind: 'server' });
   });
+
+  it('answers with the post reaction state the server returns', async () => {
+    const reactions = [
+      { emoji: COMMUNITY_REACTION_EMOJI[0], count: 2, reacted_by_me: true },
+    ];
+    api.post.mockResolvedValueOnce({
+      data: { target_type: 'post', target_id: POST, reactions },
+    });
+    await expect(
+      communityApi.reactToPost(POST, COMMUNITY_REACTION_EMOJI[0]),
+    ).resolves.toMatchObject({ target_id: POST, reactions });
+    api.delete.mockResolvedValueOnce({
+      data: { target_type: 'post', target_id: POST, reactions: [] },
+    });
+    await expect(
+      communityApi.unreactToPost(POST, COMMUNITY_REACTION_EMOJI[0]),
+    ).resolves.toMatchObject({ reactions: [] });
+  });
+
+  it('answers null, not a failure, when the reaction body drifts (the write already succeeded)', async () => {
+    api.post.mockResolvedValueOnce({ data: { ok: true } });
+    await expect(
+      communityApi.reactToPost(POST, COMMUNITY_REACTION_EMOJI[0]),
+    ).resolves.toBeNull();
+  });
+});
+
+describe('communityApi.deletePost', () => {
+  it('DELETEs the post path', async () => {
+    api.delete.mockResolvedValueOnce({ data: { post: {} } });
+    await expect(communityApi.deletePost(POST)).resolves.toBeUndefined();
+    expect(api.delete).toHaveBeenCalledWith(`/community/posts/${POST}`);
+  });
+
+  it('maps 403 on delete → "forbidden"', async () => {
+    api.delete.mockRejectedValueOnce(axiosErr(403));
+    await expect(communityApi.deletePost(POST)).rejects.toMatchObject({
+      kind: 'forbidden',
+    });
+  });
 });
 
 describe('communityApi DMs', () => {

@@ -103,6 +103,7 @@ jest.mock('../../../hooks/useCommunity', () => ({
   useAddComment: () => ({ mutateAsync: mockMutate, isPending: false }),
   useSendDm: () => ({ mutate: mockMutate, isPending: false }),
   useReactToPost: () => ({ mutate: mockMutate, isPending: false }),
+  useDeletePost: () => ({ mutateAsync: mockMutate, isPending: false }),
   isOptimisticId: (id: string) => id.startsWith('optimistic:'),
 }));
 
@@ -113,6 +114,7 @@ jest.mock('@tanstack/react-query', () => {
   return { ...actual, useQuery: () => ({ data: { title: 'A post', body: 'Body' } }) };
 });
 
+import { COMMUNITY_REACTION_EMOJI } from '../../../api/communityApi';
 import CommunityTabScreen from '../CommunityTabScreen';
 import CommunityTodayScreen from '../CommunityTodayScreen';
 import CommunitySpaceScreen from '../CommunitySpaceScreen';
@@ -272,7 +274,8 @@ describe('Community quiet reading and action parity', () => {
     expect(StyleSheet.flatten(getByText('Body').props.style)).toMatchObject({ fontSize: 17, fontFamily: 'Inter_400Regular' });
     expect(getByTestId('comment-safety-c-1')).toBeTruthy();
     expect(getByTestId('community-thread-post-safety')).toBeTruthy();
-    await fireEvent.press(getAllByRole('button')[0]);
+    expect(getAllByRole('button')[0].props.accessibilityLabel).toBe('Back');
+    await fireEvent.press(getByTestId(`reaction-${COMMUNITY_REACTION_EMOJI[0]}`));
     expect(mockMutate).toHaveBeenCalledWith(expect.objectContaining({ postId: 'p-1', active: false }));
     await fireEvent.changeText(getByTestId('community-thread-composer-field'), 'Reply text');
     await fireEvent.press(getByTestId('community-thread-composer-send'));

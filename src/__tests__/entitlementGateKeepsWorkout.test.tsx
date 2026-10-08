@@ -89,7 +89,9 @@ async function leaveAndReturn() {
 }
 
 function gateShown(q: (id: string) => unknown) {
-  return Boolean(q('protected-screen-paywall') || q('protected-screen-coach-managed'));
+  return Boolean(
+    q('protected-screen-paywall') || q('protected-screen-coach-managed') || q('protected-screen-check-failed'),
+  );
 }
 
 beforeEach(() => {

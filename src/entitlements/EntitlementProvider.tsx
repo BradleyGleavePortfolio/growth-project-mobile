@@ -93,8 +93,8 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     hasSettledRef.current = true;
     if (!result.ok) {
       // Defense in depth (Option B): transport / config failures must fail
-      // closed at the gate. We expose `unavailable` so ProtectedScreen can
-      // render the paywall and refuse to leak paid surfaces on network errors.
+      // closed at the gate. We expose `unavailable` so ProtectedScreen keeps
+      // paid surfaces closed and offers Try again (FOOD-GATE-RETRY-130).
       if (result.reason === 'error') {
         logger.error('EntitlementProvider', 'refreshEntitlement failed', result.message);
       }
