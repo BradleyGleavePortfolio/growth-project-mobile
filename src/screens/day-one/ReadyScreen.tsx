@@ -1,5 +1,5 @@
 /**
- * Day-1 step 6 — terminal "you're ready" screen.
+ * Day-1 step 5 — terminal "you're ready" screen.
  *
  * Owns the final POST that flips `day_one_completed=true` and the
  * authEvents.emit() that swings RootNavigator from onboarding to the
@@ -147,7 +147,7 @@ export default function ReadyScreen(_props: Props) {
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-ready">
-      <StepHeader step={6} />
+      <StepHeader step={5} />
       <ScrollView contentContainerStyle={styles.inner}>
         <Animated.View style={[styles.center, { opacity }]}>
           <Text style={styles.headline} accessibilityRole="header">

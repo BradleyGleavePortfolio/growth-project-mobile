@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react-native';
 import type { FoodLog } from '../../../types';
 import LogScreen from '../LogScreen';
@@ -17,7 +17,7 @@ const mockLog: FoodLog = {
   },
 };
 const mockStore = {
-  selectedDate: '2026-10-06', foodLogs: [mockLog],
+  selectedDate: '2026-10-06', foodLogs: [mockLog], hasLoadedDay: true,
   dailyTotals: { calories: 162, protein: 6, carbs: 6, fat: 14 }, waterOz: 0,
   setSelectedDate: jest.fn(), loadDayData: jest.fn().mockResolvedValue(undefined), logWater: jest.fn(),
 };
@@ -54,6 +54,16 @@ async function openEdit() {
 }
 
 describe('food edit screen uses the retained portion metadata', () => {
+  it('uses a themed scrim and a hairline edit sheet with radius four', async () => {
+    await openEdit();
+    const theme = require('../../../theme/tokens').lightTokens;
+    expect(StyleSheet.flatten(screen.getByTestId('log-edit-backdrop').props.style).backgroundColor).toBe(theme.overlay);
+    expect(StyleSheet.flatten(screen.getByTestId('log-edit-sheet').props.style)).toMatchObject({
+      backgroundColor: theme.bgPrimary, borderRadius: 4,
+      borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+    });
+  });
+
   it('keeps the saved almonds multiplier when saving an unchanged entry', async () => {
     await openEdit();
     await act(async () => fireEvent.press(screen.getByLabelText('Save edit')));

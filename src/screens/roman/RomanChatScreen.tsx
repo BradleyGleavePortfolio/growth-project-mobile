@@ -21,7 +21,9 @@
  * to and in capable hands. Primary path (Hick's Law §4.4): a single composer +
  * send — no competing actions on the surface.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { NavigationContext } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   AccessibilityInfo,
   FlatList,
@@ -61,6 +63,8 @@ import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { colors, lightTokens, spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
+import HapticPressable from '../../components/HapticPressable';
+import { useTheme } from '../../theme/ThemeProvider';
 
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
@@ -91,6 +95,8 @@ function LoadingSkeleton(): React.ReactElement {
 export default function RomanChatScreen({
   surface = 'client',
 }: RomanChatScreenProps): React.ReactElement {
+  const navigation = useContext(NavigationContext);
+  const { colors: themeColors } = useTheme();
   const user = useCurrentUser();
   const {
     phase,
@@ -269,6 +275,18 @@ export default function RomanChatScreen({
 
   const header = (
     <View style={styles.header}>
+      {navigation ? (
+        <HapticPressable
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          style={styles.backButton}
+          testID="roman-chat-back"
+          disableAnimation
+        >
+          <Ionicons name="arrow-back" size={24} color={themeColors.textPrimary} />
+        </HapticPressable>
+      ) : null}
       <RomanAvatar crop="neutral" size={36} testID="roman-header-avatar" />
       <Text style={styles.headerTitle} accessibilityRole="header">
         Roman
@@ -440,6 +458,12 @@ const styles = StyleSheet.create({
   headerTitle: {
     ...typography.h1,
     color: colors.ink,
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContent: {
     paddingVertical: spacing.md,

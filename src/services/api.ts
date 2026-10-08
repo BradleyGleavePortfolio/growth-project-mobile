@@ -1043,6 +1043,9 @@ export const listsApi = {
   getList: (type: 'grocery' | 'shopping') => api.get(`/lists/${type}`),
   addItem: (type: 'grocery' | 'shopping', data: { name: string; quantity?: number; unit?: string; source_recipe_id?: string }) =>
     api.post(`/lists/${type}`, data),
+  // One transactional request (POST /lists/:type/bulk): all items are added or none are.
+  bulkAdd: (type: 'grocery' | 'shopping', items: Array<{ name: string; quantity?: number; unit?: string; source_recipe_id?: string }>) =>
+    api.post<{ added: number }>(`/lists/${type}/bulk`, { items }),
   updateItem: (id: string, data: { is_checked?: boolean; quantity?: number; name?: string }) =>
     api.patch(`/lists/items/${id}`, data),
   deleteItem: (id: string) => api.delete(`/lists/items/${id}`),
@@ -1144,8 +1147,44 @@ export interface CoachBillingFull {
   invoices: CoachInvoice[];
 }
 
+// GET /coach/billing/status sends { status, plan_tier, current_period_end,
+// cancel_at_period_end, trial_end } (backend mobile-coach-billing.controller.ts):
+// 'unprovisioned' when the coach has no subscription row, else the raw Stripe
+// subscription status. Each maps to a screen state; a missing or unknown value
+// reads as 'none' (coaching needs no coach plan). plan_tier is a Stripe price
+// id, not a plan name, so it is not shown.
+const COACH_BILLING_STATES: Record<string, CoachBillingStatus['state']> = {
+  active: 'active',
+  trialing: 'trialing',
+  past_due: 'past_due',
+  unpaid: 'past_due',
+  paused: 'paused',
+  canceled: 'canceled',
+  incomplete: 'none',
+  incomplete_expired: 'none',
+  unprovisioned: 'none',
+};
+
+export function toCoachBillingStatus(raw: unknown): CoachBillingStatus {
+  const body = (raw !== null && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const text = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+  const code = text(body.status);
+  return {
+    state:
+      code !== null && Object.prototype.hasOwnProperty.call(COACH_BILLING_STATES, code)
+        ? COACH_BILLING_STATES[code]
+        : 'none',
+    currentPeriodEnd: text(body.current_period_end),
+    trialEndsAt: text(body.trial_end),
+    cancelAtPeriodEnd: body.cancel_at_period_end === true,
+  };
+}
+
 export const coachBillingApi = {
-  getStatus: () => api.get<CoachBillingStatus>('/coach/billing/status'),
+  getStatus: () =>
+    api
+      .get<unknown>('/coach/billing/status')
+      .then((res) => ({ ...res, data: toCoachBillingStatus(res.data) })),
   // Full billing payload incl. last 24 invoices. The mobile billing screen
   // uses this so a coach can pull up invoice PDFs without leaving the app.
   getFull: () => api.get<CoachBillingFull>('/v1/coach/me/billing'),

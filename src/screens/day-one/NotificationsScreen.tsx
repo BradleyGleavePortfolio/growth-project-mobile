@@ -41,8 +41,8 @@ export default function NotificationsScreen({ navigation }: Props) {
   const [denied, setDenied] = useState(false);
 
   const advance = () => {
-    writeResumeState({ step: 'CheckInTime' });
-    navigation.navigate('CheckInTime');
+    writeResumeState({ step: 'Ready' });
+    navigation.navigate('Ready');
   };
 
   const recordOutcome = async (state: 'granted' | 'denied' | 'skipped') => {

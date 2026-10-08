@@ -20,7 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { useFirstSignInCoachSharing } from '../../lib/coachSharingFirstSignIn';
 
@@ -31,13 +32,13 @@ type Props = {
 type Goal = 'lose_weight' | 'build_muscle' | 'maintain';
 
 const GOALS: { key: Goal; label: string; sub: string }[] = [
-  { key: 'lose_weight',  label: 'Lose Weight',  sub: 'A gradual shift.' },
-  { key: 'build_muscle', label: 'Build Muscle', sub: 'Slow, deliberate strength.' },
+  { key: 'lose_weight',  label: 'Lose weight',  sub: 'A gradual shift.' },
+  { key: 'build_muscle', label: 'Build muscle', sub: 'Slow, deliberate strength.' },
   { key: 'maintain',     label: 'Maintain',     sub: 'Hold the line.' },
 ];
 
 export default function LeanQ1GoalScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<Goal | null>(null);
   // B-SHARE-GUEST-127: an account linked outside the app (share-link buyer)
@@ -65,7 +66,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     // can change their mind without re-running signup.
     Alert.alert(
       'Skip personalisation?',
-      "Without your goal, body metrics, or any allergies, meal and workout suggestions will use generic defaults until you finish your profile from Settings.",
+      'Add your goal, body metrics and dietary preferences later from Profile > Edit profile.',
       [
         { text: 'Back', style: 'cancel' },
         {
@@ -99,12 +100,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
       <View style={styles.inner}>
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.stepIndicator}>
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-            <View style={styles.dot} />
-          </View>
+          <Text style={styles.stepIndicator}>Step 1 of 6</Text>
           <Text style={styles.headline}>Where are you headed?</Text>
           <Text style={styles.subtext}>One direction at a time.</Text>
         </View>
@@ -136,7 +132,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
 
         {/* Skip */}
         <TouchableOpacity style={styles.skipBtn} onPress={handleSkip} activeOpacity={0.6}>
-          <Text style={styles.skipText}>Skip — I'll set this later</Text>
+          <Text style={styles.skipText}>Skip for now</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -147,7 +143,7 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.bgPrimary,
   },
   inner: {
     flex: 1,
@@ -163,8 +159,10 @@ const makeStyles = (colors: ThemeColors) =>
     textAlign: 'center',
   },
   stepIndicator: {
-    flexDirection: 'row',
-    gap: 8,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.textMuted,
     marginBottom: 24,
   },
   dot: {
@@ -174,7 +172,7 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.border,
   },
   dotActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.accent,
     width: 24,
   },
   headline: {
@@ -189,7 +187,7 @@ const makeStyles = (colors: ThemeColors) =>
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 22,
   },
   options: {
@@ -199,7 +197,7 @@ const makeStyles = (colors: ThemeColors) =>
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bgSurface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 4, // radius.lg
@@ -207,9 +205,9 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 22,
   },
   optionSelected: {
-    borderColor: colors.primary,
+    borderColor: colors.accent,
     borderWidth: 1.5,
-    backgroundColor: 'rgba(44, 74, 54, 0.04)',
+    backgroundColor: colors.bgPrimary,
   },
   optionText: {
     flex: 1,
@@ -223,12 +221,12 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
   },
   optionLabelSelected: {
-    color: colors.primary,
+    color: colors.accentText,
   },
   optionSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
     lineHeight: 19,
   },
   skipBtn: {

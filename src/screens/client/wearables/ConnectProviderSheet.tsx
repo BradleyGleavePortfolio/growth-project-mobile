@@ -113,6 +113,8 @@ export interface ConnectProviderSheetProps {
    * here, but exposed for the parent to close the sheet / show a toast.
    */
   onConnected?: () => void;
+  /** The client has no coach: the disclosure names no coach (FW-BODY U10). */
+  coachless?: boolean;
 }
 
 /**
@@ -124,6 +126,7 @@ export default function ConnectProviderSheet({
   visible,
   onClose,
   onConnected,
+  coachless = false,
 }: ConnectProviderSheetProps) {
   const startOauth = useStartOauth();
   const invalidate = useInvalidateWearableConnections();
@@ -607,10 +610,10 @@ export default function ConnectProviderSheet({
                 <View
                   style={styles.note}
                   accessibilityRole="text"
-                  accessibilityLabel={onDeviceDisclosure(config.displayName, config.provider)}
+                  accessibilityLabel={onDeviceDisclosure(config.displayName, config.provider, coachless)}
                 >
                   <Text style={styles.noteText}>
-                    {onDeviceDisclosure(config.displayName, config.provider)}
+                    {onDeviceDisclosure(config.displayName, config.provider, coachless)}
                   </Text>
                 </View>
               )}
@@ -684,18 +687,26 @@ function messageNameFor(provider: WearableProvider): string {
  * required data collection for the feature, not the optional AI processing
  * choice (consent box 2), which this sheet does not change. B-364-1: for
  * Samsung Health, Health Connect asks, and every app's Health Connect data
- * is read, not only Samsung Health's.
+ * is read, not only Samsung Health's. FW-BODY U10: a client with no coach is
+ * told what the data is for without a coach, and that a coach they join can
+ * see it (the coach read checks the coach link only).
  */
-export function onDeviceDisclosure(displayName: string, provider?: WearableProvider): string {
+export function onDeviceDisclosure(
+  displayName: string,
+  provider?: WearableProvider,
+  coachless = false,
+): string {
   const data =
     provider === 'SAMSUNG_HEALTH'
       ? 'Health Connect data, from Samsung Health and every other app that shares with Health Connect,'
       : `${displayName} data,`;
+  const purpose = coachless
+    ? 'so your activity, heart rate and sleep show there. If you join a coach, your coach can see this data too.'
+    : 'so your coach can personalize your training, recovery, and check-ins.';
   return (
     `When you continue, ${provider === 'SAMSUNG_HEALTH' ? 'Health Connect' : displayName} asks ` +
     `for permission on this phone. The Growth Project then brings in your last 30 days of ${data} ` +
-    `and new data each time you open Health, so your coach can personalize your training, ` +
-    `recovery, and check-ins. Nothing is read or shared until you allow it.`
+    `and new data each time you open Health, ${purpose} Nothing is read or shared until you allow it.`
   );
 }
 

@@ -28,7 +28,8 @@ import { authEvents } from '../../utils/authEvents';
 import { prefsStorage } from '../../storage/mmkv';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens as ThemeColors } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ const DRAFT_KEY_BASE = 'onboarding.lean_q6_draft';
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LeanQ6Screen({ navigation }: Props) {
-  const { colors } = useTheme();
+  const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const draftKey = useMemo(
@@ -178,14 +179,7 @@ export default function LeanQ6Screen({ navigation }: Props) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.stepIndicator}>
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotComplete]} />
-            <View style={[styles.dot, styles.dotActive]} />
-          </View>
+          <Text style={styles.stepIndicator}>Step 6 of 6</Text>
           <Text style={styles.headline}>Any dietary preferences?</Text>
           <Text style={styles.subtext}>Select all that apply.</Text>
         </View>
@@ -225,7 +219,7 @@ export default function LeanQ6Screen({ navigation }: Props) {
           accessibilityLabel="Continue"
           testID="continue-btn"
         >
-          <Text style={styles.primaryBtnText}>CONTINUE</Text>
+          <Text style={styles.primaryBtnText}>Continue</Text>
         </TouchableOpacity>
 
         {/* Bottom row */}
@@ -239,7 +233,7 @@ export default function LeanQ6Screen({ navigation }: Props) {
             accessibilityLabel="Go back"
             testID="back-btn"
           >
-            <Text style={styles.backText}>← Back</Text>
+            <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -251,7 +245,7 @@ export default function LeanQ6Screen({ navigation }: Props) {
             accessibilityLabel="Skip, add later"
             testID="skip-btn"
           >
-            <Text style={styles.skipText}>Skip — I'll add later</Text>
+            <Text style={styles.skipText}>Skip for now</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -263,7 +257,7 @@ export default function LeanQ6Screen({ navigation }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: colors.bgPrimary },
     inner: {
       flexGrow: 1,
       paddingHorizontal: 24,
@@ -271,10 +265,10 @@ const makeStyles = (colors: ThemeColors) =>
       paddingBottom: 16,
     },
     header: { marginBottom: 28 },
-    stepIndicator: { flexDirection: 'row', gap: 8, marginBottom: 24 },
+    stepIndicator: { fontFamily: 'Inter_500Medium', fontSize: 11, letterSpacing: 1.2, color: colors.textMuted, marginBottom: 24 },
     dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
-    dotActive: { backgroundColor: colors.primary, width: 24 },
-    dotComplete: { backgroundColor: colors.primary },
+    dotActive: { backgroundColor: colors.accent, width: 24 },
+    dotComplete: { backgroundColor: colors.accent },
     headline: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 32,
@@ -287,7 +281,7 @@ const makeStyles = (colors: ThemeColors) =>
     subtext: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       lineHeight: 22,
     },
     // Chips
@@ -303,24 +297,24 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 999,
       borderWidth: 1,
       borderColor: colors.border,
-      backgroundColor: colors.surface,
+      backgroundColor: colors.bgSurface,
     },
     chipSelected: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryPale,
+      borderColor: colors.accent,
+      backgroundColor: colors.bgPrimary,
     },
     chipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 14,
-      color: colors.textSecondary,
+      color: colors.textMuted,
     },
     chipTextSelected: {
       fontFamily: 'Inter_500Medium',
-      color: colors.primary,
+      color: colors.accentText,
     },
     // Buttons
     primaryBtn: {
-      backgroundColor: colors.primary,
+      backgroundColor: colors.accent,
       paddingVertical: 16,
       alignItems: 'center',
       marginTop: 16,
@@ -329,7 +323,7 @@ const makeStyles = (colors: ThemeColors) =>
     primaryBtnText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 14,
-      color: colors.textOnPrimary,
+      color: colors.textOnAccent,
       letterSpacing: 1.2,
       fontWeight: '600',
     },
@@ -344,7 +338,7 @@ const makeStyles = (colors: ThemeColors) =>
     backText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       fontWeight: '500',
       letterSpacing: 0.3,
     },
