@@ -64,7 +64,7 @@ More → **Meal plan** opens `Plan`; its neutral “View meal plans” descripti
 
 | File | What it does |
 | --- | --- |
-| `ProfileScreen.tsx` | Identity and personal details. Reads `usersApi.getFoundingNumber` for the founding-member badge. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe which workout/meal scopes are shared with that coach. Confirmed `owner_access` preserves owner-coach visibility; absent coach or unconfirmed access shows no sharing sentence. Never claims exclusive access to logs. Settings, report, widgets, learning, personal-info editing and sign-out remain reachable. |
+| `ProfileScreen.tsx` / `profileDisplay.ts` | Identity, saved personal details and daily targets. On every focus (including returning from Edit), reads `GET /profile`; server values take precedence over the cached profile and use the same field resolver as completion. Server and legacy names render with readable labels and explicit lbs/cm units, including height and allergies. Canonical gym membership does not imply equipment or frequency; canonical goals do not imply a loss pace. `GET /me/macros/current` is authoritative for daily targets (as on Food), then saved `macro_target_*` / legacy values stand in while the read is pending or failed. A confirmed null clears old targets; zero gram targets stay visible. TDEE is omitted because it is not a saved server target. Loading/failed/confirmed-empty target states are distinct. Reads `usersApi.getFoundingNumber` for founding-member context. On focus, reads `/v1/clients/me/coach` and `/consent/me?coach_id=` to describe confirmed coach sharing; `owner_access` preserves owner-coach visibility. Absent coach or unconfirmed access shows no sharing sentence; never claims exclusive access. Settings, report, widgets, learning, all personal rows, Edit and confirmed sign-out remain reachable. Follows [Quiet-Luxury Doctrine section 8](../../../docs/QUIET_LUXURY_DOCTRINE.md#8-every-pr-updates-the-corresponding-readme). |
 | `SettingsScreen.tsx` | Seven visible groups on one screen, no added taps: Account, Training and food, Notifications, Privacy and data, Roman, Support, About. Every existing row/control stays; see [settings/README.md](settings/README.md). |
 | `PreferencesScreen.tsx` | Personalisation choices persisted via `preferencesApi`. Semantic-theme page, unfilled hairline groups, Cormorant title, Inter labels and 44 pt options. Home-module switches, cadence, tone samples, units, week-start choices and back remain reachable. Each section explicitly states its stored-only limitation; Notification settings opens the existing `NotificationSettings` route for real delivery controls. |
 | `ReportScreen.tsx` | Shareable weekly summary — image-friendly card output. |
@@ -134,6 +134,7 @@ AIGuideScreen ──► aiApi.chat { message, history? }
 
 ## App-store / deep-link dependencies
 
+- Profile uses the existing authenticated self-read endpoints `GET /profile` and `GET /me/macros/current`; no new endpoint, release flag, environment variable or write is required.
 - None of these screens are reachable from a deep link. Universal links land on `CreateAccount` only.
 - Push notifications surface on the Notifications screen in-app and as native banners. The runtime permission is requested once at boot; see `utils/notifications.ts`.
 - `RoutineBuilderScreen` and `RecipeDetailScreen` are referenced by share intents in a future iteration but are not registered as deep-link targets today.
@@ -153,6 +154,7 @@ These screens do not read env directly; they go through `services/api.ts` (which
 
 | Symptom | Cause | Recovery |
 | --- | --- | --- |
+| Profile cannot refresh saved answers or targets | A self-read failed | Keep cached/saved values; if no targets are available, show a target-specific error and reopen Profile to retry. Only a successful null target response says "No daily targets yet." |
 | Log screen freezes after tapping a search result while offline | The food doesn't yet exist server-side and the queue write needs a network round-trip to resolve | Queue stores both the food payload and the log; flush creates the food first, then logs it. The optimistic UI row appears immediately. |
 | Messages screen shows "No coach yet" | User signed up codeless and never attached an invite | They can paste a code on the screen; calls `authApi.attachInviteCode`. |
 | AI Guide says "I'm offline at the moment" | Backend `/ai/chat` returned non-200 or network error | Retry; conversation history is preserved locally. |
@@ -160,6 +162,8 @@ These screens do not read env directly; they go through `services/api.ts` (which
 | Home shows zeros after fresh install | `useClientStore.loadDayData` not yet called for today's date | Auto-runs on focus; pull-to-refresh forces a reload. |
 
 ## Tests
+
+Profile saved-server values, return-from-Edit refresh, cached fallback, truthful target states and every route/row/sign-out handler are covered by `__tests__/ProfileScreen.savedValues.test.tsx`; `__tests__/profileDisplay.test.ts` covers column aliases, readable labels, target precedence and zero gram targets. Sharing-copy parity remains in `src/__tests__/quietLuxuryDoctrine.test.ts` and `src/__tests__/truthfulCopy.guard.test.ts`.
 
 Unit tests live for the helpers these screens lean on (`hooks/__tests__`, `utils/__tests__`, `services/__tests__`). The screens themselves are exercised by the smoke matrix in `docs/RELEASE_SMOKE.md`. Run:
 
