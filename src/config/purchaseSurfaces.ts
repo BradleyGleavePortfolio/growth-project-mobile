@@ -89,6 +89,8 @@ export function nonP2PPurchasesHidden(
  * Keep this separate from nonP2PPurchasesHidden: that existing iOS posture
  * also governs feature paywalls and attendance links. Client purchases of
  * real-time 1:1 human coaching, including recurring packages, are unchanged.
+ * Coach AI credit packs have their own per-platform link switch on top of
+ * this (creditPackCheckoutMode below).
  */
 export function digitalPurchasesHidden(
   platform: string = Platform.OS,
