@@ -18,7 +18,7 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | --- | --- |
 | `HapticPressable.tsx` | Pressable that fires a haptic on press. The right primitive for any tap that commits state. |
 | `FadeInView.tsx` | Mount-time fade-in wrapper. Used for hero copy and milestone tiles. |
-| `EmptyState.tsx` | Bone-on-bone empty state with serif headline + caption. |
+| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, radius 4, 44 pt, Inter 16, HapticPressable). |
 | `ErrorBoundary.tsx` | Top-level error boundary. Reports to Sentry, renders a soft error card. |
 | `SkeletonLoader.tsx` | Shimmering placeholder for list / card load. |
 | `OfflineBanner.tsx` | Hairline banner shown when `useNetworkStatus` reports offline. Mounted by `RootNavigator`. |
@@ -67,6 +67,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 | `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Managed on the web" state (no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
 | `coach/ai-budget/*` | AI usage meter, 95% banner, 80% tutorial and hard-pause modal. When `nonP2PPurchasesHidden()` is true, the meter is a non-interactive readout with neutral accessibility copy, the banner has no CTA, the tutorial shows three usage-only cards ending in "Done", and the hard pause says when AI resumes. None of them mentions packs, buying or top-ups. |
+| `coach/LoadFailedNotice.tsx` | Calm failed-read block for coach screens (QA-COACH-HOME-131): one `textPrimary` sentence naming what did not load and a forest `accentText` "Try again" text button on `HapticPressable` (44 pt target, testID `<testID>-retry`). No red, icon or fill. Used by the Command Center tabs and Team. |
 | `coach/ExtensionPairingPanel.tsx` | Import pairing lifecycle. Unavailable state says import is not enabled on the account without promising later enablement. Copy code, cancel, review-import navigation and retry/new-code handlers are retained. |
 | `invite/PasteInviteCodeButton.tsx` | "Paste invite code" text button used by CreateAccount and RoleSelection. It reads the clipboard only on tap and parses with `lib/inviteCodeInput.extractInviteCode`, which accepts a bare code, `/join/<code>`, `tgp://join/<code>` or `?code=`, and never truncates a token. It fills the field and never auto-attaches. |
 | `tutorial/` | Clinic launch Roman-led tutorial UI (featureFlags.clientTutorial, default OFF): `TutorialHost` (hydration, signals, live macros, overlay mount), `TutorialOverlay` (Roman coach-mark card, progress, spotlight, skip/resume, defer, done line, completion), `TutorialTarget` (spotlight measurement wrapper), the C08 `MacroExplanationCard` (Home) and `PlanExplanationCard` (Train), `TutorialHomeSlot` (re-offer line, macro card, Message your coach row), `TutorialSettingsRow` (Settings > Tutorial). Logic and flags: `src/tutorial/README.md`. |

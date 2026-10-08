@@ -9,7 +9,8 @@
 // surface (system notifications) and lives at a different route. No conflict.
 //
 // State machine:
-//   idle → loading → (data | error)
+//   loading → (data | error); loading is the shared skeleton and a failed
+//   read is the calm LoadFailedNotice with Try again (QA-COACH-HOME-131).
 //   Pull-to-refresh transitions loading → data/error.
 //
 // Data source: commandCenterApi.getInbox()
@@ -22,18 +23,18 @@ import {
   FlatList,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
-  TouchableOpacity,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../../theme/tokens';
+import { colors, spacing, typography } from '../../../theme/tokens';
 import {
   commandCenterApi,
   InboxThread,
 } from '../../../services/commandCenterApi';
 import MessagePreviewRow from '../../../components/command-center/MessagePreviewRow';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 
-type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
+type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
 interface Props {
   /** Navigate to the full message thread with a client. */
@@ -41,10 +42,9 @@ interface Props {
 }
 
 export default function InboxScreen({ onOpenThread }: Props) {
-  const [state, setState] = useState<LoadState>('idle');
+  const [state, setState] = useState<LoadState>('loading');
   const [threads, setThreads] = useState<InboxThread[]>([]);
   const [totalUnread, setTotalUnread] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
@@ -54,7 +54,6 @@ export default function InboxScreen({ onOpenThread }: Props) {
       setTotalUnread(res.data.total_unread);
       setState('data');
     } catch {
-      setErrorMessage('Unable to load inbox. Check your connection and try again.');
       setState('error');
     }
   }, []);
@@ -63,8 +62,8 @@ export default function InboxScreen({ onOpenThread }: Props) {
 
   if (state === 'loading') {
     return (
-      <View style={styles.centred} testID="command-center-inbox">
-        <ActivityIndicator color={colors.forest} />
+      <View style={styles.container} testID="command-center-inbox">
+        <SkeletonScreen testID="command-center-inbox-loading" />
       </View>
     );
   }
@@ -72,15 +71,11 @@ export default function InboxScreen({ onOpenThread }: Props) {
   if (state === 'error' && threads.length === 0) {
     return (
       <View style={styles.centred} testID="command-center-inbox">
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          onPress={() => load(false)}
-          style={styles.retryButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading inbox"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
+        <LoadFailedNotice
+          message="The inbox could not load."
+          onRetry={() => load(false)}
+          testID="command-center-inbox-error"
+        />
       </View>
     );
   }
@@ -184,23 +179,6 @@ const styles = StyleSheet.create({
   emptyBody: {
     ...typography.body,
     color: colors.stone,
-    textAlign: 'center',
-  },
-  errorText: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-  },
-  retryText: {
-    ...typography.caption,
-    color: colors.bone,
     textAlign: 'center',
   },
 });

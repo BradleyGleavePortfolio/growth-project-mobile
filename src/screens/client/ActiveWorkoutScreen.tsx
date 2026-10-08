@@ -36,7 +36,14 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { errorMessage } from '../../types/common';
 import { randomUuid } from '../../utils/idempotency';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
-import { assignmentIdempotencyKey, localCalendarDate, resumedSessionRouteParams } from '../../utils/workout/workoutLogging';
+import {
+  assignmentIdempotencyKey,
+  isUntouchedSession,
+  localCalendarDate,
+  resumedPausedMs,
+  resumedSessionRouteParams,
+  routineSessionExercises,
+} from '../../utils/workout/workoutLogging';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -67,7 +74,6 @@ import { makeStyles } from './active-workout/styles';
 import type {
   Exercise,
   RouteParams,
-  RoutineExercise,
   SessionExercise,
   SessionSet,
 } from './active-workout/types';
@@ -165,6 +171,9 @@ export default function ActiveWorkoutScreen() {
   // real time catches back up. See the AppState 'active' handler for the
   // re-anchor branch.
   const lastKnownElapsedMsRef = useRef<number>(0);
+  // WORKOUT-RESUME-131: wall-clock time left out of the clock (the gap before
+  // a stale reopen). Saved with the session so a later reopen keeps it out.
+  const pausedMsRef = useRef<number>(0);
   // Track session start time for assignment completion payload.
   const sessionStartTimeRef = useRef<Date>(new Date());
   // Stable idempotency key generated once at session start. Held in a
@@ -227,33 +236,10 @@ export default function ActiveWorkoutScreen() {
   // Default (fresh) session exercises derived from the routine param.
   // Pulled out so the restore effect can fall back to it cleanly when
   // no stored session is found.
-  const defaultSessionExercises = useMemo<SessionExercise[]>(() => {
-    try {
-      const routineExs: RoutineExercise[] = JSON.parse(exercisesJson);
-      return routineExs.map((re) => ({
-        exerciseId: re.exerciseId,
-        exerciseName: re.exerciseName,
-        sets: Array.from({ length: re.sets }, () => ({
-          reps: re.reps,
-          // Coach-assigned workouts carry the coach's target weight; start
-          // each set at it so the client only edits what changed.
-          weight: re.weightLbs && re.weightLbs > 0 ? re.weightLbs : 0,
-          completed: false,
-        })),
-        restSec: re.restSec,
-        workoutPlanExerciseId: re.workoutPlanExerciseId,
-        muscleGroup: re.muscleGroup,
-        // FU-WORKLOG-126: the coach's cue stays visible mid-workout.
-        ...(re.coachNote ? { coachNote: re.coachNote } : {}),
-      }));
-    } catch (err) {
-      // Best-effort parse of the routine JSON on screen mount. An empty
-      // list lets the user add exercises manually instead of crashing
-      // the screen.
-      console.error('ActiveWorkoutScreen: routine exercises parse failed', err);
-      return [];
-    }
-  }, [exercisesJson]);
+  const defaultSessionExercises = useMemo<SessionExercise[]>(
+    () => routineSessionExercises(exercisesJson),
+    [exercisesJson],
+  );
 
   // Recompute elapsed seconds from the wallclock anchor. Called by the
   // interval tick AND on every foreground transition — the anchor is
@@ -261,20 +247,24 @@ export default function ActiveWorkoutScreen() {
   // Also caches the latest elapsed-ms value so the AppState 'active'
   // handler can re-anchor if the wallclock has moved backwards.
   const recomputeElapsed = useCallback(() => {
-    const elapsedMs = Math.max(0, Date.now() - sessionStartMsRef.current);
+    const elapsedMs = Math.max(0, Date.now() - sessionStartMsRef.current - pausedMsRef.current);
     lastKnownElapsedMsRef.current = elapsedMs;
     setTimer(Math.floor(elapsedMs / 1000));
   }, []);
 
   // Adopt a persisted session into local state.
   const adoptPersistedSession = useCallback(
-    (session: PersistedActiveWorkoutSession) => {
+    (session: PersistedActiveWorkoutSession, isStale: boolean) => {
+      const now = Date.now();
       sessionStartMsRef.current = session.startedAtMs;
       sessionStartTimeRef.current = new Date(session.startedAtMs);
+      // WORKOUT-RESUME-131: reopened after the stale window, the clock counts
+      // only up to the session's last change, then carries on from now.
+      pausedMsRef.current = resumedPausedMs(session, isStale, now);
       idempotencyKeyRef.current = session.idempotencyKey;
       setSessionExercises(session.sessionExercises);
       setWorkoutNotes(session.workoutNotes ?? '');
-      const elapsedMs = Math.max(0, Date.now() - session.startedAtMs);
+      const elapsedMs = Math.max(0, now - session.startedAtMs - pausedMsRef.current);
       lastKnownElapsedMsRef.current = elapsedMs;
       setTimer(Math.floor(elapsedMs / 1000));
     },
@@ -283,10 +273,10 @@ export default function ActiveWorkoutScreen() {
 
   // Restore-on-mount. Decides between three states:
   //   1. No stored session → start a fresh one.
-  //   2. Stored session, fresh (< 12h) → prompt the user to resume.
-  //   3. Stored session, stale (>= 12h) → still prompt, but make it
-  //      explicit so they don't accidentally resume a workout from
-  //      yesterday with mismatched timing.
+  //   2. Stored session → reopen it, no prompt (TRAIN-GATE-128). One not
+  //      changed for 12 hours counts its clock only up to that change.
+  //   3. Stored session with nothing entered while a different workout is
+  //      opened → clear it and start the opened one (WORKOUT-RESUME-131).
   useEffect(() => {
     // Wait for the userId to resolve before reading from storage —
     // the persisted key is scoped to the current user (R15). On cold
@@ -315,7 +305,7 @@ export default function ActiveWorkoutScreen() {
         setHydrated(true);
         return;
       }
-      const { session } = result;
+      const { session, isStale } = result;
       // TRAIN-GATE-128 (owner 15:03 10-07): an unfinished workout is never
       // deleted from the return path. Opening the workout screen goes straight
       // back into it, with its own name, coach assignment and sets; there is
@@ -328,9 +318,19 @@ export default function ActiveWorkoutScreen() {
           exercises: exercisesJson,
           assignmentId,
         });
+        // WORKOUT-RESUME-131: a saved session with nothing entered (the phone
+        // closed the app before the first set) holds no work. Opening a
+        // different workout clears it and opens that workout instead.
+        if ((carried || session.exercisesJson !== exercisesJson) && isUntouchedSession(session)) {
+          await clearActiveWorkoutSession(userId);
+          if (cancelled) return;
+          setSessionExercises(defaultSessionExercises);
+          setHydrated(true);
+          return;
+        }
         if (carried) navigation.setParams(carried);
       }
-      adoptPersistedSession(session);
+      adoptPersistedSession(session, isStale);
       setHydrated(true);
     })();
     return () => {
@@ -402,8 +402,8 @@ export default function ActiveWorkoutScreen() {
         // anchor the elapsed math would clamp to 0 and the timer would
         // look frozen. Re-anchor to "now minus last known elapsed" so
         // the displayed value is continuous from the user's POV.
-        if (Date.now() < sessionStartMsRef.current) {
-          sessionStartMsRef.current = Date.now() - lastKnownElapsedMsRef.current;
+        if (Date.now() < sessionStartMsRef.current + pausedMsRef.current) {
+          sessionStartMsRef.current = Date.now() - lastKnownElapsedMsRef.current - pausedMsRef.current;
         }
         recomputeElapsed();
         startTimerInterval();
@@ -426,6 +426,7 @@ export default function ActiveWorkoutScreen() {
     if (!hydrated || finishingRef.current || !userId) return;
     const payload = {
       startedAtMs: sessionStartMsRef.current,
+      pausedMs: pausedMsRef.current,
       routineName,
       exercisesJson,
       assignmentId,
@@ -1034,6 +1035,7 @@ export default function ActiveWorkoutScreen() {
                 if (userId) {
                   saveActiveWorkoutSession(userId, {
                     startedAtMs: sessionStartMsRef.current,
+                    pausedMs: pausedMsRef.current,
                     routineName,
                     exercisesJson,
                     assignmentId,

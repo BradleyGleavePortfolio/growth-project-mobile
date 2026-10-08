@@ -139,6 +139,7 @@ New screen names added to `ClientsStackParamList`:
 | --- | --- | --- |
 | `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
 | `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + the fixed quiet hours (read-only) |
+| `ClientPayments` | `ClientPaymentsScreen` | `{ clientId, clientName? }`. A client's payments with refund, pause, resume and cancel (COACH-PAY-M-130). Registered unflagged; its only entry, Summary > Payments on `ClientDetail`, shows while the server flag `coach_payment_actions` is on. Draws its own Back. |
 
 ### Unread count polling
 

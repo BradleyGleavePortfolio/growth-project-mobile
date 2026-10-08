@@ -28,6 +28,7 @@ jest.mock('../../api/featureFlagsApi', () => ({
     'community_events',
     'messaging_core_v2',
     'coachless_home',
+    'coach_payment_actions',
   ],
 }));
 
@@ -70,6 +71,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       community_events: false,
       messaging_core_v2: false,
       coachless_home: false,
+      coach_payment_actions: false,
     });
   });
 
@@ -86,6 +88,7 @@ describe('useFeatureFlags — fail-safe OFF', () => {
       community_events: false,
       messaging_core_v2: false,
       coachless_home: false,
+      coach_payment_actions: false,
     });
   });
 });
@@ -111,6 +114,7 @@ describe('useFeatureFlags — server resolution', () => {
       community_events: true,
       messaging_core_v2: false,
       coachless_home: false,
+      coach_payment_actions: false,
     });
   });
 
@@ -142,6 +146,15 @@ describe('useFeatureFlags — server resolution', () => {
 
     await waitFor(() => expect(result.current.flags.coachless_home).toBe(true));
     expect(result.current.flags.messaging_core_v2).toBe(false);
+  });
+
+  it('reads coach_payment_actions from the server map (coach payments gate, COACH-PAY-M-130)', async () => {
+    api.getFeatureFlags.mockResolvedValue(resp({ coach_payment_actions: true }));
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useFeatureFlags(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.flags.coach_payment_actions).toBe(true));
+    expect(result.current.flags.coachless_home).toBe(false);
   });
 
   it('surfaces a server-resolved coach flag without re-applying client role gating', async () => {

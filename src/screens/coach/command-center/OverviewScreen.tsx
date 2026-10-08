@@ -5,8 +5,10 @@
 // messages, and open alerts (the Action Queue).
 //
 // State machine:
-//   idle → loading → (data | error)
-//   Pull-to-refresh transitions loading → data/error.
+//   loading → (data | error)
+//   Pull-to-refresh transitions refreshing → data/error.
+// QA-COACH-HOME-131: the header (setup checklist, Money card) renders in every
+// state and mounts once; numbers are ink, and a need is said in words.
 //
 // Data source: commandCenterApi.getOverview()
 // Status: MOCKED until Phase 8 backend ships.
@@ -18,10 +20,9 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
   TouchableOpacity,
 } from 'react-native';
-import { colors, spacing, typography, radius } from '../../../theme/tokens';
+import { colors, spacing, typography } from '../../../theme/tokens';
 import {
   commandCenterApi,
   CommandCenterOverview,
@@ -29,8 +30,16 @@ import {
 import KpiTile from '../../../components/command-center/KpiTile';
 import CoachLtvDashboard from '../../../components/command-center/CoachLtvDashboard';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
+import LoadFailedNotice from '../../../components/coach/LoadFailedNotice';
+import { SkeletonScreen } from '../../../ui/skeletons/Skeleton';
 
-type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
+type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
+
+/** Said under the at-risk number instead of colouring it red. */
+function attentionWords(count: number): string | undefined {
+  if (count <= 0) return undefined;
+  return count === 1 ? 'Needs attention' : 'Need attention';
+}
 
 interface Props {
   onNavigateToAtRisk?: () => void;
@@ -48,9 +57,8 @@ export default function OverviewScreen({
   onNavigateToActionQueue,
   header,
 }: Props) {
-  const [state, setState] = useState<LoadState>('idle');
+  const [state, setState] = useState<LoadState>('loading');
   const [data, setData] = useState<CommandCenterOverview | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string>('');
 
   const load = useCallback(async (isRefresh = false) => {
     setState(isRefresh ? 'refreshing' : 'loading');
@@ -58,8 +66,7 @@ export default function OverviewScreen({
       const res = await commandCenterApi.getOverview();
       setData(res.data);
       setState('data');
-    } catch (err) {
-      setErrorMessage('Unable to load roster data. Check your connection and try again.');
+    } catch {
       setState('error');
     }
   }, []);
@@ -70,27 +77,33 @@ export default function OverviewScreen({
 
   const onRefresh = useCallback(() => load(true), [load]);
 
-  if (state === 'loading') {
+  // QA-COACH-HOME-131 (U1, C7): the header is the only way to Stripe setup
+  // and Money, so it renders while the numbers load or fail. The leading
+  // children match the data return below, so the header mounts once.
+  if (data === null) {
     return (
-      <View style={styles.centred} testID="command-center-overview">
-        <ActivityIndicator color={colors.forest} />
-      </View>
-    );
-  }
-
-  if (state === 'error' && !data) {
-    return (
-      <View style={styles.centred} testID="command-center-overview">
-        <Text style={styles.errorText}>{errorMessage}</Text>
-        <TouchableOpacity
-          onPress={() => load(false)}
-          style={styles.retryButton}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading overview"
-        >
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        testID="command-center-overview"
+        refreshControl={
+          <RefreshControl refreshing={state === 'refreshing'} onRefresh={onRefresh} tintColor={colors.forest} />
+        }
+      >
+        <CommandCenterMockDataBanner />
+        {header}
+        <Text style={styles.heading}>Command Center</Text>
+        <Text style={styles.subheading}>Your roster at a glance</Text>
+        {state === 'error' ? (
+          <LoadFailedNotice
+            message="Roster numbers could not load."
+            onRetry={() => load(false)}
+            testID="command-center-overview-error"
+          />
+        ) : (
+          <SkeletonScreen count={4} testID="command-center-overview-loading" />
+        )}
+      </ScrollView>
     );
   }
 
@@ -131,7 +144,6 @@ export default function OverviewScreen({
           label="Active today"
           value={d?.active_today ?? '—'}
           subtext={d && !noClients ? `of ${d.roster_size}` : undefined}
-          valueColor={colors.forest}
           testID="command-center-kpi-active-today"
           style={styles.tileFlex}
         />
@@ -142,15 +154,6 @@ export default function OverviewScreen({
         <KpiTile
           label="Check-in rate (7 days)"
           value={d && !noClients ? `${Math.round(d.check_in_rate_7day * 100)}%` : '—'}
-          valueColor={
-            !d || noClients
-              ? colors.stone
-              : d.check_in_rate_7day >= 0.7
-              ? colors.forest
-              : d && d.check_in_rate_7day >= 0.5
-              ? colors.mutedGold
-              : colors.error
-          }
           testID="command-center-kpi-checkin-rate"
           style={styles.tileFlex}
         />
@@ -168,7 +171,7 @@ export default function OverviewScreen({
           <KpiTile
             label="Clients at risk"
             value={d?.at_risk_count ?? '—'}
-            valueColor={d && d.at_risk_count > 0 ? colors.error : colors.forest}
+            subtext={attentionWords(d?.at_risk_count ?? 0)}
           />
         </TouchableOpacity>
         <View style={styles.tileSpacer} />
@@ -179,11 +182,7 @@ export default function OverviewScreen({
           accessibilityLabel={`${d?.win_streak_count ?? 0} clients on active streaks. View win streaks.`}
           testID="command-center-kpi-win-streaks"
         >
-          <KpiTile
-            label="Active streaks"
-            value={d?.win_streak_count ?? '—'}
-            valueColor={colors.forest}
-          />
+          <KpiTile label="Active streaks" value={d?.win_streak_count ?? '—'} />
         </TouchableOpacity>
       </View>
 
@@ -196,11 +195,7 @@ export default function OverviewScreen({
           accessibilityLabel={`${d?.unread_messages ?? 0} unread messages. View inbox.`}
           testID="command-center-kpi-unread-messages"
         >
-          <KpiTile
-            label="Unread messages"
-            value={d?.unread_messages ?? '—'}
-            valueColor={d && d.unread_messages > 0 ? colors.forest : colors.stone}
-          />
+          <KpiTile label="Unread messages" value={d?.unread_messages ?? '—'} />
         </TouchableOpacity>
         <View style={styles.tileSpacer} />
         {/* FU-CHECKIN-126 (U-A13-5): the Action Queue lists open alerts, so
@@ -217,7 +212,7 @@ export default function OverviewScreen({
           <KpiTile
             label="Open alerts"
             value={d?.open_alerts ?? '—'}
-            valueColor={d && d.open_alerts > 0 ? colors.error : colors.forest}
+            subtext={d && d.open_alerts > 0 ? 'Waiting in Actions' : undefined}
           />
         </TouchableOpacity>
       </View>
@@ -244,13 +239,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
     paddingBottom: spacing['2xl'],
   },
-  centred: {
-    flex: 1,
-    backgroundColor: colors.bone,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
   heading: {
     ...typography.h1,
     color: colors.ink,
@@ -271,27 +259,10 @@ const styles = StyleSheet.create({
   tileSpacer: {
     width: spacing.md,
   },
-  errorText: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    marginBottom: spacing.xl,
-  },
-  retryButton: {
-    backgroundColor: colors.forest,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: radius.sm,
-  },
   ltvSection: {
     marginTop: spacing.xl,
     paddingTop: spacing.lg,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.camel,
-  },
-  retryText: {
-    ...typography.caption,
-    color: colors.bone,
-    textAlign: 'center',
   },
 });

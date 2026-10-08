@@ -29,6 +29,7 @@ import { coachTeamApi } from '../../api/coachTeamApi';
 import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
+import LoadFailedNotice from '../../components/coach/LoadFailedNotice';
 import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
@@ -198,7 +199,7 @@ export default function TeamManagementScreen() {
       const res = await subCoachApi.listSubCoaches();
       setSubCoaches(res.data ?? []);
     } catch {
-      setError('Could not load team. Please try again.');
+      setError('Your team could not load.');
     } finally {
       setLoading(false);
     }
@@ -252,14 +253,10 @@ export default function TeamManagementScreen() {
         </Pressable>
       </View>
 
+      {/* QA-COACH-HOME-131 (U4): a failed read is said in words, without red,
+          and the empty line below stays hidden because it would be false. */}
       {error != null && (
-        <Pressable
-          onPress={load}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading team"
-        >
-          <Text style={styles.errorText}>{error} Tap to retry.</Text>
-        </Pressable>
+        <LoadFailedNotice message={error} onRetry={() => void load()} testID="team-load-error" />
       )}
 
       <FlatList
@@ -269,11 +266,13 @@ export default function TeamManagementScreen() {
           <SubCoachRow item={item} onPress={handlePress} />
         )}
         ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              No sub-coaches yet. Tap Invite to add your first one.
-            </Text>
-          </View>
+          error == null ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyText}>
+                No sub-coaches yet. Tap Invite to add your first one.
+              </Text>
+            </View>
+          ) : null
         }
         contentContainerStyle={styles.list}
       />
@@ -412,11 +411,6 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: 14,
-    marginBottom: 12,
   },
   emptyText: {
     fontSize: 15,

@@ -14,9 +14,9 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ViewStyle,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { spacingTokens as spacing, typographyTokens as typography, radiusTokens as radius } from '../../theme';
 
@@ -83,16 +83,16 @@ export function EmptyState({
       ) : null}
 
       {ctaLabel && onCta ? (
-        <TouchableOpacity
+        <HapticPressable
+          intent="light"
           style={styles.cta}
           onPress={onCta}
-          activeOpacity={0.8}
           accessibilityLabel={ctaLabel}
           accessibilityRole="button"
           testID="empty-state-cta"
         >
           <Text style={styles.ctaText}>{ctaLabel}</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       ) : null}
     </View>
   );
@@ -119,20 +119,24 @@ const makeStyles = (colors: ThemeColors) =>
     },
     body: {
       ...typography.bodySmall,
-      color: colors.textSecondary,
+      color: colors.textMuted,
       textAlign: 'center',
       paddingHorizontal: spacing['2xl'],
       lineHeight: 22,
     },
+    // One calm CTA for every empty state: forest, radius 4, 44 pt, Inter 16.
     cta: {
       marginTop: spacing.md,
       backgroundColor: colors.primary,
       paddingHorizontal: spacing.xl,
-      paddingVertical: spacing.md,
-      borderRadius: radius.sm,
+      paddingVertical: spacing.sm,
+      minHeight: 44,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: radius.lg,
     },
     ctaText: {
-      ...typography.caption,
+      ...typography.bodyMd,
       color: colors.textOnPrimary,
     },
   });

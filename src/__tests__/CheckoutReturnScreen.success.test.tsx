@@ -9,6 +9,7 @@
 //   • reduce-motion users get the final state (no gating on animation).
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 
 // ── Theme mock (light semantic tokens come straight from real tokens) ───────
@@ -113,5 +114,15 @@ describe('CheckoutReturnScreen — paid success peak moment (P0)', () => {
     });
     const { getByText } = await render(<CheckoutReturnScreen />);
     await waitFor(() => getByText("You're subscribed"));
+  });
+
+  it('titles the paid moment in the brand serif (Cormorant h2), not the system font at 600 (QA-EMPTY-131)', async () => {
+    const { h2 } = jest.requireActual('../theme/tokens').typography;
+    const { getByText } = await render(<CheckoutReturnScreen />);
+    await waitFor(() => getByText('Welcome to Strength Builder'));
+    const title = StyleSheet.flatten(getByText('Welcome to Strength Builder').props.style);
+    expect(title.fontFamily).toBe(h2.fontFamily);
+    expect(title.fontSize).toBe(h2.fontSize);
+    expect(title.fontWeight).toBe('400');
   });
 });

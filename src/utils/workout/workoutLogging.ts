@@ -5,6 +5,7 @@
 import { randomUuid } from '../idempotency';
 import { routineExerciseId } from './exerciseId';
 import { toServerMuscleGroup } from './muscleGroup';
+import type { RoutineExercise, SessionExercise } from '../../screens/client/active-workout/types';
 
 // PATCH /assignments/:id/complete validates `idempotency_key` with
 // @IsUUID('all'). The key used to be `${assignmentId}:${Date.now()}`, which
@@ -249,4 +250,70 @@ export function resumedSessionRouteParams(
     return null;
   }
   return { routineName, exercises: stored.exercisesJson || '[]', assignmentId };
+}
+
+/**
+ * The session a routine opens with: every set at the routine's reps and the
+ * coach's target weight, nothing ticked. ActiveWorkout starts from it, and a
+ * saved session equal to it holds nothing the client entered.
+ */
+export function routineSessionExercises(exercisesJson: string): SessionExercise[] {
+  try {
+    const routineExs: RoutineExercise[] = JSON.parse(exercisesJson);
+    return routineExs.map((re) => ({
+      exerciseId: re.exerciseId,
+      exerciseName: re.exerciseName,
+      sets: Array.from({ length: re.sets }, () => ({
+        reps: re.reps,
+        // Coach-assigned workouts carry the coach's target weight; start
+        // each set at it so the client only edits what changed.
+        weight: re.weightLbs && re.weightLbs > 0 ? re.weightLbs : 0,
+        completed: false,
+      })),
+      restSec: re.restSec,
+      workoutPlanExerciseId: re.workoutPlanExerciseId,
+      muscleGroup: re.muscleGroup,
+      // FU-WORKLOG-126: the coach's cue stays visible mid-workout.
+      ...(re.coachNote ? { coachNote: re.coachNote } : {}),
+    }));
+  } catch (err) {
+    // Best-effort parse of the routine JSON. An empty list lets the user add
+    // exercises manually instead of crashing the screen.
+    console.error('ActiveWorkoutScreen: routine exercises parse failed', err);
+    return [];
+  }
+}
+
+/**
+ * WORKOUT-RESUME-131: a saved live workout still exactly as it opened (no
+ * ticked set, no notes, no edited or added set). The same test as leaving the
+ * screen (TRAIN-GATE-128); anything else is the client's work and is kept.
+ */
+export function isUntouchedSession(session: {
+  exercisesJson: string;
+  sessionExercises: SessionExercise[];
+  workoutNotes?: string;
+}): boolean {
+  return (
+    !(session.workoutNotes ?? '').trim() &&
+    JSON.stringify(session.sessionExercises) === JSON.stringify(routineSessionExercises(session.exercisesJson))
+  );
+}
+
+/**
+ * WORKOUT-RESUME-131: time left out of a reopened workout's clock. A saved
+ * workout reopened after the stale window (12 hours since its last change)
+ * counts only up to that change, and the clock carries on from the reopen.
+ * Time left out at an earlier reopen stays out.
+ */
+export function resumedPausedMs(
+  session: { updatedAtMs: number; pausedMs?: number },
+  isStale: boolean,
+  now: number,
+): number {
+  const earlier =
+    typeof session.pausedMs === 'number' && Number.isFinite(session.pausedMs) && session.pausedMs > 0
+      ? session.pausedMs
+      : 0;
+  return isStale ? earlier + Math.max(0, now - session.updatedAtMs) : earlier;
 }
