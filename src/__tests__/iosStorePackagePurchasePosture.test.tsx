@@ -1,8 +1,9 @@
 /**
  * Store package review P0 "iOS purchase posture" (operator 2026-09-30):
- *   - AI credit top-ups are not purchasable in the iOS app: the checkout
- *     route is wrapped by the non-P2P gate and its hidden state says
- *     "Managed on the web" with no link, URL or steering.
+ *   - AI credit top-ups are not purchasable in the iOS app unless the build
+ *     has the US external link: the checkout route is wrapped by the non-P2P
+ *     gate and its hidden state says packs are not sold in this version of
+ *     the app, with no link, URL or steering (there is no web checkout).
  *   - Client package purchase on iOS is real-world 1:1 coaching sold by the
  *     coach, only on the clearly labelled coaching screen, and nothing in
  *     the purchase flow presents it as unlocking app features or access.
@@ -28,20 +29,21 @@ const read = (rel: string) => fs.readFileSync(path.join(ROOT, rel), 'utf8');
 const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 
 describe('AI credit top-ups on iOS', () => {
-  it('the hidden state says Managed on the web, with no link, URL or call to buy', async () => {
-    expect(NON_P2P_HIDDEN_TITLE).toBe('Managed on the web');
+  it('the hidden state says packs are not sold here, with no web claim, link, URL or call to buy', async () => {
+    expect(NON_P2P_HIDDEN_TITLE).toBe('Not available in this app');
     const r = await render(<NonP2PPurchaseHidden />);
-    expect(r.getByText('Managed on the web')).toBeTruthy();
+    expect(r.getByText('Not available in this app')).toBeTruthy();
+    expect(r.getByText(/AI credit packs are not sold in this version of the app/)).toBeTruthy();
     expect(r.queryByRole('link')).toBeNull();
     expect(r.queryByRole('button')).toBeNull();
     for (const s of [NON_P2P_HIDDEN_TITLE, NON_P2P_HIDDEN_BODY]) {
-      expect(s).not.toMatch(/https?:|www\.|\.com|visit|go to|buy|purchase|top up|price|\$/i);
+      expect(s).not.toMatch(/https?:|www\.|\.com|visit|go to|buy|purchase|top up|price|\$|on the web|website/i);
     }
   });
 
   it('the CreditPackCheckout route is registered only through the non-P2P gate', () => {
     const nav = read('src/navigation/CoachNavigator.tsx');
-    expect(nav).toMatch(/GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate\(CreditPackCheckoutScreen\)/);
+    expect(nav).toMatch(/GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate\(CreditPackCheckoutScreen, creditPacksHidden\)/);
     expect(nav).toMatch(/name="CreditPackCheckout"\s+component=\{GatedCreditPackCheckoutScreen\}/);
     expect(stripComments(nav)).not.toMatch(/component=\{CreditPackCheckoutScreen\}/);
   });

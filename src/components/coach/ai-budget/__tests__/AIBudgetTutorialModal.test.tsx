@@ -6,7 +6,7 @@
  *   - Cards 1–3 render no close affordance.
  *   - "Continue" advances index and finally reveals the pack options.
  *   - `onClose` is NOT called until the coach reaches card 4 and presses
- *     "I'll buy later".
+ *     "Not now".
  *   - `onSelectPack` fires when a pack tier is tapped.
  *   - `tutorialSeenKey(period_start)` is persisted on dismissal.
  */

@@ -8,7 +8,10 @@
  * available on iOS. Everything else that is sold in the app is hidden on iOS
  * while `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is on:
  *   - coach AI credit packs: CreditPackCheckout route, "Buy credits" banner
- *     CTA, meter chip tap, PackOptionsRow in the tutorial / hard-pause modals
+ *     CTA, meter chip tap, PackOptionsRow in the tutorial / hard-pause modals.
+ *     Exception (owner decision 10 fallback): a build with
+ *     EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK on shows them again and opens
+ *     Stripe Checkout in the system browser (creditPackCheckoutMode below)
  *   - coach subscription / seat CTAs: "Start subscription" / "Manage billing"
  *     and invoice links in CoachBillingScreen (there are no seat fees now)
  *   - one-to-many paid products (group, cohort, community). None is sold in
@@ -49,8 +52,9 @@ import { featureFlags } from './featureFlags';
  *     It must land with, or before, the first OTA-enabled release.
  *   - PLANNED (backend follow-up): server-side enforcement of the
  *     X-Client-Purchase-Policy header. The API client sends the header today
- *     (services/api.ts), but no backend handler reads it, so it is advisory
- *     until that follow-up ships.
+ *     (services/api.ts). Once the CREDIT-PAY-130 backend change is deployed,
+ *     the server reads it only to word the AI pool-empty message; no handler
+ *     enforces it, so it is advisory until that follow-up ships.
  */
 export const IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6;
 
@@ -94,16 +98,57 @@ export function digitalPurchasesHidden(
   return nonP2PPurchasesHidden(platform, flag, nativeBuild, dev);
 }
 
-/** Value for the X-Client-Purchase-Policy request header. */
-export function purchasePolicyHeader(): 'p2p-only' | 'all' {
-  return nonP2PPurchasesHidden() ? 'p2p-only' : 'all';
+/**
+ * How this build sells coach AI credit packs (owner decision 10 fallback,
+ * 09-30: "an external link to web checkout on the US storefront
+ * (3.1.1(a))"):
+ *   'in-app'   digital purchases are shown (development builds): the
+ *              existing in-app WebView checkout.
+ *   'external' iOS store build with EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK
+ *              on: packs show, and checkout opens in the system browser.
+ *              The app cannot read the storefront, so the switch stands in
+ *              for it: it is on only for builds offered solely on the US
+ *              App Store (an owner action in App Store Connect).
+ *   'hidden'   everything else, including every Android release build.
+ * Only credit packs use this. Seat upgrades, subscriptions and one-to-many
+ * products keep digitalPurchasesHidden / nonP2PPurchasesHidden.
+ */
+export type CreditPackCheckoutMode = 'hidden' | 'in-app' | 'external';
+
+export function creditPackCheckoutMode(
+  platform: string = Platform.OS,
+  digitalHidden: boolean = digitalPurchasesHidden(),
+  usLink: boolean = featureFlags.iosUsCreditPackLink,
+): CreditPackCheckoutMode {
+  if (!digitalHidden) return 'in-app';
+  return platform === 'ios' && usLink === true ? 'external' : 'hidden';
 }
 
-// Operator 2026-09-30 (store package P0): AI credit top-ups say "Managed on
-// the web", with no link, URL or instruction to buy elsewhere (3.1.1 / 3.1.3).
-export const NON_P2P_HIDDEN_TITLE = 'Managed on the web';
+/** True when no credit-pack entry point may show. */
+export function creditPacksHidden(): boolean {
+  return creditPackCheckoutMode() === 'hidden';
+}
+
+/**
+ * Value for the X-Client-Purchase-Policy request header. 'p2p-and-ai-credits'
+ * means 1:1 coaching plus AI credit packs through the system-browser link;
+ * the backend may then tell a coach to add a credit pack. Android release
+ * builds still send 'all' (this header describes the iOS posture), so the
+ * backend trusts 'all' only from iOS.
+ */
+export function purchasePolicyHeader(): 'p2p-only' | 'p2p-and-ai-credits' | 'all' {
+  if (!nonP2PPurchasesHidden()) return 'all';
+  return creditPackCheckoutMode() === 'external' ? 'p2p-and-ai-credits' : 'p2p-only';
+}
+
+// Operator 2026-09-30 (store package P0): the hidden state has no link, URL or
+// instruction to buy elsewhere (3.1.1 / 3.1.3). Operator 2026-10-07: there is
+// no web checkout, so it no longer says "Managed on the web"; it says plainly
+// that packs are not sold in this build. Only the CreditPackCheckout route
+// shows it, and a US-link build never does (creditPackCheckoutMode 'external').
+export const NON_P2P_HIDDEN_TITLE = 'Not available in this app';
 export const NON_P2P_HIDDEN_BODY =
-  'This is not available in this app. Your account and anything you already have are unchanged.';
+  'AI credit packs are not sold in this version of the app. Your AI credits renew each month, and your account and anything you already have are unchanged.';
 
 /** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
 export function oneToOneCoachingLabel(coachName?: string | null): string {

@@ -10,7 +10,7 @@
  *   2. "Why a budget"        → cost/protection rationale + bar-chart icon
  *   3. "How packs work"      → pack tier explanation + pack icons
  *   4. "Buy credits"         → PackOptionsRow [$10] [$25] [$99] [Custom]
- *                              + "I'll buy later" tertiary action (closes modal)
+ *                              + "Not now" tertiary action (closes modal)
  *
  * Once the coach reaches card 4 (either by pressing Continue 3 times or
  * by purchasing), we persist `aiTutorialSeenAt:<period_start>` in
@@ -52,7 +52,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
-import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { creditPackCheckoutMode, creditPacksHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -75,6 +75,8 @@ export interface AIBudgetTutorialModalProps {
   onSelectPack: (amountCents: number | 'custom') => void;
   /** iOS with non-P2P purchases hidden: usage-only cards, no pack cards. */
   purchasesHidden?: boolean;
+  /** US-link build: checkout opens in the system browser, so say who is paid. */
+  paysInBrowser?: boolean;
   testID?: string;
 }
 
@@ -89,7 +91,7 @@ type Card = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card[] {
+function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean, paysInBrowser: boolean): Card[] {
   const total = formatCents(budget.total_displayed_cents);
   if (purchasesHidden) {
     // Neutral usage information only: no packs, top-ups or "buy later".
@@ -129,7 +131,7 @@ function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card
     },
     {
       title: 'Buy credits',
-      body: 'Pick a pack to keep AI features uninterrupted. Or tap "I\'ll buy later" — this appears once per month, and you can always top up from the Coach Home meter.',
+      body: `Pick a pack to keep AI features running. Or tap "Not now": this guide appears once a month.${paysInBrowser ? ' You pay TGP the pack price through Stripe checkout, which opens in your browser.' : ''}`,
       icon: 'card-outline',
     },
   ];
@@ -140,12 +142,16 @@ export function AIBudgetTutorialModal({
   budget,
   onClose,
   onSelectPack,
-  purchasesHidden = digitalPurchasesHidden(),
+  purchasesHidden = creditPacksHidden(),
+  paysInBrowser = creditPackCheckoutMode() === 'external',
   testID,
 }: AIBudgetTutorialModalProps): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const cards = useMemo(() => getCards(budget, purchasesHidden), [budget, purchasesHidden]);
+  const cards = useMemo(
+    () => getCards(budget, purchasesHidden, paysInBrowser),
+    [budget, purchasesHidden, paysInBrowser],
+  );
   const lastIndex = cards.length - 1;
   const [index, setIndex] = useState(0);
 
@@ -266,11 +272,11 @@ export function AIBudgetTutorialModal({
                     intent="light"
                     onPress={persistAndClose}
                     accessibilityRole="button"
-                    accessibilityLabel="Buy credits later"
+                    accessibilityLabel="Not now, close without buying credits"
                     style={styles.laterBtn}
                     testID="ai-tutorial-later"
                   >
-                    <Text style={styles.laterText}>I&apos;ll buy later</Text>
+                    <Text style={styles.laterText}>Not now</Text>
                   </HapticPressable>
                 </View>
               ) : (

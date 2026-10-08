@@ -14,6 +14,8 @@ jest.mock('../../config/featureFlags', () => ({
 let mockHidden = false;
 jest.mock('../../config/purchaseSurfaces', () => ({
   digitalPurchasesHidden: () => mockHidden,
+  // CREDIT-PAY-130: the credit-pack push follows the credit-pack decision.
+  creditPacksHidden: () => mockHidden,
 }));
 
 import {

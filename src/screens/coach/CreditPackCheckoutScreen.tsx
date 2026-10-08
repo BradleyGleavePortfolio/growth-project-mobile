@@ -21,8 +21,17 @@
  * Round-3 fix: the success state was previously a particle burst that
  * violated QUIET_LUXURY_DOCTRINE.md §3 (no celebrations). It is now a
  * quiet receipt — opacity fade-in + a single icon pulse, two metadata
- * rows ("New balance" + "Receipt sent to your inbox"), auto-dismiss
+ * rows ("New balance" + "Paid to TGP, through Stripe"), auto-dismiss
  * after 1800ms. Same confidence as an Amex statement.
+ *
+ * US-link builds (creditPackCheckoutMode 'external', owner decision 10
+ * fallback): the select phase says the coach pays TGP through Stripe, the
+ * minted session opens in the SYSTEM browser (Linking.openURL, never the
+ * WebView), and the screen waits in the `external` phase. Stripe returns to
+ * tgp://checkout/success or /cancel (sent inline, so it does not depend on
+ * the server's return-URL env); a success link shows the receipt, a cancel
+ * link goes back to the packs, and coming back to the app refetches the
+ * budget either way.
  *
  * Optimistic UI: NONE. Stripe Checkout is the source of truth for payment
  * success; the budget query is invalidated only after the webhook applies
@@ -32,8 +41,10 @@
  * truth is the next budget refetch.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AppState,
+  Linking,
   View,
   Text,
   StyleSheet,
@@ -72,6 +83,7 @@ import {
   parseReturnDeepLink,
 } from '../client/BrandedCheckoutWebViewScreen';
 import { parseDollarsToCents } from './creditPackCheckoutHelpers';
+import { creditPackCheckoutMode } from '../../config/purchaseSurfaces';
 
 // Re-export so consumers (tests, navigator) can verify allow-list parity.
 export { CHECKOUT_ALLOWED_HOSTS };
@@ -81,10 +93,41 @@ export { parseDollarsToCents } from './creditPackCheckoutHelpers';
 
 const DEFAULT_RETURN_SCHEME = 'com.growthproject.app';
 
+/**
+ * System-browser return links. The checkout DTO accepts inline http, https
+ * and tgp URLs (backend credit-pack-checkout.dto.ts) and app.json registers
+ * the tgp scheme, so Stripe sends the coach back here whatever the server's
+ * COACH_AI_PACK_* / STRIPE_CHECKOUT_* defaults are.
+ */
+export const EXTERNAL_RETURN_SCHEME = 'tgp';
+export const EXTERNAL_SUCCESS_URL = 'tgp://checkout/success?session_id={CHECKOUT_SESSION_ID}';
+export const EXTERNAL_CANCEL_URL = 'tgp://checkout/cancel';
+
+const CHECKOUT_START_FAILED = 'Checkout could not start. Try again in a minute. Nothing was charged.';
+
+/** Plain copy for a checkout that did not start (no raw HTTP text). */
+export function checkoutStartErrorMessage(err: unknown): string {
+  if (typeof err !== 'object' || err === null) return CHECKOUT_START_FAILED;
+  const response = 'response' in err ? err.response : undefined;
+  const status =
+    typeof response === 'object' && response !== null && 'status' in response
+      ? response.status
+      : undefined;
+  if (status === 429) {
+    return 'Checkout was started several times in a minute. Wait a minute, then try again. Nothing was charged.';
+  }
+  if ('isAxiosError' in err && err.isAxiosError === true && response === undefined) {
+    return 'TGP could not be reached. Check your connection, then try again. Nothing was charged.';
+  }
+  return CHECKOUT_START_FAILED;
+}
+
 type Phase =
   | { kind: 'select' }
   | { kind: 'minting'; amountCents: number }
   | { kind: 'webview'; url: string; sessionId: string; amountCents: number }
+  /** US-link build: Stripe Checkout is open in the system browser. */
+  | { kind: 'external'; url: string; amountCents: number }
   /**
    * Round-3: success carries `newBalanceCents`, the SNAPSHOT projection of
    * the coach's balance after the just-completed purchase. Computed in
@@ -107,6 +150,7 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
 
   const [phase, setPhase] = useState<Phase>({ kind: 'select' });
   const [customInput, setCustomInput] = useState<string>('');
+  const external = creditPackCheckoutMode() === 'external';
 
   const packOptions = budget?.pack_options_cents ?? [1000, 2500, 9900];
   const bounds = budget?.custom_pack_bounds_cents ?? {
@@ -123,7 +167,12 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
         // contract carries the discriminated `tier` the backend's
         // class-validator @IsIn(...) requires.
         const res = await coachAiBudgetApi.createCheckout(
-          buildCheckoutInput(amountCents),
+          external
+            ? buildCheckoutInput(amountCents, {
+                success_url: EXTERNAL_SUCCESS_URL,
+                cancel_url: EXTERNAL_CANCEL_URL,
+              })
+            : buildCheckoutInput(amountCents),
         );
         const data: CreateCheckoutResponse = res.data;
         if (!data?.checkout_url) {
@@ -135,6 +184,12 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
         if (!isOriginAllowed(data.checkout_url)) {
           throw new Error('Checkout URL origin not allowed');
         }
+        if (external) {
+          // System browser (Safari), never the in-app WebView.
+          await Linking.openURL(data.checkout_url);
+          setPhase({ kind: 'external', url: data.checkout_url, amountCents });
+          return;
+        }
         setPhase({
           kind: 'webview',
           url: data.checkout_url,
@@ -142,11 +197,10 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
           amountCents,
         });
       } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Could not start checkout';
-        setPhase({ kind: 'error', message: msg });
+        setPhase({ kind: 'error', message: checkoutStartErrorMessage(err) });
       }
     },
-    [],
+    [external],
   );
 
   const handleSelect = useCallback(
@@ -208,6 +262,38 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
     setPhase({ kind: 'select' });
   }, []);
 
+  // External phase: Stripe's return link reaches the app through Linking, and
+  // returning to the app refetches the budget (the webhook applies the pack).
+  useEffect(() => {
+    if (phase.kind !== 'external') return undefined;
+    const amountCents = phase.amountCents;
+    const linkSub = Linking.addEventListener('url', ({ url }) => {
+      const link = parseReturnDeepLink(url, EXTERNAL_RETURN_SCHEME);
+      if (!link) return;
+      if (link.outcome === 'success') handleSuccess(amountCents);
+      else handleCancel();
+    });
+    const appSub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        queryClient.invalidateQueries({ queryKey: COACH_AI_BUDGET_QUERY_KEY });
+      }
+    });
+    return () => {
+      linkSub.remove();
+      appSub.remove();
+    };
+  }, [phase, handleSuccess, handleCancel, queryClient]);
+
+  const reopenExternal = useCallback(() => {
+    if (phase.kind !== 'external') return;
+    Linking.openURL(phase.url).catch(() => {
+      setPhase({
+        kind: 'error',
+        message: 'The browser did not open. Try again. Nothing was charged.',
+      });
+    });
+  }, [phase]);
+
   const handleWebViewNavigation = useCallback(
     (nav: WebViewNavigation) => {
       const link = parseReturnDeepLink(nav.url, DEFAULT_RETURN_SCHEME);
@@ -262,6 +348,12 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
             You pay face value. {formatCents(1000)} of credit = {formatCents(1000)} of AI usage —
             no multiplier math.
           </Text>
+          {external ? (
+            <Text style={styles.helper} testID="credit-pack-pays-tgp">
+              You pay TGP the pack price through Stripe checkout, which opens in your
+              browser.
+            </Text>
+          ) : null}
           <PackOptionsRow options={packOptions} onSelect={handleSelect} />
           <View style={styles.customRow}>
             <Text style={styles.customLabel}>Custom amount</Text>
@@ -317,6 +409,38 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
         />
       )}
 
+      {phase.kind === 'external' && (
+        <View style={[styles.body, styles.centered]} testID="credit-pack-external">
+          <Ionicons name="open-outline" size={36} color={colors.primary} />
+          <Text style={styles.errorTitle}>Finish paying in your browser</Text>
+          <Text style={styles.errorBody}>
+            Stripe checkout for {formatCents(phase.amountCents)} is open in your browser. You pay
+            TGP {formatCents(phase.amountCents)}. It is added to your AI credits once Stripe
+            confirms the payment.
+          </Text>
+          <HapticPressable
+            intent="medium"
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+            style={styles.retryBtn}
+            testID="credit-pack-external-done"
+          >
+            <Text style={styles.retryBtnText}>Done</Text>
+          </HapticPressable>
+          <HapticPressable
+            intent="light"
+            onPress={reopenExternal}
+            accessibilityRole="button"
+            accessibilityLabel="Open checkout in the browser again"
+            style={styles.secondaryBtn}
+            testID="credit-pack-external-reopen"
+          >
+            <Text style={styles.secondaryBtnText}>Open checkout again</Text>
+          </HapticPressable>
+        </View>
+      )}
+
       {phase.kind === 'success' && (
         <SuccessReceipt
           amountCents={phase.amountCents}
@@ -330,7 +454,7 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
       {phase.kind === 'error' && (
         <View style={[styles.body, styles.centered]} testID="credit-pack-error">
           <Ionicons name="alert-circle" size={36} color={colors.error} />
-          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorTitle}>Checkout did not start</Text>
           <Text style={styles.errorBody}>{phase.message}</Text>
           <HapticPressable
             intent="medium"
@@ -455,7 +579,9 @@ function SuccessReceipt({
   // a11y label so screen readers say "New balance, twelve fifty" rather
   // than landing on disjoint nodes.
   const balanceA11y = `New balance, ${balanceDisplay}`;
-  const receiptA11y = 'Receipt, sent to your inbox.';
+  // Who was paid, not a receipt-email claim: whether Stripe emails a receipt
+  // depends on a Stripe account setting the app cannot see.
+  const receiptA11y = 'Paid to TGP, through Stripe.';
 
   return (
     <Animated.View
@@ -468,9 +594,10 @@ function SuccessReceipt({
         >
           <Ionicons name="checkmark-circle" size={56} color={colors.success} />
         </Animated.View>
-        <Text style={styles.successTitle}>Credits added</Text>
+        <Text style={styles.successTitle}>Payment complete</Text>
         <Text style={styles.successBody}>
-          {formatCents(amountCents)} of AI credit is now on your account.
+          {formatCents(amountCents)} of AI credit is on its way to your account. It is added to
+          your AI credits once Stripe confirms the payment.
         </Text>
 
         <View style={styles.metaHairline} />
@@ -493,8 +620,8 @@ function SuccessReceipt({
           accessibilityLabel={receiptA11y}
           testID="credit-pack-success-receipt-row"
         >
-          <Text style={styles.metaLabel}>Receipt</Text>
-          <Text style={styles.metaValue}>Sent to your inbox</Text>
+          <Text style={styles.metaLabel}>Paid to</Text>
+          <Text style={styles.metaValue}>TGP, through Stripe</Text>
         </View>
       </View>
     </Animated.View>
@@ -585,6 +712,8 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: '600',
       fontSize: 15,
     },
+    secondaryBtn: { paddingHorizontal: 24, paddingVertical: 12 },
+    secondaryBtnText: { color: colors.primary, fontWeight: '600', fontSize: 15 },
     successWrap: {
       flex: 1,
       alignItems: 'center',

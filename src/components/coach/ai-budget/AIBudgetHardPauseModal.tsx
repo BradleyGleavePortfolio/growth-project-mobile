@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
-import { digitalPurchasesHidden } from '../../../config/purchaseSurfaces';
+import { creditPackCheckoutMode, creditPacksHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -32,6 +32,8 @@ export interface AIBudgetHardPauseModalProps {
   onSelectPack: (amountCents: number | 'custom') => void;
   /** Digital purchases hidden: neutral pause notice, no packs. */
   purchasesHidden?: boolean;
+  /** US-link build: checkout opens in the system browser, so say who is paid. */
+  paysInBrowser?: boolean;
   testID?: string;
 }
 
@@ -40,7 +42,8 @@ export function AIBudgetHardPauseModal({
   budget,
   onClose,
   onSelectPack,
-  purchasesHidden = digitalPurchasesHidden(),
+  purchasesHidden = creditPacksHidden(),
+  paysInBrowser = creditPackCheckoutMode() === 'external',
   testID,
 }: AIBudgetHardPauseModalProps): React.ReactElement {
   const { colors } = useTheme();
@@ -88,6 +91,12 @@ export function AIBudgetHardPauseModal({
                   features running, or wait for your monthly rollover on{' '}
                   {formatPeriodEnd(budget.period_end)}.
                 </Text>
+                {paysInBrowser ? (
+                  <Text style={styles.body} testID="ai-hard-pause-pays-tgp">
+                    You pay TGP the pack price through Stripe checkout, which opens in
+                    your browser.
+                  </Text>
+                ) : null}
 
                 <PackOptionsRow
                   options={budget.pack_options_cents}
