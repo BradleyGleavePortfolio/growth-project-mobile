@@ -3,8 +3,10 @@
  * Undo steps back through recent changes. A 404 (route not deployed) says so plainly instead of showing an empty list.
  */
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
+import { layout, radius, spacing, typography, type SemanticTokens } from '../../../theme/tokens';
+import { footerBottomPadding, useScreenInsets } from '../../../ui';
 import { listWorkoutRevisions, type WorkoutRevision } from '../../../api/workoutRevisionsApi';
 import { AI_LABEL } from '../ai-builder/aiBuilderCopy';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
@@ -33,6 +35,7 @@ type Props = { planId: string; onClose: () => void; sc: SemanticTokens };
 
 export default function RevisionHistorySheet({ planId, onClose, sc }: Props) {
   const reduceMotion = useReduceMotion();
+  const insets = useScreenInsets();
   const [state, setState] = useState<{ items?: WorkoutRevision[] | null; failed?: boolean }>({});
   const load = useCallback(() => {
     let live = true;
@@ -53,21 +56,22 @@ export default function RevisionHistorySheet({ planId, onClose, sc }: Props) {
   return (
     <Modal visible transparent animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={onClose}>
       <View style={[styles.backdrop, { backgroundColor: sc.overlay }]}>
-        <View testID="revision-history-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border }]}>
+        <View testID="revision-history-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border, paddingBottom: footerBottomPadding(insets.bottom) }]}>
+          <View style={[styles.handle, { backgroundColor: sc.border }]} accessible={false} />
           <View style={styles.row}>
-            <Text accessibilityRole="header" style={[typography.h4, styles.grow, { color: sc.textPrimary }]}>History</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close history" onPress={onClose} hitSlop={12}>
+            <Text accessibilityRole="header" style={[typography.h2, styles.grow, { color: sc.textPrimary }]}>History</Text>
+            <HapticPressable accessibilityRole="button" accessibilityLabel="Close history" onPress={onClose} hitSlop={12} style={styles.close}>
               <Text style={[typography.bodyMd, { color: sc.accentText }]}>Close</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
           <ScrollView contentContainerStyle={{ paddingBottom: spacing.lg }}>
             {state.failed ? (
               <>
                 {text(HISTORY_COPY.failed, 'revision-history-failed')}
-                <Pressable accessibilityRole="button" accessibilityLabel="Try loading history again" onPress={load}
+                <HapticPressable accessibilityRole="button" accessibilityLabel="Try loading history again" onPress={load}
                   style={[styles.retry, { borderColor: sc.border }]}>
                   <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>Try again</Text>
-                </Pressable>
+                </HapticPressable>
               </>
             ) : state.items === undefined ? (
               <ActivityIndicator color={sc.accentText} accessibilityLabel="Loading history" />
@@ -99,10 +103,13 @@ export default function RevisionHistorySheet({ planId, onClose, sc }: Props) {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '85%', minHeight: '45%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg },
+  sheet: { maxHeight: '85%', minHeight: '45%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, paddingHorizontal: layout.gutter, paddingTop: spacing.sm },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.chip, marginBottom: spacing.md },
+  pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.xs },
   grow: { flex: 1 },
   item: { borderBottomWidth: 1, paddingVertical: spacing.sm },
-  chip: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: 2 },
-  retry: { borderWidth: 1, borderRadius: 12, paddingVertical: spacing.sm, alignItems: 'center' },
+  close: { minHeight: 44, justifyContent: 'center' },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.control, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  retry: { borderWidth: 1, borderRadius: radius.button, minHeight: 48, justifyContent: 'center', paddingVertical: spacing.sm, alignItems: 'center' },
 });

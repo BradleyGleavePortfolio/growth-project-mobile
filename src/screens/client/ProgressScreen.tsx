@@ -6,8 +6,8 @@
  * Reanimated card with a draw-in line, haptic scrubber, and auto-PR flag plus
  * inline Roman commentary on the same data — but ONLY when the
  * romanFirstPaymentBodyweightPolish flag is ON (audit R5 P2). When the flag is
- * OFF the screen falls back to LegacyWeightChart, a calm static SVG line that
- * never mounts the ED.4 card.
+ * OFF (the shipped build) the screen shows WeightTrendChart, a calm static
+ * line drawn like progress-details/luxury.jpg, which never mounts the ED.4 card.
  */
 
 import React, {
@@ -35,7 +35,7 @@ import {
   InputAccessoryView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G, Path as SvgPath } from 'react-native-svg';
+import Svg, { Circle, G } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -45,7 +45,7 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { ShareCardMilestone } from '../share/ShareCardScreen';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-import { shadows as shadowTokens } from '../../theme/tokens';
+import { shadows as shadowTokens, typography } from '../../theme/tokens';
 import { WeightLog } from '../../types';
 import { getTodayString, bucketDateLocal } from '../../utils/date';
 import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
@@ -57,6 +57,10 @@ import { errorMessage } from '../../types/common';
 import { logger } from '../../utils/logger';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import ProgressChartCard from './progress/ProgressChartCard';
+import PeriodTabs from '../../components/progress/PeriodTabs';
+import WeightTrendChart from '../../components/progress/WeightTrendChart';
+import { periodSummary, type Period } from '../../components/progress/progressFormat';
+import { Lede, QuietOverline, QuietSection } from '../../ui';
 import { featureFlags } from '../../config/featureFlags';
 // §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
 // voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
@@ -64,7 +68,8 @@ import { featureFlags } from '../../config/featureFlags';
 import RomanStreakCard from '../../components/roman/RomanStreakCard';
 import type { RomanStreakTier } from '../../lib/roman/copy';
 
-type Period = '7D' | '30D' | '90D' | 'All';
+// "All" asks for every weigh-in (the server has no cap), not the last year.
+const ALL_DAYS = 3650;
 
 /**
  * §2.7 streak-milestone tier selector. The spec surface is a 3/7/30-day
@@ -190,81 +195,6 @@ function CalorieRing({
   );
 }
 
-// Legacy static weight chart (audit R5 P2): the flag-OFF surface. A calm,
-// non-animated SVG line — no draw-in, no haptic scrubber, no auto-PR, and
-// crucially NO ED.4 ProgressChartCard mount. It plots the same {x: epoch ms,
-// y: weight} series the card would, scaled into the given height and the
-// available screen width, so the flag-OFF path stays a faithful but quiet
-// rendering of the trend.
-function LegacyWeightChart({
-  data,
-  height,
-  lineColor,
-  testID,
-}: {
-  data: { x: number; y: number }[];
-  height: number;
-  lineColor: string;
-  testID?: string;
-}) {
-  // chartContainer has 16px horizontal padding each side inside a 24px screen
-  // margin each side, so the inner drawable width is the screen minus those.
-  const width = SCREEN_WIDTH - 24 * 2 - 16 * 2;
-  const PAD = 8;
-
-  const { path, points } = useMemo(() => {
-    if (data.length < 2) {
-      return { path: '', points: [] as { cx: number; cy: number }[] };
-    }
-    const xs = data.map((d) => d.x);
-    const ys = data.map((d) => d.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    const spanX = maxX - minX || 1;
-    const spanY = maxY - minY || 1;
-    const innerW = width - PAD * 2;
-    const innerH = height - PAD * 2;
-
-    const scaled = data.map((d) => {
-      const cx = PAD + ((d.x - minX) / spanX) * innerW;
-      // Invert Y so a higher weight sits nearer the top of the canvas.
-      const cy = PAD + (1 - (d.y - minY) / spanY) * innerH;
-      return { cx, cy };
-    });
-
-    const d = scaled
-      .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.cx.toFixed(2)},${p.cy.toFixed(2)}`)
-      .join(' ');
-    return { path: d, points: scaled };
-  }, [data, height, width]);
-
-  if (!path) return null;
-
-  return (
-    <Svg
-      width={width}
-      height={height}
-      testID={testID}
-      accessibilityRole="image"
-      accessibilityLabel="Weight trend line chart"
-    >
-      <SvgPath
-        d={path}
-        stroke={lineColor}
-        strokeWidth={2}
-        fill="none"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {points.map((p, i) => (
-        <Circle key={i} cx={p.cx} cy={p.cy} r={2.5} fill={lineColor} />
-      ))}
-    </Svg>
-  );
-}
-
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -304,8 +234,8 @@ export default function ProgressScreen() {
   const loadData = useCallback(async () => {
     if (!userId) return;
 
-    const periodDays: Record<Period, number | null> = { '7D': 7, '30D': 30, '90D': 90, All: null };
-    const days = periodDays[period] || 365;
+    const periodDays: Record<Period, number> = { '7D': 7, '30D': 30, '90D': 90, All: ALL_DAYS };
+    const days = periodDays[period];
 
     try {
       const res = await weightApi.getHistory(days);
@@ -496,7 +426,11 @@ export default function ProgressScreen() {
     [weightLogs],
   );
 
-  const periods: Period[] = ['7D', '30D', '90D', 'All'];
+  // The line under the chart reads the period's own first and last entry.
+  const summary =
+    weightLogs.length >= 2
+      ? periodSummary(weightLogs[0].weight, weightLogs[weightLogs.length - 1].weight, period, null)
+      : null;
 
   // ED.4 flag gate (audit R5 P2): the ProgressChartCard animated surface only
   // mounts when romanFirstPaymentBodyweightPolish is ON. When OFF the screen
@@ -649,23 +583,6 @@ export default function ProgressScreen() {
         </View>
         </FadeInView>
 
-        {/* Period Selector */}
-        <View style={styles.periodRow}>
-          {periods.map((p) => (
-            <TouchableOpacity
-              key={p}
-              style={[styles.periodBtn, period === p && styles.periodBtnActive]}
-              onPress={() => setPeriod(p)}
-              accessibilityLabel={`Show ${p} period`}
-              accessibilityRole="button"
-            >
-              <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
-                {p}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
         {/* Goal Progress Card */}
         {latestWeight && goalWeight && startWeight && startWeight !== goalWeight && (
           <FadeInView delay={50}>
@@ -695,28 +612,25 @@ export default function ProgressScreen() {
           </FadeInView>
         )}
 
-        {/* Weight Chart — ED.4: ProgressChartCard (draw-in animation, haptic
-            scrubber, auto-PR flag + Roman commentary). chartData is already the
-            {x: epoch ms, y: weight} shape ProgressChartCard expects, so it maps
-            through without an adapter. */}
-        {weightHistoryError ? (
-          // Honest load-failure state (audit R2 P2): a fetch error must NOT be
-          // dressed up as the benign "log your weight" empty copy. CoachErrorState
-          // co-mounts Roman's neutral face, an honest one-sentence line in his
-          // register (no contractions, no exclamation), and a retry action.
-          <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Weight Trend</Text>
+        {/* Weight trend — ED.4: ProgressChartCard (draw-in animation, haptic
+            scrubber, auto-PR flag + Roman commentary) when its flag is on;
+            chartData is already the {x: epoch ms, y: weight} shape it expects. */}
+        <QuietSection style={styles.trend}>
+          <QuietOverline>Weight trend</QuietOverline>
+          <PeriodTabs value={period} onChange={setPeriod} />
+          {weightHistoryError ? (
+            // Honest load-failure state (audit R2 P2): a fetch error must NOT be
+            // dressed up as the benign empty copy. CoachErrorState co-mounts
+            // Roman's neutral face, an honest one-sentence line in his register
+            // (no contractions, no exclamation), and a retry action.
             <CoachErrorState
               message="The weight chart did not load. Pull down to try again."
               onRetry={onChartRetry}
               retrying={chartRetrying}
               testID="progress-weight-chart-error"
             />
-          </View>
-        ) : chartData.length >= 2 ? (
-          <View style={styles.chartContainer}>
-            <Text style={styles.chartTitle}>Weight Trend</Text>
-            <View style={styles.chartInner}>
+          ) : chartData.length >= 2 ? (
+            <View>
               {ed4ChartEnabled ? (
                 // ED.4 surface (flag ON): the animated ProgressChartCard.
                 <ProgressChartCard
@@ -731,27 +645,25 @@ export default function ProgressScreen() {
                   enablePRDetection={false}
                 />
               ) : (
-                // Legacy surface (flag OFF, audit R5 P2): a calm static line,
-                // no draw-in animation, no haptic scrubber, no ED.4 card mount.
-                <LegacyWeightChart
-                  data={chartData}
-                  height={180}
-                  lineColor={colors.primary}
-                  testID="progress-weight-chart-legacy"
-                />
+                // Static surface (flag OFF, audit R5 P2; the shipped build): a
+                // calm line, no draw-in, no scrubber, no ED.4 card mount.
+                <WeightTrendChart data={chartData} testID="progress-weight-chart-legacy" />
               )}
+              {summary ? (
+                <View style={styles.summary}>
+                  <Text style={styles.summaryHeadline}>{summary.headline}</Text>
+                  <Text style={styles.summaryDetail}>{summary.detail}</Text>
+                </View>
+              ) : null}
             </View>
-          </View>
-        ) : (
-          <View style={styles.emptyChart}>
-            <Ionicons name="analytics-outline" size={36} color={colors.textMuted} />
-            <Text style={styles.emptyText}>
+          ) : (
+            <Lede size="small" style={styles.trendNote}>
               {weightLogs.length === 0
-                ? 'Log your weight to see your chart'
-                : 'Need at least 2 entries for a chart'}
-            </Text>
-          </View>
-        )}
+                ? 'No weigh-ins in this period.'
+                : 'One weigh-in in this period. The line appears after the second.'}
+            </Lede>
+          )}
+        </QuietSection>
 
         {/* Body Stats */}
         <FadeInView delay={200}>
@@ -1046,32 +958,6 @@ const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.textMuted,
   },
-  periodRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 16,
-  },
-  periodBtn: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 0,
-    backgroundColor: colors.surface,
-  },
-  periodBtnActive: {
-    backgroundColor: colors.primary,
-  },
-  periodText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.4,
-    color: colors.textSecondary,
-  },
-  periodTextActive: {
-    color: colors.textOnPrimary,
-  },
   goalCard: {
     marginHorizontal: 24,
     marginBottom: 16,
@@ -1116,41 +1002,26 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     color: colors.textSecondary,
   },
-  chartContainer: {
+  trend: {
     marginHorizontal: 24,
-    marginBottom: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    padding: 16,
-    overflow: 'hidden',
   },
-  chartTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: 0.4,
-    fontWeight: '500',
+  summary: {
+    marginTop: 20,
+  },
+  summaryHeadline: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontWeight: '400',
+    fontSize: 28,
+    lineHeight: 36,
+    fontVariant: ['lining-nums', 'tabular-nums'],
     color: colors.textPrimary,
-    marginBottom: 8,
   },
-  chartInner: {
-    height: 200,
-  },
-  emptyChart: {
-    height: 160,
-    marginHorizontal: 24,
-    marginBottom: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-  },
-  emptyText: {
-    fontSize: 13,
+  summaryDetail: {
+    ...typography.bodySmall,
     color: colors.textMuted,
-    textAlign: 'center',
-    paddingHorizontal: 20,
+  },
+  trendNote: {
+    marginTop: 16,
   },
   section: {
     paddingHorizontal: 24,

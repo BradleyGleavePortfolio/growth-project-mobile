@@ -8,7 +8,10 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius } from '../../theme/index';
+import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
+import { QuietOverline } from '../../ui/sections/QuietSection';
+import { PrimaryButton } from '../../ui';
 
 export interface ManualFields {
   foodName: string;
@@ -34,177 +37,134 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
   const nutritionMessage = missingMacros
     ? 'Enter protein, carbs and fat. Use 0 if there is none.'
     : missingCalories ? 'Enter calories. Use 0 if there is none.' : null;
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
+  const field = (key: keyof ManualFields, label: string, placeholder: string, keyboardType?: 'numeric' | 'decimal-pad') => (
+    <View style={styles.halfInput}>
+      <QuietOverline style={styles.inputLabel}>{label}</QuietOverline>
+      <TextInput
+        style={styles.inputSmall}
+        placeholder={placeholder}
+        placeholderTextColor={sc.textMuted}
+        keyboardType={keyboardType}
+        value={fields[key]}
+        onChangeText={(v) => onFieldChange(key, v)}
+      />
+    </View>
+  );
   return (
     <ScrollView
       style={styles.modalBody}
       contentContainerStyle={styles.manualForm}
       keyboardShouldPersistTaps="handled"
     >
-      <HapticPressable intent="light" style={styles.backToSearch} onPress={onBack}>
-        <Ionicons name="arrow-back" size={18} color={Colors.primary} />
+      <HapticPressable intent="light" style={styles.backToSearch} onPress={onBack} accessibilityRole="button">
+        <Ionicons name="chevron-back" size={18} color={sc.accentText} />
         <Text style={styles.backToSearchText}>Back to search</Text>
       </HapticPressable>
+      <Text style={styles.title} accessibilityRole="header">Food details</Text>
       <Text style={styles.portionHelp}>Enter nutrition for the whole portion below, not per serving.</Text>
 
+      <QuietOverline style={styles.inputLabel}>Food name</QuietOverline>
       <TextInput
         style={styles.input}
         placeholder="Food name"
-        placeholderTextColor={Colors.textMuted}
+        placeholderTextColor={sc.textMuted}
         value={fields.foodName}
         onChangeText={(v) => onFieldChange('foodName', v)}
       />
 
       <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Calories</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="0"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="numeric"
-            value={fields.calories}
-            onChangeText={(v) => onFieldChange('calories', v)}
-          />
-        </View>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Protein (g)</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="0"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="numeric"
-            value={fields.protein}
-            onChangeText={(v) => onFieldChange('protein', v)}
-          />
-        </View>
+        {field('calories', 'Calories', '0', 'numeric')}
+        {field('protein', 'Protein (g)', '0', 'numeric')}
       </View>
-
       <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Carbs (g)</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="0"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="numeric"
-            value={fields.carbs}
-            onChangeText={(v) => onFieldChange('carbs', v)}
-          />
-        </View>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Fat (g)</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="0"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="numeric"
-            value={fields.fat}
-            onChangeText={(v) => onFieldChange('fat', v)}
-          />
-        </View>
+        {field('carbs', 'Carbs (g)', '0', 'numeric')}
+        {field('fat', 'Fat (g)', '0', 'numeric')}
       </View>
-
       <View style={styles.row}>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Portion quantity</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="1"
-            placeholderTextColor={Colors.textMuted}
-            keyboardType="decimal-pad"
-            value={fields.quantity}
-            onChangeText={(v) => onFieldChange('quantity', v)}
-          />
-        </View>
-        <View style={styles.halfInput}>
-          <Text style={styles.inputLabel}>Unit</Text>
-          <TextInput
-            style={styles.inputSmall}
-            placeholder="serving"
-            placeholderTextColor={Colors.textMuted}
-            value={fields.unit}
-            onChangeText={(v) => onFieldChange('unit', v)}
-          />
-        </View>
+        {field('quantity', 'Portion quantity', '1', 'decimal-pad')}
+        {field('unit', 'Unit', 'serving')}
       </View>
 
       {nutritionMessage && <Text style={styles.portionHelp} accessibilityRole="alert">{nutritionMessage}</Text>}
-      <HapticPressable intent="success" style={styles.logButton} onPress={onSubmit} disabled={saving || missingMacros || missingCalories} accessibilityRole="button">
-        <Ionicons name="add-circle" size={22} color={Colors.white} />
-        <Text style={styles.logButtonText}>{saving ? 'Saving food…' : 'Log food'}</Text>
-      </HapticPressable>
+      <PrimaryButton
+        label="Log food"
+        onPress={onSubmit}
+        disabled={missingMacros || missingCalories}
+        loading={saving}
+        testID="manual-log-food"
+        style={styles.logButton}
+      />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  portionHelp: { color: Colors.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 16 },
+const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
+  portionHelp: { color: sc.textMuted, fontSize: 13, lineHeight: 19, marginBottom: 16, fontFamily: 'Inter_400Regular' },
   modalBody: {
     flex: 1,
   },
   manualForm: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
+    paddingHorizontal: layout.gutter,
+    paddingTop: 8,
     paddingBottom: 40,
   },
   backToSearch: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 16,
+    alignSelf: 'flex-start',
+    minHeight: layout.touchMin,
+    gap: 4,
+    marginLeft: -4,
   },
   backToSearchText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.primary,
+    fontFamily: typography.bodyMd.fontFamily,
+    color: sc.accentText,
+  },
+  title: {
+    ...typography.h1,
+    color: sc.textPrimary,
+    marginTop: 8,
+    marginBottom: 4,
   },
   input: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    minHeight: layout.buttonHeight,
+    backgroundColor: sc.bgSurface,
+    borderRadius: radius.input,
     paddingHorizontal: 16,
-    paddingVertical: 14,
     fontSize: 16,
-    color: Colors.dark,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 12,
+    fontFamily: 'Inter_400Regular',
+    color: sc.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    marginBottom: 16,
   },
   inputSmall: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    minHeight: 48,
+    backgroundColor: sc.bgSurface,
+    borderRadius: radius.input,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
-    color: Colors.dark,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    fontSize: 16,
+    fontFamily: 'Inter_400Regular',
+    color: sc.textPrimary,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    fontVariant: ['tabular-nums'],
   },
   inputLabel: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginBottom: 4,
+    marginBottom: 8,
   },
   row: {
     flexDirection: 'row',
     gap: 12,
-    marginBottom: 12,
+    marginBottom: 16,
   },
   halfInput: {
     flex: 1,
   },
   logButton: {
-    backgroundColor: Colors.primary,
-    marginTop: 8,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  logButtonText: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: '500',
+    marginTop: 16,
   },
 });

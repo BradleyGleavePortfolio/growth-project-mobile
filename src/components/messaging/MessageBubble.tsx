@@ -16,7 +16,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
 
 export interface BubbleMessage {
   id: string;
@@ -146,7 +146,7 @@ const makeStyles = (colors: ThreadColors) =>
 
     bubble: {
       maxWidth: '78%',
-      borderRadius: 4,
+      borderRadius: radius.card,
       minHeight: 44,
       paddingHorizontal: 14,
       paddingVertical: 10,
@@ -172,7 +172,8 @@ const makeStyles = (colors: ThreadColors) =>
       gap: 8,
       paddingVertical: 6,
       paddingHorizontal: 8,
-      borderRadius: 4,
+      // Nested inside the 16 pt bubble: the smaller radius keeps the corners concentric.
+      borderRadius: radius.control,
       minHeight: 44,
       marginBottom: 6,
     },
@@ -182,7 +183,6 @@ const makeStyles = (colors: ThreadColors) =>
       width: StyleSheet.hairlineWidth,
       alignSelf: 'stretch',
       backgroundColor: colors.primary,
-      borderRadius: 2,
     },
     replyStubText: { ...typography.bodySmall, flex: 1, fontSize: 13 },
     replyStubTextMe: { color: colors.textMuted },

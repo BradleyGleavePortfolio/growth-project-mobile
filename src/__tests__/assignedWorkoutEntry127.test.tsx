@@ -166,7 +166,7 @@ describe('U-V1-8: assigned workout Start and Resume labels', () => {
     mockLoadSession.mockResolvedValue({ session: { assignmentId: PLAN.id } });
     const screen = await render(<WorkoutAssignmentDetailScreen />);
     expect(await screen.findByText('Resume workout')).toBeTruthy();
-    expect(screen.getByLabelText('Resume workout Upper A')).toBeTruthy();
+    expect(screen.getByLabelText('Resume workout').props.accessibilityHint).toBe('Opens Upper A as a live workout');
     expect(mockLoadSession).toHaveBeenCalledWith(mockUser.id);
     await fireEvent.press(screen.getByTestId('assignment-start'));
     expect(mockTabNavigate).toHaveBeenCalledWith('WorkoutTab', {
@@ -184,7 +184,7 @@ describe('U-V1-8: assigned workout Start and Resume labels', () => {
       mockLoadSession.mockResolvedValue(saved);
       const screen = await render(<WorkoutAssignmentDetailScreen />);
       expect(await screen.findByText('Start workout')).toBeTruthy();
-      expect(screen.getByLabelText('Start workout Upper A')).toBeTruthy();
+      expect(screen.getByLabelText('Start workout').props.accessibilityHint).toBe('Opens Upper A as a live workout');
       expect(screen.queryByText('Resume workout')).toBeNull();
     },
   );

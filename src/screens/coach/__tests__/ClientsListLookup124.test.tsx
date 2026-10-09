@@ -16,7 +16,8 @@
 import React from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react-native';
 import { Share, StyleSheet } from 'react-native';
-import { typography } from '../../../theme/tokens';
+import { SafeAreaInsetsContext, type EdgeInsets } from 'react-native-safe-area-context';
+import { layout, radius, typography } from '../../../theme/tokens';
 
 const mockGetClients = jest.fn();
 const mockListInviteCodes = jest.fn();
@@ -100,7 +101,7 @@ function wireRow(id: string, name: string, activity?: Activity, archived = false
 type Nav = React.ComponentProps<typeof ClientsListScreen>['navigation'];
 const navigate = jest.fn();
 let focusListener: (() => void) | null = null;
-async function mount() {
+async function mount(insets?: EdgeInsets) {
   // Only navigate() and the focus listener are read by the screen.
   const navigation = {
     navigate,
@@ -109,7 +110,10 @@ async function mount() {
       return () => undefined;
     },
   } as unknown as Nav;
-  return await render(<ClientsListScreen navigation={navigation} />);
+  const screenEl = <ClientsListScreen navigation={navigation} />;
+  return await render(
+    insets ? <SafeAreaInsetsContext.Provider value={insets}>{screenEl}</SafeAreaInsetsContext.Provider> : screenEl,
+  );
 }
 
 beforeEach(() => {
@@ -394,3 +398,24 @@ describe('DES-O-127: honest landing and action parity', () => {
     expect(navigate).toHaveBeenCalledWith('InviteCodes');
   });
 });
+
+describe('REDO-COACH-133: quiet luxury landing (coach-home-solo reference)', () => {
+  it.each([
+    ['360x800 Android', { top: 24, bottom: 0, left: 0, right: 0 }],
+    ['390x844 iPhone', { top: 47, bottom: 34, left: 0, right: 0 }],
+  ] as const)('%s: content starts under the real status bar, overlines are 11 pt, the hero never clips', async (_label, insets) => {
+    mockGetClients.mockResolvedValue({ data: [wireRow('c1', 'Ana Lopez')] });
+    await mount(insets);
+    await screen.findByText('Ana Lopez');
+    const list = StyleSheet.flatten(screen.getByTestId('clients-list').props.contentContainerStyle);
+    expect(list.paddingTop).toBe(insets.top + layout.statusBarGap + 12);
+    const date = StyleSheet.flatten(screen.getByTestId('clients-date').props.style);
+    expect(date.fontSize).toBe(typography.eyebrow.fontSize);
+    expect(date.borderBottomWidth).toBe(StyleSheet.hairlineWidth);
+    const hero = StyleSheet.flatten(screen.getByTestId('clients-hero').props.style);
+    expect(hero.lineHeight).toBeGreaterThanOrEqual(1.25 * hero.fontSize);
+    const invite = StyleSheet.flatten(screen.getByTestId('clients-invite-pill').props.style);
+    expect(invite.borderRadius).toBe(radius.button);
+  });
+});
+

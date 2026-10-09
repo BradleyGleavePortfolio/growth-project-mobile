@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -17,6 +16,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { scheduleFastEndAlert } from '../../utils/fastingAlert';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Screen } from '../../ui';
 import { errorStatus } from '../../types/common';
 
 // Wave 5b: WidgetsScreen reduced to the actions that actually work today.
@@ -105,11 +105,7 @@ export default function WidgetsScreen() {
   );
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <Screen edges={['top']} contentStyle={styles.content}>
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -154,24 +150,21 @@ export default function WidgetsScreen() {
           })}
         </View>
       </FadeInView>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
   content: {
+    paddingHorizontal: 0,
     paddingBottom: spacing['2xl'],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: 60,
     marginBottom: spacing.xl,
     gap: spacing.md,
   },
@@ -190,11 +183,11 @@ const makeStyles = (colors: ThemeColors) =>
   },
   section: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     padding: spacing.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   eyebrow: {
@@ -211,7 +204,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.input,
     paddingVertical: spacing.md,
     marginBottom: spacing.sm,
     gap: spacing.md,
@@ -219,7 +212,7 @@ const makeStyles = (colors: ThemeColors) =>
   cardIcon: {
     width: 40,
     height: 40,
-    borderRadius: radius.md,
+    borderRadius: radius.input,
     backgroundColor: colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',

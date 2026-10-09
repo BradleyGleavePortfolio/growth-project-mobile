@@ -100,7 +100,8 @@ it('shows a neutral purchase empty state and keeps Done and refresh', async () =
   await waitFor(() => expect(s.getByText('Items appear here when Coach Lee releases them.')).toBeTruthy());
   expect(s.queryByText(/notification each time/)).toBeNull();
   await fireEvent.press(s.getByTestId('purchase-unpack-done')); expect(mockNavigate).toHaveBeenLastCalledWith('Home');
-  await s.getByTestId('purchase-unpack-empty').props.refreshControl.props.onRefresh();
+  // The Screen wrapper (REDO-INSETS-133) puts the ScrollView at <testID>-scroll.
+  await s.getByTestId('purchase-unpack-empty-scroll').props.refreshControl.props.onRefresh();
   expect(require('../api/clientPaymentsApi').clientPaymentsApi.getPurchaseDrops).toHaveBeenCalledTimes(2);
 });
 it('does not invent a coach when the purchase coach name is unavailable', async () => {
