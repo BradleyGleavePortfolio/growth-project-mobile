@@ -56,21 +56,8 @@ export function habitsSummary(done: number, total: number): string {
 }
 
 export default function HabitsScreen() {
-  const { colors: themeColors, semanticColors: sc } = useTheme();
-  // Bridge the existing child props to semantic tokens, not the fixed palette.
-  const colors = useMemo(() => ({
-    ...themeColors,
-    primary: sc.accentText,
-    primaryPale: sc.bgPrimary,
-    background: sc.bgPrimary,
-    surface: sc.bgPrimary,
-    textPrimary: sc.textPrimary,
-    textSecondary: sc.textMuted,
-    textMuted: sc.textMuted,
-    textOnPrimary: sc.textOnAccent,
-    border: sc.border,
-  }), [themeColors, sc]);
-  const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -143,7 +130,7 @@ export default function HabitsScreen() {
       id: h.id,
       name: h.name,
       icon: h.icon || h.emoji || 'checkmark-circle',
-      color: h.color || colors.primary,
+      color: h.color || sc.accent,
       frequency: h.frequency || 'daily',
       targetCount: h.target_count || h.target_value || 1,
       unit: h.unit || 'times',
@@ -160,6 +147,7 @@ export default function HabitsScreen() {
   );
   const weekStart = getLocalWeekStart();
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const todayIndex = weekDates.indexOf(today);
   const habits: HabitView[] = allHabits.map((h, index) => ({
     ...h,
     log: logsMap.get(h.id) || null,
@@ -344,7 +332,8 @@ export default function HabitsScreen() {
                   habit={habit}
                   onToggle={handleToggle}
                   onLongPress={handleDelete}
-                  colors={colors}
+                  todayIndex={todayIndex}
+                  sc={sc}
                   styles={styles}
                 />
               ))}
@@ -421,7 +410,7 @@ export default function HabitsScreen() {
                   setSleepHours={setSleepHours}
                   notes={notes}
                   setNotes={setNotes}
-                  colors={colors}
+                  sc={sc}
                   styles={styles}
                 />
 
@@ -449,7 +438,7 @@ export default function HabitsScreen() {
         setNewUnit={setNewUnit}
         onAdd={handleAddHabit}
         isSaving={createHabit.isPending}
-        colors={colors}
+        sc={sc}
         styles={styles}
       />
     </Screen>

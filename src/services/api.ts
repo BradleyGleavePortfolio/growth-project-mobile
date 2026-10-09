@@ -71,6 +71,7 @@
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { authEvents } from '../utils/authEvents';
+import { isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
@@ -213,6 +214,17 @@ let currentCycleId = 0;
 // one more cycle) without enabling an infinite-loop if the server is
 // pathologically rejecting every freshly-issued token.
 const MAX_REFRESH_ATTEMPTS = 2;
+
+/**
+ * START-HANG-134 (B35): the longest a request waits for a session renewal.
+ * supabase-js renews over fetch, which on React Native has no time limit, so
+ * a renewal on a stalled connection could keep every 401'd request (the
+ * app's start included) waiting forever. Past this bound the waiting request
+ * fails as one with no answer (session kept, nobody signed out). The renewal
+ * itself is not abandoned: if it lands later its tokens are stored as usual,
+ * so a rotated refresh token is never lost.
+ */
+export const SESSION_REFRESH_WAIT_MS = 15000;
 
 type RetryableConfig = AxiosRequestConfig & {
   _refreshAttempts?: number;
@@ -521,7 +533,7 @@ api.interceptors.response.use(
     }
 
     try {
-      const newToken = await refreshPromise;
+      const newToken = await withStartupTimeout(refreshPromise, 'session refresh', SESSION_REFRESH_WAIT_MS);
       // The replay below goes through the request interceptor, which checks
       // the binding against the stored token again; stop here already when
       // the sign-in changed during the refresh.
@@ -550,7 +562,9 @@ api.interceptors.response.use(
       // The refresh got no answer: this request failed like one with no
       // answer at all (offline queues keep their rows, screens say there is
       // no connection). A replay's own failure is passed on as it came.
-      if (refreshErr instanceof RefreshNoAnswerError) return Promise.reject(asNoAnswer(error));
+      if (refreshErr instanceof RefreshNoAnswerError || isStartupTimeout(refreshErr)) {
+        return Promise.reject(asNoAnswer(error));
+      }
       return Promise.reject(refreshErr);
     }
   },

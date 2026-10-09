@@ -1,8 +1,10 @@
 /**
  * Consultation building blocks: frame, progress, rows, chips, wheels,
- * checkbox, buttons and Roman's line. Tokens only (theme/tokens), weights
- * 400/500, radius 4 or less, and every control carries
- * an accessibility role, label and state.
+ * checkbox and Roman's line. The button, quiet link, top bar and headline
+ * are the shared src/ui primitives (DS-PRIMITIVES-133). Tokens only
+ * (theme/tokens), weights 400/500, corners from the radius tokens (owner
+ * 17:07: rounded), and every control carries an accessibility role, label
+ * and state.
  */
 import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import {
@@ -20,7 +22,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
-import { lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
+import { layout, lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { footerBottomPadding, Headline, PrimaryButton, ScreenTopBar, TextLink } from '../../ui';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import RomanAvatar from '../../components/roman/RomanAvatar';
@@ -46,6 +50,7 @@ const semanticPalette = (tokens: SemanticTokens) => ({
   onDisabled: tokens.textOnDisabled,
   hair: tokens.border,
   stone: tokens.textMuted,
+  field: tokens.bgSurface,
 });
 
 /** Compatibility exports for the untouched question and flow modules. */
@@ -101,76 +106,35 @@ export function Eyebrow({ children, testID }: { children: React.ReactNode; testI
   );
 }
 
+/**
+ * Roman's voice (prototype decision C-D8): Cormorant Garamond italic, the
+ * coach voice of the approved prototype. The italic face is loaded here, from
+ * the font package App.tsx already ships, so no native change is needed;
+ * until it has loaded the line renders in the regular serif, never in a
+ * system font.
+ */
+export const ROMAN_VOICE_FONT = 'CormorantGaramond_400Regular_Italic';
+
+export function useRomanVoiceFont(): string {
+  const [loaded] = useFonts({ CormorantGaramond_400Regular_Italic });
+  return loaded ? ROMAN_VOICE_FONT : typography.h2.fontFamily;
+}
+
 export function RomanLine({ text, size = 28 }: { text: string; size?: number }) {
   const { s } = useConsultationStyles();
+  const fontFamily = useRomanVoiceFont();
   return (
     <View style={s.romanLine} accessible accessibilityLabel={`Roman says: ${text}`}>
       <RomanAvatar crop="neutral" size={size} />
-      <Text style={s.romanText}>{text}</Text>
+      <Text style={[s.romanText, { fontFamily }]} testID="roman-line-text">{text}</Text>
     </View>
   );
 }
 
 // ─── Buttons ─────────────────────────────────────────────────────────────────
-
-export function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-  testID,
-  hint,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  testID?: string;
-  hint?: string;
-}) {
-  const { s } = useConsultationStyles();
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      accessibilityState={{ disabled: !!disabled }}
-      testID={testID}
-      style={({ pressed }) => [s.cta, disabled && s.ctaDisabled, pressed && !disabled && s.pressed]}
-    >
-      <Text style={[s.ctaText, disabled && s.ctaTextDisabled]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-export function TextLink({
-  label,
-  onPress,
-  testID,
-  accent,
-  role = 'button',
-}: {
-  label: string;
-  onPress: () => void;
-  testID?: string;
-  accent?: boolean;
-  /** "link" for a control that leaves the app (opens a web page). */
-  role?: 'button' | 'link';
-}) {
-  const { s } = useConsultationStyles();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole={role}
-      accessibilityLabel={label}
-      testID={testID}
-      hitSlop={8}
-      style={s.link}
-    >
-      <Text style={[s.linkText, accent && s.linkAccent]}>{label}</Text>
-    </Pressable>
-  );
-}
+// The one filled forest button and the quiet text link are the shared
+// primitives; re-exported so the consultation screens keep one import.
+export { PrimaryButton, TextLink };
 
 // ─── Frame ───────────────────────────────────────────────────────────────────
 
@@ -242,44 +206,37 @@ export function useConsultInsets() {
   return useContext(SafeAreaInsetsContext) ?? ZERO_INSETS;
 }
 
+/**
+ * The consultation frame: the shared ScreenTopBar (Back and the underlined
+ * "Finish later"), the chapter progress, a scroll body and the pinned footer,
+ * with the shared Screen's insets and footer spacing. It keeps its own scroll
+ * body because src/ui Screen cannot yet carry the analytics marker on the
+ * scroll view or `automaticallyAdjustKeyboardInsets` (Opus C-6).
+ */
 export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
-  const { s, palette } = useConsultationStyles();
+  const { s } = useConsultationStyles();
   const insets = useConsultInsets();
   return (
     <View
       ph-no-capture
-      style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}
+      style={[s.root, { paddingTop: insets.top + layout.statusBarGap, paddingLeft: insets.left, paddingRight: insets.right }]}
       testID={testID}
     >
-      <View style={s.topbar} testID="consult-topbar">
-        {onBack ? (
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={10}
-            testID="consult-back"
-            style={s.iconBtn}
-          >
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
-        ) : (
-          <View style={s.iconBtn} />
-        )}
-        {onFinishLater ? (
-          <Pressable
-            onPress={onFinishLater}
-            accessibilityRole="button"
-            accessibilityLabel={pauseLabel ? 'Pause' : 'Finish later'}
-            accessibilityHint="Saves your answers so you can continue later"
-            hitSlop={10}
-            testID="consult-finish-later"
-            style={s.finishButton}
-          >
-            <Text style={s.finishText}>{pauseLabel ? 'Pause' : 'Finish later'}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <ScreenTopBar
+        onBack={onBack ?? undefined}
+        testID="consult"
+        trailing={
+          onFinishLater ? (
+            <TextLink
+              label={pauseLabel ? 'Pause' : 'Finish later'}
+              size="small"
+              onPress={onFinishLater}
+              accessibilityHint="Saves your answers so you can continue later"
+              testID="consult-finish-later"
+            />
+          ) : null
+        }
+      />
       {progress ? <ProgressBar progress={progress} /> : null}
       {/* Opus C-6: the notes inputs scroll above the keyboard on iOS. */}
       <ScrollView
@@ -293,11 +250,11 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
         {children}
       </ScrollView>
       {footer ? (
-        <View ph-no-capture style={[s.footer, { paddingBottom: spacing.xl + insets.bottom }]} testID="consult-footer">
+        <View ph-no-capture style={[s.footer, { paddingBottom: footerBottomPadding(insets.bottom) }]} testID="consult-footer">
           {footer}
         </View>
       ) : (
-        <View style={{ height: 34 + insets.bottom }} testID="consult-footer" />
+        <View style={{ height: footerBottomPadding(insets.bottom) }} testID="consult-footer" />
       )}
     </View>
   );
@@ -329,9 +286,9 @@ export function QuestionHeader({
       </View>
       {sub ? <Text style={s.sub}>{sub}</Text> : null}
       {roman ? <RomanLine text={roman} /> : null}
-      <Text style={[long ? s.h2 : s.h1, s.question]} accessibilityRole="header">
+      <Headline level={long ? 'h2' : 'h1'} style={s.question}>
         {question}
-      </Text>
+      </Headline>
       {why ? <Text style={s.why}>{why}</Text> : null}
     </View>
   );
@@ -494,9 +451,10 @@ export function UnitTabs({
           accessibilityLabel={u === 'imperial' ? 'Imperial units' : 'Metric units'}
           accessibilityState={{ selected: unit === u }}
           testID={`unit-${u}`}
-          style={[s.tab, unit === u && s.tabOn]}
+          style={s.tab}
         >
           <Text style={[s.tabText, unit === u && s.tabTextOn]}>{u === 'imperial' ? 'Imperial' : 'Metric'}</Text>
+          <View style={[s.tabRule, unit === u && s.tabRuleOn]} testID={`unit-${u}-rule`} />
         </Pressable>
       ))}
     </View>
@@ -506,6 +464,15 @@ export function UnitTabs({
 // ─── Wheel ───────────────────────────────────────────────────────────────────
 
 const ROW_H = 44;
+
+/**
+ * Prototype T-D wheels: the selected value at full ink, its neighbours
+ * fading with distance (B2, B3, B4).
+ */
+export function wheelOpacity(distance: number): number {
+  const d = Math.abs(distance);
+  return d === 0 ? 1 : d === 1 ? 0.6 : 0.3;
+}
 
 export function Wheel<T extends string | number>({
   label,
@@ -567,7 +534,7 @@ export function Wheel<T extends string | number>({
       >
         {values.map((v, i) => (
           <View key={String(v)} style={s.wheelRow}>
-            <Text style={[s.wheelText, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
+            <Text style={[s.wheelText, { opacity: wheelOpacity(i - idx) }, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
           </View>
         ))}
       </ScrollView>
@@ -579,32 +546,27 @@ export function Wheel<T extends string | number>({
 
 const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
-  topbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    minHeight: 48,
-  },
-  iconBtn: { width: 44, height: 44, justifyContent: 'center' },
-  finishText: { ...typography.bodySmall, color: palette.muted },
-  finishButton: { minHeight: 44, justifyContent: 'center' },
-  progress: { flexDirection: 'row', gap: 4, paddingHorizontal: spacing.xl, marginTop: spacing.xs },
+  progress: { flexDirection: 'row', gap: 4, paddingHorizontal: layout.gutter, marginTop: spacing.xs },
   seg: { flex: 1, height: 2, backgroundColor: palette.border, overflow: 'hidden' },
   segFill: { height: 2, backgroundColor: palette.accent },
-  scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xl },
-  footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, paddingTop: spacing.md, gap: spacing.md },
-  footerSpacer: { height: 34 },
+  scroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl, paddingBottom: spacing.xl },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, gap: layout.footerItemGap },
   eyerow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { ...typography.eyebrow, color: palette.muted },
   timeLeft: { ...typography.bodySmall, color: palette.muted },
   sub: { ...typography.bodySmall, color: palette.muted, marginTop: 6 },
   romanLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginTop: spacing.lg },
+  // Roman's voice: serif italic (C-D8). Cormorant runs small for its size,
+  // so 18 / 25 reads like 16 pt Inter; lineHeight stays above 1.2 x size so
+  // descenders never clip on Android.
   romanText: {
     flex: 1,
-    ...typography.body,
-    color: palette.charcoal,
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 18,
+    lineHeight: 25,
+    letterSpacing: 0.1,
+    fontWeight: '400',
+    color: palette.muted,
   },
   h1: { ...typography.h1, color: palette.ink },
   h2: { ...typography.h2, color: palette.ink, fontVariant: ['tabular-nums'] },
@@ -635,14 +597,14 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   radio: {
     width: 20,
     height: 20,
-    borderRadius: radius.pill,
+    borderRadius: radius.chip,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.stone,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioSel: { borderColor: palette.accent },
-  radioDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: palette.accent },
+  radioDot: { width: 10, height: 10, borderRadius: radius.chip, backgroundColor: palette.accent },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     flexDirection: 'row',
@@ -651,13 +613,22 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     paddingHorizontal: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.chip,
     backgroundColor: palette.surface,
   },
-  chipBig: { minHeight: 56, minWidth: 72, justifyContent: 'center' },
+  // S1 / N3: large 56 pt chips, two to a row, serif numerals (prototype 17, 23).
+  chipsBig: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.sm },
+  chipBig: { minHeight: 56, width: '48.5%', justifyContent: 'center' },
   chipSel: { borderColor: palette.accent },
   chipText: { ...typography.bodySmall, color: palette.ink },
-  chipBigText: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
+  chipBigText: {
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '400',
+    fontVariant: ['tabular-nums'],
+    color: palette.ink,
+  },
   chipTextSel: { color: palette.accentText },
   chipCapped: { color: palette.muted },
   chipCheck: { marginLeft: 6 },
@@ -671,7 +642,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: palette.surface,
     marginTop: spacing.lg,
   },
@@ -680,7 +651,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     height: 22,
     borderWidth: 1,
     borderColor: palette.charcoal,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -688,24 +659,27 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
   inputWrap: { marginTop: spacing.lg },
-  flabel: { ...typography.bodySmall, color: palette.charcoal, marginBottom: 6 },
+  flabel: { ...typography.eyebrow, color: palette.muted, marginBottom: spacing.sm },
   field: {
     ...typography.body,
     color: palette.ink,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: radius.md,
-    backgroundColor: palette.surface,
+    borderRadius: radius.input,
+    backgroundColor: palette.field,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     minHeight: 44,
   },
   fieldMulti: { minHeight: 72, textAlignVertical: 'top' },
-  tabs: { flexDirection: 'row', borderWidth: 1, borderColor: palette.border, borderRadius: radius.lg, marginBottom: spacing.lg },
-  tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  tabOn: { backgroundColor: palette.accent },
-  tabText: { ...typography.bodySmall, color: palette.ink },
-  tabTextOn: { color: palette.onAccent },
+  // Prototype B3: quiet text tabs, the selected one underlined in forest.
+  // Never a filled tab: the screen's one filled control is Continue.
+  tabs: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xl, marginBottom: spacing.lg },
+  tab: { minHeight: 44, minWidth: 64, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  tabText: { ...typography.bodySmall, color: palette.muted },
+  tabTextOn: { ...typography.bodySmall, fontFamily: typography.bodyMd.fontFamily, color: palette.ink },
+  tabRule: { alignSelf: 'stretch', height: 1.5, marginTop: 6, backgroundColor: 'transparent' },
+  tabRuleOn: { backgroundColor: palette.accent },
   wheels: { flexDirection: 'row', gap: spacing.md },
   wheelCol: { flex: 1 },
   wheelFrame: { height: ROW_H * 5, overflow: 'hidden', marginTop: spacing.sm },
@@ -720,20 +694,17 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     borderColor: palette.border,
   },
   wheelRow: { height: ROW_H, alignItems: 'center', justifyContent: 'center' },
-  wheelText: { ...typography.body, fontVariant: ['tabular-nums'], color: palette.muted },
-  wheelTextOn: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
-  cta: {
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.accent,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.xl,
+  // Serif wheel values (prototype 07-09): neighbours muted at 20 pt, the
+  // selected value in ink at 28 pt; both keep lineHeight >= 1.2 x size.
+  wheelText: {
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '400',
+    fontVariant: ['tabular-nums'],
+    color: palette.muted,
   },
-  ctaDisabled: { backgroundColor: palette.disabledBg },
-  ctaText: { ...typography.bodyMd, color: palette.onAccent },
-  ctaTextDisabled: { color: palette.onDisabled },
-  link: { alignSelf: 'center', paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
+  wheelTextOn: { fontSize: 28, lineHeight: 34, color: palette.ink },
   linkText: { ...typography.bodySmall, color: palette.muted },
   linkAccent: { color: palette.accentText },
   pressed: { opacity: 0.85 },
