@@ -38,6 +38,9 @@ const CoachCardSchema = z.object({
   photo_url: z.string().nullable(),
   business_name: z.string().nullable(),
   bio: z.string().nullable(),
+  // COACH-CARD-134 (backend b#898): K1 card line and K2 specialty keys; absent on older backends.
+  headline: z.string().nullable().optional(),
+  specialties: z.array(z.string()).nullable().optional(),
 });
 export type CoachCard = z.infer<typeof CoachCardSchema>;
 
