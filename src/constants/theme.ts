@@ -113,7 +113,7 @@ export const Spacing = {
 // rounded corners, not rectangles"). New code uses radius.button / input /
 // card / sheet / chip from theme/tokens.
 export const Radius = {
-  sm: tokenRadius.sm, // 12
+  sm: tokenRadius.button, // 12
   md: tokenRadius.md, // 12
   lg: tokenRadius.lg, // 16
   xl: tokenRadius.xl, // 16
