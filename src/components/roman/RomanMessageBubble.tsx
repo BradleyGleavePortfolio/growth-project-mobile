@@ -75,6 +75,7 @@ function RomanMessageBubbleComponent({
     opacities.current = blocks.map(() => new Animated.Value(animate ? 0 : 1));
   }
 
+  // blocks.length: a reply whose paragraph count changes gets fresh opacities; run them too.
   useEffect(() => {
     if (!animate) {
       opacities.current.forEach((o) => o.setValue(1));
@@ -86,7 +87,7 @@ function RomanMessageBubbleComponent({
     );
     run.start();
     return () => run.stop();
-  }, [animate]);
+  }, [animate, blocks.length]);
 
   if (isAssistant) {
     const reading = [styles.reading, { color: c.textPrimary }];
@@ -100,7 +101,8 @@ function RomanMessageBubbleComponent({
           style={styles.assistantBody}
           accessible
           accessibilityRole="text"
-          accessibilityLabel={`Roman said: ${message.content}`}
+          // The interrupted note is part of what a screen reader speaks (B-602-C-1).
+          accessibilityLabel={`Roman said: ${message.content}${message.interrupted ? ` ${ROMAN_INTERRUPTED_NOTE}` : ''}`}
           testID={testID ? `${testID}-reply` : undefined}
         >
           {blocks.map((b, i) => (

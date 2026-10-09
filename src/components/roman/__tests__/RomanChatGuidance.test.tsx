@@ -77,7 +77,7 @@ it('renders serif Roman replies without a bubble and the client in a quiet right
   expect(r.queryByText('YOU')).toBeNull();
   expect(r.getByTestId('roman-bubble-avatar')).toBeTruthy();
   expect(r.getByText(ROMAN_INTERRUPTED_NOTE)).toBeTruthy();
-  expect(StyleSheet.flatten(r.getByLabelText('Roman said: Recovery guidance.').props.style)?.backgroundColor).toBeUndefined();
+  expect(StyleSheet.flatten(r.getByLabelText(`Roman said: Recovery guidance. ${ROMAN_INTERRUPTED_NOTE}`).props.style)?.backgroundColor).toBeUndefined();
   const prose = StyleSheet.flatten(r.getByText('Recovery guidance.').props.style);
   expect(prose).toMatchObject({ fontFamily: typography.h2.fontFamily, fontSize: 19, lineHeight: 28 });
   expect(StyleSheet.flatten(r.getByText('Roman').props.style).fontFamily).toBe(typography.h1.fontFamily);

@@ -10,6 +10,7 @@ import type { TestInstance } from 'test-renderer';
 import RomanMessageBubble, { romanBlocks } from '../RomanMessageBubble';
 import { useRomanReveal } from '../useRomanReveal';
 import type { RomanMessage } from '../../../api/romanApi';
+import { ROMAN_INTERRUPTED_NOTE } from '../romanVoice';
 
 const flat = (node: TestInstance): TextStyle => StyleSheet.flatten(node.props.style) ?? {};
 /** Opacity of the nearest wrapper that sets one (the reveal's Animated.View). */
@@ -61,6 +62,17 @@ it('only the reply that arrives after a send is fresh', async () => {
   // An older page arriving later does not reveal anything new.
   await rerender({ messages: [turn('a-1', 'assistant', 'Older.'), old, fresh], sending: false });
   expect(result.current).toBe('a1');
+});
+
+it.each([
+  [false, 'Roman said: Close, not perfect.'],
+  [true, `Roman said: Close, not perfect. ${ROMAN_INTERRUPTED_NOTE}`],
+])('interrupted %s: the reply label a screen reader speaks (B-602-C-1)', async (interrupted, label) => {
+  const r = await render(
+    <RomanMessageBubble message={{ ...turn('a', 'assistant', 'Close, not perfect.'), interrupted }} testID="t" />,
+  );
+  expect(r.getByTestId('t-reply').props.accessibilityLabel).toBe(label);
+  expect(r.queryByText(ROMAN_INTERRUPTED_NOTE) !== null).toBe(interrupted);
 });
 
 it('a send that ends without a reply leaves nothing to reveal', async () => {
