@@ -1,7 +1,7 @@
 /**
  * S-COACH-MOB-2 — the Money card on the coach Home: net to you over the last
- * 30 days, the change on the 30 days before, and a red count of what needs
- * attention. Tapping it opens the full Money page. Before Stripe is set up
+ * 30 days, the change on the 30 days before, and what needs attention, in
+ * words (COACH-HOME-134: no red pill). Tapping it opens the full Money page. Before Stripe is set up
  * the card offers the setup action instead of empty numbers.
  * Data: GET /v1/coach/money/summary (30d + compare), GET /coach/connect/status.
  */
@@ -21,6 +21,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
+import { radius, typography } from "../../../theme/tokens";
 import { coachMoneyApi, type MoneySummary } from "../../../api/coachMoneyApi";
 import { coachSetupApi, type ConnectView } from "../../../api/coachSetupApi";
 import {
@@ -228,11 +229,14 @@ export default function MoneyHomeCard({ onOpenMoney, onSetUpStripe }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    // COACH-HOME-134: rounded hairline card (Q10b), serif title and amount;
+    // the attention count is said in forest words, never a red pill.
     card: {
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      borderRadius: radius.card,
       backgroundColor: colors.surface,
-      padding: 16,
+      padding: 20,
       marginBottom: 16,
     },
     head: {
@@ -242,31 +246,25 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 8,
     },
     title: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 17,
+      ...typography.h3,
       color: colors.textPrimary,
     },
     badge: {
-      backgroundColor: colors.error,
-      paddingHorizontal: 10,
       paddingVertical: 4,
-      borderRadius: 12,
     },
     badgeText: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 13,
-      color: colors.textOnPrimary,
+      ...typography.bodySmall,
+      fontFamily: "Inter_500Medium",
+      color: colors.primary,
     },
     eyebrow: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 12,
-      letterSpacing: 0.6,
-      textTransform: "uppercase",
+      ...typography.eyebrow,
       color: colors.textSecondary,
+      marginTop: 4,
     },
     amount: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 30,
+      ...typography.h1,
+      fontVariant: ["lining-nums", "tabular-nums"],
       color: colors.textPrimary,
       marginVertical: 2,
     },

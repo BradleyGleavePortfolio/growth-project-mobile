@@ -596,7 +596,7 @@ describe("MoneyScreen", () => {
 });
 
 describe("Money Home card", () => {
-  it("shows net 30d with a red attention count and opens Money", async () => {
+  it("shows net 30d with the attention count in words and opens Money", async () => {
     routeGets();
     const onOpenMoney = jest.fn();
     const { findByTestId, getByTestId } = await render(
