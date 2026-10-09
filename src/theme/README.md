@@ -45,14 +45,32 @@ Components are free to choose the ergonomic shape — the underlying values are 
 
 | Role | Family | Size / line | Weight | Letter spacing |
 | --- | --- | --- | --- | --- |
-| `display` | CormorantGaramond_400Regular | 44 / 46 | 400 | 0.4 |
-| `h1` | CormorantGaramond_400Regular | 32 / 35 | 400 | 0.6 |
-| `h2` | CormorantGaramond_400Regular | 24 / 29 | 400 | 0.5 |
-| `h3` | CormorantGaramond_500Medium | 20 / 24 | 500 | 0.4 |
+| `display` | CormorantGaramond_400Regular | 44 / 55 | 400 | 0.4 |
+| `h1` | CormorantGaramond_400Regular | 32 / 40 | 400 | 0.6 |
+| `h2` | CormorantGaramond_400Regular | 24 / 30 | 400 | 0.5 |
+| `h3` | CormorantGaramond_500Medium | 20 / 25 | 500 | 0.4 |
 | `body` | Inter_400Regular | 16 / 26 | 400 | -0.16 |
 | `label` | Inter_500Medium | 11 / 13 | 500 | 1.98 (uppercase) |
 | `caption` | Inter_500Medium | 12 / 18 | 500 | 0.96 |
 | `button` | Inter_600SemiBold | 14 / 18 | 600 | 1.2 (uppercase) |
+
+Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: Cormorant's own line box is 1.211 em, so anything tighter clips descenders on Android (B15). `__tests__/serifLineHeight.test.ts` checks every serif role in `tokens`, `theme/index` and `constants/theme`.
+
+## Radius, layout and wheel (DS-PRIMITIVES-133)
+
+| Token | Value | Used by |
+| --- | --- | --- |
+| `radius.button` | 12 | `ui/buttons/PrimaryButton` (owner 17:07: rounded, not rectangles) |
+| `radius.input` | 12 | text fields, unit tabs, segmented controls |
+| `radius.card` | 16 | cards, grouped panels |
+| `radius.sheet` | 24 | bottom-sheet and modal top corners |
+| `radius.chip` / `radius.pill` | 999 | chips |
+| `radius.control` | 6 | boxes under 28 pt (checkbox) |
+| `radius.sm/md/lg/xl/2xl` | 0/2/4/4/4 | legacy, not for new code; DS-THEME-133 moves them to the rounded scale |
+| `layout` | gutter 24, statusBarGap 12, footer gaps, buttonHeight 54, touchMin 44, rowMinHeight 56, section 18 + 24 | `ui/layout/Screen`, buttons, rows, sections |
+| `wheel` | 44 pt rows x 5, hairline band, serif 28 / 21 / 18 | consultation wheels (`ui/wheel/WheelBand`) |
+
+Spacing: `tokens.spacing` (lg 16, xl 24) is canonical; the legacy `Spacing` in `index.ts` (md 16, lg 24, xl 32) shares key names with different values and is deprecated for new code. The primitives use `layout`.
 
 The fonts come from `@expo-google-fonts/cormorant-garamond` and `@expo-google-fonts/inter`. They are loaded by `App.tsx` via `expo-font.useFonts` before the splash screen hides — nothing renders until both families are ready.
 
