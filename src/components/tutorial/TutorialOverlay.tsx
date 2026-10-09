@@ -208,10 +208,7 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
       }
     : null;
   const centered = mode === 'priming' || mode === 'notice' || mode === 'complete' || !!gate?.center;
-  // Tab beats (47 Train, 51 Food, 55 "Tap Home", the coachless Roman beat):
-  // the card sits just above the tab bar, beside the lit tab, as the prototype
-  // draws it (B-606-1), never at the top of the screen.
-  const tabSpot = mode === 'gate' && !!gate?.target?.startsWith('tab:');
+  const tabSpot = mode === 'gate' && !!gate?.target?.startsWith('tab:'); // B-606-1: tab beats sit above the tab bar
   const cardAtTop = !centered && !tabSpot && (spot ? spot.y + spot.height / 2 > height / 2 : mode !== 'done');
   const scrim = (extra?: object) => [StyleSheet.absoluteFill, { backgroundColor: sc.overlay }, extra];
 

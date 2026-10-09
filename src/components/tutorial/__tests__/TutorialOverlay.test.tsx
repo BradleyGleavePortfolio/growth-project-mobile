@@ -163,41 +163,30 @@ describe('TutorialOverlay', () => {
     expect(screen.queryByTestId('tutorial-ack')).toBeNull();
   });
 
-  it.each([
-    [360, 800],
-    [390, 844],
-  ])('B-606-1: tab beats draw the card just above the tab bar, never at the top (47, 51, 55) at %sx%s', async (w, h) => {
+  it.each([[360, 800], [390, 844]])('B-606-1: tab beats (47, 51, 55) put the card just above the tab bar at %sx%s', async (w, h) => {
     mockWindow = { width: w, height: h };
+    const aboveBar = (step: string) => {
+      expect(screen.getByTestId('tutorial-step-count').props.children).toBe(step);
+      const { bottom, top } = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
+      expect([bottom, top]).toEqual([34 + 64 + 12, undefined]); // bottom inset + tab bar + 12 pt, never the top slot
+    };
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
-    // Welcome (46) is centred.
-    expect(StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style).top).toBe(0);
     await fireEvent.press(screen.getByLabelText('Begin'));
-    // 47: Train tab lit; bottom inset 34 + tab bar 64 + 12 pt gap.
-    let wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
-    expect(wrap.bottom).toBe(34 + 64 + 12);
-    expect(wrap.top).toBeUndefined();
+    aboveBar('Step 2 of 7'); // 47 Train
     await act(async () => {
       setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
       setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
       dispatchTutorial({ type: 'ACK' });
       useTutorialStore.setState({ celebration: null });
     });
-    // 51: Food (Log) tab lit, same slot.
-    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 4 of 7');
-    wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
-    expect(wrap.bottom).toBe(34 + 64 + 12);
-    expect(wrap.top).toBeUndefined();
+    aboveBar('Step 4 of 7'); // 51 Food
     await act(async () => {
       setTutorialRoute(['Log']);
       dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
       useTutorialStore.setState({ celebration: null });
     });
-    // 55: "Tap Home" with the Home tab lit, same slot.
-    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 5 of 7');
-    wrap = StyleSheet.flatten(screen.getByTestId('tutorial-card-wrap').props.style);
-    expect(wrap.bottom).toBe(34 + 64 + 12);
-    expect(wrap.top).toBeUndefined();
+    aboveBar('Step 5 of 7'); // 55 Tap Home
   });
 
   it('the spotlight path is a full-screen rect with a rounded hole', () => {
