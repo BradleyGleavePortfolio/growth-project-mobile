@@ -17,5 +17,7 @@ What `ProtectedScreen` shows:
 | unavailable (the check failed: weak signal, server error) | "Your access could not be checked", "Check the connection, then try again." with Try again, which re-runs the check. The screen stays closed until the server confirms access (FOOD-GATE-RETRY-130). |
 | checking or unavailable after access was confirmed in this session | The screen stays mounted, so a live workout survives weak signal (TRAIN-GATE-128) |
 
+`withProtectedScreen(X, { openToCoachless: true })` also wraps the screen in `dunning/DunningOwnScreen`, so it stays open through the Day 10+ payment lockout with the locked notice at its foot (owner ruling 10-08 23:5x; see `dunning/README.md`).
+
 On hidden iOS builds and for coachless clients `PaywallSheet` never lists packages or prices (App Review 3.1.1). Follows
 `docs/QUIET_LUXURY_DOCTRINE.md`.
