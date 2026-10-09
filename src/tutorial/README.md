@@ -48,7 +48,7 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 6 | roman (no coach, `romanChat` on) | the You tab is spotlit; Continue | button |
 | 7 | complete (60) | Got it | button |
 
-- Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, we will look at logging.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
+- Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, the tour carries on with Food.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
 - Only a beat really done earns its done line and success haptic, never Later.
 - Stored state is version 3. Older versions (v1: nine or eleven steps, v2: six) keep what the client chose: finished stays finished, skipped stays skipped (never restarts by itself) and resumes at the welcome.
 
