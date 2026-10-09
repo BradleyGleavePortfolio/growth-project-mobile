@@ -8,7 +8,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   Platform,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { spacing as Spacing, typography, SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { featureFlags } from '../../config/featureFlags';
 import { isAndroidHealthConnectEnabled } from '../../config/healthConnect';
 // FACE+VOICE contract (D-012): the Roman entry row is a Roman-branded surface,
@@ -289,7 +289,7 @@ export default function MoreScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title} accessibilityRole="header">More</Text>
         <Text style={styles.subtitle}>Everything else you can do</Text>

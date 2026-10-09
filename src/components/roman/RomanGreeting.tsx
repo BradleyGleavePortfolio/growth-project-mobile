@@ -1,9 +1,9 @@
 /**
- * RomanGreeting — the FACE+VOICE empty state for an empty Roman chat.
+ * RomanGreeting — the FACE+VOICE launch state for an empty Roman chat.
  *
  * Operator rule (P0 if violated): Roman's face renders with every Roman-voiced
- * string. Here the bundled RomanAvatar (neutral crop) sits above the §2.2
- * returning-user greeting so the voice is never disembodied. RomanAvatar is the
+ * string. Here RomanAvatar (neutral) sits beside the launch line so the voice
+ * is never disembodied. RomanAvatar is the
  * existing Community component (reused, not forked — brief lane rule); it paints
  * the bundled brand face offline on first frame and falls back to the accessible
  * monogram only on image-load failure.
@@ -14,12 +14,9 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
-import {
-  romanGreeting,
-  ROMAN_GREETING_SUBTITLE,
-  type RomanGreetingSurface,
-} from './romanVoice';
-import { colors, spacing, typography } from '../../theme/tokens';
+import { romanGreeting, romanLaunchLine, type RomanGreetingSurface } from './romanVoice';
+import { spacing, typography } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
 
 export interface RomanGreetingProps {
   /** Host surface — selects the client vs coach greeting register (U1). */
@@ -27,28 +24,33 @@ export interface RomanGreetingProps {
   /** True when Roman has no prior history, so the §2.1 intro is shown (U1). */
   isFirstOpen: boolean;
   firstName?: string | null;
+  /** Local hour for the time-of-day greeting (tests pass it). */
+  hour?: number;
   testID?: string;
 }
 
+/**
+ * B30 / prototype 69 launch state: Roman's whole portrait (B27: never
+ * cropped) beside one serif line. Client: the greeting and what Roman can
+ * explain with the client's own numbers; coach: the coach register.
+ */
 export default function RomanGreeting({
   surface,
   isFirstOpen,
   firstName,
+  hour = new Date().getHours(),
   testID,
 }: RomanGreetingProps): React.ReactElement {
+  const { semanticColors: c } = useTheme();
+  const line =
+    surface === 'client'
+      ? romanLaunchLine({ surface, isFirstOpen, firstName, hour })
+      : romanGreeting({ surface, isFirstOpen, firstName });
   return (
     <View style={styles.container} testID={testID}>
-      <RomanAvatar crop="neutral" size={72} testID="roman-greeting-avatar" />
-      <Text
-        style={styles.greeting}
-        accessibilityRole="text"
-        // The greeting text already names Roman; the avatar above carries the
-        // face. State is conveyed in the visible copy, no extra a11y state here.
-      >
-        {romanGreeting({ surface, isFirstOpen, firstName })}
-      </Text>
-      <Text style={styles.subtitle} accessibilityRole="text">
-        {ROMAN_GREETING_SUBTITLE}
+      <RomanAvatar crop="neutral" size={40} testID="roman-greeting-avatar" />
+      <Text style={[styles.line, { color: c.textPrimary }]} accessibilityRole="text">
+        {line}
       </Text>
     </View>
   );
@@ -56,20 +58,19 @@ export default function RomanGreeting({
 
 const styles = StyleSheet.create({
   container: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing['3xl'],
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
   },
-  greeting: {
-    ...typography.h3,
-    color: colors.ink,
-    textAlign: 'center',
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
+  line: {
+    // Serif reading text, as Roman's replies (19 on 28, over the 1.2x floor).
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 19,
+    lineHeight: 28,
+    letterSpacing: 0.2,
+    flex: 1,
+    paddingTop: 4,
   },
 });
