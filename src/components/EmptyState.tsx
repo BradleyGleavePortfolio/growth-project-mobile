@@ -63,7 +63,7 @@ const makeStyles = (sc: SemanticTokens) =>
       minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: radius.lg,
+      borderRadius: radius.button,
     },
     ctaText: {
       ...typography.bodyMd,

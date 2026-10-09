@@ -2,12 +2,12 @@
  * QA-EMPTY-131: the shared empty states share one calm look (AUD-FIN-DESIGN-129 U6).
  *
  *  - Base EmptyState (coach Clients, Messages search, client Train): the CTA is a
- *    44 pt forest button with radius 4 and an Inter 16 sentence-case label, pressed
+ *    44 pt forest button with radius.button (12) and an Inter 16 sentence-case label, pressed
  *    through HapticPressable; the body uses the one muted grey.
  *  - components/EmptyState (Recipes, Fasting, Bloodwork, coach Brief, ...): Cormorant
  *    title, theme colours (follows the active scheme), the same CTA.
  *  - EmptyStateNoClients (a new coach's Clients and Messages): Cormorant h2 headline,
- *    sentence-case 44 pt buttons with radius 4, an unfilled code box with the theme
+ *    sentence-case 44 pt buttons with radius.button (12), an unfilled code box with the theme
  *    hairline, a button label that names where it goes, and the copy haptic through
  *    HapticService so the Haptics switch is honoured.
  */
@@ -59,14 +59,14 @@ import { EmptyStateNoClients } from '../EmptyStateNoClients';
 import { IconChartEmpty } from '../icons';
 import LegacyEmptyState from '../../../components/EmptyState';
 import Colors from '../../../constants/colors';
-import { darkTokens, lightTokens, typography } from '../../../theme/tokens';
+import { darkTokens, lightTokens, radius, typography } from '../../../theme/tokens';
 
 type Styled = { props: { style?: StyleProp<TextStyle> } };
 const flat = (node: Styled): TextStyle => StyleSheet.flatten(node.props.style) ?? {};
 
 function expectCalmCta(button: Styled, label: Styled) {
   const b = flat(button);
-  expect(b.borderRadius).toBe(4);
+  expect(b.borderRadius).toBe(radius.button);
   expect(b.minHeight).toBeGreaterThanOrEqual(44);
   const l = flat(label);
   expect(l.fontFamily).toBe(typography.bodyMd.fontFamily);
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('base EmptyState', () => {
-  it('CTA: 44 pt forest button, radius 4, Inter 16 label, light HapticPressable feedback', async () => {
+  it('CTA: 44 pt forest button, radius.button, Inter 16 label, light HapticPressable feedback', async () => {
     const onCta = jest.fn();
     const { getByTestId, getByText } = await render(
       <EmptyState icon={<IconChartEmpty />} headline="No results" body="Nothing matches." ctaLabel="Clear search" onCta={onCta} />,
@@ -91,7 +91,8 @@ describe('base EmptyState', () => {
     expect(getByTestId('empty-state-cta').props.accessibilityRole).toBe('button');
     await fireEvent.press(getByTestId('empty-state-cta'));
     expect(onCta).toHaveBeenCalledTimes(1);
-    expect(mockImpact).toHaveBeenCalledWith('light');
+    // HapticPressable now taps through HapticService (honours the Haptics switch).
+    expect(mockSoftImpact).toHaveBeenCalled();
   });
 
   it('body uses the one muted grey; the headline stays Cormorant h2', async () => {
@@ -131,7 +132,7 @@ describe('components/EmptyState', () => {
 });
 
 describe('EmptyStateNoClients', () => {
-  it('no code yet: sentence-case button that names where it goes, 44 pt, radius 4', async () => {
+  it('no code yet: sentence-case button that names where it goes, 44 pt, radius.button', async () => {
     mockListInviteCodes.mockResolvedValue({ data: [] });
     const onInvite = jest.fn();
     const { findByTestId, getByText, queryByText } = await render(<EmptyStateNoClients onInvite={onInvite} />);
@@ -151,7 +152,7 @@ describe('EmptyStateNoClients', () => {
     const box = flat(await findByTestId('invite-code-block'));
     expect(box.backgroundColor).toBeUndefined();
     expect(box.borderColor).toBe(lightTokens.border);
-    expect(box.borderRadius).toBe(4);
+    expect(box.borderRadius).toBe(radius.input);
     const headline = flat(getByText('Your first client is one link away.'));
     expect(headline.fontFamily).toBe(typography.h2.fontFamily);
     expect(headline.fontSize).toBe(typography.h2.fontSize);
