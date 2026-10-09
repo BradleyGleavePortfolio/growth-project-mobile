@@ -199,7 +199,7 @@ it.each(['simple', 'full'] as const)('keeps every %s metric in one hairline row 
   });
   const home = require('fs').readFileSync(require.resolve('../HomeScreen.tsx'), 'utf8');
   expect(home).not.toContain('marginTop: 96');
-  const sections = ['<DunningBanner', '<CoachlessHomeSlot', '<PendingInviteBanner', '<PushPermissionCard',
+  const sections = ['<DunningBanner', '<CoachlessHomeSlot part="roman"', '<PendingInviteBanner', '<PushPermissionCard',
     '{showProfileNudge ?', '<CoachIntroductionBanner', '<FullMacrosIntroCard', '<TutorialHomeSlot', '<HolisticInsightsTile'];
   const positions = sections.map((section) => home.indexOf(section));
   expect(positions.every((position) => position > 0)).toBe(true);
