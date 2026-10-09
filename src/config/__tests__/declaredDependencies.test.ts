@@ -400,8 +400,9 @@ const ENTRYPOINT_ONLY = [...collectImports(ROOT_MODULES).keys()]
  * prove, and that is a fact a reviewer should have to look at rather than a
  * number that quietly drifts.
  */
+// Cormorant Garamond left this list when the consultation started importing
+// its italic face for Roman's voice (CONSULT-PARITY-133).
 const ENTRYPOINT_ONLY_PACKAGES = [
-  '@expo-google-fonts/cormorant-garamond',
   '@expo-google-fonts/inter',
   'expo',
   'expo-splash-screen',
