@@ -49,7 +49,7 @@ export default function K2Specialties({ answers, setAnswers, onNext, onBack, onF
       </View>
       {full ? (
         <Text style={[styles.note, { color: sc.textMuted }]} testID="coach-consult-K2-cap">
-          That is five. Remove one to choose another.
+          Up to five.
         </Text>
       ) : null}
     </CoachStepFrame>
