@@ -58,14 +58,16 @@ async function begin() {
   startClientTutorial(PAYLOAD);
 }
 
-function toFirstMessage() {
+/** Welcome to the message beat (TOUR-133), every gate met by its real action. */
+function toMessageBeat() {
   dispatchTutorial({ type: 'ACK' });
   setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
-  dispatchTutorial({ type: 'SIGNAL', signal: 'plan_card_opened' });
-  setTutorialRoute(['Home', 'HomeMain']);
-  dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
+  setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
+  dispatchTutorial({ type: 'ACK' });
   setTutorialRoute(['Log']);
   dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
+  setTutorialRoute(['Home', 'HomeMain']);
+  dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
 }
 
 beforeEach(async () => {
@@ -94,8 +96,8 @@ describe('TutorialOverlay', () => {
     expect(avatar.props.source).not.toBe(romanFaceAsset('smile'));
     const progress = screen.getByTestId('tutorial-progress');
     expect(progress.props.accessibilityRole).toBe('progressbar');
-    expect(progress.props.accessibilityLabel).toBe('Step 1 of 5, Welcome');
-    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 5, now: 0 });
+    expect(progress.props.accessibilityLabel).toBe('Step 1 of 7, Welcome');
+    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 7, now: 0 });
     expect(screen.getByLabelText('Begin')).toBeTruthy();
     expect(screen.getByLabelText('Skip the tour')).toBeTruthy();
   });
@@ -105,11 +107,11 @@ describe('TutorialOverlay', () => {
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Begin'));
     expect(screen.getByTestId('tutorial-line').props.children).toBe(
-      'This is Train. Bradley has assigned you Foundations. Tap Train to see it.',
+      'This is Train. Bradley assigned you Foundations. Tap Train to see it.',
     );
     expect(screen.getByTestId('tutorial-spotlight')).toBeTruthy();
     expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe(
-      'Step 2 of 5, Your workout plan',
+      'Step 2 of 7, Your plan',
     );
     // A route gate has no button that could fake the action.
     expect(screen.queryByLabelText('Begin')).toBeNull();
@@ -122,10 +124,10 @@ describe('TutorialOverlay', () => {
     await act(async () => {
       dispatchTutorial({ type: 'ACK' });
       setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
-      dispatchTutorial({ type: 'SIGNAL', signal: 'plan_card_opened' });
+      setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
     });
     expect(screen.getByTestId('tutorial-done-line')).toBeTruthy();
-    expect(screen.getByText('Your plan stays pinned here on Train.')).toBeTruthy();
+    expect(screen.getByText('This is your first day. Each move lists its sets, reps and a short cue from Bradley.')).toBeTruthy();
   });
 
   it('Skip asks first, keeps progress, and hides the overlay', async () => {
@@ -143,23 +145,24 @@ describe('TutorialOverlay', () => {
     expect(screen.getByTestId('tutorial-overlay')).toBeTruthy();
   });
 
-  it('offers Take me there for the coach conversation, and no Later on the teach-back', async () => {
+  it('offers Take me there and Later on the message beat; Later moves to the completion', async () => {
     await begin();
     const onNavigate = jest.fn();
     await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
-    await act(async () => toFirstMessage());
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/Open your conversation with Bradley/);
+    await act(async () => toMessageBeat());
+    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/A real person, not me\./);
     await fireEvent.press(screen.getByLabelText('Take me there'));
     expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'Messages' });
-    await act(async () => setTutorialRoute(['Home', 'Messages']));
-    expect(screen.queryByLabelText('Later')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Later'));
+    expect(useTutorialStore.getState().tutorial.outcomes.first_message).toBe('deferred');
+    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/^That is everything, Maya\./);
   });
 
-  it('ends on a quiet completion card with no skip, and Done finishes the tour', async () => {
+  it('ends on a quiet completion card with no skip, and the button finishes the tour', async () => {
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await act(async () => {
-      toFirstMessage();
+      toMessageBeat();
       setTutorialRoute(['Home', 'Messages']);
       dispatchTutorial({ type: 'SIGNAL', signal: 'message_sent' });
     });
@@ -173,7 +176,7 @@ describe('TutorialOverlay', () => {
     expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe('Tour complete');
     expect(screen.queryByLabelText('Skip the tour')).toBeNull();
     expect(screen.getByTestId('tutorial-roman-avatar').props.source).toBe(romanFaceAsset('neutral'));
-    await fireEvent.press(screen.getByLabelText('Done'));
+    await fireEvent.press(screen.getByLabelText('Got it'));
     expect(useTutorialStore.getState().tutorial.status).toBe('completed');
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
   });

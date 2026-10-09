@@ -1,22 +1,26 @@
 /**
- * tutorialSteps — the Roman-led tour, declared as data.
+ * tutorialSteps — the Roman-led tour, declared as data (TOUR-133).
  *
- * Calendar, Community and connected devices are no longer steps: the
- * completion names them in one quiet paragraph (TOUR-133, decision 133-5).
+ * Prototype 46-60 has seven beats: welcome, your plan on Train, the first
+ * exercise, Food and its add control, the daily targets on Home, message
+ * your coach, and the completion. They run on today's six tabs (owner 16:20:
+ * our tabs and button counts stay). For a client without a coach, beat six
+ * is the Roman beat instead (decision 28: nothing is locked, coaching is just
+ * absent). Calendar, Community and connected devices are folded into the
+ * completion line (decision 133-5 default).
  *
  * Each step is a sequence of gates. A gate is one of:
- *   - ack:    a single explicit button (only the welcome, two "this is where
- *             it lives" beats after a real navigation, and the completion).
+ *   - ack:    an explicit button (welcome, first exercise, Roman, completion).
  *   - route:  satisfied when the real navigator focuses one of `routes`.
  *   - signal: satisfied when the real product emits `signal` (see
- *             tutorialEvents.ts). `allowDefer` adds an explicit "Later".
+ *             tutorialEvents.ts). `allowDefer` (any gate) adds an explicit
+ *             "Later" that leaves the step.
  *
  * Copy is Roman's butler voice (AI_BUTLER_ROMAN_IDENTITY_SPEC §1): short,
  * complete sentences, no contractions, no exclamation points, no emoji, no
  * em dashes, no hype. The coach and client names and every number come from
  * the onboarding complete payload or the live macro endpoint; nothing is
- * invented. Steps about a coach run only when a coach is linked, and the
- * closing line repeats only what this tour really did.
+ * invented, and the closing line repeats only what this tour really did.
  * `tutorialCopy.test.ts` enforces the voice rules; `tutorialTruth.test.tsx`
  * the state-driven lines.
  */
@@ -38,8 +42,11 @@ export type TutorialTargetId =
   | 'tab:CommunityTab'
   | 'tab:CalendarTab'
   | 'plan-card'
+  | 'first-exercise'
+  | 'food-add'
   | 'macro-card'
   | 'home-message-coach'
+  // MoreScreen still marks these rows; the tour no longer visits them.
   | 'more-connections'
   | 'more-health';
 
@@ -81,6 +88,10 @@ interface GateBase {
   center?: boolean;
   /** A quieter second paragraph (the completion card). */
   sub?: Line;
+  /** An explicit "Later" that leaves the whole step (route or signal gates). */
+  allowDefer?: boolean;
+  /** Spoken hint on the Later button. */
+  deferHint?: string;
 }
 
 export interface AckGate extends GateBase {
@@ -97,17 +108,19 @@ export interface RouteGate extends GateBase {
 export interface SignalGate extends GateBase {
   kind: 'signal';
   signal: TutorialSignal;
-  allowDefer?: boolean;
-  /** Spoken hint on the Later button. */
-  deferHint?: string;
 }
 
 export type TutorialGate = AckGate | RouteGate | SignalGate;
 
-export type StepRequirement = 'program' | 'macros' | 'coach';
+export type StepRequirement = 'program' | 'macros' | 'coach' | 'no_coach' | 'roman';
+
+/** Beats in the progress indicator ("Step n of 7"), the completion included. */
+export const TOUR_LENGTH = 7;
 
 export interface TutorialStepDef {
   id: TutorialStepId;
+  /** 1-based beat number shown as "Step n of 7" (both forms of beat 6 are 6). */
+  ordinal: number;
   /** Short accessible title, used by the progress indicator. */
   title: string;
   /** Every requirement must hold, or the step is skipped (see tutorialMachine). */
@@ -115,7 +128,7 @@ export interface TutorialStepDef {
   gates: TutorialGate[];
   /** Roman's line on completion (shown with the check glyph). */
   doneLine?: Line;
-  /** Shown instead of the step when its data is not ready yet. */
+  /** Shown, with Continue, when the step's data is not ready yet (66). */
   pendingLine?: Line;
 }
 
@@ -134,22 +147,28 @@ function joinAnd(parts: string[]): string {
   return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
 }
 
-function macroLine(c: CopyContext): string {
-  const m = c.macros;
-  if (!m) return 'Tap How to use these numbers.';
-  if (c.macroMode === 'simple') {
-    return `This first week keeps it to two numbers: ${n(m.calories)} calories and ${n(m.protein_g)} grams of protein. Carbohydrate and fat are already worked out for you, and they will join these on Home when the week is done. Tap How to use these numbers.`;
-  }
-  return `Each day: ${n(m.calories)} calories, ${n(m.protein_g)} grams of protein, ${n(m.carbs_g)} grams of carbohydrate and ${n(m.fat_g)} grams of fat. Tap How to use these numbers.`;
+function assigned(c: CopyContext): string {
+  const name = c.program?.name ?? 'your plan';
+  return c.coachLinked ? `${c.coachName} assigned you ${name}.` : `Your plan is ${name}.`;
 }
 
-/** No coach linked: no coach is named and only the meal is the client's turn. */
+function macroLine(c: CopyContext): string {
+  const m = c.macros;
+  const tail = 'Tap How to use these numbers any time for what each one means.';
+  if (!m) return tail;
+  const setBy = c.coachLinked ? `${c.coachName} set these for you.` : 'They come from your answers.';
+  if (c.macroMode === 'simple') {
+    return `This first week keeps it to two numbers: ${n(m.calories)} calories and ${n(m.protein_g)} grams of protein. Carbohydrate and fat are already worked out for you, and they will join these on Home when the week is done. ${tail}`;
+  }
+  return `Here are your daily numbers: ${n(m.calories)} calories, ${n(m.protein_g)} grams of protein, ${n(m.carbs_g)} grams of carbohydrate and ${n(m.fat_g)} grams of fat. ${setBy} ${tail}`;
+}
+
+/** No coach linked: no coach is named. */
 function welcomeLine(c: CopyContext): string {
   const hello = c.firstName ? `Welcome, ${c.firstName}. ` : 'Welcome. ';
-  if (!c.coachLinked) {
-    return `${hello}I am Roman. This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself.`;
-  }
-  return `${hello}I am Roman. I work with ${c.coachName} to help you get the most from ${c.program ? 'your plan' : 'your training'}. This takes about three minutes. I will show you where everything lives, and then you will try two things yourself.`;
+  const what = c.program ? 'your plan' : 'your training';
+  const who = c.coachLinked ? `I work with ${c.coachName} to help you` : 'I am here to help you';
+  return `${hello}I am Roman. ${who} get the most from ${what}. This takes about two minutes. I will show you where everything lives.`;
 }
 
 /** Each clause needs its step to have ended 'done' in this tour. */
@@ -175,54 +194,76 @@ function completeSub(c: CopyContext): string {
   return `${where}${call} One thing at a time. You do not need to be perfect, just consistent.`;
 }
 
-function planSummary(c: CopyContext): string {
-  const p = c.program;
-  if (!p) return '';
-  const parts: string[] = [];
-  if (p.weeks) parts.push(`${p.weeks} weeks`);
-  if (p.days_per_week) parts.push(`${p.days_per_week} days a week`);
-  return parts.length ? `${p.name}: ${parts.join(', ')}.` : `${p.name}.`;
-}
-
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'welcome',
+    ordinal: 1,
     title: 'Welcome',
-    gates: [
-      {
-        kind: 'ack',
-        center: true,
-        cta: 'Begin',
-        line: welcomeLine,
-      },
-    ],
+    gates: [{ kind: 'ack', center: true, cta: 'Begin', line: welcomeLine }],
   },
   {
     id: 'plan',
-    title: 'Your workout plan',
+    ordinal: 2,
+    title: 'Your plan',
     requires: 'program',
     gates: [
       {
         kind: 'route',
         routes: ['WorkoutMain'],
         target: 'tab:WorkoutTab',
-        line: (c) =>
-          `This is Train. ${c.coachName} has assigned you ${c.program?.name ?? 'your plan'}. Tap Train to see it.`,
+        line: (c) => `This is Train. ${assigned(c)} Tap Train to see it.`,
+      },
+      {
+        // Opened from the plan card's first day (the real assignment).
+        kind: 'route',
+        routes: ['WorkoutAssignmentDetail', 'ClientWorkoutViewer'],
+        target: 'plan-card',
+        line: (c) => `${assigned(c)} Tap your first day on the card to see it.`,
+      },
+    ],
+    doneLine: (c) =>
+      `This is your first day. Each move lists its sets, reps and a short cue${c.coachLinked ? ` from ${c.coachName}` : ''}.`,
+    pendingLine: (c) =>
+      `${c.coachLinked ? `${c.coachName} is still setting up your first plan.` : 'Your first plan is still being set up.'} It will appear on Train once it is ready. For now, we will look at logging.`,
+  },
+  {
+    id: 'first_exercise',
+    ordinal: 3,
+    title: 'Your first exercise',
+    requires: 'program',
+    gates: [
+      {
+        kind: 'ack',
+        target: 'first-exercise',
+        cta: 'Continue',
+        line: () =>
+          'Start with the first move. When you are ready to train, tap Start workout. There is no need to do that now.',
+      },
+    ],
+  },
+  {
+    id: 'first_meal',
+    ordinal: 4,
+    title: 'Log your first meal',
+    gates: [
+      {
+        kind: 'route',
+        routes: ['Log'],
+        target: 'tab:Log',
+        line: () => 'This is Food. Log anything you have eaten today. One entry is enough to start. Tap Food.',
       },
       {
         kind: 'signal',
-        signal: 'plan_card_opened',
-        target: 'plan-card',
-        line: (c) =>
-          `${planSummary(c)} Tap Why this plan to see how it follows from your answers.`,
+        signal: 'meal_logged',
+        target: 'food-add',
+        line: () => 'Tap Add food under any meal, choose one thing you have eaten today, and save it.',
       },
     ],
-    doneLine: () => 'Your plan stays pinned here on Train.',
-    pendingLine: (c) =>
-      `${c.coachName} is still setting up your first plan. It will appear on Train once it is ready. For now, the tour carries on.`,
+    doneLine: () => 'Logged. This is the single habit that matters most, day to day.',
   },
   {
     id: 'macros',
+    ordinal: 5,
     title: 'Your daily targets',
     requires: 'macros',
     gates: [
@@ -232,38 +273,15 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
         target: 'tab:Home',
         line: () => 'Your daily numbers live on Home. Tap Home.',
       },
-      {
-        kind: 'signal',
-        signal: 'macro_card_opened',
-        target: 'macro-card',
-        line: macroLine,
-      },
+      { kind: 'signal', signal: 'macro_card_opened', target: 'macro-card', line: macroLine },
     ],
-    doneLine: () => 'You know your numbers now. They stay pinned on Home.',
+    doneLine: () => 'You know your numbers now.',
     pendingLine: (c) =>
-      `${c.coachName} is finishing your numbers. They will appear on Home once they are ready.`,
-  },
-  {
-    id: 'first_meal',
-    title: 'Log your first meal',
-    gates: [
-      {
-        kind: 'route',
-        routes: ['Log'],
-        target: 'tab:Log',
-        line: () => 'Now it is your turn. Tap Log.',
-      },
-      {
-        kind: 'signal',
-        signal: 'meal_logged',
-        line: () =>
-          'Tap Add Food under any meal, choose one thing you have eaten today, and save it.',
-      },
-    ],
-    doneLine: () => 'Recorded. This is the habit that matters most, day to day.',
+      `${c.coachLinked ? `${c.coachName} is finishing your numbers.` : 'Your numbers are still being worked out.'} They will appear on Home once they are ready.`,
   },
   {
     id: 'first_message',
+    ordinal: 6,
     title: 'Message your coach',
     requires: 'coach',
     gates: [
@@ -272,34 +290,47 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
         routes: ['Messages'],
         target: 'home-message-coach',
         takeMeThere: { tab: 'Home', screen: 'Messages' },
-        line: (c) => `Last one. Open your conversation with ${c.coachName}.`,
+        // The most-skipped beat; skipping is fully allowed (Tutorial 4).
+        allowDefer: true,
+        deferHint: 'Message your coach another time from Home',
+        line: (c) =>
+          `This is where you talk with ${c.coachName} directly. A real person, not me. Tap Message your coach.`,
       },
       {
+        // Freely skippable (prototype Tutorial 4): Later moves on.
         kind: 'signal',
         signal: 'message_sent',
+        allowDefer: true,
+        deferHint: 'Message your coach another time from Home',
         line: (c) =>
-          `Write ${c.coachName} a short hello, or one thing about your goal, and tap send. Nothing sends until you do.`,
+          `Send ${c.coachName} a quick hello, or one thing about your goal. Nothing sends until you tap send.`,
       },
     ],
     doneLine: (c) => `Sent. ${c.coachName} will see it in your conversation.`,
   },
   {
-    id: 'complete',
-    title: 'Complete',
+    // Beat six for a client without a coach (decision 28).
+    id: 'roman',
+    ordinal: 6,
+    title: 'Ask Roman',
+    requires: ['no_coach', 'roman'],
     gates: [
       {
         kind: 'ack',
-        center: true,
-        cta: 'Done',
-        line: completeLine,
-        sub: completeSub,
+        target: 'tab:MoreTab',
+        cta: 'Continue',
+        line: () =>
+          'When a question comes up about your plan, your food or your training, ask me. You will find me under You, at any time.',
       },
     ],
   },
+  {
+    id: 'complete',
+    ordinal: 7,
+    title: 'Complete',
+    gates: [{ kind: 'ack', center: true, cta: 'Got it', line: completeLine, sub: completeSub }],
+  },
 ];
-
-/** Steps shown in the progress indicator (the completion moment is not one). */
-export const COUNTED_STEPS = TUTORIAL_STEPS.filter((s) => s.id !== 'complete');
 
 export function stepIndexOf(id: TutorialStepId): number {
   return TUTORIAL_STEPS.findIndex((s) => s.id === id);

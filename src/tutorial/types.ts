@@ -44,24 +44,37 @@ export interface OnboardingCompletePayload {
   coach?: OnboardingCoach | null;
 }
 
-/** The steps, in order (Calendar, Community and devices fold into complete). */
-export type TutorialStepId = 'welcome' | 'plan' | 'macros' | 'first_meal' | 'first_message' | 'complete';
+/**
+ * The seven beats of prototype 46-60 on today's tabs (decision 133-5).
+ * `first_message` (coach linked) and `roman` (no coach) are the two forms of
+ * beat 6; a client only ever meets one of them.
+ */
+export type TutorialStepId =
+  | 'welcome'
+  | 'plan'
+  | 'first_exercise'
+  | 'first_meal'
+  | 'macros'
+  | 'first_message'
+  | 'roman'
+  | 'complete';
 
 /**
  * How a step ended.
  *  - done:        every gate satisfied by a real action.
- *  - deferred:    the client explicitly chose "Later".
+ *  - deferred:    the client explicitly chose "Later" (wearables only).
  *  - pending:     data the step explains is not ready yet (no plan / no
  *                 macros); resumable once it lands.
- *  - unavailable: not for this client (no coach linked).
+ *  - unavailable: not for this client (the coach beat without a coach, the
+ *                 Roman beat with one, or Roman chat not in this build).
  */
 export type TutorialStepOutcome = 'done' | 'deferred' | 'pending' | 'unavailable';
 
 export type TutorialStatus = 'not_started' | 'active' | 'paused' | 'completed';
 
 export interface TutorialState {
-  /** 2 since TOUR-133 (the step list changed; older blobs are mapped). */
-  version: 2;
+  /** 3 since the seven beats (TOUR-133); older blobs are mapped. */
+  version: 3;
   status: TutorialStatus;
   stepIndex: number;
   gateIndex: number;
@@ -84,6 +97,8 @@ export type TutorialSignal =
 export interface TutorialContext {
   hasProgram: boolean;
   hasMacros: boolean;
+  /** featureFlags.romanChat: the Roman beat for a client without a coach. */
+  romanAvailable?: boolean;
   /**
    * A coach is linked to this client (`user.coach_id`, the signal Home uses
    * for its Message your coach row). Absent means no coach.
