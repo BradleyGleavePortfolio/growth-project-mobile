@@ -6,9 +6,9 @@
  * line after a resume (42), the under-16 stop (45), and the coachless copy.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleProp, StyleSheet, TextStyle } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import * as Haptics from 'expo-haptics';
+import { HapticService } from '../../../ui/haptics/haptics.service';
 import ConsultationFlow from '../ConsultationFlow';
 import { CompleteProblemScreen, MacroRevealScreen, PausedScreen, PlanRevealScreen, SummaryScreen } from '../RevealScreens';
 import { fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
@@ -19,9 +19,8 @@ import { fillCopy } from '../../../lib/consultation/engine';
 const mockNet = { isOnline: true, isInternetReachable: null as boolean | null };
 jest.mock('../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => mockNet }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
-jest.mock('expo-haptics', () => ({
-  notificationAsync: jest.fn(async () => undefined),
-  NotificationFeedbackType: { Success: 'success' },
+jest.mock('../../../ui/haptics/haptics.service', () => ({
+  HapticService: { success: jest.fn(async () => undefined), selection: jest.fn(async () => undefined), lightImpact: jest.fn(async () => undefined) },
 }));
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -31,13 +30,13 @@ jest.mock('../../../services/api', () => ({
 const ctx = { firstName: 'Maya', coachName: 'Bradley', now: NOW };
 const coachless = { firstName: 'Maya', coachless: true, now: NOW };
 const noop = () => undefined;
-const flat = (style: unknown) => StyleSheet.flatten(style as never) as Record<string, unknown>;
+const flat = (style: StyleProp<TextStyle>): TextStyle => StyleSheet.flatten(style) ?? {};
 
 beforeEach(async () => {
   await resetStores();
   mockNet.isOnline = true;
   mockNet.isInternetReachable = null;
-  (Haptics.notificationAsync as jest.Mock).mockClear();
+  (HapticService.success as jest.Mock).mockClear();
 });
 
 describe('reveals and states', () => {
@@ -64,7 +63,7 @@ describe('reveals and states', () => {
 
   it('macro reveal: one success haptic, hero number never clipped (39)', async () => {
     const r = await render(<MacroRevealScreen result={RESULT} answers={fullAnswers()} ctx={ctx} onNext={noop} />);
-    expect(Haptics.notificationAsync).toHaveBeenCalledTimes(1);
+    expect(HapticService.success).toHaveBeenCalledTimes(1);
     const hero = flat(r.getByTestId('macro-calories').props.style);
     expect(hero.lineHeight as number).toBeGreaterThanOrEqual(1.2 * (hero.fontSize as number));
     await fireEvent.press(r.getByTestId('macro-why'));
@@ -72,7 +71,7 @@ describe('reveals and states', () => {
   });
 
   it('macro reveal for a coachless client never points to a coach', async () => {
-    const r = await render(<MacroRevealScreen result={{ ...RESULT, coach: null as never }} answers={fullAnswers()} ctx={coachless} onNext={noop} />);
+    const r = await render(<MacroRevealScreen result={RESULT} answers={fullAnswers()} ctx={coachless} onNext={noop} />);
     await fireEvent.press(r.getByTestId('macro-why'));
     expect(r.queryByText(/coach/i)).toBeNull();
   });

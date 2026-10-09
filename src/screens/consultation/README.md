@@ -117,6 +117,16 @@ Every failure says what happened and offers a next step that works; known status
 - P8 opens "Thanks for answering honestly, {first}." with Roman: "That helps me keep you safe."
 - Deliberate differences from the prototype: P0 stays straight after W1 with two boxes (D2); T3's reason stays impersonal; N2 keeps "So your coach knows what you avoid."; P7 uses commas; P8's body keeps the approved safety copy.
 
+## Reveals and states (CONSULT-PARITY-133, prototype screens 37-45)
+
+- 43 Summary offline: every chapter works offline; only Prepare needs the network. While `useNetworkStatus` reports no connection the summary's action reads "Prepare when I'm back online" (disabled) and Roman says "I'll prepare your numbers the moment you're connected. Nothing you've told me is lost."; the app-wide `OfflineBanner` shows above the flow. Back online, "Prepare my plan" returns.
+- 44 Calm error: every problem screen shows Roman's face above the serif sentence; no red, no error haptic.
+- 39 Macro reveal: one success haptic when the numbers appear (no count-up); the 64 pt calorie number has a 77 pt line height (never clipped).
+- 40 Plan reveal: training days carry an accent dot and the C1 first-session day is ring-highlighted; the week line adds the session length from T4 ("About 30 to 45 minutes each."). Program content (A Foundations, B Build, C Gentle Start) comes from the server.
+- 42 Welcome back: after a resume (reopening the app or Continue on the paused screen), Roman's line on the screen the client lands on is "Welcome back, {first}. You were telling me about {topic}." (`welcomeBackLine`); the chapter line returns on the next screen.
+- 45 Under 16: Continue on B2 with an age under 16 opens a calm, final stop screen ("The Growth Project is for ages 16 and up.", "If the date was entered by mistake, go back and change it.", "Change my date of birth"); nothing is saved or sent.
+- Coachless clients: the plan's physician line, the plan and macro "message your coach" lines and the paused line have `COACHLESS_COPY` versions.
+
 ## Tests
 
 ```bash
@@ -133,6 +143,7 @@ npx jest src/lib/consultation src/screens/consultation --maxWorkers=1
 - `src/lib/consultation/__tests__/aiConsentRetry.test.ts`: the one retry and the stop check between attempts.
 - `src/screens/consultation/__tests__/consultationOrdering.test.tsx`: auto-advance timer, serialized saves, resume reconciliation in the flow, safe-area insets, identity fencing.
 - `src/screens/consultation/__tests__/consultationTemplates.test.tsx`: wheels, unit tabs, soft notes, T3 expansion, summary Edit, API client routes and 409 mapping, the rollback flag.
+- `src/screens/consultation/__tests__/consultationParity133States.test.tsx`: summary offline, calm error with Roman, macro haptic and line height, first-day ring and session length, welcome back after a resume, coachless reveals.
 - `src/screens/consultation/__tests__/consultationParity133.test.tsx`: prototype parity at 360x800 and 390x844 (Roman's italic voice, quiet unit tabs and region default, serif wheels and band, the large grid, P8), and the coachless copy never naming a coach.
 
 ## Problem and paused screens

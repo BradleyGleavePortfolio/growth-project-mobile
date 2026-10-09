@@ -7,14 +7,14 @@
  * without one). Rendered at 360x800 and 390x844 through the test renderer.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleProp, StyleSheet, TextStyle } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import QuestionScreen from '../QuestionScreen';
 import { ROMAN_VOICE_FONT, wheelOpacity } from '../components';
 import { COACHLESS_COPY, SCREENS, screenById } from '../../../lib/consultation/definitions';
 import { defaultMeasureUnit, fillCopy, type CopyContext } from '../../../lib/consultation/engine';
-import { P8_COPY } from '../../../lib/consultation/copy';
+import { P8_COPY, REVEAL_COPY } from '../../../lib/consultation/copy';
 import type { Answers, ScreenDef } from '../../../lib/consultation/types';
 
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
@@ -49,7 +49,7 @@ function renderScreen(id: string, answers: Answers = {}, ctx: CopyContext = { fi
   );
 }
 
-const flat = (style: unknown) => StyleSheet.flatten(style as never) as Record<string, unknown>;
+const flat = (style: StyleProp<TextStyle>): TextStyle => StyleSheet.flatten(style) ?? {};
 
 /** Every template string a screen shows. */
 function screenStrings(screen: ScreenDef): string[] {
@@ -127,13 +127,13 @@ describe('copy and defaults', () => {
   });
 
   it('every coachless variant replaces a line the consultation really shows', async () => {
-    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next]);
+    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...Object.values(REVEAL_COPY)]);
     for (const key of Object.keys(COACHLESS_COPY)) expect(shown.has(key)).toBe(true);
   });
 
-  it('a coachless client is never told about a coach, on any question or P8 line', async () => {
+  it('a coachless client is never told about a coach, on any question, P8, reveal or paused line', async () => {
     const ctx: CopyContext = { firstName: 'Maya', coachless: true, coachName: 'Bradley', now: NOW };
-    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next];
+    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...Object.values(REVEAL_COPY)];
     for (const t of lines) expect(fillCopy(t, ctx)).not.toMatch(/coach|Bradley/i);
     // A coached client keeps the coach's name.
     expect(fillCopy('{Coach} can build around what you already like.', { coachName: 'Bradley' })).toBe(

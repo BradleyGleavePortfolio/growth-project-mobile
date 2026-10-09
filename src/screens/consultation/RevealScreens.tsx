@@ -7,7 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { radius } from '../../theme/tokens';
@@ -315,11 +315,10 @@ export function MacroRevealScreen({
   // Opus C-4 / contract item 8: never-trackers see calories and protein only
   // in week one. The full targets are still set on the server.
   const simple = result.macro_display_mode === 'simple';
-  // Prototype 39: the numbers arrive with one success haptic, no count-up.
+  // Prototype 39: the numbers arrive with one success haptic (the Settings
+  // switch is honoured; no engine means nothing happens), no count-up.
   useEffect(() => {
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {
-      // No haptics engine (simulator, some Android phones): the reveal reads the same.
-    });
+    void HapticService.success();
   }, []);
   const questionsLine = fillCopy(REVEAL_COPY.macroQuestions, c2);
   const rows = (simple
