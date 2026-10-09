@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
@@ -22,6 +21,8 @@ import { errorMessage } from '../../types/common';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { Screen } from '../../ui';
+import { layout, radius } from '../../theme/tokens';
 
 interface InviteCode {
   id: string;
@@ -177,27 +178,30 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
     );
   }
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>Invite Codes</Text>
-        <View style={styles.backBtn} />
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
+    <Screen
+      edges={['top']}
+      testID="invite-codes"
+      header={
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>Invite Codes</Text>
+          <View style={styles.backBtn} />
+        </View>
+      }
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+      }
+    >
         <Text style={styles.intro}>
           Share an invite code with a new client. When they sign up using your code, they'll be
           linked to you as their coach automatically.
@@ -302,7 +306,6 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
             );
           })
         )}
-      </ScrollView>
 
       <Modal visible={showCreateModal} transparent animationType="fade" onRequestClose={() => setShowCreateModal(false)}>
         <View style={styles.modalOverlay}>
@@ -369,37 +372,34 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
           </View>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
     paddingBottom: 12,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: layout.touchMin,
+    height: layout.touchMin,
     justifyContent: 'center',
     alignItems: 'center',
   },
   topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
-  content: { paddingHorizontal: 24, paddingBottom: 40 },
   intro: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 16 },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.button,
     paddingVertical: 14,
     gap: 8,
     marginBottom: 24,
@@ -410,7 +410,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 2,
+    borderRadius: radius.button,
     paddingVertical: 14,
     gap: 8,
     marginTop: -16,
@@ -424,14 +424,14 @@ const makeStyles = (colors: ThemeColors) =>
   emptyText: { fontSize: 13, color: colors.textSecondary },
   codeCard: {
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 16,
     marginBottom: 12,
     gap: 10,
   },
   codeCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   codeText: { fontSize: 20, fontWeight: '500', color: colors.textPrimary, letterSpacing: 1 },
-  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.chip },
   statusPillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
   codeMetaRow: { flexDirection: 'row', gap: 16 },
   codeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -444,18 +444,18 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 12,
     paddingVertical: 8,
     backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
   },
   actionBtnDanger: { backgroundColor: colors.error + '18' },
   actionBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: 4, padding: 24 },
+  modalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: radius.card, padding: 24 },
   modalTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary, textAlign: 'center', marginBottom: 8 },
   modalDesc: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
   inputLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -463,9 +463,9 @@ const makeStyles = (colors: ThemeColors) =>
   },
   errorText: { color: colors.error, fontSize: 13, marginTop: 12, textAlign: 'center' },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
+  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
   modalCancelText: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
-  modalSaveBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.primary, alignItems: 'center' },
+  modalSaveBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center' },
   modalSaveText: { fontSize: 15, fontWeight: '500', color: colors.textOnPrimary },
   buttonDisabled: { opacity: 0.6 },
 

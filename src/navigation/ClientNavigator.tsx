@@ -129,7 +129,7 @@ import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
-import { colors } from '../theme/tokens';
+import { colors, typography } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // v1-5 Community client tab. The whole stack + tab are gated behind
 // featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
@@ -681,14 +681,19 @@ export default function ClientNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarShowLabel: true,
+        // B26: six labelled tabs on a 360 pt Android phone leave 60 pt each;
+        // the label keeps one line (tokens typography.tabLabel*, no side
+        // padding on the item, shrinks rather than wraps at large text).
         tabBarLabel: ({ focused, color, children }) => (
-          <Text style={{
-            fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
-            fontSize: 11,
-            fontWeight: focused ? '500' : '400',
-            color,
-          }}>{children}</Text>
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.8}
+            maxFontSizeMultiplier={1.3}
+            style={[focused ? typography.tabLabelActive : typography.tabLabel, { color }]}
+          >{children}</Text>
         ),
+        tabBarItemStyle: { paddingHorizontal: 0 },
         tabBarHideOnKeyboard: true,
         tabBarActiveTintColor:   colors.forest,
         tabBarInactiveTintColor: sc.textMuted,

@@ -58,6 +58,7 @@ jest.mock('../../../components/tutorial/TutorialHomeSlot', () => () => null);
 jest.mock('../../../components/coachless/CoachlessHomeSlot', () => () => null);
 jest.mock('../../../components/PendingInviteBanner', () => () => null);
 import HomeScreen from '../HomeScreen';
+import { homeDateLine } from '../homeDate';
 beforeEach(() => {
   jest.clearAllMocks();
   mockUser.coach_id = 'c1'; mockMacroMode = 'full';
@@ -100,6 +101,8 @@ it.each([
       ? 'Opens your saved workout' : label === 'Open Train' ? 'Opens Train' : 'Opens the assigned workout');
   }
   expect(screen.queryByText(/One workout to go|Explore the app/)).toBeNull();
+  // B25: Home never offers a coach action to a client without a coach.
+  if (state === 'coachless') expect(screen.queryByText(/coach/i)).toBeNull();
 });
 it('opens the first unfinished assignment, not a completed workout or a different plan', async () => {
   mockAssignments.mockResolvedValue([
@@ -134,7 +137,9 @@ it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s m
   await render(<HomeScreen />);
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(`${oz} oz`)).toBeTruthy();
-  for (const [label, destination] of [['home-message-coach', 'Messages'], ['home-notification-bell', 'NotificationCenter'],
+  // B25: no coach, so no coach entry (it used to open an empty Messages thread).
+  expect(screen.queryByTestId('home-message-coach')).toBeNull();
+  for (const [label, destination] of [['home-notification-bell', 'NotificationCenter'],
     ['Log a meal to see your protein', 'Log'], [mode === 'simple' ? 'Log a meal to see your calories' : 'Log a meal to see your carbs', 'Log'], ...(mode === 'full' ? [['Log a meal to see your fat', 'Log']] : [])]) {
     await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
@@ -159,6 +164,9 @@ it.each(['simple', 'full'] as const)('keeps every %s metric in one hairline row 
     });
   }
   expect(StyleSheet.flatten(screen.getByTestId('home-date').props.style).fontFamily).toBe(typography.eyebrow.fontFamily);
+  // B34: weekday, day and month in the phone's locale; no "the eighth." ordinal words.
+  expect(screen.getByTestId('home-date').props.children).toBe(homeDateLine(new Date()));
+  expect(screen.getByTestId('home-date').props.children).not.toMatch(/\bthe\b|\.$/);
   expect(StyleSheet.flatten(screen.getByText('One meal logged.').props.style).fontFamily).toBe(typography.h1.fontFamily);
   expect(StyleSheet.flatten(screen.getByTestId('home-explore-cta').props.style)).toMatchObject({
     backgroundColor: lightTokens.accent, minHeight: 44,

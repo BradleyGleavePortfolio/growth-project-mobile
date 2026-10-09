@@ -27,6 +27,8 @@ import type { RouteProp } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { coachApi } from '../../services/api';
 import { errorStatus } from '../../types/common';
+import { Screen } from '../../ui';
+import { layout } from '../../theme/tokens';
 
 interface Redeemer {
   user_id: string;
@@ -76,8 +78,10 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
     void load();
   }, [load]);
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="invite-code-redeemers">
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -158,22 +162,22 @@ export default function InviteCodeRedeemersScreen({ route, navigation }: Props) 
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    // The list and states keep their own sides and foot.
+    body: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
       gap: 8,
     },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+    backBtn: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', alignItems: 'center' },
     topTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
     subTitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
