@@ -305,6 +305,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           ) : null}
           <QuietRow label="Name" value={currentUser?.name || 'No name set'} />
           <QuietRow label="Email" detail={currentUser?.email} />
+          {currentUser && !currentUser.coach_id ? (
+            <QuietRow label="Add a coach code" detail="Connect this account to a coach." testID="settings-add-coach-code"
+              onPress={() => navigation.navigate('AddCoachCode')} />
+          ) : null}
           <QuietRow label="Change password" onPress={() => setShowPasswordModal(true)} />
           {/* Appearance remains on this screen, with light rendering for launch. */}
           <View style={[styles.row, styles.rowStacked]}>
