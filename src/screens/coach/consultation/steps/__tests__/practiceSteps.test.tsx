@@ -15,7 +15,7 @@ const mockInviteLink = jest.fn();
 jest.mock('../../../../../api/coachSetupApi', () => ({ coachSetupApi: { inviteLink: () => mockInviteLink() } }));
 const mockCopy = jest.fn();
 jest.mock('expo-clipboard', () => ({ setStringAsync: (v: string) => mockCopy(v) }));
-const mockPrefsSet = jest.fn(async () => undefined);
+const mockPrefsSet = jest.fn<Promise<void>, [string, string]>(async () => undefined);
 jest.mock('../../../../../storage/mmkv', () => ({ prefsStorage: { set: (k: string, v: string) => mockPrefsSet(k, v) } }));
 jest.mock('../../../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 
@@ -37,7 +37,6 @@ function props(over: Partial<CoachStepProps> = {}): CoachStepProps {
     eyebrow: 'Your practice · 4 of 5',
     firstName: 'Jordan',
     completing: false,
-    completeError: null,
     ...over,
   };
 }
@@ -50,35 +49,35 @@ beforeEach(() => {
 });
 
 describe('K5 Programming style', () => {
-  it('shows the question and three rows, saves the tap and moves on after a short beat', () => {
+  it('shows the question and three rows, saves the tap and moves on after a short beat', async () => {
     jest.useFakeTimers();
     const p = props();
-    const ui = render(<K5ProgrammingStyle {...p} />);
+    const ui = await render(<K5ProgrammingStyle {...p} />);
     expect(ui.getByText('How do you usually build programs?')).toBeTruthy();
     expect(ui.getByText('Your practice · 4 of 5')).toBeTruthy();
     ['I write my own', 'I adapt templates', "I'd like help building them"].forEach((t) => expect(ui.getByText(t)).toBeTruthy());
-    fireEvent.press(ui.getByTestId('k5-templates'));
-    fireEvent.press(ui.getByTestId('k5-own')); // a second tap while leaving is ignored
+    await fireEvent.press(ui.getByTestId('k5-templates'));
+    await fireEvent.press(ui.getByTestId('k5-own')); // a second tap while leaving is ignored
     expect(p.setAnswers).toHaveBeenCalledTimes(1);
     expect(p.setAnswers).toHaveBeenCalledWith({ programming_style: 'templates' });
     expect(p.onNext).not.toHaveBeenCalled();
-    act(() => {
+    await act(async () => {
       jest.advanceTimersByTime(K5_ADVANCE_MS);
     });
     expect(p.onNext).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 
-  it('moves on at once with Reduce Motion, and Skip saves nothing', () => {
+  it('moves on at once with Reduce Motion, and Skip saves nothing', async () => {
     mockReduced = true;
     const a = props();
-    const ui = render(<K5ProgrammingStyle {...a} />);
-    fireEvent.press(ui.getByTestId('k5-help'));
+    const ui = await render(<K5ProgrammingStyle {...a} />);
+    await fireEvent.press(ui.getByTestId('k5-help'));
     expect(a.onNext).toHaveBeenCalledTimes(1);
     const b = props({ answers: { programming_style: 'own' } });
-    const ui2 = render(<K5ProgrammingStyle {...b} />);
+    const ui2 = await render(<K5ProgrammingStyle {...b} />);
     expect(ui2.getByTestId('k5-own').props.accessibilityState).toEqual(expect.objectContaining({ selected: true }));
-    fireEvent.press(ui2.getByTestId('k5-skip'));
+    await fireEvent.press(ui2.getByTestId('k5-skip'));
     expect(b.setAnswers).not.toHaveBeenCalled();
     expect(b.onNext).toHaveBeenCalledTimes(1);
   });
@@ -88,16 +87,13 @@ describe('K6 Your personal link', () => {
   it('shows the real link, its code and a QR, and shares it through the system sheet', async () => {
     const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction } as never);
     const p = props({ progress: { chapter: 5, position: 1, count: 1, total: 5 }, eyebrow: 'Your practice · 5 of 5' });
-    const ui = render(<K6PersonalLink {...p} />);
-    expect(ui.getByTestId('k6-loading')).toBeTruthy();
+    const ui = await render(<K6PersonalLink {...p} />);
     await waitFor(() => expect(ui.getByTestId('k6-url')).toBeTruthy());
     expect(ui.getByText('app.trygrowthproject.com/join/GP-RS7K2Q')).toBeTruthy();
     expect(ui.getByTestId('k6-code').props.children).toBe('GP-RS7K2Q');
     expect(ui.getByTestId('k6-qr')).toBeTruthy();
     expect(ui.getByText('Anyone who opens this joins your roster directly.')).toBeTruthy();
-    await act(async () => {
-      fireEvent.press(ui.getByTestId('k6-share'));
-    });
+    await fireEvent.press(ui.getByTestId('k6-share'));
     expect(shareSpy).toHaveBeenCalledWith({ message: `Join my coaching on The Growth Project: ${LINK.url}` });
     expect(p.setAnswers).toHaveBeenCalledWith({ link_shared: true });
     expect(mockPrefsSet).toHaveBeenCalledWith(expect.stringContaining('coach_1'), 'true');
@@ -108,19 +104,15 @@ describe('K6 Your personal link', () => {
   it('stays when the share sheet is dismissed; Copy copies the url; Later moves on', async () => {
     const shareSpy = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.dismissedAction } as never);
     const p = props();
-    const ui = render(<K6PersonalLink {...p} />);
+    const ui = await render(<K6PersonalLink {...p} />);
     await waitFor(() => expect(ui.getByTestId('k6-url')).toBeTruthy());
-    await act(async () => {
-      fireEvent.press(ui.getByTestId('k6-share'));
-    });
+    await fireEvent.press(ui.getByTestId('k6-share'));
     expect(p.onNext).not.toHaveBeenCalled();
-    await act(async () => {
-      fireEvent.press(ui.getByTestId('k6-copy'));
-    });
+    await fireEvent.press(ui.getByTestId('k6-copy'));
     expect(mockCopy).toHaveBeenCalledWith(LINK.url);
     expect(p.setAnswers).toHaveBeenCalledWith({ link_shared: true });
     expect(ui.getByText('Copied')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('k6-later'));
+    await fireEvent.press(ui.getByTestId('k6-later'));
     expect(p.onNext).toHaveBeenCalledTimes(1);
     shareSpy.mockRestore();
   });
@@ -128,29 +120,27 @@ describe('K6 Your personal link', () => {
   it('names a failed load and loads again on Try again', async () => {
     mockInviteLink.mockRejectedValueOnce(Object.assign(new Error('x'), { response: { status: 503, data: {} } }));
     const p = props();
-    const ui = render(<K6PersonalLink {...p} />);
+    const ui = await render(<K6PersonalLink {...p} />);
     await waitFor(() => expect(ui.getByTestId('k6-error')).toBeTruthy());
     expect(ui.queryByTestId('k6-share')).toBeNull();
-    await act(async () => {
-      fireEvent.press(ui.getByTestId('k6-retry'));
-    });
+    await fireEvent.press(ui.getByTestId('k6-retry'));
     await waitFor(() => expect(ui.getByTestId('k6-url')).toBeTruthy());
     expect(mockInviteLink).toHaveBeenCalledTimes(2);
   });
 });
 
 describe('K7 Import offer', () => {
-  it('records the choice locally and moves on either way', () => {
+  it('records the choice locally and moves on either way', async () => {
     const a = props();
-    const ui = render(<K7ImportOffer {...a} />);
+    const ui = await render(<K7ImportOffer {...a} />);
     expect(ui.getByText('Bring your existing clients over?')).toBeTruthy();
     expect(ui.getByText('You can do this later from Settings > Import my records.')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('k7-show-me'));
+    await fireEvent.press(ui.getByTestId('k7-show-me'));
     expect(a.setAnswers).toHaveBeenCalledWith({ import_choice: 'show_me' });
     expect(a.onNext).toHaveBeenCalledTimes(1);
     const b = props();
-    const ui2 = render(<K7ImportOffer {...b} />);
-    fireEvent.press(ui2.getByTestId('k7-later'));
+    const ui2 = await render(<K7ImportOffer {...b} />);
+    await fireEvent.press(ui2.getByTestId('k7-later'));
     expect(b.setAnswers).toHaveBeenCalledWith({ import_choice: 'later' });
   });
 });
@@ -163,29 +153,27 @@ describe('K8 Practice ready', () => {
     clients_today: 'none' as const,
   };
 
-  it('summarises the card, specialties and link, with no bar and no Finish later', () => {
+  it('summarises the card, specialties and link, with no bar and no Finish later', async () => {
     const p = props({ answers, progress: null, eyebrow: 'Your practice' });
-    const ui = render(<K8PracticeReady {...p} />);
+    const ui = await render(<K8PracticeReady {...p} />);
     expect(ui.getByText('Your practice is ready.')).toBeTruthy();
     expect(ui.getByText('Jordan Reyes, Reyes Strength.')).toBeTruthy();
     expect(ui.getByText('Strength, fat loss and beginners.')).toBeTruthy();
     expect(ui.getByText('Your link is ready to share.')).toBeTruthy();
     expect(ui.getByText("Next, I'll show you around and help you create your first package.")).toBeTruthy();
     expect(ui.queryByText('Finish later')).toBeNull();
-    fireEvent.press(ui.getByTestId('k8-show-me-around'));
+    await fireEvent.press(ui.getByTestId('k8-show-me-around'));
     expect(p.onNext).toHaveBeenCalledTimes(1);
   });
 
-  it('falls back to the first name, leaves out skipped specialties, and shows completion state', () => {
-    const p = props({ answers: { clients_today: 'none' }, progress: null, completing: true, completeError: null });
-    const ui = render(<K8PracticeReady {...p} />);
+  it('falls back to the first name, leaves out skipped specialties, and holds still while completing', async () => {
+    const p = props({ answers: { clients_today: 'none' }, progress: null, completing: true });
+    const ui = await render(<K8PracticeReady {...p} />);
     expect(ui.getByText('Jordan.')).toBeTruthy();
     expect(ui.queryByTestId('k8-specialties')).toBeNull();
     expect(ui.getByTestId('k8-show-me-around-spinner')).toBeTruthy();
-    fireEvent.press(ui.getByTestId('k8-show-me-around'));
+    await fireEvent.press(ui.getByTestId('k8-show-me-around'));
     expect(p.onNext).not.toHaveBeenCalled();
-    const q = props({ answers, progress: null, completeError: 'Your practice could not be saved yet. Check your connection and try again.' });
-    const ui2 = render(<K8PracticeReady {...q} />);
-    expect(ui2.getByTestId('k8-complete-error')).toBeTruthy();
+    expect(ui.queryByTestId('coach-consult-topbar-back')).toBeNull(); // no back while completing
   });
 });
