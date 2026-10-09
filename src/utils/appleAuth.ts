@@ -31,6 +31,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import { toAuthErrorDetail, type AuthErrorDetail } from './authErrorDetail';
 import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
+import { presentJoinFrom } from '../lib/joinPackage';
 import {
   COACH_SIGNUP_UNAVAILABLE,
   COACH_SIGNUP_UNCONFIRMED,
@@ -259,7 +260,8 @@ export async function signInWithApple(
       user,
       is_new_user,
       ...(providerSubject ? { provider_subject: providerSubject } : {}),
-      ...(typeof invite_attached === 'boolean' ? { invite_attached } : {}),
+      // B-PACKAGE-135: a join means the code was accepted (a paid one finishes on the package screen).
+      ...(typeof invite_attached === 'boolean' ? { invite_attached: presentJoinFrom(response.data) || invite_attached } : {}),
       ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {

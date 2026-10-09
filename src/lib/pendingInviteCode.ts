@@ -25,6 +25,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
 import { patchUserCache } from './userCache';
+import { presentJoinFrom } from './joinPackage';
 import { logger } from '../utils/logger';
 
 const KEY = 'pending_invite_code';
@@ -115,6 +116,8 @@ export async function clearPendingInviteCode(): Promise<void> {
 
 export interface ClaimResult {
   ok: boolean;
+  /** B-PACKAGE-135: the code's package is paid first; not attached until it is paid. */
+  paidJoin?: boolean;
   /** Server-provided reason on failure (e.g. "expired", "max_uses_reached"). */
   reason?: string;
   /** Surface-friendly message when the server provides nothing usable. */
@@ -138,8 +141,9 @@ export async function claimPendingInviteCode(
         logger.warn('PendingInviteCode', 'user cache patch after attach failed', err),
       );
     }
+    const joined = presentJoinFrom(response?.data);
     await clearPendingInviteCode();
-    return { ok: true };
+    return { ok: true, ...(joined && typeof coachId !== 'string' ? { paidJoin: true } : {}) };
   } catch (err: unknown) {
     const r = err as { response?: { status?: number; data?: { reason?: string; message?: string } } };
     const status = r?.response?.status ?? 0;

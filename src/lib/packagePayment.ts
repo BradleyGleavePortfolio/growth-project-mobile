@@ -57,6 +57,8 @@ export const clientPackagePath = (packageId: string) =>
 export interface PaymentIntentRequest {
   package_id: string;
   idempotency_key: string;
+  /** B-PACKAGE-135: a client with no coach buys their coach code's package. */
+  join_code?: string;
 }
 
 /** Exactly the fields of the backend CreateSubscriptionIntentDto. */
@@ -75,6 +77,8 @@ export interface SubscriptionIntentRequest {
    * who can buy.
    */
   share_token?: string;
+  /** B-PACKAGE-135: a client with no coach buys their coach code's package. */
+  join_code?: string;
 }
 
 /** Same shape the backend DTO accepts (21 chars, nanoid alphabet). */
@@ -135,11 +139,13 @@ function numOrNull(v: unknown): number | null {
 export async function createPackagePaymentIntent(
   packageId: string,
   idempotencyKey: string,
+  joinCode?: string | null,
 ): Promise<PaymentSheetSecrets> {
   const body: PaymentIntentRequest = {
     package_id: packageId,
     idempotency_key: idempotencyKey,
   };
+  if (joinCode) body.join_code = joinCode;
   const res = await api.post<Record<string, unknown>>(
     PAYMENT_INTENT_PATH,
     body,
@@ -166,6 +172,7 @@ export async function createSubscriptionIntent(
   expectedAmountCents: number | null,
   shareToken?: string | null,
   expectedOneTimeCents?: number | null,
+  joinCode?: string | null,
 ): Promise<SubscriptionIntent> {
   const body: SubscriptionIntentRequest = {
     package_id: packageId,
@@ -181,6 +188,7 @@ export async function createSubscriptionIntent(
     body.expected_one_time_cents = expectedOneTimeCents;
   if (typeof shareToken === "string" && SHARE_TOKEN_SHAPE.test(shareToken))
     body.share_token = shareToken;
+  if (joinCode) body.join_code = joinCode;
   const res = await api.post<Record<string, unknown>>(
     SUBSCRIPTION_INTENT_PATH,
     body,

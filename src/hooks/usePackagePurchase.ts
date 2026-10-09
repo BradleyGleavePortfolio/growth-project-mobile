@@ -139,6 +139,8 @@ export interface UsePackagePurchaseOptions {
    * (PACKAGE_COACH_NOT_CONNECTED). Never sent to payment-intent.
    */
   shareToken?: string | null;
+  /** B-PACKAGE-135: the coach code a client with no coach joins through (both intents). */
+  joinCode?: string | null;
   now?: () => Date;
 }
 
@@ -827,7 +829,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
       const ref = shortReference(key);
       let secrets: PaymentSheetSecrets;
       try {
-        secrets = await createPackagePaymentIntent(pkg.id, key);
+        secrets = await createPackagePaymentIntent(pkg.id, key, optsRef.current.joinCode ?? null);
       } catch (err) {
         if (!live()) return;
         // The coach made the plan free since the list loaded.
@@ -981,6 +983,7 @@ export function usePackagePurchase(opts: UsePackagePurchaseOptions) {
           pkg.amountCents,
           optsRef.current.shareToken ?? null,
           pkg.oneTimeCents,
+          optsRef.current.joinCode ?? null,
         );
       let intent;
       try {

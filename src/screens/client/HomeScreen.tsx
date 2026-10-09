@@ -26,6 +26,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 // in PR #130; this PR places it on HomeScreen).
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import PendingInviteBanner from '../../components/PendingInviteBanner';
+import FinishJoining from '../../components/join/FinishJoining';
 import { DunningBanner } from '../../entitlements/dunning/DunningBanner';
 import HomeHeaderActions from '../../components/home/HomeHeaderActions';
 import PushPermissionCard from '../../components/home/PushPermissionCard';
@@ -488,6 +489,7 @@ export default function HomeScreen() {
           })}
         </View>
         {/* Supporting sections keep their original relative order. */}
+        <FinishJoining />
         <DunningBanner surface="HomeScreen" presentation="section" />
         <CoachlessHomeSlot part="roman" />
         <PendingInviteBanner />

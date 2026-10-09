@@ -56,6 +56,7 @@ import { signInWithGoogle } from '../../utils/googleAuth';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 import { setUserCache } from '../../lib/userCache';
+import { presentJoinFrom } from '../../lib/joinPackage';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { authEvents } from '../../utils/authEvents';
 import RoleChoice from '../../components/auth/RoleChoice';
@@ -556,6 +557,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           // C03: the account can be created while the coach attach fails.
           // Never continue silently; remember it so the post-verify step
           // routes to the enter-code retry screen.
+          presentJoinFrom(res?.data);
           const outcomeAttach = readInviteAttachOutcome(res?.data);
           setInviteAttachError(outcomeAttach.attached === false ? outcomeAttach.reason ?? 'unknown' : null);
           accountEmail = canonicalEmailFrom(res?.data, submittedEmail);

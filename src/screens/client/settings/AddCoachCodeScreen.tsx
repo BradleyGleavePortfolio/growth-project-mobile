@@ -17,6 +17,7 @@ import { keepsIdempotencyKey, refusalLine } from '../../../components/coachless/
 import { extractInviteCode } from '../../../lib/inviteCodeInput';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { patchUserCache } from '../../../lib/userCache';
+import { presentJoinFrom } from '../../../lib/joinPackage';
 import { useCoachSharingNotice } from '../../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../../components/coachSharing/CoachSharingNotice';
 import { useEntitlement } from '../../../entitlements/EntitlementProvider';
@@ -66,6 +67,16 @@ export default function AddCoachCodeScreen({ navigation }: Props) {
     try {
       const result = await redeemCoachCode(toSend, keyRef.current.key, sharingVersion);
       keyRef.current = null;
+      // B-PACKAGE-135: the code's package screen (FinishJoining on Home) takes over.
+      if (presentJoinFrom(result) || result.status === 'checkout_required') {
+        if (result.status === 'attached') {
+          await patchUserCache({ coach_id: result.coach.id })
+            .catch((err: unknown) => logger.warn('AddCoachCode', 'user cache patch after redeem failed', err));
+          authEvents.emit('login');
+        }
+        navigation.goBack();
+        return;
+      }
       setJoined(true);
       await patchUserCache({ coach_id: result.coach.id })
         .catch((err: unknown) => logger.warn('AddCoachCode', 'user cache patch after redeem failed', err));

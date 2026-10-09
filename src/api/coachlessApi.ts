@@ -72,7 +72,8 @@ export type CoachCodeCheck = { valid: true; coach: CoachCard } | { valid: false;
 const GrantSchema = z.object({ status: z.string() }).nullable();
 
 export const RedeemSchema = z.object({
-  status: z.literal('attached'),
+  // B-PACKAGE-135: checkout_required = the code's package is paid first; not attached yet.
+  status: z.enum(['attached', 'checkout_required']),
   already_attached: z.boolean(),
   coach: CoachCardSchema,
   next: z.object({
@@ -81,6 +82,8 @@ export const RedeemSchema = z.object({
   }),
   grant: GrantSchema.optional().default(null),
   replayed: z.boolean().optional().default(false),
+  /** B-PACKAGE-135: the code's one package (read by lib/joinPackage). */
+  join: z.unknown().optional(),
 });
 export type RedeemResult = z.infer<typeof RedeemSchema>;
 
