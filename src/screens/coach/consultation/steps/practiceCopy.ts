@@ -54,20 +54,11 @@ export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
 }
 
-/** "Strength, fat loss and beginners." First label kept, the rest lower-cased. */
+/** "Strength, fat loss and beginners." First label kept, the rest lower-cased (K2 labels have no acronyms). */
 export function joinSentence(labels: readonly string[]): string {
-  const clean = labels.map((l) => l.trim()).filter(Boolean);
-  if (clean.length === 0) return '';
-  const parts = clean.map((l, i) => (i === 0 ? l : lowerFirst(l)));
-  const body = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
-  return `${body}.`;
-}
-
-function lowerFirst(label: string): string {
-  // Keep acronyms and proper nouns ("HIIT", "Pilates") as written.
-  const first = label.split(' ')[0] ?? '';
-  if (first.length > 1 && first === first.toUpperCase()) return label;
-  return label.charAt(0).toLowerCase() + label.slice(1);
+  const parts = labels.map((l) => l.trim()).filter(Boolean).map((l, i) => (i === 0 ? l : l.charAt(0).toLowerCase() + l.slice(1)));
+  if (parts.length === 0) return '';
+  return `${parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`}.`;
 }
 
 /** "Jordan Reyes, Reyes Strength." or "Jordan Reyes." without a business name. */
@@ -86,20 +77,14 @@ export function specialtyLabels(keys: readonly string[] | null | undefined): str
     .filter((l): l is string => !!l);
 }
 
-/** K8 summary sections, in prototype order; an empty section is left out. */
-export interface PracticeSummaryInput {
-  name?: string | null;
-  business?: string | null;
-  specialtyLabels?: readonly string[];
-}
-
 export interface SummarySection {
   key: 'card' | 'specialties' | 'link';
   label: string;
   sentence: string;
 }
 
-export function practiceSummary(input: PracticeSummaryInput): SummarySection[] {
+/** K8 summary sections, in prototype order; an empty section is left out. */
+export function practiceSummary(input: { name?: string | null; business?: string | null; specialtyLabels?: readonly string[] }): SummarySection[] {
   const out: SummarySection[] = [];
   const card = cardSentence(input.name, input.business);
   if (card) out.push({ key: 'card', label: K8_COPY.cardLabel, sentence: card });

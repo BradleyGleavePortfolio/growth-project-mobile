@@ -6,6 +6,7 @@
 import React from 'react';
 import { Share } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CoachStepProps } from '../../types';
 
 let mockReduced = false;
@@ -18,11 +19,17 @@ jest.mock('expo-clipboard', () => ({ setStringAsync: (v: string) => mockCopy(v) 
 const mockPrefsSet = jest.fn<Promise<void>, [string, string]>(async () => undefined);
 jest.mock('../../../../../storage/mmkv', () => ({ prefsStorage: { set: (k: string, v: string) => mockPrefsSet(k, v) } }));
 jest.mock('../../../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
+jest.mock('../../../../../services/api', () => ({ __esModule: true, default: {} }));
 
 import K5ProgrammingStyle, { K5_ADVANCE_MS } from '../K5ProgrammingStyle';
 import K6PersonalLink from '../K6PersonalLink';
 import K7ImportOffer from '../K7ImportOffer';
 import K8PracticeReady from '../K8PracticeReady';
+import { PRACTICE_STEPS } from '../practiceSteps';
+import CoachConsultationFlow from '../../CoachConsultationFlow';
+import { STEP_COMPONENTS } from '../../registry';
+import { draftKey } from '../../../../../lib/coachConsultation/draft';
+import type { CoachConsultApi } from '../../../../../lib/coachConsultation/api';
 
 const LINK = { code: 'GP-RS7K2Q', url: 'https://app.trygrowthproject.com/join/GP-RS7K2Q' };
 
@@ -175,5 +182,54 @@ describe('K8 Practice ready', () => {
     await fireEvent.press(ui.getByTestId('k8-show-me-around'));
     expect(p.onNext).not.toHaveBeenCalled();
     expect(ui.queryByTestId('coach-consult-topbar-back')).toBeNull(); // no back while completing
+  });
+});
+
+describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
+  async function walk(importOn: boolean) {
+    mockReduced = true;
+    await AsyncStorage.setItem(
+      draftKey('c1'),
+      JSON.stringify({ v: 1, step: 'K2', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: '1_10' } }),
+    );
+    const api: jest.Mocked<CoachConsultApi> = {
+      load: jest.fn().mockResolvedValue(null),
+      saveDraft: jest.fn().mockResolvedValue('unavailable'),
+      complete: jest.fn().mockResolvedValue(undefined),
+    };
+    const onComplete = jest.fn();
+    const ui = await render(
+      <CoachConsultationFlow
+        userId="c1"
+        user={{ name: 'Jordan Reyes' }}
+        api={api}
+        onComplete={onComplete}
+        steps={{ ...STEP_COMPONENTS, ...PRACTICE_STEPS }}
+        importOn={importOn}
+      />,
+    );
+    await waitFor(() => expect(ui.getByTestId('coach-consult-K2-skip')).toBeTruthy());
+    await fireEvent.press(ui.getByTestId('coach-consult-K2-skip'));
+    expect(ui.getByTestId('coach-step-K5')).toBeTruthy();
+    await fireEvent.press(ui.getByTestId('k5-own'));
+    await waitFor(() => expect(ui.getByTestId('k6-url')).toBeTruthy());
+    await fireEvent.press(ui.getByTestId('k6-later'));
+    return { ui, api, onComplete };
+  }
+
+  it('walks K5, K6 and K8 to completion with the importer off, sending the programming style', async () => {
+    const { ui, api, onComplete } = await walk(false);
+    expect(ui.queryByTestId('coach-step-K7')).toBeNull();
+    expect(ui.getByText('Jordan Reyes.')).toBeTruthy();
+    await fireEvent.press(ui.getByTestId('k8-show-me-around'));
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(api.complete).toHaveBeenCalledWith(expect.objectContaining({ programming_style: 'own', clients_today: '1_10' }));
+  });
+
+  it('offers K7 between K6 and K8 when the importer is on and the coach has clients', async () => {
+    const { ui } = await walk(true);
+    expect(ui.getByTestId('coach-step-K7')).toBeTruthy();
+    await fireEvent.press(ui.getByTestId('k7-later'));
+    expect(ui.getByTestId('coach-step-K8')).toBeTruthy();
   });
 });

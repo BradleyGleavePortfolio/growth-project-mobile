@@ -1,7 +1,4 @@
-/**
- * K5-K8 pure rules (prototype 82-85): summary sentences, the link text and the copy rules (no exclamation marks, no emojis, no app
- * first person outside Roman's lines and the coach's own answers).
- */
+/** K5-K8 pure rules (prototype 82-85): summary sentences, link text, copy rules. */
 import { PROGRAMMING_STYLE_OPTIONS } from '../../../../../lib/coachConsultation/flow';
 import {
   K5_COPY,
@@ -18,13 +15,7 @@ import {
 
 describe('K8 summary sentences', () => {
   it('reads like the prototype: card, specialties, link', () => {
-    expect(
-      practiceSummary({
-        name: 'Jordan Reyes',
-        business: 'Reyes Strength',
-        specialtyLabels: ['Strength', 'Fat loss', 'Beginners'],
-      }),
-    ).toEqual([
+    expect(practiceSummary({ name: 'Jordan Reyes', business: 'Reyes Strength', specialtyLabels: ['Strength', 'Fat loss', 'Beginners'] })).toEqual([
       { key: 'card', label: 'Your card', sentence: 'Jordan Reyes, Reyes Strength.' },
       { key: 'specialties', label: 'You specialise in', sentence: 'Strength, fat loss and beginners.' },
       { key: 'link', label: 'Your link', sentence: 'Your link is ready to share.' },
@@ -38,10 +29,9 @@ describe('K8 summary sentences', () => {
     expect(practiceSummary({}).map((s) => s.key)).toEqual(['link']);
   });
 
-  it('joins one, two and many labels and keeps acronyms', () => {
+  it('joins one, two and many labels', () => {
     expect(joinSentence(['Mobility'])).toBe('Mobility.');
     expect(joinSentence(['Strength', 'Mobility'])).toBe('Strength and mobility.');
-    expect(joinSentence(['Strength', 'HIIT classes', 'Older adults'])).toBe('Strength, HIIT classes and older adults.');
     expect(joinSentence([])).toBe('');
   });
 
