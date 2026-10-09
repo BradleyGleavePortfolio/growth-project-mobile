@@ -8,7 +8,7 @@ The Coach Command Center is the new top-level landing screen for every coach in 
 
 A coach with 14 clients cannot manage their roster from a single-screen dashboard. The Command Center gives them five focused tabs that answer five distinct questions:
 
-1. **Overview** — how is the roster performing right now? (KPI tiles)
+1. **Overview** — the coach Home: how is the practice doing, and who needs the coach today?
 2. **At risk** — which clients are disengaging and need contact today?
 3. **Win Streaks** — which clients are on a roll and deserve acknowledgement?
 4. **Inbox** — who needs a reply, and how long have they been waiting?
@@ -21,7 +21,7 @@ A coach with 14 clients cannot manage their roster from a single-screen dashboar
 | Screen | File | States |
 |---|---|---|
 | Root tab host | `CommandCenterScreen.tsx` | Stateless host — delegates to child screens |
-| Overview | `OverviewScreen.tsx` | `loading → data \| error`; the Home header renders in every state |
+| Overview | `OverviewScreen.tsx` | `loading → data \| error`; hero, payout, retention and at-risk reads settle on their own |
 | At risk | `AtRiskScreen.tsx` | `loading → data \| error` |
 | Streaks | `WinStreaksScreen.tsx` | `loading → data \| error` |
 | Inbox | `InboxScreen.tsx` | `loading → data \| error` |
@@ -44,6 +44,13 @@ All list screens support:
 - Top tabs: sentence case ("Overview", "At risk", "Streaks", "Inbox", "Actions"), Inter 14 pt (`typography.bodySmall`),
   `textMuted` when inactive and `accentText` with a 2 pt `accent` underline when active, `minHeight: 44`. Colours
   come from `useTheme().semanticColors`.
+
+### Coach Home (COACH-HOME-134)
+
+- Built to `design-targets/mobile/coach-home-solo` for every coach: date and greeting, the month so far as one serif
+  hero only when a real figure exists, a hairline stat row (Clients; Retention and Next payout only when real), then
+  "Your clients today", the most urgent client first as a monogram card. Pieces: `CoachHomeSections.tsx`, copy
+  `coachHomeCopy.ts`, reads `coachHomeSources.ts` (existing endpoints only). Tests: `coachHome134.test.tsx`.
 
 ---
 
