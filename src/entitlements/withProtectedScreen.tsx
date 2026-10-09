@@ -16,11 +16,20 @@
 import React from 'react';
 import { ProtectedScreen } from './ProtectedScreen';
 
+export interface ProtectedScreenOptions {
+  /**
+   * B22/B24: the screen only calls server routes marked
+   * @OpenToCoachlessClient(), so a client with no coach is never gated.
+   */
+  openToCoachless?: boolean;
+}
+
 export function withProtectedScreen<P extends object>(
   Component: React.ComponentType<P>,
+  options: ProtectedScreenOptions = {},
 ): React.ComponentType<P> {
   const Wrapped: React.FC<P> = (props) => (
-    <ProtectedScreen>
+    <ProtectedScreen openToCoachless={options.openToCoachless}>
       <Component {...props} />
     </ProtectedScreen>
   );

@@ -197,7 +197,10 @@ describe('Food gate when the first access check fails (B2)', () => {
   });
 });
 
-describe('Coachless Food gate copy (G1)', () => {
+// CLIENT-POLISH-134 item 5 (B22/B24): the real Food route is open to a
+// coachless client (withProtectedScreen(LogScreen, OWN), see
+// coachlessNeverGated134). This default wrapper stands for a coach-only screen.
+describe('Coachless gate copy on a coach-only screen (G1)', () => {
   it.each([
     ['Android', false],
     ['iOS', true],
@@ -208,7 +211,7 @@ describe('Coachless Food gate copy (G1)', () => {
     const onMessageCoach = jest.fn();
     const r = await mount(onMessageCoach);
 
-    expect(await r.findByText('Logging comes with coaching')).toBeTruthy();
+    expect(await r.findByText('This part comes with a coach')).toBeTruthy();
     expect(r.getByText('Join a coach with their code. Each coach sets up what their coaching includes.')).toBeTruthy();
     // The same lines sit in front of every gated screen, on iOS too (App Review 3.1.1): no sale framing.
     for (const line of [COACHLESS_TITLE, COACHLESS_BODY]) {

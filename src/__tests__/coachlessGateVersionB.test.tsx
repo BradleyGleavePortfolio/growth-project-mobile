@@ -80,7 +80,7 @@ import { useCoachlessClient } from '../hooks/useCoachlessClient';
 import { pairWithCoach } from '../screens/day-one/api';
 import { claimPendingInviteCode } from '../lib/pendingInviteCode';
 
-const TITLE = 'Logging comes with coaching';
+const TITLE = 'This part comes with a coach';
 const BODY = 'Join a coach with their code. Each coach sets up what their coaching includes.';
 const CTA = 'Enter a coach code';
 function CoachlessProbe() {

@@ -69,19 +69,19 @@ describe('coach consultation flow (prototype 77-79)', () => {
   });
 
   it('completes with every answer once the required ones are given', async () => {
-    await seed('K4', { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] });
+    await seed('K8', { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] });
     const { getByTestId, api, onComplete } = await mount();
-    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
+    await fireEvent.press(getByTestId('k8-show-me-around')); // K8 Practice ready is the last step (COACH-CONSULT-M2-134)
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(api.complete).toHaveBeenCalledWith(expect.objectContaining({ display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] }));
     expect(await AsyncStorage.getItem(draftKey('c1'))).toBeNull();
   });
 
   it('shows a specific problem with Try again when completion fails, and keeps the answers', async () => {
-    await seed('K4', { display_name: 'Jordan', clients_today: 'none' });
+    await seed('K8', { display_name: 'Jordan', clients_today: 'none' });
     const api = makeApi({ complete: jest.fn().mockRejectedValueOnce(Object.assign(new Error('x'), { response: { status: 429 } })).mockResolvedValueOnce(undefined) });
     const { getByTestId, getByText, onComplete } = await mount(api);
-    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
+    await fireEvent.press(getByTestId('k8-show-me-around'));
     await waitFor(() => expect(getByTestId('coach-consult-problem')).toBeTruthy());
     expect(getByText('Too many tries in a row')).toBeTruthy();
     expect(getByText(/Your answers are kept on this phone\./)).toBeTruthy();
