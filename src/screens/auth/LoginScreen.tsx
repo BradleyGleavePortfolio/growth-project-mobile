@@ -13,7 +13,7 @@ import {
   // TouchableOpacity retained for auth buttons — safe pattern
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Spacing, Radius, Shadow, Typography as ProviderTypography } from '../../theme';
+import { Spacing, Radius, Shadow } from '../../theme';
 import { lightTokens, typography as Typography, type SemanticTokens } from '../../theme/tokens';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
@@ -671,9 +671,9 @@ const makeStyles = (colors: SemanticTokens) =>
   inputLabel: { ...Typography.eyebrow, color: colors.textMuted, marginBottom: Spacing.xs },
   input: {
     backgroundColor: colors.bgPrimary,
+    // SHOTS-134B 5: an underline input has no radius (a radius curls the hairline up at both ends).
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    borderRadius: Radius.md,
     padding: Spacing.md,
     fontSize: 16,
     color: colors.textPrimary,
@@ -722,7 +722,8 @@ const makeStyles = (colors: SemanticTokens) =>
     marginRight: Spacing.sm,
     color: colors.textPrimary,
   },
-  googleButtonText: { ...ProviderTypography.button, color: colors.textPrimary },
+  // Google's own button text, sentence case as on Create account (SHOTS-134B 5).
+  googleButtonText: { ...Typography.bodyMd, color: colors.textPrimary },
   confirmBox: {
     marginTop: Spacing.md,
     padding: Spacing.md,
