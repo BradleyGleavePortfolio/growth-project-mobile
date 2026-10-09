@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useTheme } from "../../../theme/ThemeProvider";
+import { layout, radius, typography } from "../../../theme/tokens";
 import { useProgramList, useSavedWorkouts } from "../../../hooks/usePrograms";
 import type {
   ProgramStatusFilter,
@@ -120,7 +121,7 @@ export default function ProgramsLibraryScreen() {
       <View
         style={[
           styles.search,
-          { borderColor: colors.border, backgroundColor: colors.surface },
+          { borderColor: colors.border },
         ]}
       >
         <Ionicons name="search" size={18} color={colors.textMuted} />
@@ -308,7 +309,7 @@ function ProgramCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        { borderColor: colors.border },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -359,7 +360,7 @@ function SavedWorkoutRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: colors.surface, borderColor: colors.border },
+        { borderColor: colors.border },
         pressed && { opacity: 0.85 },
       ]}
     >
@@ -380,11 +381,13 @@ function SavedWorkoutRow({
   );
 }
 
+// REDO-COACH-133: tags read as quiet small-caps text, not tinted chips
+// (no category-coded fills).
 function Tag({ text }: { text: string }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.tag, { backgroundColor: colors.primaryPale }]}>
-      <Text style={[styles.tagText, { color: colors.primaryDark }]}>
+    <View style={styles.tag}>
+      <Text style={[styles.tagText, { color: colors.textSecondary }]}>
         {text}
       </Text>
     </View>
@@ -393,37 +396,49 @@ function Tag({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  list: { padding: 16, paddingBottom: 48, gap: 12 },
-  headerBlock: { gap: 12, marginBottom: 4 },
+  list: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: layout.statusBarGap,
+    paddingBottom: 48,
+    gap: 12,
+  },
+  headerBlock: { gap: 14, marginBottom: 8 },
   titleRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-  title: { fontSize: 26, fontWeight: "600" },
+  title: { ...typography.h1 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   search: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: 44,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.input,
+    paddingHorizontal: 14,
+    minHeight: 48,
   },
   searchInput: { flex: 1, fontSize: 16, paddingVertical: 10 },
-  card: { borderWidth: 1, borderRadius: 14, padding: 14, gap: 6 },
+  // Rounded hairline card with no fill (owner 17:07: rounded corners).
+  card: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.card,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 6,
+  },
   cardTop: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 8,
   },
-  cardTitle: { fontSize: 17, fontWeight: "600", flex: 1 },
-  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  cardTitle: { ...typography.h3, flex: 1 },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   meta: { fontSize: 14 },
-  tag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  tagText: { fontSize: 12, fontWeight: "600" },
+  tag: { paddingVertical: 2 },
+  tagText: { ...typography.eyebrow },
   empty: {
     fontSize: 15,
     lineHeight: 22,

@@ -1,9 +1,10 @@
 /** AIB-FINISH-127 job 6: the builder on a client's copy. The copy reaches the client only when assigned here; the assignment freezes
  * the rows at that moment (backend writeAssignmentSnapshot), so it comes after Ask AI, and the last edit is saved first. */
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { spacing, typography } from '../../../theme/tokens';
+import { radius, spacing, typography } from '../../../theme/tokens';
 import { useAssignWorkoutPlan } from '../../../hooks/useWorkoutBuilder';
 import { fireAiHaptic } from '../ai-builder/useAiBuilder';
 
@@ -26,7 +27,6 @@ export function ClientCopyBar({ planId, clientId, firstName, prepare }: {
   const busy = assign.isPending;
   const onAssign = async () => {
     if (busy || done) return;
-    fireAiHaptic('medium');
     setNote(null);
     if (!(await prepare()).ok) return setNote(copy.saving);
     try {
@@ -40,21 +40,23 @@ export function ClientCopyBar({ planId, clientId, firstName, prepare }: {
     }
   };
   return (
-    <View testID="client-copy-bar" style={[styles.bar, { borderColor: sc.border, backgroundColor: sc.bgSurface }]}>
+    <View testID="client-copy-bar" style={[styles.bar, { borderColor: sc.border }]}>
       <Text style={[typography.caption, { color: sc.textMuted }]}>{copy.intro}</Text>
-      <Pressable testID="client-copy-assign" accessibilityRole="button" accessibilityLabel={copy.assign}
+      {/* REDO-COACH-133: an outlined forest action; the builder's Save is the
+          screen's one filled button. The press haptic comes from HapticPressable. */}
+      <HapticPressable intent="medium" testID="client-copy-assign" accessibilityRole="button" accessibilityLabel={copy.assign}
         accessibilityState={{ disabled: busy || done, busy }} disabled={busy || done} onPress={() => void onAssign()}
-        style={[styles.button, { backgroundColor: busy || done ? sc.disabledBg : sc.accent }]}>
-        <Text style={[typography.bodyMd, { color: busy || done ? sc.textOnDisabled : sc.textOnAccent }]}>
+        style={[styles.button, { borderColor: busy || done ? sc.border : sc.accentText }]}>
+        <Text style={[typography.bodyMd, { color: busy || done ? sc.textMuted : sc.accentText }]}>
           {done ? 'Assigned' : busy ? 'Assigning' : copy.assign}
         </Text>
-      </Pressable>
+      </HapticPressable>
       {note ? <Text testID="client-copy-note" accessibilityLiveRegion="polite" style={[typography.body, { color: sc.textPrimary }]}>{note}</Text> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  bar: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.sm },
-  button: { alignItems: 'center', borderRadius: 10, paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
+  bar: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, gap: spacing.sm, marginBottom: spacing.sm },
+  button: { alignItems: 'center', borderWidth: 1, borderRadius: radius.button, paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
 });

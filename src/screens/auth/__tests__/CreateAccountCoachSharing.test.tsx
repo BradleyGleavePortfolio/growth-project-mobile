@@ -31,7 +31,10 @@ jest.mock('../../../services/secureStorage', () => ({
 jest.mock('../../../lib/userCache', () => ({ setUserCache: jest.fn(async () => undefined) }));
 jest.mock('../../../services/queryClient', () => ({ purgePersistedQueryCacheForAllUsers: jest.fn(async () => undefined) }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
-jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }) }));
+jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({
+    colors: new Proxy({}, { get: () => '#000000' }),
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+  }) }));
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: jest.fn() } }));
 
 import CreateAccountScreen from '../CreateAccountScreen';

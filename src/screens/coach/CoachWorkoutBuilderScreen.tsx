@@ -58,7 +58,9 @@ import {
   useWorkoutPlan,
 } from '../../hooks/useWorkoutBuilder';
 import { useExerciseSearch } from '../../hooks/useExerciseLibrary';
-import { spacing, typography } from '../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../theme/tokens';
+import HapticPressable from '../../components/HapticPressable';
+import { Overline, PrimaryButton, ScreenTopBar, useScreenInsets } from '../../ui';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
@@ -273,6 +275,7 @@ function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
 export default function CoachWorkoutBuilderScreen() {
   const route = useRoute<RouteProp<Record<string, RouteParam>, string>>();
   const navigation = useNavigation<NativeStackNavigationProp<ParamListBase>>();
+  const insets = useScreenInsets();
   const planId = route.params?.planId;
   const isEditing = Boolean(planId);
 
@@ -1600,10 +1603,13 @@ export default function CoachWorkoutBuilderScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
+      style={[styles.screen, { paddingTop: insets.top + layout.statusBarGap }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* REDO-COACH-133: a deep flow with no stack header gets the reference's
+          back chevron and breathing room under the status bar. */}
+      <ScreenTopBar onBack={() => navigation.goBack()} testID="builder-top-bar" />
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <View style={styles.headerRow}>
           <Text style={[typography.h1, styles.title, { color: sc.textPrimary }]}>
             {isEditing ? 'Edit workout plan' : 'New workout plan'}
@@ -1622,7 +1628,7 @@ export default function CoachWorkoutBuilderScreen() {
             />
           ) : null}
           {ai.visible && (autosaveEnabled || aiOnNew) ? (
-            <Pressable testID="ai-header-button" accessibilityRole="button" accessibilityLabel="Ask AI to change this workout" onPress={openAi} style={styles.historyButton}>
+            <Pressable testID="ai-header-button" accessibilityRole="button" accessibilityLabel="Ask AI to change this workout" onPress={openAi} style={({ pressed }) => [styles.historyButton, pressed && styles.pressed]}>
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Ask AI</Text>
             </Pressable>
           ) : null}
@@ -1631,12 +1637,13 @@ export default function CoachWorkoutBuilderScreen() {
         {clientId && planId && autosaveEnabled ? <ClientCopyBar planId={planId} clientId={clientId} firstName={clientFirst} prepare={aiPrepare} /> : null}
         {autosaveEnabled ? (
           <View style={styles.historyRow}>
-            <Pressable
+            <HapticPressable
+              intent="medium"
               accessibilityRole="button"
               accessibilityLabel="Undo last change"
               accessibilityState={{ disabled: historyBlocked || undoStack.length === 0 }}
               disabled={historyBlocked || undoStack.length === 0}
-              onPress={() => { fireAiHaptic('medium'); void runHistoryStep('undo'); }}
+              onPress={() => { void runHistoryStep('undo'); }}
               style={[
                 styles.historyButton,
                 (historyBlocked || undoStack.length === 0) && styles.historyButtonDisabled,
@@ -1645,8 +1652,8 @@ export default function CoachWorkoutBuilderScreen() {
               <Text style={[typography.caption, { color: sc.textPrimary }]}>
                 {historyBusy ? 'Working' : 'Undo'}
               </Text>
-            </Pressable>
-            <Pressable
+            </HapticPressable>
+            <HapticPressable
               accessibilityRole="button"
               accessibilityLabel="Redo change"
               accessibilityState={{ disabled: historyBlocked || redoStack.length === 0 }}
@@ -1658,20 +1665,17 @@ export default function CoachWorkoutBuilderScreen() {
               ]}
             >
               <Text style={[typography.caption, { color: sc.textPrimary }]}>Redo</Text>
-            </Pressable>
+            </HapticPressable>
             {ai.visible && planId ? (
-              <Pressable
+              <HapticPressable
                 testID="revision-history-button"
                 accessibilityRole="button"
                 accessibilityLabel="Show the history of this workout"
-                onPress={() => {
-                  fireAiHaptic('light');
-                  setRevisionsOpen(true);
-                }}
+                onPress={() => setRevisionsOpen(true)}
                 style={styles.historyButton}
               >
                 <Text style={[typography.caption, { color: sc.textPrimary }]}>History</Text>
-              </Pressable>
+              </HapticPressable>
             ) : null}
             {revisionsOpen && planId ? (
               <RevisionHistorySheet planId={planId} onClose={() => setRevisionsOpen(false)} sc={sc} />
@@ -1697,14 +1701,14 @@ export default function CoachWorkoutBuilderScreen() {
         ) : null}
         {autosaveEnabled &&
         (historyGate?.phase === 'unconfirmed' || historyGate?.phase === 'reload') ? (
-          <Pressable
+          <HapticPressable
             accessibilityRole="button"
             accessibilityLabel="Check again"
             onPress={() => void checkHistoryAgain()}
             style={[styles.historyButton, { alignSelf: 'flex-start', marginBottom: spacing.xs }]}
           >
             <Text style={[typography.caption, { color: sc.textPrimary }]}>Check again</Text>
-          </Pressable>
+          </HapticPressable>
         ) : null}
 
         {planLoading ? (
@@ -1715,7 +1719,7 @@ export default function CoachWorkoutBuilderScreen() {
                 : 'Loading workout plan'}
             </Text>
             {planLoadFailed ? (
-              <Pressable
+              <HapticPressable
                 accessibilityRole="button"
                 accessibilityLabel="Try loading the workout plan again"
                 onPress={() => void refetchPlan()}
@@ -1724,14 +1728,12 @@ export default function CoachWorkoutBuilderScreen() {
                 <Text style={[typography.caption, { color: sc.textPrimary }]}>
                   Try again
                 </Text>
-              </Pressable>
+              </HapticPressable>
             ) : null}
           </View>
         ) : null}
 
-        <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
-          Plan name
-        </Text>
+        <Overline style={styles.label}>Plan name</Overline>
         <TextInput
           accessibilityLabel="Plan name"
           value={name}
@@ -1746,12 +1748,10 @@ export default function CoachWorkoutBuilderScreen() {
           maxLength={120}
         />
 
-        <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
-          Type
-        </Text>
+        <Overline style={styles.label}>Type</Overline>
         <View style={styles.typeRow}>
           {WORKOUT_TYPES.map((t) => (
-            <Pressable
+            <HapticPressable
               key={t}
               accessibilityRole="button"
               accessibilityState={{ disabled: editorLocked, selected: type === t }}
@@ -1762,25 +1762,23 @@ export default function CoachWorkoutBuilderScreen() {
               }}
               style={[
                 styles.typeChip,
-                { borderColor: type === t ? sc.textPrimary : sc.border },
+                { borderColor: type === t ? sc.accentText : sc.border },
                 type === t && styles.typeSelected,
               ]}
             >
               <Text
                 style={[
                   typography.body,
-                  { color: sc.textPrimary },
+                  { color: type === t ? sc.accentText : sc.textPrimary },
                 ]}
               >
                 {t}
               </Text>
-            </Pressable>
+            </HapticPressable>
           ))}
         </View>
 
-        <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
-          Estimated duration (minutes, optional)
-        </Text>
+        <Overline style={styles.label}>Estimated duration (minutes, optional)</Overline>
         <TextInput
           accessibilityLabel="Estimated duration in minutes"
           value={duration}
@@ -1796,9 +1794,7 @@ export default function CoachWorkoutBuilderScreen() {
           maxLength={4}
         />
 
-        <Text style={[typography.h3, styles.sectionHeading, { color: sc.textPrimary }]}>
-          Exercises
-        </Text>
+        <Overline style={[styles.label, styles.sectionHeading]} accessibilityRole="header">Exercises</Overline>
 
         {rows.length === 0 ? (
           <Text style={[typography.body, { color: sc.textMuted }]}>
@@ -1822,7 +1818,7 @@ export default function CoachWorkoutBuilderScreen() {
                   />
                 </View>
                 <View style={styles.rowControls}>
-                  <Pressable
+                  <HapticPressable
                     accessibilityRole="button"
                     accessibilityLabel="Move exercise up"
                     accessibilityState={{ disabled: editorLocked || idx === 0 }}
@@ -1831,8 +1827,8 @@ export default function CoachWorkoutBuilderScreen() {
                     style={[styles.controlBtn, (editorLocked || idx === 0) && styles.historyButtonDisabled]}
                   >
                     <Ionicons name="chevron-up-outline" size={20} color={sc.textPrimary} />
-                  </Pressable>
-                  <Pressable
+                  </HapticPressable>
+                  <HapticPressable
                     accessibilityRole="button"
                     accessibilityLabel="Move exercise down"
                     accessibilityState={{ disabled: editorLocked || idx === rows.length - 1 }}
@@ -1841,8 +1837,8 @@ export default function CoachWorkoutBuilderScreen() {
                     style={[styles.controlBtn, (editorLocked || idx === rows.length - 1) && styles.historyButtonDisabled]}
                   >
                     <Ionicons name="chevron-down-outline" size={20} color={sc.textPrimary} />
-                  </Pressable>
-                  <Pressable
+                  </HapticPressable>
+                  <HapticPressable
                     accessibilityRole="button"
                     accessibilityLabel="Edit exercise"
                     accessibilityHint="Focuses sets. Reps and rest remain below."
@@ -1852,8 +1848,8 @@ export default function CoachWorkoutBuilderScreen() {
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
                     <Ionicons name="create-outline" size={20} color={sc.textPrimary} />
-                  </Pressable>
-                  <Pressable
+                  </HapticPressable>
+                  <HapticPressable
                     accessibilityRole="button"
                     accessibilityLabel="Remove exercise"
                     accessibilityState={{ disabled: editorLocked }}
@@ -1862,7 +1858,7 @@ export default function CoachWorkoutBuilderScreen() {
                     style={[styles.controlBtn, editorLocked && styles.historyButtonDisabled]}
                   >
                     <Ionicons name="trash-outline" size={20} color={sc.textMuted} />
-                  </Pressable>
+                  </HapticPressable>
                 </View>
               </View>
               <View style={styles.rowInputs}>
@@ -1896,9 +1892,7 @@ export default function CoachWorkoutBuilderScreen() {
           ))
         )}
 
-        <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
-          Add exercise (search)
-        </Text>
+        <Overline style={styles.label}>Add exercise (search)</Overline>
         <TextInput
           accessibilityLabel="Search exercise catalog"
           value={search}
@@ -1911,7 +1905,7 @@ export default function CoachWorkoutBuilderScreen() {
         {searchEnabled && searchResult?.items?.length ? (
           <View style={styles.searchResults}>
             {searchResult.items.map((ex) => (
-              <Pressable
+              <HapticPressable
                 key={ex.id}
                 accessibilityRole="button"
                 disabled={editorLocked}
@@ -1929,31 +1923,22 @@ export default function CoachWorkoutBuilderScreen() {
                   ) : null}
                 </View>
                 <Ionicons name="add-outline" size={22} color={sc.textPrimary} accessible={false} />
-              </Pressable>
+              </HapticPressable>
             ))}
           </View>
         ) : null}
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={isEditing ? 'Save changes' : 'Create plan'}
+        {/* The one filled forest action (DS-PRIMITIVES-133 PrimaryButton). */}
+        <PrimaryButton
+          label={isEditing ? 'Save changes' : 'Create plan'}
           disabled={!canSave}
+          loading={createMut.isPending || updateMut.isPending || setExercisesMut.isPending}
           onPress={() => {
             void onSave();
           }}
-          style={[
-            styles.saveBtn,
-            { backgroundColor: canSave ? sc.accent : sc.disabledBg },
-          ]}
-        >
-          <Text style={[typography.h4, { color: canSave ? sc.textOnAccent : sc.textOnDisabled }]}>
-            {createMut.isPending || updateMut.isPending || setExercisesMut.isPending
-              ? 'Saving...'
-              : isEditing
-                ? 'Save changes'
-                : 'Create plan'}
-          </Text>
-        </Pressable>
+          style={styles.saveBtn}
+          testID="builder-save"
+        />
       </ScrollView>
       {aiToast ? (
         <AiWinToast key={aiApplied} text={aiToast.text} undo={aiToast.undo} undoDisabled={historyBlocked} sc={sc}
@@ -1964,7 +1949,7 @@ export default function CoachWorkoutBuilderScreen() {
             <Text testID="ai-save-error" accessibilityRole="alert" style={[typography.caption, { color: sc.textPrimary, paddingHorizontal: spacing.md }]}>{aiSaveError}</Text>
           ) : null}
           <Pressable testID="ai-prompt-bar" accessibilityRole="button" accessibilityLabel={aiBarLabel} accessibilityHint={aiOnNew ? 'Saves this workout, then opens Ask AI' : undefined}
-            accessibilityState={{ disabled: savingNew, busy: savingNew }} disabled={savingNew} onPress={openAi} style={styles.aiBar}>
+            accessibilityState={{ disabled: savingNew, busy: savingNew }} disabled={savingNew} onPress={openAi} style={({ pressed }) => [styles.aiBar, pressed && styles.pressed]}>
             <Text style={[typography.body, { color: sc.textMuted }]}>{aiBarLabel}</Text>
           </Pressable>
         </View>
@@ -2013,7 +1998,7 @@ function NumberField(props: {
 function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    content: { padding: spacing.lg, paddingBottom: spacing["2xl"] },
+    content: { paddingHorizontal: layout.gutter, paddingTop: spacing.sm, paddingBottom: spacing["2xl"] },
     headerRow: {
       flexDirection: 'row',
       flexWrap: 'wrap',
@@ -2022,11 +2007,12 @@ function makeStyles(sc: SemanticTokens) {
       marginBottom: spacing.lg,
     },
     title: { width: '100%', marginBottom: spacing.sm },
-    label: { marginTop: spacing.xl, marginBottom: spacing.sm, fontSize: 13, textTransform: 'uppercase' },
+    label: { marginTop: spacing.xl, marginBottom: spacing.sm },
+    pressed: { opacity: 0.6 },
     historyRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.xs },
     aiBar: {
       flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 52, marginHorizontal: spacing.lg, marginBottom: spacing.md,
-      paddingHorizontal: spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
+      paddingHorizontal: spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
     },
     historyButton: {
       minHeight: 44,
@@ -2036,28 +2022,35 @@ function makeStyles(sc: SemanticTokens) {
       justifyContent: 'center',
     },
     historyButtonDisabled: { opacity: 0.5 },
+    // Rounded hairline field (owner 17:07: rounded, not rectangles); no fill.
     input: {
       ...typography.body,
-      minHeight: 48,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      minHeight: 52,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: sc.border,
+      borderRadius: radius.input,
+      paddingHorizontal: spacing.md,
       paddingVertical: spacing.sm,
       color: sc.textPrimary,
     },
     typeRow: { flexDirection: 'row', gap: spacing.sm },
+    // Pill choices as in the builder reference; the selection is a forest
+    // outline and label, never a second filled button.
     typeChip: {
       flex: 1,
       minHeight: 44,
-      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: radius.chip,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    typeSelected: { borderBottomWidth: 2 },
-    sectionHeading: { marginTop: spacing.xl, marginBottom: spacing.sm },
+    typeSelected: { borderWidth: 1.5 },
+    sectionHeading: { marginTop: spacing['2xl'] },
     rowCard: {
-      borderTopWidth: StyleSheet.hairlineWidth,
-      paddingVertical: spacing.lg,
-      marginBottom: spacing.sm,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: radius.card,
+      padding: spacing.lg,
+      marginBottom: spacing.md,
     },
     rowHeader: {
       gap: spacing.sm,
@@ -2067,7 +2060,7 @@ function makeStyles(sc: SemanticTokens) {
     rowControls: { flexDirection: 'row', gap: spacing.sm, justifyContent: 'flex-end' },
     controlBtn: {
       minHeight: 44, minWidth: 44, borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border,
-      borderRadius: 4, alignItems: 'center', justifyContent: 'center',
+      borderRadius: radius.button, alignItems: 'center', justifyContent: 'center',
     },
     rowInputs: { flexDirection: 'row', gap: spacing.sm },
     searchResults: { marginTop: spacing.sm },
@@ -2079,12 +2072,6 @@ function makeStyles(sc: SemanticTokens) {
       borderBottomWidth: StyleSheet.hairlineWidth,
       paddingVertical: spacing.sm,
     },
-    saveBtn: {
-      marginTop: spacing.xl,
-      borderRadius: 4,
-      minHeight: 52,
-      paddingVertical: spacing.md,
-      alignItems: 'center',
-    },
+    saveBtn: { marginTop: spacing['2xl'] },
   });
 }

@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,12 +14,13 @@ import { getTodayString } from '../../utils/date';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
+import { typography, radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 
 // Pastel feedback backgrounds previously sourced from the legacy `colors`
 // barrel. Inlined as constants so this file no longer depends on the
 // legacy theme/index.ts grouped export. Values match
 // theme/index.ts feedback.* exactly.
-const FEEDBACK_SUCCESS_BG = Colors.feedbackSuccessBg;
 const FEEDBACK_ERROR_TEXT = Colors.noticeCriticalAccent;
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -29,6 +29,8 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
   const currentUser = useCurrentUser();
   const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  // Until today's log has been read the totals are unknown, not zero.
+  const [macrosRead, setMacrosRead] = useState(false);
 
   useEffect(() => {
     loadReportData();
@@ -72,8 +74,9 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
         fat += (fi.fat_g || 0) * qty;
       });
       setTodayMacros({ calories: cals, protein: prot, carbs, fat });
+      setMacrosRead(true);
     } catch (err) {
-      // Read-only daily totals; defaults to 0 if the fetch fails.
+      // Read-only daily totals; they stay unknown (--) if the fetch fails.
       console.error('ReportScreen: logApi.getDaily failed', err);
     }
   };
@@ -95,27 +98,29 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
   })();
 
   return (
-    <View style={styles.wrapper}>
-      <View style={styles.topBar}>
+    <Screen
+      edges={['top']}
+      testID="report"
+      contentStyle={styles.content}
+      header={<View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityRole="button" accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>My Report</Text>
+        <Text style={styles.topTitle} accessibilityRole="header">Weekly report</Text>
         <View style={styles.backBtn} />
-      </View>
-
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      </View>}
+    >
         {/* Tip Banner */}
         <View style={styles.tipBanner}>
-          <Ionicons name="camera-outline" size={16} color={colors.primary} />
-          <Text style={styles.tipText}>Screenshot or screen-record to save your report</Text>
+          <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.tipText}>Take a screenshot to keep this report.</Text>
         </View>
 
         {/* Cover */}
         <View style={styles.cover}>
           <View style={styles.coverDot} />
           <Text style={styles.coverTitle}>The Growth Project</Text>
-          <Text style={styles.coverSubtitle}>Weekly Progress Report</Text>
+          <Text style={styles.coverSubtitle}>Weekly progress report</Text>
           <Text style={styles.coverName}>
             {currentUser?.firstName || currentUser?.name}
           </Text>
@@ -124,12 +129,12 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
 
         {/* Macros */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Today's Macros</Text>
+          <Text style={styles.sectionTitle}>Today's macros</Text>
           <View style={styles.macroRow}>
-            <MacroBox label="Calories" value={`${Math.round(todayMacros.calories)}`} unit="kcal" />
-            <MacroBox label="Protein" value={`${Math.round(todayMacros.protein)}`} unit="g" accent />
-            <MacroBox label="Carbs" value={`${Math.round(todayMacros.carbs)}`} unit="g" />
-            <MacroBox label="Fat" value={`${Math.round(todayMacros.fat)}`} unit="g" />
+            <MacroBox label="Calories" value={macrosRead ? `${Math.round(todayMacros.calories)}` : '--'} unit="kcal" />
+            <MacroBox label="Protein" value={macrosRead ? `${Math.round(todayMacros.protein)}` : '--'} unit="g" accent />
+            <MacroBox label="Carbs" value={macrosRead ? `${Math.round(todayMacros.carbs)}` : '--'} unit="g" />
+            <MacroBox label="Fat" value={macrosRead ? `${Math.round(todayMacros.fat)}` : '--'} unit="g" />
           </View>
           {currentUser?.profile?.calorie_target && (
             <Text style={styles.targetHint}>
@@ -140,7 +145,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
 
         {/* Weekly Progress */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Weekly Progress</Text>
+          <Text style={styles.sectionTitle}>Weekly progress</Text>
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Text style={styles.statValue}>{startWeight ? `${Math.round(startWeight)}` : '--'}</Text>
@@ -191,8 +196,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
           <View style={styles.footerDot} />
           <Text style={styles.footerTitle}>The Growth Project</Text>
         </View>
-      </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
@@ -210,103 +214,56 @@ function MacroBox({ label, value, unit, accent }: { label: string; value: string
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  wrapper: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
+    paddingBottom: 8,
   },
   backBtn: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  topTitle: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  scroll: {
-    flex: 1,
-  },
+  topTitle: { ...typography.eyebrow, color: colors.textSecondary },
   content: {
+    paddingHorizontal: 24,
     paddingBottom: 60,
   },
   tipBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: FEEDBACK_SUCCESS_BG,
-    marginHorizontal: 16,
-    borderRadius: 4, // radius.lg
-    padding: 12,
+    paddingVertical: 12,
     marginBottom: 8,
   },
-  tipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
+  tipText: { ...typography.bodySmall, flex: 1, color: colors.textSecondary },
+  // Cover: the screenshot's title block. Serif, centred, no box.
   cover: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 4, // radius.lg
-    padding: 32,
+    paddingVertical: 32,
     alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   coverDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 4, // radius.lg
+    width: 8,
+    height: 8,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
-    marginBottom: 16,
+    marginBottom: 20,
   },
-  coverTitle: {
-    fontSize: 24,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  coverSubtitle: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
-  coverName: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginTop: 20,
-  },
-  coverDate: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-  },
+  coverTitle: { ...typography.h1, color: colors.textPrimary, textAlign: 'center' },
+  coverSubtitle: { ...typography.eyebrow, color: colors.textSecondary, marginTop: 8 },
+  coverName: { ...typography.h3, color: colors.textPrimary, marginTop: 24 },
+  coverDate: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 4, fontVariant: ['tabular-nums'] },
+  // Hairline sections, never boxed cards (CATALOG progress-details).
   section: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 4, // radius.lg
-    padding: 20,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
+    paddingVertical: 24,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 14,
-  },
+  sectionTitle: { ...typography.eyebrow, color: colors.textSecondary, marginBottom: 16 },
   macroRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -315,25 +272,15 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     flex: 1,
   },
-  macroValue: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  macroUnit: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
-  macroLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
+  macroValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  macroUnit: { ...typography.bodySmall, color: colors.textSecondary },
+  macroLabel: { ...typography.eyebrow, color: colors.textSecondary, marginTop: 4 },
   targetHint: {
-    fontSize: 12,
+    ...typography.bodySmall,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 16,
+    fontVariant: ['tabular-nums'],
   },
   statsRow: {
     flexDirection: 'row',
@@ -343,79 +290,46 @@ const makeStyles = (colors: ThemeColors) =>
   statBox: {
     alignItems: 'center',
   },
-  statValue: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  statLabel: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
+  statValue: { ...typography.h2, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
+  statLabel: { ...typography.eyebrow, color: colors.textSecondary, marginTop: 4 },
   weightList: {
-    borderTopWidth: 1,
-    borderTopColor: colors.divider,
-    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   weightRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 6,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  weightDate: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  weightVal: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.textPrimary,
-  },
+  weightDate: { ...typography.bodySmall, color: colors.textSecondary, fontVariant: ['tabular-nums'] },
+  weightVal: { ...typography.bodyMd, color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   goalBadge: {
+    ...typography.bodySmall,
     alignSelf: 'flex-start',
-    backgroundColor: FEEDBACK_SUCCESS_BG,
-    color: colors.primary,
-    fontSize: 13,
-    fontWeight: '500',
+    color: colors.textPrimary,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     overflow: 'hidden',
     marginBottom: 12,
   },
-  bodyText: {
-    fontSize: 14,
-    color: colors.textSecondary,
-    lineHeight: 22,
-  },
+  bodyText: { ...typography.body, color: colors.textSecondary },
   footer: {
-    backgroundColor: colors.surface,
-    marginHorizontal: 16,
-    borderRadius: 4, // radius.lg
-    padding: 24,
+    paddingVertical: 32,
     alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   footerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 2, // radius.md
+    width: 6,
+    height: 6,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     marginBottom: 12,
   },
-  footerTitle: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  footerSub: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 4,
-    textAlign: 'center',
-  },
-
+  footerTitle: { ...typography.h3, color: colors.textPrimary },
   });

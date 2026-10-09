@@ -2,7 +2,6 @@ import React from 'react';
 import {
   View,
   StyleSheet,
-  TouchableOpacity,
   Modal,
   TextInput,
   KeyboardAvoidingView,
@@ -10,11 +9,13 @@ import {
   Image,
   ScrollView,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius } from '../../theme/index';
+import { layout, radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
+import HapticPressable from '../HapticPressable';
+import { QuietOverline } from '../../ui/sections/QuietSection';
+import { PrimaryButton, TextLink } from '../../ui';
 import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros, parseQuantityInput } from '../../utils/log/macros';
 
@@ -56,11 +57,19 @@ export function QuantityPickerContent({
   saving = false,
 }: Omit<Props, 'visible'>) {
   const quantity = parseQuantityInput(quantityInput);
-  const styles = makeStyles(useTheme().semanticColors);
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   const previewMacros = selectedFood
     ? calcMacros(selectedFood, quantity ?? 0, selectedUnit)
     : { calories: 0, protein: 0, carbs: 0, fat: 0 };
   const displayMacro = (value: number) => Number.isFinite(value) ? String(value) : '—';
+
+  const macros = [
+    { key: 'calories', label: 'Calories', value: displayMacro(previewMacros.calories) },
+    { key: 'protein', label: 'Protein', value: `${displayMacro(previewMacros.protein)}g` },
+    { key: 'carbs', label: 'Carbs', value: `${displayMacro(previewMacros.carbs)}g` },
+    { key: 'fat', label: 'Fat', value: `${displayMacro(previewMacros.fat)}g` },
+  ];
 
   return (
     <KeyboardAvoidingView
@@ -71,44 +80,33 @@ export function QuantityPickerContent({
         contentContainerStyle={styles.quantityModalContent}
         keyboardShouldPersistTaps="handled"
       >
-        {selectedFood?.image_url ? (
-          <Image
-            source={{ uri: selectedFood.image_url }}
-            style={styles.quantityFoodImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <FoodImage name={selectedFood?.name || '?'} size={120} />
-        )}
+        <View style={styles.hero}>
+          {selectedFood?.image_url ? (
+            <Image
+              source={{ uri: selectedFood.image_url }}
+              style={styles.quantityFoodImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <FoodImage name={selectedFood?.name || '?'} size={96} />
+          )}
+        </View>
 
-        <Text style={styles.quantityFoodName}>{selectedFood?.name}</Text>
+        <Text style={styles.quantityFoodName} accessibilityRole="header">{selectedFood?.name}</Text>
         {selectedFood?.brand ? (
           <Text style={styles.quantityFoodBrand}>{selectedFood.brand}</Text>
         ) : null}
 
         <View style={styles.macroPreviewCard}>
-          <View style={styles.macroPreviewItem}>
-            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.calories)}</Text>
-            <Text style={styles.macroPreviewLabel}>Cal</Text>
-          </View>
-          <View style={styles.macroPreviewDivider} />
-          <View style={styles.macroPreviewItem}>
-            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.protein)}g</Text>
-            <Text style={styles.macroPreviewLabel}>Protein</Text>
-          </View>
-          <View style={styles.macroPreviewDivider} />
-          <View style={styles.macroPreviewItem}>
-            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.carbs)}g</Text>
-            <Text style={styles.macroPreviewLabel}>Carbs</Text>
-          </View>
-          <View style={styles.macroPreviewDivider} />
-          <View style={styles.macroPreviewItem}>
-            <Text style={styles.macroPreviewValue}>{displayMacro(previewMacros.fat)}g</Text>
-            <Text style={styles.macroPreviewLabel}>Fat</Text>
-          </View>
+          {macros.map((macro) => (
+            <View key={macro.key} style={styles.macroPreviewItem}>
+              <QuietOverline style={styles.macroPreviewLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{macro.label}</QuietOverline>
+              <Text style={styles.macroPreviewValue}>{macro.value}</Text>
+            </View>
+          ))}
         </View>
 
-        <Text style={styles.quantitySectionLabel}>Quantity</Text>
+        <QuietOverline style={styles.quantitySectionLabel}>Quantity</QuietOverline>
         <TextInput
           accessibilityLabel="Food quantity"
           style={styles.quantityInput}
@@ -116,14 +114,16 @@ export function QuantityPickerContent({
           onChangeText={onQuantityChange}
           keyboardType="decimal-pad"
           placeholder="1"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={sc.textMuted}
         />
 
-        <Text style={styles.quantitySectionLabel}>Unit</Text>
+        <QuietOverline style={styles.quantitySectionLabel}>Unit</QuietOverline>
         <View style={styles.unitChipRow}>
           {unitOptionsFor(selectedFood).map((u) => (
-            <TouchableOpacity
+            <HapticPressable
               key={u}
+              intent="light"
+              disableAnimation
               accessibilityRole="button"
               accessibilityLabel={`Portion unit ${u}`}
               accessibilityState={{ selected: selectedUnit === u }}
@@ -131,7 +131,7 @@ export function QuantityPickerContent({
               onPress={() => onUnitChange(u)}
             >
               <Text style={[styles.unitChipText, selectedUnit === u && styles.unitChipTextActive]}>{u}</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           ))}
         </View>
 
@@ -145,25 +145,15 @@ export function QuantityPickerContent({
           <Text style={styles.servingSizeInfo}>Enter a quantity greater than zero to log this food.</Text>
         ) : null}
 
-        <TouchableOpacity
-          style={[styles.quantityLogButton, quantity == null && { opacity: 0.5 }]}
-          accessibilityRole="button"
-          accessibilityLabel={saving ? 'Saving food' : 'Log food'}
-          disabled={quantity == null || saving}
+        <PrimaryButton
+          label="Log food"
+          disabled={quantity == null}
+          loading={saving}
           onPress={onConfirm}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="add-circle" size={22} color={Colors.white} />
-          <Text style={styles.quantityLogButtonText}>{saving ? 'Saving food…' : 'Log food'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.quantityCancelLink}
-          onPress={onCancel}
-          disabled={saving}
-        >
-          <Text style={styles.quantityCancelText}>Cancel</Text>
-        </TouchableOpacity>
+          testID="quantity-log-food"
+          style={styles.quantityLogButton}
+        />
+        <TextLink label="Cancel" underline={false} disabled={saving} onPress={onCancel} />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -172,142 +162,106 @@ export function QuantityPickerContent({
 const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   quantityModalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: sc.bgPrimary,
   },
   quantityModalContent: {
-    padding: 24,
+    paddingHorizontal: layout.gutter,
+    paddingTop: 32,
     paddingBottom: 40,
+  },
+  hero: {
     alignItems: 'center',
+    marginBottom: 20,
   },
   quantityFoodImage: {
-    width: 120,
-    height: 120,
-    borderRadius: Radius.lg,
-    marginBottom: 16,
+    width: 96,
+    height: 96,
+    borderRadius: radius.card,
   },
   quantityFoodName: {
-    fontSize: 22,
-    fontWeight: '500',
-    color: Colors.dark,
+    ...typography.h1,
+    color: sc.textPrimary,
     textAlign: 'center',
-    marginBottom: 4,
   },
   quantityFoodBrand: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: sc.textMuted,
     textAlign: 'center',
-    marginBottom: 16,
+    marginTop: 4,
   },
   macroPreviewCard: {
     flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    marginBottom: 24,
-    width: '100%',
+    gap: 12,
+    paddingVertical: layout.sectionPadY,
+    marginTop: layout.sectionGap,
+    marginBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
   },
   macroPreviewItem: {
     flex: 1,
-    alignItems: 'center',
-  },
-  macroPreviewValue: {
-    fontSize: 18,
-    fontWeight: '500',
-    color: sc.textPrimary,
+    alignItems: 'flex-start',
   },
   macroPreviewLabel: {
-    fontSize: 13,
-    color: sc.textMuted,
-    marginTop: 2,
+    marginBottom: 4,
   },
-  macroPreviewDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 28,
-    backgroundColor: sc.border,
+  macroPreviewValue: {
+    ...typography.h2,
+    color: sc.textPrimary,
+    fontVariant: ['lining-nums', 'tabular-nums'],
   },
   quantitySectionLabel: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Colors.textMuted,
-    alignSelf: 'flex-start',
+    marginTop: 20,
     marginBottom: 8,
   },
   quantityInput: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
+    minHeight: layout.buttonHeight,
+    backgroundColor: sc.bgSurface,
+    borderRadius: radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    fontFamily: typography.bodyMd.fontFamily,
     fontSize: 20,
-    fontWeight: '500',
-    color: Colors.dark,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 20,
-    width: '100%',
+    color: sc.textPrimary,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
   unitChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
-    width: '100%',
   },
   unitChip: {
-    minHeight: 44,
+    minHeight: layout.touchMin,
     justifyContent: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   unitChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    borderWidth: 1,
+    borderColor: sc.accent,
   },
   unitChipText: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textMuted,
+    color: sc.textMuted,
   },
   unitChipTextActive: {
-    color: Colors.white,
+    fontFamily: typography.bodyMd.fontFamily,
+    color: sc.accentText,
   },
   servingSizeInfo: {
     fontSize: 13,
-    color: Colors.textMuted,
-    alignSelf: 'flex-start',
-    marginBottom: 20,
+    lineHeight: 19,
+    color: sc.textMuted,
     marginTop: 4,
   },
   quantityLogButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: Radius.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    width: '100%',
-    marginTop: 8,
-  },
-  quantityLogButtonText: {
-    color: Colors.white,
-    fontSize: 18,
-    fontWeight: '500',
-  },
-  quantityCancelLink: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  quantityCancelText: {
-    fontSize: 15,
-    color: Colors.textMuted,
-    fontWeight: '600',
+    marginTop: 32,
+    marginBottom: 8,
   },
 });

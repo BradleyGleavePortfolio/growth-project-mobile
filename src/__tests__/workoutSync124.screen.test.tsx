@@ -150,7 +150,7 @@ afterEach(() => {
 
 async function finishOnce(view: Awaited<ReturnType<typeof render>>) {
   await act(async () => {
-    await fireEvent.press(view.getByText('Finish'));
+    await fireEvent.press(view.getByText('Finish workout'));
     for (let i = 0; i < 6; i++) await Promise.resolve();
   });
 }
@@ -174,7 +174,7 @@ describe('DES-W-127 live screen route/action parity', () => {
     await waitFor(() => expect(mockGoBack).toHaveBeenCalled());
     expect(alertSpy).not.toHaveBeenCalledWith('Discard this workout?', expect.any(String), expect.any(Array));
     mockCatalog.mockResolvedValue([{ id: 'curl', name: 'Dumbbell Curl', muscle: 'biceps', equipment: 'dumbbell' }]);
-    await fireEvent.press(view.getByText('Add Exercise'));
+    await fireEvent.press(view.getByText('Add exercise'));
     const search = await view.findByPlaceholderText('Search exercises...');
     await fireEvent.press(view.getByRole('button', { name: 'Biceps' }));
     await fireEvent.changeText(search, 'Curl');
@@ -191,7 +191,7 @@ describe('DES-W-127 live screen route/action parity', () => {
     await fireEvent.press(view.getByLabelText('Add 30 seconds to rest timer'));
     await fireEvent.press(view.getByLabelText('Skip rest timer'));
     expect(view.queryByLabelText('Skip rest timer')).toBeNull();
-    await fireEvent.press(view.getAllByText('Add Set')[0]);
+    await fireEvent.press(view.getAllByText('Add set')[0]);
     expect(view.getByTestId('set-weight-0-1').props.value).toBe('60');
     await finishOnce(view);
     expect(mockQueueWorkout.mock.calls[0][0]).toMatchObject({ payload: {
