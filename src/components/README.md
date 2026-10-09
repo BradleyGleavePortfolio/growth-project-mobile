@@ -127,6 +127,7 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 | `AppleSignInButton.tsx` | Thin wrapper around `<AppleAuthentication.AppleAuthenticationButton/>` (mandatory by Apple HIG). Renders nothing on Android or unsupported iOS configurations so call sites can drop it in unconditionally. |
 | `BiometricUnlockGate.tsx` | Wraps the app shell. When the user has opted in, blocks render until `useBiometricGate` reports `unlocked`. Pass-through otherwise. |
 | `BiometricUnlockSetting.tsx` | Settings row that toggles the SecureStore opt-in flag (`biometric_unlock_enabled`). Hides itself when the device has no biometrics. |
+| `ai/AiConsentSheet.tsx` | The AI help consent sheet. Presentation (ROMAN-ROOM-133): `radius.sheet` top corners, the shared `PrimaryButton` / `TextLink`, a serif `Headline` title and a bottom padding from real insets. Copy and consent logic are unchanged. |
 
 ### Anticipation, community, trust
 

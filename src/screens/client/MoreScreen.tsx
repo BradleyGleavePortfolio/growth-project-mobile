@@ -208,9 +208,9 @@ const ROMAN_MORE_ITEM: MoreItem = {
   icon: 'sparkles-outline',
   label: 'Roman',
   // Roman is not "your AI" — he is Roman, shared across surfaces (identity
-  // spec). Client row keeps the plain open-a-conversation register
-  // (R1 UX finding P2).
-  description: 'Open a conversation with Roman',
+  // spec). Prototype 67 (ROMAN-ROOM-133): the row says what Roman is for.
+  // The AI guidance row stays beside it (owner 16:20: keep button counts).
+  description: 'Ask Roman about your plan and targets',
   section: 'Guidance and community',
   target: { type: 'stack', screen: 'RomanChat' },
   a11yHint: 'Opens a conversation with Roman',

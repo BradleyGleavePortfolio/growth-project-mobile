@@ -46,7 +46,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import defaultAiConsentApi, {
@@ -66,6 +65,8 @@ import { readUserCacheSync } from '../../lib/userCache';
 import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { layout, radius } from '../../theme/tokens';
+import { footerBottomPadding, Headline, PrimaryButton, TextLink, useScreenInsets } from '../../ui';
 
 export type AiConsentSheetApi = Pick<typeof defaultAiConsentApi, 'getStatus' | 'grantRoman'>;
 
@@ -158,6 +159,9 @@ export default function AiConsentSheet({
 }: AiConsentSheetProps): React.ReactElement {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
+  // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
+  // gesture bar from real insets; buttons are the shared src/ui primitives.
+  const insets = useScreenInsets();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const active = useRef(true);
   /** The account whose status the sheet is showing (set by `load`). */
@@ -343,31 +347,20 @@ export default function AiConsentSheet({
               <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
               <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>
             </ScrollView>
-            <TouchableOpacity
-              style={[styles.primary, saving && styles.disabled]}
+            <PrimaryButton
+              label={AI_CONSENT_SHEET_COPY.allow}
               onPress={() => void allow()}
-              disabled={saving}
-              accessibilityRole="button"
-              accessibilityLabel={AI_CONSENT_SHEET_COPY.allow}
-              accessibilityState={{ disabled: saving, busy: saving }}
+              loading={saving}
+              style={styles.primary}
               testID={`${testID}-allow`}
-            >
-              {saving ? (
-                <ActivityIndicator color={colors.textOnPrimary} />
-              ) : (
-                <Text style={styles.primaryLabel}>{AI_CONSENT_SHEET_COPY.allow}</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.secondary}
+            />
+            <TextLink
+              label={AI_CONSENT_SHEET_COPY.notNow}
               onPress={onClose}
               disabled={saving}
-              accessibilityRole="button"
-              accessibilityLabel={AI_CONSENT_SHEET_COPY.notNow}
+              style={styles.secondary}
               testID={`${testID}-not-now`}
-            >
-              <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.notNow}</Text>
-            </TouchableOpacity>
+            />
           </>
         );
       }
@@ -377,15 +370,12 @@ export default function AiConsentSheet({
             <Text style={styles.message} accessibilityRole="alert" testID={`${testID}-already-on`}>
               {AI_CONSENT_SHEET_COPY.alreadyOn}
             </Text>
-            <TouchableOpacity
-              style={styles.primary}
+            <PrimaryButton
+              label={AI_CONSENT_SHEET_COPY.tryAgain}
               onPress={retryAlreadyOn}
-              accessibilityRole="button"
-              accessibilityLabel={AI_CONSENT_SHEET_COPY.tryAgain}
+              style={styles.primary}
               testID={`${testID}-retry-request`}
-            >
-              <Text style={styles.primaryLabel}>{AI_CONSENT_SHEET_COPY.tryAgain}</Text>
-            </TouchableOpacity>
+            />
           </>
         );
       case 'checking':
@@ -400,9 +390,7 @@ export default function AiConsentSheet({
             <Text style={styles.message} accessibilityRole="alert" testID={`${testID}-not-sent`}>
               {AI_CONSENT_SHEET_COPY.notSent}
             </Text>
-            <TouchableOpacity style={styles.secondary} onPress={onClose} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.close}</Text>
-            </TouchableOpacity>
+            <TextLink label={AI_CONSENT_SHEET_COPY.close} onPress={onClose} style={styles.secondary} />
           </>
         );
       case 'update_app':
@@ -411,9 +399,7 @@ export default function AiConsentSheet({
             <Text style={styles.message} accessibilityRole="alert" testID={`${testID}-update-app`}>
               {AI_CONSENT_SHEET_COPY.updateApp}
             </Text>
-            <TouchableOpacity style={styles.secondary} onPress={onClose} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.close}</Text>
-            </TouchableOpacity>
+            <TextLink label={AI_CONSENT_SHEET_COPY.close} onPress={onClose} style={styles.secondary} />
           </>
         );
       case 'unavailable':
@@ -440,29 +426,21 @@ export default function AiConsentSheet({
                 {`Reference: ${short}`}
               </Text>
             ) : null}
-            <TouchableOpacity
-              style={styles.primary}
+            <PrimaryButton
+              label={AI_CONSENT_SHEET_COPY.tryAgain}
               onPress={retry}
-              accessibilityRole="button"
-              accessibilityLabel={AI_CONSENT_SHEET_COPY.tryAgain}
+              style={styles.primary}
               testID={`${testID}-try-again`}
-            >
-              <Text style={styles.primaryLabel}>{AI_CONSENT_SHEET_COPY.tryAgain}</Text>
-            </TouchableOpacity>
+            />
             {onContactSupport ? (
-              <TouchableOpacity
-                style={styles.secondary}
+              <TextLink
+                label={AI_CONSENT_SHEET_COPY.contactSupport}
                 onPress={onContactSupport}
-                accessibilityRole="button"
-                accessibilityLabel={AI_CONSENT_SHEET_COPY.contactSupport}
+                style={styles.secondary}
                 testID={`${testID}-support`}
-              >
-                <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.contactSupport}</Text>
-              </TouchableOpacity>
+              />
             ) : null}
-            <TouchableOpacity style={styles.secondary} onPress={onClose} accessibilityRole="button">
-              <Text style={styles.secondaryLabel}>{AI_CONSENT_SHEET_COPY.close}</Text>
-            </TouchableOpacity>
+            <TextLink label={AI_CONSENT_SHEET_COPY.close} onPress={onClose} style={styles.secondary} />
           </>
         );
       }
@@ -472,10 +450,14 @@ export default function AiConsentSheet({
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
-        <View style={styles.sheet} testID={testID} accessibilityViewIsModal>
-          <Text style={styles.title} accessibilityRole="header">
+        <View
+          style={[styles.sheet, { paddingBottom: footerBottomPadding(insets.bottom) }]}
+          testID={testID}
+          accessibilityViewIsModal
+        >
+          <Headline level="h2" style={styles.title}>
             {AI_CONSENT_SHEET_COPY.title}
-          </Text>
+          </Headline>
           {renderBody()}
         </View>
       </View>
@@ -488,14 +470,13 @@ function makeStyles(colors: ThemeColors) {
     backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
     sheet: {
       backgroundColor: colors.surfaceElevated,
-      borderTopLeftRadius: 20,
-      borderTopRightRadius: 20,
-      paddingHorizontal: 20,
-      paddingTop: 20,
-      paddingBottom: 32,
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
+      paddingHorizontal: layout.gutter,
+      paddingTop: layout.gutter,
       maxHeight: '85%',
     },
-    title: { fontSize: 18, fontWeight: '600', color: colors.textPrimary, marginBottom: 12 },
+    title: { marginBottom: 12 },
     center: { paddingVertical: 32, alignItems: 'center' },
     scroll: { flexGrow: 0 },
     scrollContent: { paddingBottom: 8 },
@@ -504,17 +485,7 @@ function makeStyles(colors: ThemeColors) {
     note: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginBottom: 8 },
     message: { fontSize: 15, lineHeight: 22, color: colors.textPrimary, marginBottom: 12 },
     reference: { fontSize: 13, color: colors.textSecondary, marginBottom: 12 },
-    primary: {
-      minHeight: 48,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginTop: 8,
-    },
-    primaryLabel: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '600' },
-    disabled: { opacity: 0.6 },
-    secondary: { minHeight: 44, alignItems: 'center', justifyContent: 'center', marginTop: 4 },
-    secondaryLabel: { color: colors.primary, fontSize: 15, fontWeight: '500' },
+    primary: { marginTop: 8 },
+    secondary: { marginTop: 4 },
   });
 }
