@@ -231,7 +231,7 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     doneLine: (c) =>
       `This is your first day. Each move lists its sets, reps and a short cue${c.coachLinked ? ` from ${c.coachName}` : ''}.`,
     pendingLine: (c) =>
-      `${c.coachLinked ? `${c.coachName} is still setting up your first plan.` : 'Your first plan is still being set up.'} It will appear on Train once it is ready. For now, we will look at logging.`,
+      `${c.coachLinked ? `${c.coachName} is still setting up your first plan.` : 'Your first plan is still being set up.'} It will appear on Train once it is ready. For now, the tour carries on with Food.`,
   },
   {
     id: 'first_exercise',
