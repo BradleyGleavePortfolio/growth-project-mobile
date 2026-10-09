@@ -318,6 +318,7 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
                 "marginVertical": 24,
               }
             }
+            testID="create-account-or"
           >
             <View
               style={
@@ -922,7 +923,6 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
             "fontWeight": "400",
             "letterSpacing": 0,
             "lineHeight": 22,
-            "marginVertical": 16,
           }
         }
         testID="create-account-legal"
@@ -1882,6 +1882,7 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
                 "marginVertical": 24,
               }
             }
+            testID="create-account-or"
           >
             <View
               style={
@@ -2486,7 +2487,6 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
             "fontWeight": "400",
             "letterSpacing": 0,
             "lineHeight": 22,
-            "marginVertical": 16,
           }
         }
         testID="create-account-legal"
