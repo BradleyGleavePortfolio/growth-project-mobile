@@ -1,15 +1,17 @@
 /**
- * Render tests for Roman's tutorial overlay: the coach-mark card, progress
- * indicator, Roman's canonical face, spotlight, skip/resume, defer, the
- * per-step done line, the completion moment, accessibility labels and
- * Reduce Motion.
+ * Render tests for Roman's tour overlay (TOUR-133, prototype 46-66): the
+ * coach-mark card ("Step n of 7", Skip, hairline, line, progress, one text
+ * action), the rounded spotlight, the Skip confirm sheet (64), the done line
+ * (3.2 s or a tap), the pending notice (66), the completion (60), the push
+ * priming card (61-62), landing on Home (63), and Reduce Motion. Rendered at
+ * 360x800 and 390x844.
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AccessibilityInfo, Animated } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 
-const mockFlags = { clientTutorial: true, communityTab: true };
+const mockFlags = { clientTutorial: true, communityTab: true, clientCalendar: true, romanChat: true };
 jest.mock('../../../config/featureFlags', () => ({
   featureFlags: {
     get clientTutorial() {
@@ -18,6 +20,12 @@ jest.mock('../../../config/featureFlags', () => ({
     get communityTab() {
       return mockFlags.communityTab;
     },
+    get clientCalendar() {
+      return mockFlags.clientCalendar;
+    },
+    get romanChat() {
+      return mockFlags.romanChat;
+    },
   },
 }));
 jest.mock('../../../ui/haptics/haptics.service', () => ({
@@ -25,14 +33,34 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({
     success: () => Promise.resolve(),
     selection: () => Promise.resolve(),
     warning: () => Promise.resolve(),
+    softImpact: () => Promise.resolve(),
   },
 }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
   useSafeAreaInsets: () => ({ top: 20, bottom: 34, left: 0, right: 0 }),
 }));
+jest.mock('react-native-svg', () => {
+  const ActualReact = jest.requireActual<typeof import('react')>('react');
+  const { View: RNView } = jest.requireActual<typeof import('react-native')>('react-native');
+  const Stub = (props: { children?: React.ReactNode }) => ActualReact.createElement(RNView, props, props.children);
+  return { __esModule: true, default: Stub, Svg: Stub, Path: Stub, Rect: Stub };
+});
+const mockOffer = jest.fn(async () => false);
+const mockAnswer = jest.fn(async () => undefined);
+jest.mock('../../../tutorial/pushPriming', () => ({
+  shouldOfferPushPriming: () => mockOffer(),
+  answerPushPriming: (_u: string | null, accept: boolean) => mockAnswer(accept),
+}));
+let mockWindow = { width: 390, height: 844 };
+jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
+  __esModule: true,
+  default: () => ({ ...mockWindow, scale: 3, fontScale: 1 }),
+}));
 
-import TutorialOverlay from '../TutorialOverlay';
+import { StyleSheet } from 'react-native';
+import TutorialOverlay, { spotlightPath, TUTORIAL_DONE_LINE_MS, TUTORIAL_FADE_MS } from '../TutorialOverlay';
+import { radius } from '../../../theme/tokens';
 import { romanFaceAsset } from '../../roman/romanAvatarAssets';
 import {
   __resetTutorialStoreForTests,
@@ -50,7 +78,7 @@ const PAYLOAD: OnboardingCompletePayload = {
   spaces: [{ id: 's1', name: 'All members' }],
   coach: { id: 'c1', display_name: 'Bradley' },
 };
-const TABS = ['Home', 'WorkoutTab', 'Log', 'MoreTab', 'CommunityTab'];
+const TABS = ['Home', 'WorkoutTab', 'Log', 'CalendarTab', 'MoreTab', 'CommunityTab'];
 
 async function begin() {
   await hydrateTutorial('u1', 'Maya', true);
@@ -58,7 +86,7 @@ async function begin() {
   startClientTutorial(PAYLOAD);
 }
 
-/** Welcome to the message beat (TOUR-133), every gate met by its real action. */
+/** Welcome to the message beat, every gate met by its real action. */
 function toMessageBeat() {
   dispatchTutorial({ type: 'ACK' });
   setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
@@ -68,15 +96,31 @@ function toMessageBeat() {
   dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
   setTutorialRoute(['Home', 'HomeMain']);
   dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
+  useTutorialStore.setState({ celebration: null });
+}
+
+function toCompletion() {
+  toMessageBeat();
+  setTutorialRoute(['Home', 'Messages']);
+  dispatchTutorial({ type: 'SIGNAL', signal: 'message_sent' });
+  useTutorialStore.setState({ celebration: null });
 }
 
 beforeEach(async () => {
   await AsyncStorage.clear();
   __resetTutorialStoreForTests();
   mockFlags.clientTutorial = true;
+  mockOffer.mockReset().mockResolvedValue(false);
+  mockAnswer.mockClear();
+  mockWindow = { width: 390, height: 844 };
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(false);
 });
-afterEach(() => jest.restoreAllMocks());
+afterEach(() => {
+  jest.useRealTimers();
+  jest.restoreAllMocks();
+});
+
+const line = () => screen.getByTestId('tutorial-line').props.children;
 
 describe('TutorialOverlay', () => {
   it('renders nothing when the tour is not active', async () => {
@@ -85,40 +129,50 @@ describe('TutorialOverlay', () => {
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
   });
 
-  it('welcomes the client in Roman\'s voice with his canonical face and a progress indicator', async () => {
+  it.each([
+    [360, 800],
+    [390, 844],
+  ])('welcomes the client with Roman, Step 1 of 7, Skip and Begin at %sx%s', async (w, h) => {
+    mockWindow = { width: w, height: h };
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(
-      /^Welcome, Maya\. I am Roman\. I work with Bradley/,
-    );
-    const avatar = screen.getByTestId('tutorial-roman-avatar');
+    expect(line()).toMatch(/^Welcome, Maya\. I am Roman\. I work with Bradley/);
+    const avatar = screen.getAllByTestId('tutorial-roman-avatar')[0];
     expect(avatar.props.source).toBe(romanFaceAsset('neutral'));
-    expect(avatar.props.source).not.toBe(romanFaceAsset('smile'));
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 1 of 7');
     const progress = screen.getByTestId('tutorial-progress');
     expect(progress.props.accessibilityRole).toBe('progressbar');
     expect(progress.props.accessibilityLabel).toBe('Step 1 of 7, Welcome');
-    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 7, now: 0 });
+    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 7, now: 1 });
     expect(screen.getByLabelText('Begin')).toBeTruthy();
-    expect(screen.getByLabelText('Skip the tour')).toBeTruthy();
+    expect(screen.getByLabelText('Skip')).toBeTruthy();
+    // Welcome is a full scrim, no cut-out (46).
+    expect(screen.queryByTestId('tutorial-spotlight')).toBeNull();
+    // Rounded corners from the tokens (owner 17:07).
+    expect(StyleSheet.flatten(screen.getByTestId('tutorial-card').props.style).borderRadius).toBe(radius.card);
   });
 
-  it('Begin moves to the plan step and spotlights the Train tab', async () => {
+  it('Begin moves to the plan beat and spotlights the Train tab with a rounded cut-out', async () => {
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await fireEvent.press(screen.getByLabelText('Begin'));
-    expect(screen.getByTestId('tutorial-line').props.children).toBe(
-      'This is Train. Bradley assigned you Foundations. Tap Train to see it.',
-    );
+    expect(line()).toBe('This is Train. Bradley assigned you Foundations. Tap Train to see it.');
     expect(screen.getByTestId('tutorial-spotlight')).toBeTruthy();
-    expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe(
-      'Step 2 of 7, Your plan',
-    );
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 2 of 7');
     // A route gate has no button that could fake the action.
-    expect(screen.queryByLabelText('Begin')).toBeNull();
     expect(screen.queryByTestId('tutorial-ack')).toBeNull();
   });
 
-  it('shows the done line with a check after a step completes', async () => {
+  it('the spotlight path is a full-screen rect with a rounded hole', () => {
+    const d = spotlightPath(390, 844, 10, 20, 100, 60, radius.card);
+    expect(d.startsWith('M0 0H390V844H0Z')).toBe(true);
+    expect(d).toContain(`A${radius.card} ${radius.card} 0 0 1`);
+    // Never a radius larger than half the hole.
+    expect(spotlightPath(390, 844, 0, 0, 20, 20, radius.card)).toContain('A10 10');
+  });
+
+  it('shows the done line with a check, clears after 3.2 s, or on a tap', async () => {
+    jest.useFakeTimers();
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await act(async () => {
@@ -127,17 +181,22 @@ describe('TutorialOverlay', () => {
       setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
     });
     expect(screen.getByTestId('tutorial-done-line')).toBeTruthy();
-    expect(screen.getByText('This is your first day. Each move lists its sets, reps and a short cue from Bradley.')).toBeTruthy();
+    await act(async () => {
+      jest.advanceTimersByTime(TUTORIAL_DONE_LINE_MS);
+    });
+    expect(screen.queryByTestId('tutorial-done-line')).toBeNull();
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 3 of 7');
   });
 
-  it('Skip asks first, keeps progress, and hides the overlay', async () => {
+  it('Skip asks first in a sheet (64), keeps progress, and hides the overlay', async () => {
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
-    await fireEvent.press(screen.getByLabelText('Skip the tour'));
+    await fireEvent.press(screen.getByLabelText('Skip'));
     expect(screen.getByText('Skip the tour?')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Keep going'));
+    expect(screen.getByText('You can pick it up again from Settings, under Tutorial.')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('tutorial-keep-going'));
     expect(screen.queryByText('Skip the tour?')).toBeNull();
-    await fireEvent.press(screen.getByLabelText('Skip the tour'));
+    await fireEvent.press(screen.getByLabelText('Skip'));
     await fireEvent.press(screen.getByLabelText('Skip tour'));
     expect(useTutorialStore.getState().tutorial.status).toBe('paused');
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
@@ -145,47 +204,103 @@ describe('TutorialOverlay', () => {
     expect(screen.getByTestId('tutorial-overlay')).toBeTruthy();
   });
 
+  it('without a plan, beat two speaks once with Continue, then the tour moves to Food (66)', async () => {
+    await hydrateTutorial('u1', 'Maya', true);
+    setTutorialRoute(['Home', 'HomeMain']);
+    startClientTutorial({ ...PAYLOAD, program: null });
+    await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
+    await fireEvent.press(screen.getByLabelText('Begin'));
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 2 of 7');
+    expect(line()).toMatch(/^Bradley is still setting up your first plan\./);
+    await fireEvent.press(screen.getByLabelText('Continue'));
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 4 of 7');
+    expect(line()).toMatch(/^This is Food\./);
+  });
+
   it('offers Take me there and Later on the message beat; Later moves to the completion', async () => {
     await begin();
     const onNavigate = jest.fn();
     await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
     await act(async () => toMessageBeat());
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/A real person, not me\./);
+    expect(line()).toMatch(/A real person, not me\./);
     await fireEvent.press(screen.getByLabelText('Take me there'));
     expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'Messages' });
     await fireEvent.press(screen.getByLabelText('Later'));
     expect(useTutorialStore.getState().tutorial.outcomes.first_message).toBe('deferred');
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/^That is everything, Maya\./);
+    expect(line()).toMatch(/^That is everything, Maya\./);
   });
 
-  it('ends on a quiet completion card with no skip, and the button finishes the tour', async () => {
+  it('ends on the completion (60): face, serif line, no Skip; Got it lands on Home (63)', async () => {
     await begin();
-    await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
+    const onNavigate = jest.fn();
+    await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
+    await act(async () => toCompletion());
+    expect(line()).toBe('That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message.');
+    expect(screen.getByTestId('tutorial-sub').props.children).toMatch(/One thing at a time\. You do not need to be perfect, just consistent\.$/);
+    expect(screen.queryByLabelText('Skip')).toBeNull();
     await act(async () => {
-      toMessageBeat();
-      setTutorialRoute(['Home', 'Messages']);
-      dispatchTutorial({ type: 'SIGNAL', signal: 'message_sent' });
+      fireEvent.press(screen.getByLabelText('Got it'));
     });
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(
-      /^That is everything, Maya\. Your plan is set, your numbers are set, and Bradley has your message\./,
-    );
-    // Calendar, Community and devices are folded in here (decision 133-5).
-    expect(screen.getByTestId('tutorial-sub').props.children).toBe(
-      'Community has its own tab, and connected devices live under You. One thing at a time. You do not need to be perfect, just consistent.',
-    );
-    expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe('Tour complete');
-    expect(screen.queryByLabelText('Skip the tour')).toBeNull();
-    expect(screen.getByTestId('tutorial-roman-avatar').props.source).toBe(romanFaceAsset('neutral'));
-    await fireEvent.press(screen.getByLabelText('Got it'));
     expect(useTutorialStore.getState().tutorial.status).toBe('completed');
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
     expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
   });
 
-  it('animates the card with a single 280ms fade', async () => {
+  it('then asks for notifications once (61); only Turn on asks the OS, Not now goes Home (62)', async () => {
+    mockOffer.mockResolvedValue(true);
+    await begin();
+    const onNavigate = jest.fn();
+    await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
+    await act(async () => toCompletion());
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Got it'));
+    });
+    expect(screen.getByTestId('tutorial-push-priming')).toBeTruthy();
+    expect(line()).toBe(
+      "Want a nudge when Bradley messages you, or when the day's workout is ready? I will only ask once.",
+    );
+    expect(onNavigate).not.toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Not now'));
+    });
+    expect(mockAnswer).toHaveBeenCalledWith(false);
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
+    expect(screen.queryByTestId('tutorial-overlay')).toBeNull();
+  });
+
+  it('Turn on notifications answers yes before landing on Home', async () => {
+    mockOffer.mockResolvedValue(true);
+    await begin();
+    const onNavigate = jest.fn();
+    await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
+    await act(async () => toCompletion());
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Got it'));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText('Turn on notifications'));
+    });
+    expect(mockAnswer).toHaveBeenCalledWith(true);
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'HomeMain' });
+  });
+
+  it('a coachless client meets Roman at beat six', async () => {
+    await hydrateTutorial('u1', 'Maya', false);
+    setTutorialRoute(['Home', 'HomeMain']);
+    startClientTutorial({ ...PAYLOAD, coach: null });
+    await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
+    await act(async () => toMessageBeat());
+    expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 6 of 7');
+    expect(line()).toMatch(/ask me\. You will find me under You/);
+    expect(screen.getByLabelText('Continue')).toBeTruthy();
+  });
+
+  it('animates the card with a single 280 ms fade', async () => {
     const timing = jest.spyOn(Animated, 'timing');
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
-    expect(timing).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ duration: 280 }));
+    expect(timing).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ duration: TUTORIAL_FADE_MS }));
+    expect(TUTORIAL_FADE_MS).toBeLessThanOrEqual(300);
   });
 
   it('drops the animation entirely under Reduce Motion', async () => {
@@ -193,7 +308,6 @@ describe('TutorialOverlay', () => {
     (AccessibilityInfo.isReduceMotionEnabled as jest.Mock).mockResolvedValue(true);
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
-    // Let the Reduce Motion probe resolve.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 0));
     });

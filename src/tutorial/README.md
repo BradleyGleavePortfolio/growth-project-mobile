@@ -2,7 +2,7 @@
 
 After the consultation reveal, "Show me around" starts Roman's tour of the real app. Each beat only moves forward when the client does the real thing. This folder holds the logic. The UI lives in `src/components/tutorial/`.
 
-The approach is Duolingo mechanics inside Quiet Luxury visuals: a progress indicator, a spotlight on the real tab or card, one success haptic and a short line from Roman when a step finishes, and skip with resume. There is no confetti, no exclamation point and no emoji. Motion is one 280 ms fade, and none at all when Reduce Motion is on.
+The approach is Duolingo mechanics inside Quiet Luxury visuals: "Step n of 7", a rounded spotlight on the real tab, card or row, one success haptic and a short line from Roman when a beat finishes, and skip with resume. There is no confetti, no exclamation point and no emoji. Motion is one 280 ms fade with an 8 pt rise, and none at all when Reduce Motion is on. Corners come from the radius tokens only (owner 17:07, decision 133-4): the card `radius.card`, the skip sheet `radius.sheet`, buttons from `src/ui` (`PrimaryButton`, `TextLink`).
 
 ## Build flags
 
@@ -42,19 +42,19 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 7 | complete (60) | Got it | button |
 
 - Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, we will look at logging.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
-- Push priming (61-62, `pushPriming.ts`): after Got it, the overlay shows one card, only when the OS can still ask and the account never answered Home's push card: "Want a nudge when {coach} messages you, or when the day's workout is ready? I will only ask once." Only "Turn on notifications" shows the OS dialog; "Not now" goes straight on. Both answers use Home's `push_primer_dismissed:<user>` key, so Home never asks again, and Home's card hides while the tour runs.
+- Done line (each beat): a check glyph and Roman's line, one success haptic, gone after 3.2 s or on a tap. Only a beat really done earns it, never Later.
+- Completion (60): Roman's face, the serif line built from this tour's outcomes ("Your plan is set", "your numbers are set", "{coach} has your message", each only when true), then one quiet paragraph that folds in Calendar, Community and connected devices, the welcome call when there is a coach and Calendar, and "One thing at a time. You do not need to be perfect, just consistent." No Skip.
+- Push priming (61-62, `pushPriming.ts`): after Got it, one card, only when the OS can still ask and the account never answered Home's push card: "Want a nudge when {coach} messages you, or when the day's workout is ready? I will only ask once." Only "Turn on notifications" shows the OS dialog; "Not now" goes straight on. Both answers use Home's `push_primer_dismissed:<user>` key, so Home never asks again, and Home's card hides while the tour runs.
+- Landing (63): plain Home (`Home` / `HomeMain`), nothing else opens.
+- Skip (64): a bottom sheet, "Skip the tour?", "You can pick it up again from Settings, under Tutorial.", Skip tour (the one filled button) and Keep going, warning haptic. Progress is kept.
 - Re-offer (65): one quiet line on Home, "Pick up the quick tour in Settings, under Tutorial.", which resumes it; never a re-triggered prompt (owner T-5).
-- Only a beat really done earns its done line and success haptic, never Later.
 - Stored state is version 3. Older versions (v1: nine or eleven steps, v2: six) keep what the client chose: finished stays finished, skipped stays skipped (never restarts by itself) and resumes at the welcome.
 
 ## Truthful tour (FW-ONB-128 B2)
 
 - "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`; it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). The first unmet requirement of a beat decides its outcome.
 - Without a coach Roman names no coach anywhere, beat six is the Roman beat (decision 28: nothing is locked), and the push line drops the coach.
-- Complete: built from this tour's outcomes. "Your plan is set" only when the plan step ended `done`, "your numbers are set" only when the macros step did, and "{coach} has your message" only when the first message was sent. With none of them: "That is everything." The second paragraph ends "One thing at a time. You do not need to be perfect, just consistent."
 - Settings > Tutorial reads "Take the tour" until a tour has been completed on this device, then "Take the tour again".
-
-Food has no button and no "Later"; the message beat has Later (Tutorial 4). The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).
 
 ## Files
 
@@ -88,4 +88,4 @@ The overlay renders `RomanAvatar crop="neutral"`, which resolves `romanFaceAsset
 
 ## Tests
 
-`src/tutorial/__tests__/` (machine, store/persistence, completion detection, copy voice, push priming, the consultation hand-off, and `tutorialTruth.test.tsx` for clients without a coach or a plan) and `src/components/tutorial/__tests__/` (overlay, cards, Home slot, Settings row).
+`src/tutorial/__tests__/` (machine, store/persistence, completion detection, copy voice, push priming, the consultation hand-off, and `tutorialTruth.test.tsx` for clients without a coach or a plan) and `src/components/tutorial/__tests__/` (overlay at 360x800 and 390x844, cards, Home slot, Settings row).
