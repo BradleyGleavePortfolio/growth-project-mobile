@@ -29,6 +29,7 @@ import {
   type SignupRoleNoticeKind,
 } from '../../lib/signupRoleNotice';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import InviteCoachCardDetails from '../../components/invite/InviteCoachCardDetails';
 import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
 import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { typography } from '../../theme/tokens';
@@ -427,10 +428,17 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
           ) : previewLoading ? (
             <Text style={styles.invitePreviewMuted}>Checking code…</Text>
           ) : invitePreview?.valid ? (
-            <Text style={styles.invitePreviewOk}>
-              You will be paired with{' '}
-              <Text style={styles.coachName}>{invitePreview.coach_name || invitePreview.business_name || 'your coach'}</Text>.
-            </Text>
+            <>
+              <Text style={styles.invitePreviewOk}>
+                You will be paired with{' '}
+                <Text style={styles.coachName}>{invitePreview.coach_name || invitePreview.business_name || 'your coach'}</Text>.
+              </Text>
+              <InviteCoachCardDetails
+                headline={invitePreview.headline}
+                specialties={invitePreview.specialties}
+                testID="role-coach-card"
+              />
+            </>
           ) : invitePreview && !invitePreview.valid ? (
             <Text style={styles.invitePreviewBad}>
               {invitePreview.reason || 'This code is not currently active.'}

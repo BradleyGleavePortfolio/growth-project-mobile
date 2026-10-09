@@ -240,6 +240,8 @@ describe('TutorialHomeSlot', () => {
     expect(screen.queryByTestId('tutorial-reoffer')).toBeNull();
     dispatchTutorial({ type: 'PAUSE' });
     await rerender(<TutorialHomeSlot />);
+    // 65: one quiet line, never a re-triggered prompt.
+    expect(screen.getByText('Pick up the quick tour in Settings, under Tutorial.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('tutorial-reoffer'));
     expect(useTutorialStore.getState().tutorial.status).toBe('active');
   });

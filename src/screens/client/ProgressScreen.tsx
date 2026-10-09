@@ -641,7 +641,8 @@ export default function ProgressScreen() {
                 // The doctrine parity test presses this by its label; a
                 // shorter visible "Save" waits on a PrimaryButton
                 // accessibilityLabel prop (NEED in ops/reports/REDO-PROGRESS-133.md).
-                label={savingWeight ? 'Saving' : 'Save weight log entry'}
+                label={savingWeight ? 'Saving' : 'Save'}
+                accessibilityLabel={savingWeight ? 'Saving' : 'Save weight log entry'}
                 onPress={() => {
                   void handleLogWeight();
                 }}

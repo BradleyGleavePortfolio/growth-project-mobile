@@ -41,6 +41,7 @@ import {
 } from '../../lib/signupPolicy';
 import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import InviteCoachCardDetails from '../../components/invite/InviteCoachCardDetails';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -1454,10 +1455,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             {previewLoading ? (
               <Text style={styles.invitePreviewMuted}>Checking code…</Text>
             ) : invitePreview?.valid ? (
-              <Text style={styles.invitePreviewOk}>
-                You will be paired with{' '}
-                {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
-              </Text>
+              <>
+                <Text style={styles.invitePreviewOk}>
+                  You will be paired with{' '}
+                  {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+                </Text>
+                <InviteCoachCardDetails
+                  headline={invitePreview.headline}
+                  specialties={invitePreview.specialties}
+                  testID="create-coach-card"
+                />
+              </>
             ) : invitePreview && !invitePreview.valid ? (
               <Text style={styles.invitePreviewBad}>
                 {invitePreview.reason || 'This code is not currently active.'}

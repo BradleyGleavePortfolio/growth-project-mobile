@@ -11,7 +11,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import { dispatchTutorial, useTutorialStore } from '../../tutorial/tutorialStore';
@@ -32,12 +32,13 @@ export default function TutorialHomeSlot(): React.ReactElement | null {
         <Pressable
           onPress={() => dispatchTutorial({ type: 'RESUME' })}
           accessibilityRole="button"
-          accessibilityLabel="Resume the tour. You can also find it in Settings, under Tutorial."
+          accessibilityLabel="Pick up the quick tour"
+          accessibilityHint="Resumes the tour where you left off. It is also in Settings, under Tutorial."
           testID="tutorial-reoffer"
           style={styles.reoffer}
         >
           <Text style={[styles.reofferText, { color: sc.textMuted }]}>
-            Pick up the tour where you left off, or find it in Settings under Tutorial.
+            Pick up the quick tour in Settings, under Tutorial.
           </Text>
         </Pressable>
       ) : null}
@@ -83,7 +84,7 @@ const styles = StyleSheet.create({
   mono: {
     width: 40,
     height: 40,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     borderWidth: 0.5,
     alignItems: 'center',
     justifyContent: 'center',
