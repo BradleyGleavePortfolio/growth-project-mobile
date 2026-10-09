@@ -10,10 +10,23 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { coachApi } from '../../services/api';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+
+// B-SMALLFIX-135 (m#650 review U1): coach guidelines are part of what the
+// coach sells, so the server answers a coached client without an active plan
+// with 402 CLIENT_ENTITLEMENT_REQUIRED. That is not a connection problem.
+export const GUIDELINES_ACCESS_TITLE = 'Guidelines open with an active plan';
+export const GUIDELINES_ACCESS_BODY = "Your coach's guidelines open when your plan with them is active.";
+
+function isAccessRequired(err: unknown): boolean {
+  const response = (err as { response?: { status?: number; data?: { error?: string } } } | null)?.response;
+  return response?.status === 402 && response.data?.error === 'CLIENT_ENTITLEMENT_REQUIRED';
+}
 
 export default function CoachGuidelinesScreen() {
   const { colors: base, semanticColors: sc } = useTheme();
@@ -31,23 +44,48 @@ export default function CoachGuidelinesScreen() {
   // guidelines. Tracking error separately lets us surface a retry
   // button only when the request actually failed.
   const [error, setError] = useState<string | null>(null);
+  // The real reason is access, not the connection (402 from the guard, or the
+  // app already knows the plan is inactive). The plans action stays the one
+  // the rest of the app uses: View plans, or the coach on a hidden iOS build.
+  const { status, openPlans, messageCoach } = useEntitlement();
+  const [accessRequired, setAccessRequired] = useState(() => status === 'inactive');
+  const coachManaged = nonP2PPurchasesHidden();
 
   const load = () => {
     if (!currentUser) return;
     setLoading(true);
     setError(null);
+    setAccessRequired(false);
     coachApi
       .getMyGuidelines()
       .then((res) => {
         setGuideline(res.data);
       })
-      .catch(() => {
-        setError('Guidelines did not load. Check your connection and try again.');
+      .catch((err: unknown) => {
+        if (isAccessRequired(err)) setAccessRequired(true);
+        else setError('Guidelines did not load. Check your connection and try again.');
       })
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, [currentUser]);
+  // A plan the app already knows is inactive skips the read: it could only
+  // answer 402 and pop the plans sheet again.
+  useEffect(() => {
+    if (status === 'inactive') {
+      setLoading(false);
+      return;
+    }
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser]);
+
+  // Inactive locks the screen; once the plan is active again the read runs.
+  // A foreground re-check ('checking') changes nothing on screen.
+  useEffect(() => {
+    if (status === 'inactive') setAccessRequired(true);
+    else if (status === 'active' && accessRequired) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -66,7 +104,22 @@ export default function CoachGuidelinesScreen() {
         <View style={{ width: 44 }} />
       </View>}
     >
-        {loading ? (
+        {accessRequired ? (
+          <View style={styles.emptyCard} testID="coach-guidelines-access">
+            <Ionicons name="clipboard-outline" size={48} color={colors.textMuted} />
+            <Text style={styles.emptyTitle}>{GUIDELINES_ACCESS_TITLE}</Text>
+            <Text style={styles.emptyText}>{GUIDELINES_ACCESS_BODY}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={coachManaged ? messageCoach : openPlans}
+              accessibilityRole="button"
+              accessibilityLabel={coachManaged ? 'Message your coach' : 'View plans'}
+              testID="coach-guidelines-plans"
+            >
+              <Text style={styles.retryBtnText}>{coachManaged ? 'Message your coach' : 'View plans'}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : loading ? (
           <SkeletonScreen count={3} />
         ) : error ? (
           <View style={styles.emptyCard} accessibilityRole="alert" accessibilityLiveRegion="assertive">

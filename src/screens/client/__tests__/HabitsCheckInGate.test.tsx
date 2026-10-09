@@ -108,33 +108,36 @@ function expectNoForm(screen: Awaited<ReturnType<typeof openCheckIn>>) {
   expect(mockSaveCheckIn).not.toHaveBeenCalled();
 }
 
-it.each([false, true])('explains inactive access before editing and uses the existing recovery action (hidden=%s)', async (hidden) => {
+// B1 (owner ruling 10-08 23:5x): check-ins are the client's own basic
+// function, open to every client. A coached client with no package, a free
+// package or a lapsed plan checks in whatever the entitlement check says.
+const GATE_LINES = [
+  REQUIREMENT, 'Choose a Plan', 'Your coach manages your access', 'Your access could not be checked',
+  'Logging comes with coaching', 'This part comes with a coach',
+];
+it.each<[EntitlementStatus, boolean]>([
+  ['inactive', false], ['inactive', true], ['unknown', false], ['loading', false], ['checking', false], ['unavailable', false],
+])('a coached client checks in with no gate or access line while access is %s (hidden=%s)', async (status, hidden) => {
   mockHidden = hidden;
-  mockEntitlement = { ...mockEntitlement, entitlementActive: false, status: 'inactive', confirmedActive: false };
-  // A previous package's cached row must not replace the access explanation.
-  queryClient.setQueryData(['check-ins', 'day', TODAY], savedRow);
+  mockEntitlement = {
+    ...mockEntitlement, entitlementActive: status === 'inactive' ? false : null, status, confirmedActive: false,
+  };
   const screen = await openCheckIn();
-  expect(screen.getByText(REQUIREMENT)).toBeTruthy();
-  expect(screen.getByText(hidden ? 'Your coach manages your access' : 'Choose a Plan')).toBeTruthy();
-  expectNoForm(screen);
-  expect(screen.queryByText('Saved for today. Change anything and update.')).toBeNull();
-  expect(mockGetCheckIns).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
+  expect(mockGetCheckIns).toHaveBeenCalledWith({ from: TODAY, to: TODAY, limit: 1 });
+  for (const line of GATE_LINES) expect(screen.queryByText(line)).toBeNull();
+  for (const id of ['protected-screen-loading', 'protected-screen-paywall', 'protected-screen-coach-managed']) {
+    expect(screen.queryByTestId(id)).toBeNull();
+  }
 
-  let scroll = screen.getByText(REQUIREMENT).parent;
+  let scroll = screen.getByText('How are you feeling?').parent;
   while (scroll && !scroll.props.refreshControl) scroll = scroll.parent;
-  expect(scroll?.props.refreshControl).toBeTruthy();
   await act(async () => scroll?.props.refreshControl.props.onRefresh());
-  expect(mockGetCheckIns).not.toHaveBeenCalled();
-  expect(mockRefreshEntitlement).toHaveBeenCalledTimes(1);
-
-  await fireEvent.press(screen.getByTestId(hidden ? 'protected-screen-message-coach' : 'protected-screen-view-plans'));
-  expect(hidden ? mockMessageCoach : mockOpenPlans).toHaveBeenCalledTimes(1);
-  expect(hidden ? mockOpenPlans : mockMessageCoach).not.toHaveBeenCalled();
-  if (hidden) expect(screen.queryByText('View Plans')).toBeNull();
+  expect(mockGetCheckIns).toHaveBeenCalledTimes(2);
+  expect(mockRefreshEntitlement).not.toHaveBeenCalled();
 
   await fireEvent.press(screen.getByText('Habits'));
   await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
-  expect(screen.getByText('Add habit')).toBeTruthy();
   await fireEvent.press(screen.getByText('Drink water'));
   await waitFor(() => expect(mockLogHabit).toHaveBeenCalledWith('water', {
     date: TODAY, completed: true, value: 1,
@@ -155,35 +158,6 @@ it.each([false, true])('a coachless client checks in without a gate or an access
     expect(screen.queryByText(line)).toBeNull();
   }
   expect(screen.queryByText('Enter a coach code')).toBeNull();
-});
-
-it.each<EntitlementStatus>(['unknown', 'loading', 'checking'])('waits for confirmed access without fetching check-ins (%s)', async (status) => {
-  mockEntitlement = { ...mockEntitlement, entitlementActive: null, status, confirmedActive: false };
-  const screen = await openCheckIn();
-  expect(screen.getByTestId('protected-screen-loading')).toBeTruthy();
-  expectNoForm(screen);
-  expect(screen.queryByText('Choose a Plan')).toBeNull();
-  expect(screen.queryByText(REQUIREMENT)).toBeNull();
-  expect(mockGetCheckIns).not.toHaveBeenCalled();
-});
-
-it('an unavailable access check offers retry, and newly confirmed access enables the form and read', async () => {
-  mockEntitlement = {
-    ...mockEntitlement, entitlementActive: null, status: 'unavailable', confirmedActive: false,
-  };
-  const screen = await openCheckIn();
-  expect(screen.getByText('Your access could not be checked')).toBeTruthy();
-  expectNoForm(screen);
-  expect(screen.queryByText(REQUIREMENT)).toBeNull();
-  expect(mockGetCheckIns).not.toHaveBeenCalled();
-  await fireEvent.press(screen.getByTestId('protected-screen-try-again'));
-  expect(mockRefreshEntitlement).toHaveBeenCalledTimes(1);
-
-  mockEntitlement = { ...mockEntitlement, entitlementActive: true, status: 'active', confirmedActive: true };
-  await screen.rerender(tree());
-  await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
-  expect(mockGetCheckIns).toHaveBeenCalledWith({ from: TODAY, to: TODAY, limit: 1 });
-  expect(screen.queryByText('Your access could not be checked')).toBeNull();
 });
 
 it('keeps mood, energy, sleep, notes and save reachable for active access', async () => {

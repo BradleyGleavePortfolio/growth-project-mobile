@@ -24,7 +24,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
 
 type Props = {
@@ -138,7 +138,7 @@ const makeStyles = (colors: ThemeColors) =>
     primaryButton: {
       backgroundColor: colors.primary,
       paddingVertical: 16,
-      borderRadius: 4,
+      borderRadius: radius.button,
       minHeight: 52,
       alignItems: 'center',
     },
