@@ -67,7 +67,7 @@ Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: C
 | `radius.sheet` | 24 | bottom-sheet and modal top corners |
 | `radius.chip` / `radius.pill` | 999 | chips |
 | `radius.control` | 6 | boxes under 28 pt (checkbox) |
-| `radius.md/lg/xl/2xl`, `Radius.*` | 12/16/16/24, `Radius.sm` 12 | legacy names on the rounded scale (DS-THEME-133); new code names the semantic key. `radius.sm` stays 0 until agent 132 OKs the card-payment sheet test |
+| `radius.sm/md/lg/xl/2xl`, `Radius.*` | 12/12/16/16/24 | legacy names on the rounded scale (DS-THEME-133); new code names the semantic key |
 | `layout` | gutter 24, statusBarGap 12, footer gaps, buttonHeight 54, touchMin 44, rowMinHeight 56, section 18 + 24 | `ui/layout/Screen`, buttons, rows, sections |
 | `wheel` | 44 pt rows x 5, hairline band, serif 28 / 21 / 18 | consultation wheels (`ui/wheel/WheelBand`) |
 
