@@ -41,9 +41,12 @@ interface AuthResult {
 }
 
 let lastForegroundedAt: number | null = null;
+/** The opt-in as last read, so a returning opted-in person is covered at once. */
+let lastKnownOptIn = false;
 
 export function __resetForTests() {
   lastForegroundedAt = null;
+  lastKnownOptIn = false;
 }
 
 async function readOptIn(): Promise<boolean> {
@@ -107,7 +110,11 @@ export function useBiometricGate(): UseBiometricGateResult {
     // B36: the opt-in is read before anything is shown. A person who never
     // turned biometric unlock on is never moved to 'checking' again (which
     // would unmount the whole app on every return from the background).
+    // START-HANG-FOLLOW-134: someone opted in at the last read is covered at
+    // once, before the read answers, so the app never shows unlocked.
+    if (lastKnownOptIn && mountedRef.current) setStatus('checking');
     const optedIn = await readOptIn();
+    lastKnownOptIn = optedIn;
     if (!optedIn) {
       lastForegroundedAt = Date.now();
       if (mountedRef.current) setStatus('unlocked');
@@ -160,6 +167,7 @@ export async function getBiometricOptIn(): Promise<boolean> {
 export async function setBiometricOptIn(enabled: boolean): Promise<void> {
   if (Platform.OS === 'web') return;
   await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, enabled ? 'true' : 'false');
+  lastKnownOptIn = enabled;
 }
 
 export async function isBiometricSupportedOnDevice(): Promise<boolean> {
