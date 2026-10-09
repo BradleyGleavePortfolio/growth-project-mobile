@@ -81,8 +81,8 @@ import { pairWithCoach } from '../screens/day-one/api';
 import { claimPendingInviteCode } from '../lib/pendingInviteCode';
 
 const TITLE = 'This part comes with a coach';
-const BODY = 'Join a coach with their code. Each coach sets up what their coaching includes.';
-const CTA = 'Enter a coach code';
+const BODY = 'It opens once you join a coach. Each coach sets up what their coaching includes.';
+const CTA = 'Join a coach';
 function CoachlessProbe() {
   return <Text testID="coachless-probe">{useCoachlessClient() ? 'coachless' : 'connected'}</Text>;
 }

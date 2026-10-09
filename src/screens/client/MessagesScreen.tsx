@@ -533,21 +533,22 @@ export default function MessagesScreen() {
           <Text style={styles.noCoachHeadline}>No coach connected</Text>
           {/* Owner 2026-10-01 13:28: a client without a coach is a complete
               state. This screen says what is missing and offers a working
-              next step instead of a sign-up-time instruction. */}
+              next step instead of a sign-up-time instruction. Owner
+              2026-10-09 00:0x: the next step reads "Join a coach". */}
           <Text style={styles.noCoachText}>
             {flags.coachless_home
-              ? 'Enter a coach code to connect and start messaging. Need help finding a coach? Contact support.'
+              ? 'Messages open once you join a coach. Need help finding one? Contact support.'
               : 'You are not connected to a coach yet, so there is no one to message here. Contact support for help finding a coach.'}
           </Text>
           {flags.coachless_home && (
             <TouchableOpacity
               onPress={() => setShowCoachCode(true)}
               accessibilityRole="button"
-              accessibilityLabel="Enter a coach code"
+              accessibilityLabel="Join a coach"
               testID="messages-no-coach-code"
               style={[styles.noCoachAction, styles.noCoachPrimary]}
             >
-              <Text style={[styles.noCoachActionText, styles.noCoachPrimaryText]}>Enter a coach code</Text>
+              <Text style={[styles.noCoachActionText, styles.noCoachPrimaryText]}>Join a coach</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity

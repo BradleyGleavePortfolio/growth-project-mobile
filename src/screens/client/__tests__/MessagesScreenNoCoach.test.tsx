@@ -111,6 +111,9 @@ describe('client MessagesScreen with no coach', () => {
     const utils = await render(<MessagesScreen />);
     await utils.findByText('No coach connected');
     expect(utils.queryByText(/code from a coach, contact support/)).toBeNull();
+    // Owner 2026-10-09 00:0x: a clear "Join a coach" with a short explanation.
+    expect(utils.getByText('Messages open once you join a coach. Need help finding one? Contact support.')).toBeTruthy();
+    expect(utils.getByTestId('messages-no-coach-code')).toHaveTextContent('Join a coach');
     await fireEvent.press(utils.getByTestId('messages-no-coach-code'));
     expect(utils.getByTestId('mock-coach-code-sheet')).toBeTruthy();
     mockList.mockResolvedValue({ data: [] });

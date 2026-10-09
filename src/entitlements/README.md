@@ -19,3 +19,7 @@ What `ProtectedScreen` shows:
 
 On hidden iOS builds and for coachless clients `PaywallSheet` never lists packages or prices (App Review 3.1.1). Follows
 `docs/QUIET_LUXURY_DOCTRINE.md`.
+
+Coachless coach-only screens (owner 10-09 00:0x, B-ROMANLOCK-135): the body now reads "It opens once you join a coach. Each
+coach sets up what their coaching includes." and the button "Join a coach" (`PaywallSheet` `COACHLESS_BODY` / `COACHLESS_CTA`),
+replacing the wording in the table row above; it still opens the existing code sheet.
