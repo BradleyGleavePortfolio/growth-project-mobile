@@ -1,16 +1,15 @@
 /**
- * ROMAN-ROOM-133 (B30; prototype 69-73): launch state, chips, reply blocks,
- * the reading reveal (and Reduce Motion), and the room at 360x800 and
- * 390x844 for the QA evidence. Turn and composer styling: RomanChatGuidance.
+ * ROMAN-ROOM-133 (B30; prototype 69-73): the launch state, overlines, the
+ * four quick-start chips, and the room at 360x800 and 390x844 for the QA
+ * evidence. Composer styling: RomanChatGuidance.
  */
 import React from 'react';
 import { AccessibilityInfo, StyleSheet, type TextStyle } from 'react-native';
 import type { TestInstance } from 'test-renderer';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import RomanChatScreen from '../RomanChatScreen';
 import type { UseRomanChatResult } from '../useRomanChat';
 import RomanGreeting from '../../../components/roman/RomanGreeting';
-import { romanBlocks } from '../../../components/roman/RomanMessageBubble';
 import { ROMAN_QUICK_STARTS, ROMAN_ROOM_FOOTER } from '../../../components/roman/romanVoice';
 import { typography } from '../../../theme/tokens';
 
@@ -24,6 +23,10 @@ jest.mock('@react-navigation/native', () => ({
   NavigationContext: jest.requireActual('react').createContext({ goBack: jest.fn(), navigate: jest.fn() }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
+// Bundled art resolves to a machine-specific testUri; snapshots keep the slot only.
+jest.mock('../../../components/roman/RomanAvatar', () => ({ testID }: { testID?: string }) =>
+  jest.requireActual('react').createElement(jest.requireActual('react-native').View, { testID, accessibilityLabel: 'Roman' }),
+);
 jest.mock('../../../components/ai/useOpenSupport', () => ({ useOpenSupport: () => jest.fn() }));
 jest.mock('react-native/Libraries/Utilities/useWindowDimensions', () => ({
   __esModule: true,
@@ -47,14 +50,6 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 const flat = (node: TestInstance): TextStyle => StyleSheet.flatten(node.props.style) ?? {};
-/** Opacity of the nearest wrapper that sets one (the reveal's Animated.View). */
-function opacityOf(node: TestInstance): number {
-  for (let n: TestInstance | null = node; n; n = n.parent) {
-    const o = flat(n).opacity;
-    if (typeof o === 'number') return o;
-  }
-  return 1;
-}
 
 describe('B30 launch state (prototype 69)', () => {
   it('shows the portrait and one serif line with the time of day', async () => {
@@ -111,39 +106,6 @@ describe('B30 chips send fixed prompts (prototype 70-73)', () => {
     state.sending = true;
     await r.rerender(<RomanChatScreen surface="client" />);
     expect(r.getByTestId('roman-quick-start-1').props.accessibilityState).toMatchObject({ disabled: true });
-  });
-});
-
-describe('B30 replies read like prose', () => {
-  it('splits replies into paragraphs and bullets and drops emphasis markers', () => {
-    expect(romanBlocks('Your targets are **1,789** calories.\n\n- Protein first.\n• Fat a quarter.\n2. Carbs the rest.\nAim for close.')).toEqual([
-      { kind: 'paragraph', text: 'Your targets are 1,789 calories.' },
-      { kind: 'bullet', marker: '\u2022', text: 'Protein first.' },
-      { kind: 'bullet', marker: '\u2022', text: 'Fat a quarter.' },
-      { kind: 'bullet', marker: '2.', text: 'Carbs the rest.' },
-      { kind: 'paragraph', text: 'Aim for close.' },
-    ]);
-  });
-
-  it.each([
-    [false, 0],
-    [true, 1],
-  ])('a fresh reply fades in (Reduce Motion %s starts at %s); history does not', async (reduce, start) => {
-    jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(reduce);
-    const old = { id: 'a0', role: 'assistant' as const, content: 'Earlier reply.', interrupted: false, createdAt: '2026-10-08' };
-    state.messages = [old];
-    let resolveSend: (v: 'sent') => void = () => undefined;
-    state.send = jest.fn(() => new Promise<'sent'>((res) => { resolveSend = res; }));
-    const r = await render(<RomanChatScreen surface="client" />);
-    expect(opacityOf(r.getByText('Earlier reply.'))).toBe(1);
-    await fireEvent.press(r.getByTestId('roman-quick-start-1'));
-    state.messages = [old,
-      { id: 'u1', role: 'user', content: "Today's workout", interrupted: false, createdAt: '2026-10-08' },
-      { id: 'a1', role: 'assistant', content: 'Foundations, session one.', interrupted: false, createdAt: '2026-10-08' }];
-    await act(async () => { resolveSend('sent'); });
-    await r.rerender(<RomanChatScreen surface="client" />);
-    expect(opacityOf(r.getByText('Foundations, session one.'))).toBe(start);
-    expect(opacityOf(r.getByText('Earlier reply.'))).toBe(1);
   });
 });
 

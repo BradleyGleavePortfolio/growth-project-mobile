@@ -125,10 +125,6 @@ export default function RomanChatScreen({
   const [askAgainHint, setAskAgainHint] = useState(false);
   // The quick-start chip last sent (forest outline, prototype 70).
   const [pickedChip, setPickedChip] = useState<string | null>(null);
-  // Reading reveal: the newest Roman reply that arrived after a send in this
-  // visit fades in; history and the first load never animate.
-  const revealFrom = useRef<string | null | undefined>(undefined);
-  const [revealId, setRevealId] = useState<string | null>(null);
   // OS "Reduce Motion" preference. When ON, the auto-scroll to the newest turn
   // is instant rather than animated, matching the reduced-motion parity the
   // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
@@ -202,24 +198,6 @@ export default function RomanChatScreen({
   }, [messages]);
 
   const isEmpty = messages.length === 0;
-  let newestAssistantId: string | null = null;
-  for (let i = messages.length - 1; i >= 0; i -= 1) {
-    if (messages[i].role === 'assistant') {
-      newestAssistantId = messages[i].id;
-      break;
-    }
-  }
-  // Computed during render so the fresh reply mounts already hidden.
-  const freshId =
-    revealFrom.current !== undefined && newestAssistantId != null && newestAssistantId !== revealFrom.current
-      ? newestAssistantId
-      : revealId;
-  useEffect(() => {
-    if (freshId !== revealId) {
-      revealFrom.current = undefined;
-      setRevealId(freshId);
-    }
-  }, [freshId, revealId]);
   // R2b: a consent / egress refusal gets its own notice with a working action
   // (Allow AI help, or Contact support with the reference), never the
   // generic send-failed row.
@@ -265,9 +243,7 @@ export default function RomanChatScreen({
   const sendText = useCallback(
     async (text: string, fromChip: boolean) => {
       setAskAgainHint(false);
-      revealFrom.current = newestAssistantId;
       const outcome = await send(text);
-      if (outcome !== 'sent') revealFrom.current = undefined;
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
@@ -278,7 +254,7 @@ export default function RomanChatScreen({
         setDraft('');
       }
     },
-    [send, newestAssistantId],
+    [send],
   );
 
   const onSend = useCallback(async () => {
@@ -322,14 +298,9 @@ export default function RomanChatScreen({
 
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<RomanMessage>) => (
-      <RomanMessageBubble
-        message={item}
-        reveal={item.id === freshId}
-        reduceMotion={reduceMotion}
-        testID={`roman-message-${item.id}`}
-      />
+      <RomanMessageBubble message={item} testID={`roman-message-${item.id}`} />
     ),
-    [freshId, reduceMotion],
+    [],
   );
 
   const header = (
@@ -407,7 +378,6 @@ export default function RomanChatScreen({
             style={styles.flex}
             contentContainerStyle={styles.listContent}
             data={messages}
-            extraData={freshId}
             keyExtractor={(m) => m.id}
             renderItem={renderItem}
             keyboardShouldPersistTaps="handled"

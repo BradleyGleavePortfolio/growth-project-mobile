@@ -45,10 +45,9 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 | `roman/RomanAvatar.tsx` | Roman's circular face avatar (neutral / smile / monogram fallback). |
 | `roman/romanAvatarAssets.ts` | Resolves bundled Roman art: `romanFaceAsset(crop)` for avatars, `romanArtAsset('portrait' \| 'hero' \| 'welcome')` for onboarding, reveal and tutorial surfaces. |
 | `roman/__tests__/romanCanonicalAssets.test.ts` | Pins every file in `assets/roman/` by sha256. |
-| `roman/RomanMessageBubble.tsx`, `RomanComposer.tsx`, `RomanQuickStarts.tsx`, `RomanGreeting.tsx`, `RomanTypingIndicator.tsx` | The Roman chat room (B30): serif replies without a bubble (`romanBlocks` splits paragraphs and bullets) with a reading fade, quiet client bubbles, the four client quick-start chips, the launch line, and the composer with the forest send square. Rules: `src/screens/roman/README.md`. |
 | `roman/RomanConversationsButton.tsx` | Roman chat header entry to "Your conversations with Roman" (`RomanConversations` route). Renders nothing outside a navigator. |
 
-Roman is an older Black man in his 60s in a black three-piece butler suit, white shirt and straight black tie. The only approved art is `tgp-agent-context/design/roman/` (see `tgp-agent-context/strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md` section 3). Until 2026-09-30 the bundled avatar files showed a different, younger man; that art is removed and must never return. Replacing any Roman asset requires an owner decision recorded in tgp-agent-context, after which the pinned hashes are updated in the same PR. B27 (owner screenshot S8, 2026-10-08): the neutral and smile crops are re-derived from `portrait.jpg` (the 330 px square at x 80, y 10, circle-masked at 64/128/192 px) so the whole crown shows; same art, new pins.
+Roman is an older Black man in his 60s in a black three-piece butler suit, white shirt and straight black tie. The only approved art is `tgp-agent-context/design/roman/` (see `tgp-agent-context/strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md` section 3). Until 2026-09-30 the bundled avatar files showed a different, younger man; that art is removed and must never return. Replacing any Roman asset requires an owner decision recorded in tgp-agent-context, after which the pinned hashes are updated in the same PR.
 
 ### Logging primitives
 

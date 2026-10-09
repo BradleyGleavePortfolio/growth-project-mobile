@@ -276,31 +276,8 @@ exports[`QA evidence: the room at 360x800 and 390x844 360x800 launch state 1`] =
             }
             testID="roman-empty-greeting"
           >
-            <Image
+            <View
               accessibilityLabel="Roman"
-              accessibilityRole="image"
-              onError={[Function]}
-              source={
-                {
-                  "testUri": "../../../../../wt/ROMAN-ROOM-133-scratch/assets/roman/neutral.png",
-                }
-              }
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                  },
-                  {
-                    "borderRadius": 20,
-                    "height": 40,
-                    "width": 40,
-                  },
-                  {
-                    "borderColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                ]
-              }
               testID="roman-greeting-avatar"
             />
             <Text
@@ -1101,31 +1078,8 @@ exports[`QA evidence: the room at 360x800 and 390x844 390x844 launch state 1`] =
             }
             testID="roman-empty-greeting"
           >
-            <Image
+            <View
               accessibilityLabel="Roman"
-              accessibilityRole="image"
-              onError={[Function]}
-              source={
-                {
-                  "testUri": "../../../../../wt/ROMAN-ROOM-133-scratch/assets/roman/neutral.png",
-                }
-              }
-              style={
-                [
-                  {
-                    "backgroundColor": "transparent",
-                  },
-                  {
-                    "borderRadius": 20,
-                    "height": 40,
-                    "width": 40,
-                  },
-                  {
-                    "borderColor": "transparent",
-                    "borderWidth": 0,
-                  },
-                ]
-              }
               testID="roman-greeting-avatar"
             />
             <Text

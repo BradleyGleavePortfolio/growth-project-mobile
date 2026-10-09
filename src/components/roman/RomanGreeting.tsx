@@ -15,9 +15,8 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { romanGreeting, romanLaunchLine, type RomanGreetingSurface } from './romanVoice';
-import { spacing } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
-import { ROMAN_READING } from './RomanMessageBubble';
 
 export interface RomanGreetingProps {
   /** Host surface — selects the client vs coach greeting register (U1). */
@@ -66,7 +65,11 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   line: {
-    ...ROMAN_READING,
+    // Serif reading text, as Roman's replies (19 on 28, over the 1.2x floor).
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 19,
+    lineHeight: 28,
+    letterSpacing: 0.2,
     flex: 1,
     paddingTop: 4,
   },

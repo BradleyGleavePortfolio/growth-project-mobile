@@ -23,9 +23,6 @@
  * (which already carries the spec's slight smile) until a dedicated
  * expression asset is approved.
  *
- * B27 (owner 10-08, S8): the face crops are re-derived from portrait.jpg (the
- * 330 px square at x 80, y 10, circle-masked) so Roman's crown is never cut.
- *
  * `monogram` is not a face asset; it is the in-row/`onError` text fallback, so
  * it maps to `null` here.
  */

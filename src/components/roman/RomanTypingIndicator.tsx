@@ -17,8 +17,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { ROMAN_TYPING_A11Y_LABEL, ROMAN_TYPING_LABEL } from './romanVoice';
-import { radius, spacing, typography } from '../../theme/tokens';
-import { useTheme } from '../../theme/useTheme';
+import { colors, radius, spacing, typography } from '../../theme/tokens';
 import { logger } from '../../utils/logger';
 
 export interface RomanTypingIndicatorProps {
@@ -30,7 +29,6 @@ const DOT_COUNT = 3;
 export default function RomanTypingIndicator({
   testID,
 }: RomanTypingIndicatorProps): React.ReactElement {
-  const { semanticColors: c } = useTheme();
   const [reduceMotion, setReduceMotion] = useState(false);
   const dots = useRef(
     Array.from({ length: DOT_COUNT }, () => new Animated.Value(0.4)),
@@ -59,8 +57,8 @@ export default function RomanTypingIndicator({
       Animated.loop(
         Animated.sequence([
           Animated.delay(i * 160),
-          Animated.timing(dot, { toValue: 1, duration: 300, useNativeDriver: true }),
-          Animated.timing(dot, { toValue: 0.4, duration: 300, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+          Animated.timing(dot, { toValue: 0.4, duration: 400, useNativeDriver: true }),
         ]),
       ),
     );
@@ -76,21 +74,18 @@ export default function RomanTypingIndicator({
       accessibilityLabel={ROMAN_TYPING_A11Y_LABEL}
       accessibilityLiveRegion="polite"
     >
-      <View style={styles.speakerRow}>
-        <RomanAvatar crop="neutral" size={22} testID="roman-typing-avatar" />
-        <Text style={[styles.speaker, { color: c.textMuted }]}>ROMAN</Text>
-      </View>
+      <RomanAvatar crop="neutral" size={32} testID="roman-typing-avatar" />
       <View style={styles.content}>
+        <Text style={styles.label}>{ROMAN_TYPING_LABEL}</Text>
         <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           {dots.map((dot, i) => (
             <Animated.View
               // eslint-disable-next-line react/no-array-index-key
               key={i}
-              style={[styles.dot, { opacity: dot, backgroundColor: c.textMuted }]}
+              style={[styles.dot, { opacity: dot }]}
             />
           ))}
         </View>
-        <Text style={[styles.label, { color: c.textMuted }]}>{ROMAN_TYPING_LABEL}</Text>
       </View>
     </View>
   );
@@ -98,35 +93,28 @@ export default function RomanTypingIndicator({
 
 const styles = StyleSheet.create({
   row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: spacing.sm,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
   },
-  speakerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  speaker: {
-    ...typography.eyebrow,
-  },
   content: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    minHeight: 28,
+    flex: 1,
+    gap: spacing.xs,
   },
   label: {
     ...typography.bodySmall,
+    color: colors.charcoal,
   },
   dots: {
     flexDirection: 'row',
-    gap: 6,
+    gap: spacing.xs,
   },
   dot: {
     width: 6,
     height: 6,
-    borderRadius: radius.chip,
+    borderRadius: radius.pill,
+    backgroundColor: colors.stone,
   },
 });
