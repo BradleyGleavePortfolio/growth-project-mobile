@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
+import * as Localization from 'expo-localization';
 import { PRIVACY_POLICY_URL } from '../../config/env';
 import type { AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
@@ -19,6 +20,7 @@ import type {
 import {
   answerKeyOf,
   CopyContext,
+  defaultMeasureUnit,
   detailShown,
   fillCopy,
   isConsentAnswerCurrent,
@@ -110,6 +112,14 @@ function range(a: number, b: number): number[] {
   return r;
 }
 const ftIn = (v: number) => `${Math.floor(v / 12)} ft ${v % 12} in`;
+
+function phoneRegion(): string | null {
+  try {
+    return Localization.getLocales()[0]?.regionCode ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export default function QuestionScreen(props: QuestionScreenProps) {
   const { screen, answers, progress, ctx, now, onAnswer, onNext, onBack, onFinishLater } = props;
@@ -229,7 +239,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       const showCta = !!screen.cta && (multi || !screen.autoAdvance);
       return frame(
         <View>
-          <View style={s.chips} accessibilityRole={multi ? undefined : 'radiogroup'}>
+          <View style={screen.big ? s.chipsBig : s.chips} accessibilityRole={multi ? undefined : 'radiogroup'} testID={screen.big ? 'consult-chips-big' : undefined}>
             {options.map((o) => (
               <Chip
                 key={o.value}
@@ -275,12 +285,12 @@ export default function QuestionScreen(props: QuestionScreenProps) {
         <View>
           <Text style={s.small}>{P8_COPY.intro}</Text>
           <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 4 }]}>{P8_COPY.guidanceTitle}</Text>
-          {P8_COPY.guidance.map((t) => (
-            <Text key={t} style={s.listItem}>{fillCopy(t, ctx)}</Text>
+          {P8_COPY.guidance.map((t) => fillCopy(t, ctx)).filter(Boolean).map((t) => (
+            <Text key={t} style={s.listItem}>{t}</Text>
           ))}
           <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 4 }]}>{P8_COPY.nextTitle}</Text>
-          {P8_COPY.next.map((t) => (
-            <Text key={t} style={s.listItem}>{fillCopy(t, ctx)}</Text>
+          {P8_COPY.next.map((t) => fillCopy(t, ctx)).filter(Boolean).map((t) => (
+            <Text key={t} style={s.listItem}>{t}</Text>
           ))}
           <Text style={[s.small, { marginTop: 20 }]} testID="p8-physician-line">{P8_COPY.physician}</Text>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>{P8_COPY.emergency}</Text>
@@ -374,7 +384,9 @@ function DobBody(props: BodyProps) {
 function MeasureBody(props: BodyProps) {
   const { answers, onAnswer, onNext, header } = props;
   const existing = answers.B3 as MeasureAnswer | undefined;
-  const [unit, setUnit] = useState<'imperial' | 'metric'>(existing?.unit ?? 'imperial');
+  // Prototype B3: the unit tabs default from the phone's region (US, Liberia
+  // and Myanmar imperial, everywhere else metric); a saved answer keeps its unit.
+  const [unit, setUnit] = useState<'imperial' | 'metric'>(() => existing?.unit ?? defaultMeasureUnit(phoneRegion()));
   const [heightCm, setHeightCm] = useState(existing?.height_cm ?? 167.6);
   const [weightLbs, setWeightLbs] = useState(existing?.weight_lbs ?? 172);
   const value: MeasureAnswer = { height_cm: heightCm, weight_lbs: weightLbs, unit };

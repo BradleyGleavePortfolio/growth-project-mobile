@@ -53,6 +53,7 @@ export default function ConsultationOnboardingNavigator() {
       userId={user.id}
       firstName={firstNameOf(user)}
       coachName={null}
+      coachless={!user.coach_id}
       onFinished={onFinished}
       onSignOut={() => void signOut(user.id)}
     />

@@ -183,7 +183,7 @@ describe('ConsultationFlow', () => {
       await fireEvent.press(r.getByTestId('consult-option-no'));
     }
     await waitFor(() => r.getByTestId('consult-screen-P8'));
-    expect(r.getByText('Thank you for answering so carefully, Maya.')).toBeTruthy();
+    expect(r.getByText('Thanks for answering honestly, Maya.')).toBeTruthy();
     const guidance = r.getByText(/Choose an effort where you can still hold a conversation/);
     const physician = r.getByTestId('p8-physician-line');
     expect(guidance).toBeTruthy();

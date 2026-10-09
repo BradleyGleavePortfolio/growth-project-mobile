@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
+import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
 import { lightTokens, radius, spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
@@ -46,6 +47,7 @@ const semanticPalette = (tokens: SemanticTokens) => ({
   onDisabled: tokens.textOnDisabled,
   hair: tokens.border,
   stone: tokens.textMuted,
+  field: tokens.bgSurface,
 });
 
 /** Compatibility exports for the untouched question and flow modules. */
@@ -101,12 +103,27 @@ export function Eyebrow({ children, testID }: { children: React.ReactNode; testI
   );
 }
 
+/**
+ * Roman's voice (prototype decision C-D8): Cormorant Garamond italic, the
+ * coach voice of the approved prototype. The italic face is loaded here, from
+ * the font package App.tsx already ships, so no native change is needed;
+ * until it has loaded the line renders in the regular serif, never in a
+ * system font.
+ */
+export const ROMAN_VOICE_FONT = 'CormorantGaramond_400Regular_Italic';
+
+export function useRomanVoiceFont(): string {
+  const [loaded] = useFonts({ CormorantGaramond_400Regular_Italic });
+  return loaded ? ROMAN_VOICE_FONT : typography.h2.fontFamily;
+}
+
 export function RomanLine({ text, size = 28 }: { text: string; size?: number }) {
   const { s } = useConsultationStyles();
+  const fontFamily = useRomanVoiceFont();
   return (
     <View style={s.romanLine} accessible accessibilityLabel={`Roman says: ${text}`}>
       <RomanAvatar crop="neutral" size={size} />
-      <Text style={s.romanText}>{text}</Text>
+      <Text style={[s.romanText, { fontFamily }]} testID="roman-line-text">{text}</Text>
     </View>
   );
 }
@@ -494,9 +511,10 @@ export function UnitTabs({
           accessibilityLabel={u === 'imperial' ? 'Imperial units' : 'Metric units'}
           accessibilityState={{ selected: unit === u }}
           testID={`unit-${u}`}
-          style={[s.tab, unit === u && s.tabOn]}
+          style={s.tab}
         >
           <Text style={[s.tabText, unit === u && s.tabTextOn]}>{u === 'imperial' ? 'Imperial' : 'Metric'}</Text>
+          <View style={[s.tabRule, unit === u && s.tabRuleOn]} testID={`unit-${u}-rule`} />
         </Pressable>
       ))}
     </View>
@@ -506,6 +524,15 @@ export function UnitTabs({
 // ─── Wheel ───────────────────────────────────────────────────────────────────
 
 const ROW_H = 44;
+
+/**
+ * Prototype T-D wheels: the selected value at full ink, its neighbours
+ * fading with distance (B2, B3, B4).
+ */
+export function wheelOpacity(distance: number): number {
+  const d = Math.abs(distance);
+  return d === 0 ? 1 : d === 1 ? 0.6 : 0.3;
+}
 
 export function Wheel<T extends string | number>({
   label,
@@ -567,7 +594,7 @@ export function Wheel<T extends string | number>({
       >
         {values.map((v, i) => (
           <View key={String(v)} style={s.wheelRow}>
-            <Text style={[s.wheelText, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
+            <Text style={[s.wheelText, { opacity: wheelOpacity(i - idx) }, i === idx && s.wheelTextOn]}>{fmt(v)}</Text>
           </View>
         ))}
       </ScrollView>
@@ -601,10 +628,17 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   timeLeft: { ...typography.bodySmall, color: palette.muted },
   sub: { ...typography.bodySmall, color: palette.muted, marginTop: 6 },
   romanLine: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginTop: spacing.lg },
+  // Roman's voice: serif italic (C-D8). Cormorant runs small for its size,
+  // so 18 / 25 reads like 16 pt Inter; lineHeight stays above 1.2 x size so
+  // descenders never clip on Android.
   romanText: {
     flex: 1,
-    ...typography.body,
-    color: palette.charcoal,
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 18,
+    lineHeight: 25,
+    letterSpacing: 0.1,
+    fontWeight: '400',
+    color: palette.muted,
   },
   h1: { ...typography.h1, color: palette.ink },
   h2: { ...typography.h2, color: palette.ink, fontVariant: ['tabular-nums'] },
@@ -651,13 +685,22 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     paddingHorizontal: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
     backgroundColor: palette.surface,
   },
-  chipBig: { minHeight: 56, minWidth: 72, justifyContent: 'center' },
+  // S1 / N3: large 56 pt chips, two to a row, serif numerals (prototype 17, 23).
+  chipsBig: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: spacing.sm },
+  chipBig: { minHeight: 56, width: '48.5%', justifyContent: 'center' },
   chipSel: { borderColor: palette.accent },
   chipText: { ...typography.bodySmall, color: palette.ink },
-  chipBigText: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
+  chipBigText: {
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '400',
+    fontVariant: ['tabular-nums'],
+    color: palette.ink,
+  },
   chipTextSel: { color: palette.accentText },
   chipCapped: { color: palette.muted },
   chipCheck: { marginLeft: 6 },
@@ -688,24 +731,27 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   boxOn: { backgroundColor: palette.accent, borderColor: palette.accent },
   checkLabel: { ...typography.bodyMd, color: palette.ink, flex: 1 },
   inputWrap: { marginTop: spacing.lg },
-  flabel: { ...typography.bodySmall, color: palette.charcoal, marginBottom: 6 },
+  flabel: { ...typography.eyebrow, color: palette.muted, marginBottom: spacing.sm },
   field: {
     ...typography.body,
     color: palette.ink,
     borderWidth: 1,
     borderColor: palette.border,
     borderRadius: radius.md,
-    backgroundColor: palette.surface,
+    backgroundColor: palette.field,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     minHeight: 44,
   },
   fieldMulti: { minHeight: 72, textAlignVertical: 'top' },
-  tabs: { flexDirection: 'row', borderWidth: 1, borderColor: palette.border, borderRadius: radius.lg, marginBottom: spacing.lg },
-  tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
-  tabOn: { backgroundColor: palette.accent },
-  tabText: { ...typography.bodySmall, color: palette.ink },
-  tabTextOn: { color: palette.onAccent },
+  // Prototype B3: quiet text tabs, the selected one underlined in forest.
+  // Never a filled tab: the screen's one filled control is Continue.
+  tabs: { flexDirection: 'row', justifyContent: 'center', gap: spacing.xl, marginBottom: spacing.lg },
+  tab: { minHeight: 44, minWidth: 64, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.sm },
+  tabText: { ...typography.bodySmall, color: palette.muted },
+  tabTextOn: { ...typography.bodySmall, fontFamily: typography.bodyMd.fontFamily, color: palette.ink },
+  tabRule: { alignSelf: 'stretch', height: 1.5, marginTop: 6, backgroundColor: 'transparent' },
+  tabRuleOn: { backgroundColor: palette.accent },
   wheels: { flexDirection: 'row', gap: spacing.md },
   wheelCol: { flex: 1 },
   wheelFrame: { height: ROW_H * 5, overflow: 'hidden', marginTop: spacing.sm },
@@ -720,8 +766,17 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     borderColor: palette.border,
   },
   wheelRow: { height: ROW_H, alignItems: 'center', justifyContent: 'center' },
-  wheelText: { ...typography.body, fontVariant: ['tabular-nums'], color: palette.muted },
-  wheelTextOn: { ...typography.bodyMd, fontVariant: ['tabular-nums'], color: palette.ink },
+  // Serif wheel values (prototype 07-09): neighbours muted at 20 pt, the
+  // selected value in ink at 28 pt; both keep lineHeight >= 1.2 x size.
+  wheelText: {
+    fontFamily: typography.h2.fontFamily,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '400',
+    fontVariant: ['tabular-nums'],
+    color: palette.muted,
+  },
+  wheelTextOn: { fontSize: 28, lineHeight: 34, color: palette.ink },
   cta: {
     minHeight: 52,
     alignItems: 'center',
