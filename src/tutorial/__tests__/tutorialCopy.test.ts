@@ -3,7 +3,7 @@
  * (AI_BUTLER_ROMAN_IDENTITY_SPEC §1) and the Quiet Luxury doctrine §4, and
  * every number it speaks is the real one from the payload.
  */
-import { TUTORIAL_STEPS, type CopyContext } from '../tutorialSteps';
+import { pushPrimingLine, TUTORIAL_STEPS, type CopyContext } from '../tutorialSteps';
 
 const CTX: CopyContext = {
   firstName: 'Maya',
@@ -42,6 +42,7 @@ function allLines(ctx: CopyContext): string[] {
     if (s.doneLine) out.push(s.doneLine(ctx));
     if (s.pendingLine) out.push(s.pendingLine(ctx));
   }
+  out.push(pushPrimingLine(ctx));
   return out;
 }
 
@@ -129,6 +130,7 @@ describe('prototype copy (46-61), re-voiced without contractions', () => {
     const ctx: CopyContext = { ...CTX, coachLinked: false, outcomes: { plan: 'done', macros: 'done' } };
     const lines = TUTORIAL_STEPS.filter((s) => s.id !== 'first_message')
       .flatMap((s) => [...s.gates.map((g) => g.line(ctx)), s.doneLine?.(ctx) ?? '', s.pendingLine?.(ctx) ?? ''])
+      .concat(pushPrimingLine(ctx))
       .join(' ');
     expect(lines).not.toContain('Bradley');
     expect(line('roman', 0, ctx)).toContain('ask me');

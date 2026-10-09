@@ -13,6 +13,7 @@ import { RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Headline, Lede, Overline, PrimaryButton, QuietTextButton, Screen } from '../../ui';
+import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import {
   RouteProp,
   useNavigation,
@@ -212,8 +213,10 @@ export default function WorkoutAssignmentDetailScreen() {
 
       <View style={[styles.list, { borderTopColor: sc.border }]}>
         <Overline style={styles.listOverline}>Exercises</Overline>
-        {sorted.map((ex) => (
-          <View key={ex.id} style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
+        {sorted.map((ex, i) => (
+          // TOUR-133: the tour's first-exercise beat spotlights the first row.
+          <TutorialTarget key={ex.id} id={i === 0 ? 'first-exercise' : undefined}>
+          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
             <Text style={[styles.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
               {ex.order}
             </Text>
@@ -241,6 +244,7 @@ export default function WorkoutAssignmentDetailScreen() {
               ) : null}
             </View>
           </View>
+          </TutorialTarget>
         ))}
       </View>
     </Screen>

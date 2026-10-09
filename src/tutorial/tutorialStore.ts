@@ -63,6 +63,8 @@ interface TutorialStoreState {
   targets: Partial<Record<TutorialTargetId, TargetRect>>;
   celebration: TutorialCelebration | null;
   notice: TutorialNotice | null;
+  /** The push priming card after the completion (61) is showing. */
+  priming: boolean;
   pendingStart: { restart: boolean } | null;
 }
 
@@ -78,6 +80,7 @@ const initial = (): TutorialStoreState => ({
   targets: {},
   celebration: null,
   notice: null,
+  priming: false,
   pendingStart: null,
 });
 
@@ -221,6 +224,7 @@ export async function hydrateTutorial(
     targets: {},
     celebration: null,
     notice: null,
+    priming: false,
   });
   const pending: { restart: boolean } | null = useTutorialStore.getState().pendingStart;
   if (pending) {
@@ -265,6 +269,9 @@ export function clearTutorialNotice(): void {
   useTutorialStore.setState({ notice: null });
 }
 
+export function setTutorialPriming(priming: boolean): void {
+  useTutorialStore.setState({ priming });
+}
 
 let unsubscribeSignals: (() => void) | null = null;
 
