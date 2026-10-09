@@ -18,7 +18,12 @@
  */
 import {
   romanGreeting,
+  romanLaunchLine,
   romanRateLimited,
+  romanRoomOverline,
+  ROMAN_COMPOSER_PLACEHOLDER,
+  ROMAN_QUICK_STARTS,
+  ROMAN_ROOM_FOOTER,
   ROMAN_ERROR_EXHAUSTED,
   ROMAN_ERROR_TRANSIENT,
   ROMAN_GREETING_SUBTITLE,
@@ -58,6 +63,16 @@ const STRINGS: Array<{ label: string; value: string }> = [
   { label: 'rate limited (with seconds)', value: romanRateLimited(12) },
   { label: 'rate limited (no seconds)', value: romanRateLimited() },
   { label: 'rate limited (1 second)', value: romanRateLimited(1) },
+  // ROMAN-ROOM-133 (prototype 69-73).
+  { label: 'launch line (first open, morning)', value: romanLaunchLine({ surface: 'client', isFirstOpen: true, firstName: 'Sam', hour: 8 }) },
+  { label: 'launch line (returning, afternoon)', value: romanLaunchLine({ surface: 'client', isFirstOpen: false, firstName: 'Sam', hour: 15 }) },
+  { label: 'launch line (nameless, evening)', value: romanLaunchLine({ surface: 'client', isFirstOpen: false, firstName: null, hour: 20 }) },
+  ...ROMAN_QUICK_STARTS.map((value) => ({ label: `quick start ${value}`, value })),
+  { label: 'overline (client with coach)', value: romanRoomOverline('client', true) },
+  { label: 'overline (coachless)', value: romanRoomOverline('client', false) },
+  { label: 'overline (coach)', value: romanRoomOverline('coach', true) },
+  { label: 'composer placeholder', value: ROMAN_COMPOSER_PLACEHOLDER },
+  { label: 'room footer', value: ROMAN_ROOM_FOOTER },
 ];
 
 // §1.3 / §1.4 / §5 banned vocabulary — matched case-insensitively as whole words.

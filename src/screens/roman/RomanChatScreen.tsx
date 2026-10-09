@@ -20,23 +20,29 @@
  * Emotional target (DESIGN_INTELLIGENCE §5.1): the user leaves feeling attended
  * to and in capable hands. Primary path (Hick's Law §4.4): a single composer +
  * send — no competing actions on the surface.
+ *
+ * B30 (owner 14:57, "a luxurious AI chat room, the UI and class of a premium
+ * Anthropic mixed with iMessage"; prototype 69-73): serif "Roman" title with
+ * its overline, a launch state with Roman's whole portrait and one line, four
+ * quick-start chips that send fixed prompts, Roman's replies as serif reading
+ * text that fades in paragraph by paragraph (Reduce Motion: at once), the
+ * client's turns as quiet bubbles, and the composer with the forest send
+ * square in the src/ui Screen footer, above the keyboard and the gesture bar.
  */
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import {
   AccessibilityInfo,
   FlatList,
   Keyboard,
-  KeyboardAvoidingView,
-  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
   type ListRenderItemInfo,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Headline, Overline, Screen, ScreenTopBar } from '../../ui';
+import RomanQuickStarts from '../../components/roman/RomanQuickStarts';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanGreeting from '../../components/roman/RomanGreeting';
 import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
@@ -48,6 +54,7 @@ import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import RomanConsentGate from '../../components/roman/RomanConsentGate';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
+import { useRomanReveal } from '../../components/roman/useRomanReveal';
 import {
   romanPoolEmpty,
   romanRateLimited,
@@ -57,15 +64,17 @@ import {
   ROMAN_SEND_FAILED,
   ROMAN_STORED_NO_REPLY,
   ROMAN_AI_ON_ASK_AGAIN,
+  ROMAN_ROOM_FOOTER,
+  romanRoomOverline,
 } from '../../components/roman/romanVoice';
 import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
-import { colors, lightTokens, spacing, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
-import HapticPressable from '../../components/HapticPressable';
-import { useTheme } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/useTheme';
 
 export interface RomanChatScreenProps {
   /** Host surface; defaults to 'client' when a route omits it. */
@@ -97,8 +106,9 @@ export default function RomanChatScreen({
   surface = 'client',
 }: RomanChatScreenProps): React.ReactElement {
   const navigation = useContext(NavigationContext);
-  const { colors: themeColors } = useTheme();
+  const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
+  const coachless = useCoachlessClient();
   const {
     phase,
     isFirstOpen,
@@ -115,6 +125,8 @@ export default function RomanChatScreen({
   const [draft, setDraft] = useState('');
   // Shown after AI help is allowed for a message the server already stored.
   const [askAgainHint, setAskAgainHint] = useState(false);
+  // The quick-start chip last sent (forest outline, prototype 70).
+  const [pickedChip, setPickedChip] = useState<string | null>(null);
   // OS "Reduce Motion" preference. When ON, the auto-scroll to the newest turn
   // is instant rather than animated, matching the reduced-motion parity the
   // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
@@ -230,15 +242,35 @@ export default function RomanChatScreen({
     }
   }, [sendErrorCopy]);
 
+  const sendText = useCallback(
+    async (text: string, fromChip: boolean) => {
+      setAskAgainHint(false);
+      const outcome = await send(text);
+      // Clear the composer ONLY when the turn actually persisted; on a send
+      // failure the draft is preserved so the user can retry without retyping
+      // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
+      // a chip that fails leaves its prompt in the composer to send again,
+      // but only when the composer is empty: it never replaces a typed draft.
+      if (fromChip) {
+        if (outcome === 'send-failed') setDraft((d) => (d.trim() === '' ? text : d));
+      } else if (outcome === 'sent') {
+        setDraft('');
+      }
+    },
+    [send],
+  );
+
   const onSend = useCallback(async () => {
-    const text = draft;
-    setAskAgainHint(false);
-    const outcome = await send(text);
-    // Clear the composer ONLY when the turn actually persisted; on a send
-    // failure the draft is preserved so the user can retry without retyping
-    // (brief §3 / F5 RomanSendOutcome).
-    if (outcome === 'sent') setDraft('');
-  }, [draft, send]);
+    await sendText(draft, false);
+  }, [draft, sendText]);
+
+  const onPickChip = useCallback(
+    (prompt: string) => {
+      setPickedChip(prompt);
+      void sendText(prompt, true);
+    },
+    [sendText],
+  );
 
   const onChangeDraft = useCallback(
     (text: string) => {
@@ -267,64 +299,80 @@ export default function RomanChatScreen({
     onRetrySend();
   }, [sendError, clearSendError, onRetrySend]);
 
+  // B30: the reply that arrives after a send fades in like reading.
+  const freshId = useRomanReveal(messages, sending);
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<RomanMessage>) => (
-      <RomanMessageBubble message={item} testID={`roman-message-${item.id}`} />
+      <RomanMessageBubble
+        message={item}
+        reveal={item.id === freshId}
+        reduceMotion={reduceMotion}
+        testID={`roman-message-${item.id}`}
+      />
     ),
-    [],
+    [freshId, reduceMotion],
   );
 
   const header = (
-    <View style={styles.header}>
-      {navigation ? (
-        <HapticPressable
-          onPress={() => navigation.goBack()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={styles.backButton}
-          testID="roman-chat-back"
-          disableAnimation
-        >
-          <Ionicons name="arrow-back" size={24} color={themeColors.textPrimary} />
-        </HapticPressable>
-      ) : null}
-      <RomanAvatar crop="neutral" size={36} testID="roman-header-avatar" />
-      <Text style={styles.headerTitle} accessibilityRole="header">
-        Roman
-      </Text>
-      <RomanConversationsButton />
+    <View style={[styles.header, { borderBottomColor: sc.border }]}>
+      <ScreenTopBar
+        onBack={navigation ? () => navigation.goBack() : undefined}
+        trailing={<RomanConversationsButton />}
+        testID="roman-chat"
+      />
+      <View style={styles.titleBlock}>
+        <Headline level="h1">Roman</Headline>
+        <Overline testID="roman-chat-overline">{romanRoomOverline(surface, !coachless)}</Overline>
+      </View>
     </View>
   );
 
   if (phase === 'loading') {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
-        {header}
+      <Screen edges={['top']} scroll={false} header={header} contentStyle={styles.body} testID="roman-chat-screen">
         <LoadingSkeleton />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (phase === 'unavailable' || phase === 'offline' || phase === 'error') {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
-        {header}
+      <Screen edges={['top']} scroll={false} header={header} contentStyle={styles.body} testID="roman-chat-screen">
         <RomanState
           kind={phase}
           onRetry={phase === 'unavailable' ? undefined : reload}
           testID="roman-chat-state"
         />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
+  const composer = (
+    <RomanComposer
+      value={draft}
+      onChangeText={onChangeDraft}
+      onSend={onSend}
+      sending={sending}
+      accessory={
+        surface === 'client' ? (
+          <RomanQuickStarts onPick={onPickChip} selected={pickedChip} disabled={sending} />
+        ) : null
+      }
+      footer={surface === 'client' ? ROMAN_ROOM_FOOTER : null}
+      testID="roman-composer"
+    />
+  );
+
   return (
-    <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
-      {header}
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    <Screen
+      edges={['top']}
+      scroll={false}
+      header={header}
+      footer={composer}
+      contentStyle={styles.body}
+      testID="roman-chat-screen"
+    >
+      <View style={styles.flex}>
         {isEmpty ? (
           <View style={styles.flex}>
             <RomanGreeting
@@ -342,6 +390,8 @@ export default function RomanChatScreen({
             data={messages}
             keyExtractor={(m) => m.id}
             renderItem={renderItem}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
             onEndReachedThreshold={0.4}
             onEndReached={nextCursor != null ? loadOlder : undefined}
             onContentSizeChange={scrollToLatest}
@@ -362,7 +412,7 @@ export default function RomanChatScreen({
                   accessibilityState={{ busy: true }}
                 >
                   <RomanAvatar crop="neutral" size={24} />
-                  <Text style={styles.olderNoteText} accessibilityRole="text">
+                  <Text style={[styles.olderNoteText, { color: sc.textMuted }]} accessibilityRole="text">
                     {ROMAN_LOADING_OLDER}
                   </Text>
                 </View>
@@ -397,7 +447,7 @@ export default function RomanChatScreen({
         {askAgainHint && sendError == null ? (
           <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
             <RomanAvatar crop="neutral" size={28} />
-            <Text style={styles.sendErrorText} accessibilityRole="text">
+            <Text style={[styles.sendErrorText, { color: sc.textPrimary }]} accessibilityRole="text">
               {ROMAN_AI_ON_ASK_AGAIN}
             </Text>
           </View>
@@ -411,7 +461,7 @@ export default function RomanChatScreen({
             accessibilityLiveRegion="assertive"
           >
             <RomanAvatar crop="neutral" size={28} />
-            <Text style={styles.sendErrorText} accessibilityRole="text">
+            <Text style={[styles.sendErrorText, { color: sc.textPrimary }]} accessibilityRole="text">
               {sendErrorCopy}
             </Text>
             {sendError?.kind !== 'rateLimited' && sendError?.kind !== 'poolEmpty' ? (
@@ -424,53 +474,37 @@ export default function RomanChatScreen({
                 accessibilityState={{ disabled: sending }}
                 testID="roman-send-retry"
               >
-                <Text style={styles.retryLabel}>Send again</Text>
+                <Text style={[styles.retryLabel, { color: sc.accentText }]}>Send again</Text>
               </TouchableOpacity>
             ) : null}
           </View>
         ) : null}
 
-        <RomanComposer
-          value={draft}
-          onChangeText={onChangeDraft}
-          onSend={onSend}
-          sending={sending}
-          testID="roman-composer"
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bone,
-  },
   flex: {
     flex: 1,
   },
+  // The list and the states run edge to edge; rows carry their own gutter.
+  body: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+  },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: lightTokens.border,
   },
-  headerTitle: {
-    ...typography.h1,
-    color: colors.ink,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+  titleBlock: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.lg,
+    gap: spacing.xs,
   },
   listContent: {
-    paddingVertical: spacing.md,
+    paddingBottom: spacing.lg,
   },
   skeletonWrap: {
     padding: spacing.xl,
@@ -486,7 +520,6 @@ const styles = StyleSheet.create({
   },
   olderNoteText: {
     ...typography.bodySmall,
-    color: colors.charcoal,
   },
   sendError: {
     flexDirection: 'row',
@@ -497,7 +530,6 @@ const styles = StyleSheet.create({
   },
   sendErrorText: {
     ...typography.bodySmall,
-    color: colors.charcoal,
     flex: 1,
   },
   retryButton: {
@@ -509,7 +541,6 @@ const styles = StyleSheet.create({
   },
   retryLabel: {
     ...typography.bodyMd,
-    color: colors.forest,
     textDecorationLine: 'underline',
   },
 });
