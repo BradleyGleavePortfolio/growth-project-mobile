@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
-import { radius } from '../../../theme/tokens';
+import { radius, typography } from '../../../theme/tokens';
 const mockAccept = jest.fn(), mockSession = jest.fn();
 jest.mock('../../../api/invites', () => ({ invitesApi: { acceptInvite: (...a: unknown[]) => mockAccept(...a) } }));
 jest.mock('../../../services/secureStorage', () => ({ secureStorage: { getItem: () => mockSession() } }));
@@ -106,6 +106,12 @@ describe('Email verification frozen action parity', () => {
     await confirmed.unmount();
     const open = await render(verified(nav(['CreateAccount', 'EmailVerified'])));
     expect(open.getByLabelText('Continue')).toHaveStyle({ borderRadius: radius.button });
+  });
+  it('the title uses the theme title line height, so Android keeps its descenders (B-SMALL2-135)', async () => {
+    const view = await render(verified(nav(), 'link_problem'));
+    const title = StyleSheet.flatten(view.getByText('This link has expired or was already used').props.style);
+    expect(title).toMatchObject({ fontSize: typography.h1.fontSize, lineHeight: typography.h1.lineHeight });
+    expect(title.lineHeight).toBeGreaterThanOrEqual(1.2 * Number(title.fontSize));
   });
   it('open signup retains Continue and goes back', async () => {
     const navigation = nav(['CreateAccount', 'EmailVerified']), view = await render(verified(navigation));
