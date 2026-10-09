@@ -39,7 +39,7 @@ function RatingRow({
             accessibilityState={{ checked: on }}
           >
             <View style={[styles.ratingDot, on && styles.ratingDotActive]} />
-            <Text style={[styles.ratingLabel, on && styles.ratingLabelActive]} numberOfLines={1}>
+            <Text style={[styles.ratingLabel, on && styles.ratingLabelActive]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
               {labels[val]}
             </Text>
           </Pressable>
