@@ -20,6 +20,7 @@ jest.mock('@react-navigation/native', () => ({
   NavigationContext: jest.requireActual('react').createContext({ goBack: () => mockGoBack() }),
 }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
+jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-me' }) }));
 const mockOpenPrivacy = jest.fn();
 jest.mock('../../../lib/legalLinks', () => ({ openPrivacyPolicyPage: () => mockOpenPrivacy() }));
 
