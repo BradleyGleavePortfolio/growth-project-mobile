@@ -17,6 +17,7 @@ import {
   mediaTitleFromFile,
 } from '../../../../api/coachMediaApi';
 import { useTheme } from '../../../../theme/ThemeProvider';
+import { radius } from '../../../../theme/tokens';
 import { describeProgramFailure } from '../../../../utils/programErrors';
 import { Chip, FailureBox, LoadingRow } from '../../programs/ProgramUi';
 
@@ -136,6 +137,6 @@ const VIDEO_PENDING = 'Uploaded. The video can be attached once processing ends.
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 },
   hint: { fontSize: 13, lineHeight: 19, marginTop: 6 },
-  uploadBtn: { borderWidth: 1, borderColor: 'transparent', borderRadius: 2, padding: 10, alignItems: 'center' },
+  uploadBtn: { borderWidth: 1, borderColor: 'transparent', borderRadius: radius.button, padding: 10, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '500' },
 });
