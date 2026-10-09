@@ -1,9 +1,4 @@
-/**
- * Coach consultation K5-K8 (prototype 82-85): copy, options and the pure
- * rules the step components use. No React, so the rules are tested alone.
- * App copy has no first person except Roman's lines; no exclamation marks.
- */
-
+/** K5-K8 (prototype 82-85) copy and pure rules, tested alone. No app first person outside Roman; no exclamation marks. */
 import { SPECIALTY_OPTIONS } from '../../../../lib/coachConsultation/flow';
 
 /** K5 Programming style (prototype 82); the rows are PROGRAMMING_STYLE_OPTIONS (flow.ts). */

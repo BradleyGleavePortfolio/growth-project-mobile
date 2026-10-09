@@ -1,9 +1,4 @@
-/**
- * K5-K8 (COACH-CONSULT-M2-134) for the step registry: `STEP_COMPONENTS` in
- * ../registry.ts spreads this map (`...PRACTICE_STEPS`), so the flow shows
- * K5 Programming style, K6 Your personal link, K7 Import offer (importer
- * flag on and clients today only) and K8 Practice ready.
- */
+/** K5-K8 for the step registry: ../registry.ts spreads this map into STEP_COMPONENTS after K4. */
 import type { StepRegistry } from '../registry';
 import K5ProgrammingStyle from './K5ProgrammingStyle';
 import K6PersonalLink from './K6PersonalLink';
