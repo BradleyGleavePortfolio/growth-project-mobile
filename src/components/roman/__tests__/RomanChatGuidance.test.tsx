@@ -115,14 +115,18 @@ it.each(['client', 'coach'] as const)('%s keeps history, editing, send, preserve
   expect(r.getByTestId('roman-composer-input').props.value).toBe('');
 });
 
-it('keeps a hairline Inter input, square forest send and sending/length guards', async () => {
+it('keeps a rounded Inter field, the forest send square and sending/length guards (B30)', async () => {
   const r = await render(<RomanChatScreen />);
   const input = r.getByTestId('roman-composer-input');
   expect(StyleSheet.flatten(input.props.style).backgroundColor).toBeUndefined();
   expect(StyleSheet.flatten(input.props.style).fontFamily).toBe(typography.body.fontFamily);
+  expect(input.props.placeholder).toBe('Ask Roman anything.');
+  expect(StyleSheet.flatten(r.getByTestId('roman-composer-field').props.style).borderRadius).toBe(radius.input);
+  // Empty draft: the forest square stays (never a grey dead square, owner S8).
+  expect(StyleSheet.flatten(r.getByTestId('roman-composer-send').props.style).backgroundColor).toBe(colors.forest);
   await fireEvent.changeText(input, 'A question');
   const buttonStyle = StyleSheet.flatten(r.getByTestId('roman-composer-send').props.style);
-  expect(buttonStyle).toMatchObject({ backgroundColor: colors.forest, borderRadius: radius.sm, width: 48, height: 48 });
+  expect(buttonStyle).toMatchObject({ backgroundColor: colors.forest, borderRadius: radius.button, width: 44, height: 44 });
   await fireEvent.changeText(input, 'x'.repeat(8001));
   expect(r.getByTestId('roman-composer-send').props.accessibilityState.disabled).toBe(true);
   state.sending = true;
