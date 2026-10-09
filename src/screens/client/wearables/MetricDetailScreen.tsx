@@ -26,7 +26,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useNavigation,
@@ -261,8 +261,25 @@ export default function MetricDetailScreen() {
   const hasData = points.length > 0;
   const bucketLabel = bucket === 'HEALTH_FITNESS' ? 'Fitness' : 'Recovery';
 
+  // B-HEALTHBACK-135 (B29): the More stack hides the native header, so the
+  // pushed detail draws its own Back (iOS has no hardware back), on every
+  // branch. Same arrow, size and place as the coach detail screens (m#638);
+  // 44 pt target. With nothing below it there is no dead Back.
+  const back = navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}
+      testID="metric-detail-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={sc.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   const titleStack = (
     <View style={styles.titleBlock}>
+      {back}
       <Overline>{bucketLabel}</Overline>
       <Headline level="h1">{title}</Headline>
     </View>
@@ -399,6 +416,12 @@ export default function MetricDetailScreen() {
 const styles = StyleSheet.create({
   titleBlock: {
     paddingBottom: layout.sectionGap,
+  },
+  back: {
+    width: layout.touchMin,
+    height: layout.touchMin,
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
   hero: {
     ...typography.display,
