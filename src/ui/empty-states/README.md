@@ -28,7 +28,7 @@ One calm look across `EmptyState`, `EmptyStateNoClients` and `src/components/Emp
 
 - Headlines in Cormorant (`typography.h2`; the components variant uses `typography.h3`), body in Inter with the one muted grey (`textMuted`).
 - The CTA is a forest button with radius 4, at least 44 pt tall, with an Inter 16 sentence-case label (`typography.bodyMd`). The base and components variants press through `HapticPressable` (light).
-- `EmptyStateNoClients`: "Share your code" and "Open invite codes" (it opens the Invite codes screen, so it no longer says Settings); a 44 pt "Copy code" whose tap goes through `HapticService`, so the Haptics switch is honoured; the code box is unfilled with the theme hairline (`semanticColors.border`).
+- `EmptyStateNoClients` (prototype 86 K-LAND): Roman's neutral face, "No clients yet." and "Share your link and your first client lands here."; one forest "Share my link" (or "Open invite codes" when there is no code yet; it opens the Invite codes screen); a quiet 44 pt "Copy code <code>" whose tap goes through `HapticService`, so the Haptics switch is honoured; a plain line when the share sheet does not open.
 
 ## Props
 

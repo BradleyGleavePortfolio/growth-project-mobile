@@ -155,9 +155,10 @@ describe('U2: monochrome numbers, the need said in words', () => {
     for (const node of screen.getAllByText(/./)) {
       expect([colors.mutedGold, colors.error]).not.toContain(flat(node).color);
     }
-    for (const value of ['60%', '3', '2', '8', '1']) {
+    for (const value of ['60%', '3', '2', '12', '1']) {
       expect(flat(screen.getByText(value)).color).toBe(colors.ink);
     }
+    expect(screen.getByText('8 active today')).toBeTruthy();
     expect(within(screen.getByTestId('command-center-kpi-at-risk')).getByText('Need attention')).toBeTruthy();
     expect(within(screen.getByTestId('command-center-kpi-open-alerts')).getByText('Waiting in Actions')).toBeTruthy();
   });

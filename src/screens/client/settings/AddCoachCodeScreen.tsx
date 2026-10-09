@@ -1,25 +1,36 @@
 /**
  * AddCoachCodeScreen (decision 133-14): a client without a coach adds the
- * code here from Settings. One redemption per tap through the same call the
- * in-app attach on RoleSelectionScreen uses (POST /auth/attach-invite-code),
- * with the same coach-sharing sentence and version (B-SHARE-127) and the same
- * invite error copy (lib/inviteAttachOutcome). On success the cached user
- * gains its coach and the session is re-read, so coach features appear.
+ * code here from Settings. CLIENT-POLISH-134: one coach-code endpoint for the
+ * app. Settings now joins through POST /coachless/coach-code/redeem, the same
+ * call as the coachless Home and Messages sheet (components/coachless/
+ * CoachCodeSheet): one Idempotency-Key per attempt (reused on a retry of the
+ * same code), the featured-pause refusal, the same refusal copy
+ * (coachlessCopy) and the coach-sharing version (B-SHARE-127). Both write
+ * through the server's one attach writer. A pasted join link (.../join/<code>,
+ * tgp://join/<code>, ?code=) becomes the code inside it. On success the
+ * cached user gains its coach and the session is re-read.
  */
 import React, { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
-import { authApi } from '../../../services/api';
+import { coachlessFailureOf, redeemCoachCode } from '../../../api/coachlessApi';
+import { keepsIdempotencyKey, refusalLine } from '../../../components/coachless/coachlessCopy';
+import { extractInviteCode } from '../../../lib/inviteCodeInput';
+import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { patchUserCache } from '../../../lib/userCache';
-import { inviteAttachErrorMessage } from '../../../lib/inviteAttachOutcome';
 import { useCoachSharingNotice } from '../../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../../components/coachSharing/CoachSharingNotice';
 import { useEntitlement } from '../../../entitlements/EntitlementProvider';
-import { isNetworkFailure, unknownAuthFailure } from '../../../utils/authFailure';
 import { authEvents } from '../../../utils/authEvents';
 import { logger } from '../../../utils/logger';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { layout, radius, typography } from '../../../theme/tokens';
 import { Headline, Lede, PrimaryButton, Screen, ScreenTopBar } from '../../../ui';
+
+/** The code to send: the one inside a pasted join link, else the text as typed. */
+export function coachCodeFromInput(text: string): string {
+  const trimmed = text.trim();
+  return extractInviteCode(trimmed) ?? trimmed;
+}
 
 interface Props {
   navigation: { goBack: () => void };
@@ -34,41 +45,38 @@ export default function AddCoachCodeScreen({ navigation }: Props) {
   const [error, setError] = useState('');
   const [joined, setJoined] = useState(false);
   const inFlight = useRef(false);
+  // One attempt = one Idempotency-Key; a retry of the same code reuses it.
+  const keyRef = useRef<{ code: string; key: string } | null>(null);
   const trimmed = code.trim();
 
   const join = async () => {
     if (inFlight.current || joined) return;
     if (!trimmed) {
-      setError('Enter the invite code your coach shared.');
+      setError('Enter the code the coach shared.');
       return;
     }
     inFlight.current = true;
     setBusy(true);
     setError('');
+    const toSend = coachCodeFromInput(trimmed);
+    const normalised = toSend.toUpperCase();
+    if (!keyRef.current || keyRef.current.code !== normalised) {
+      keyRef.current = { code: normalised, key: generateIdempotencyKey() };
+    }
     try {
-      const res = await authApi.attachInviteCode(trimmed, sharingVersion);
-      const data = (res?.data ?? {}) as { role?: string; coach_id?: string | null };
+      const result = await redeemCoachCode(toSend, keyRef.current.key, sharingVersion);
+      keyRef.current = null;
       setJoined(true);
-      await patchUserCache({
-        ...(typeof data.coach_id === 'string' ? { coach_id: data.coach_id } : {}),
-        ...(typeof data.role === 'string' ? { role: data.role } : {}),
-      }).catch((err: unknown) => logger.warn('AddCoachCode', 'user cache patch after attach failed', err));
+      await patchUserCache({ coach_id: result.coach.id })
+        .catch((err: unknown) => logger.warn('AddCoachCode', 'user cache patch after redeem failed', err));
       void refreshEntitlement().catch((err: unknown) =>
-        logger.warn('AddCoachCode', 'entitlement refresh after attach failed', err));
+        logger.warn('AddCoachCode', 'entitlement refresh after redeem failed', err));
       // Re-read the session everywhere (useCurrentUser listens for login).
       authEvents.emit('login');
     } catch (err) {
-      const r = err as { response?: { status?: number; data?: { reason?: string; code?: string; message?: string } } };
-      const status = r?.response?.status ?? 0;
-      if (status >= 400 && status < 500) {
-        setError(inviteAttachErrorMessage(
-          r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
-        ));
-      } else if (isNetworkFailure(err)) {
-        setError('The server could not be reached. Check your connection, then try again.');
-      } else {
-        setError(unknownAuthFailure(err, 'role_selection').message);
-      }
+      const failure = coachlessFailureOf(err);
+      if (!keepsIdempotencyKey(failure.code)) keyRef.current = null;
+      setError(refusalLine(failure));
     } finally {
       inFlight.current = false;
       setBusy(false);
@@ -86,7 +94,7 @@ export default function AddCoachCodeScreen({ navigation }: Props) {
       ) : (
         <View>
           <Headline level="h1">Add a coach code</Headline>
-          <Lede style={styles.lede}>Enter the code your coach shared to connect your account.</Lede>
+          <Lede style={styles.lede}>Enter the code a coach shared to connect this account.</Lede>
           {error ? (
             <Text style={[styles.error, { color: colors.error }]} accessibilityRole="alert" testID="add-coach-code-error">
               {error}
@@ -94,7 +102,11 @@ export default function AddCoachCodeScreen({ navigation }: Props) {
           ) : null}
           <TextInput
             value={code}
-            onChangeText={(t) => { setCode(t); if (error) setError(''); }}
+            onChangeText={(t) => {
+              // A pasted join link shows (and sends) the code inside it.
+              setCode(t.includes('/') ? extractInviteCode(t) ?? t : t);
+              if (error) setError('');
+            }}
             placeholder="Coach code"
             placeholderTextColor={sc.textMuted}
             autoCapitalize="characters"

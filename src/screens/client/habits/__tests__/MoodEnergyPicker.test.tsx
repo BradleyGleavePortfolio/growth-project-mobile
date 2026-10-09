@@ -25,6 +25,10 @@ it('keeps every check-in action with a single readable word per mood choice', as
     expect(label.props.style).toEqual(expect.arrayContaining([expect.objectContaining({
       fontSize: 13, textTransform: 'none', letterSpacing: 0,
     })]));
+    // "Exhausted" / "Energized" are wider than a fifth of a 360 pt screen: shrink to fit, never an ellipsis.
+    for (const word of [MOOD_LABELS[value], ENERGY_LABELS[value]]) {
+      expect(view.getByText(word).props).toEqual(expect.objectContaining({ adjustsFontSizeToFit: true, minimumFontScale: 0.85 }));
+    }
     await fireEvent.press(label);
     expect(setMood).toHaveBeenLastCalledWith(value);
     await fireEvent.press(view.getByText(ENERGY_LABELS[value]));

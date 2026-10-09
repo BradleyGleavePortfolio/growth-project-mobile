@@ -205,17 +205,21 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
           }
           renderItem={({ item }) => {
             const copy = STATUS_COPY[item.status];
+            // COACH-INSETS-B3-134 (B29): a missing or unreadable date leaves its
+            // part out of the line, never a dash and never "null".
+            const started = formatDate(item.startedAt);
+            const renews = formatDate(item.nextRenewalAt);
             return (
               <View style={styles.row}>
                 <View style={styles.rowMain}>
                   <Text style={styles.rowName}>{item.name || item.email || 'Client'}</Text>
                   <Text style={styles.rowMeta}>
-                    {item.entitlementActive ? 'Access active' : 'Access ended'}{' · '}
-                    Started {formatDate(item.startedAt) ?? '—'}
+                    {item.entitlementActive ? 'Access active' : 'Access ended'}
+                    {started ? ` · Started ${started}` : ''}
                     {item.cancelAtPeriodEnd
                       ? ' · Renewal canceled'
-                      : item.nextRenewalAt
-                      ? ` · Renews ${formatDate(item.nextRenewalAt)}`
+                      : renews
+                      ? ` · Renews ${renews}`
                       : ''}
                   </Text>
                 </View>

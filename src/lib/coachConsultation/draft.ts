@@ -2,7 +2,10 @@
  * Local resume draft for the coach consultation, one per user
  * (`coach_consult_v1:<user id>`). Written on every answer and step change,
  * read on open, purged after completion. It keeps the coach's place when the
- * backend routes are not deployed yet or the phone is offline.
+ * backend routes are not deployed yet or the phone is offline. `synced` is
+ * true only when the server acknowledged exactly these answers; an unsynced
+ * draft always wins on resume (the server's timestamp is its arrival time,
+ * not the coach's edit time).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isStepId, sanitizeAnswers } from './flow';
@@ -15,6 +18,7 @@ export interface CoachDraft {
   answers: CoachConsultAnswers;
   step: CoachStepId;
   updatedAt: string;
+  synced: boolean;
 }
 
 export function draftKey(userId: string): string {
@@ -27,7 +31,7 @@ export async function readDraft(userId: string): Promise<CoachDraft | null> {
     if (!raw) return null;
     const d = JSON.parse(raw) as Partial<CoachDraft>;
     if (d?.v !== 1 || !isStepId(d.step) || typeof d.updatedAt !== 'string') return null;
-    return { v: 1, answers: sanitizeAnswers(d.answers), step: d.step, updatedAt: d.updatedAt };
+    return { v: 1, answers: sanitizeAnswers(d.answers), step: d.step, updatedAt: d.updatedAt, synced: d.synced === true };
   } catch {
     // Unreadable draft: start fresh; the server draft (if any) still resumes.
     return null;
@@ -38,9 +42,10 @@ export async function writeDraft(
   userId: string,
   answers: CoachConsultAnswers,
   step: CoachStepId,
+  synced = false,
   now: Date = new Date(),
 ): Promise<void> {
-  const draft: CoachDraft = { v: 1, answers, step, updatedAt: now.toISOString() };
+  const draft: CoachDraft = { v: 1, answers, step, updatedAt: now.toISOString(), synced };
   try {
     await AsyncStorage.setItem(draftKey(userId), JSON.stringify(draft));
   } catch {

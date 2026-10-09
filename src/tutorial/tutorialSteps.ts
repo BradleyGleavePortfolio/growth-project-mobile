@@ -194,6 +194,13 @@ function completeSub(c: CopyContext): string {
   return `${where}${call} One thing at a time. You do not need to be perfect, just consistent.`;
 }
 
+/** The single push ask after the completion (prototype 61). */
+export function pushPrimingLine(c: CopyContext): string {
+  return c.coachLinked
+    ? `Want a nudge when ${c.coachName} messages you, or when the day's workout is ready? I will only ask once.`
+    : "Want a nudge when the day's workout is ready? I will only ask once.";
+}
+
 export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'welcome',

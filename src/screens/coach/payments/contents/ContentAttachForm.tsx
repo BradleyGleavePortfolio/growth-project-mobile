@@ -47,6 +47,7 @@ import {
   PatchContentBody,
 } from '../../../../api/packageContentsApi';
 import { useTheme, ThemeColors } from '../../../../theme/ThemeProvider';
+import { radius } from '../../../../theme/tokens';
 import { mediumTap, warningTap } from '../../../../utils/haptics';
 import { featureFlags } from '../../../../config/featureFlags';
 import ProgramAssetPicker from '../../programs/ProgramAssetPicker';
@@ -625,7 +626,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.input,
       fontSize: 15,
       color: colors.textPrimary,
     },
@@ -637,7 +638,7 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       flexWrap: 'wrap',
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 4,
       gap: 4,
     },
@@ -645,7 +646,7 @@ const makeStyles = (colors: ThemeColors) =>
       flexGrow: 1,
       flexBasis: '30%',
       paddingVertical: 10,
-      borderRadius: 2,
+      borderRadius: radius.button,
       alignItems: 'center',
     },
     segmentItemActive: { backgroundColor: colors.primary },
@@ -671,7 +672,7 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       backgroundColor: colors.primary,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
     },
     primaryBtnDisabled: { opacity: 0.6 },
     primaryBtnText: {

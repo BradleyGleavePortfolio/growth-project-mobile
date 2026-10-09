@@ -26,6 +26,8 @@ export interface PrimaryButtonProps {
   loading?: boolean; // spinner, presses ignored, label kept for screen readers
   haptic?: boolean; // light impact on press (default true)
   accessibilityHint?: string;
+  /** What a screen reader says when it must be fuller than the visible label (default = label). */
+  accessibilityLabel?: string;
   testID?: string;
   style?: StyleProp<ViewStyle>;
 }
@@ -37,6 +39,7 @@ export function PrimaryButton({
   loading = false,
   haptic = true,
   accessibilityHint,
+  accessibilityLabel,
   testID,
   style,
 }: PrimaryButtonProps): React.ReactElement {
@@ -53,7 +56,7 @@ export function PrimaryButton({
       onPress={handlePress}
       disabled={inert}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: inert, busy: loading }}
       testID={testID}

@@ -45,6 +45,7 @@ import DateTimePicker, {
 
 import { useTheme } from '../../../../theme/useTheme';
 import type { SemanticTokens } from '../../../../theme/tokens';
+import { radius } from '../../../../theme/tokens';
 import { mediumTap, warningTap } from '../../../../utils/haptics';
 
 export interface PushConfirmModalProps {
@@ -331,7 +332,7 @@ const makeStyles = (colors: SemanticTokens) =>
       backgroundColor: colors.bgSurface,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.input,
       borderWidth: 1,
       borderColor: colors.border,
     },
@@ -355,7 +356,7 @@ const makeStyles = (colors: SemanticTokens) =>
       gap: 8,
       backgroundColor: colors.accent,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
     },
     primaryBtnDisabled: { opacity: 0.5 },
     primaryBtnText: {
