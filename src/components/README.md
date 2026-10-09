@@ -18,9 +18,9 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 
 | File | What it does |
 | --- | --- |
-| `HapticPressable.tsx` | Pressable that fires a haptic on press. The right primitive for any tap that commits state. |
+| `HapticPressable.tsx` | Pressable that fires a haptic on press through `HapticService`, so the Settings Haptics switch is honoured; press-in scales to 0.97, release is a 120 ms timing (no spring). |
 | `FadeInView.tsx` | Mount-time fade-in wrapper. Used for hero copy and milestone tiles. |
-| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, radius 4, 44 pt, Inter 16, HapticPressable). |
+| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, `radius.button`, 44 pt, Inter 16, HapticPressable). |
 | `ErrorBoundary.tsx` | Top-level error boundary. Reports to Sentry, renders a soft error card. |
 | `SkeletonLoader.tsx` | Shimmering placeholder for list / card load. |
 | `../ui/states/QuietStates.tsx` | `QuietError` (calm sentence, forest "Try again" text action, muted extra steps, no red) and `QuietLoading` (shared skeleton rows, spoken label), plus `loadFailureMessage` ("Check your connection" only for no-answer failures). Used by the coach booking inbox, invites, pending AI drafts, risk board and Programs. |
@@ -53,8 +53,8 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 
 | File | What it does |
 | --- | --- |
-| `log/DailySummaryBar.tsx` | Macro / calorie summary header for the Log screen. |
-| `log/MealSectionCard.tsx` | Per-meal card with add-food and entry list. |
+| `log/DailySummaryBar.tsx` | Food log hero: the overline (Calories left / over target / eaten), one serif display number with lining tabular figures, then the quiet macro bars. |
+| `log/MealSectionCard.tsx` | Hairline meal section: serif meal title, tabular kcal, entry rows (tap = edit, long-press = delete) and a forest "Add food" text action. No meal icons, no fills. |
 | `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
 | `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
 | `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
@@ -67,7 +67,7 @@ Roman is an older Black man in his 60s in a black three-piece butler suit, white
 | `CalorieRing.tsx`, `MacroBar.tsx` | Hand-rolled charts with no third-party chart lib. |
 | `WaterTracker.tsx` | Theme-coloured hairline progress and three quick-add actions. The unchanged 100 oz reference is labelled “Starter goal”; changed Settings goals and explicit targets retain their values. Metric (`kg`) settings show approximate ml totals, the equivalent glass size, and 250/350/500 ml buttons. Imperial 8/12/16 oz buttons and the ounce callback contract stay unchanged; metric callbacks convert back to ounces so the store writes the selected ml. Optional saved `entries` show their exact ml or approximate ounce amount and a 44 pt `onRemove(entry)` control. `removingId` labels only that entry as removing and disables water actions until it settles; the screen owns confirmation and API errors. Covered by `__tests__/WaterTracker.goal.test.tsx` and the Food log day-loading integration test. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
-| `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
+| `DaySelector.tsx` | Food log headline: the selected day in serif h1 ("Today" plus the forest dot), previous and next as two quiet chevrons on the right; the day itself jumps back to today. |
 | `progress/PeriodTabs.tsx`, `progress/WeightTrendChart.tsx`, `progress/TodayFood.tsx`, `progress/WeighInRows.tsx`, `progress/BodyNumbers.tsx`, `progress/progressFormat.ts` | More > Progress, "The full picture" (REDO-PROGRESS-133): the Body block's four serif numbers (Weight, Start, Goal, Change with a true minus) between vertical hairlines, "—" while the first read runs or after it fails; `formatChange` / `formatSince` ("Since 12 February", the year only when it is not this year); underlined 7D / 30D / 90D / All text tabs; the static ink weight line with dashed guides and tabular labels; today's food as four hairline `QuietRow`s against real targets only ("—" until the read lands, one failed-read line, no invented 2,000 kcal); recent weigh-ins as hairline rows with the weight in serif tabular figures and a muted "lb". |
 | `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Not available in this app" state (packs are not sold in this version of the app; no link, URL or steering) and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). The wrapper takes an optional hide decision; `CreditPackCheckout` passes `creditPacksHidden`. |
 | `coach/ai-budget/*` | AI usage meter, 95% banner, 80% tutorial and hard-pause modal. When `creditPacksHidden()` is true (`src/config/purchaseSurfaces.ts`), the meter is a non-interactive readout with neutral accessibility copy, the banner has no CTA, the tutorial shows three usage-only cards ending in "Done", and the hard pause says when AI resumes. None of them mentions packs, buying or top-ups. On a link build (`creditPackCheckoutMode() === 'external'`: iOS switch `EXPO_PUBLIC_FF_IOS_US_CREDIT_PACK_LINK`, or Android switch `EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK`, preview and clinic-apk profiles only) they show the packs, `PackOptionsRow` prints "Credit packs are non-refundable." under the prices, and the tutorial's last card and the hard pause add that the coach pays TGP the pack price through Stripe checkout in the browser. The tutorial's close action reads "Not now"; its last card names no meter, because Coach Home shows none at 80-94% use, when the guide appears. After the coach closes the hard pause, the tappable meter chip stays on Coach Home so the packs are one tap away. |

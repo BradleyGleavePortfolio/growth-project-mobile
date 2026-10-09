@@ -58,16 +58,14 @@ async function begin() {
   startClientTutorial(PAYLOAD);
 }
 
-function toWearableConnect() {
+function toFirstMessage() {
   dispatchTutorial({ type: 'ACK' });
   setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
   dispatchTutorial({ type: 'SIGNAL', signal: 'plan_card_opened' });
   setTutorialRoute(['Home', 'HomeMain']);
   dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
-  setTutorialRoute(['CommunityTab', 'CommunityTab']);
-  dispatchTutorial({ type: 'ACK' });
-  setTutorialRoute(['Home', 'Messages']);
-  dispatchTutorial({ type: 'ACK' });
+  setTutorialRoute(['Log']);
+  dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
 }
 
 beforeEach(async () => {
@@ -96,8 +94,8 @@ describe('TutorialOverlay', () => {
     expect(avatar.props.source).not.toBe(romanFaceAsset('smile'));
     const progress = screen.getByTestId('tutorial-progress');
     expect(progress.props.accessibilityRole).toBe('progressbar');
-    expect(progress.props.accessibilityLabel).toBe('Step 1 of 8, Welcome');
-    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 8, now: 0 });
+    expect(progress.props.accessibilityLabel).toBe('Step 1 of 5, Welcome');
+    expect(progress.props.accessibilityValue).toEqual({ min: 0, max: 5, now: 0 });
     expect(screen.getByLabelText('Begin')).toBeTruthy();
     expect(screen.getByLabelText('Skip the tour')).toBeTruthy();
   });
@@ -111,7 +109,7 @@ describe('TutorialOverlay', () => {
     );
     expect(screen.getByTestId('tutorial-spotlight')).toBeTruthy();
     expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe(
-      'Step 2 of 8, Your workout plan',
+      'Step 2 of 5, Your workout plan',
     );
     // A route gate has no button that could fake the action.
     expect(screen.queryByLabelText('Begin')).toBeNull();
@@ -145,37 +143,32 @@ describe('TutorialOverlay', () => {
     expect(screen.getByTestId('tutorial-overlay')).toBeTruthy();
   });
 
-  it('offers Take me there for menu screens and Later on the wearable connect gate', async () => {
+  it('offers Take me there for the coach conversation, and no Later on the teach-back', async () => {
     await begin();
     const onNavigate = jest.fn();
     await render(<TutorialOverlay tabs={TABS} onNavigate={onNavigate} />);
-    await act(async () => toWearableConnect());
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/Connected devices/);
+    await act(async () => toFirstMessage());
+    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/Open your conversation with Bradley/);
     await fireEvent.press(screen.getByLabelText('Take me there'));
-    expect(onNavigate).toHaveBeenCalledWith({ tab: 'MoreTab', screen: 'Connections' });
-    await act(async () => setTutorialRoute(['MoreTab', 'Connections']));
-    expect(screen.getByLabelText('Later')).toBeTruthy();
-    await fireEvent.press(screen.getByLabelText('Later'));
-    expect(useTutorialStore.getState().tutorial.outcomes.wearables).toBe('deferred');
-    expect(screen.getByTestId('tutorial-line').props.children).toMatch(/Health and sleep/);
+    expect(onNavigate).toHaveBeenCalledWith({ tab: 'Home', screen: 'Messages' });
+    await act(async () => setTutorialRoute(['Home', 'Messages']));
+    expect(screen.queryByLabelText('Later')).toBeNull();
   });
 
   it('ends on a quiet completion card with no skip, and Done finishes the tour', async () => {
     await begin();
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await act(async () => {
-      toWearableConnect();
-      setTutorialRoute(['MoreTab', 'Connections']);
-      dispatchTutorial({ type: 'SIGNAL', signal: 'wearable_connected' });
-      setTutorialRoute(['MoreTab', 'Health']);
-      dispatchTutorial({ type: 'ACK' });
-      setTutorialRoute(['Log']);
-      dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
+      toFirstMessage();
       setTutorialRoute(['Home', 'Messages']);
       dispatchTutorial({ type: 'SIGNAL', signal: 'message_sent' });
     });
     expect(screen.getByTestId('tutorial-line').props.children).toMatch(
       /^That is everything, Maya\. Your plan is set, your numbers are set, and Bradley has your message\./,
+    );
+    // Calendar, Community and devices are folded in here (decision 133-5).
+    expect(screen.getByTestId('tutorial-sub').props.children).toBe(
+      'Community has its own tab, and connected devices live under You. One thing at a time. You do not need to be perfect, just consistent.',
     );
     expect(screen.getByTestId('tutorial-progress').props.accessibilityLabel).toBe('Tour complete');
     expect(screen.queryByLabelText('Skip the tour')).toBeNull();

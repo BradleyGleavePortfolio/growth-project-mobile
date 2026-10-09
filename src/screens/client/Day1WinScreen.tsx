@@ -20,14 +20,14 @@ import {
   Text,
   Pressable,
   ScrollView,
-  SafeAreaView,
   StyleSheet,
   Alert,
 } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { firstWinApi, WinType } from '../../services/firstWinApi';
 import { track } from '../../lib/analytics';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
 import { shouldOfferPackagePrompt } from '../../lib/packagePromptGate';
 import { prefsStorage } from '../../storage/mmkv';
@@ -370,12 +370,12 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     winCard: {
       padding: 20,
       borderWidth: 1,
-      borderRadius: 2,
+      borderRadius: radius.card,
     },
     cardLoadingSkeleton: {
       width: 72,
       height: 10,
-      borderRadius: 2,
+      borderRadius: radius.control,
       backgroundColor: colors.border,
       marginBottom: 8,
       alignSelf: 'flex-start',
@@ -428,7 +428,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       height: 52,
       justifyContent: 'center',
       alignItems: 'center',
-      borderRadius: 0,
+      borderRadius: radius.button,
     },
     continueButtonText: {
       fontFamily: 'Inter_600SemiBold',

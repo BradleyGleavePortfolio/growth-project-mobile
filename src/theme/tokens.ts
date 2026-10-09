@@ -255,8 +255,8 @@ export const spacing = {
 // not rectangles". Decision 133-4 answered: rounded. New code uses the
 // SEMANTIC keys (button, input, card, sheet, chip, control); never a literal.
 // The prototype frames show square corners; the owner's ruling wins over them.
-// Legacy keys sm / md / lg / xl / 2xl: do not use in new code; they move to
-// the rounded scale in the follow-up DS-THEME-133 PR (tests in three lanes).
+// Legacy keys md / lg / xl / 2xl (and every theme/index `Radius` key) now resolve
+// to the rounded scale so existing users round at once (DS-THEME-133); sm waits.
 export const radius = {
   // Semantic (use these)
   button:  12,   // PrimaryButton, filled or outlined actions
@@ -265,13 +265,15 @@ export const radius = {
   sheet:   24,   // bottom-sheet and modal TOP corners
   chip:    999,  // chips and pills
   control: 6,    // small boxes under 28 pt (checkbox, tag)
-  // Legacy (deprecated for new code; values unchanged)
+  // Legacy names (deprecated for new code), mapped onto the rounded scale
+  // EXCEPTION: sm stays 0 — awaits agent 132 OK, nativeCardUpdate.test.tsx:423
+  // (the card-payment sheet button reads radius.sm). New code: radius.button.
   sm:   0,
-  md:   2,
-  lg:   4,
-  xl:   4,
-  '2xl': 4,
-  pill: 999,  // SMALL CHIPS ONLY (same as chip)
+  md:   12,   // was 2: inputs -> input
+  lg:   16,   // was 4: cards -> card
+  xl:   16,   // was 4 -> card
+  '2xl': 24,  // was 4 -> sheet
+  pill: 999,  // same as chip
 } as const;
 
 // ─── Layout (DS-PRIMITIVES-133) ─────────────────────────────────────────────

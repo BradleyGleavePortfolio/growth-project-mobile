@@ -44,35 +44,24 @@ export interface OnboardingCompletePayload {
   coach?: OnboardingCoach | null;
 }
 
-/** The nine steps, in the owner-mandated order. */
-export type TutorialStepId =
-  | 'welcome'
-  | 'plan'
-  | 'macros'
-  | 'community'
-  | 'coach_messages'
-  | 'calendar'
-  | 'wearables'
-  | 'first_meal'
-  | 'first_message'
-  | 'welcome_call'
-  | 'complete';
+/** The steps, in order (Calendar, Community and devices fold into complete). */
+export type TutorialStepId = 'welcome' | 'plan' | 'macros' | 'first_meal' | 'first_message' | 'complete';
 
 /**
  * How a step ended.
  *  - done:        every gate satisfied by a real action.
- *  - deferred:    the client explicitly chose "Later" (wearables only).
+ *  - deferred:    the client explicitly chose "Later".
  *  - pending:     data the step explains is not ready yet (no plan / no
  *                 macros); resumable once it lands.
- *  - unavailable: the surface is not in this build (community tab flag off),
- *                 or not for this client (no coach linked).
+ *  - unavailable: not for this client (no coach linked).
  */
 export type TutorialStepOutcome = 'done' | 'deferred' | 'pending' | 'unavailable';
 
 export type TutorialStatus = 'not_started' | 'active' | 'paused' | 'completed';
 
 export interface TutorialState {
-  version: 1;
+  /** 2 since TOUR-133 (the step list changed; older blobs are mapped). */
+  version: 2;
   status: TutorialStatus;
   stepIndex: number;
   gateIndex: number;
@@ -95,9 +84,6 @@ export type TutorialSignal =
 export interface TutorialContext {
   hasProgram: boolean;
   hasMacros: boolean;
-  communityAvailable: boolean;
-  /** S-SCHED: featureFlags.clientCalendar. Absent means off. */
-  calendarAvailable?: boolean;
   /**
    * A coach is linked to this client (`user.coach_id`, the signal Home uses
    * for its Message your coach row). Absent means no coach.

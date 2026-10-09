@@ -156,14 +156,6 @@ describe('signals and feedback', () => {
     emitTutorialSignal('plan_card_opened');
     setTutorialRoute(['Home', 'HomeMain']);
     emitTutorialSignal('macro_card_opened');
-    setTutorialRoute(['CommunityTab', 'CommunityTab']);
-    dispatchTutorial({ type: 'ACK' });
-    setTutorialRoute(['Home', 'Messages']);
-    dispatchTutorial({ type: 'ACK' });
-    setTutorialRoute(['MoreTab', 'Connections']);
-    dispatchTutorial({ type: 'DEFER' });
-    setTutorialRoute(['MoreTab', 'Health']);
-    dispatchTutorial({ type: 'ACK' });
     setTutorialRoute(['Log']);
   }
 
@@ -180,7 +172,6 @@ describe('signals and feedback', () => {
     dispatchTutorial({ type: 'ACK' });
     const s = useTutorialStore.getState().tutorial;
     expect(s.status).toBe('completed');
-    expect(s.outcomes.wearables).toBe('deferred');
     expect(s.outcomes.first_meal).toBe('done');
     expect(s.outcomes.first_message).toBe('done');
     await flush();
@@ -206,17 +197,18 @@ describe('signals and feedback', () => {
     expect(mockHaptics.warning).toHaveBeenCalledTimes(1);
   });
 
-  it('marks community unavailable when the tab flag is off', async () => {
-    mockFlags.communityTab = false;
+  it('names Community in the completion only when the tab flag is on', async () => {
     await hydrateTutorial('u1', 'Maya', true);
     startClientTutorial(PAYLOAD);
+    expect(buildCopyContext(useTutorialStore.getState(), 'full').communityAvailable).toBe(true);
+    mockFlags.communityTab = false;
+    expect(buildCopyContext(useTutorialStore.getState(), 'full').communityAvailable).toBe(false);
     dispatchTutorial({ type: 'ACK' });
     setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
     dispatchTutorial({ type: 'SIGNAL', signal: 'plan_card_opened' });
     setTutorialRoute(['Home', 'HomeMain']);
     dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
-    expect(useTutorialStore.getState().tutorial.outcomes.community).toBe('unavailable');
-    expect(step()).toBe('coach_messages');
+    expect(step()).toBe('first_meal');
   });
 });
 

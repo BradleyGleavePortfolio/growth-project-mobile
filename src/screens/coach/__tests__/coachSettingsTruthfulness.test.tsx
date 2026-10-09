@@ -7,7 +7,7 @@ describe('coach Settings truthfulness', () => {
   it('does not offer the Meal Templates route from Settings in v1', () => {
     expect(settingsSource).not.toContain('accessibilityLabel="Open meal templates"');
     expect(settingsSource).not.toContain("screen: 'CoachMealTemplates'");
-    expect(settingsSource).toContain('Workout Builder');
+    expect(settingsSource).toContain('Workout builder');
   });
 
   it('removes only the orphan meal-template route, retaining adjacent coach routes', () => {

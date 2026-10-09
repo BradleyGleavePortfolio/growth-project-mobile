@@ -19,7 +19,8 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 // implementation and future rollback. See the file header for context.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
-import LeanOnboardingNavigator from './LeanOnboardingNavigator';
+// B14 (CONSULT-ALL-M-133): the lean flow is no longer mounted; every new
+// client gets the consultation. LEAN-CUT-133 deletes the lean files.
 import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
@@ -33,7 +34,6 @@ import { isScreenshotMode } from '../screenshots';
 // contributes nothing, so no `tgp://community*` route exists in the parser.
 import { featureFlags } from '../config/featureFlags';
 import { firstWinApi, WinType } from '../services/firstWinApi';
-import { consultationApi } from '../api/consultationApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
 import { prefsStorage } from '../storage/mmkv';
@@ -327,28 +327,13 @@ function openUpdateCard(params: { autostart: boolean; surface: string }): void {
   }
 }
 
-/** B-REV-1: per-user marker that this client was sent to the standard onboarding. */
-const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
-
 /**
- * S-REVENUE-124 (B-REV-1): with the consultation flag on, the consultation
- * runs only for a client the server can finish it for. GET /me/onboarding
- * `consultation_available: false` (no coach yet, or a coach without a clinic
- * program set: POST /complete would answer not_attached or
- * clinic_not_configured forever) means the standard onboarding.
- * A missing field (older server), a 404 or
- * a failed read keeps the consultation, as before.
+ * B-REV-1: per-user marker that this client was sent to the standard (lean)
+ * onboarding by an earlier build. Read only for a client who finished that
+ * flow (they may still choose a first win); cleared when a client who never
+ * finished it is sent to the consultation instead (B14).
  */
-async function consultationApplies(): Promise<boolean> {
-  if (!featureFlags.consultationOnboarding) return false;
-  try {
-    const state = await consultationApi.getState();
-    return state?.consultation_available !== false;
-  } catch (err) {
-    logger.warn('RootNavigator', 'consultation availability not read', err);
-    return true;
-  }
-}
+const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
 
 function signOutFromLockout(): void {
   signOut().catch((err: unknown) => {
@@ -373,8 +358,6 @@ export function extractAcceptInviteToken(url: string): string | null {
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
-  // B-REV-1: consultation or the standard onboarding, decided per client at boot.
-  const [consultationMode, setConsultationMode] = useState<boolean>(featureFlags.consultationOnboarding);
 
   // Push-tap routing: hand the container ref to pushTapRouter once. The
   // session effect below (after sessionUserId is declared) tells the router
@@ -759,15 +742,17 @@ export default function RootNavigator() {
           typeof user?.id === 'string' && user.id ? `${STANDARD_ONBOARDING_KEY}:${user.id}` : null;
 
         if (onboardingDone !== 'true' && !profileDone) {
-          // Psych Report #1: route new users to 3-question lean flow.
-          // Existing users who already have the old 10-step onboarding_complete
-          // flag bypass this entirely — the check above handles them.
-          // B-REV-1: the consultation only where the server can finish it.
-          const useConsultation = await consultationApplies();
-          setConsultationMode(useConsultation);
-          if (!useConsultation && featureFlags.consultationOnboarding && standardKey) {
-            await AsyncStorage.setItem(standardKey, 'true').catch((err: unknown) =>
-              logger.warn('RootNavigator', 'standard onboarding marker not saved', err),
+          // B14 (owner decisions 27-28): every new client, with or without a
+          // coach, gets the full consultation. GET /me/onboarding
+          // consultation_available is no longer read here: an older server that
+          // cannot finish it answers POST /complete with not_attached /
+          // clinic_not_configured, and the consultation shows its calm server
+          // state with Try again (prototype 44). A lean marker left by an earlier
+          // build is cleared, so the consultation's finish is never followed by
+          // the lean flow's first-win step.
+          if (standardKey) {
+            await AsyncStorage.removeItem(standardKey).catch((err: unknown) =>
+              logger.warn('RootNavigator', 'standard onboarding marker not cleared', err),
             );
           }
           setAuthState('onboarding');
@@ -958,13 +943,8 @@ export default function RootNavigator() {
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
-        // Consultation onboarding (consult-v1) when the flag is on; it has no
-        // skip-to-finish path. Flag off: the lean flow, unchanged.
-        consultationMode ? (
-          <ConsultationOnboardingNavigator />
-        ) : (
-          <LeanOnboardingNavigator />
-        )
+        // B14: the consultation for every new client; it has no skip-to-finish path.
+        <ConsultationOnboardingNavigator />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />
