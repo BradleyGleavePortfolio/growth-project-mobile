@@ -32,7 +32,7 @@ const mockColors: ThemeColors = {
   orange: CanonicalColors.error,
 };
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: mockColors }),
+  useTheme: () => ({ colors: mockColors, semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
 }));
 jest.mock('../../../components/coach/setup/InviteShareCard', () => {
   const ReactModule = require('react');
