@@ -532,7 +532,7 @@ function ConsentBody(props: BodyProps) {
           <PrimaryButton
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}
-            hint={checked ? undefined : 'Tick the first box to continue'}
+            accessibilityHint={checked ? undefined : 'Tick the first box to continue'}
             onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
             testID="consult-continue"
           />
