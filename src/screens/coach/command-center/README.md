@@ -51,6 +51,10 @@ All list screens support:
   hero only when a real figure exists, a hairline stat row (Clients; Retention and Next payout only when real), then
   "Your clients today", the most urgent client first as a monogram card. Pieces: `CoachHomeSections.tsx`, copy
   `coachHomeCopy.ts`, reads `coachHomeSources.ts` (existing endpoints only). Tests: `coachHome134.test.tsx`.
+- The Home cards below (setup checklist, brief, Money) are rounded hairline cards with serif titles; the Money need is said
+  in forest words. "Send a message" is also a screen-reader action on the urgent card. The five tabs share the width gutter
+  to gutter; date and greeting stay on one line (short date when the long one does not fit); serif figures are lining
+  (`lining-nums`), so a 1 never reads as I. Tests: `coachHomeCards134.test.tsx` (360x800 and 390x844).
 
 ---
 
