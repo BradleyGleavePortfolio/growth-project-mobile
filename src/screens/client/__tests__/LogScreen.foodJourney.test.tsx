@@ -128,13 +128,13 @@ describe.each(['ios', 'android'] as const)('%s client food journey (real screen,
     await fireEvent.press(screen.getByRole('button', { name: 'Lunch' }));
     await fireEvent.press(screen.getByRole('button', { name: 'Breakfast' }));
     await fireEvent.changeText(screen.getByLabelText('Edit quantity'), '80');
-    await fireEvent.press(screen.getByRole('button', { name: 'Save edit' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(useClientStore.getState().dailyTotals.calories).toBeCloseTo(303.2));
     expect(logApi.updateEntry).toHaveBeenCalledWith('entry', {
       quantity_multiplier: 0.8, original_quantity: 80, original_unit: 'g', meal_type: 'breakfast',
     });
     await fireEvent.press(screen.getByLabelText(/Rolled oats.*Tap to edit/));
-    await fireEvent.press(screen.getByRole('button', { name: 'Cancel edit' }));
+    await fireEvent.press(screen.getByRole('button', { name: 'Cancel' }));
 
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await fireEvent.press(screen.getByLabelText(/Rolled oats.*Tap to edit/));
