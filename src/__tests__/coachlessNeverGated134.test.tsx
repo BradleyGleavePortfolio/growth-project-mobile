@@ -1,10 +1,12 @@
 /**
- * CLIENT-POLISH-134 item 5 (B22/B24). The server lets a client with no coach
+ * CLIENT-POLISH-134 item 5 (B22/B24) and B1 (owner ruling 10-08 23:5x: no
+ * client is ever locked out of basic functions). The server lets EVERY client
  * use their own logging, workouts, plans, fasting, macros, check-ins and Roman
- * guidance without a package (b#888, routes marked @OpenToCoachlessClient()).
- * The app must never put "Logging comes with coaching" or an access line in
- * front of those, whatever the entitlement check says (inactive, failed,
- * pending, a stray 402). A client with a coach keeps today's gate.
+ * guidance without a package (routes marked @OpenToCoachlessClient()). The app
+ * must never put "Logging comes with coaching", a plan gate or an access line
+ * in front of those, whatever the entitlement check says (inactive, failed,
+ * pending, a stray 402), for a coachless client or a coached one with a free
+ * package, no package or a lapsed plan. Screens the coach sells keep the gate.
  *
  * The real EntitlementProvider, withProtectedScreen, ProtectedScreen and
  * PaywallSheet run; only the network, the user, the user cache and the iOS
@@ -121,14 +123,58 @@ describe('coachless client on its own logging screens', () => {
   });
 });
 
-describe('the gate that remains', () => {
-  it.each([false, true])('a coached client whose plan lapsed keeps the gate on the same screen (hidden=%s)', async (hidden) => {
+describe('coached client with no package, a free package or a lapsed plan, on its own logging screens (B1)', () => {
+  it.each([
+    ['Android, inactive', false, INACTIVE],
+    ['iOS, inactive', true, INACTIVE],
+    ['Android, the check failed', false, WEAK_SIGNAL],
+    ['iOS, the check failed', true, WEAK_SIGNAL],
+  ])('%s: the screen opens with no gate', async (_label, hidden, answer) => {
     mockHidden = hidden;
+    mockUser = COACHED;
+    getEntitlement.mockResolvedValue(answer);
+    const r = await mount(<OwnFood />);
+    expect(r.getByTestId('food-log')).toBeTruthy();
+    for (const id of ['protected-screen-coach-managed', 'protected-screen-paywall', 'protected-screen-loading', 'protected-screen-check-failed']) {
+      expect(r.queryByTestId(id)).toBeNull();
+    }
+    for (const line of [...OLD_LINES, 'Choose a Plan', COACH_MANAGED_TITLE]) expect(r.queryByText(line)).toBeNull();
+  });
+
+  it('opens while the first check is still running (no spinner)', async () => {
+    mockUser = COACHED;
+    getEntitlement.mockReturnValue(new Promise(() => {}));
+    const r = await mount(<OwnFood />);
+    expect(r.getByTestId('food-log')).toBeTruthy();
+    expect(r.queryByTestId('protected-screen-loading')).toBeNull();
+  });
+
+  it('a 402 from a paid route does not close logging', async () => {
     mockUser = COACHED;
     getEntitlement.mockResolvedValue(INACTIVE);
     const r = await mount(<OwnFood />);
-    expect(r.queryByTestId('food-log')).toBeNull();
+    await act(async () => {
+      entitlementEvents.emitRequired({ status: 402, code: 'CLIENT_ENTITLEMENT_REQUIRED', message: 'Choose a plan.' });
+    });
+    expect(r.getByTestId('food-log')).toBeTruthy();
+  });
+});
+
+describe('the gate that remains (screens the coach sells)', () => {
+  it.each([false, true])('a coached client without access keeps the gate on a coach-only screen (hidden=%s)', async (hidden) => {
+    mockHidden = hidden;
+    mockUser = COACHED;
+    getEntitlement.mockResolvedValue(INACTIVE);
+    const r = await mount(<CoachOnly />);
+    expect(r.queryByTestId('community-feed')).toBeNull();
     expect(r.getByText(hidden ? COACH_MANAGED_TITLE : 'Choose a Plan')).toBeTruthy();
+  });
+
+  it('a coached client with active access opens a coach-only screen', async () => {
+    mockUser = COACHED;
+    getEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
+    const r = await mount(<CoachOnly />);
+    expect(r.getByTestId('community-feed')).toBeTruthy();
   });
 
   it('a coachless client on a coach-only screen sees the coach line, not a logging line', async () => {
@@ -151,7 +197,7 @@ describe('ClientNavigator wiring (from the code)', () => {
     'WorkoutScreen', 'ActiveWorkoutScreen', 'WorkoutHistoryEditScreen', 'ClientWorkoutViewerScreen',
     'WorkoutAssignmentDetailScreen', 'PlanScreen', 'ClientDailyMealPlanScreen', 'FastingScreen',
     'LogScreen', 'ClientMacrosScreen', 'AIGuideScreen',
-  ])('%s is open to a coachless client', (name) => {
+  ])('%s is open to every client', (name) => {
     expect(wrapped(name)?.[1]).toBeTruthy();
   });
 

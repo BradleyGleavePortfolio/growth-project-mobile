@@ -116,17 +116,16 @@ beforeEach(async () => {
   Object.assign(mockEntitlement, { entitlementActive: true, confirmedActive: true, status: 'active' });
 });
 
-it('inactive Home → View access → Membership → Back retains the You menu', async () => {
+// B1 (owner ruling 10-08 23:5x): no client is locked out of basic functions,
+// so a coached client without a package goes from Home straight into Food.
+it('inactive Home → Log a meal opens Food with no View access detour or gate', async () => {
   Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
-  const navigation = createNavigationContainerRef<ParamListBase>();
-  const view = await render(<NavigationContainer ref={navigation}><ClientNavigator /></NavigationContainer>);
-  await fireEvent.press(await view.findByLabelText('View access'));
-  expect(await view.findByText('../screens/client/MembershipScreen')).toBeTruthy();
-  expect(navigation.getRootState().routes.find((route) => route.name === 'MoreTab')?.state?.routes.map((route) => route.name))
-    .toEqual(['MoreIndex', 'Membership']);
-  await act(async () => navigation.goBack());
-  expect(await view.findByText('../screens/client/MoreScreen')).toBeTruthy();
-  expect(mockAssignments).not.toHaveBeenCalled();
+  const view = await render(<NavigationContainer><ClientNavigator /></NavigationContainer>);
+  await fireEvent.press(await view.findByLabelText('Log a meal'));
+  expect(await view.findByText('../screens/client/LogScreen')).toBeTruthy();
+  expect(view.queryByLabelText('View access')).toBeNull();
+  expect(view.queryByText('Choose a Plan')).toBeNull();
+  expect(mockAssignments).toHaveBeenCalled();
 });
 
 it('Resume → discard the untouched session by leaving → Train opens the workout list', async () => {
