@@ -1210,7 +1210,8 @@ export default function ActiveWorkoutScreen() {
           <Text style={styles.timerText}>{formatTime(timer)}</Text>
         </View>
         <HapticPressable
-          intent="success"
+          // A light tap here; the one success haptic fires when the save lands (DES-R-127).
+          intent="light"
           onPress={() => finishWorkout()}
           disabled={saving}
           style={[styles.finishBtn, saving && { opacity: 0.6 }]}
