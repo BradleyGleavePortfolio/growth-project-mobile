@@ -154,7 +154,7 @@ it.each([false, true])('a coachless client checks in without a gate or an access
   for (const line of ['Logging comes with coaching', 'This part comes with a coach', 'Choose a Plan', 'Your coach manages your access']) {
     expect(screen.queryByText(line)).toBeNull();
   }
-  expect(screen.queryByText('Enter a coach code')).toBeNull();
+  expect(screen.queryByText('Join a coach')).toBeNull();
 });
 
 it.each<EntitlementStatus>(['unknown', 'loading', 'checking'])('waits for confirmed access without fetching check-ins (%s)', async (status) => {

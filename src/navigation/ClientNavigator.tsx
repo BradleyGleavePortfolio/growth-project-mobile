@@ -158,10 +158,12 @@ import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
 
-// B22/B24 (b#888): logging, workouts, plans, fasting, macros and Roman
-// guidance call routes marked @OpenToCoachlessClient() server-side, so a
-// client with no coach is never gated there (OWN). Clients with a coach keep
-// the package gate.
+// B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
+// workouts, plans, fasting, macros and Roman guidance call routes marked
+// @OpenToCoachlessClient() server-side. They are the client's own basic
+// functions, so these screens are open to every client, coachless or coached,
+// with a free package, no package or a lapsed plan (OWN). Roman itself is
+// locked for a client with no coach inside the screen (owner 2026-10-09).
 const OWN = { openToCoachless: true } as const;
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen, OWN);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OWN);

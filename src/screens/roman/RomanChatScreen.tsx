@@ -28,6 +28,11 @@
  * text that fades in paragraph by paragraph (Reduce Motion: at once), the
  * client's turns as quiet bubbles, and the composer with the forest send
  * square in the src/ui Screen footer, above the keyboard and the gesture bar.
+ *
+ * Coach only (owner 2026-10-09 00:0x): a client with no coach meets the calm
+ * "Roman works with a coach" state with one "Join a coach" button instead of
+ * the room, and so does any client the server answers with 403
+ * ROMAN_REQUIRES_COACH. Nothing is sent to Roman for them.
  */
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';
@@ -74,6 +79,11 @@ import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
+import JoinCoachState, {
+  ROMAN_LOCK_BODY,
+  ROMAN_LOCK_TITLE,
+  useClientNeedsCoach,
+} from '../../components/coachless/JoinCoachState';
 import { useTheme } from '../../theme/useTheme';
 
 export interface RomanChatScreenProps {
@@ -102,9 +112,30 @@ function LoadingSkeleton(): React.ReactElement {
   );
 }
 
+/** Roman's locked state for a client with no coach (Back keeps the stack). */
+function RomanCoachLock(): React.ReactElement {
+  const navigation = useContext(NavigationContext);
+  return (
+    <JoinCoachState
+      roman
+      title={ROMAN_LOCK_TITLE}
+      body={ROMAN_LOCK_BODY}
+      onBack={navigation ? () => navigation.goBack() : undefined}
+      testID="roman-coach-lock"
+    />
+  );
+}
+
 export default function RomanChatScreen({
   surface = 'client',
 }: RomanChatScreenProps): React.ReactElement {
+  const needsCoach = useClientNeedsCoach();
+  // Checked before the room mounts, so no session is opened for them.
+  if (surface === 'client' && needsCoach) return <RomanCoachLock />;
+  return <RomanChatRoom surface={surface} />;
+}
+
+function RomanChatRoom({ surface }: { surface: RomanSurface }): React.ReactElement {
   const navigation = useContext(NavigationContext);
   const { semanticColors: sc } = useTheme();
   const user = useCurrentUser();
@@ -326,6 +357,10 @@ export default function RomanChatScreen({
       </View>
     </View>
   );
+
+  if (phase === 'requiresCoach' || sendError?.kind === 'requiresCoach') {
+    return <RomanCoachLock />;
+  }
 
   if (phase === 'loading') {
     return (

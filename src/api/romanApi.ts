@@ -66,6 +66,7 @@ import { env } from '../config/env';
 import { secureStorage } from '../services/secureStorage';
 import { logger } from '../utils/logger';
 import { captureError } from '../services/sentry';
+import { romanRequiresCoachFromHttp, romanRequiresCoachOf } from '../lib/ai/romanRequiresCoach';
 import {
   aiRefusalFromHttp,
   aiRefusalFromStreamCode,
@@ -203,6 +204,7 @@ export type RomanErrorKind =
   | 'offline' // no network reachability
   | 'aiRefused' // R2b: 403 ai_consent_required / 503 ai_egress_blocked (HTTP or in-stream)
   | 'poolEmpty' // 402 COACH_AI_BUDGET_EXHAUSTED: the coach's monthly AI credit pool is used up
+  | 'requiresCoach' // 403 ROMAN_REQUIRES_COACH: a client with no coach (shows "Join a coach")
   | 'generic'; // anything else (5xx, malformed, unknown)
 
 export class RomanApiError extends Error {
@@ -278,6 +280,7 @@ const ROMAN_DAILY_CAP_MESSAGE = 'Daily AI limit reached.';
 /** Backend B-668-1 machine code: the coach's monthly AI credit pool is used up (402). */
 export const COACH_AI_BUDGET_EXHAUSTED_CODE = 'COACH_AI_BUDGET_EXHAUSTED';
 const ROMAN_POOL_EMPTY_MESSAGE = 'AI credits used up for this month.';
+const ROMAN_REQUIRES_COACH_MESSAGE = 'Roman works with a coach.';
 
 function isPoolEmptyBody(body: unknown): boolean {
   return (
@@ -296,6 +299,9 @@ function toRomanApiError(err: unknown): RomanApiError {
       const dailyCap = aiDailyCapOf(err);
       if (dailyCap) {
         return new RomanApiError('dailyCap', ROMAN_DAILY_CAP_MESSAGE, undefined, undefined, false, dailyCap);
+      }
+      if (romanRequiresCoachOf(err)) {
+        return new RomanApiError('requiresCoach', ROMAN_REQUIRES_COACH_MESSAGE);
       }
       if (status === 404) {
         return new RomanApiError(
@@ -524,6 +530,10 @@ export async function sendMessage(
       // before the turn is stored: its own copy, never a retryable error.
       if (response.status === 402 && isPoolEmptyBody(errorBody)) {
         throw new RomanApiError('poolEmpty', ROMAN_POOL_EMPTY_MESSAGE);
+      }
+      // A client with no coach, before the turn is stored: the locked state.
+      if (romanRequiresCoachFromHttp(response.status, errorBody)) {
+        throw new RomanApiError('requiresCoach', ROMAN_REQUIRES_COACH_MESSAGE);
       }
       if (response.status === 429 || response.status === 503) {
         // Daily AI cap (429 ROMAN_RATE_LIMIT / 503 ROMAN_CAPACITY_REACHED),

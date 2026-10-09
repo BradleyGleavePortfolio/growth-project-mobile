@@ -183,7 +183,7 @@ describe('hidden iOS build (flag true, native build 6)', () => {
   it('a coachless gate requests code entry through the existing thread callback', async () => {
     mockCoachId = undefined;
     const r = await mountInactive();
-    await fireEvent.press(await r.findByText('Enter a coach code'));
+    await fireEvent.press(await r.findByText('Join a coach'));
     expect(r.onMessageCoach).toHaveBeenCalledWith(true);
     await emit402();
     await fireEvent.press(r.getByTestId('paywall-message-coach'));

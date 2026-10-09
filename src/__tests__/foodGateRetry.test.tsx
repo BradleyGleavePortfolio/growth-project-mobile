@@ -204,7 +204,7 @@ describe('Coachless gate copy on a coach-only screen (G1)', () => {
   it.each([
     ['Android', false],
     ['iOS', true],
-  ])('%s: promises only what exists and keeps Enter a coach code', async (_label, hidden) => {
+  ])('%s: promises only what exists and offers Join a coach', async (_label, hidden) => {
     mockHidden = hidden;
     mockUser = COACHLESS;
     getEntitlement.mockResolvedValue(INACTIVE);
@@ -212,7 +212,7 @@ describe('Coachless gate copy on a coach-only screen (G1)', () => {
     const r = await mount(onMessageCoach);
 
     expect(await r.findByText('This part comes with a coach')).toBeTruthy();
-    expect(r.getByText('Join a coach with their code. Each coach sets up what their coaching includes.')).toBeTruthy();
+    expect(r.getByText('It opens once you join a coach. Each coach sets up what their coaching includes.')).toBeTruthy();
     // The same lines sit in front of every gated screen, on iOS too (App Review 3.1.1): no sale framing.
     for (const line of [COACHLESS_TITLE, COACHLESS_BODY]) {
       expect(line).not.toMatch(/plan|package|price|buy|subscribe|unlock/i);

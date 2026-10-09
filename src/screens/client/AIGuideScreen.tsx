@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useContext, useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -25,6 +25,13 @@ import { aiDailyCapOf, type AiDailyCap } from '../../lib/ai/aiDailyCap';
 import { shortReference, supportReferenceOf, diagnosticReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import { typography } from '../../theme/tokens';
+import { romanRequiresCoachOf } from '../../lib/ai/romanRequiresCoach';
+import JoinCoachState, {
+  ROMAN_LOCK_BODY,
+  ROMAN_LOCK_TITLE,
+  useClientNeedsCoach,
+} from '../../components/coachless/JoinCoachState';
+import { NavigationContext } from '@react-navigation/native';
 
 /** The HTTP status of a failed request, or null (no other error detail is reported). */
 function httpStatusOf(err: unknown): number | null {
@@ -72,7 +79,31 @@ class EmptyGuideReplyError extends Error {
   }
 }
 
+/**
+ * Coach only (owner 2026-10-09 00:0x): a client with no coach, or one the
+ * server answers with 403 ROMAN_REQUIRES_COACH, sees Roman's locked state
+ * with "Join a coach" instead of the guide. Nothing is sent for them.
+ */
+function GuideCoachLock() {
+  const navigation = useContext(NavigationContext);
+  return (
+    <JoinCoachState
+      roman
+      title={ROMAN_LOCK_TITLE}
+      body={ROMAN_LOCK_BODY}
+      onBack={navigation ? () => navigation.goBack() : undefined}
+      testID="ai-guide-coach-lock"
+    />
+  );
+}
+
 export default function AIGuideScreen() {
+  const needsCoach = useClientNeedsCoach();
+  if (needsCoach) return <GuideCoachLock />;
+  return <AIGuideChat />;
+}
+
+function AIGuideChat() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -90,6 +121,7 @@ export default function AIGuideScreen() {
   // 429 AI_DAILY_QUOTA_EXCEEDED: the daily AI cap pop-up, never the generic
   // service-problem reply.
   const [dailyCap, setDailyCap] = useState<AiDailyCap | null>(null);
+  const [requiresCoach, setRequiresCoach] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
@@ -168,6 +200,14 @@ export default function AIGuideScreen() {
         // Show degraded banner when the backend served a deterministic fallback.
         setIsDegraded(response.data?.degraded === true);
       } catch (err) {
+        // 403 ROMAN_REQUIRES_COACH: nothing was answered; the locked state.
+        if (romanRequiresCoachOf(err)) {
+          setIsTyping(false);
+          setInput(text.trim());
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          setRequiresCoach(true);
+          return;
+        }
         // R2b: the server refused to send this to the AI provider. Nothing was
         // answered, so the turn is not kept; the draft goes back in the input
         // and the notice offers the working next step.
@@ -285,6 +325,8 @@ export default function AIGuideScreen() {
 
   // Inverted list data
   const invertedMessages = [...messages].reverse();
+
+  if (requiresCoach) return <GuideCoachLock />;
 
   return (
     <KeyboardAvoidingView

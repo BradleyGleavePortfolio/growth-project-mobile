@@ -47,18 +47,23 @@ import CommunitySafetyScreen from '../screens/community/CommunitySafetyScreen';
 import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
+import { CoachOnlyGate, COMMUNITY_LOCK_BODY, COMMUNITY_LOCK_TITLE } from '../components/coachless/JoinCoachState';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
 
 /**
  * Apple 1.2 (B-IOSREV-2): the whole stack sits behind the one-time community
  * terms agreement, so a deep link or push into any Community route asks first.
+ * Owner 2026-10-09 00:0x: a client with no coach sees "Join a coach" here
+ * instead (a community belongs to a coach), before any terms or feed.
  */
 export default function CommunityNavigator(): React.ReactElement {
   return (
-    <CommunityTermsGate>
-      <CommunityNavigatorStack />
-    </CommunityTermsGate>
+    <CoachOnlyGate title={COMMUNITY_LOCK_TITLE} body={COMMUNITY_LOCK_BODY} testID="community-coach-lock">
+      <CommunityTermsGate>
+        <CommunityNavigatorStack />
+      </CommunityTermsGate>
+    </CoachOnlyGate>
   );
 }
 

@@ -38,6 +38,7 @@ import { useTheme } from '../theme/useTheme';
 import { logger } from '../utils/logger';
 import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
 import { useCoachlessClient } from '../hooks/useCoachlessClient';
+import { radius } from '../theme/tokens';
 
 export const COACH_MANAGED_TITLE = 'Your coach manages your access';
 export const COACH_MANAGED_BODY =
@@ -45,9 +46,10 @@ export const COACH_MANAGED_BODY =
 // B22/B24: a coachless client logs without a coach (b#888), so this gate only
 // meets them on coach-only surfaces (community, sessions, 1:1 coaching) and
 // never speaks of logging. A coachless client may not have a code yet.
+// Owner 2026-10-09 00:0x: coach-only screens show a clear "Join a coach".
 export const COACHLESS_TITLE = 'This part comes with a coach';
-export const COACHLESS_BODY = 'Join a coach with their code. Each coach sets up what their coaching includes.';
-export const COACHLESS_CTA = 'Enter a coach code';
+export const COACHLESS_BODY = 'It opens once you join a coach. Each coach sets up what their coaching includes.';
+export const COACHLESS_CTA = 'Join a coach';
 
 export interface PaywallSheetProps {
   visible: boolean;
@@ -437,7 +439,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   coachCta: {
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,

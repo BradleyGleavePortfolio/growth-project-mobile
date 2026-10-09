@@ -47,6 +47,7 @@ export type RomanChatPhase =
   | 'loading' // opening the session / loading first page
   | 'ready' // session open, messages (possibly empty) shown
   | 'unavailable' // backend feature gate off (404) — calm typed state
+  | 'requiresCoach' // 403 ROMAN_REQUIRES_COACH: a client with no coach
   | 'offline' // no connection
   | 'error'; // generic load failure
 
@@ -103,6 +104,7 @@ export interface UseRomanChatResult {
 function phaseFromError(err: unknown): RomanChatPhase {
   if (err instanceof RomanApiError) {
     if (err.kind === 'unavailable') return 'unavailable';
+    if (err.kind === 'requiresCoach') return 'requiresCoach';
     if (err.kind === 'offline') return 'offline';
   }
   return 'error';
