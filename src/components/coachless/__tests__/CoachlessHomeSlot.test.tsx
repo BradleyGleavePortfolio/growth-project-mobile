@@ -27,6 +27,10 @@ let mockIosHidden = false;
 jest.mock('../../../config/purchaseSurfaces', () => ({ nonP2PPurchasesHidden: () => mockIosHidden }));
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: mockNavigate }) }));
+const mockMessageCoach = jest.fn();
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ refreshEntitlement: async () => false, messageCoach: mockMessageCoach }),
+}));
 jest.mock('../../PackageSelectionSheet', () => {
   const { Text } = jest.requireActual('react-native');
   return {
@@ -101,6 +105,7 @@ beforeEach(() => {
   mockGet.mockReset();
   mockPost.mockReset();
   mockNavigate.mockReset();
+  mockMessageCoach.mockReset();
   mockPatch.mockClear();
   mockFlagOn = true;
   mockIosHidden = false;
@@ -268,7 +273,7 @@ describe('CoachlessHomeSlot banner and story', () => {
     expect(screen.queryByTestId('plan-sheet')).toBeNull();
   });
 
-  it('while the featured coach is not accepting: no offer, no featured coach, no Roman card; Join a coach opens an empty sheet', async () => {
+  it('while the featured coach is not accepting: no offer, no featured coach, no Roman card; Join a coach opens the Messages join view, not an empty sheet', async () => {
     mockGet.mockResolvedValue({
       data: {
         ...homeAccepting(),
@@ -283,13 +288,14 @@ describe('CoachlessHomeSlot banner and story', () => {
     expect(screen.queryByTestId('coachless-offer')).toBeNull();
     expect(screen.queryByTestId('coachless-roman-card')).toBeNull();
     await fireEvent.press(screen.getByTestId('coachless-join'));
-    expect(screen.getByTestId('coach-code-input').props.value).toBe('');
+    expect(mockMessageCoach).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('coach-code-sheet')).toBeNull();
     expect(mockPost).not.toHaveBeenCalledWith('/coachless/roman-card/seen', expect.anything(), expect.anything());
   });
 });
 
 describe('CoachlessHomeSlot Roman card', () => {
-  it('shows the server pitch, records one impression, opens the sheet with the code, and persists Not now', async () => {
+  it('shows the server pitch, records one impression, leaves the join to the banner (one join on Home), and persists Not now', async () => {
     routePost({});
     await renderSlot();
     expect(await screen.findByText(PITCH)).toBeTruthy();
@@ -298,9 +304,9 @@ describe('CoachlessHomeSlot Roman card', () => {
     );
     expect(mockPost.mock.calls.filter((c) => c[0] === '/coachless/roman-card/seen')).toHaveLength(1);
 
-    await fireEvent.press(screen.getByTestId('coachless-roman-yes'));
-    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
-    await fireEvent.press(screen.getByTestId('coach-code-cancel'));
+    expect(screen.getByTestId('coachless-join-banner')).toBeTruthy();
+    expect(screen.queryByTestId('coachless-roman-yes')).toBeNull();
+    expect(screen.queryByText('Enter the code')).toBeNull();
 
     await fireEvent.press(screen.getByTestId('coachless-roman-not-now'));
     expect(screen.queryByTestId('coachless-roman-card')).toBeNull();

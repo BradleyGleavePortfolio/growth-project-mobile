@@ -11,9 +11,12 @@
  *   - part "join" (near the top of Home): JoinCoachBanner (owner 10-09
  *     00:0x) replaced the server-titled banner there. The owner's offer line
  *     and featured coach show inside it only while the featured coach accepts
- *     clients; its button opens the code sheet prefilled with that code, else
- *     empty. Shown once the server answers eligible or the read fails.
- *   - Roman card (part "roman"): scripted (no AI call). Shown only while the server returns
+ *     clients; its button then opens the code sheet prefilled with that code.
+ *     With no offer it calls messageCoach (the Messages no-coach view with the
+ *     code sheet and Contact support), like every other "Join a coach".
+ *     Shown once the server answers eligible or the read fails.
+ *   - Roman card (part "roman"): scripted (no AI call). It drops its "Enter
+ *     the code" while the join banner can show (one join on Home). Shown only while the server returns
  *     it (featured coach accepting, caps and "Not now" applied server-side).
  *     Each display is recorded once (POST /coachless/roman-card/seen); "Not
  *     now" is persisted (POST /coachless/roman-card/not-now).
@@ -31,6 +34,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
+import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { track } from '../../lib/analytics';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
@@ -57,6 +61,7 @@ export default function CoachlessHomeSlot({ part }: { part?: 'join' | 'roman' })
   const { flags } = useFeatureFlags();
   const user = useCurrentUser();
   const coachless = useCoachlessClient();
+  const { messageCoach } = useEntitlement();
   const qc = useQueryClient();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const enabled = flags.coachless_home && !!user && !user.coach_id;
@@ -84,7 +89,8 @@ export default function CoachlessHomeSlot({ part }: { part?: 'join' | 'roman' })
 
   const roman =
     part !== 'join' && home && home.roman_card && home.banner?.code && !romanHidden ? home.roman_card : null;
-  const showJoin = part !== 'roman' && enabled && coachless && (query.isError || !!home);
+  const joinOnHome = enabled && coachless;
+  const showJoin = part !== 'roman' && joinOnHome && (query.isError || !!home);
   const offerCode = home?.banner?.offer_text && home.banner.code ? home.banner.code : null;
 
   // One impression per displayed card (the server applies the caps).
@@ -120,11 +126,11 @@ export default function CoachlessHomeSlot({ part }: { part?: 'join' | 'roman' })
       {showJoin ? (
         <JoinCoachBanner
           offer={home ? <Banner home={home} presentation="offer" onUseCode={noop} onEnterCode={noop} /> : null}
-          onJoin={() => setSheet({ code: offerCode })}
+          onJoin={offerCode ? () => setSheet({ code: offerCode }) : messageCoach}
         />
       ) : null}
       {roman ? (
-        <RomanCard text={roman.text} onEnterCode={() => setSheet({ code: roman.code })} onNotNow={notNow} />
+        <RomanCard text={roman.text} onEnterCode={joinOnHome ? undefined : () => setSheet({ code: roman.code })} onNotNow={notNow} />
       ) : null}
       {sheet ? (
         <CoachCodeSheet
@@ -269,7 +275,8 @@ export function Banner({
   );
 }
 
-export function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnterCode: () => void; onNotNow: () => void }) {
+/** No onEnterCode = no "Enter the code" (Home's join banner already offers it). */
+export function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnterCode?: () => void; onNotNow: () => void }) {
   const { semanticColors: sc } = useTheme();
   return (
     <QuietSection testID="coachless-roman-card">
@@ -279,9 +286,11 @@ export function RomanCard({ text, onEnterCode, onNotNow }: { text: string; onEnt
       </View>
       <Text style={[styles.body, { color: sc.textPrimary, marginTop: 12 }]}>{text}</Text>
       <View style={quietActions.row}>
-        <Pressable onPress={onEnterCode} accessibilityRole="button" testID="coachless-roman-yes" style={quietActions.action}>
-          <Text style={[quietActions.label, { color: sc.accentText }]}>Enter the code</Text>
-        </Pressable>
+        {onEnterCode ? (
+          <Pressable onPress={onEnterCode} accessibilityRole="button" testID="coachless-roman-yes" style={quietActions.action}>
+            <Text style={[quietActions.label, { color: sc.accentText }]}>Enter the code</Text>
+          </Pressable>
+        ) : null}
         <Pressable onPress={onNotNow} accessibilityRole="button" testID="coachless-roman-not-now" style={quietActions.action}>
           <Text style={[quietActions.label, { color: sc.textMuted }]}>Not now</Text>
         </Pressable>

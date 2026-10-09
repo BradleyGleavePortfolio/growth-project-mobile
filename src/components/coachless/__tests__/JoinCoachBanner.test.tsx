@@ -18,6 +18,10 @@ let mockCached: { id: string; coach_id?: string } | null = null;
 jest.mock('../../../lib/userCache', () => ({ patchUserCache: jest.fn(async () => undefined), readUserCacheSync: () => mockCached }));
 jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
 jest.mock('../../PackageSelectionSheet', () => ({ __esModule: true, default: () => null }));
+const mockMessageCoach = jest.fn();
+jest.mock('../../../entitlements/EntitlementProvider', () => ({
+  useEntitlement: () => ({ refreshEntitlement: async () => false, messageCoach: mockMessageCoach }),
+}));
 let mockAppState: ((s: AppStateStatus) => void) | null = null;
 jest.spyOn(AppState, 'addEventListener').mockImplementation((_type, handler) => {
   mockAppState = handler as (s: AppStateStatus) => void;
@@ -43,10 +47,11 @@ const banner = () => screen.queryByTestId('coachless-join-banner');
 beforeEach(() => {
   mockUser = { id: 'client-1' };
   mockCached = null;
+  mockMessageCoach.mockReset();
   mockGet.mockReset().mockResolvedValue({ data: HOME });
 });
 
-it('a client with no coach sees Join a coach in calm copy, once; the Roman card stays in its own part', async () => {
+it('a client with no coach sees Join a coach in calm copy, once; the Roman card stays lower without its own join', async () => {
   await renderPart();
   expect(await screen.findByTestId('coachless-join-banner')).toBeTruthy();
   expect(screen.getByText(JOIN_COACH_BODY)).toBeTruthy();
@@ -56,14 +61,18 @@ it('a client with no coach sees Join a coach in calm copy, once; the Roman card 
   await screen.unmount();
   await renderPart('roman');
   expect(await screen.findByTestId('coachless-roman-card')).toBeTruthy();
+  expect(screen.queryByTestId('coachless-roman-yes')).toBeNull(); // the banner holds the one join action
+  expect(screen.getByTestId('coachless-roman-not-now')).toBeTruthy();
   expect(banner()).toBeNull();
 });
 
-it('a failed Home read still shows it (no offer); the code sheet checks the code itself', async () => {
+it('a failed Home read still shows it without the offer, and Join a coach goes to the Messages join view', async () => {
   mockGet.mockReset().mockRejectedValue({ response: { status: 503 } });
   await renderPart();
   expect(await screen.findByTestId('coachless-join-banner')).toBeTruthy();
   expect(screen.queryByTestId('coachless-offer')).toBeNull();
+  await fireEvent.press(screen.getByTestId('coachless-join'));
+  expect(mockMessageCoach).toHaveBeenCalledTimes(1);
 });
 
 it('a coached client never sees it (server user, or the cache mirror after a join)', async () => {
@@ -80,14 +89,23 @@ it('a coached client never sees it (server user, or the cache mirror after a joi
   expect(banner()).toBeNull();
 });
 
-it('the forest outlined button (Home keeps one filled forest action) opens the coach-code sheet', async () => {
+it('forest outlined Join a coach: no offer -> messageCoach (Messages code sheet and Contact support), never an empty sheet', async () => {
   await renderPart();
   const button = await screen.findByTestId('coachless-join');
   const style = StyleSheet.flatten(button.props.style);
   expect([style.borderColor, style.borderRadius, style.backgroundColor]).toEqual(['#2C4A36', 12, undefined]);
   await fireEvent.press(button);
-  expect(screen.getByTestId('coach-code-sheet')).toBeTruthy();
-  expect(screen.getByTestId('coach-code-input').props.value).toBe('');
+  expect(mockMessageCoach).toHaveBeenCalledTimes(1);
+  expect(screen.queryByTestId('coach-code-sheet')).toBeNull();
+});
+
+it('with the featured offer live, Join a coach opens the code sheet in place, prefilled', async () => {
+  mockGet.mockReset().mockResolvedValue({ data: { ...HOME, banner: { ...HOME.banner, offer_text: 'Offer.' } } });
+  await renderPart();
+  expect(await screen.findByTestId('coachless-offer')).toBeTruthy();
+  await fireEvent.press(screen.getByTestId('coachless-join'));
+  expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
+  expect(mockMessageCoach).not.toHaveBeenCalled();
 });
 
 it('Not now lasts for this session only: back after sign-in or a long background, not a quick switch', async () => {
