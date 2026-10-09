@@ -48,11 +48,10 @@ export default function SetupNotice({ error, onRetry, testID }: Props) {
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     box: {
-      borderWidth: 1,
-      borderColor: colors.error,
-      padding: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      paddingVertical: 14,
       marginVertical: 8,
-      backgroundColor: colors.surface,
     },
     title: {
       fontFamily: "Inter_600SemiBold",
@@ -68,7 +67,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     ref: {
       fontFamily: "Inter_400Regular",
-      fontSize: 12,
+      fontSize: 13,
       color: colors.textSecondary,
       marginTop: 6,
     },
