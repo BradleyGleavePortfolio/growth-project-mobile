@@ -137,7 +137,9 @@ it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s m
   await render(<HomeScreen />);
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(`${oz} oz`)).toBeTruthy();
-  for (const [label, destination] of [['home-message-coach', 'Messages'], ['home-notification-bell', 'NotificationCenter'],
+  // B25: no coach, so no coach entry (it used to open an empty Messages thread).
+  expect(screen.queryByTestId('home-message-coach')).toBeNull();
+  for (const [label, destination] of [['home-notification-bell', 'NotificationCenter'],
     ['Log a meal to see your protein', 'Log'], [mode === 'simple' ? 'Log a meal to see your calories' : 'Log a meal to see your carbs', 'Log'], ...(mode === 'full' ? [['Log a meal to see your fat', 'Log']] : [])]) {
     await fireEvent.press(label.startsWith('home-') ? screen.getByTestId(label) : screen.getByLabelText(label));
     expect(mockNavigate).toHaveBeenLastCalledWith(destination);
