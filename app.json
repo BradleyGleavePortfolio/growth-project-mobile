@@ -22,7 +22,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.growthproject.app",
-      "buildNumber": "8",
+      "buildNumber": "9",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "The Growth Project uses Face ID only to unlock the app, when you turn on Biometric unlock in Settings.",
@@ -46,7 +46,7 @@
         "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
-      "versionCode": 7,
+      "versionCode": 8,
       "blockedPermissions": [
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR",
