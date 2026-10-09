@@ -7,7 +7,7 @@
  * without one). Rendered at 360x800 and 390x844 through the test renderer.
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleProp, StyleSheet, TextStyle } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import QuestionScreen, { goalWeightNote } from '../QuestionScreen';
@@ -51,7 +51,7 @@ function renderScreen(id: string, answers: Answers = {}, ctx: CopyContext = { fi
 
 /** Lines produced by helpers rather than the screen data (the sweep covers them too). */
 const HELPER_LINES = [goalWeightNote(100, 172, 'fat_loss'), goalWeightNote(200, 172, 'fat_loss')].filter(Boolean);
-const flat = (style: unknown) => StyleSheet.flatten(style as never) as Record<string, unknown>;
+const flat = (style: StyleProp<TextStyle>): TextStyle => StyleSheet.flatten(style) ?? {};
 
 /** Every template string a screen shows. */
 function screenStrings(screen: ScreenDef): string[] {
