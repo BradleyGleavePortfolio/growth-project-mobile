@@ -40,6 +40,8 @@ import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { Screen } from '../../ui';
+import { layout, radius } from '../../theme/tokens';
 
 const FILTERS: InviteListFilter[] = ['all', 'pending', 'accepted', 'expired'];
 
@@ -285,8 +287,10 @@ export default function CoachInvitesScreen({
     );
   }, []);
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="coach-invites">
       <View style={styles.topBar}>
         <Pressable
           onPress={() => navigation.goBack()}
@@ -440,7 +444,7 @@ export default function CoachInvitesScreen({
           );
         }}
       />
-    </View>
+    </Screen>
   );
 }
 
@@ -492,37 +496,37 @@ const badgeStyles = StyleSheet.create({
   pill: {
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 999,
+    borderRadius: radius.chip,
   },
   text: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
   microPill: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 999,
+    borderRadius: radius.chip,
   },
   microText: { fontSize: 9, fontWeight: '500', textTransform: 'uppercase' },
 });
 
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    // The filters and list keep their own 16 pt sides and list foot.
+    body: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'center',
     },
     actionBtnTop: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -536,7 +540,7 @@ function makeStyles(colors: ThemeColors) {
     filterChip: {
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: 999,
+      borderRadius: radius.chip,
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
@@ -565,7 +569,7 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 12,
       paddingHorizontal: 12,
       backgroundColor: colors.surface,
-      borderRadius: 8,
+      borderRadius: radius.card,
       marginBottom: 8,
     },
     rowMain: { flex: 1 },
@@ -586,7 +590,7 @@ function makeStyles(colors: ThemeColors) {
     actionBtn: {
       width: 32,
       height: 32,
-      borderRadius: 999,
+      borderRadius: radius.chip,
       backgroundColor: colors.primaryPale,
       justifyContent: 'center',
       alignItems: 'center',

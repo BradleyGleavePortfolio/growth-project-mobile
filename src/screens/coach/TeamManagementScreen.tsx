@@ -31,6 +31,8 @@ import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
 import LoadFailedNotice from '../../components/coach/LoadFailedNotice';
 import { digitalPurchasesHidden } from '../../config/purchaseSurfaces';
+import { Screen } from '../../ui';
+import { radius } from '../../theme/tokens';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
 
@@ -229,17 +231,19 @@ export default function TeamManagementScreen() {
     );
   }
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   if (isGated) {
     return (
-      <View style={styles.container}>
+      <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
         <Text style={styles.header}>Team</Text>
         <UpgradeGate />
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="team-management">
       <View style={styles.headerRow}>
         <Text style={styles.header}>Team</Text>
         <Pressable
@@ -289,17 +293,13 @@ export default function TeamManagementScreen() {
         existingEmails={subCoaches.map((s) => s.email)}
         remainingSeats={remainingSeats ?? undefined}
       />
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: 56,
-    paddingHorizontal: 16,
-  },
+  // The list pads its own foot; Screen keeps the 24 pt gutter.
+  body: { paddingBottom: 0 },
   center: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 4,
+    borderRadius: radius.button,
     gap: 4,
   },
   addBtnText: {
@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: 16,
     gap: 12,
   },
@@ -370,12 +370,12 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     backgroundColor: Colors.divider,
-    borderRadius: 2,
+    borderRadius: radius.chip,
     overflow: 'hidden',
   },
   capacityFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: radius.chip,
   },
   capacityLabel: {
     fontSize: 12,
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   badge: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
   },
