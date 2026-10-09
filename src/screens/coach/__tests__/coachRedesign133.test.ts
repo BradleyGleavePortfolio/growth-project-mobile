@@ -44,10 +44,9 @@ describe('coach tab bar', () => {
 describe.each(FILES)('%s', (file) => {
   const code = read(file);
   it('takes every corner radius from the tokens (owner 17:07: rounded, never a literal)', () => {
-    const literals = [...code.matchAll(/borderRadius:\s*(\d+)/g)].map((m) => Number(m[1]));
-    // Only the avatar circle and the 6 pt status dot remain as geometry, not corners.
-    for (const r of literals) expect([22, 3]).toContain(r);
-    expect(code).not.toMatch(/borderRadius:\s*4\b/);
+    // COACH-INSETS-B-134 (U-589-SOL-A-133-1): the avatar circle and the status
+    // dot read radius.chip too, so no literal radius is allowed at all.
+    expect(code).not.toMatch(/borderRadius:\s*\d/);
   });
   it('has no 13 pt uppercase labels (overlines come from the 11 pt token)', () => {
     expect(code).not.toMatch(/fontSize:\s*13,\s*textTransform:\s*'uppercase'/);

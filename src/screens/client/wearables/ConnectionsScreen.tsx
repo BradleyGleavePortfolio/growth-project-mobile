@@ -31,6 +31,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import {
   configFor,
   WEARABLE_PROVIDERS,
@@ -42,10 +43,10 @@ import {
   useLocalOnDeviceAuthorization,
   useWearableConnections,
 } from '../../../hooks/useWearableConnections';
-import { layout, semantic, typography } from '../../../theme/tokens';
+import { layout, radius, semantic, typography } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
-import { Headline, Lede, Overline, QuietSection, Screen } from '../../../ui';
+import { Headline, Lede, Overline, QuietSection, Screen, ScreenTopBar } from '../../../ui';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import ConnectProviderSheet from './ConnectProviderSheet';
 import {
@@ -349,6 +350,12 @@ export default function ConnectionsScreen() {
     useWearableConnections();
   const disconnect = useDisconnectProvider();
   const { semanticColors: sc } = useTheme();
+  // The More stack hides the native header: a back chevron like the references
+  // (operator 18:33). Context, not useNavigation, so it renders outside a navigator.
+  const navigation = React.useContext(NavigationContext);
+  const topBar = navigation?.canGoBack() ? (
+    <ScreenTopBar onBack={() => navigation.goBack()} testID="connections-top" />
+  ) : undefined;
 
   const [sheetProvider, setSheetProvider] = useState<WearableProvider | null>(
     null,
@@ -434,7 +441,7 @@ export default function ConnectionsScreen() {
 
   if (isLoading) {
     return (
-      <Screen edges={['top']} testID="connections-loading">
+      <Screen edges={['top']} testID="connections-loading" header={topBar}>
         <Header />
         <QuietLoading label="Loading your connections" rows={3} />
       </Screen>
@@ -443,7 +450,7 @@ export default function ConnectionsScreen() {
 
   if (isError) {
     return (
-      <Screen edges={['top']} testID="connections-error">
+      <Screen edges={['top']} testID="connections-error" header={topBar}>
         <Header />
         <QuietError
           layout="inline"
@@ -472,6 +479,7 @@ export default function ConnectionsScreen() {
     <Screen
       edges={['top']}
       testID="connections"
+      header={topBar}
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
@@ -569,7 +577,7 @@ const styles = StyleSheet.create({
   mark: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radius.chip,
   },
   status: {
     ...typography.bodySmall,

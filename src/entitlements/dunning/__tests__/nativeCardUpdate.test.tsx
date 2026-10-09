@@ -414,13 +414,13 @@ describe('runNativeCardUpdate (SetupIntent -> PaymentSheet -> confirm)', () => {
 });
 
 describe('PaymentSheet theme from TGP tokens', () => {
-  it('maps light and dark semantic tokens, all #RRGGBB, square primary button', () => {
+  it('maps light and dark semantic tokens, all #RRGGBB, rounded primary button', () => {
     const a = buildPaymentSheetAppearance();
     expect(a.colors.light.primary).toBe(realTokens.lightTokens.accent);
     expect(a.colors.light.background).toBe(realTokens.lightTokens.bgPrimary);
     expect(a.colors.dark.background).toBe(realTokens.darkTokens.bgPrimary);
     expect(a.primaryButton.colors.light.text).toBe(realTokens.lightTokens.textOnAccent);
-    expect(a.primaryButton.shapes.borderRadius).toBe(0);
+    expect(a.primaryButton.shapes.borderRadius).toBe(realTokens.radius.button); // owner 17:07: rounded
     const all = [
       ...Object.values(a.colors.light),
       ...Object.values(a.colors.dark),

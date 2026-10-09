@@ -53,6 +53,7 @@ Components are free to choose the ergonomic shape — the underlying values are 
 | `label` | Inter_500Medium | 11 / 13 | 500 | 1.98 (uppercase) |
 | `caption` | Inter_500Medium | 12 / 18 | 500 | 0.96 |
 | `button` | Inter_600SemiBold | 14 / 18 | 600 | 1.2 (uppercase) |
+| `tabLabel` / `tabLabelActive` | Inter_400Regular / Inter_500Medium | 11 / 14 | 400 / 500 | -0.2 (B26: "Community" fits one of six tabs at 360 pt) |
 
 Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: Cormorant's own line box is 1.211 em, so anything tighter clips descenders on Android (B15). `__tests__/serifLineHeight.test.ts` checks every serif role in `tokens`, `theme/index` and `constants/theme`.
 
@@ -66,7 +67,7 @@ Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: C
 | `radius.sheet` | 24 | bottom-sheet and modal top corners |
 | `radius.chip` / `radius.pill` | 999 | chips |
 | `radius.control` | 6 | boxes under 28 pt (checkbox) |
-| `radius.md/lg/xl/2xl`, `Radius.*` | 12/16/16/24, `Radius.sm` 12 | legacy names on the rounded scale (DS-THEME-133); new code names the semantic key. `radius.sm` stays 0 until agent 132 OKs the card-payment sheet test |
+| `radius.sm/md/lg/xl/2xl`, `Radius.*` | 12/12/16/16/24 | legacy names on the rounded scale (DS-THEME-133); new code names the semantic key |
 | `layout` | gutter 24, statusBarGap 12, footer gaps, buttonHeight 54, touchMin 44, rowMinHeight 56, section 18 + 24 | `ui/layout/Screen`, buttons, rows, sections |
 | `wheel` | 44 pt rows x 5, hairline band, serif 28 / 21 / 18 | consultation wheels (`ui/wheel/WheelBand`) |
 
