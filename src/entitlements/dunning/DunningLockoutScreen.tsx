@@ -41,6 +41,8 @@ export interface DunningLockoutScreenProps {
   /** Own logging stays open (owner ruling 2026-10-08 23:5x); the lockout covers the tab bar. */
   onOpenFood?: () => void;
   onOpenTrain?: () => void;
+  /** Habits and the daily check-in (Home > Habits), basic self logging too. */
+  onOpenHabits?: () => void;
 }
 
 /**
@@ -168,6 +170,7 @@ export function DunningLockoutScreen({
   onBack,
   onOpenFood,
   onOpenTrain,
+  onOpenHabits,
 }: DunningLockoutScreenProps) {
   const { semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
@@ -309,6 +312,7 @@ export function DunningLockoutScreen({
         <Text style={styles.sectionLabel}>{dispute ? 'Still available' : 'Still available while your plan is paused'}</Text>
         {onOpenFood ? <Row label="Log food" onPress={onOpenFood} styles={styles} testID="dunning-lockout-food" /> : null}
         {onOpenTrain ? <Row label="Log a workout" onPress={onOpenTrain} styles={styles} testID="dunning-lockout-train" /> : null}
+        {onOpenHabits ? <Row label="Habits and check-in" onPress={onOpenHabits} styles={styles} testID="dunning-lockout-habits" /> : null}
         <Row label="Download my data" onPress={onOpenDataExport} styles={styles} testID="dunning-lockout-data-export" />
         <Row label="Delete my account" onPress={onOpenDeleteAccount} styles={styles} testID="dunning-lockout-delete-account" />
         <Row label="Email support" onPress={handleContactSupport} styles={styles} testID="dunning-lockout-support" />

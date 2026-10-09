@@ -147,13 +147,15 @@ describe('Day 10+ lockout keeps the client own logging (owner ruling 23:5x)', ()
 
   it('Habits and New routine are basic self logging: open, with the notice (B-SMALL2-135)', async () => {
     const view = await openApp(LOCKED);
-    await press(view, 'dunning-lockout-train');
-    await press(view, 'stub-new-routine');
-    expect(routeName()).toBe('RoutineBuilder');
+    expect(routeName()).toBe('HomeMain');
+    // Sol B1: Habits is reached from the lockout itself (its ordinary entry, You, stays locked).
+    await press(view, 'dunning-lockout-habits');
+    expect(routeName()).toBe('Habits');
     expect(view.queryByTestId('dunning-lockout-overlay')).toBeNull();
     expect(view.getByTestId('dunning-banner')).toBeTruthy();
-    await go('Home', { screen: 'Habits' });
-    expect(routeName()).toBe('Habits');
+    await go('WorkoutTab');
+    await press(view, 'stub-new-routine');
+    expect(routeName()).toBe('RoutineBuilder');
     expect(view.queryByTestId('dunning-lockout-overlay')).toBeNull();
     expect(view.getByTestId('dunning-banner')).toBeTruthy();
   });

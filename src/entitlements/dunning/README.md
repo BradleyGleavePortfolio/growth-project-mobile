@@ -24,7 +24,7 @@ Client-side half of the backend's 10-day non-payment sequence (`FEATURE_DUNNING_
 
 ## Own logging stays open (owner ruling 2026-10-08 23:5x)
 
-No client is ever locked out of basic functions. A client at Day 10+, or in a disputed or refunded cycle that uses the same lockout, still logs. `OPEN_FOR_OWN_LOGGING` is every screen `ClientNavigator` wraps OWN plus the Train and Food tabs (`WorkoutTab`, `Log`); `dunningOwnLogging135.test.tsx` holds the set to the navigator. Habits and New routine are OWN too: their `/habits`, `/check-ins` and `/routines` routes pass the lockout on the server, and New routine's exercise list is on the phone. `AIGuide` is OWN but is Roman's guidance on `/ai`, a paid surface the backend keeps locked, so it keeps the lockout. The lockout covers the tab bar, so its "Still available" list leads to Log food and Log a workout. Billing, the dispute pause, coach services and Roman are unchanged.
+No client is ever locked out of basic functions. A client at Day 10+, or in a disputed or refunded cycle that uses the same lockout, still logs. `OPEN_FOR_OWN_LOGGING` is every screen `ClientNavigator` wraps OWN plus the Train and Food tabs (`WorkoutTab`, `Log`); `dunningOwnLogging135.test.tsx` holds the set to the navigator. Habits and New routine are OWN too: their `/habits`, `/check-ins` and `/routines` routes pass the lockout on the server, and New routine's exercise list is on the phone. `AIGuide` is OWN but is Roman's guidance on `/ai`, a paid surface the backend keeps locked, so it keeps the lockout. The lockout covers the tab bar, so its "Still available" list leads to Log food, Log a workout and Habits and check-in. Billing, the dispute pause, coach services and Roman are unchanged.
 
 ## Recovery
 

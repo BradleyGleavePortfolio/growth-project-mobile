@@ -251,6 +251,9 @@ export function DunningLockoutProvider({
   const openTrain = useCallback(() => {
     if (navRoot?.isReady()) navRoot.navigate('WorkoutTab');
   }, [navRoot]);
+  const openHabits = useCallback(() => {
+    if (navRoot?.isReady()) navRoot.navigate('Home', { screen: 'Habits' });
+  }, [navRoot]);
 
   // Android back must not reveal a locked screen underneath; it only returns to an open one.
   useEffect(() => {
@@ -337,6 +340,7 @@ export function DunningLockoutProvider({
             onBack={backToOpen ? goBackToOpen : undefined}
             onOpenFood={navRoot ? openFood : undefined}
             onOpenTrain={navRoot ? openTrain : undefined}
+            onOpenHabits={navRoot ? openHabits : undefined}
           />
         </View>
       ) : null}
