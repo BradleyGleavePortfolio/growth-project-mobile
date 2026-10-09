@@ -144,32 +144,35 @@ export const typography = {
    * CRITICAL: weight 400 (NOT 700/800) — the single biggest amateur tell.
    * Display/heading roles use Cormorant Garamond (editorial serif).
    * Body/UI roles use Inter (neutral sans).
+   * Serif roles keep lineHeight >= SERIF_MIN_LINE_RATIO x fontSize. Cormorant's
+   * own line box is 1.211 em (hhea 924 + 287 per 1000), so anything tighter
+   * clips descenders on Android (B15). Guarded by serifLineHeight.test.ts.
    */
   display: {
     fontFamily:    'CormorantGaramond_400Regular',
     fontSize:      44,
-    lineHeight:    46,
+    lineHeight:    55,
     letterSpacing: 0.4,
     fontWeight:    '400' as const,
   },
   h1: {
     fontFamily:    'CormorantGaramond_400Regular',
     fontSize:      32,
-    lineHeight:    35,
+    lineHeight:    40,
     letterSpacing: 0.6,
     fontWeight:    '400' as const,
   },
   h2: {
     fontFamily:    'CormorantGaramond_400Regular',
     fontSize:      24,
-    lineHeight:    29,
+    lineHeight:    30,
     letterSpacing: 0.5,
     fontWeight:    '400' as const,
   },
   h3: {
     fontFamily:    'CormorantGaramond_500Medium',
     fontSize:      20,
-    lineHeight:    24,
+    lineHeight:    25,
     letterSpacing: 0.4,
     fontWeight:    '500' as const,
   },
@@ -225,6 +228,16 @@ export const typography = {
   },
 } as const;
 
+/**
+ * Minimum serif lineHeight / fontSize. 1.25 sits above Cormorant's natural
+ * 1.211 em line box and above the 1.2 floor in the lane 133 quality bar.
+ */
+export const SERIF_MIN_LINE_RATIO = 1.25;
+
+/** Typography roles set in Cormorant Garamond (checked by the lineHeight test). */
+export const serifRoles = ['display', 'h1', 'h2', 'h3'] as const;
+export type SerifRole = (typeof serifRoles)[number];
+
 // ─── Spacing — 4 px base grid ──────────────────────────────────────────────────
 export const spacing = {
   xs:  4,
@@ -237,16 +250,58 @@ export const spacing = {
   '4xl': 64,
 } as const;
 
-// ─── Border Radius (Wave 2: luxury scale) ─────────────────────────────────────
+// ─── Border Radius ────────────────────────────────────────────────────────────
+// OWNER 17:07 2026-10-08 (binding): "I want nice rounded corners, luxurious,
+// not rectangles". Decision 133-4 answered: rounded. New code uses the
+// SEMANTIC keys (button, input, card, sheet, chip, control); never a literal.
+// The prototype frames show square corners; the owner's ruling wins over them.
+// Legacy keys sm / md / lg / xl / 2xl: do not use in new code; they move to
+// the rounded scale in the follow-up DS-THEME-133 PR (tests in three lanes).
 export const radius = {
-  sm:   0,    // buttons, primary CTAs
-  md:   2,    // inputs
-  lg:   4,    // cards
-  // xl and 2xl kept for legacy back-compat — screens with literal large radii
-  // are flagged in FITNESS_RADIUS_HITS.md for Wave 3 cleanup.
-  xl:   4,    // remapped to lg value (was 16)
-  '2xl': 4,   // remapped to lg value (was 24)
-  pill: 999,  // SMALL CHIPS ONLY — never on primary surfaces
+  // Semantic (use these)
+  button:  12,   // PrimaryButton, filled or outlined actions
+  input:   12,   // text fields, unit tabs, segmented controls
+  card:    16,   // cards, grouped panels, image tiles
+  sheet:   24,   // bottom-sheet and modal TOP corners
+  chip:    999,  // chips and pills
+  control: 6,    // small boxes under 28 pt (checkbox, tag)
+  // Legacy (deprecated for new code; values unchanged)
+  sm:   0,
+  md:   2,
+  lg:   4,
+  xl:   4,
+  '2xl': 4,
+  pill: 999,  // SMALL CHIPS ONLY (same as chip)
+} as const;
+
+// ─── Layout (DS-PRIMITIVES-133) ─────────────────────────────────────────────
+// Measured from the prototype (390 x 844): 24 pt gutters, 54 pt button, link
+// 8 pt under it. statusBarGap = breathing room under the real inset (B13, B28).
+export const layout = {
+  gutter:          24,  // horizontal page margin
+  statusBarGap:    12,  // added under insets.top
+  footerTopGap:    12,  // space above the pinned footer
+  footerBottomMin: 16,  // floor for insets.bottom (devices with no gesture bar)
+  footerBottomGap: 8,   // added under the footer, above the gesture bar
+  footerItemGap:   8,   // primary button to quiet link
+  buttonHeight:    54,  // primary button (prototype 00, 07)
+  touchMin:        44,  // minimum touch target (links, icons)
+  rowMinHeight:    56,  // QuietRow
+  sectionPadY:     18,  // QuietSection padding above and below (Home rhythm)
+  sectionGap:      24,  // QuietSection bottom margin
+} as const;
+
+// ─── Wheel (shared band for consultation wheels, B19) ────────────────────────
+// Prototype 07-09: 44 pt rows, five visible, two hairlines framing the selected
+// value. The band is outline only and sits BEHIND the values.
+const wheelSerif = { fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400' as const };
+export const wheel = {
+  rowHeight:    44,
+  visibleRows:  5,
+  bandHairline: 1,
+  selected: { ...wheelSerif, fontSize: 28, lineHeight: 36 },
+  near:     { ...wheelSerif, fontSize: 21, lineHeight: 28, opacity: 0.55 },
+  far:      { ...wheelSerif, fontSize: 18, lineHeight: 24, opacity: 0.3 },
 } as const;
 
 // ─── Shadows (Wave 2: luxury opacity caps) ────────────────────────────────────
@@ -453,6 +508,8 @@ const tokens = {
   radius,
   shadows,
   motion,
+  layout,
+  wheel,
   lightTokens,
   darkTokens,
 } as const;
