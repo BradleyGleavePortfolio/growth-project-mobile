@@ -53,7 +53,7 @@ describe('every new coach goes to the consultation (B02, prototype 77, 86)', () 
   it('completing on today\'s backend finishes the old wizard record, then opens the coach app', async () => {
     await AsyncStorage.setItem(
       draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K4', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none' } }),
+      JSON.stringify({ v: 1, step: 'K8', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none' } }),
     );
     mockPost.mockImplementation(async (url: string) => {
       if (url === '/coach/consultation/complete') throw Object.assign(new Error('nf'), { response: { status: 404 } });
@@ -66,8 +66,8 @@ describe('every new coach goes to the consultation (B02, prototype 77, 86)', () 
       throw new Error(`unexpected ${url}`);
     });
     const r = await render(<CoachWizardNavigator />);
-    await waitFor(() => expect(r.getByTestId('coach-consult-K4')).toBeTruthy());
-    await fireEvent.press(r.getByTestId('coach-consult-K4-skip'));
+    await waitFor(() => expect(r.getByTestId('coach-step-K8')).toBeTruthy()); // K8 Practice ready is the last step
+    await fireEvent.press(r.getByTestId('k8-show-me-around'));
     await waitFor(() => expect(mockEmit).toHaveBeenCalled());
     const urls = mockPost.mock.calls.map((c) => c[0]);
     expect(urls[0]).toBe('/coach/consultation/complete');
