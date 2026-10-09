@@ -41,11 +41,11 @@ function wire(): void {
   });
 }
 
-function subscribe(listener: () => void): () => void {
+const subscribe = (listener: () => void): (() => void) => {
   wire();
   listeners.add(listener);
   return () => listeners.delete(listener);
-}
+};
 const isHidden = (): boolean => hidden;
 
 export default function JoinCoachBanner({ offer, onJoin }: { offer?: React.ReactNode; onJoin: () => void }) {
@@ -53,32 +53,17 @@ export default function JoinCoachBanner({ offer, onJoin }: { offer?: React.React
   const hiddenNow = useSyncExternalStore(subscribe, isHidden, isHidden);
   if (hiddenNow) return null;
   return (
-    <View
-      testID="coachless-join-banner"
-      accessibilityRole="summary"
-      style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
-    >
+    <View testID="coachless-join-banner" style={[styles.card, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}>
       <Text accessibilityRole="header" style={[styles.title, { color: sc.textPrimary }]}>{JOIN_COACH_TITLE}</Text>
       <Text style={[styles.body, { color: sc.textMuted }]}>{JOIN_COACH_BODY}</Text>
       {offer}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={JOIN_COACH_TITLE}
-        accessibilityHint="Opens the coach code sheet"
-        testID="coachless-join"
-        onPress={onJoin}
-        style={({ pressed }) => [styles.join, { borderColor: sc.accent, opacity: pressed ? 0.7 : 1 }]}
-      >
+      <Pressable accessibilityRole="button" accessibilityLabel={JOIN_COACH_TITLE} accessibilityHint="Opens the coach code sheet"
+        testID="coachless-join" onPress={onJoin}
+        style={({ pressed }) => [styles.join, { borderColor: sc.accent, opacity: pressed ? 0.7 : 1 }]}>
         <Text style={[styles.joinLabel, { color: sc.accentText }]} maxFontSizeMultiplier={1.6}>{JOIN_COACH_TITLE}</Text>
       </Pressable>
-      <TextLink
-        label="Not now"
-        underline={false}
-        accessibilityHint="Hides this until the app is next opened"
-        testID="coachless-join-not-now"
-        style={styles.notNow}
-        onPress={() => setHidden(true)}
-      />
+      <TextLink label="Not now" underline={false} accessibilityHint="Hides this until the app is next opened"
+        testID="coachless-join-not-now" style={styles.notNow} onPress={() => setHidden(true)} />
     </View>
   );
 }
