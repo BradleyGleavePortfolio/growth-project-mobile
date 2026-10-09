@@ -1,53 +1,9 @@
 import React from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import HapticPressable from '../../../components/HapticPressable';
-import { HapticService } from '../../../ui/haptics/haptics.service';
-import { Overline, QuietSection } from '../../../ui';
-import type { SemanticTokens } from '../../../theme/tokens';
+import type { ThemeColors } from '../../../theme/ThemeProvider';
 import { ENERGY_LABELS, MOOD_LABELS } from './constants';
 import type { HabitsStyles } from './styles';
-
-const SCALE = [1, 2, 3, 4, 5];
-
-/** Five quiet radio dots with a word under each (no emoji, no colour code). */
-function RatingRow({
-  value,
-  onChange,
-  labels,
-  styles,
-}: {
-  value: number;
-  onChange: (n: number) => void;
-  labels: string[];
-  styles: HabitsStyles;
-}) {
-  return (
-    <View style={styles.ratingRow} accessibilityRole="radiogroup">
-      {SCALE.map((val) => {
-        const on = value === val;
-        return (
-          <Pressable
-            key={val}
-            style={({ pressed }) => [styles.ratingBtn, pressed && styles.pressed]}
-            onPress={() => {
-              void HapticService.selection();
-              onChange(val);
-            }}
-            accessibilityRole="radio"
-            accessibilityLabel={labels[val]}
-            accessibilityState={{ checked: on }}
-          >
-            <View style={[styles.ratingDot, on && styles.ratingDotActive]} />
-            <Text style={[styles.ratingLabel, on && styles.ratingLabelActive]} numberOfLines={1}>
-              {labels[val]}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
 
 export function MoodEnergyPicker({
   mood,
@@ -58,7 +14,7 @@ export function MoodEnergyPicker({
   setSleepHours,
   notes,
   setNotes,
-  sc,
+  colors,
   styles,
 }: {
   mood: number;
@@ -69,64 +25,103 @@ export function MoodEnergyPicker({
   setSleepHours: React.Dispatch<React.SetStateAction<number>>;
   notes: string;
   setNotes: (s: string) => void;
-  sc: SemanticTokens;
+  colors: ThemeColors;
   styles: HabitsStyles;
 }) {
   return (
     <>
-      <QuietSection>
-        <Overline>Mood</Overline>
-        <Text style={styles.prompt}>How are you feeling?</Text>
-        <RatingRow value={mood} onChange={setMood} labels={MOOD_LABELS} styles={styles} />
-      </QuietSection>
-
-      <QuietSection>
-        <Overline>Energy</Overline>
-        <Text style={styles.prompt}>How is your energy?</Text>
-        <RatingRow value={energy} onChange={setEnergy} labels={ENERGY_LABELS} styles={styles} />
-      </QuietSection>
-
-      <QuietSection>
-        <Overline>Sleep</Overline>
-        <Text style={styles.prompt}>Hours slept last night</Text>
-        <View style={styles.stepperRow}>
-          <HapticPressable
-            intent="light"
-            disableAnimation
-            style={({ pressed }) => [styles.stepperBtn, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Decrease sleep hours"
-            onPress={() => setSleepHours((h) => Math.max(0, h - 0.5))}
-          >
-            <Ionicons name="remove" size={18} color={sc.textPrimary} />
-          </HapticPressable>
-          <Text style={styles.stepperValue} accessibilityLiveRegion="polite">{sleepHours}h</Text>
-          <HapticPressable
-            intent="light"
-            disableAnimation
-            style={({ pressed }) => [styles.stepperBtn, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Increase sleep hours"
-            onPress={() => setSleepHours((h) => Math.min(14, h + 0.5))}
-          >
-            <Ionicons name="add" size={18} color={sc.textPrimary} />
-          </HapticPressable>
+      {/* Mood */}
+      <View style={styles.checkInCard}>
+        <Text style={styles.checkInLabel}>How are you feeling?</Text>
+        <View style={styles.ratingRow}>
+          {[1, 2, 3, 4, 5].map((val) => (
+            <TouchableOpacity
+              key={val}
+              style={[styles.ratingBtn, { minHeight: 44 }, mood === val && styles.ratingBtnActive]}
+              onPress={() => setMood(val)}
+              accessibilityRole="radio"
+              accessibilityLabel={MOOD_LABELS[val]}
+              accessibilityState={{ checked: mood === val }}
+            >
+              <Ionicons name={mood === val ? 'ellipse' : 'ellipse-outline'} size={16}
+                color={mood === val ? colors.primary : colors.textMuted} />
+              <Text style={[styles.ratingLabel, { fontSize: 13, letterSpacing: 0, textTransform: 'none' },
+                mood === val && styles.ratingLabelActive]}>
+                {MOOD_LABELS[val]}
+              </Text>
+            </TouchableOpacity>
+          ))}
         </View>
-      </QuietSection>
+      </View>
 
-      <QuietSection>
-        <Overline>Notes</Overline>
+      {/* Energy */}
+      <View style={styles.checkInCard}>
+        <Text style={styles.checkInLabel}>Energy level</Text>
+        <View style={styles.ratingRow}>
+          {[1, 2, 3, 4, 5].map((val) => (
+            <TouchableOpacity
+              key={val}
+              style={[styles.ratingBtn, energy === val && styles.ratingBtnActive]}
+              onPress={() => setEnergy(val)}
+              accessibilityRole="radio"
+              accessibilityLabel={ENERGY_LABELS[val]}
+              accessibilityState={{ checked: energy === val }}
+            >
+              <Ionicons
+                name="flash-outline"
+                size={16}
+                color={energy === val ? colors.primary : colors.textMuted}
+              />
+              <Text style={[styles.ratingLabel, energy === val && styles.ratingLabelActive]}>
+                {ENERGY_LABELS[val]}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Sleep */}
+      <View style={styles.checkInCard}>
+        <Text style={styles.checkInLabel}>Sleep</Text>
+        <View style={styles.sleepRow}>
+          <View style={styles.sleepControl}>
+            <Text style={styles.sleepLabel}>Hours</Text>
+            <View style={styles.stepperRow}>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Decrease sleep hours"
+                onPress={() => setSleepHours((h) => Math.max(0, h - 0.5))}
+              >
+                <Ionicons name="remove" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.stepperValue}>{sleepHours}h</Text>
+              <TouchableOpacity
+                style={styles.stepperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Increase sleep hours"
+                onPress={() => setSleepHours((h) => Math.min(14, h + 0.5))}
+              >
+                <Ionicons name="add" size={18} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Notes */}
+      <View style={styles.checkInCard}>
+        <Text style={styles.checkInLabel}>Notes</Text>
         <TextInput
           style={styles.notesInput}
-          accessibilityLabel="Check-in notes"
-          placeholder="Anything worth noting about today"
-          placeholderTextColor={sc.textMuted}
+          placeholder="How's your day going? Anything noteworthy?"
+          placeholderTextColor={colors.textMuted}
           value={notes}
           onChangeText={setNotes}
           multiline
           maxLength={500}
         />
-      </QuietSection>
+      </View>
     </>
   );
 }
