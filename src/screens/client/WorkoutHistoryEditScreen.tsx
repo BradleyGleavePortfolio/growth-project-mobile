@@ -24,7 +24,7 @@ export default function WorkoutHistoryEditScreen() {
       container: { ...base.container, backgroundColor: sc.bgPrimary },
       topBar: { ...base.topBar, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
       topTitle: { ...base.topTitle, color: sc.textMuted },
-      finishBtn: { ...base.finishBtn, minHeight: 44, justifyContent: 'center', backgroundColor: sc.accent, borderRadius: 4 },
+      finishBtn: { ...base.finishBtn, minHeight: 44, justifyContent: 'center', backgroundColor: sc.accent },
       finishBtnText: { ...base.finishBtnText, color: sc.textOnAccent },
       content: { ...base.content, paddingTop: spacing.xl },
       exerciseCard: { ...base.exerciseCard, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
