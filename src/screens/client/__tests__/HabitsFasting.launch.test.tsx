@@ -75,6 +75,8 @@ jest.mock('../../../components/FadeInView', () => {
 import HabitsScreen, { habitsSummary } from '../HabitsScreen';
 import { radius } from '../../../theme/tokens';
 import { makeStyles } from '../habits/styles';
+import { habitTargetLabel } from '../habits/HabitCard';
+import type { HabitView } from '../habits/constants';
 import FastingScreen from '../FastingScreen';
 import type { ApiHabitLog } from '../../../hooks/useApi';
 
@@ -521,6 +523,14 @@ describe('REDO-HABITS-CAL-COMM-133 Habits page', () => {
 
 describe('REDO-HABITS-CAL-COMM-133 habit rows and sheet', () => {
   const flat = (n: { props: { style?: unknown } }) => (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+
+  it('says the target in words and never invents a daily cadence', () => {
+    const h = (over: Partial<HabitView>) => ({ targetCount: 1, unit: 'times', frequency: 'daily', log: null, ...over }) as HabitView;
+    expect(habitTargetLabel(h({ targetCount: 8, unit: 'glasses', log: { count: 3 } as HabitView['log'] }))).toBe('3 of 8 glasses');
+    expect(habitTargetLabel(h({}))).toBe('Once a day');
+    expect(habitTargetLabel(h({ frequency: 'weekly' }))).toBe('times');
+    expect(habitTargetLabel(h({ unit: 'walk' }))).toBe('walk');
+  });
 
   it('serif habit names that never clip; a rounded sheet with rounded fields', async () => {
     const screen = await renderHabits();

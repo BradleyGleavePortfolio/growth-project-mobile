@@ -6,10 +6,10 @@ import type { SemanticTokens } from '../../../theme/tokens';
 import { DAY_LABELS, type HabitView } from './constants';
 import type { HabitsStyles } from './styles';
 
-/** "3 of 8 glasses", "Once a day", "1 glass". */
+/** "3 of 8 glasses"; a once-a-day habit says so instead of a bare "times". */
 export function habitTargetLabel(habit: HabitView): string {
   if (habit.targetCount > 1) return `${habit.log?.count || 0} of ${habit.targetCount} ${habit.unit}`;
-  return habit.unit === 'times' ? 'Once a day' : `1 ${habit.unit}`;
+  return habit.unit === 'times' && habit.frequency === 'daily' ? 'Once a day' : habit.unit;
 }
 
 /**
