@@ -58,6 +58,7 @@ import {
   Wheel,
   s,
 } from './components';
+import { Headline } from '../../ui';
 
 export interface QuestionScreenProps {
   screen: ScreenDef;
@@ -309,7 +310,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
           <View style={{ paddingTop: 48 }}>
             <FadeIn><Text style={s.eyebrow}>{screen.eyebrow}</Text></FadeIn>
             <FadeIn delayIndex={1}>
-              <Text style={[s.display, { marginTop: 16 }]} accessibilityRole="header">{f(screen.question)}</Text>
+              <Headline level="display" style={{ marginTop: 16 }}>{f(screen.question)}</Headline>
             </FadeIn>
             {screen.roman ? (
               <FadeIn delayIndex={2} style={{ marginTop: 12 }}>
@@ -376,7 +377,7 @@ function DobBody(props: BodyProps) {
       >
         <View style={{ paddingTop: 96 }}>
           <Text style={s.eyebrow}>{screen.eyebrow}</Text>
-          <Text style={[s.h1, { marginTop: 16 }]} accessibilityRole="header">{`The Growth Project is for ages ${minAge} and up.`}</Text>
+          <Headline style={{ marginTop: 16 }}>{`The Growth Project is for ages ${minAge} and up.`}</Headline>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
         </View>
       </Frame>

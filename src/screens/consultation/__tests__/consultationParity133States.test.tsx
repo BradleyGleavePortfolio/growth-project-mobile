@@ -20,7 +20,7 @@ const mockNet = { isOnline: true, isInternetReachable: null as boolean | null };
 jest.mock('../../../hooks/useNetworkStatus', () => ({ useNetworkStatus: () => mockNet }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../../../ui/haptics/haptics.service', () => ({
-  HapticService: { success: jest.fn(async () => undefined), selection: jest.fn(async () => undefined), lightImpact: jest.fn(async () => undefined) },
+  HapticService: { success: jest.fn(async () => undefined), softImpact: jest.fn(async () => undefined), selection: jest.fn(async () => undefined) },
 }));
 jest.mock('../../../services/api', () => ({
   __esModule: true,

@@ -11,6 +11,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { radius } from '../../theme/tokens';
+import { Headline } from '../../ui';
 import type { Answers } from '../../lib/consultation/types';
 import type { CompleteOnboardingResponse } from '../../api/consultationApi';
 import { anyScreeningYes, CopyContext, fillCopy } from '../../lib/consultation/engine';
@@ -92,7 +93,7 @@ export function SummaryScreen({
     >
       <View style={{ opacity: preparing ? 0.3 : 1 }}>
         <Text style={s.eyebrow}>{`${forName}${now.getDate()} ${months[now.getMonth()]}`}</Text>
-        <Text style={[s.h1, { marginTop: 12 }]} accessibilityRole="header">Your consultation</Text>
+        <Headline style={{ marginTop: 12 }}>Your consultation</Headline>
         {sections.map((sec) => (
           <View key={sec.title} style={{ paddingVertical: 20, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: palette.border }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -268,7 +269,7 @@ export function CompleteProblemScreen({
       <View style={{ marginTop: 48 }} testID="consult-problem-roman">
         <RomanAvatar crop="neutral" size={32} />
       </View>
-      <Text style={[s.h2, { marginTop: 16 }]} accessibilityRole="header">{c.head}</Text>
+      <Headline level="h2" style={{ marginTop: 16 }}>{c.head}</Headline>
       <Text style={[s.body, { marginTop: 12 }]}>{c.body}</Text>
       {ref ? (
         <Text style={[s.body, { marginTop: 12 }]} selectable testID="consult-problem-reference">
@@ -286,7 +287,7 @@ export function PausedScreen({ ctx, onResume, onSignOut }: { ctx: CopyContext; o
   const { s } = useConsultationStyles();
   return (
     <Frame testID="consult-paused" footer={<PrimaryButton label="Continue my consultation" onPress={onResume} testID="consult-resume" />}>
-      <Text style={[s.h1, { marginTop: 48 }]} accessibilityRole="header">Your place is kept.</Text>
+      <Headline style={{ marginTop: 48 }}>Your place is kept.</Headline>
       <RomanLine text={fillCopy(REVEAL_COPY.paused, ctx)} />
       <EscapeRow onSignOut={onSignOut} />
     </Frame>
@@ -401,7 +402,7 @@ export function PlanRevealScreen({
     <Frame onBack={onBack} testID="consult-screen-PLAN" footer={<PrimaryButton label="Show me around" onPress={onFinish} testID="consult-finish" />}>
       <FadeIn><Text style={s.eyebrow}>{weeksEyebrow(p.weeks)}</Text></FadeIn>
       <FadeIn delayIndex={1}>
-        <Text style={[s.display, { marginTop: 14 }]} accessibilityRole="header" testID="plan-name">{p.name}</Text>
+        <Headline level="display" style={{ marginTop: 14 }} testID="plan-name">{p.name}</Headline>
         {screened ? (
           <Text style={[s.mutedSmall, { marginTop: 10 }]} testID="plan-physician-line">
             {fillCopy(REVEAL_COPY.physicianStart, c2)}
@@ -431,14 +432,14 @@ export function PlanRevealScreen({
                 style={{
                   width: 14,
                   height: 14,
-                  borderRadius: radius.pill,
+                  borderRadius: radius.chip,
                   borderWidth: i === firstDay ? 1 : 0,
                   borderColor: palette.accent,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <View style={{ width: 6, height: 6, borderRadius: radius.pill, backgroundColor: days.includes(i) || i === firstDay ? palette.accent : palette.border }} />
+                <View style={{ width: 6, height: 6, borderRadius: radius.chip, backgroundColor: days.includes(i) || i === firstDay ? palette.accent : palette.border }} />
               </View>
             </View>
           ))}
