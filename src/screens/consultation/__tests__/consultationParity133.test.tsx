@@ -144,7 +144,7 @@ describe('copy and defaults', () => {
   });
 
   it('B4 long-road note: coached keeps the coach, coachless is never promised one (B-579-SOL-B-1)', async () => {
-    const b3 = { B3: { height_cm: 167.6, weight_lbs: 172, unit: 'imperial' }, G1: 'fat_loss', B4: 100 };
+    const b3: Answers = { B3: { height_cm: 167.6, weight_lbs: 172, unit: 'imperial' }, G1: 'fat_loss', B4: 100 };
     const coached = await renderScreen('B4', b3, { firstName: 'Maya', coachName: 'Bradley', now: NOW });
     expect(coached.getByTestId('goal-weight-note').props.children).toBe("That's a long road. Bradley will set milestones with you.");
     await coached.unmount();
