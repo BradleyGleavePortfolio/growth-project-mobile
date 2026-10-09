@@ -1,10 +1,12 @@
 import { renderHook, act, waitFor } from '@testing-library/react-native';
+import { AppState } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import {
   useBiometricGate,
   __resetForTests,
   BIOMETRIC_OPT_IN_KEY,
   BIOMETRIC_CHECK_TIMEOUT_MS,
+  BACKGROUND_TIMEOUT_MS,
 } from '../useBiometricGate';
 
 // expo-local-authentication isn't shimmed by jest-expo for our setup, so we
@@ -116,5 +118,29 @@ describe('useBiometricGate', () => {
     });
     expect(seen).not.toContain('checking');
     expect(result.current.status).toBe('unlocked');
+  });
+
+  // START-HANG-FOLLOW-134 (U1 on m#619).
+  it('opted in: the lock covers the app at once on return from the background, before the read answers', async () => {
+    await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
+    const listeners: Array<(s: string) => void> = [];
+    const sub = jest.spyOn(AppState, 'addEventListener').mockImplementation(((_: string, fn: (s: string) => void) => {
+      listeners.push(fn);
+      return { remove: jest.fn() };
+    }) as never);
+    const { result } = await renderHook(() => useBiometricGate());
+    await waitFor(() => expect(result.current.status).toBe('unlocked'));
+    let answer: (v: string) => void = () => undefined;
+    (SecureStore.getItemAsync as jest.Mock).mockImplementationOnce(() => new Promise((r) => { answer = r; }));
+    const now = Date.now();
+    await act(async () => listeners.forEach((fn) => fn('background')));
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now + BACKGROUND_TIMEOUT_MS + 1);
+    await act(async () => listeners.forEach((fn) => fn('active')));
+    clock.mockRestore();
+    expect(result.current.status).toBe('checking');
+    await act(async () => answer('true'));
+    await waitFor(() => expect(result.current.status).toBe('unlocked'));
+    expect(mockAuthenticate).toHaveBeenCalledTimes(2);
+    sub.mockRestore();
   });
 });
