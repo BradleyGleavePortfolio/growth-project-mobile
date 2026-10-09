@@ -231,45 +231,9 @@ exports[`Create account (prototype 02) Android 360x800: role and create steps si
           }
           testID="create-account-providers"
         >
-          <View
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onClick={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "opacity": 1,
-              }
-            }
-            testID="apple-button"
-          >
-            <Text>
-              Continue with Apple
-            </Text>
-          </View>
+          <Text>
+            Continue with Apple
+          </Text>
           <View
             accessibilityLabel="Continue with Google"
             accessibilityRole="button"
@@ -1831,45 +1795,9 @@ exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit
           }
           testID="create-account-providers"
         >
-          <View
-            accessibilityState={
-              {
-                "busy": undefined,
-                "checked": undefined,
-                "disabled": undefined,
-                "expanded": undefined,
-                "selected": undefined,
-              }
-            }
-            accessibilityValue={
-              {
-                "max": undefined,
-                "min": undefined,
-                "now": undefined,
-                "text": undefined,
-              }
-            }
-            accessible={true}
-            collapsable={false}
-            focusable={true}
-            onClick={[Function]}
-            onResponderGrant={[Function]}
-            onResponderMove={[Function]}
-            onResponderRelease={[Function]}
-            onResponderTerminate={[Function]}
-            onResponderTerminationRequest={[Function]}
-            onStartShouldSetResponder={[Function]}
-            style={
-              {
-                "opacity": 1,
-              }
-            }
-            testID="apple-button"
-          >
-            <Text>
-              Continue with Apple
-            </Text>
-          </View>
+          <Text>
+            Continue with Apple
+          </Text>
           <View
             accessibilityLabel="Continue with Google"
             accessibilityRole="button"

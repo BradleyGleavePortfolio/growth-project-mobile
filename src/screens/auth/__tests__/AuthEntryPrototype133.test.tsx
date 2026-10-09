@@ -1,12 +1,4 @@
-/**
- * AUTH-ENTRY-133 (B12 B13 B17): Role (prototype 01) and Create account
- * (prototype 02) flow, copy and states on CreateAccountScreen.
- *  - Role: two radio rows, Continue disabled until a choice, one Continue,
- *    "I have an invite code" link, coachless line for "I'm here to train".
- *  - Create: providers first (Apple on iOS, Google when advertised), then
- *    the email form; eyebrow names the coach once a code resolves;
- *    show-password; back returns to the role step, never a dead button.
- */
+/** AUTH-ENTRY-133 (B13 B17): Role (prototype 01) and Create account (prototype 02) flow, copy and states. */
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -25,15 +17,8 @@ jest.mock('../../../services/api', () => ({
 jest.mock('../../../utils/appleAuth', () => ({ signInWithApple: jest.fn() }));
 jest.mock('../../../utils/googleAuth', () => ({ signInWithGoogle: jest.fn() }));
 jest.mock('../../../components/AppleSignInButton', () => {
-  const { TouchableOpacity, Text } = jest.requireActual('react-native');
-  return {
-    __esModule: true,
-    default: ({ onPress }: { onPress: () => void }) => (
-      <TouchableOpacity testID="apple-button" onPress={onPress}>
-        <Text>Continue with Apple</Text>
-      </TouchableOpacity>
-    ),
-  };
+  const { Text } = jest.requireActual('react-native');
+  return { __esModule: true, default: () => <Text>Continue with Apple</Text> };
 });
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
@@ -46,13 +31,7 @@ import CreateAccountScreen from '../CreateAccountScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
 // Production GET /api/auth/signup-policy at 16:58 PDT 8 Oct (role_choice on).
-const LIVE = {
-  invite_code_required: false,
-  providers: ['email', 'google', 'apple'],
-  role_choice: true,
-  role_choice_field: 'intended_role',
-  role_choice_values: ['client', 'coach'],
-};
+const LIVE = { invite_code_required: false, providers: ['email', 'google', 'apple'], role_choice: true };
 
 function makeNav(canGoBack = true) {
   return { navigate: jest.fn(), replace: jest.fn(), goBack: jest.fn(), canGoBack: () => canGoBack };
