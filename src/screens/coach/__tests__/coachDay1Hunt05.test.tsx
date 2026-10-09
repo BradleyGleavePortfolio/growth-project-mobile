@@ -80,15 +80,15 @@ describe('B-H05-1: no promise of alerts the server never sends', () => {
 });
 
 describe('U-H05-2: Overview with no clients yet', () => {
-  it('shows no red 0% check-in rate and no "of 0" for a coach with no clients', async () => {
+  it('shows one calm line, no red 0%, no "of 0" and no dash wall for a coach with no clients', async () => {
     (commandCenterApi.getOverview as jest.Mock).mockResolvedValue({ data: overview({}) });
-    const { getByTestId, queryByText } = await render(<OverviewScreen />);
-    await waitFor(() => expect(getByTestId('command-center-kpi-checkin-rate')).toBeTruthy());
-    expect(getByTestId('command-center-kpi-checkin-rate').props.accessibilityLabel).toBe(
-      'Check-in rate (7 days): —',
-    );
+    const { findByTestId, getByText, queryByTestId, queryByText } = await render(<OverviewScreen />);
+    expect(await findByTestId('coach-home-clients-empty')).toBeTruthy();
+    expect(getByText('No clients yet.')).toBeTruthy();
+    expect(queryByTestId('command-center-kpi-checkin-rate')).toBeNull();
     expect(queryByText('0%')).toBeNull();
     expect(queryByText('of 0')).toBeNull();
+    expect(queryByText('—')).toBeNull();
   });
 
   it('keeps the real rate once clients exist', async () => {
@@ -97,7 +97,7 @@ describe('U-H05-2: Overview with no clients yet', () => {
     });
     const { getByTestId, getByText } = await render(<OverviewScreen />);
     await waitFor(() => expect(getByText('75%')).toBeTruthy());
-    expect(getByText('of 12')).toBeTruthy();
+    expect(getByText('8 active today')).toBeTruthy();
     expect(getByTestId('command-center-kpi-checkin-rate')).toBeTruthy();
   });
 });

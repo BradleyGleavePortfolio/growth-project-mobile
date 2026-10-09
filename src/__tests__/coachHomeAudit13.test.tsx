@@ -16,9 +16,11 @@ jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
-jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const R = jest.requireActual<typeof import('react')>('react');
+  const insets = { top: 47, bottom: 0, left: 0, right: 0 };
+  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: R.createContext(insets) };
+});
 const mockGet = jest.fn();
 jest.mock('../services/api', () => ({
   __esModule: true,
@@ -81,11 +83,11 @@ describe('U-A13-1: Coach Home rows open the right place', () => {
     });
   });
 
-  it('the tab row sits below the status bar', () => {
+  it('the tab row sits below the status bar (the shared Screen owns the top inset)', () => {
     const src = jest.requireActual<typeof import('fs')>('fs').readFileSync(
       require.resolve('../screens/coach/command-center/CommandCenterScreen.tsx'),
       'utf8',
     );
-    expect(src).toMatch(/paddingTop: insets\.top/);
+    expect(src).toMatch(/<Screen edges=\{\['top'\]\}/);
   });
 });
