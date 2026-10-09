@@ -22,14 +22,8 @@ export function ChapterBar({ progress }: { progress: CoachProgress }) {
   const { semanticColors: sc } = useTheme();
   const text = `Step ${progress.chapter} of ${progress.total}`;
   return (
-    <View
-      style={styles.bar}
-      accessible
-      accessibilityRole="progressbar"
-      accessibilityLabel="Practice setup progress"
-      accessibilityValue={{ min: 0, max: progress.total, now: progress.chapter, text }}
-      testID="coach-consult-progress"
-    >
+    <View style={styles.bar} accessible accessibilityRole="progressbar" accessibilityLabel="Practice setup progress"
+      accessibilityValue={{ min: 0, max: progress.total, now: progress.chapter, text }} testID="coach-consult-progress">
       {segmentFill(progress).map((w, i) => (
         <View key={i} style={[styles.seg, { backgroundColor: sc.border }]}>
           <View style={[styles.segFill, { width: `${Math.round(w * 100)}%`, backgroundColor: sc.accent }]} />
@@ -95,14 +89,9 @@ export function ChoiceChip({ label, selected, onPress, testID, single, capped }:
   const muted = !!capped && !selected;
   const color = selected ? sc.accentText : muted ? sc.textMuted : sc.textPrimary;
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole={single ? 'radio' : 'checkbox'}
-      accessibilityLabel={label}
+    <Pressable onPress={onPress} accessibilityRole={single ? 'radio' : 'checkbox'} accessibilityLabel={label} testID={testID}
       accessibilityState={{ selected, checked: selected, disabled: muted }}
-      testID={testID}
-      style={({ pressed }) => [styles.chip, { borderColor: selected ? sc.accent : sc.border }, pressed && styles.pressed]}
-    >
+      style={({ pressed }) => [styles.chip, { borderColor: selected ? sc.accent : sc.border }, pressed && styles.pressed]}>
       <Text style={[styles.chipText, { color }]}>{label}</Text>
       {selected ? <Ionicons name="checkmark" size={14} color={sc.accentText} style={styles.chipCheck} /> : null}
     </Pressable>
@@ -113,14 +102,9 @@ export function ChoiceChip({ label, selected, onPress, testID, single, capped }:
 export function ChoiceRow({ label, sub, selected, onPress, testID }: ChoiceProps & { sub?: string }) {
   const { semanticColors: sc } = useTheme();
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityLabel={sub ? `${label}. ${sub}` : label}
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityLabel={sub ? `${label}. ${sub}` : label} testID={testID}
       accessibilityState={{ selected, checked: selected }}
-      testID={testID}
-      style={({ pressed }) => [styles.row, { borderColor: sc.border }, pressed && styles.pressed]}
-    >
+      style={({ pressed }) => [styles.row, { borderColor: sc.border }, pressed && styles.pressed]}>
       <View style={styles.rowText}>
         <Text style={[styles.rowLabel, { color: sc.textPrimary }]}>{label}</Text>
         {sub ? <Text style={[styles.rowSub, { color: sc.textMuted }]}>{sub}</Text> : null}
@@ -149,20 +133,13 @@ export function Field({ label, value, onChange, maxLength, multiline, autoCapita
   return (
     <View style={styles.fieldWrap}>
       <QuietOverline>{label}</QuietOverline>
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        maxLength={maxLength}
-        multiline={multiline}
-        autoCapitalize={autoCapitalize}
-        accessibilityLabel={label}
-        style={[styles.field, look, multiline && styles.fieldMulti]}
-        testID={testID}
-      />
+      <TextInput value={value} onChangeText={onChange} maxLength={maxLength} multiline={multiline} autoCapitalize={autoCapitalize}
+        accessibilityLabel={label} style={[styles.field, look, multiline && styles.fieldMulti]} testID={testID} />
     </View>
   );
 }
 
+const hair = StyleSheet.hairlineWidth;
 const styles = StyleSheet.create({
   bar: { flexDirection: 'row', gap: spacing.xs, paddingHorizontal: layout.gutter, marginTop: spacing.xs },
   seg: { flex: 1, height: 2, overflow: 'hidden' },
@@ -172,36 +149,16 @@ const styles = StyleSheet.create({
   headline: { marginTop: spacing.md },
   body: { marginTop: spacing.xl },
   pressed: { opacity: 0.6 },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: layout.touchMin,
-    paddingHorizontal: spacing.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.chip,
-  },
+  chip: { flexDirection: 'row', alignItems: 'center', minHeight: layout.touchMin, paddingHorizontal: spacing.lg, borderWidth: hair, borderRadius: radius.chip },
   chipText: { ...typography.bodySmall },
   chipCheck: { marginLeft: 6 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: layout.rowMinHeight,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  row: { flexDirection: 'row', alignItems: 'center', minHeight: layout.rowMinHeight, paddingVertical: spacing.md, borderBottomWidth: hair },
   rowText: { flex: 1, paddingRight: spacing.md },
   rowLabel: { ...typography.bodyMd },
   rowSub: { ...typography.bodySmall },
   radio: { width: 20, height: 20, borderRadius: radius.chip, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   radioDot: { width: 10, height: 10, borderRadius: radius.chip },
   fieldWrap: { marginTop: spacing.lg, gap: 6 },
-  field: {
-    ...typography.body,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radius.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minHeight: layout.touchMin,
-  },
+  field: { ...typography.body, borderWidth: hair, borderRadius: radius.input, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, minHeight: layout.touchMin },
   fieldMulti: { minHeight: 88, textAlignVertical: 'top' },
 });
