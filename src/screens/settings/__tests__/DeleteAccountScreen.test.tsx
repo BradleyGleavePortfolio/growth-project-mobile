@@ -52,6 +52,7 @@ jest.mock('../../../utils/haptics', () => ({
 // Provide a minimal theme so styled components don't crash
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
     colors: {
       background: '#F5EFE4',
       surface: '#F1E8D5',

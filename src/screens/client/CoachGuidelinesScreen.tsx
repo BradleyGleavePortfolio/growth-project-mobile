@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +11,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { coachApi } from '../../services/api';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 
 export default function CoachGuidelinesScreen() {
@@ -55,16 +55,17 @@ export default function CoachGuidelinesScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
+    <Screen
+      edges={['top']}
+      contentStyle={styles.content}
+      header={<View style={styles.topBar}>
         <TouchableOpacity style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Coach guidelines</Text>
-        <View style={{ width: 24 }} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={{ width: 44 }} />
+      </View>}
+    >
         {loading ? (
           <SkeletonScreen count={3} />
         ) : error ? (
@@ -138,30 +139,27 @@ export default function CoachGuidelinesScreen() {
             </Text>
           </View>
         )}
-      </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   topTitle: { ...typography.h1, flexShrink: 1, textAlign: 'center', color: colors.textPrimary },
-  content: { padding: 20, paddingBottom: 100 },
+  content: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 100 },
   headerCard: {
     backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
@@ -169,7 +167,7 @@ const makeStyles = (colors: ThemeColors) =>
   headerIcon: {
     width: 52,
     height: 52,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -177,10 +175,9 @@ const makeStyles = (colors: ThemeColors) =>
   },
   headerTitle: { ...typography.h4, color: colors.textPrimary, marginBottom: 4 },
   headerSub: { ...typography.bodySmall, fontVariant: ['tabular-nums'], color: colors.textSecondary },
+  // A hairline section, not a box: no fill, no corners.
   guidelineCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 20,
+    paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
   },
@@ -228,7 +225,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   emptyCard: {
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 40,
     alignItems: 'center',
     marginTop: 40,
@@ -242,14 +239,14 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 8,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 4,
+    borderRadius: radius.button,
     backgroundColor: colors.primary,
   },
   retryBtnText: {
     fontFamily: typography.bodyMd.fontFamily,
     color: colors.textOnPrimary,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
     letterSpacing: 0.4,
   },
 

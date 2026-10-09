@@ -1,0 +1,3129 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Create account (prototype 02) Android 360x800: role and create steps sit below the status bar (B13): create 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 36,
+      },
+      undefined,
+    ]
+  }
+  testID="create-account-register"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "minHeight": 44,
+          "paddingHorizontal": 16,
+        }
+      }
+      testID="create-account-back"
+    >
+      <View
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "height": 44,
+              "justifyContent": "center",
+              "paddingLeft": 6,
+              "width": 44,
+            },
+            false,
+          ]
+        }
+        testID="create-account-back-back"
+      >
+        <Text
+          allowFontScaling={false}
+          selectable={false}
+          style={
+            [
+              {
+                "color": "#1A1A18",
+                "fontSize": 22,
+              },
+              undefined,
+              {
+                "fontFamily": "ionicons",
+                "fontStyle": "normal",
+                "fontWeight": "normal",
+              },
+              {},
+            ]
+          }
+        >
+          
+        </Text>
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        [
+          {
+            "flexGrow": 1,
+            "paddingHorizontal": 24,
+          },
+          false,
+          {
+            "paddingBottom": 24,
+          },
+          undefined,
+        ]
+      }
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+      testID="create-account-register-scroll"
+    >
+      <View>
+        <View
+          style={
+            {
+              "marginBottom": 32,
+              "marginTop": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              [
+                {
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 6,
+                  "textTransform": "uppercase",
+                },
+                {
+                  "color": "#6B675F",
+                },
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 8,
+                  "textTransform": "uppercase",
+                },
+              ]
+            }
+            testID="create-account-eyebrow"
+          >
+            Joining as a client
+          </Text>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+            style={
+              [
+                {
+                  "fontFamily": "CormorantGaramond_400Regular",
+                  "fontSize": 32,
+                  "fontWeight": "400",
+                  "letterSpacing": 0.6,
+                  "lineHeight": 40,
+                },
+                {
+                  "color": "#1A1A18",
+                  "textAlign": "left",
+                },
+                {
+                  "marginBottom": 8,
+                },
+              ]
+            }
+          >
+            Create your account.
+          </Text>
+          <Text
+            accessibilityLabel="Change how you will use the app"
+            accessibilityRole="button"
+            disabled={false}
+            onPress={[Function]}
+            style={
+              {
+                "color": "#2C4A36",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 22,
+                "marginTop": 8,
+                "minHeight": 44,
+                "paddingVertical": 8,
+              }
+            }
+            testID="role-choice-change"
+          >
+            Coach clients instead?
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "gap": 8,
+            }
+          }
+          testID="create-account-providers"
+        >
+          <Text>
+            Continue with Apple
+          </Text>
+          <View
+            accessibilityLabel="Continue with Google"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderColor": "#1A1A18",
+                "borderRadius": 12,
+                "borderWidth": 0.5,
+                "flexDirection": "row",
+                "justifyContent": "center",
+                "minHeight": 48,
+                "opacity": 1,
+                "paddingHorizontal": 16,
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#1A1A18",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                  "marginRight": 8,
+                }
+              }
+            >
+              G
+            </Text>
+            <Text
+              style={
+                {
+                  "color": "#1A1A18",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                }
+              }
+            >
+              Continue with Google
+            </Text>
+          </View>
+          <View
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "marginVertical": 24,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "backgroundColor": "#DCD5CC",
+                  "flex": 1,
+                  "height": 0.5,
+                }
+              }
+            />
+            <Text
+              style={
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_400Regular",
+                  "fontSize": 14,
+                  "fontWeight": "400",
+                  "letterSpacing": 0,
+                  "lineHeight": 22,
+                  "marginHorizontal": 8,
+                }
+              }
+            >
+              or
+            </Text>
+            <View
+              style={
+                {
+                  "backgroundColor": "#DCD5CC",
+                  "flex": 1,
+                  "height": 0.5,
+                }
+              }
+            />
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            INVITE CODE (OPTIONAL)
+          </Text>
+          <TextInput
+            accessibilityLabel="Coach invite code"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            autoFocus={false}
+            onBlur={[Function]}
+            onChangeText={[Function]}
+            placeholder="From your coach"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            testID="invite-code-input"
+            value=""
+          />
+          <View
+            accessibilityHint="Pastes an invite code or join link you copied"
+            accessibilityLabel="Paste invite code"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={
+              {
+                "bottom": 8,
+                "left": 8,
+                "right": 8,
+                "top": 8,
+              }
+            }
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignSelf": "flex-start",
+                "marginTop": 8,
+                "opacity": 1,
+                "paddingVertical": 4,
+              }
+            }
+            testID="paste-invite-code"
+          >
+            <Text
+              style={
+                [
+                  {
+                    "fontFamily": "Inter_500Medium",
+                    "fontSize": 16,
+                    "fontWeight": "500",
+                    "letterSpacing": -0.16,
+                    "lineHeight": 26,
+                  },
+                  {
+                    "color": "#000000",
+                  },
+                ]
+              }
+            >
+              Paste invite code
+            </Text>
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            FULL NAME
+          </Text>
+          <TextInput
+            accessibilityLabel="Full name"
+            autoCapitalize="words"
+            onChangeText={[Function]}
+            placeholder="Your full name"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="name"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            EMAIL
+          </Text>
+          <TextInput
+            accessibilityLabel="Email"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onChangeText={[Function]}
+            placeholder="you@email.com"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="emailAddress"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            PASSWORD
+          </Text>
+          <View
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+              }
+            }
+          >
+            <TextInput
+              accessibilityHint="Minimum 8 characters, 1 uppercase, 1 number, 1 special"
+              accessibilityLabel="Password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={[Function]}
+              placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
+              placeholderTextColor="#6B675F"
+              secureTextEntry={true}
+              style={
+                [
+                  {
+                    "borderBottomWidth": 0.5,
+                    "borderColor": "#DCD5CC",
+                    "color": "#1A1A18",
+                    "fontFamily": "Inter_400Regular",
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "letterSpacing": -0.16,
+                    "lineHeight": 26,
+                    "minHeight": 52,
+                    "paddingVertical": 8,
+                  },
+                  {
+                    "flex": 1,
+                  },
+                ]
+              }
+              textContentType="newPassword"
+              value=""
+            />
+            <View
+              accessibilityLabel="Show password"
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onClick={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 44,
+                  "opacity": 1,
+                }
+              }
+              testID="create-account-password-visibility"
+            >
+              <Text
+                allowFontScaling={false}
+                selectable={false}
+                style={
+                  [
+                    {
+                      "color": "#6B675F",
+                      "fontSize": 20,
+                    },
+                    undefined,
+                    {
+                      "fontFamily": "ionicons",
+                      "fontStyle": "normal",
+                      "fontWeight": "normal",
+                    },
+                    {},
+                  ]
+                }
+              >
+                
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            PHONE (OPTIONAL)
+          </Text>
+          <TextInput
+            accessibilityLabel="Phone number, optional"
+            keyboardType="phone-pad"
+            onChangeText={[Function]}
+            placeholder="Your phone number"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="telephoneNumber"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "justifyContent": "center",
+              "marginBottom": 32,
+              "marginTop": 32,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 22,
+              }
+            }
+          >
+            Already have an account? 
+          </Text>
+          <View
+            accessibilityLabel="Sign in"
+            accessibilityRole="link"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "justifyContent": "center",
+                "minHeight": 44,
+                "opacity": 1,
+                "paddingHorizontal": 8,
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#2C4A36",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                }
+              }
+            >
+              Sign in
+            </Text>
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 24,
+          },
+        ]
+      }
+      testID="create-account-register-footer"
+    >
+      <View
+        accessibilityLabel="Create account"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": false,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "alignItems": "center",
+              "alignSelf": "stretch",
+              "borderRadius": 12,
+              "justifyContent": "center",
+              "minHeight": 54,
+              "overflow": "hidden",
+              "paddingHorizontal": 24,
+            },
+            {
+              "backgroundColor": "#2C4A36",
+            },
+            undefined,
+          ]
+        }
+        testID="create-account-submit"
+      >
+        <Text
+          maxFontSizeMultiplier={1.6}
+          numberOfLines={1}
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 16,
+                "fontWeight": "500",
+                "letterSpacing": 0.1,
+                "lineHeight": 22,
+                "textAlign": "center",
+              },
+              {
+                "color": "#FBF7F0",
+              },
+            ]
+          }
+        >
+          Create account
+        </Text>
+      </View>
+      <Text
+        style={
+          {
+            "color": "#6B675F",
+            "fontFamily": "Inter_400Regular",
+            "fontSize": 14,
+            "fontWeight": "400",
+            "letterSpacing": 0,
+            "lineHeight": 22,
+            "marginVertical": 16,
+          }
+        }
+        testID="create-account-legal"
+      >
+        By continuing, you agree to the
+         
+        <Text
+          accessibilityRole="link"
+          onPress={[Function]}
+          style={
+            {
+              "color": "#2C4A36",
+              "textDecorationLine": "underline",
+            }
+          }
+          testID="create-account-terms-link"
+        >
+          Terms of Service
+        </Text>
+         
+        and the
+         
+        <Text
+          accessibilityRole="link"
+          onPress={[Function]}
+          style={
+            {
+              "color": "#2C4A36",
+              "textDecorationLine": "underline",
+            }
+          }
+          testID="create-account-privacy-link"
+        >
+          Privacy Policy
+        </Text>
+        .
+      </Text>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Create account (prototype 02) Android 360x800: role and create steps sit below the status bar (B13): role 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 36,
+      },
+      undefined,
+    ]
+  }
+  testID="create-account-role"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "minHeight": 44,
+          "paddingHorizontal": 16,
+        }
+      }
+      testID="role-choice-back"
+    >
+      <View
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "height": 44,
+              "justifyContent": "center",
+              "paddingLeft": 6,
+              "width": 44,
+            },
+            false,
+          ]
+        }
+        testID="role-choice-back-back"
+      >
+        <Text
+          allowFontScaling={false}
+          selectable={false}
+          style={
+            [
+              {
+                "color": "#1A1A18",
+                "fontSize": 22,
+              },
+              undefined,
+              {
+                "fontFamily": "ionicons",
+                "fontStyle": "normal",
+                "fontWeight": "normal",
+              },
+              {},
+            ]
+          }
+        >
+          
+        </Text>
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        [
+          {
+            "flexGrow": 1,
+            "paddingHorizontal": 24,
+          },
+          false,
+          {
+            "paddingBottom": 24,
+          },
+          undefined,
+        ]
+      }
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+      testID="create-account-role-scroll"
+    >
+      <View>
+        <View
+          style={
+            {
+              "marginBottom": 32,
+              "marginTop": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              [
+                {
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 6,
+                  "textTransform": "uppercase",
+                },
+                {
+                  "color": "#6B675F",
+                },
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 8,
+                  "textTransform": "uppercase",
+                },
+              ]
+            }
+          >
+            Welcome
+          </Text>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+            style={
+              [
+                {
+                  "fontFamily": "CormorantGaramond_400Regular",
+                  "fontSize": 32,
+                  "fontWeight": "400",
+                  "letterSpacing": 0.6,
+                  "lineHeight": 40,
+                },
+                {
+                  "color": "#1A1A18",
+                  "textAlign": "left",
+                },
+                {
+                  "marginBottom": 8,
+                },
+              ]
+            }
+          >
+            How will you use The Growth Project?
+          </Text>
+        </View>
+        <View
+          accessibilityRole="radiogroup"
+          style={
+            [
+              {
+                "borderTopWidth": 0.5,
+              },
+              {
+                "borderColor": "#DCD5CC",
+              },
+            ]
+          }
+          testID="role-choice"
+        >
+          <View
+            accessibilityHint="A plan, daily targets and a coach who knows you."
+            accessibilityLabel="I'm here to train"
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "flexDirection": "row",
+                "minHeight": 88,
+                "opacity": 1,
+                "paddingVertical": 16,
+              }
+            }
+            testID="role-choice-client"
+          >
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "marginRight": 16,
+                }
+              }
+            >
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "CormorantGaramond_500Medium",
+                      "fontSize": 20,
+                      "fontWeight": "500",
+                      "letterSpacing": 0.4,
+                      "lineHeight": 25,
+                      "marginBottom": 2,
+                    },
+                    {
+                      "color": "#1A1A18",
+                    },
+                  ]
+                }
+              >
+                I'm here to train
+              </Text>
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "Inter_400Regular",
+                      "fontSize": 14,
+                      "fontWeight": "400",
+                      "letterSpacing": 0,
+                      "lineHeight": 22,
+                    },
+                    {
+                      "color": "#6B675F",
+                    },
+                  ]
+                }
+              >
+                A plan, daily targets and a coach who knows you.
+              </Text>
+            </View>
+            <View
+              style={
+                [
+                  {
+                    "alignItems": "center",
+                    "borderRadius": 999,
+                    "borderWidth": 1.5,
+                    "height": 22,
+                    "justifyContent": "center",
+                    "width": 22,
+                  },
+                  {
+                    "borderColor": "#6B675F",
+                  },
+                ]
+              }
+              testID="role-choice-client-radio"
+            />
+          </View>
+          <View
+            accessibilityHint="Your practice in one place: clients, programs and messages."
+            accessibilityLabel="I coach clients"
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "flexDirection": "row",
+                "minHeight": 88,
+                "opacity": 1,
+                "paddingVertical": 16,
+              }
+            }
+            testID="role-choice-coach"
+          >
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "marginRight": 16,
+                }
+              }
+            >
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "CormorantGaramond_500Medium",
+                      "fontSize": 20,
+                      "fontWeight": "500",
+                      "letterSpacing": 0.4,
+                      "lineHeight": 25,
+                      "marginBottom": 2,
+                    },
+                    {
+                      "color": "#1A1A18",
+                    },
+                  ]
+                }
+              >
+                I coach clients
+              </Text>
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "Inter_400Regular",
+                      "fontSize": 14,
+                      "fontWeight": "400",
+                      "letterSpacing": 0,
+                      "lineHeight": 22,
+                    },
+                    {
+                      "color": "#6B675F",
+                    },
+                  ]
+                }
+              >
+                Your practice in one place: clients, programs and messages.
+              </Text>
+            </View>
+            <View
+              style={
+                [
+                  {
+                    "alignItems": "center",
+                    "borderRadius": 999,
+                    "borderWidth": 1.5,
+                    "height": 22,
+                    "justifyContent": "center",
+                    "width": 22,
+                  },
+                  {
+                    "borderColor": "#6B675F",
+                  },
+                ]
+              }
+              testID="role-choice-coach-radio"
+            />
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 24,
+          },
+        ]
+      }
+      testID="create-account-role-footer"
+    >
+      <View
+        accessibilityLabel="Continue"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": false,
+            "checked": undefined,
+            "disabled": true,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "alignItems": "center",
+              "alignSelf": "stretch",
+              "borderRadius": 12,
+              "justifyContent": "center",
+              "minHeight": 54,
+              "overflow": "hidden",
+              "paddingHorizontal": 24,
+            },
+            {
+              "backgroundColor": "#E0D9CE",
+            },
+            undefined,
+          ]
+        }
+        testID="role-choice-continue"
+      >
+        <Text
+          maxFontSizeMultiplier={1.6}
+          numberOfLines={1}
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 16,
+                "fontWeight": "500",
+                "letterSpacing": 0.1,
+                "lineHeight": 22,
+                "textAlign": "center",
+              },
+              {
+                "color": "#524E47",
+              },
+            ]
+          }
+        >
+          Continue
+        </Text>
+      </View>
+      <View
+        accessibilityLabel="I have an invite code"
+        accessibilityRole="link"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "justifyContent": "center",
+              "minHeight": 44,
+              "paddingHorizontal": 4,
+            },
+            {
+              "alignSelf": "center",
+            },
+            false,
+            undefined,
+          ]
+        }
+        testID="role-choice-invite-code"
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 22,
+              },
+              {
+                "color": "#1A1A18",
+              },
+              {
+                "textDecorationLine": "underline",
+              },
+            ]
+          }
+        >
+          I have an invite code
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit below the status bar (B13): create 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 59,
+      },
+      undefined,
+    ]
+  }
+  testID="create-account-register"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "minHeight": 44,
+          "paddingHorizontal": 16,
+        }
+      }
+      testID="create-account-back"
+    >
+      <View
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "height": 44,
+              "justifyContent": "center",
+              "paddingLeft": 6,
+              "width": 44,
+            },
+            false,
+          ]
+        }
+        testID="create-account-back-back"
+      >
+        <Text
+          allowFontScaling={false}
+          selectable={false}
+          style={
+            [
+              {
+                "color": "#1A1A18",
+                "fontSize": 22,
+              },
+              undefined,
+              {
+                "fontFamily": "ionicons",
+                "fontStyle": "normal",
+                "fontWeight": "normal",
+              },
+              {},
+            ]
+          }
+        >
+          
+        </Text>
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        [
+          {
+            "flexGrow": 1,
+            "paddingHorizontal": 24,
+          },
+          false,
+          {
+            "paddingBottom": 24,
+          },
+          undefined,
+        ]
+      }
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+      testID="create-account-register-scroll"
+    >
+      <View>
+        <View
+          style={
+            {
+              "marginBottom": 32,
+              "marginTop": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              [
+                {
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 6,
+                  "textTransform": "uppercase",
+                },
+                {
+                  "color": "#6B675F",
+                },
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 8,
+                  "textTransform": "uppercase",
+                },
+              ]
+            }
+            testID="create-account-eyebrow"
+          >
+            Joining as a client
+          </Text>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+            style={
+              [
+                {
+                  "fontFamily": "CormorantGaramond_400Regular",
+                  "fontSize": 32,
+                  "fontWeight": "400",
+                  "letterSpacing": 0.6,
+                  "lineHeight": 40,
+                },
+                {
+                  "color": "#1A1A18",
+                  "textAlign": "left",
+                },
+                {
+                  "marginBottom": 8,
+                },
+              ]
+            }
+          >
+            Create your account.
+          </Text>
+          <Text
+            accessibilityLabel="Change how you will use the app"
+            accessibilityRole="button"
+            disabled={false}
+            onPress={[Function]}
+            style={
+              {
+                "color": "#2C4A36",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 22,
+                "marginTop": 8,
+                "minHeight": 44,
+                "paddingVertical": 8,
+              }
+            }
+            testID="role-choice-change"
+          >
+            Coach clients instead?
+          </Text>
+        </View>
+        <View
+          style={
+            {
+              "gap": 8,
+            }
+          }
+          testID="create-account-providers"
+        >
+          <Text>
+            Continue with Apple
+          </Text>
+          <View
+            accessibilityLabel="Continue with Google"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderColor": "#1A1A18",
+                "borderRadius": 12,
+                "borderWidth": 0.5,
+                "flexDirection": "row",
+                "justifyContent": "center",
+                "minHeight": 48,
+                "opacity": 1,
+                "paddingHorizontal": 16,
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#1A1A18",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                  "marginRight": 8,
+                }
+              }
+            >
+              G
+            </Text>
+            <Text
+              style={
+                {
+                  "color": "#1A1A18",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                }
+              }
+            >
+              Continue with Google
+            </Text>
+          </View>
+          <View
+            accessibilityElementsHidden={true}
+            importantForAccessibility="no-hide-descendants"
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+                "marginVertical": 24,
+              }
+            }
+          >
+            <View
+              style={
+                {
+                  "backgroundColor": "#DCD5CC",
+                  "flex": 1,
+                  "height": 0.5,
+                }
+              }
+            />
+            <Text
+              style={
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_400Regular",
+                  "fontSize": 14,
+                  "fontWeight": "400",
+                  "letterSpacing": 0,
+                  "lineHeight": 22,
+                  "marginHorizontal": 8,
+                }
+              }
+            >
+              or
+            </Text>
+            <View
+              style={
+                {
+                  "backgroundColor": "#DCD5CC",
+                  "flex": 1,
+                  "height": 0.5,
+                }
+              }
+            />
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            INVITE CODE (OPTIONAL)
+          </Text>
+          <TextInput
+            accessibilityLabel="Coach invite code"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            autoFocus={false}
+            onBlur={[Function]}
+            onChangeText={[Function]}
+            placeholder="From your coach"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            testID="invite-code-input"
+            value=""
+          />
+          <View
+            accessibilityHint="Pastes an invite code or join link you copied"
+            accessibilityLabel="Paste invite code"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            hitSlop={
+              {
+                "bottom": 8,
+                "left": 8,
+                "right": 8,
+                "top": 8,
+              }
+            }
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignSelf": "flex-start",
+                "marginTop": 8,
+                "opacity": 1,
+                "paddingVertical": 4,
+              }
+            }
+            testID="paste-invite-code"
+          >
+            <Text
+              style={
+                [
+                  {
+                    "fontFamily": "Inter_500Medium",
+                    "fontSize": 16,
+                    "fontWeight": "500",
+                    "letterSpacing": -0.16,
+                    "lineHeight": 26,
+                  },
+                  {
+                    "color": "#000000",
+                  },
+                ]
+              }
+            >
+              Paste invite code
+            </Text>
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            FULL NAME
+          </Text>
+          <TextInput
+            accessibilityLabel="Full name"
+            autoCapitalize="words"
+            onChangeText={[Function]}
+            placeholder="Your full name"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="name"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            EMAIL
+          </Text>
+          <TextInput
+            accessibilityLabel="Email"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            onChangeText={[Function]}
+            placeholder="you@email.com"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="emailAddress"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            PASSWORD
+          </Text>
+          <View
+            style={
+              {
+                "alignItems": "center",
+                "flexDirection": "row",
+              }
+            }
+          >
+            <TextInput
+              accessibilityHint="Minimum 8 characters, 1 uppercase, 1 number, 1 special"
+              accessibilityLabel="Password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onChangeText={[Function]}
+              placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
+              placeholderTextColor="#6B675F"
+              secureTextEntry={true}
+              style={
+                [
+                  {
+                    "borderBottomWidth": 0.5,
+                    "borderColor": "#DCD5CC",
+                    "color": "#1A1A18",
+                    "fontFamily": "Inter_400Regular",
+                    "fontSize": 16,
+                    "fontWeight": "400",
+                    "letterSpacing": -0.16,
+                    "lineHeight": 26,
+                    "minHeight": 52,
+                    "paddingVertical": 8,
+                  },
+                  {
+                    "flex": 1,
+                  },
+                ]
+              }
+              textContentType="newPassword"
+              value=""
+            />
+            <View
+              accessibilityLabel="Show password"
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onClick={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "justifyContent": "center",
+                  "minHeight": 44,
+                  "minWidth": 44,
+                  "opacity": 1,
+                }
+              }
+              testID="create-account-password-visibility"
+            >
+              <Text
+                allowFontScaling={false}
+                selectable={false}
+                style={
+                  [
+                    {
+                      "color": "#6B675F",
+                      "fontSize": 20,
+                    },
+                    undefined,
+                    {
+                      "fontFamily": "ionicons",
+                      "fontStyle": "normal",
+                      "fontWeight": "normal",
+                    },
+                    {},
+                  ]
+                }
+              >
+                
+              </Text>
+            </View>
+          </View>
+        </View>
+        <View
+          style={
+            {
+              "marginBottom": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 4,
+                "textTransform": "uppercase",
+              }
+            }
+          >
+            PHONE (OPTIONAL)
+          </Text>
+          <TextInput
+            accessibilityLabel="Phone number, optional"
+            keyboardType="phone-pad"
+            onChangeText={[Function]}
+            placeholder="Your phone number"
+            placeholderTextColor="#6B675F"
+            style={
+              {
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "color": "#1A1A18",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 26,
+                "minHeight": 52,
+                "paddingVertical": 8,
+              }
+            }
+            textContentType="telephoneNumber"
+            value=""
+          />
+        </View>
+        <View
+          style={
+            {
+              "alignItems": "center",
+              "flexDirection": "row",
+              "flexWrap": "wrap",
+              "justifyContent": "center",
+              "marginBottom": 32,
+              "marginTop": 32,
+            }
+          }
+        >
+          <Text
+            style={
+              {
+                "color": "#6B675F",
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 14,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 22,
+              }
+            }
+          >
+            Already have an account? 
+          </Text>
+          <View
+            accessibilityLabel="Sign in"
+            accessibilityRole="link"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "justifyContent": "center",
+                "minHeight": 44,
+                "opacity": 1,
+                "paddingHorizontal": 8,
+              }
+            }
+          >
+            <Text
+              style={
+                {
+                  "color": "#2C4A36",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 16,
+                  "fontWeight": "500",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                }
+              }
+            >
+              Sign in
+            </Text>
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 42,
+          },
+        ]
+      }
+      testID="create-account-register-footer"
+    >
+      <View
+        accessibilityLabel="Create account"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": false,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "alignItems": "center",
+              "alignSelf": "stretch",
+              "borderRadius": 12,
+              "justifyContent": "center",
+              "minHeight": 54,
+              "overflow": "hidden",
+              "paddingHorizontal": 24,
+            },
+            {
+              "backgroundColor": "#2C4A36",
+            },
+            undefined,
+          ]
+        }
+        testID="create-account-submit"
+      >
+        <Text
+          maxFontSizeMultiplier={1.6}
+          numberOfLines={1}
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 16,
+                "fontWeight": "500",
+                "letterSpacing": 0.1,
+                "lineHeight": 22,
+                "textAlign": "center",
+              },
+              {
+                "color": "#FBF7F0",
+              },
+            ]
+          }
+        >
+          Create account
+        </Text>
+      </View>
+      <Text
+        style={
+          {
+            "color": "#6B675F",
+            "fontFamily": "Inter_400Regular",
+            "fontSize": 14,
+            "fontWeight": "400",
+            "letterSpacing": 0,
+            "lineHeight": 22,
+            "marginVertical": 16,
+          }
+        }
+        testID="create-account-legal"
+      >
+        By continuing, you agree to the
+         
+        <Text
+          accessibilityRole="link"
+          onPress={[Function]}
+          style={
+            {
+              "color": "#2C4A36",
+              "textDecorationLine": "underline",
+            }
+          }
+          testID="create-account-terms-link"
+        >
+          Terms of Service
+        </Text>
+         
+        and the
+         
+        <Text
+          accessibilityRole="link"
+          onPress={[Function]}
+          style={
+            {
+              "color": "#2C4A36",
+              "textDecorationLine": "underline",
+            }
+          }
+          testID="create-account-privacy-link"
+        >
+          Privacy Policy
+        </Text>
+        .
+      </Text>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`Create account (prototype 02) iPhone 390x844: role and create steps sit below the status bar (B13): role 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 59,
+      },
+      undefined,
+    ]
+  }
+  testID="create-account-role"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        {
+          "alignItems": "center",
+          "flexDirection": "row",
+          "justifyContent": "space-between",
+          "minHeight": 44,
+          "paddingHorizontal": 16,
+        }
+      }
+      testID="role-choice-back"
+    >
+      <View
+        accessibilityLabel="Back"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "height": 44,
+              "justifyContent": "center",
+              "paddingLeft": 6,
+              "width": 44,
+            },
+            false,
+          ]
+        }
+        testID="role-choice-back-back"
+      >
+        <Text
+          allowFontScaling={false}
+          selectable={false}
+          style={
+            [
+              {
+                "color": "#1A1A18",
+                "fontSize": 22,
+              },
+              undefined,
+              {
+                "fontFamily": "ionicons",
+                "fontStyle": "normal",
+                "fontWeight": "normal",
+              },
+              {},
+            ]
+          }
+        >
+          
+        </Text>
+      </View>
+    </View>
+    <RCTScrollView
+      contentContainerStyle={
+        [
+          {
+            "flexGrow": 1,
+            "paddingHorizontal": 24,
+          },
+          false,
+          {
+            "paddingBottom": 24,
+          },
+          undefined,
+        ]
+      }
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+      style={
+        {
+          "flex": 1,
+        }
+      }
+      testID="create-account-role-scroll"
+    >
+      <View>
+        <View
+          style={
+            {
+              "marginBottom": 32,
+              "marginTop": 24,
+            }
+          }
+        >
+          <Text
+            style={
+              [
+                {
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 6,
+                  "textTransform": "uppercase",
+                },
+                {
+                  "color": "#6B675F",
+                },
+                {
+                  "color": "#6B675F",
+                  "fontFamily": "Inter_500Medium",
+                  "fontSize": 11,
+                  "fontWeight": "500",
+                  "letterSpacing": 1.98,
+                  "lineHeight": 13,
+                  "marginBottom": 8,
+                  "textTransform": "uppercase",
+                },
+              ]
+            }
+          >
+            Welcome
+          </Text>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.4}
+            style={
+              [
+                {
+                  "fontFamily": "CormorantGaramond_400Regular",
+                  "fontSize": 32,
+                  "fontWeight": "400",
+                  "letterSpacing": 0.6,
+                  "lineHeight": 40,
+                },
+                {
+                  "color": "#1A1A18",
+                  "textAlign": "left",
+                },
+                {
+                  "marginBottom": 8,
+                },
+              ]
+            }
+          >
+            How will you use The Growth Project?
+          </Text>
+        </View>
+        <View
+          accessibilityRole="radiogroup"
+          style={
+            [
+              {
+                "borderTopWidth": 0.5,
+              },
+              {
+                "borderColor": "#DCD5CC",
+              },
+            ]
+          }
+          testID="role-choice"
+        >
+          <View
+            accessibilityHint="A plan, daily targets and a coach who knows you."
+            accessibilityLabel="I'm here to train"
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "flexDirection": "row",
+                "minHeight": 88,
+                "opacity": 1,
+                "paddingVertical": 16,
+              }
+            }
+            testID="role-choice-client"
+          >
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "marginRight": 16,
+                }
+              }
+            >
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "CormorantGaramond_500Medium",
+                      "fontSize": 20,
+                      "fontWeight": "500",
+                      "letterSpacing": 0.4,
+                      "lineHeight": 25,
+                      "marginBottom": 2,
+                    },
+                    {
+                      "color": "#1A1A18",
+                    },
+                  ]
+                }
+              >
+                I'm here to train
+              </Text>
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "Inter_400Regular",
+                      "fontSize": 14,
+                      "fontWeight": "400",
+                      "letterSpacing": 0,
+                      "lineHeight": 22,
+                    },
+                    {
+                      "color": "#6B675F",
+                    },
+                  ]
+                }
+              >
+                A plan, daily targets and a coach who knows you.
+              </Text>
+            </View>
+            <View
+              style={
+                [
+                  {
+                    "alignItems": "center",
+                    "borderRadius": 999,
+                    "borderWidth": 1.5,
+                    "height": 22,
+                    "justifyContent": "center",
+                    "width": 22,
+                  },
+                  {
+                    "borderColor": "#6B675F",
+                  },
+                ]
+              }
+              testID="role-choice-client-radio"
+            />
+          </View>
+          <View
+            accessibilityHint="Your practice in one place: clients, programs and messages."
+            accessibilityLabel="I coach clients"
+            accessibilityRole="radio"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": false,
+                "disabled": false,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomWidth": 0.5,
+                "borderColor": "#DCD5CC",
+                "flexDirection": "row",
+                "minHeight": 88,
+                "opacity": 1,
+                "paddingVertical": 16,
+              }
+            }
+            testID="role-choice-coach"
+          >
+            <View
+              style={
+                {
+                  "flex": 1,
+                  "marginRight": 16,
+                }
+              }
+            >
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "CormorantGaramond_500Medium",
+                      "fontSize": 20,
+                      "fontWeight": "500",
+                      "letterSpacing": 0.4,
+                      "lineHeight": 25,
+                      "marginBottom": 2,
+                    },
+                    {
+                      "color": "#1A1A18",
+                    },
+                  ]
+                }
+              >
+                I coach clients
+              </Text>
+              <Text
+                style={
+                  [
+                    {
+                      "fontFamily": "Inter_400Regular",
+                      "fontSize": 14,
+                      "fontWeight": "400",
+                      "letterSpacing": 0,
+                      "lineHeight": 22,
+                    },
+                    {
+                      "color": "#6B675F",
+                    },
+                  ]
+                }
+              >
+                Your practice in one place: clients, programs and messages.
+              </Text>
+            </View>
+            <View
+              style={
+                [
+                  {
+                    "alignItems": "center",
+                    "borderRadius": 999,
+                    "borderWidth": 1.5,
+                    "height": 22,
+                    "justifyContent": "center",
+                    "width": 22,
+                  },
+                  {
+                    "borderColor": "#6B675F",
+                  },
+                ]
+              }
+              testID="role-choice-coach-radio"
+            />
+          </View>
+        </View>
+      </View>
+    </RCTScrollView>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 42,
+          },
+        ]
+      }
+      testID="create-account-role-footer"
+    >
+      <View
+        accessibilityLabel="Continue"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": false,
+            "checked": undefined,
+            "disabled": true,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "alignItems": "center",
+              "alignSelf": "stretch",
+              "borderRadius": 12,
+              "justifyContent": "center",
+              "minHeight": 54,
+              "overflow": "hidden",
+              "paddingHorizontal": 24,
+            },
+            {
+              "backgroundColor": "#E0D9CE",
+            },
+            undefined,
+          ]
+        }
+        testID="role-choice-continue"
+      >
+        <Text
+          maxFontSizeMultiplier={1.6}
+          numberOfLines={1}
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 16,
+                "fontWeight": "500",
+                "letterSpacing": 0.1,
+                "lineHeight": 22,
+                "textAlign": "center",
+              },
+              {
+                "color": "#524E47",
+              },
+            ]
+          }
+        >
+          Continue
+        </Text>
+      </View>
+      <View
+        accessibilityLabel="I have an invite code"
+        accessibilityRole="link"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": false,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          [
+            {
+              "justifyContent": "center",
+              "minHeight": 44,
+              "paddingHorizontal": 4,
+            },
+            {
+              "alignSelf": "center",
+            },
+            false,
+            undefined,
+          ]
+        }
+        testID="role-choice-invite-code"
+      >
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 16,
+                "fontWeight": "400",
+                "letterSpacing": -0.16,
+                "lineHeight": 22,
+              },
+              {
+                "color": "#1A1A18",
+              },
+              {
+                "textDecorationLine": "underline",
+              },
+            ]
+          }
+        >
+          I have an invite code
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+`;

@@ -28,6 +28,8 @@ jest.mock('react-native-safe-area-context', () => {
       ReactLocal.createElement(View, { style }, children),
     SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    // REDO-DEVICES-133: the shared Screen reads insets from this context.
+    SafeAreaInsetsContext: ReactLocal.createContext(null),
   };
 });
 
@@ -140,7 +142,8 @@ describe('ConnectionsScreen — list + badges', () => {
     );
     await render(<ConnectionsScreen />);
     expect(screen.getByText('Connected')).toBeTruthy();
-    expect(screen.getByText('10m ago')).toBeTruthy();
+    // REDO-DEVICES-133: the sync time reads as a sentence.
+    expect(screen.getByText('Last synced 10m ago')).toBeTruthy();
     // A connected provider's primary action is Disconnect.
     expect(screen.getByLabelText('Disconnect Oura')).toBeTruthy();
   });
@@ -345,7 +348,9 @@ describe('ConnectionsScreen — loading + error states', () => {
       queryResult({ isError: true, refetch }),
     );
     await render(<ConnectionsScreen />);
-    const retry = screen.getByLabelText('Retry loading connections');
+    // REDO-DEVICES-133: the shared QuietError owns the retry (label Try again).
+    expect(screen.getByText('Your connections could not load. Try again in a moment.')).toBeTruthy();
+    const retry = screen.getByLabelText('Try again');
     expect(retry).toBeTruthy();
     await fireEvent.press(retry);
     expect(refetch).toHaveBeenCalledTimes(1);

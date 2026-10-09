@@ -10,3 +10,8 @@ export type { PrimaryButtonProps, TextLinkProps, TextLinkTone } from './buttons/
 export { Headline, Lede, AccentRule } from './text/Headline';
 export type { HeadlineProps, LedeProps } from './text/Headline';
 export { QuietSection, QuietOverline, QuietOverline as Overline, quietActions } from './sections/QuietSection';
+export type { QuietSectionProps } from './sections/QuietSection';
+export { QuietRow } from './rows/QuietRow';
+export type { QuietRowProps } from './rows/QuietRow';
+export { WheelBand, wheelBandStyle, wheelFrameStyle, wheelValueStyle } from './wheel/WheelBand';
+export type { WheelBandProps } from './wheel/WheelBand';
