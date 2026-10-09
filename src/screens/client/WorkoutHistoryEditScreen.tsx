@@ -34,7 +34,7 @@ export default function WorkoutHistoryEditScreen() {
       setHeaderText: { ...base.setHeaderText, color: sc.textMuted },
       setText: { ...base.setText, color: sc.textMuted },
       setRow: { ...base.setRow, borderBottomColor: sc.border },
-      setRowCompleted: { backgroundColor: sc.bgPrimary },
+      setRowCompleted: { ...base.setRowCompleted, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
       setInput: { ...base.setInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
       notesInput: { ...base.notesInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
