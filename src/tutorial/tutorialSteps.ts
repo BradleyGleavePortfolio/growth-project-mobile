@@ -1,5 +1,8 @@
 /**
- * tutorialSteps — the nine-step Roman-led tour, declared as data.
+ * tutorialSteps — the Roman-led tour, declared as data.
+ *
+ * Calendar, Community and connected devices are no longer steps: the
+ * completion names them in one quiet paragraph (TOUR-133, decision 133-5).
  *
  * Each step is a sequence of gates. A gate is one of:
  *   - ack:    a single explicit button (only the welcome, two "this is where
@@ -17,7 +20,6 @@
  * `tutorialCopy.test.ts` enforces the voice rules; `tutorialTruth.test.tsx`
  * the state-driven lines.
  */
-import { featureFlags } from '../config/featureFlags';
 import type { MacroDisplayMode } from '../macros/macroDisplay';
 import type {
   OnboardingMacros,
@@ -63,6 +65,9 @@ export interface CopyContext {
   macroMode?: MacroDisplayMode;
   /** A coach is linked to this client. Absent means no coach. */
   coachLinked?: boolean;
+  /** The Calendar and Community tabs are in this build (completion line). */
+  calendarAvailable?: boolean;
+  communityAvailable?: boolean;
   /** How each step of this tour ended so far (the closing line reads it). */
   outcomes?: Partial<Record<TutorialStepId, TutorialStepOutcome>>;
 }
@@ -74,6 +79,8 @@ interface GateBase {
   target?: TutorialTargetId;
   /** Centered card with no spotlight (welcome and completion). */
   center?: boolean;
+  /** A quieter second paragraph (the completion card). */
+  sub?: Line;
 }
 
 export interface AckGate extends GateBase {
@@ -91,18 +98,13 @@ export interface SignalGate extends GateBase {
   kind: 'signal';
   signal: TutorialSignal;
   allowDefer?: boolean;
-  /** Spoken hint on the Later button (defaults to the wearable wording). */
+  /** Spoken hint on the Later button. */
   deferHint?: string;
-  /**
-   * Optional primary action that opens the screen where the signal can
-   * happen (e.g. the welcome call booking). Never required to finish.
-   */
-  action?: { label: Line; target: TutorialNavTarget };
 }
 
 export type TutorialGate = AckGate | RouteGate | SignalGate;
 
-export type StepRequirement = 'program' | 'macros' | 'community' | 'calendar' | 'coach';
+export type StepRequirement = 'program' | 'macros' | 'coach';
 
 export interface TutorialStepDef {
   id: TutorialStepId;
@@ -126,20 +128,10 @@ export function stepRequirements(step: Pick<TutorialStepDef, 'requires'>): reado
 
 const n = (v: number): string => Math.round(v).toLocaleString('en-US');
 
-export function wearableName(c: CopyContext): string {
-  if (c.platform === 'ios') return 'Apple Health';
-  if (c.platform === 'android') return 'Health Connect';
-  return 'your health app';
-}
-
-function spacesSentence(c: CopyContext): string {
-  const names = c.spaces.map((s) => s.name).filter(Boolean);
-  if (names.length === 0) {
-    return `You are in the community ${c.coachName} keeps for everyone training together.`;
-  }
-  if (names.length === 1) return `You are a member of ${names[0]}.`;
-  const last = names[names.length - 1];
-  return `You are a member of ${names.slice(0, -1).join(', ')} and ${last}.`;
+function joinAnd(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  if (parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
 }
 
 function macroLine(c: CopyContext): string {
@@ -167,16 +159,20 @@ function completeLine(c: CopyContext): string {
   if (o.plan === 'done') facts.push('your plan is set');
   if (o.macros === 'done') facts.push('your numbers are set');
   if (o.first_message === 'done') facts.push(`${c.coachName} has your message`);
-  const last = facts.pop();
-  const said = !last
-    ? ''
-    : facts.length === 0
-      ? last
-      : facts.length === 1
-        ? `${facts[0]} and ${last}`
-        : `${facts.join(', ')}, and ${last}`;
-  const summary = said ? `${said.charAt(0).toUpperCase()}${said.slice(1)}. ` : '';
-  return `That is everything${c.firstName ? `, ${c.firstName}` : ''}. ${summary}One thing at a time. Consistency matters more than perfection.`;
+  const said = joinAnd(facts);
+  const summary = said ? ` ${said.charAt(0).toUpperCase()}${said.slice(1)}.` : '';
+  return `That is everything${c.firstName ? `, ${c.firstName}` : ''}.${summary}`;
+}
+
+/** Calendar, Community and devices, folded in (decision 133-5). */
+function completeSub(c: CopyContext): string {
+  const tabs = [c.calendarAvailable ? 'Calendar' : '', c.communityAvailable ? 'Community' : ''].filter(Boolean);
+  const where = tabs.length
+    ? `${joinAnd(tabs)} ${tabs.length > 1 ? 'have their own tabs' : 'has its own tab'}, and connected devices live under You.`
+    : 'Connected devices live under You.';
+  const call =
+    c.calendarAvailable && c.coachLinked ? ` Book your welcome call with ${c.coachName} from Calendar when it suits you.` : '';
+  return `${where}${call} One thing at a time. You do not need to be perfect, just consistent.`;
 }
 
 function planSummary(c: CopyContext): string {
@@ -188,7 +184,7 @@ function planSummary(c: CopyContext): string {
   return parts.length ? `${p.name}: ${parts.join(', ')}.` : `${p.name}.`;
 }
 
-const ALL_STEPS: readonly TutorialStepDef[] = [
+export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
   {
     id: 'welcome',
     title: 'Welcome',
@@ -248,109 +244,6 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
       `${c.coachName} is finishing your numbers. They will appear on Home once they are ready.`,
   },
   {
-    id: 'community',
-    title: 'Community',
-    // Spaces live in the coach's workspace: no coach, no community to show.
-    requires: ['community', 'coach'],
-    gates: [
-      {
-        kind: 'route',
-        routes: ['CommunityTab'],
-        target: 'tab:CommunityTab',
-        line: (c) =>
-          `This is Community, where the people training with ${c.coachName} talk. Tap Community.`,
-      },
-      {
-        kind: 'ack',
-        cta: 'Continue',
-        line: (c) =>
-          `${spacesSentence(c)} Post when you like and read when you prefer. ${c.coachName} is here too.`,
-      },
-    ],
-    doneLine: () => 'Very good.',
-  },
-  {
-    id: 'coach_messages',
-    title: 'Messaging your coach',
-    requires: 'coach',
-    gates: [
-      {
-        kind: 'route',
-        routes: ['Messages'],
-        target: 'home-message-coach',
-        takeMeThere: { tab: 'Home', screen: 'Messages' },
-        line: (c) =>
-          `To reach ${c.coachName} directly, go to Home and tap Message your coach. This is a real person, not me.`,
-      },
-      {
-        kind: 'ack',
-        cta: 'Continue',
-        line: (c) =>
-          `This is your conversation with ${c.coachName}. Ask about your plan, your schedule, or anything in the way. You will send your first note at the end of the tour.`,
-      },
-    ],
-    doneLine: () => 'Noted.',
-  },
-  {
-    // S-SCHED: only when featureFlags.clientCalendar is on. The open times
-    // it explains are the coach's, so it also needs a linked coach.
-    id: 'calendar',
-    title: 'Your calendar',
-    requires: ['calendar', 'coach'],
-    gates: [
-      {
-        kind: 'route',
-        routes: ['CalendarHome'],
-        target: 'tab:CalendarTab',
-        line: (c) =>
-          `This is Calendar. It shows ${c.coachName}'s open times and your upcoming sessions. Tap Calendar.`,
-      },
-      {
-        kind: 'ack',
-        cta: 'Continue',
-        line: (c) =>
-          `Choose a type of call, then a time that suits you. Times are shown in your own time zone. Some calls are confirmed straight away, and others wait for ${c.coachName} to confirm. You can copy a confirmed session to your phone's calendar. If it changes, update the copy in your calendar app.`,
-      },
-    ],
-    doneLine: () => 'That is where your sessions live.',
-  },
-  {
-    id: 'wearables',
-    title: 'Wearables, health and sleep',
-    gates: [
-      {
-        kind: 'route',
-        routes: ['Connections'],
-        target: 'more-connections',
-        takeMeThere: { tab: 'MoreTab', screen: 'Connections' },
-        line: (c) =>
-          `Your phone or watch can share steps, heart rate and sleep through ${wearableName(c)}. Open Profile and more, then Connected devices.`,
-      },
-      {
-        kind: 'signal',
-        signal: 'wearable_connected',
-        allowDefer: true,
-        line: (c) =>
-          `Choose ${wearableName(c)} and allow access. If you would rather do this later, tap Later. Nothing is lost.`,
-      },
-      {
-        kind: 'route',
-        routes: ['Health'],
-        target: 'more-health',
-        takeMeThere: { tab: 'MoreTab', screen: 'Health' },
-        line: () =>
-          'Your health and sleep data live in one place. Open Profile and more, then Health and sleep.',
-      },
-      {
-        kind: 'ack',
-        cta: 'Continue',
-        line: () =>
-          'Fitness holds your steps and activity. Recovery holds your sleep. It fills in once a device is connected.',
-      },
-    ],
-    doneLine: () => 'That is where to look.',
-  },
-  {
     id: 'first_meal',
     title: 'Log your first meal',
     gates: [
@@ -391,29 +284,6 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
     doneLine: (c) => `Sent. ${c.coachName} will see it in your conversation.`,
   },
   {
-    // S-SCHED owner decision 2026-10-01: the tour ends with the welcome call.
-    // Skippable (Later), never blocks finishing. Only with clientCalendar on
-    // and a linked coach.
-    id: 'welcome_call',
-    title: 'Your welcome call',
-    requires: ['calendar', 'coach'],
-    gates: [
-      {
-        kind: 'signal',
-        signal: 'welcome_call_booked',
-        allowDefer: true,
-        deferHint: 'Book the welcome call another time from Calendar',
-        action: {
-          label: (c) => `Book your welcome call with ${c.coachName}`,
-          target: { tab: 'CalendarTab', screen: 'CalendarBook', params: { welcome: true } },
-        },
-        line: (c) =>
-          `One more thing. Book your welcome call with ${c.coachName}. Pick a time that suits you and it is set. If now is not a good moment, tap Later and book it from Calendar.`,
-      },
-    ],
-    doneLine: () => 'Done. You will find it in Calendar.',
-  },
-  {
     id: 'complete',
     title: 'Complete',
     gates: [
@@ -422,22 +292,11 @@ const ALL_STEPS: readonly TutorialStepDef[] = [
         center: true,
         cta: 'Done',
         line: completeLine,
+        sub: completeSub,
       },
     ],
   },
 ];
-
-/**
- * The tour for this build. The two Calendar steps (S-SCHED) exist only when
- * featureFlags.clientCalendar is on, so with the flag off the step list,
- * the progress count ("Step 1 of 8") and persisted step indexes are
- * exactly what they were before.
- */
-export function buildTutorialSteps(calendar: boolean): readonly TutorialStepDef[] {
-  return calendar ? ALL_STEPS : ALL_STEPS.filter((s) => !stepRequirements(s).includes('calendar'));
-}
-
-export const TUTORIAL_STEPS: readonly TutorialStepDef[] = buildTutorialSteps(featureFlags.clientCalendar);
 
 /** Steps shown in the progress indicator (the completion moment is not one). */
 export const COUNTED_STEPS = TUTORIAL_STEPS.filter((s) => s.id !== 'complete');

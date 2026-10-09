@@ -21,7 +21,7 @@ export function SkeletonClientCard() {
         styles.card,
         {
           backgroundColor: tokens.colors.cream,
-          borderRadius: tokens.radius.lg,
+          borderRadius: tokens.radius.card,
         },
       ]}
       accessibilityElementsHidden

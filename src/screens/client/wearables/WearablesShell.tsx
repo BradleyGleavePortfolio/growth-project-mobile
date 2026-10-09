@@ -20,8 +20,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import {
   useNavigation,
   useRoute,
@@ -29,7 +28,10 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { spacing, typography } from '../../../theme/tokens';
+import { useTheme } from '../../../theme/ThemeProvider';
+import HapticPressable from '../../../components/HapticPressable';
+import { Headline, Overline, Screen, quietActions } from '../../../ui';
 import { configFor } from '../../../api/wearablesConnectionsApi';
 import {
   connectFailureMessage,
@@ -115,6 +117,7 @@ export default function WearablesShell() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, HealthRouteParams>, string>>();
   const reduceMotion = useReduceMotion();
+  const { semanticColors: sc } = useTheme();
 
   const initialBucket = bucketForParam(route.params?.bucket);
   const [bucket, setBucket] = useState<WearableMetricBucket>(initialBucket);
@@ -310,8 +313,33 @@ export default function WearablesShell() {
       />
     );
 
+  const noticeLabel =
+    notice == null
+      ? ''
+      : notice.kind === 'notSyncing'
+        ? 'Reconnect'
+        : notice.action === 'resume'
+          ? 'Try again'
+          : notice.action === 'connect'
+            ? 'Reconnect'
+            : ctaLabelFor({ action: notice.action, cta: notice.cta });
+  const noticeA11y =
+    notice == null
+      ? ''
+      : notice.kind === 'notSyncing' || (notice.kind === 'retry' && notice.action === 'connect')
+        ? `Reconnect ${deviceName}`
+        : notice.action === 'resume'
+          ? `Try again to sync ${deviceName}`
+          : noticeLabel;
+
+  // REDO-DEVICES-133: a serif title stack over the switcher, the sync notice
+  // as a hairline band (no cream box), insets from the shared Screen.
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.column} testID="health-shell">
+      <View style={styles.titleBlock}>
+        <Overline>Health data</Overline>
+        <Headline level="h1">Health and sleep</Headline>
+      </View>
       <View style={styles.header}>
         <BucketSwitcher active={bucket} onChange={handleSwitch} />
         <FreshnessChip
@@ -322,39 +350,28 @@ export default function WearablesShell() {
       </View>
 
       {notice != null && (
-        <View style={styles.notice} accessibilityRole="alert">
-          <Text style={styles.noticeText}>
+        <View
+          style={[styles.notice, { borderColor: sc.border }]}
+          accessibilityRole="alert"
+          testID="health-notice"
+        >
+          <Text style={[styles.noticeText, { color: sc.textPrimary }]}>
             {notice.kind === 'notSyncing' ? notSyncingHereCopy(deviceName) : notice.text}
           </Text>
           {(notice.kind === 'notSyncing' || notice.action !== 'none') && (
-          <Pressable
-            style={styles.noticeAction}
-            onPress={
-              notice.kind === 'notSyncing'
-                ? goToConnections
-                : () => runNoticeAction(notice.action)
-            }
-            accessibilityRole="button"
-            accessibilityLabel={
-              notice.kind === 'notSyncing'
-                ? `Reconnect ${deviceName}`
-                : notice.action === 'resume'
-                  ? `Try again to sync ${deviceName}`
-                  : notice.action === 'connect'
-                    ? `Reconnect ${deviceName}`
-                    : ctaLabelFor({ action: notice.action, cta: notice.cta })
-            }
-          >
-            <Text style={styles.noticeActionText}>
-              {notice.kind === 'notSyncing'
-                ? 'Reconnect'
-                : notice.action === 'resume'
-                  ? 'Try again'
-                  : notice.action === 'connect'
-                    ? 'Reconnect'
-                    : ctaLabelFor({ action: notice.action, cta: notice.cta })}
-            </Text>
-          </Pressable>
+            <HapticPressable
+              intent="light"
+              style={({ pressed }) => [quietActions.action, styles.noticeAction, { opacity: pressed ? 0.6 : 1 }]}
+              onPress={
+                notice.kind === 'notSyncing'
+                  ? goToConnections
+                  : () => runNoticeAction(notice.action)
+              }
+              accessibilityRole="button"
+              accessibilityLabel={noticeA11y}
+            >
+              <Text style={[quietActions.label, { color: sc.accentText }]}>{noticeLabel}</Text>
+            </HapticPressable>
           )}
         </View>
       )}
@@ -364,7 +381,7 @@ export default function WearablesShell() {
       >
         {content}
       </Animated.View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
@@ -373,10 +390,16 @@ export function providerLabel(bucket: WearableMetricBucket): string {
   return bucket === 'HEALTH_FITNESS' ? 'Fitness' : 'Recovery';
 }
 
+// The bucket screens keep their own 16 pt gutter; the shell's title and
+// switcher sit on the same line so the column reads as one page.
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bone,
+  column: {
+    paddingHorizontal: 0,
+    paddingBottom: 0,
+  },
+  titleBlock: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
   },
   header: {
     flexDirection: 'row',
@@ -384,7 +407,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
   body: {
@@ -393,21 +415,14 @@ const styles = StyleSheet.create({
   notice: {
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   noticeText: {
     ...typography.bodySmall,
-    color: colors.charcoal,
   },
   noticeAction: {
     alignSelf: 'flex-start',
-    marginTop: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  noticeActionText: {
-    ...typography.bodyMd,
-    color: colors.forest,
   },
 });

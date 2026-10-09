@@ -79,7 +79,7 @@
     "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": {
       "kind": "flag",
       "default": "off",
-      "reason": "Feature flag read via featureFlags.ts with a literal key."
+      "reason": "Feature flag read via featureFlags.ts with a literal key (Roman's client tour after the consultation). B40: must be \"true\" in every store and test profile (preview, production, clinic, clinic-apk); scripts/validate-app-config.js enforces it."
     },
     "EXPO_PUBLIC_FF_COACH_BRIEF": {
       "kind": "flag",
@@ -154,7 +154,7 @@
     "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": {
       "kind": "flag",
       "default": "off",
-      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation onboarding, #310); on in the clinic EAS profile."
+      "reason": "Feature flag read via featureFlags.ts with a literal key (consultation onboarding, #310). B14/B40: must be \"true\" in every store and test profile (preview, production, clinic, clinic-apk); scripts/validate-app-config.js enforces it. RootNavigator sends every new client to the consultation whatever its value; it still gates the tour's recovery read."
     },
     "EXPO_PUBLIC_FF_DELIVERABLES": {
       "kind": "flag",

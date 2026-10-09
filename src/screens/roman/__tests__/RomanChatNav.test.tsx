@@ -26,7 +26,10 @@ jest.mock('@expo/vector-icons', () => ({
     }),
 }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: { textPrimary: 'theme-foreground' } }),
+  useTheme: () => ({
+    colors: { textPrimary: 'theme-foreground' },
+    semanticColors: { ...jest.requireActual('../../../theme/tokens').lightTokens, textPrimary: 'theme-foreground' },
+  }),
 }));
 jest.mock('../../../screens/client/wearables/components/useReduceMotion', () => ({
   useReduceMotion: () => true,
@@ -55,7 +58,7 @@ it.each(['loading', 'ready', 'offline', 'error', 'unavailable'] as const)(
     const view = await render(<RomanChatScreen />);
     const back = view.getByRole('button', { name: 'Back' });
     expect(StyleSheet.flatten(back.props.style)).toMatchObject({ width: 44, height: 44 });
-    expect(view.getByTestId('icon-arrow-back').props.style.color).toBe('theme-foreground');
+    expect(view.getByTestId('icon-chevron-back').props.style.color).toBe('theme-foreground');
     await fireEvent.press(back);
     expect(mockGoBack).toHaveBeenCalledTimes(1);
     await fireEvent.press(view.getByTestId('roman-conversations-button'));

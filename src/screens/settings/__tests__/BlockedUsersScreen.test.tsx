@@ -30,7 +30,8 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
 
 jest.mock('../../../theme/ThemeProvider', () => {
   const CanonicalColors = jest.requireActual('../../../constants/colors').default;
-  return { useTheme: () => ({ colors: CanonicalColors }) };
+  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+  return { useTheme: () => ({ colors: CanonicalColors, semanticColors: lightTokens }) };
 });
 
 import BlockedUsersScreen from '../BlockedUsersScreen';

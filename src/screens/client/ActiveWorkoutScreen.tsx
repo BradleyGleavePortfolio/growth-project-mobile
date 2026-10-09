@@ -10,10 +10,10 @@ import {
   FlatList,
   AppState,
   AppStateStatus,
-  ActivityIndicator,
   type AlertButton,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
+import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar } from '../../ui';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -77,7 +77,7 @@ import type {
   SessionExercise,
   SessionSet,
 } from './active-workout/types';
-import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
+import { ExerciseImage, MUSCLES } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
 import WorkoutFinishSummary from './active-workout/WorkoutFinishSummary';
 import { workoutApi } from '../../services/api';
@@ -135,7 +135,6 @@ function dropRestAlert(id: string): void {
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const muscleColors = useMemo(() => makeMuscleColors(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { routineName, exercises: exercisesJson, assignmentId } = route.params;
@@ -633,7 +632,7 @@ export default function ActiveWorkoutScreen() {
     } catch {
       setShowAddModal(false);
       // FU-WORKLOG2-126: a failed Swap used to say "try Add Exercise again".
-      Alert.alert('Exercise list unavailable', `The exercise list did not load. Keep this workout open and try ${index === null ? 'Add Exercise' : 'Swap'} again.`);
+      Alert.alert('Exercise list unavailable', `The exercise list did not load. Keep this workout open and try ${index === null ? 'Add exercise' : 'Swap'} again.`);
     }
   };
 
@@ -1080,7 +1079,7 @@ export default function ActiveWorkoutScreen() {
       void finishButtons[1].onPress?.();
       return;
     }
-    Alert.alert('Finish Workout?', finishMessage, finishButtons);
+    Alert.alert('Finish workout?', finishMessage, finishButtons);
   };
 
   // TRAIN-GATE-128 (owner 15:03 10-07): leaving a live workout never deletes
@@ -1192,63 +1191,102 @@ export default function ActiveWorkoutScreen() {
     return found;
   })();
 
+  // REDO-LIVE-133: the rest timer sits in the pinned footer above Finish, so it
+  // never covers a set row. Its handlers are unchanged (#474 rest alert).
+  const restRow = restActive ? (
+    <View style={styles.restOverlay} testID="rest-timer">
+      <View style={styles.restLeft}>
+        <Ionicons name="timer-outline" size={20} color={colors.textMuted} />
+        <Text style={styles.restLabel}>Rest</Text>
+      </View>
+      <Text style={styles.restCountdown}>
+        {Math.floor(restSeconds / 60).toString().padStart(2, '0')}
+        :{(restSeconds % 60).toString().padStart(2, '0')}
+      </Text>
+      <HapticPressable intent="light" style={styles.toolButton} onPress={() => { restEndsAtRef.current += 30_000; cancelRestAlert(); refreshRest(); }} accessibilityLabel="Add 30 seconds to rest timer">
+        <Text style={styles.restSkip}>+30s</Text>
+      </HapticPressable>
+      <TouchableOpacity
+        style={styles.toolButton}
+        activeOpacity={0.6}
+        onPress={() => {
+          if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+          restIntervalRef.current = null;
+          cancelRestAlert();
+          setRestActive(false);
+          HapticService.softImpact();
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Skip rest timer"
+      >
+        <Text style={styles.restSkip}>Skip</Text>
+      </TouchableOpacity>
+    </View>
+  ) : null;
+
   return (
-    <View style={styles.container}>
-      {/* Top Bar */}
-      <View style={styles.topBar}>
-        <HapticPressable
-          intent="warning"
-          onPress={() => askBeforeLeaving(() => navigation.goBack(), true)}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          accessibilityRole="button"
-          accessibilityLabel="Leave workout"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </HapticPressable>
-        <View style={styles.topCenter}>
-          <Text style={styles.topTitle} numberOfLines={2}>{routineName}</Text>
-          <Text style={styles.timerText}>{formatTime(timer)}</Text>
+    <>
+    <Screen
+      edges={['top']}
+      keyboardAware={false}
+      contentStyle={styles.screenContent}
+      testID="active-workout"
+      header={
+        <ScreenTopBar
+          onBack={() => askBeforeLeaving(() => navigation.goBack(), true)}
+          backLabel="Leave workout"
+          trailing={
+            <Text style={styles.timerText} accessibilityLabel={`Workout time ${formatTime(timer)}`}>
+              {formatTime(timer)}
+            </Text>
+          }
+        />
+      }
+      footer={
+        <>
+          {restRow}
+          <PrimaryButton
+            label={saving ? 'Saving workout' : 'Finish workout'}
+            onPress={() => finishWorkout()}
+            loading={saving}
+            testID="finish-workout"
+          />
+        </>
+      }
+    >
+        <View style={styles.hero}>
+          <Overline>Live workout</Overline>
+          <Headline level="h1" numberOfLines={3}>{routineName}</Headline>
+          <Text style={styles.heroMeta}>{completedSets} of {totalSets} sets completed</Text>
+          <View
+            style={styles.progressBar}
+            accessibilityRole="progressbar"
+            accessibilityLabel="Sets completed"
+            accessibilityValue={{ min: 0, max: totalSets, now: completedSets }}
+          >
+            <View testID="live-progress-fill" style={[styles.progressFill, { width: totalSets > 0 ? `${(completedSets / totalSets) * 100}%` : '0%' }]} />
+          </View>
         </View>
-        <HapticPressable
-          intent="success"
-          onPress={() => finishWorkout()}
-          disabled={saving}
-          style={[styles.finishBtn, saving && { opacity: 0.6 }]}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          accessibilityRole="button"
-          accessibilityLabel={saving ? 'Saving workout' : 'Finish workout'}
-          accessibilityState={{ disabled: saving, busy: saving }}
-          testID="finish-workout"
-        >
-          {saving ? (
-            <ActivityIndicator size="small" color={colors.textOnPrimary} />
-          ) : (
-            <Text style={styles.finishBtnText}>Finish</Text>
-          )}
-        </HapticPressable>
-      </View>
-
-      {/* Progress */}
-      <View style={styles.progressBar}>
-        <View style={[styles.progressFill, { width: totalSets > 0 ? `${(completedSets / totalSets) * 100}%` : '0%' }]} />
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-        <Text style={[styles.previousSetText, { marginHorizontal: 20, marginBottom: 12 }]}>{completedSets} of {totalSets} sets completed</Text>
         {/* §2.9 Roman voice-log readback — voiced beside his face, reading back
             the most recently completed set. Only when the Roman flag is on AND
             at least one set has been completed. Default mode: a per-set PR
             signal is not tracked in the live session, so no celebration is
             fabricated (documented in the report). */}
         {featureFlags.romanChat && lastCompletedSet ? (
-          <RomanVoiceLogReadback
-            weight={lastCompletedSet.weight}
-            reps={lastCompletedSet.reps}
-            mode="default"
-            testID="roman-voicelog-card"
-          />
+          <View style={styles.readback}>
+            <RomanVoiceLogReadback
+              weight={lastCompletedSet.weight}
+              reps={lastCompletedSet.reps}
+              mode="default"
+              testID="roman-voicelog-card"
+            />
+          </View>
         ) : null}
 
+        <Overline style={styles.listOverline}>Exercises</Overline>
+        {sessionExercises.length === 0 ? (
+          <Text style={styles.emptyList} testID="active-workout-empty">No exercises yet. Add the first one below.</Text>
+        ) : null}
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
             key={`${exercise.exerciseId}-${exIdx}`}
@@ -1271,25 +1309,26 @@ export default function ActiveWorkoutScreen() {
           />
         ))}
 
-        <HapticPressable intent="medium" style={styles.addExerciseBtn} disabled={saving} onPress={() => { void openAddExercise(); }}>
-          <Ionicons name="add-circle" size={22} color={colors.primary} />
-          <Text style={styles.addExerciseText}>Add Exercise</Text>
+        <HapticPressable intent="medium" style={styles.addExerciseBtn} disabled={saving} onPress={() => { void openAddExercise(); }} accessibilityRole="button">
+          <Ionicons name="add-outline" size={22} color={colors.primary} />
+          <Text style={styles.addExerciseText}>Add exercise</Text>
         </HapticPressable>
-        <View style={[styles.exerciseCard, { marginTop: 16 }]}>
-          <TextInput style={styles.notesInput} value={workoutNotes} onChangeText={setWorkoutNotes} placeholder="Workout notes" accessibilityLabel="Workout notes" placeholderTextColor={colors.textMuted} multiline maxLength={2000} editable={!saving} />
+        <View style={styles.notesSection}>
+          <Overline>Notes</Overline>
+          <TextInput style={styles.notesInput} value={workoutNotes} onChangeText={setWorkoutNotes} placeholder="How the session went, for next time" accessibilityLabel="Workout notes" placeholderTextColor={colors.textMuted} multiline maxLength={2000} editable={!saving} />
         </View>
         {completedSets > 0 && <WorkoutFinishSummary summary={summary} styles={styles} historyState={historyState} elapsed={formatTime(timer)} />}
-      </ScrollView>
+    </Screen>
 
       {/* Add Exercise Modal */}
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <HapticPressable intent="light" onPress={() => setShowAddModal(false)}>
+            <HapticPressable intent="light" style={styles.modalClose} onPress={() => setShowAddModal(false)} accessibilityRole="button" accessibilityLabel="Close">
               <Ionicons name="close" size={24} color={colors.textPrimary} />
             </HapticPressable>
-            <Text style={styles.modalTitle}>{swapIndex === null ? 'Add Exercise' : 'Choose replacement'}</Text>
-            <View style={{ width: 24 }} />
+            <Headline level="h3">{swapIndex === null ? 'Add exercise' : 'Choose replacement'}</Headline>
+            <View style={styles.modalClose} />
           </View>
 
           <View style={styles.searchBar}>
@@ -1359,20 +1398,10 @@ export default function ActiveWorkoutScreen() {
                 <View style={styles.exerciseListInfo}>
                   <Text style={styles.exerciseListName}>{item.name}</Text>
 
-                  {/* Muscle badge */}
-                  <View
-                    style={[
-                      styles.muscleBadge,
-                      { backgroundColor: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) + '22', borderColor: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) + '66' },
-                    ]}
-                  >
-                    <Text style={[styles.muscleBadgeText, { color: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) }]}>
-                      {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)}
-                    </Text>
-                  </View>
-
-                  {/* Equipment */}
-                  <Text style={styles.exerciseListEquipment}>{item.equipment}</Text>
+                  {/* REDO-LIVE-133: muscle and equipment as one muted line (monochrome data, no colour-coded badge). */}
+                  <Text style={styles.exerciseListEquipment}>
+                    {[item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1), item.equipment].filter(Boolean).join(' · ')}
+                  </Text>
                 </View>
 
                 <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
@@ -1382,36 +1411,6 @@ export default function ActiveWorkoutScreen() {
         </View>
       </Modal>
 
-      {/* Rest Timer Overlay */}
-      {restActive && (
-        <View style={styles.restOverlay}>
-          <View style={styles.restLeft}>
-            <Ionicons name="timer-outline" size={20} color={colors.primary} />
-            <Text style={styles.restLabel}>Rest</Text>
-          </View>
-          <Text style={styles.restCountdown}>
-            {Math.floor(restSeconds / 60).toString().padStart(2, '0')}
-            :{(restSeconds % 60).toString().padStart(2, '0')}
-          </Text>
-          <HapticPressable intent="light" style={styles.toolButton} onPress={() => { restEndsAtRef.current += 30_000; cancelRestAlert(); refreshRest(); }} accessibilityLabel="Add 30 seconds to rest timer">
-            <Text style={styles.restSkip}>+30s</Text>
-          </HapticPressable>
-          <TouchableOpacity
-            style={styles.toolButton}
-            onPress={() => {
-              if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-              restIntervalRef.current = null;
-              cancelRestAlert();
-              setRestActive(false);
-              HapticService.softImpact();
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Skip rest timer"
-          >
-            <Text style={styles.restSkip}>Skip</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
+    </>
   );
 }

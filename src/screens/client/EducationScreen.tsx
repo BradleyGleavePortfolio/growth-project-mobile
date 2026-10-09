@@ -21,6 +21,8 @@ import {
   markLessonComplete,
 } from '../../db/educationDb';
 import { lessonFromApi, type EducationLesson } from './educationLesson';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 
 type ScreenMode = 'list' | 'detail';
 
@@ -149,7 +151,7 @@ export default function EducationScreen() {
   // ──────────────────── DETAIL VIEW ────────────────────
   if (mode === 'detail' && selectedLesson) {
     return (
-      <View style={styles.container}>
+      <Screen edges={['top']} scroll={false} contentStyle={styles.bare}>
         <View style={styles.detailHeader}>
           <TouchableOpacity onPress={goBack} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center' }} accessibilityRole="button" accessibilityLabel="Back to lessons">
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -257,14 +259,14 @@ export default function EducationScreen() {
 
           <View style={{ height: 60 }} />
         </ScrollView>
-      </View>
+      </Screen>
 
     );
   }
 
   // ──────────────────── LIST VIEW ────────────────────
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare}>
       <View style={styles.header}>
         <Text style={styles.title}>Learn</Text>
         <Text style={styles.subtitle}>Build your nutrition &amp; fitness knowledge</Text>
@@ -393,19 +395,20 @@ export default function EducationScreen() {
           );
         }}
       />
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Screen owns the inset top (insets.top + 12); the lists keep their own gutters.
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
   // ── Header ──
-  header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 16 },
+  header: { paddingHorizontal: 24, marginBottom: 16 },
   title: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 32,
-    lineHeight: 35,
+    lineHeight: 40,
     letterSpacing: 0.6,
     fontWeight: '400',
     color: colors.textPrimary,
@@ -424,7 +427,7 @@ const makeStyles = (colors: ThemeColors) =>
   progressCard: {
     marginHorizontal: 24,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    // A hairline section, not a box: no corners.
     padding: 16,
     marginBottom: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -444,16 +447,16 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     color: colors.textPrimary,
   },
-  progressCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, fontVariant: ['tabular-nums'], color: colors.textPrimary },
+  progressCount: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 30, fontVariant: ['tabular-nums'], color: colors.textPrimary },
   progressBarContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   progressBarBg: {
     flex: 1,
     height: 8,
     backgroundColor: colors.primaryPale,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     overflow: 'hidden',
   },
-  progressBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  progressBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: radius.chip },
   progressPercent: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textPrimary, minWidth: 36 },
   // ── Category Filters ──
   categoryRow: { paddingHorizontal: 24, gap: 8, marginBottom: 12 },
@@ -462,14 +465,14 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     gap: 6,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 14,
+    borderRadius: radius.chip,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     minHeight: 44,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  categoryChipActive: { borderBottomWidth: 2, borderColor: colors.textPrimary },
+  categoryChipActive: { borderWidth: 1, borderColor: colors.textPrimary },
   categoryChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textSecondary },
   categoryChipTextActive: { color: colors.textPrimary },
   // ── Lesson Cards ──
@@ -478,7 +481,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    // A hairline row, not a box: no corners.
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -488,14 +491,14 @@ const makeStyles = (colors: ThemeColors) =>
   lessonNumber: {
     width: 40,
     height: 40,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.chip,
     justifyContent: 'center',
     alignItems: 'center',
   },
   lessonNumberText: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 18,
-    lineHeight: 22,
+    lineHeight: 23,
     letterSpacing: 0.4,
     fontWeight: '500',
   },
@@ -510,11 +513,11 @@ const makeStyles = (colors: ThemeColors) =>
   },
   lessonSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary },
   lessonMeta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 4 },
-  lessonCategoryTag: { borderRadius: 0, paddingHorizontal: 8, paddingVertical: 2 },
+  lessonCategoryTag: { borderRadius: radius.control, paddingHorizontal: 8, paddingVertical: 2 },
   lessonCategoryText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500' },
   featuredTag: {
     backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.control,
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -533,10 +536,8 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   detailHeaderCenter: { alignItems: 'center' },
@@ -555,7 +556,7 @@ const makeStyles = (colors: ThemeColors) =>
   detailTitle: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 32,
-    lineHeight: 35,
+    lineHeight: 40,
     letterSpacing: 0.6,
     fontWeight: '400',
     color: colors.textPrimary,
@@ -600,7 +601,8 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
     gap: 8,
     backgroundColor: colors.primary,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
+    minHeight: 54,
     paddingVertical: 16,
     marginTop: 24,
   },
@@ -619,7 +621,7 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
     gap: 8,
     backgroundColor: colors.background,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
     paddingVertical: 16,
     marginTop: 24,
   },
@@ -640,7 +642,7 @@ const makeStyles = (colors: ThemeColors) =>
   emptyTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 20,
-    lineHeight: 24,
+    lineHeight: 25,
     letterSpacing: 0.4,
     fontWeight: '500',
     color: colors.textPrimary,

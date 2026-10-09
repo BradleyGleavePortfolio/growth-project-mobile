@@ -28,7 +28,8 @@ import {
 import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, SemanticTokens } from '../../theme/tokens';
+import { typography, radius, SemanticTokens } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { patchUserCache } from '../../lib/userCache';
 import { track } from '../../lib/analytics';
@@ -240,7 +241,7 @@ export default function RecipesScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}
@@ -360,19 +361,19 @@ export default function RecipesScreen() {
         onSubmit={handleAllergySubmit}
         onLater={handleAllergyLater}
       />
-    </View>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPrimary },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
     marginBottom: 16,
     gap: 12,
   },
@@ -383,11 +384,11 @@ const makeStyles = (colors: SemanticTokens) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.bgPrimary,
-    borderRadius: 2, // radius.md
-    marginHorizontal: 16,
+    borderRadius: radius.input,
+    marginHorizontal: 24,
     marginBottom: 12,
     paddingHorizontal: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     height: 44,
   },
@@ -395,14 +396,14 @@ const makeStyles = (colors: SemanticTokens) =>
   searchInput: { ...typography.body, flex: 1, color: colors.textPrimary, height: 44 },
 
   tagFilterRow: { maxHeight: 44, marginBottom: 8 },
-  tagFilterContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+  tagFilterContent: { paddingHorizontal: 24, gap: 8, alignItems: 'center' },
   tagFilter: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     minHeight: 44,
     justifyContent: 'center',
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     backgroundColor: colors.bgPrimary,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
   tagFilterActive: {
@@ -432,7 +433,10 @@ const makeStyles = (colors: SemanticTokens) =>
   },
   cardImageWrap: {
     height: 160,
-    backgroundColor: colors.bgPrimary,
+    marginTop: 20,
+    borderRadius: radius.card,
+    overflow: 'hidden',
+    backgroundColor: colors.bgSurface,
   },
   cardImage: {
     width: '100%',
@@ -445,7 +449,7 @@ const makeStyles = (colors: SemanticTokens) =>
     backgroundColor: colors.accent,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
   },
   cardBody: { paddingVertical: 20, gap: 6 },
   cardTitle: { ...typography.bodyMd, color: colors.textPrimary },
@@ -460,14 +464,14 @@ const makeStyles = (colors: SemanticTokens) =>
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
   },
   tagsRow: { marginTop: 6 },
   tag: {
     backgroundColor: colors.bgPrimary,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     marginRight: 6,
   },
   tagText: { ...typography.bodySmall, color: colors.textMuted },
