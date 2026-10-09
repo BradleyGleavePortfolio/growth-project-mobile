@@ -23,6 +23,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTheme } from '../../theme/ThemeProvider';
 import { typography } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
+import { useTutorialStore } from '../../tutorial/tutorialStore';
 
 export const pushPrimerDismissedKey = (userId: string) => `push_primer_dismissed:${userId}`;
 
@@ -48,6 +49,9 @@ export default function PushPermissionCard({
   const userId = user?.id ?? null;
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
+  // TOUR-133: while the tour runs, its own priming card (61) is the one ask;
+  // the check runs again when it ends, so an answered ask stays answered.
+  const tourBusy = useTutorialStore((s) => s.tutorial.status === 'active' || s.priming);
 
   useEffect(() => {
     let mounted = true;
@@ -55,7 +59,10 @@ export default function PushPermissionCard({
     (async () => {
       try {
         const dismissed = await prefsStorage.getStringAsync(pushPrimerDismissedKey(userId));
-        if (dismissed) return;
+        if (dismissed) {
+          if (mounted) setVisible(false);
+          return;
+        }
         const perm = await Notifications.getPermissionsAsync();
         if (mounted && perm.status !== 'granted' && perm.canAskAgain !== false) setVisible(true);
       } catch {
@@ -65,9 +72,9 @@ export default function PushPermissionCard({
     return () => {
       mounted = false;
     };
-  }, [userId]);
+  }, [userId, tourBusy]);
 
-  if (!visible || !userId) return null;
+  if (!visible || !userId || tourBusy) return null;
 
   const dismiss = async () => {
     setVisible(false);

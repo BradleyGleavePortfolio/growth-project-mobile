@@ -8,6 +8,7 @@ import { QuietText as Text } from '../../ui/progress/QuietBar';
 import { FoodLog, MealType } from '../../types';
 import type { IoniconName } from '../../types/common';
 import { foodMacroLine, type MacroDisplayMode } from '../../macros/macroDisplay';
+import TutorialTarget from '../tutorial/TutorialTarget';
 
 interface Props {
   label: string;
@@ -23,6 +24,8 @@ interface Props {
   onEditPress?: (log: FoodLog) => void;
   /** 'simple' during a never-tracker's first week: protein only per entry. */
   macroMode?: MacroDisplayMode;
+  /** TOUR-133: the first meal's Add food is the tour's spotlight (52). */
+  tutorialTarget?: boolean;
 }
 
 export default function MealSectionCard({
@@ -35,6 +38,7 @@ export default function MealSectionCard({
   onDeletePress,
   onEditPress,
   macroMode = 'full',
+  tutorialTarget = false,
 }: Props) {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
@@ -97,6 +101,7 @@ export default function MealSectionCard({
         );
       })}
 
+      <TutorialTarget id={tutorialTarget ? 'food-add' : undefined}>
       <HapticPressable
         intent="medium"
         style={styles.addFoodButton}
@@ -107,6 +112,7 @@ export default function MealSectionCard({
         <Ionicons name="add-circle-outline" size={18} color={sc.accentText} />
         <Text style={styles.addFoodText}>Add food</Text>
       </HapticPressable>
+      </TutorialTarget>
     </View>
   );
 }

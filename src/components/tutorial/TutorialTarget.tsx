@@ -12,7 +12,8 @@ import { registerTutorialTarget } from '../../tutorial/tutorialStore';
 import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
 
 interface Props {
-  id: TutorialTargetId;
+  /** No id: children render unchanged (lets a list mark only its first row). */
+  id?: TutorialTargetId;
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }
@@ -21,6 +22,7 @@ export default function TutorialTarget({ id, children, style }: Props): React.Re
   const ref = useRef<View>(null);
 
   const measure = useCallback(() => {
+    if (!id) return;
     const node = ref.current as unknown as {
       measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
     } | null;
@@ -29,9 +31,11 @@ export default function TutorialTarget({ id, children, style }: Props): React.Re
     });
   }, [id]);
 
-  useEffect(() => () => registerTutorialTarget(id, null), [id]);
+  useEffect(() => () => {
+    if (id) registerTutorialTarget(id, null);
+  }, [id]);
 
-  if (!featureFlags.clientTutorial) return <>{children}</>;
+  if (!featureFlags.clientTutorial || !id) return <>{children}</>;
   return (
     <View ref={ref} collapsable={false} onLayout={measure} style={style}>
       {children}

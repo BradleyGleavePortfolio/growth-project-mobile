@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockGetPerms = jest.fn();
 jest.mock('expo-notifications', () => ({ getPermissionsAsync: () => mockGetPerms() }));
@@ -23,6 +23,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 }));
 
 import PushPermissionCard, { pushPrimerDismissedKey } from '../PushPermissionCard';
+import { __resetTutorialStoreForTests, useTutorialStore } from '../../../tutorial/tutorialStore';
 
 describe('PushPermissionCard (deferred OS prompt)', () => {
   beforeEach(() => {
@@ -66,6 +67,19 @@ describe('PushPermissionCard (deferred OS prompt)', () => {
     await waitFor(() => expect(mockRegister).toHaveBeenCalledWith({ requestPermission: true }));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('coach-tok'));
     expect(mockStore.get(pushPrimerDismissedKey('u1'))).toBe('true');
+  });
+
+  it('TOUR-133: hides while the tour priming card shows, and stays away once that is answered', async () => {
+    mockGetPerms.mockResolvedValue({ status: 'undetermined', canAskAgain: true });
+    useTutorialStore.setState({ priming: true });
+    const { queryByTestId } = await render(<PushPermissionCard />);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(queryByTestId('push-permission-card')).toBeNull();
+    mockStore.set(pushPrimerDismissedKey('u1'), 'true'); // "Not now" on the priming card
+    await act(async () => useTutorialStore.setState({ priming: false }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(queryByTestId('push-permission-card')).toBeNull();
+    __resetTutorialStoreForTests();
   });
 
   it('stays hidden when already granted', async () => {

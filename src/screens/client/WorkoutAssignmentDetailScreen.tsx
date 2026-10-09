@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
+import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import {
   RouteProp,
   useNavigation,
@@ -204,8 +205,10 @@ export default function WorkoutAssignmentDetailScreen() {
       </Text>
 
       <View style={styles.list}>
-        {sorted.map((ex) => (
-          <View key={ex.id} style={styles.exerciseRow}>
+        {sorted.map((ex, i) => (
+          // TOUR-133: the tour's first-exercise beat spotlights the first row.
+          <TutorialTarget key={ex.id} id={i === 0 ? 'first-exercise' : undefined}>
+          <View style={styles.exerciseRow}>
             <Text style={[typography.h3, { color: sc.textPrimary }]}>
               {ex.order}. {nameFor(ex.exercise_external_id)}
             </Text>
@@ -230,6 +233,7 @@ export default function WorkoutAssignmentDetailScreen() {
               </Text>
             ) : null}
           </View>
+          </TutorialTarget>
         ))}
       </View>
 

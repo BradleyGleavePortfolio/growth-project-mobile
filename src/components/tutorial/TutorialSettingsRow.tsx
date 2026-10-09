@@ -7,7 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import {
@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
   row: {
     minHeight: 52,
     borderWidth: 0.5,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',

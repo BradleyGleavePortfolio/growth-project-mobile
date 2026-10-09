@@ -599,7 +599,7 @@ export default function LogScreen() {
             {hasLoadedDay && foodLogs.length === 0 ? (
               <Text style={styles.emptyDayMessage}>No foods logged for this day. Add food to a meal below.</Text>
             ) : null}
-            {MEAL_SECTIONS.map((section) => (
+            {MEAL_SECTIONS.map((section, i) => (
               <MealSectionCard
                 key={section.type}
                 label={section.label}
@@ -611,6 +611,7 @@ export default function LogScreen() {
                 onDeletePress={handleDeleteFood}
                 onEditPress={handleEditFood}
                 macroMode={macroMode}
+                tutorialTarget={i === 0}
               />
             ))}
             {hasLoadedDay ? (
