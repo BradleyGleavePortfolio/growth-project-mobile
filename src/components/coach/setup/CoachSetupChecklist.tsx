@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
+import { radius, typography } from "../../../theme/tokens";
 import { useCurrentUser } from "../../../hooks/useCurrentUser";
 import {
   loadSetupStatus,
@@ -224,16 +225,17 @@ export default function CoachSetupChecklist({ onOpen }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    // COACH-HOME-134: rounded hairline card (Q10b) with a serif title.
     card: {
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
+      borderRadius: radius.card,
       backgroundColor: colors.surface,
-      padding: 16,
+      padding: 20,
       marginBottom: 16,
     },
     title: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 17,
+      ...typography.h3,
       color: colors.textPrimary,
     },
     sub: {
@@ -252,7 +254,7 @@ const makeStyles = (colors: ThemeColors) =>
     dot: {
       width: 14,
       height: 14,
-      borderRadius: 7,
+      borderRadius: radius.chip,
       borderWidth: 2,
       borderColor: colors.primary,
       marginRight: 12,
@@ -261,8 +263,7 @@ const makeStyles = (colors: ThemeColors) =>
     dotUnknown: { borderColor: colors.textSecondary, borderStyle: "dashed" },
     rowText: { flex: 1 },
     label: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 15,
+      ...typography.bodyMd,
       color: colors.textPrimary,
     },
     labelDone: { color: colors.textSecondary },
