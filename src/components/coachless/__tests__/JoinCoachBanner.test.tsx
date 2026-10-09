@@ -59,6 +59,13 @@ it('a client with no coach sees Join a coach in calm copy, once; the Roman card 
   expect(banner()).toBeNull();
 });
 
+it('a failed Home read still shows it (no offer); the code sheet checks the code itself', async () => {
+  mockGet.mockReset().mockRejectedValue({ response: { status: 503 } });
+  await renderPart();
+  expect(await screen.findByTestId('coachless-join-banner')).toBeTruthy();
+  expect(screen.queryByTestId('coachless-offer')).toBeNull();
+});
+
 it('a coached client never sees it (server user, or the cache mirror after a join)', async () => {
   mockUser = { id: 'client-1', coach_id: 'coach-1' };
   await renderPart();
