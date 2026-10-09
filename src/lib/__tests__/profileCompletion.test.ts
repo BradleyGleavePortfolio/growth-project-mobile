@@ -10,6 +10,8 @@ import {
   buildProfileUpdatePayload,
   resolveProfileFields,
   FIELD_LABEL,
+  profileNudgeLine,
+  TARGET_INPUT_FIELDS,
 } from '../profileCompletion';
 import type { CurrentUser } from '../../hooks/useCurrentUser';
 
@@ -130,14 +132,18 @@ describe('summarizeMissing', () => {
     expect(summarizeMissing([])).toBe('');
   });
 
-  it('uses "and" for two missing fields', () => {
-    expect(summarizeMissing(['sex', 'dob'])).toBe('Sex and Date of birth');
+  it('uses "and" for two missing fields, in sentence case', () => {
+    expect(summarizeMissing(['sex', 'dob'])).toBe('sex and date of birth');
   });
 
   it('lists the first two and counts the rest', () => {
     expect(
       summarizeMissing(['sex', 'dob', 'target_weight', 'diet_type']),
-    ).toBe('Sex, Date of birth, and 2 more');
+    ).toBe('sex, date of birth, and 2 more');
+  });
+
+  it('B29: never capitalises a label mid-sentence', () => {
+    expect(summarizeMissing(['diet_restrictions'])).toBe('allergies and restrictions');
   });
 
   it('exposes a label for every required field', () => {
@@ -151,6 +157,55 @@ describe('summarizeMissing', () => {
     ] as const;
     for (const f of fields) {
       expect(FIELD_LABEL[f]).toBeTruthy();
+    }
+  });
+});
+
+describe('profileNudgeLine (B29, SHOTS-134B e)', () => {
+  const none = { hasCoachPlan: false, hasTargets: false };
+  const shown = { hasCoachPlan: false, hasTargets: true };
+  const plan = { hasCoachPlan: true, hasTargets: true };
+  const ALLERGIES = 'Add allergies and restrictions so food suggestions take them into account.';
+
+  it.each([
+    ['targets shown', shown],
+    ['no targets yet', none],
+    ['a coach plan', plan],
+  ] as const)('allergies alone, %s: says what they change and never claims daily targets', (_s, state) => {
+    const line = profileNudgeLine(['diet_restrictions'], state);
+    expect(line).toBe(ALLERGIES);
+    expect(line).not.toMatch(/target/i);
+  });
+
+  it('claims daily targets only for the six target inputs, and names only those', () => {
+    expect(profileNudgeLine(['height_cm'], none)).toBe('Add height to set daily targets.');
+    expect(profileNudgeLine(['target_weight', 'activity_level', 'diet_restrictions'], none))
+      .toBe('Add activity level to set daily targets.');
+    expect(profileNudgeLine(['sex', 'dob', 'target_weight', 'current_weight', 'diet_restrictions'], none))
+      .toBe('Add sex, date of birth, and 1 more to set daily targets.');
+    expect([...TARGET_INPUT_FIELDS].sort()).toEqual(
+      ['activity_level', 'current_weight', 'dob', 'height_cm', 'primary_goal', 'sex'],
+    );
+  });
+
+  it('drops the targets claim when no missing field feeds targets, or targets are already shown', () => {
+    expect(profileNudgeLine(['diet_type', 'gym_membership'], none)).toBe('Add diet preference and equipment access to your profile.');
+    expect(profileNudgeLine(['height_cm'], shown)).toBe('Add height to your profile.');
+    expect(profileNudgeLine(['target_weight', 'diet_restrictions'], none)).toBe(ALLERGIES);
+  });
+
+  it('keeps the coach-plan line when something besides allergies is missing', () => {
+    expect(profileNudgeLine(['height_cm', 'diet_type'], plan)).toBe('Add height and diet preference so your plan reflects you.');
+    expect(profileNudgeLine(['sex'], { hasCoachPlan: true, hasTargets: false })).toBe('Add sex so your plan reflects you.');
+  });
+
+  it('every line is sentence case: a capital only on the first word', () => {
+    const fields = Object.keys(FIELD_LABEL) as (keyof typeof FIELD_LABEL)[];
+    for (const state of [none, shown, plan]) {
+      for (const f of fields) {
+        expect(profileNudgeLine([f], state)).toMatch(/^Add [^A-Z]+\.$/);
+      }
+      expect(profileNudgeLine(fields, state)).toMatch(/^Add [^A-Z]+\.$/);
     }
   });
 });

@@ -163,12 +163,60 @@ export const FIELD_LABEL: Record<ProfileField, string> = {
   diet_restrictions: 'Allergies and restrictions',
 };
 
+/** A field's label inside a sentence: sentence case, so "Add allergies and ...", never "Add Allergies and ...". */
+function fieldInSentence(field: ProfileField): string {
+  return FIELD_LABEL[field].toLowerCase();
+}
+
+/** The missing fields as they read inside a sentence (lower case): "sex, date of birth, and 2 more". */
 export function summarizeMissing(missing: ProfileField[]): string {
   if (missing.length === 0) return '';
-  if (missing.length === 1) return FIELD_LABEL[missing[0]];
-  if (missing.length === 2) return `${FIELD_LABEL[missing[0]]} and ${FIELD_LABEL[missing[1]]}`;
-  const head = missing.slice(0, 2).map((f) => FIELD_LABEL[f]).join(', ');
+  if (missing.length === 1) return fieldInSentence(missing[0]);
+  if (missing.length === 2) return `${fieldInSentence(missing[0])} and ${fieldInSentence(missing[1])}`;
+  const head = missing.slice(0, 2).map(fieldInSentence).join(', ');
   return `${head}, and ${missing.length - 2} more`;
+}
+
+/**
+ * The six answers daily targets are computed from (EditProfileScreen's
+ * tryComputeMacrosFromForm needs all six; finalizeLeanOnboarding uses the
+ * same inputs). The other five fields never change a target.
+ */
+export const TARGET_INPUT_FIELDS: readonly ProfileField[] = [
+  'sex',
+  'dob',
+  'current_weight',
+  'height_cm',
+  'activity_level',
+  'primary_goal',
+];
+
+/**
+ * Home's "Finish your profile" sentence. It names only what the missing
+ * answers really change (B29, SHOTS-134B e):
+ *  1. no coach plan, no daily targets shown, a target input missing:
+ *     "Add <target inputs> to set daily targets." (only those six are named);
+ *  2. a coach plan and something besides allergies missing: the plan line;
+ *  3. allergies unanswered: food suggestions read them (backend: Roman's
+ *     client context, the AI meal-plan prompt, and coach-shared recipes that
+ *     declare a saved allergen are hidden); daily targets never use them;
+ *  4. anything else: a plain "Add <fields> to your profile."
+ */
+export function profileNudgeLine(
+  missing: ProfileField[],
+  state: { hasCoachPlan: boolean; hasTargets: boolean },
+): string {
+  const targetInputs = missing.filter((f) => TARGET_INPUT_FIELDS.includes(f));
+  if (!state.hasCoachPlan && !state.hasTargets && targetInputs.length > 0) {
+    return `Add ${summarizeMissing(targetInputs)} to set daily targets.`;
+  }
+  if (state.hasCoachPlan && missing.some((f) => f !== 'diet_restrictions')) {
+    return `Add ${summarizeMissing(missing)} so your plan reflects you.`;
+  }
+  if (missing.includes('diet_restrictions')) {
+    return 'Add allergies and restrictions so food suggestions take them into account.';
+  }
+  return `Add ${summarizeMissing(missing)} to your profile.`;
 }
 
 /**
