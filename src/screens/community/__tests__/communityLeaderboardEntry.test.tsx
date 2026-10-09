@@ -15,7 +15,12 @@ jest.mock('@react-navigation/native', () => {
 });
 jest.mock('react-native-safe-area-context', () => {
   const { View } = jest.requireActual('react-native');
-  return { SafeAreaView: View, useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) };
+  // Screen (src/ui) reads SafeAreaInsetsContext; null = no provider = zero insets.
+  return {
+    SafeAreaView: View,
+    SafeAreaInsetsContext: jest.requireActual('react').createContext(null),
+    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+  };
 });
 const mockUser: { current: { id: string; coach_id?: string } } = { current: { id: 'me-1' } };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser.current }));
