@@ -154,6 +154,11 @@ describe('validate-app-config — EAS Update gate', () => {
       ['clinic-apk profile deleted', 'eas.json', (j) => { delete j.build['clinic-apk']; }, /build\.clinic-apk is required/],
       ['clinic-apk inherits the clinic channel', 'eas.json', (j) => { delete j.build['clinic-apk'].channel; }, /channel "clinic" is used by clinic, clinic-apk/],
       ['clinic-apk on the preview environment', 'eas.json', (j) => { j.build['clinic-apk'].environment = 'preview'; }, /build\.clinic-apk\.environment must be "production"/],
+      // B14/B40 (CONSULT-ALL-M-133): the consultation and the tour are on in every store and test build.
+      ['production consultation flag missing', 'eas.json', (j) => { delete j.build.production.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING; }, /build\.production\.env\.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING must be "true"/],
+      ['preview consultation flag false', 'eas.json', (j) => { j.build.preview.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING = 'false'; }, /build\.preview\.env\.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING must be "true"/],
+      ['preview tour flag missing', 'eas.json', (j) => { delete j.build.preview.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL; }, /build\.preview\.env\.EXPO_PUBLIC_FF_CLIENT_TUTORIAL must be "true"/],
+      ['clinic-apk turns the tour off', 'eas.json', (j) => { j.build['clinic-apk'].env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL = 'false'; }, /build\.clinic-apk\.env\.EXPO_PUBLIC_FF_CLIENT_TUTORIAL must be "true"/],
       // Audit #305 C4: the accepted launch behaviour is enforced, not just "valid".
       ['updates disabled', 'app.json', (j) => { j.expo.updates.enabled = false; }, /expo\.updates\.enabled must be true/],
       ['update check only on Wi-Fi', 'app.json', (j) => { j.expo.updates.checkAutomatically = 'WIFI_ONLY'; }, /checkAutomatically must be "ON_LOAD"/],
