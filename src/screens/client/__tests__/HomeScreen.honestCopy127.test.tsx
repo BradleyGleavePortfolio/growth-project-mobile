@@ -9,7 +9,8 @@ const mockHistory = jest.fn();
 const mockAssignments = jest.fn();
 const mockActive = jest.fn();
 let mockMacroMode = 'full';
-const mockUser = { id: 'u1', coach_id: 'c1', profile: {} };
+const mockUser: { id: string; coach_id: string; profile: Record<string, unknown> } = { id: 'u1', coach_id: 'c1', profile: {} };
+let mockTargets: { calories: number; protein: number; carbs: number; fat: number } | null = null;
 const mockSavedWorkout = {
   routineName: 'Saved strength',
   exercisesJson: '[{"exerciseId":"seed:push-001","exerciseName":"Push-up","sets":3,"reps":8}]',
@@ -32,7 +33,7 @@ jest.mock('../../../entitlements/EntitlementProvider', () => ({
   useEntitlement: () => ({ entitlementActive: true, confirmedActive: true, status: 'active' }),
 }));
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
-jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => null }));
+jest.mock('../../../hooks/useMacroTargets', () => ({ useMacroTargets: () => mockTargets }));
 jest.mock('../../../hooks/useClientUnreadCount', () => ({ useClientUnreadCount: () => 0 }));
 jest.mock('../../../store/clientStore', () => ({ useClientStore: () => mockDay }));
 jest.mock('../../../macros/macroDisplayStore', () => ({ useMacroDisplayMode: () => mockMacroMode }));
@@ -61,7 +62,7 @@ import HomeScreen from '../HomeScreen';
 import { homeDateLine } from '../homeDate';
 beforeEach(() => {
   jest.clearAllMocks();
-  mockUser.coach_id = 'c1'; mockMacroMode = 'full';
+  mockUser.coach_id = 'c1'; mockUser.profile = {}; mockTargets = null; mockMacroMode = 'full';
   mockHistory.mockResolvedValue({ data: [] });
   mockAssignments.mockResolvedValue([]);
   mockActive.mockResolvedValue(null);
@@ -129,6 +130,31 @@ it.each([false, true])('profile copy reflects coach plan presence: %s', async (h
   await screen.findByLabelText('Log a meal');
   expect(screen.getByText(hasPlan ? /so your plan reflects you/ : /to set daily targets/)).toBeTruthy();
   await fireEvent.press(screen.getByLabelText(/^Complete your profile/));
+  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
+});
+// B29 (SHOTS-134B e): every answer saved except the named ones; the sentence says what they change.
+const savedProfile = {
+  sex: 'female', dob: '1992-04-15', target_weight: 150, diet_type: 'omnivore', workout_days_per_week: 3,
+  gym_membership: 'yes_regular', current_weight: 160, height_cm: 168, activity_level: 'moderate',
+  primary_goal: 'maintain', diet_restrictions: [] as string[],
+};
+it.each([
+  ['allergies, targets shown', 'diet_restrictions', true,
+    'Add allergies and restrictions so food suggestions take them into account.', 'allergies and restrictions'],
+  ['allergies, no targets yet', 'diet_restrictions', false,
+    'Add allergies and restrictions so food suggestions take them into account.', 'allergies and restrictions'],
+  ['height, no targets yet', 'height_cm', false, 'Add height to set daily targets.', 'height'],
+  ['height, targets shown', 'height_cm', true, 'Add height to your profile.', 'height'],
+] as const)('B29 %s: sentence case, claims targets only when they depend on it, opens Edit profile', async (_s, field, targets, line, missing) => {
+  mockUser.profile = Object.fromEntries(Object.entries(savedProfile).filter(([key]) => key !== field));
+  if (targets) mockTargets = { calories: 1789, protein: 150, carbs: 185, fat: 50 };
+  await render(<HomeScreen />);
+  await screen.findByLabelText('Log a meal');
+  expect(screen.getByText(line)).toBeTruthy();
+  expect(screen.queryByText(/Add Allergies/)).toBeNull();
+  const row = screen.getByLabelText(`Complete your profile. Missing ${missing}.`);
+  expect(screen.getByText('91% complete')).toBeTruthy();
+  await fireEvent.press(row);
   expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'EditProfile' });
 });
 it.each([['simple', 0], ['full', 24]] as const)('keeps coachless actions in %s mode with %s oz', async (mode, oz) => {

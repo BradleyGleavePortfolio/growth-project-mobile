@@ -111,4 +111,30 @@ describe('loadSignupPolicy (shared reader, audit A1)', () => {
     expect(r.policy.inviteCodeRequired).toBe(true);
     expect(r.policy.googleEnabled).toBe(true);
   });
+
+  describe('ONB-SWEEP U3: the GET gives up at the startup step limit', () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('no answer in 8 s is unknown, and a late answer is remembered for the next screen', async () => {
+      let answer: (v: { data: unknown }) => void = () => undefined;
+      let settled: Awaited<ReturnType<typeof mod.loadSignupPolicy>> | null = null;
+      void mod.loadSignupPolicy(() => new Promise((res) => (answer = res))).then((r) => (settled = r));
+      await jest.advanceTimersByTimeAsync(7900);
+      expect(settled).toBeNull();
+      await jest.advanceTimersByTimeAsync(200);
+      expect(settled).toEqual({ policy: mod.UNKNOWN_SIGNUP_POLICY, source: 'unknown' });
+      answer({ data: { invite_code_required: true, providers: ['email', 'google'], role_choice: true } });
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mod.getLastKnownSignupPolicy()).toMatchObject({ inviteCodeRequired: true, googleEnabled: true, roleChoice: true });
+    });
+
+    it('an answer inside the limit is live', async () => {
+      const r = mod.loadSignupPolicy(
+        () => new Promise((res) => setTimeout(() => res({ data: { invite_code_required: false, providers: ['email'] } }), 7000)),
+      );
+      await jest.advanceTimersByTimeAsync(7000);
+      await expect(r).resolves.toMatchObject({ source: 'live', policy: { inviteCodeRequired: false } });
+    });
+  });
 });

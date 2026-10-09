@@ -18,6 +18,7 @@ import { eyebrowFor, firstNameOf, isStepVisible, missingRequired, nextStep, prev
 import { progressFor, resumeStep, stepForMissing, type FlowContext } from '../../../lib/coachConsultation/flow';
 import { purgeDraft, readDraft, writeDraft } from '../../../lib/coachConsultation/draft';
 import { coachConsultApi, type CoachConsultApi } from '../../../lib/coachConsultation/api';
+import { withStartupTimeout } from '../../../lib/startupTimebox';
 import type { CoachConsultAnswers, CoachStepId } from '../../../lib/coachConsultation/types';
 import { STEP_COMPONENTS, type StepRegistry } from './registry';
 
@@ -64,7 +65,12 @@ export default function CoachConsultationFlow(props: CoachConsultationFlowProps)
   useEffect(() => {
     let alive = true;
     void (async () => {
-      const [local, server] = await Promise.all([readDraft(userId), api.load()]);
+      // ONB-SWEEP U2: a stalled GET gives up after the startup step limit
+      // (8 s, not axios's 30 s); the phone draft (or a fresh start) decides.
+      const [local, server] = await Promise.all([
+        readDraft(userId),
+        withStartupTimeout(api.load(), 'coach consultation').catch(() => null),
+      ]);
       if (!alive) return;
       const serverDraft = server && server.status !== 'not_started' ? server : null;
       const winner = local && (!local.synced || !serverDraft) ? local : serverDraft;

@@ -98,6 +98,7 @@ import {
   writeDraft,
 } from '../../lib/consultation/storage';
 import { readUserCacheSync } from '../../lib/userCache';
+import { withStartupTimeout } from '../../lib/startupTimebox';
 import {
   acceptFirstSignInCoachSharing,
   readFirstSignInCoachSharing,
@@ -537,9 +538,11 @@ export default function ConsultationFlow({
       const local = await readLocalState(userId, nowFn());
       let server = null;
       try {
-        server = await api.getState();
+        // ONB-SWEEP U1: a stalled network gives up after the startup step
+        // limit (8 s), not axios's 30 s, and resumes from this device.
+        server = await withStartupTimeout(api.getState(), 'consultation state');
       } catch (err) {
-        logger.warn('ConsultationFlow', 'GET /me/onboarding failed; using local state', err);
+        logger.warn('ConsultationFlow', 'GET /me/onboarding failed or timed out; using local state', err);
       }
       if (!live()) return;
       // B-310-2 / B-310-3: box 2 starts from the last confirmed ledger state
