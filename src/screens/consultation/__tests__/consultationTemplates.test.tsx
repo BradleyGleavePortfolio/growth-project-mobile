@@ -46,7 +46,7 @@ beforeEach(async () => {
 });
 
 describe('templates', () => {
-  it('B2 wheels are adjustable and stop under-16s with a calm message', async () => {
+  it('B2 wheels are adjustable and stop under-16s with a calm stop screen', async () => {
     const a = fullAnswers();
     delete a.B2;
     await seed(a, 'B2');
@@ -60,8 +60,14 @@ describe('templates', () => {
       await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     }
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
-    expect(r.getByTestId('consult-validation').props.children).toMatch(/16 and over/);
-    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    // Prototype 45: Continue leads to a calm, final stop screen; nothing is sent.
+    expect(r.queryByTestId('consult-validation')).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    expect(r.getByTestId('consult-screen-UNDER_AGE')).toBeTruthy();
+    expect(r.getByText('The Growth Project is for ages 16 and up.')).toBeTruthy();
+    expect(mockPut).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('consult-under-age-change'));
+    expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
   });
 
   it('B3 converts units in place without resetting', async () => {

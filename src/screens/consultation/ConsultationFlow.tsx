@@ -68,7 +68,7 @@ import {
   runAiLedgerWrite,
   withdrawRomanWithRetry,
 } from '../../lib/consultation/aiConsent';
-import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
+import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, welcomeBackLine } from '../../lib/consultation/copy';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -236,6 +236,8 @@ export default function ConsultationFlow({
   const coachSharingRef = useRef<FirstSignInSharing | null>(null);
   const coachSharingSent = useRef(false);
   const [consentNonce, setConsentNonce] = useState(0);
+  /** Prototype 42: the screen a resume landed on; Roman greets the client back there. */
+  const [welcomeBackId, setWelcomeBackId] = useState<string | null>(null);
   const answersRef = useRef<Answers>({});
   const screenRef = useRef<string>('W1');
   const phaseRef = useRef<Phase>('loading');
@@ -377,6 +379,7 @@ export default function ConsultationFlow({
         }
       }
       if (id === 'P0' && screenRef.current !== 'P0') p0Handled.current = false;
+      setWelcomeBackId(null);
       screenRef.current = id;
       setScreenId(id);
       setPhaseBoth('question');
@@ -613,6 +616,7 @@ export default function ConsultationFlow({
         setPhaseBoth('summary');
       } else {
         showScreen(id, ans);
+        if (id !== 'W1' && id !== 'P0' && hasAnswersBeyondConsent(ans)) setWelcomeBackId(id);
       }
     })();
     return () => {
@@ -1208,7 +1212,17 @@ export default function ConsultationFlow({
       );
     }
     if (phase === 'paused') {
-      return <PausedScreen ctx={ctx} onResume={() => showScreen(screenRef.current)} onSignOut={onSignOut} />;
+      return (
+        <PausedScreen
+          ctx={ctx}
+          onResume={() => {
+            const id = screenRef.current;
+            showScreen(id);
+            if (id !== 'W1' && id !== 'P0') setWelcomeBackId(id);
+          }}
+          onSignOut={onSignOut}
+        />
+      );
     }
     if (phase === 'macro' && result) {
       return <MacroRevealScreen result={result} answers={answers} ctx={ctx} onNext={() => setPhaseBoth('plan')} />;
@@ -1232,6 +1246,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
+        romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
         consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
       />
     );

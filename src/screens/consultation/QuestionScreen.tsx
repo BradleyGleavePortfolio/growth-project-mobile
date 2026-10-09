@@ -18,6 +18,7 @@ import type {
   ScreenDef,
 } from '../../lib/consultation/types';
 import {
+  ageOn,
   answerKeyOf,
   CopyContext,
   defaultMeasureUnit,
@@ -75,6 +76,8 @@ export interface QuestionScreenProps {
   onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
+  /** Prototype 42: Roman's welcome-back line replaces the chapter line on the first screen after a resume. */
+  romanOverride?: string | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
   /**
    * `aiAllowed`: what box 2 shows (the client's latest choice while the
@@ -134,7 +137,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       eyebrow={screen.eyebrow}
       timeLeft={screen.timeLeft}
       sub={f(screen.sub)}
-      roman={f(screen.roman)}
+      roman={f(props.romanOverride ?? screen.roman)}
       question={f(screen.question) ?? ''}
       long={screen.longQuestion}
       why={f(screen.why)}
@@ -357,13 +360,42 @@ function DobBody(props: BodyProps) {
   const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const draft = { ...answers, B2: iso };
   const v = validateScreen(screen, draft, now);
+  // Prototype 45: an age under 16 leads to a calm, final stop screen (no
+  // form, nothing saved) whose only action returns to the wheels.
+  const minAge = screen.validation?.ageRange?.min ?? 16;
+  const age = ageOn(iso, now);
+  const under = !Number.isNaN(age) && age < minAge;
+  const [stopped, setStopped] = useState(false);
+  if (stopped) {
+    return (
+      <Frame
+        onBack={() => setStopped(false)}
+        onFinishLater={null}
+        footer={<PrimaryButton label="Change my date of birth" onPress={() => setStopped(false)} testID="consult-under-age-change" />}
+        testID="consult-screen-UNDER_AGE"
+      >
+        <View style={{ paddingTop: 96 }}>
+          <Text style={s.eyebrow}>{screen.eyebrow}</Text>
+          <Text style={[s.h1, { marginTop: 16 }]} accessibilityRole="header">{`The Growth Project is for ages ${minAge} and up.`}</Text>
+          <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
+        </View>
+      </Frame>
+    );
+  }
   const commit = (ny = y, nm = m, nd = d) =>
     onAnswer('B2', `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`);
   return (
     <BodyFrame
       props={props}
       header={header}
-      footer={<PrimaryButton label="Continue" disabled={!v.valid} onPress={() => onNext({ B2: iso })} testID="consult-continue" />}
+      footer={
+        <PrimaryButton
+          label="Continue"
+          disabled={!v.valid && !under}
+          onPress={() => (under ? setStopped(true) : onNext({ B2: iso }))}
+          testID="consult-continue"
+        />
+      }
     >
       <View style={s.wheels}>
         <View style={[s.wheelCol, { flex: 1.6 }]}>
@@ -376,7 +408,7 @@ function DobBody(props: BodyProps) {
           <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
         </View>
       </View>
-      {v.message ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
     </BodyFrame>
   );
 }

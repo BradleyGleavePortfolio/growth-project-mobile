@@ -586,6 +586,13 @@ export const COACHLESS_COPY: Readonly<Record<string, string>> = {
   '{Coach} will be told, so they can check in with you.': '',
   'Your safest next step: book a visit with your physician and mention you are starting a training program. Once you have their OK, message {coach} and your plan can be adjusted.':
     'Your safest next step: book a visit with your physician and mention you are starting a training program.',
+  // Reveals and paused (copy.ts REVEAL_COPY)
+  'Start once your physician gives you the OK. {Coach} has been told.': 'Start once your physician gives you the OK.',
+  'Your first day is already scheduled in Train. Does something feel off? Message {coach}. Your coach can adjust anything in this plan.':
+    'Your first day is already scheduled in Train.',
+  'Questions about your numbers? Message {coach} any time from Messages. Your coach can adjust these targets for you.': '',
+  "Whenever you're ready, you can pick up exactly where you left off. {Coach} will see your answers once you finish.":
+    "Whenever you're ready, you can pick up exactly where you left off.",
 };
 
 export function screenById(id: string): ScreenDef | undefined {
