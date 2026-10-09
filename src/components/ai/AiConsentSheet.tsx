@@ -169,6 +169,10 @@ export default function AiConsentSheet({
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
   const beforeAnswer = variant === 'beforeAnswer';
+  // The coach note is true only when a coach is attached (B-592-SOL-B-1). Read from
+  // the signed-in user's cache (patched by CoachCodeSheet after a join), not a hook.
+  const cachedUser = readUserCacheSync();
+  const coachless = Boolean(cachedUser?.id && !cachedUser.coach_id);
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
@@ -356,10 +360,12 @@ export default function AiConsentSheet({
               <Text style={styles.label} testID={`${testID}-label`}>
                 {phase.label}
               </Text>
-              <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
+              {coachless ? null : (
+                <Text style={styles.note} testID={`${testID}-coach-note`}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
+              )}
               <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>
             </ScrollView>
-            <View style={beforeAnswer ? styles.pair : null}>
+            <View style={beforeAnswer ? styles.pair : null} testID={`${testID}-actions`}>
               <PrimaryButton
                 label={beforeAnswer ? AI_CONSENT_SHEET_COPY.allowAndContinue : AI_CONSENT_SHEET_COPY.allow}
                 onPress={() => void allow()}
@@ -515,8 +521,9 @@ function makeStyles(colors: ThemeColors) {
     reference: { fontSize: 13, color: colors.textSecondary, marginBottom: 12 },
     primary: { marginTop: 8 },
     secondary: { marginTop: 4 },
-    pair: { flexDirection: 'row', gap: 12 },
-    pairItem: { flex: 1, alignSelf: 'auto' },
+    // Stacked, both full width and 54 pt: the same size, and "Allow and continue" never truncates.
+    pair: { alignSelf: 'stretch' },
+    pairItem: { alignSelf: 'stretch' },
     pairOutline: {
       marginTop: 8,
       minHeight: layout.buttonHeight,

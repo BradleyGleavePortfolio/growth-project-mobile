@@ -20,7 +20,8 @@ jest.mock('@react-navigation/native', () => ({
   NavigationContext: jest.requireActual('react').createContext({ goBack: () => mockGoBack() }),
 }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
-jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => ({ id: 'client-me' }) }));
+let mockUser: { id: string; coach_id?: string } = { id: 'client-me', coach_id: 'coach-1' };
+jest.mock('../../../lib/userCache', () => ({ readUserCacheSync: () => mockUser }));
 const mockOpenPrivacy = jest.fn();
 jest.mock('../../../lib/legalLinks', () => ({ openPrivacyPolicyPage: () => mockOpenPrivacy() }));
 
@@ -46,6 +47,7 @@ function makeApi(first: AiConsentOutcome): AiConsentSheetApi & { getStatus: jest
 }
 
 beforeEach(async () => {
+  mockUser = { id: 'client-me', coach_id: 'coach-1' };
   jest.clearAllMocks();
   resetAiLedgerWritesForTests();
   await AsyncStorage.clear();
@@ -63,6 +65,30 @@ it('opens before the first answer with the prototype title, paired actions and P
   await fireEvent.press(r.getByTestId('roman-consent-gate-not-now'));
   expect(mockGoBack).toHaveBeenCalledTimes(1);
   expect(api.grantRoman).not.toHaveBeenCalled();
+});
+
+it('stacks Allow and Not now at the same full width so neither label truncates', async () => {
+  const { StyleSheet } = jest.requireActual('react-native');
+  const r = await render(<RomanConsentGate surface="client" api={makeApi({ kind: 'ok', status: OFF })} />);
+  await waitFor(() => expect(r.getByTestId('roman-consent-gate-allow')).toBeTruthy());
+  expect(StyleSheet.flatten(r.getByTestId('roman-consent-gate-actions').props.style)?.flexDirection).not.toBe('row');
+  for (const id of ['roman-consent-gate-allow', 'roman-consent-gate-not-now']) {
+    const st = StyleSheet.flatten(r.getByTestId(id).props.style);
+    expect(st.alignSelf).toBe('stretch');
+    expect(st.flex).toBeUndefined();
+  }
+});
+
+it.each([
+  ['a coached client sees', { id: 'client-me', coach_id: 'coach-1' }, true],
+  ['a coachless client never sees', { id: 'client-me' }, false],
+])('%s the coach note (B-592-SOL-B-1)', async (_label, user, shown) => {
+  mockUser = user;
+  const r = await render(<RomanConsentGate surface="client" api={makeApi({ kind: 'ok', status: OFF })} />);
+  await waitFor(() => expect(r.getByTestId('roman-consent-gate-allow')).toBeTruthy());
+  expect(r.queryByText(AI_CONSENT_SHEET_COPY.coachNote) !== null).toBe(shown);
+  // The server paragraph is shown either way.
+  expect(r.getByText(AI_CONSENT_PARAGRAPH)).toBeTruthy();
 });
 
 it('Allow records consent through the existing ledger and keeps the room open', async () => {
