@@ -47,7 +47,7 @@ jest.mock('react-native-svg', () => {
   return { __esModule: true, default: Stub, Svg: Stub, Path: Stub, Rect: Stub };
 });
 const mockOffer = jest.fn(async () => false);
-const mockAnswer = jest.fn(async () => undefined);
+const mockAnswer = jest.fn(async (_accept: boolean) => undefined);
 jest.mock('../../../tutorial/pushPriming', () => ({
   shouldOfferPushPriming: () => mockOffer(),
   answerPushPriming: (_u: string | null, accept: boolean) => mockAnswer(accept),
