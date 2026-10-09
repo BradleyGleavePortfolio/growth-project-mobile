@@ -146,6 +146,7 @@ export function PushPromptSheet({
         <View
           style={[styles.sheet, { paddingBottom: spacing.lg + insets.bottom }]}
           accessibilityViewIsModal
+          testID="push-prompt-panel"
         >
           {/* Header row: title + quiet close affordance (Miller element 1 + 5). */}
           <View style={styles.headerRow}>
@@ -214,8 +215,9 @@ function makeStyles(colors: SemanticTokens) {
     scrimPress: { flex: 1 },
     sheet: {
       backgroundColor: colors.bgSurface,
-      borderTopLeftRadius: radius.lg,
-      borderTopRightRadius: radius.lg,
+      // COACH-INSETS-B3-134: bottom-sheet top corners are the sheet token (24).
+      borderTopLeftRadius: radius.sheet,
+      borderTopRightRadius: radius.sheet,
       paddingHorizontal: spacing.lg,
       paddingTop: spacing.lg,
     },
@@ -253,7 +255,7 @@ function makeStyles(colors: SemanticTokens) {
     primaryBtn: {
       // Forest is the PRIMARY accent (doctrine). Dominant affirmative path.
       backgroundColor: palette.forest,
-      borderRadius: radius.sm,
+      borderRadius: radius.button,
       minHeight: 48,
       paddingVertical: spacing.md,
       paddingHorizontal: spacing.lg,

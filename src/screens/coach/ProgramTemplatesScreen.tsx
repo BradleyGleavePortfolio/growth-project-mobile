@@ -25,7 +25,6 @@ import { radius } from '../../theme/tokens';
 
 interface ProgramTemplate {
   id: string;
-  emoji: string;
   title: string;
   subtitle: string;
   nutritionNotes: string;
@@ -38,7 +37,6 @@ function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
   return [
   {
     id: 'fat_loss',
-    emoji: 'FL',
     title: 'Fat Loss Protocol',
     subtitle: 'Aggressive caloric deficit with muscle preservation',
     nutritionNotes:
@@ -50,7 +48,6 @@ function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
   },
   {
     id: 'lean_bulk',
-    emoji: 'LB',
     title: 'Lean Bulk Protocol',
     subtitle: 'Clean caloric surplus for maximum muscle gain',
     nutritionNotes:
@@ -62,7 +59,6 @@ function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
   },
   {
     id: 'recomp',
-    emoji: 'RC',
     title: 'Body Recomposition',
     subtitle: 'Simultaneously lose fat and build muscle',
     nutritionNotes:
@@ -74,7 +70,6 @@ function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
   },
   {
     id: 'maintenance',
-    emoji: 'MP',
     title: 'Maintenance Protocol',
     subtitle: 'Sustain current physique and optimize performance',
     nutritionNotes:
@@ -86,7 +81,6 @@ function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
   },
   {
     id: 'mobility',
-    emoji: 'MW',
     title: 'Mobility & Wellness',
     subtitle: 'Recovery, flexibility, and holistic health focus',
     nutritionNotes:
@@ -176,9 +170,8 @@ export default function ProgramTemplatesScreen() {
                   style={styles.cardHeader}
                   onPress={() => setExpanded(isExpanded ? null : template.id)}
                 >
-                  <View style={[styles.emojiCircle, { backgroundColor: template.color + '20' }]}>
-                    <Text style={styles.emoji}>{template.emoji}</Text>
-                  </View>
+                  {/* COACH-INSETS-B3-134: no emoji-style initials tile; the title
+                      carries the template and the tags keep its colour. */}
                   <View style={styles.cardHeaderText}>
                     <Text style={styles.templateTitle}>{template.title}</Text>
                     <Text style={styles.templateSubtitle}>{template.subtitle}</Text>
@@ -262,7 +255,7 @@ export default function ProgramTemplatesScreen() {
               <Text style={styles.modalTitle}>Select Client</Text>
               {selectedTemplate && (
                 <Text style={styles.modalSubtitle}>
-                  Posting: {selectedTemplate.emoji} {selectedTemplate.title}
+                  Posting: {selectedTemplate.title}
                 </Text>
               )}
             </View>
@@ -350,17 +343,6 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'flex-start',
     padding: 16,
     gap: 12,
-  },
-  emojiCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: radius.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  emoji: {
-    fontSize: 24,
   },
   cardHeaderText: {
     flex: 1,
