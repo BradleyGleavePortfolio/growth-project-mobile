@@ -109,14 +109,14 @@ export const Spacing = {
   xs: 4, sm: 8, md: 16, lg: 24, xl: 32, xxl: 48,
 };
 
-// Radius — flattened to the tokenised luxury scale. xl/full kept for back
-// compat (sheet headers, pills). They no longer return rounded "sheet"
-// corners; pill stays generous because chip-only.
+// Radius — follows tokens.radius: the rounded scale (owner 17:07, "nice
+// rounded corners, not rectangles"). New code uses radius.button / input /
+// card / sheet / chip from theme/tokens.
 export const Radius = {
-  sm: tokenRadius.sm, // 0
-  md: tokenRadius.md, // 2
-  lg: tokenRadius.lg, // 4
-  xl: tokenRadius.xl, // 4
+  sm: tokenRadius.button, // 12
+  md: tokenRadius.md, // 12
+  lg: tokenRadius.lg, // 16
+  xl: tokenRadius.xl, // 16
   full: tokenRadius.pill, // 999 — chips only
 };
 
