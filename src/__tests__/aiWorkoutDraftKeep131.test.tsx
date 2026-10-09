@@ -7,7 +7,7 @@ import type { Draft, WorkoutPayload } from '../types/coachAi';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }), semanticColors: jest.requireActual('../theme/tokens').lightTokens }),
 }));
 jest.mock('../components/coach/ai-builder/useAiBuilder', () => ({ fireAiHaptic: jest.fn() }));
 const mockGetDraft = jest.fn();

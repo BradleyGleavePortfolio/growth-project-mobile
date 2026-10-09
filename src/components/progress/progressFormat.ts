@@ -11,6 +11,29 @@ export function formatWeight(lbs: number): string {
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
+/** Signed change in pounds with a true minus: "+2", "\u22121.6", "0". */
+export function formatChange(lbs: number): string {
+  const r = Math.round(lbs * 10) / 10;
+  if (r === 0) return '0';
+  return `${r > 0 ? '+' : '\u2212'}${formatWeight(Math.abs(r))}`;
+}
+
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+/** "2026-02-12" -> "Since 12 February" (the year only when it is not this year). */
+export function formatSince(date: string, now: Date = new Date()): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = MONTHS[Number(m[2]) - 1];
+  if (!month) return null;
+  const day = Number(m[3]);
+  return year === now.getFullYear() ? `Since ${day} ${month}` : `Since ${day} ${month} ${year}`;
+}
+
 const PERIOD_WORDS: Record<Exclude<Period, 'All'>, string> = {
   '7D': 'over the last 7 days',
   '30D': 'over the last 30 days',

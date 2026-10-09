@@ -15,6 +15,8 @@ import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import CoachInboxV2 from './CoachInboxV2';
@@ -115,7 +117,7 @@ function LegacyCoachMessages() {
     .sort((a, b) => b.unread - a.unread);
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="coach-messages">
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Messages</Text>
@@ -213,13 +215,14 @@ function LegacyCoachMessages() {
           </TouchableOpacity>
         )}
       />
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Screen (src/ui) owns the top: insets.top + 12; the header adds 12 like the Clients and Settings tabs (B13 B28).
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -228,18 +231,18 @@ const makeStyles = (colors: ThemeColors) =>
     flexWrap: 'wrap',
     gap: 8,
     paddingHorizontal: 24,
-    paddingTop: 60,
+    paddingTop: 12,
     marginBottom: 8,
   },
   headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
+  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 39, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
   unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.input,
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
@@ -252,7 +255,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -260,7 +263,7 @@ const makeStyles = (colors: ThemeColors) =>
   convoAvatar: {
     width: 48,
     height: 48,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -273,7 +276,7 @@ const makeStyles = (colors: ThemeColors) =>
   unreadBadge: {
     minWidth: 22,
     height: 22,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

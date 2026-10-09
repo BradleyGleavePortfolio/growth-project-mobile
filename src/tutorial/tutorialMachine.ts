@@ -11,9 +11,9 @@
  *     the matching SIGNAL (or DEFER where `allowDefer`). Anything else is a
  *     no-op, so stray taps and unrelated signals never move the tour.
  *   - Entering a step whose data is missing marks it `pending` (no plan or no
- *     macros yet) or `unavailable` (no coach linked for a step about the
- *     coach) and moves on; it never blocks the
- *     client (owner decision T-3).
+ *     macros yet) or `unavailable` (the coach beat without a coach, the Roman
+ *     beat with one) and moves on; it never blocks the client (owner decision
+ *     T-3). The store shows a pending step's line once, with Continue (66).
  *   - A route gate that is already satisfied by where the client is standing
  *     advances immediately (no pointless "tap Home" while on Home).
  *   - PAUSE is the "Skip the tour" action: progress is kept, and RESUME picks
@@ -21,6 +21,7 @@
  */
 import {
   stepRequirements,
+  TOUR_LENGTH,
   TUTORIAL_STEPS,
   type StepRequirement,
   type TutorialGate,
@@ -53,7 +54,7 @@ export type TutorialAction =
 
 export function initialTutorialState(): TutorialState {
   return {
-    version: 2,
+    version: 3,
     status: 'not_started',
     stepIndex: 0,
     gateIndex: 0,
@@ -84,6 +85,10 @@ function missingOutcome(
       return env.hasMacros ? null : 'pending';
     case 'coach':
       return env.coachLinked ? null : 'unavailable';
+    case 'no_coach':
+      return env.coachLinked ? 'unavailable' : null;
+    case 'roman':
+      return env.romanAvailable ? null : 'unavailable';
     default:
       return null;
   }
@@ -206,14 +211,14 @@ export function tutorialReducer(
     case 'DEFER': {
       const gate = currentGate(state);
       const step = currentStep(state);
-      if (state.status !== 'active' || !step || gate?.kind !== 'signal' || !gate.allowDefer) {
+      if (state.status !== 'active' || !step || gate?.kind === 'ack' || !gate?.allowDefer) {
         return state;
       }
       const deferred: TutorialState = {
         ...state,
         outcomes: { ...state.outcomes, [step.id]: 'deferred' },
       };
-      return settle(advanceGate(deferred, env), env);
+      return settle(moveToStep(deferred, state.stepIndex + 1, env), env);
     }
     default:
       return state;
@@ -227,22 +232,23 @@ export function newlyFinishedSteps(prev: TutorialState, next: TutorialState): Tu
   );
 }
 
-/** 1-based position in the progress indicator, and the total counted steps. */
+/** "Step n of 7": the beat number of the current step, and the tour length. */
 export function progressOf(state: TutorialState): { position: number; total: number } {
-  const total = TUTORIAL_STEPS.length - 1;
-  if (state.status === 'completed') return { position: total, total };
-  return { position: Math.min(state.stepIndex + 1, total), total };
+  if (state.status === 'completed') return { position: TOUR_LENGTH, total: TOUR_LENGTH };
+  const step = TUTORIAL_STEPS[state.stepIndex];
+  return { position: step ? step.ordinal : 1, total: TOUR_LENGTH };
 }
 
 /** Parse a persisted blob defensively; anything unexpected starts fresh. */
 export function parseTutorialState(raw: unknown): TutorialState | null {
   if (!raw || typeof raw !== 'object') return null;
   const r = raw as Partial<Omit<TutorialState, 'version'>> & { version?: unknown };
-  // An older step list (v1: nine steps, eleven with Calendar): keep what the
-  // client chose. Finished stays finished; a skipped tour stays skipped (never
-  // restarts by itself, B-310-4) and resumes at the welcome; a running one
-  // restarts there.
-  if (r.version === 1 && (r.status === 'completed' || r.status === 'paused' || r.status === 'active')) {
+  // An older step list (v1: nine steps, eleven with Calendar; v2: six steps):
+  // keep what the client chose. Finished stays finished; a skipped tour stays
+  // skipped (never restarts by itself, B-310-4) and resumes at the welcome; a
+  // running one restarts there.
+  const older = r.version === 1 || r.version === 2;
+  if (older && (r.status === 'completed' || r.status === 'paused' || r.status === 'active')) {
     return {
       ...initialTutorialState(),
       status: r.status,
@@ -252,7 +258,7 @@ export function parseTutorialState(raw: unknown): TutorialState | null {
       updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
     };
   }
-  if (r.version !== 2) return null;
+  if (r.version !== 3) return null;
   if (!['not_started', 'active', 'paused', 'completed'].includes(String(r.status))) return null;
   const stepIndex = Number(r.stepIndex);
   const gateIndex = Number(r.gateIndex);
@@ -261,7 +267,7 @@ export function parseTutorialState(raw: unknown): TutorialState | null {
   }
   const gates = TUTORIAL_STEPS[stepIndex].gates.length;
   return {
-    version: 2,
+    version: 3,
     status: r.status as TutorialState['status'],
     stepIndex,
     gateIndex: Number.isInteger(gateIndex) && gateIndex >= 0 && gateIndex < gates ? gateIndex : 0,

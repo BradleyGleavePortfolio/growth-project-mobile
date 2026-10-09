@@ -44,6 +44,11 @@ export interface TutorialCelebration {
   at: number;
 }
 
+/** A step whose data is not ready yet, shown once with Continue (66). */
+export interface TutorialNotice {
+  stepId: TutorialStepId;
+}
+
 interface TutorialStoreState {
   userId: string | null;
   hydrated: boolean;
@@ -57,6 +62,9 @@ interface TutorialStoreState {
   currentPath: string[];
   targets: Partial<Record<TutorialTargetId, TargetRect>>;
   celebration: TutorialCelebration | null;
+  notice: TutorialNotice | null;
+  /** The push priming card after the completion (61) is showing. */
+  priming: boolean;
   pendingStart: { restart: boolean } | null;
 }
 
@@ -71,6 +79,8 @@ const initial = (): TutorialStoreState => ({
   currentPath: [],
   targets: {},
   celebration: null,
+  notice: null,
+  priming: false,
   pendingStart: null,
 });
 
@@ -90,6 +100,7 @@ function envOf(s: TutorialStoreState): MachineEnv {
   return {
     hasProgram: !!s.payload?.program?.name,
     hasMacros: !!resolveMacros(s),
+    romanAvailable: featureFlags.romanChat,
     coachLinked: s.coachLinked,
     currentPath: s.currentPath,
     now: new Date().toISOString(),
@@ -131,13 +142,18 @@ export function dispatchTutorial(action: TutorialAction): void {
   const celebrate = finished
     .map((id) => TUTORIAL_STEPS.find((st) => st.id === id))
     .reverse()
-    .find((st) => st && st.doneLine && next.outcomes[st.id] !== 'pending');
+    // Only a beat the client really did earns the check and line (not Later).
+    .find((st) => st && st.doneLine && next.outcomes[st.id] === 'done');
+  const waiting = finished
+    .map((id) => TUTORIAL_STEPS.find((st) => st.id === id))
+    .find((st) => st && st.pendingLine && next.outcomes[st.id] === 'pending');
   useTutorialStore.setState({
     tutorial: next,
     celebration: celebrate ? { stepId: celebrate.id, at: Date.now() } : s.celebration,
+    notice: waiting ? { stepId: waiting.id } : action.type === 'PAUSE' ? null : s.notice,
   });
   persist(useTutorialStore.getState());
-  if (finished.length > 0 || next.status === 'completed') {
+  if (finished.some((id) => next.outcomes[id] === 'done') || next.status === 'completed') {
     void HapticService.success();
   } else if (next.gateIndex !== prev.gateIndex || next.stepIndex !== prev.stepIndex) {
     void HapticService.selection();
@@ -207,6 +223,8 @@ export async function hydrateTutorial(
     liveMacros: cur.userId === userId ? cur.liveMacros : null,
     targets: {},
     celebration: null,
+    notice: null,
+    priming: false,
   });
   const pending: { restart: boolean } | null = useTutorialStore.getState().pendingStart;
   if (pending) {
@@ -245,6 +263,14 @@ export function registerTutorialTarget(id: TutorialTargetId, rect: TargetRect | 
 
 export function clearTutorialCelebration(): void {
   useTutorialStore.setState({ celebration: null });
+}
+
+export function clearTutorialNotice(): void {
+  useTutorialStore.setState({ notice: null });
+}
+
+export function setTutorialPriming(priming: boolean): void {
+  useTutorialStore.setState({ priming });
 }
 
 let unsubscribeSignals: (() => void) | null = null;

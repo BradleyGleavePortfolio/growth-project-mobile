@@ -388,7 +388,7 @@ describe('DES-O-127: honest landing and action parity', () => {
     const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
     const view = await mount();
     await fireEvent.press(await screen.findByTestId('share-code-btn'));
-    expect(share).toHaveBeenCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST' });
+    expect(share).toHaveBeenCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
     await fireEvent.press(screen.getByTestId('copy-code-btn'));
     expect(mockCopy).toHaveBeenCalledWith('GP-TEST');
     await view.unmount();

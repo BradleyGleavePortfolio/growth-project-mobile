@@ -1,9 +1,11 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { radius } from '../../../theme/tokens';
 
 export const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background, paddingTop: 56 },
+  // The top comes from ClientDetailScreen: useScreenInsets().top + 12, never a fixed 56 (B13 B28).
+  container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: {
     flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background,
   },
@@ -12,7 +14,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryDark,
+    width: 44, height: 44, borderRadius: radius.chip, backgroundColor: colors.primaryDark,
     justifyContent: 'center', alignItems: 'center',
   },
   avatarText: {
@@ -41,14 +43,14 @@ export const makeStyles = (colors: ThemeColors) =>
     marginTop: 4,
   },
   msgIconBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primaryPale,
+    width: 38, height: 38, borderRadius: radius.chip, backgroundColor: colors.primaryPale,
     justifyContent: 'center', alignItems: 'center',
   },
   tabScroll: { maxHeight: 44, marginBottom: 16 },
   tabRow: { paddingHorizontal: 20, gap: 8 },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 4, // radius.lg
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.chip,
     backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
   tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
@@ -67,28 +69,28 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   // Calorie card
   calorieCard: {
-    backgroundColor: colors.surface, borderRadius: 4, padding: 20, marginBottom: 16, alignItems: 'center',
+    backgroundColor: colors.surface, borderRadius: radius.card, padding: 20, marginBottom: 16, alignItems: 'center',
   },
   calorieMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 12 },
   calorieValue: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 44,
-    lineHeight: 46,
+    lineHeight: 53,
     letterSpacing: 0.4,
     fontWeight: '400',
     color: colors.textPrimary,
   },
   calorieTarget: { fontSize: 16, color: colors.textSecondary },
-  caloriePctBg: { width: '100%', height: 6, borderRadius: 3, backgroundColor: colors.primaryPale },
-  caloriePctFill: { height: '100%', borderRadius: 3, backgroundColor: colors.primary },
+  caloriePctBg: { width: '100%', height: 6, borderRadius: radius.chip, backgroundColor: colors.primaryPale },
+  caloriePctFill: { height: '100%', borderRadius: radius.chip, backgroundColor: colors.primary },
   caloriePctText: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
   // Macro cards
   macroGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  macroCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
+  macroCard: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, alignItems: 'center', gap: 4 },
   macroCardValue: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 22,
-    lineHeight: 26,
+    lineHeight: 27,
     letterSpacing: 0.4,
     fontWeight: '500',
   },
@@ -100,11 +102,11 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.textMuted,
   },
-  macroBarBg: { width: '100%', height: 4, borderRadius: 2, backgroundColor: colors.primaryPale, marginTop: 4 },
-  macroBarFill: { height: '100%', borderRadius: 2 },
+  macroBarBg: { width: '100%', height: 4, borderRadius: radius.chip, backgroundColor: colors.primaryPale, marginTop: 4 },
+  macroBarFill: { height: '100%', borderRadius: radius.chip },
   macroCardTarget: { fontSize: 10, color: colors.textMuted },
   // Profile
-  profileGrid: { backgroundColor: colors.surface, borderRadius: 2, padding: 16, gap: 12, marginBottom: 20 },
+  profileGrid: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, gap: 12, marginBottom: 20 },
   profileRow: { flexDirection: 'row', justifyContent: 'space-between' },
   profileLabel: { fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary, textTransform: 'capitalize' },
   profileValue: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary, textTransform: 'capitalize' },
@@ -118,7 +120,7 @@ export const makeStyles = (colors: ThemeColors) =>
     gap: 6,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
     backgroundColor: colors.primaryPale,
   },
   actionPillText: {
@@ -136,16 +138,16 @@ export const makeStyles = (colors: ThemeColors) =>
     paddingVertical: 10,
     paddingHorizontal: 14,
     backgroundColor: colors.success + '18',
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     marginBottom: 12,
   },
   successBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.success },
   nudgeModalOverlay: { flex: 1, backgroundColor: 'rgba(26,26,24,0.5)', justifyContent: 'center', alignItems: 'center' },
-  nudgeModalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: 4, padding: 24 },
+  nudgeModalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: radius.card, padding: 24 },
   nudgeModalTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 22,
-    lineHeight: 26,
+    lineHeight: 27,
     letterSpacing: 0.4,
     fontWeight: '500',
     color: colors.textPrimary,
@@ -165,7 +167,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   nudgeInput: {
     backgroundColor: colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -174,7 +176,7 @@ export const makeStyles = (colors: ThemeColors) =>
   nudgeInputMulti: { minHeight: 90, textAlignVertical: 'top' },
   nudgeErrorText: { color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
   nudgeButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
+  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
   nudgeCancelText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
@@ -183,7 +185,7 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
     color: colors.textSecondary,
   },
-  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.primary, alignItems: 'center' },
+  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: radius.button, backgroundColor: colors.primary, alignItems: 'center' },
   nudgeSendText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
@@ -193,7 +195,7 @@ export const makeStyles = (colors: ThemeColors) =>
     color: colors.textOnPrimary,
   },
   // Logs
-  logItem: { backgroundColor: colors.surface, borderRadius: 2, padding: 16, marginBottom: 10 },
+  logItem: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 10 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   logMeal: {
     fontFamily: 'Inter_500Medium',
@@ -207,7 +209,7 @@ export const makeStyles = (colors: ThemeColors) =>
   logFood: { fontFamily: 'Inter_500Medium', fontSize: 16, fontWeight: '500', color: colors.textPrimary, marginBottom: 4 },
   logMacros: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
   // Workouts
-  sessionCard: { backgroundColor: colors.surface, borderRadius: 4, padding: 16, marginBottom: 10 },
+  sessionCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, marginBottom: 10 },
   sessionTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   sessionName: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -223,7 +225,7 @@ export const makeStyles = (colors: ThemeColors) =>
   inProgressText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.warning },
   sessionStats: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   sessionStat: {
-    flex: 1, backgroundColor: colors.background, borderRadius: 4, padding: 10, alignItems: 'center',
+    flex: 1, backgroundColor: colors.background, borderRadius: radius.card, padding: 10, alignItems: 'center',
   },
   sessionStatValue: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -245,11 +247,11 @@ export const makeStyles = (colors: ThemeColors) =>
   sessionExercises: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
   // Progress
   progressStatsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  progressStat: { flex: 1, backgroundColor: colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
+  progressStat: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, alignItems: 'center', gap: 4 },
   progressStatValue: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 28,
-    lineHeight: 32,
+    lineHeight: 34,
     letterSpacing: 0.4,
     fontWeight: '400',
     color: colors.textPrimary,
@@ -263,7 +265,7 @@ export const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
   },
   // Meal plan
-  planDayCard: { backgroundColor: colors.surface, borderRadius: 2, padding: 14, marginBottom: 10 },
+  planDayCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 10 },
   planDayLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary, marginBottom: 8 },
   planSlotRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
   planSlotLabel: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textSecondary, width: 70 },
@@ -271,7 +273,7 @@ export const makeStyles = (colors: ThemeColors) =>
   planSlotCals: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.primary },
   planEmpty: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
   // Empty
-  emptyCard: { backgroundColor: colors.surface, borderRadius: 4, padding: 32, alignItems: 'center', gap: 8 },
+  emptyCard: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 32, alignItems: 'center', gap: 8 },
   emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
   foodReviewHeader: {
     flexDirection: 'row',
@@ -284,7 +286,7 @@ export const makeStyles = (colors: ThemeColors) =>
   foodReviewChip: {
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
@@ -297,7 +299,7 @@ export const makeStyles = (colors: ThemeColors) =>
   foodReviewChipTextActive: { color: colors.textOnPrimary },
   foodReviewDayCard: {
     backgroundColor: colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: 12,
     marginBottom: 12,
     borderWidth: 1,
@@ -326,7 +328,7 @@ export const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
   },
   createPlanBtnText: {
     fontFamily: 'Inter_500Medium',
@@ -340,7 +342,7 @@ export const makeStyles = (colors: ThemeColors) =>
     marginTop: 8,
     paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
     backgroundColor: colors.primaryPale,
   },
   retryBtnText: {
@@ -353,7 +355,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   serverPlanCard: {
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -378,7 +380,7 @@ export const makeStyles = (colors: ThemeColors) =>
   planIconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.primaryPale,
@@ -444,7 +446,7 @@ export const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     padding: 12,
     fontSize: 14,
     color: colors.textPrimary,
@@ -467,7 +469,7 @@ export const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: colors.primaryPale,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
   },
   planAddItemText: {
     fontFamily: 'Inter_500Medium',
@@ -479,7 +481,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   planItemCard: {
     backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.card,
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
@@ -496,7 +498,7 @@ export const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.input,
     padding: 10,
     fontSize: 13,
     color: colors.textPrimary,
@@ -511,7 +513,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   planSubmitBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.button,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 12,

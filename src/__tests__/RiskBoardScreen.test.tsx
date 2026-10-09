@@ -120,6 +120,7 @@ jest.mock('../theme/ThemeProvider', () => ({
       warning: '#C5A253',
       error: '#4A0404',
     },
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens,
   }),
 }));
 const mockGetRiskBoard = jest.fn((_q?: unknown) =>

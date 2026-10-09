@@ -618,7 +618,7 @@ export default function LogScreen() {
             {foodLogs.length > 0 ? (
               <Text style={styles.note} testID="log-edit-hint">Tap a food to edit, move or delete it.</Text>
             ) : null}
-            {MEAL_SECTIONS.map((section) => (
+            {MEAL_SECTIONS.map((section, i) => (
               <MealSectionCard
                 key={section.type}
                 label={section.label}
@@ -630,6 +630,7 @@ export default function LogScreen() {
                 onDeletePress={handleDeleteFood}
                 onEditPress={handleEditFood}
                 macroMode={macroMode}
+                tutorialTarget={i === 0}
               />
             ))}
             {hasLoadedDay ? (

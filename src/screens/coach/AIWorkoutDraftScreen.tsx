@@ -31,6 +31,8 @@ import { useNavigation, usePreventRemove, useRoute, RouteProp } from '@react-nav
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import coachAiApi from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import type {
@@ -320,7 +322,7 @@ export default function AIWorkoutDraftScreen() {
   const weeks = payload.weeks || [];
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="ai-workout-draft">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -526,7 +528,7 @@ export default function AIWorkoutDraftScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
@@ -597,7 +599,8 @@ function StringField({
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingTop: 56 },
+    // Screen (src/ui) owns the top: insets.top + 12, never a fixed 56 (B13 B28).
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
     centered: {
       flex: 1,
       justifyContent: 'center',
@@ -611,7 +614,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.primary,
       paddingVertical: 10,
       paddingHorizontal: 20,
-      borderRadius: 4,
+      borderRadius: radius.button,
     },
     retryBtnText: {
       fontFamily: 'Inter_500Medium',
@@ -643,7 +646,7 @@ const makeStyles = (colors: ThemeColors) =>
     scrollContent: { padding: 20, paddingBottom: 40 },
     summaryCard: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 14,
       marginBottom: 16,
     },
@@ -655,7 +658,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     emptyCard: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 32,
       alignItems: 'center',
       gap: 8,
@@ -667,7 +670,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     weekCard: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 14,
       marginBottom: 14,
       borderWidth: 1,
@@ -684,7 +687,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.background,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 8,
       fontSize: 13,
       color: colors.textPrimary,
@@ -693,7 +696,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     dayCard: {
       backgroundColor: colors.background,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 10,
       marginBottom: 8,
       borderWidth: 1,
@@ -730,7 +733,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 8,
       fontSize: 13,
       color: colors.textPrimary,
@@ -757,7 +760,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       paddingVertical: 6,
       paddingHorizontal: 8,
       fontSize: 13,
@@ -779,7 +782,7 @@ const makeStyles = (colors: ThemeColors) =>
     btnSecondary: {
       flex: 1,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.surfaceElevated,
       alignItems: 'center',
     },
@@ -794,7 +797,7 @@ const makeStyles = (colors: ThemeColors) =>
     btnReject: {
       paddingVertical: 12,
       paddingHorizontal: 14,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.error,
@@ -811,7 +814,7 @@ const makeStyles = (colors: ThemeColors) =>
     btnApprove: {
       flex: 1.5,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
       alignItems: 'center',
     },
@@ -832,7 +835,7 @@ const makeStyles = (colors: ThemeColors) =>
     rejectCard: {
       width: '85%',
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 20,
     },
     rejectTitle: {
@@ -850,7 +853,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     rejectInput: {
       backgroundColor: colors.surfaceElevated,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 10,
       fontSize: 14,
       color: colors.textPrimary,
@@ -865,7 +868,7 @@ const makeStyles = (colors: ThemeColors) =>
     rejectCancelBtn: {
       flex: 1,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.surfaceElevated,
       alignItems: 'center',
     },
@@ -880,7 +883,7 @@ const makeStyles = (colors: ThemeColors) =>
     rejectConfirmBtn: {
       flex: 1,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.error,
       alignItems: 'center',
     },

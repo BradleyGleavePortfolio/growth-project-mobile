@@ -63,6 +63,8 @@ import {
 } from '../../../utils/haptics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
+import { layout, radius } from '../../../theme/tokens';
+import { Screen } from '../../../ui';
 import HapticPressable from '../../../components/HapticPressable';
 import ContentAttachForm, {
   assetTypeLabel,
@@ -573,8 +575,10 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     );
   };
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.page} testID="coach-package-contents">
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -656,24 +660,24 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
           </View>
         </View>
       ) : null}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
+    // The list and footer keep their own sides and foot.
+    page: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -733,7 +737,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginTop: 4,
       paddingVertical: 10,
       paddingHorizontal: 20,
-      borderRadius: 2,
+      borderRadius: radius.button,
       borderWidth: 1,
       borderColor: semanticColors.accent,
     },
@@ -752,7 +756,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       gap: 8,
       backgroundColor: semanticColors.accent,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
     },
     primaryBtnText: {
       color: semanticColors.textOnAccent,

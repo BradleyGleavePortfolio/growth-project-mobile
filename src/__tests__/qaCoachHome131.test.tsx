@@ -19,6 +19,8 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
+  // COACH-INSETS-B-134: Team now sits in the shared Screen, which reads this context.
+  SafeAreaInsetsContext: jest.requireActual('react-native-safe-area-context').SafeAreaInsetsContext,
 }));
 const mockMe = jest.fn();
 jest.mock('../services/api', () => ({
@@ -153,9 +155,10 @@ describe('U2: monochrome numbers, the need said in words', () => {
     for (const node of screen.getAllByText(/./)) {
       expect([colors.mutedGold, colors.error]).not.toContain(flat(node).color);
     }
-    for (const value of ['60%', '3', '2', '8', '1']) {
+    for (const value of ['60%', '3', '2', '12', '1']) {
       expect(flat(screen.getByText(value)).color).toBe(colors.ink);
     }
+    expect(screen.getByText('8 active today')).toBeTruthy();
     expect(within(screen.getByTestId('command-center-kpi-at-risk')).getByText('Need attention')).toBeTruthy();
     expect(within(screen.getByTestId('command-center-kpi-open-alerts')).getByText('Waiting in Actions')).toBeTruthy();
   });

@@ -14,10 +14,10 @@ jest.mock('../../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ 
 it('keeps every check-in action with a single readable word per mood choice', async () => {
   const setMood = jest.fn(), setEnergy = jest.fn(), setSleepHours = jest.fn(), setNotes = jest.fn();
   function Picker() {
-    const { colors, semanticColors } = useTheme();
+    const { semanticColors } = useTheme();
     return <MoodEnergyPicker mood={3} setMood={setMood} energy={3} setEnergy={setEnergy}
       sleepHours={7} setSleepHours={setSleepHours} notes="" setNotes={setNotes}
-      colors={colors} styles={makeStyles(colors, semanticColors)} />;
+      sc={semanticColors} styles={makeStyles(semanticColors)} />;
   }
   const view = await render(<Picker />);
   for (let value = 1; value <= 5; value += 1) {
@@ -25,6 +25,10 @@ it('keeps every check-in action with a single readable word per mood choice', as
     expect(label.props.style).toEqual(expect.arrayContaining([expect.objectContaining({
       fontSize: 13, textTransform: 'none', letterSpacing: 0,
     })]));
+    // "Exhausted" / "Energized" are wider than a fifth of a 360 pt screen: shrink to fit, never an ellipsis.
+    for (const word of [MOOD_LABELS[value], ENERGY_LABELS[value]]) {
+      expect(view.getByText(word).props).toEqual(expect.objectContaining({ adjustsFontSizeToFit: true, minimumFontScale: 0.85 }));
+    }
     await fireEvent.press(label);
     expect(setMood).toHaveBeenLastCalledWith(value);
     await fireEvent.press(view.getByText(ENERGY_LABELS[value]));
@@ -35,6 +39,6 @@ it('keeps every check-in action with a single readable word per mood choice', as
   expect(setSleepHours.mock.calls[0][0](7)).toBe(6.5);
   await fireEvent.press(view.getByTestId('icon-add'));
   expect(setSleepHours.mock.calls[1][0](7)).toBe(7.5);
-  await fireEvent.changeText(view.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Steady');
+  await fireEvent.changeText(view.getByPlaceholderText('Anything worth noting about today'), 'Steady');
   expect(setNotes).toHaveBeenCalledWith('Steady');
 });

@@ -38,6 +38,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import ActionMenu, { ActionMenuOption } from '../../components/messaging/ActionMenu';
 import {
@@ -311,7 +313,7 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
   );
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="coach-inbox">
       <View style={styles.header}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Messages</Text>
@@ -393,25 +395,26 @@ export default function CoachInboxV2({ onFeatureDisabled }: CoachInboxV2Props) {
         onSelect={onSelect}
         onClose={() => setMenuFor(null)}
       />
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
+    // Screen (src/ui) owns the top: insets.top + 12; the header adds 12 like the Clients and Settings tabs (B13 B28).
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
+    header: { paddingHorizontal: 24, paddingTop: 12, marginBottom: 8 },
     // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
     headerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-    title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
+    title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 39, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
     unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
     searchContainer: { paddingHorizontal: 24, marginBottom: 8, gap: 10 },
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 2,
+      borderRadius: radius.input,
       paddingHorizontal: 14,
       paddingVertical: 10,
       gap: 8,
@@ -420,13 +423,13 @@ const makeStyles = (colors: ThemeColors) =>
     },
     searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
     filters: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
+    filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.chip, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface },
     filterChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     filterText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
     filterTextOn: { color: colors.textOnPrimary },
     listContent: { paddingHorizontal: 16, paddingBottom: 100 },
-    convoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 4, padding: 14, marginBottom: 8, gap: 12 },
-    convoAvatar: { width: 48, height: 48, borderRadius: 4, backgroundColor: colors.primaryDark, justifyContent: 'center', alignItems: 'center' },
+    convoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 8, gap: 12 },
+    convoAvatar: { width: 48, height: 48, borderRadius: radius.chip, backgroundColor: colors.primaryDark, justifyContent: 'center', alignItems: 'center' },
     convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
     convoInfo: { flex: 1, gap: 4 },
     convoTopLine: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -438,7 +441,7 @@ const makeStyles = (colors: ThemeColors) =>
     unreadBadge: {
       minWidth: 22,
       height: 22,
-      borderRadius: 4,
+      borderRadius: radius.chip,
       backgroundColor: colors.primary,
       justifyContent: 'center',
       alignItems: 'center',
@@ -450,7 +453,7 @@ const makeStyles = (colors: ThemeColors) =>
     errorBox: { padding: 24, alignItems: 'center', gap: 8 },
     errorTitle: { fontSize: 16, fontWeight: '600', color: colors.textPrimary },
     errorBody: { fontSize: 14, color: colors.textSecondary, textAlign: 'center' },
-    retry: { marginTop: 8, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 4, backgroundColor: colors.primary },
+    retry: { marginTop: 8, paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.button, backgroundColor: colors.primary },
     retryText: { color: colors.textOnPrimary, fontWeight: '600' },
     allRead: { padding: 24, textAlign: 'center', fontSize: 14, color: colors.textSecondary },
   });

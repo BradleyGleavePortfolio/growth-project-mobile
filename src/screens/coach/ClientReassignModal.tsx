@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -23,6 +24,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
+import { layout, radius } from '../../theme/tokens';
+import { Screen, type ScreenEdge } from '../../ui';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 
@@ -72,7 +75,7 @@ export default function ClientReassignModal() {
   }, [selected, clientId, reason, navigation]);
 
   return (
-    <View style={styles.container}>
+    <Screen edges={MODAL_EDGES} scroll={false} contentStyle={styles.sheet} testID="client-reassign">
       <Text style={styles.title}>Reassign {clientName}</Text>
       <Text style={styles.subtitle}>Choose a destination coach</Text>
 
@@ -155,16 +158,18 @@ export default function ClientReassignModal() {
           )}
         </Pressable>
       </View>
-    </View>
+    </Screen>
   );
 }
 
+// presentation 'modal': an iOS page sheet sits below the status bar and owns the home
+// indicator; on Android it fills the stack above the tab bar, so it owns the top (B13 B28).
+const MODAL_EDGES: readonly ScreenEdge[] = Platform.OS === 'ios' ? ['bottom'] : ['top'];
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    paddingTop: 56,
-    paddingHorizontal: 16,
+  // Screen (src/ui) owns the insets and the 24 pt gutter; never a fixed 56.
+  sheet: {
+    paddingTop: layout.gutter,
   },
   title: {
     fontSize: 22,
@@ -189,7 +194,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: 14,
     marginBottom: 8,
     borderWidth: 1,
@@ -220,7 +225,7 @@ const styles = StyleSheet.create({
   checkmark: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: radius.chip,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -232,7 +237,7 @@ const styles = StyleSheet.create({
   },
   reasonInput: {
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.input,
     padding: 12,
     fontSize: 15,
     color: Colors.textPrimary,
@@ -248,7 +253,7 @@ const styles = StyleSheet.create({
   cancelBtn: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
@@ -262,7 +267,7 @@ const styles = StyleSheet.create({
   confirmBtn: {
     flex: 1,
     backgroundColor: Colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 14,
     alignItems: 'center',
   },

@@ -1,6 +1,6 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { BackHandler, StyleSheet } from 'react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CoachConsultationFlow from '../CoachConsultationFlow';
 import { draftKey } from '../../../../lib/coachConsultation/draft';
@@ -11,20 +11,18 @@ jest.mock('../../../../services/api', () => ({ __esModule: true, default: {} }))
 
 const USER = { name: 'Jordan Reyes' };
 
-function makeApi(over: Partial<CoachConsultApi> = {}): jest.Mocked<CoachConsultApi> {
-  return {
-    load: jest.fn().mockResolvedValue(null),
-    saveDraft: jest.fn().mockResolvedValue('unavailable'),
-    complete: jest.fn().mockResolvedValue(undefined),
-    ...over,
-  } as jest.Mocked<CoachConsultApi>;
-}
+const makeApi = (over: Partial<CoachConsultApi> = {}): jest.Mocked<CoachConsultApi> =>
+  ({ load: jest.fn().mockResolvedValue(null), saveDraft: jest.fn().mockResolvedValue('unavailable'), complete: jest.fn().mockResolvedValue(undefined), ...over }) as jest.Mocked<CoachConsultApi>;
 
 async function mount(api = makeApi(), onComplete = jest.fn()) {
   const utils = await render(<CoachConsultationFlow userId="c1" user={USER} api={api} onComplete={onComplete} />);
   await waitFor(() => expect(utils.queryByTestId('coach-consult-loading')).toBeNull());
   return { ...utils, api, onComplete };
 }
+
+const seed = (step: string, answers: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+  AsyncStorage.setItem(draftKey('c1'), JSON.stringify({ v: 1, step, updatedAt: '2026-10-08T20:00:00.000Z', answers, ...extra }));
+const stored = async () => JSON.parse((await AsyncStorage.getItem(draftKey('c1'))) ?? 'null');
 
 beforeEach(async () => {
   await AsyncStorage.clear();
@@ -71,10 +69,7 @@ describe('coach consultation flow (prototype 77-79)', () => {
   });
 
   it('completes with every answer once the required ones are given', async () => {
-    await AsyncStorage.setItem(
-      draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K8', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] } }),
-    );
+    await seed('K8', { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] });
     const { getByTestId, api, onComplete } = await mount();
     await fireEvent.press(getByTestId('k8-show-me-around')); // K8 Practice ready is the last step (COACH-CONSULT-M2-134)
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
@@ -83,10 +78,7 @@ describe('coach consultation flow (prototype 77-79)', () => {
   });
 
   it('shows a specific problem with Try again when completion fails, and keeps the answers', async () => {
-    await AsyncStorage.setItem(
-      draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K8', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan', clients_today: 'none' } }),
-    );
+    await seed('K8', { display_name: 'Jordan', clients_today: 'none' });
     const api = makeApi({ complete: jest.fn().mockRejectedValueOnce(Object.assign(new Error('x'), { response: { status: 429 } })).mockResolvedValueOnce(undefined) });
     const { getByTestId, getByText, onComplete } = await mount(api);
     await fireEvent.press(getByTestId('k8-show-me-around'));
@@ -102,25 +94,62 @@ describe('coach consultation flow (prototype 77-79)', () => {
     await fireEvent.press(getByTestId('coach-consult-K0-cta'));
     await fireEvent.press(getByTestId('coach-consult-finish-later'));
     expect(getByTestId('coach-consult-paused')).toBeTruthy();
-    expect(api.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ display_name: 'Jordan Reyes' }), 'K1');
+    await waitFor(() => expect(api.saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ display_name: 'Jordan Reyes' }), 'K1'));
     await fireEvent.press(getByTestId('coach-consult-resume'));
     expect(getByTestId('coach-consult-K1')).toBeTruthy();
   });
 
-  it('resumes from the newer server draft', async () => {
-    await AsyncStorage.setItem(
-      draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K1', updatedAt: '2026-10-08T19:00:00.000Z', answers: { display_name: 'Old' } }),
-    );
-    const api = makeApi({
-      load: jest.fn().mockResolvedValue({
-        status: 'in_progress',
-        step: 'K2',
-        updatedAt: '2026-10-08T20:00:00.000Z',
-        answers: { display_name: 'Jordan Reyes', specialties: ['strength'] },
-      }),
-    });
-    const { getByTestId } = await mount(api);
+  it('resumes from the server draft when the phone draft was already synced (another phone)', async () => {
+    await seed('K1', { display_name: 'Old' }, { synced: true });
+    const server = { status: 'in_progress', step: 'K2', updatedAt: 'x', answers: { display_name: 'Jordan Reyes', specialties: ['strength'] } };
+    const { getByTestId } = await mount(makeApi({ load: jest.fn().mockResolvedValue(server) }));
     expect(getByTestId('coach-consult-K2-strength').props.accessibilityState.checked).toBe(true);
+  });
+
+  it('typing while a step save is in flight leaves the phone draft unsynced (B-621-B2-1)', async () => {
+    const { getByTestId } = await mount(makeApi({ saveDraft: jest.fn(() => new Promise<'saved'>(() => undefined)) }));
+    await fireEvent.press(getByTestId('coach-consult-K0-cta'));
+    await fireEvent.changeText(getByTestId('coach-consult-K1-business'), 'Reyes Strength');
+    await waitFor(async () => expect((await stored())?.answers?.business_name).toBe('Reyes Strength'));
+    expect((await stored()).synced).toBe(false);
+  });
+
+  it('an unsynced phone draft wins over a later-arriving older server snapshot (B-621-B2-1)', async () => {
+    await seed('K1', { display_name: 'Jordan Reyes', business_name: 'Reyes Strength' }, { synced: false });
+    // The old K1-entry snapshot reached the server last, so its arrival time is the newest.
+    const server = { status: 'in_progress', step: 'K1', updatedAt: '2099-01-01T00:00:00.000Z', answers: { display_name: 'Jordan Reyes', bio: 'Old' } };
+    const { getByTestId } = await mount(makeApi({ load: jest.fn().mockResolvedValue(server) }));
+    expect(getByTestId('coach-consult-K1-business').props.value).toBe('Reyes Strength');
+    expect(getByTestId('coach-consult-K1-bio').props.value).toBe('');
+  });
+
+  it('sends draft saves one at a time, latest last, and marks the phone draft synced', async () => {
+    let release: (v: 'saved') => void = () => undefined;
+    const saveDraft = jest.fn(() => new Promise<'saved'>((res) => (release = res)));
+    const { getByTestId } = await mount(makeApi({ saveDraft }));
+    await fireEvent.press(getByTestId('coach-consult-K0-cta'));
+    await fireEvent.changeText(getByTestId('coach-consult-K1-business'), 'Reyes Strength');
+    await fireEvent.press(getByTestId('coach-consult-finish-later'));
+    expect(saveDraft).toHaveBeenCalledTimes(1);
+    release('saved');
+    await waitFor(() => expect(saveDraft).toHaveBeenCalledTimes(2));
+    expect(saveDraft).toHaveBeenLastCalledWith(expect.objectContaining({ business_name: 'Reyes Strength' }), 'K1');
+    release('saved');
+    await waitFor(async () => expect((await stored())?.synced).toBe(true));
+  });
+
+  it('Android back goes to the previous step and leaves K0 to the system (B-621-1)', async () => {
+    let back: (() => boolean | null | undefined) | undefined;
+    jest.spyOn(BackHandler, 'addEventListener').mockImplementation((_e, cb) => ((back = cb), { remove: jest.fn() }));
+    const { getByTestId } = await mount();
+    expect(back?.()).toBe(false);
+    await fireEvent.press(getByTestId('coach-consult-K0-cta'));
+    await fireEvent.press(getByTestId('coach-consult-K1-cta'));
+    await act(async () => void expect(back?.()).toBe(true));
+    expect(getByTestId('coach-consult-K1')).toBeTruthy();
+    await fireEvent.press(getByTestId('coach-consult-finish-later'));
+    await act(async () => void expect(back?.()).toBe(true));
+    expect(getByTestId('coach-consult-K1')).toBeTruthy();
+    jest.restoreAllMocks();
   });
 });

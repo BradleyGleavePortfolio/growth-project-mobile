@@ -75,6 +75,24 @@ describe('RoleSelection retry step', () => {
     expect(mockPreview).toHaveBeenCalledWith('GP-TEST1');
   });
 
+  it('COACH-CARD-134: the coach card shows headline and specialties when the preview has them, and no rows when not', async () => {
+    type Props = React.ComponentProps<typeof RoleSelectionScreen>;
+    mockPreview.mockResolvedValue({
+      data: { valid: true, coach_name: 'Coach Avery', headline: 'Strength for busy parents', specialties: ['strength', 'busy'] },
+    });
+    const view = await render(<RoleSelectionScreen navigation={{} as Props['navigation']} route={route()} />);
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST1');
+    await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
+    expect(await view.findByTestId('role-coach-card-headline')).toHaveTextContent('Strength for busy parents');
+    expect(view.getByTestId('role-coach-card-specialties')).toHaveTextContent('Specialises in strength and busy professionals.');
+
+    mockPreview.mockResolvedValue({ data: { valid: true, coach_name: 'Coach Blake', headline: null, specialties: [] } });
+    await fireEvent.changeText(view.getByTestId('role-invite-code-input'), 'GP-TEST2');
+    await fireEvent(view.getByTestId('role-invite-code-input'), 'blur');
+    await view.findByText('Coach Blake');
+    expect(view.queryByTestId('role-coach-card')).toBeNull();
+  });
+
   it('shows friendly retry copy with the code prefilled', async () => {
     const { findByTestId, getByTestId, getByText, queryByText } = await render(
       <RoleSelectionScreen navigation={{} as never} route={route({ inviteAttachError: 'coach_inactive', inviteCode: 'GP-TEST1' })} />,

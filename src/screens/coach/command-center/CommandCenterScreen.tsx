@@ -5,6 +5,7 @@
 //   Overview | At risk | Streaks | Inbox | Actions
 // QA-COACH-HOME-131: sentence-case 14 pt labels in theme colours (textMuted
 // inactive, AA on bone; accentText active) on 44 pt tall tabs.
+// COACH-HOME-134: the shared Screen owns the top inset (insets + 12 pt, iOS and Android alike).
 //
 // Navigation into client-level detail (ClientDetail, ClientMessages) is
 // handled by navigating up to the ClientsStack in CoachNavigator via the
@@ -17,12 +18,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { spacing, typography } from '../../../theme/tokens';
+import { Screen } from '../../../ui';
 import { useTheme } from '../../../theme/useTheme';
 import type { CoachTabParamList } from '../../../navigation/CoachNavigator';
 import OverviewScreen from './OverviewScreen';
@@ -31,6 +31,7 @@ import WinStreaksScreen from './WinStreaksScreen';
 import InboxScreen from './InboxScreen';
 import ActionQueueScreen from './ActionQueueScreen';
 import CoachHomeCards from './CoachHomeCards';
+import { coachHomeSources } from './coachHomeSources';
 
 export type CommandCenterTab =
   | 'overview'
@@ -66,7 +67,6 @@ export default function CommandCenterScreen({
   // client row and inbox thread was a dead tap. Default to the Clients stack
   // (`initial: false` keeps the Clients list under it for Back).
   const navigation = useNavigation<BottomTabNavigationProp<CoachTabParamList>>();
-  const insets = useSafeAreaInsets();
   const { semanticColors: sc } = useTheme();
   const selectClient =
     onSelectClient ??
@@ -84,6 +84,10 @@ export default function CommandCenterScreen({
         params: { clientId, clientName },
         initial: false,
       }));
+  // Same Money route as the Home's Money card (B-332-7: `initial: false`).
+  const openMoney = () =>
+    navigation.navigate('SettingsStack', { screen: 'CoachMoney', params: { from: 'home' }, initial: false });
+  const openClients = () => navigation.navigate('ClientsStack', { screen: 'ClientsList' });
 
   const renderContent = () => {
     switch (activeTab) {
@@ -94,6 +98,11 @@ export default function CommandCenterScreen({
             onNavigateToWinStreaks={() => setActiveTab('win-streaks')}
             onNavigateToInbox={() => setActiveTab('inbox')}
             onNavigateToActionQueue={() => setActiveTab('action-queue')}
+            onSelectClient={selectClient}
+            onOpenThread={openThread}
+            onOpenMoney={openMoney}
+            onOpenClients={openClients}
+            sources={coachHomeSources}
             header={<CoachHomeCards />}
           />
         );
@@ -109,17 +118,10 @@ export default function CommandCenterScreen({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: sc.bgPrimary }]} testID="command-center-root">
-      {/* Top tab bar */}
-      {/* AUDIT-13-125: no header above this tab, so keep the tab row out
-          of the status bar / Dynamic Island on iOS. */}
-      <View
-        style={[
-          styles.tabBarWrapper,
-          { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
-          { paddingTop: insets.top + (Platform.OS === 'ios' ? 0 : spacing.sm) },
-        ]}
-      >
+    <Screen edges={['top']} scroll={false} contentStyle={styles.content} testID="command-center-root">
+      {/* Top tab bar. AUDIT-13-125: no header above this tab; Screen keeps
+          the tab row out of the status bar / Dynamic Island. */}
+      <View style={[styles.tabBarWrapper, { backgroundColor: sc.bgPrimary, borderBottomColor: sc.border }]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -149,18 +151,14 @@ export default function CommandCenterScreen({
       </View>
 
       {/* Screen content */}
-      <View style={styles.content}>{renderContent()}</View>
-    </View>
+      {renderContent()}
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   tabBarWrapper: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingTop: Platform.OS === 'ios' ? 0 : spacing.sm,
   },
   tabBar: {
     paddingHorizontal: spacing.lg,
@@ -179,6 +177,7 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
   },
   content: {
-    flex: 1,
+    paddingHorizontal: 0,
+    paddingBottom: 0,
   },
 });

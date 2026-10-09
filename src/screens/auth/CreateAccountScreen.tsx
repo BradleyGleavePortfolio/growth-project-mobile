@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Keyboard,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,6 +41,7 @@ import {
 } from '../../lib/signupPolicy';
 import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import InviteCoachCardDetails from '../../components/invite/InviteCoachCardDetails';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -85,7 +87,7 @@ import {
   type CoachSignupIdentity,
   type CoachSignupMethod,
 } from '../../lib/coachSignupAttempt';
-import { lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, lightTokens, radius, typography, type SemanticTokens } from '../../theme/tokens';
 import ResendVerificationLink from './ResendVerificationLink';
 import { Headline, Overline, PrimaryButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 
@@ -219,6 +221,21 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [googleEnabled, setGoogleEnabled] = useState(
     () => getLastKnownSignupPolicy()?.googleEnabled === true,
   );
+  // The "or" divider needs a provider above it: Apple only once this device
+  // offers it (never on Android), Google only when advertised.
+  const [appleShown, setAppleShown] = useState(false);
+  // With the keyboard open, the footer (sharing sentence, Create account,
+  // terms) moves to the end of the form so it never covers the fields (360x800).
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const ios = Platform.OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   // Set when signup succeeded but the backend reported
   // `invite_attached:false`. The raw reason is forwarded to the
   // RoleSelection retry step, which renders friendly copy for it.
@@ -1205,49 +1222,52 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     leaveCreateAccount();
   };
 
+  // Pinned under the form; inline at its end while the keyboard is open.
+  const footerContent = (
+    <>
+      {/* Pinned footer: the sharing sentence (B-SHARE-127) and the terms line
+          (B-IOSREV-2) stay on screen above or beside every join button. */}
+      <CoachSharingNotice
+        version={sharingNotice}
+        coachName={sharingCoachName}
+        style={styles.legalText}
+      />
+      <PrimaryButton
+        label="Create account"
+        onPress={handleRegister}
+        loading={loading}
+        testID="create-account-submit"
+      />
+      {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
+      <Text style={styles.legalText} testID="create-account-legal">
+        By continuing, you agree to the{' '}
+        <Text
+          style={styles.legalLink}
+          onPress={openTermsOfService}
+          accessibilityRole="link"
+          testID="create-account-terms-link"
+        >
+          Terms of Service
+        </Text>{' '}
+        and the{' '}
+        <Text
+          style={styles.legalLink}
+          onPress={openPrivacyPolicyPage}
+          accessibilityRole="link"
+          testID="create-account-privacy-link"
+        >
+          Privacy Policy
+        </Text>
+        .
+      </Text>
+    </>
+  );
+
   return (
     <Screen
       testID="create-account-register"
       header={<ScreenTopBar onBack={backFromRegister} testID="create-account-back" />}
-      footer={
-        <>
-          {/* Pinned footer: the sharing sentence (B-SHARE-127) and the terms line
-              (B-IOSREV-2) stay on screen above or beside every join button. */}
-          <CoachSharingNotice
-            version={sharingNotice}
-            coachName={sharingCoachName}
-            style={styles.legalText}
-          />
-          <PrimaryButton
-            label="Create account"
-            onPress={handleRegister}
-            loading={loading}
-            testID="create-account-submit"
-          />
-          {/* Apple 1.2 (B-IOSREV-2): covers email, Google and Apple sign-up. */}
-          <Text style={styles.legalText} testID="create-account-legal">
-            By continuing, you agree to the{' '}
-            <Text
-              style={styles.legalLink}
-              onPress={openTermsOfService}
-              accessibilityRole="link"
-              testID="create-account-terms-link"
-            >
-              Terms of Service
-            </Text>{' '}
-            and the{' '}
-            <Text
-              style={styles.legalLink}
-              onPress={openPrivacyPolicyPage}
-              accessibilityRole="link"
-              testID="create-account-privacy-link"
-            >
-              Privacy Policy
-            </Text>
-            .
-          </Text>
-        </>
-      }
+      footer={<>{keyboardOpen ? null : footerContent}</>}
     >
         <View style={styles.header}>
           <Overline style={styles.eyebrow} testID="create-account-eyebrow">{eyebrow}</Overline>
@@ -1369,7 +1389,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             {/* Apple Sign-In: required by App Store policy when any other
                 third-party sign-in is offered. Renders nothing on Android or
                 unsupported iOS configurations. */}
-            <AppleSignInButton onPress={handleAppleSignup} label="CONTINUE" cornerRadius={radius.button} />
+            <AppleSignInButton
+              onPress={handleAppleSignup}
+              label="CONTINUE"
+              cornerRadius={radius.button}
+              onAvailable={() => setAppleShown(true)}
+            />
             {googleEnabled ? (
               <TouchableOpacity
                 style={styles.googleButton}
@@ -1381,11 +1406,18 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                 <Text style={styles.googleButtonText}>Continue with Google</Text>
               </TouchableOpacity>
             ) : null}
-            <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
+            {appleShown || googleEnabled ? (
+              <View
+                style={styles.divider}
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                testID="create-account-or"
+              >
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>or</Text>
+                <View style={styles.dividerLine} />
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -1423,10 +1455,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             {previewLoading ? (
               <Text style={styles.invitePreviewMuted}>Checking code…</Text>
             ) : invitePreview?.valid ? (
-              <Text style={styles.invitePreviewOk}>
-                You will be paired with{' '}
-                {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
-              </Text>
+              <>
+                <Text style={styles.invitePreviewOk}>
+                  You will be paired with{' '}
+                  {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+                </Text>
+                <InviteCoachCardDetails
+                  headline={invitePreview.headline}
+                  specialties={invitePreview.specialties}
+                  testID="create-coach-card"
+                />
+              </>
             ) : invitePreview && !invitePreview.valid ? (
               <Text style={styles.invitePreviewBad}>
                 {invitePreview.reason || 'This code is not currently active.'}
@@ -1535,6 +1574,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           />
         </View>
 
+        {keyboardOpen ? (
+          <View style={styles.inlineFooter} testID="create-account-inline-footer">{footerContent}</View>
+        ) : null}
+
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Already have an account? </Text>
           <TouchableOpacity
@@ -1633,7 +1676,9 @@ const makeStyles = (colors: SemanticTokens) =>
     marginBottom: Spacing.xl,
   },
   signupText: { ...typography.bodySmall, color: colors.textMuted },
-  legalText: { ...typography.bodySmall, color: colors.textMuted, marginVertical: Spacing.md },
+  // Footer lines sit on the footer's 8 pt gap (no extra 16 pt margins: 360x800).
+  legalText: { ...typography.bodySmall, color: colors.textMuted },
+  inlineFooter: { gap: layout.footerItemGap, marginTop: Spacing.lg },
   legalLink: { color: colors.accentText, textDecorationLine: 'underline' },
   signInTarget: { minHeight: 44, justifyContent: 'center', paddingHorizontal: Spacing.sm },
   signupLink: { ...typography.bodyMd, color: colors.accentText },
