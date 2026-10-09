@@ -8,13 +8,11 @@ import {
   RefreshControl,
   Modal,
   TextInput,
-  TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
-import { Spacing } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi, type WaterEntry } from '../../services/api';
 import { notifyPendingFoodLogs, syncFoodLogQueue } from '../../services/foodLogSync';
@@ -46,14 +44,16 @@ import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { SemanticTokens } from '../../theme/tokens';
+import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { Screen, Headline, Overline, PrimaryButton, TextLink, QuietTextButton, useScreenInsets, footerBottomPadding } from '../../ui';
+import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
-import CoachErrorState from '../../components/community/coach/CoachErrorState';
-import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import { Skeleton } from '../../ui/skeletons/Skeleton';
 
 export default function LogScreen() {
   const { semanticColors: colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const insets = useScreenInsets();
   const currentUser = useCurrentUser();
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
@@ -553,11 +553,14 @@ export default function LogScreen() {
   const onManualFieldChange = (field: keyof ManualFields, value: string) =>
     setManualFields((prev) => ({ ...prev, [field]: value }));
 
+  const editUnits = editLog ? editUnitsFor(editLog) : [];
+
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <>
+      <Screen
+        edges={['top']}
+        testID="log-screen"
+        contentStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -567,37 +570,53 @@ export default function LogScreen() {
           />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Food log</Text>
-        </View>
-
+        <Overline>Food log</Overline>
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
 
         {loadError ? (
-          <CoachErrorState
-            message={loadError}
-            onRetry={() => void onRefresh()}
-            retrying={isLoading || refreshing}
-            testID="log-day-data-error"
-          />
+          <View style={styles.errorBlock} testID="log-day-data-error" accessibilityLiveRegion="polite">
+            <Text style={styles.errorText}>{loadError}</Text>
+            <QuietTextButton
+              label="Try again"
+              disabled={isLoading || refreshing}
+              onPress={() => void onRefresh()}
+              testID="log-day-data-error-retry"
+            />
+          </View>
         ) : null}
 
         {hasLoadedDay ? <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} targets={macroTargets} mode={macroMode} /> : null}
         {pendingFoods > 0 ? (
-          <Text style={styles.pendingMessage} accessibilityLiveRegion="polite" testID="log-offline-pending">
+          <Text style={styles.note} accessibilityLiveRegion="polite" testID="log-offline-pending">
             {pendingFoods === 1
               ? `1 food saved offline is not in this log or its totals yet. ${online ? 'Pull down to sync it now.' : 'It syncs when the connection returns.'}`
               : `${pendingFoods} foods saved offline are not in this log or its totals yet. ${online ? 'Pull down to sync them now.' : 'They sync when the connection returns.'}`}
           </Text>
         ) : null}
         {savedMessage ? (
-          <Text style={styles.savedMessage} accessibilityLiveRegion="polite">{savedMessage}</Text>
+          <Text style={[styles.note, styles.savedMessage]} accessibilityLiveRegion="polite">{savedMessage}</Text>
         ) : null}
 
-        {showDayLoading ? <SkeletonScreen count={4} testID="log-day-loading" /> : (
+        {showDayLoading ? (
+          // Meal-shaped placeholders on the page gutter (no zero totals, no empty-meal claims).
+          <View testID="log-day-loading" accessibilityLabel="Loading" accessibilityLiveRegion="polite">
+            <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              {MEAL_SECTIONS.map((section) => (
+                <View key={section.type} style={styles.skeletonSection}>
+                  <Skeleton width="38%" height={22} borderRadius={radius.control} />
+                  <Skeleton width="72%" height={14} borderRadius={radius.control} />
+                  <Skeleton width="48%" height={14} borderRadius={radius.control} />
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : (
           <>
             {hasLoadedDay && foodLogs.length === 0 ? (
-              <Text style={styles.emptyDayMessage}>No foods logged for this day. Add food to a meal below.</Text>
+              <Text style={styles.note}>No foods logged for this day. Add food to a meal below.</Text>
+            ) : null}
+            {foodLogs.length > 0 ? (
+              <Text style={styles.note} testID="log-edit-hint">Tap a food to edit, move or delete it.</Text>
             ) : null}
             {MEAL_SECTIONS.map((section, i) => (
               <MealSectionCard
@@ -615,19 +634,17 @@ export default function LogScreen() {
               />
             ))}
             {hasLoadedDay ? (
-              <View style={styles.waterSection}>
-                <WaterTracker
-                  currentOz={waterOz}
-                  onAdd={handleAddWater}
-                  entries={waterEntries}
-                  onRemove={handleRemoveWater}
-                  removingId={removingWaterId}
-                />
-              </View>
+              <WaterTracker
+                currentOz={waterOz}
+                onAdd={handleAddWater}
+                entries={waterEntries}
+                onRemove={handleRemoveWater}
+                removingId={removingWaterId}
+              />
             ) : null}
           </>
         )}
-      </ScrollView>
+      </Screen>
 
       <FoodSearchModal
         visible={modalVisible}
@@ -685,7 +702,7 @@ export default function LogScreen() {
         ) : undefined}
       />
 
-      {/* F-2: edit-log modal. Inline so it works on iOS + Android without
+      {/* F-2: edit-log sheet. Inline so it works on iOS + Android without
           relying on Alert.prompt (iOS-only). Saves through the existing
           logApi.updateEntry endpoint and triggers loadDayData on success. */}
       <Modal
@@ -699,11 +716,17 @@ export default function LogScreen() {
           style={styles.editModalBackdrop}
           testID="log-edit-backdrop"
         >
-          <ScrollView testID="log-edit-sheet" style={styles.editModalCard} contentContainerStyle={styles.editModalContent} keyboardShouldPersistTaps="handled">
-            <Text style={styles.editModalTitle} numberOfLines={1}>
+          <ScrollView
+            testID="log-edit-sheet"
+            style={styles.editModalCard}
+            contentContainerStyle={[styles.editModalContent, { paddingBottom: footerBottomPadding(insets.bottom) }]}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Overline>Edit entry</Overline>
+            <Headline level="h2" numberOfLines={2} style={styles.editModalTitle}>
               {editLog?.foodName || 'Edit entry'}
-            </Text>
-            <Text style={styles.editModalSubtitle}>Quantity</Text>
+            </Headline>
+            <Overline style={styles.fieldLabel}>Quantity</Overline>
             <TextInput
               accessibilityLabel="Edit quantity"
               value={editQty}
@@ -711,197 +734,150 @@ export default function LogScreen() {
               keyboardType="decimal-pad"
               style={styles.editModalInput}
             />
-            <Text style={styles.editModalSubtitle}>Unit</Text>
-            <View style={styles.editUnitRow}>
-              {(editLog ? editUnitsFor(editLog) : []).map((unit) => (
-                <TouchableOpacity
+            <Overline style={styles.fieldLabel}>Unit</Overline>
+            <View style={styles.chipRow}>
+              {editUnits.map((unit) => (
+                <HapticPressable
                   key={unit}
+                  intent="light"
+                  disableAnimation
                   accessibilityRole="button"
                   accessibilityLabel={`Edit unit ${unit}`}
                   accessibilityState={{ selected: editUnit === unit }}
                   disabled={editSaving}
                   onPress={() => setEditUnit(unit)}
-                  style={[styles.editModalBtn, editUnit === unit && { borderColor: colors.accent }]}
+                  style={[styles.chip, editUnit === unit && styles.chipSelected]}
                 >
-                  <Text style={styles.editButtonText}>{unit}</Text>
-                </TouchableOpacity>
+                  <Text style={[styles.chipText, editUnit === unit && styles.chipTextSelected]}>{unit}</Text>
+                </HapticPressable>
               ))}
             </View>
-            <Text style={styles.editModalSubtitle}>Meal</Text>
-            <View style={styles.editUnitRow}>
+            <Overline style={styles.fieldLabel}>Meal</Overline>
+            <View style={styles.chipRow}>
               {MEAL_SECTIONS.map((meal) => (
-                <TouchableOpacity
+                <HapticPressable
                   key={meal.type}
+                  intent="light"
+                  disableAnimation
                   accessibilityRole="button"
+                  accessibilityLabel={meal.label}
                   accessibilityState={{ selected: editMealType === meal.type }}
                   disabled={editSaving}
                   onPress={() => setEditMealType(meal.type)}
-                  style={[styles.editModalBtn, editMealType === meal.type && { borderColor: colors.accent }]}
+                  style={[styles.chip, editMealType === meal.type && styles.chipSelected]}
                 >
-                  <Text style={styles.editButtonText}>{meal.label}</Text>
-                </TouchableOpacity>
+                  <Text style={[styles.chipText, editMealType === meal.type && styles.chipTextSelected]}>{meal.label}</Text>
+                </HapticPressable>
               ))}
             </View>
-            <TouchableOpacity
-              accessibilityRole="button"
-              disabled={editSaving}
-              style={styles.deleteEntryButton}
-              onPress={() => {
-                if (editLog) void handleDeleteFood(editLog);
-              }}
-            >
-              <Text style={styles.editButtonText}>Delete entry</Text>
-            </TouchableOpacity>
-            <View style={styles.editModalActions}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Cancel edit"
+            <PrimaryButton
+              label="Save changes"
+              loading={editSaving}
+              onPress={handleEditSave}
+              testID="log-edit-save"
+              style={styles.editSave}
+            />
+            <View style={styles.editSecondary}>
+              <TextLink label="Cancel" underline={false} disabled={editSaving} onPress={handleEditCancel} />
+              <TextLink
+                label="Delete entry"
+                underline={false}
                 disabled={editSaving}
-                onPress={handleEditCancel}
-                style={[
-                  styles.editModalBtn,
-                  { borderColor: colors.border, opacity: editSaving ? 0.5 : 1 },
-                ]}
-              >
-                <Text style={styles.editButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Save edit"
-                disabled={editSaving}
-                onPress={handleEditSave}
-                style={[
-                  styles.editModalBtn,
-                  styles.editModalBtnPrimary,
-                  {
-                    backgroundColor: colors.accent,
-                    opacity: editSaving ? 0.6 : 1,
-                  },
-                ]}
-              >
-                <Text style={[styles.editButtonText, { color: colors.textOnAccent }]}>
-                  {editSaving ? 'Saving…' : 'Save'}
-                </Text>
-              </TouchableOpacity>
+                onPress={() => {
+                  if (editLog) void handleDeleteFood(editLog);
+                }}
+              />
             </View>
           </ScrollView>
         </KeyboardAvoidingView>
       </Modal>
-    </View>
+    </>
   );
 }
 
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgPrimary,
-  },
   content: {
-    paddingBottom: 40,
+    paddingBottom: layout.sectionGap * 2,
   },
-  header: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 60,
-    marginBottom: 8,
-  },
-  title: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 32,
-    lineHeight: 35,
-    letterSpacing: 0.6,
-    fontWeight: '400',
-    color: colors.textPrimary,
-  },
-  waterSection: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: 20,
-  },
-  pendingMessage: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 12,
-    color: colors.textMuted,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-  },
-  emptyDayMessage: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 16,
-    color: colors.textMuted,
-    fontFamily: 'Inter_400Regular',
+  note: {
+    ...typography.bodySmall,
     fontSize: 13,
     lineHeight: 19,
+    color: colors.textMuted,
+    marginBottom: 12,
   },
   savedMessage: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 12,
     color: colors.accentText,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
   },
-  editUnitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  deleteEntryButton: { minHeight: 44, justifyContent: 'center', marginTop: 8 },
-  editModalBackdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
+  skeletonSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: layout.sectionPadY,
+    marginBottom: layout.sectionPadY,
+    gap: 12,
+  },
+  errorBlock: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+    paddingTop: layout.sectionPadY,
+    marginBottom: layout.sectionGap,
+  },
+  errorText: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: {
+    minHeight: layout.touchMin,
+    paddingHorizontal: 16,
     justifyContent: 'center',
-    padding: Spacing.lg,
-  },
-  editModalCard: {
-    width: '100%',
-    maxWidth: 420,
-    maxHeight: '100%',
-    backgroundColor: colors.bgPrimary,
-    borderRadius: 4,
+    alignItems: 'center',
+    borderRadius: radius.chip,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  editModalContent: { padding: Spacing.lg },
-  editModalTitle: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 22,
-    fontWeight: '400',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  editModalSubtitle: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  editModalInput: {
+  chipSelected: {
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    color: colors.textPrimary,
-    fontFamily: 'Inter_400Regular',
-    fontSize: 16,
-  },
-  editModalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 16,
-  },
-  editModalBtn: {
-    borderWidth: 1,
-    borderRadius: 4,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  editModalBtnPrimary: {
     borderColor: colors.accent,
   },
-  editButtonText: { fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.textPrimary },
+  chipText: { ...typography.bodySmall, color: colors.textMuted },
+  chipTextSelected: { fontFamily: typography.bodyMd.fontFamily, color: colors.accentText },
+  editModalBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  editModalCard: {
+    width: '100%',
+    maxHeight: '90%',
+    flexGrow: 0,
+    backgroundColor: colors.bgPrimary,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  editModalContent: { paddingHorizontal: layout.gutter, paddingTop: layout.gutter + 4 },
+  editModalTitle: { marginTop: 4, marginBottom: 8 },
+  fieldLabel: { marginTop: 20, marginBottom: 8 },
+  editModalInput: {
+    minHeight: layout.buttonHeight,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    backgroundColor: colors.bgSurface,
+    paddingHorizontal: 16,
+    color: colors.textPrimary,
+    fontFamily: typography.bodyMd.fontFamily,
+    fontSize: 18,
+    fontVariant: ['tabular-nums'],
+  },
+  editSave: { marginTop: 32 },
+  editSecondary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
 
   });

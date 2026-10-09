@@ -5,7 +5,8 @@ import HapticPressable from '../../HapticPressable';
 import CoachExerciseName from '../workout-builder/CoachExerciseName';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 import { AI_BUILDER_INJURY_AREAS, AI_BUILDER_INSTRUCTION_MAX, AI_BUILDER_QUICK_ACTIONS, type AiBuilderChange, type AiBuilderInjuryArea, type AiBuilderQuickAction } from '../../../api/aiBuilderApi';
-import { spacing, typography, type SemanticTokens } from '../../../theme/tokens';
+import { layout, radius, spacing, typography, type SemanticTokens } from '../../../theme/tokens';
+import { footerBottomPadding, useScreenInsets } from '../../../ui';
 import { AI_LABEL, applyLabel, contextLine, droppedLine, formatRow, INJURY_AREA_LABELS, KIND_LABELS, noCreditsCopy, PAUSED_COPY, QUICK_ACTIONS, SCREENING_COPY, UNNAMED_CHANGE } from './aiBuilderCopy';
 import type { AiBuilderController } from './useAiBuilder';
 import { AI_SPRING, AI_STAGGER_MS } from './AiFunLayer';
@@ -40,7 +41,7 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
   const slide = reduceMotion ? null : { transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }, { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }] };
 
   return (
-    <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity }, slide]}>
+    <Animated.View testID={`ai-change-${change.change_id}`} style={[styles.card, { borderColor: sc.border, opacity }, slide]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: badge, borderColor: badge }]}>{kind}</Text>
         {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
@@ -61,6 +62,7 @@ function ChangeCard({ change, index, kept, reduceMotion, onToggle, sc }: CardPro
 
 export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientFirst }: Props) {
   const reduceMotion = useReduceMotion();
+  const insets = useScreenInsets();
   const [text, setText] = useState('');
   const [injuryPicker, setInjuryPicker] = useState(false);
   const st = ai.status?.state;
@@ -104,10 +106,11 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
   return (
     <Modal visible={open} transparent animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={close}>
       <KeyboardAvoidingView style={[styles.backdrop, { backgroundColor: sc.overlay }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <View testID="ai-builder-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border }]}>
+        <View testID="ai-builder-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border, paddingBottom: footerBottomPadding(insets.bottom) }]}>
+          <View style={[styles.handle, { backgroundColor: sc.border }]} accessible={false} />
           <View style={styles.row}>
-            <Text accessibilityRole="header" style={[typography.h4, styles.grow, { color: sc.textPrimary }]}>Ask AI</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close Ask AI" onPress={close} hitSlop={12}>
+            <Text accessibilityRole="header" style={[typography.h2, styles.grow, { color: sc.textPrimary }]}>Ask AI</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close Ask AI" onPress={close} hitSlop={12} style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
               <Text style={[typography.bodyMd, { color: sc.accentText }]}>Close</Text>
             </Pressable>
           </View>
@@ -137,7 +140,7 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
                   </View>
                 ) : null}
                 <Pressable testID="ai-builder-send" accessibilityRole="button" accessibilityLabel="Send to Ask AI" accessibilityState={{ disabled: !canSend }}
-                  disabled={!canSend} onPress={() => send()} style={[styles.button, { backgroundColor: canSend ? sc.accent : sc.disabledBg }]}>
+                  disabled={!canSend} onPress={() => send()} style={({ pressed }) => [styles.button, { backgroundColor: canSend ? sc.accent : sc.disabledBg }, pressed && styles.pressed]}>
                   <Text style={[typography.bodyMd, { color: canSend ? sc.textOnAccent : sc.textOnDisabled }]}>Send</Text>
                 </Pressable>
               </>
@@ -167,14 +170,14 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
                 <Text style={[typography.caption, { color: sc.textMuted, marginTop: spacing.xs }]}>{AI_LABEL}</Text>
                 <View style={[styles.row, { marginTop: spacing.md }]}>
                   <Pressable testID="ai-builder-discard" accessibilityRole="button" accessibilityLabel={p.changes.length ? 'Discard all suggestions' : 'Done'}
-                    disabled={busy} onPress={() => void ai.discard()} style={[styles.button, styles.outline, { borderColor: sc.border }]}>
+                    disabled={busy} onPress={() => void ai.discard()} style={({ pressed }) => [styles.button, styles.outline, { borderColor: sc.border }, pressed && styles.pressed]}>
                     <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{p.changes.length ? 'Discard' : 'Done'}</Text>
                   </Pressable>
                   {p.changes.length ? (
                     <Animated.View style={[styles.grow, { transform: [{ scale: pop }] }]}>
                       <Pressable testID="ai-builder-apply" accessibilityRole="button" accessibilityLabel={applyLabel(n)} accessibilityState={{ disabled: busy || !n }}
                         disabled={busy || !n} onPress={() => void ai.apply().then((ok) => ok && onClose())}
-                        style={[styles.button, { backgroundColor: n ? sc.accent : sc.disabledBg }]}>
+                        style={({ pressed }) => [styles.button, { backgroundColor: n ? sc.accent : sc.disabledBg }, pressed && styles.pressed]}>
                         <Text style={[typography.bodyMd, { color: n ? sc.textOnAccent : sc.textOnDisabled }]}>{ai.phase === 'applying' ? 'Applying' : applyLabel(n)}</Text>
                       </Pressable>
                     </Animated.View>
@@ -191,15 +194,18 @@ export default function AiBuilderSheet({ open, onClose, ai, isBlank, sc, clientF
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '88%', minHeight: '50%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg },
+  sheet: { maxHeight: '88%', minHeight: '50%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, paddingHorizontal: layout.gutter, paddingTop: spacing.sm },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.chip, marginBottom: spacing.md },
+  pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   grow: { flex: 1 }, outline: { borderWidth: 1 }, strike: { textDecorationLine: 'line-through' }, wrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  input: { borderWidth: 1, borderRadius: 12, padding: spacing.md, minHeight: 72, marginBottom: spacing.sm, textAlignVertical: 'top' },
-  chip: { borderWidth: 1, borderRadius: 16, paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
-  button: { borderRadius: 12, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
+  close: { minHeight: 44, justifyContent: 'center' },
+  input: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.input, padding: spacing.md, minHeight: 72, marginBottom: spacing.sm, textAlignVertical: 'top' },
+  chip: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.chip, minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginRight: spacing.sm, marginBottom: spacing.sm },
+  button: { borderRadius: radius.button, minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
   stages: { gap: spacing.xs, marginVertical: spacing.md },
   alert: { borderLeftWidth: 3, paddingLeft: spacing.sm, marginVertical: spacing.sm },
-  card: { borderWidth: 1, borderRadius: 12, padding: spacing.md, marginBottom: spacing.sm, gap: spacing.xs },
-  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.sm, gap: spacing.xs },
+  badge: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.control, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   warning: { borderLeftWidth: 3, paddingLeft: spacing.sm },
 });

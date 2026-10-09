@@ -5,6 +5,7 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
+import * as Localization from 'expo-localization';
 import { PRIVACY_POLICY_URL } from '../../config/env';
 import type { AiConsentUpgradeCopy } from '../../api/aiConsentApi';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
@@ -17,8 +18,10 @@ import type {
   ScreenDef,
 } from '../../lib/consultation/types';
 import {
+  ageOn,
   answerKeyOf,
   CopyContext,
+  defaultMeasureUnit,
   detailShown,
   fillCopy,
   isConsentAnswerCurrent,
@@ -55,6 +58,7 @@ import {
   Wheel,
   s,
 } from './components';
+import { Headline } from '../../ui';
 
 export interface QuestionScreenProps {
   screen: ScreenDef;
@@ -73,6 +77,8 @@ export interface QuestionScreenProps {
   onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
+  /** Prototype 42: Roman's welcome-back line replaces the chapter line on the first screen after a resume. */
+  romanOverride?: string | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
   /**
    * `aiAllowed`: what box 2 shows (the client's latest choice while the
@@ -111,6 +117,14 @@ function range(a: number, b: number): number[] {
 }
 const ftIn = (v: number) => `${Math.floor(v / 12)} ft ${v % 12} in`;
 
+function phoneRegion(): string | null {
+  try {
+    return Localization.getLocales()[0]?.regionCode ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default function QuestionScreen(props: QuestionScreenProps) {
   const { screen, answers, progress, ctx, now, onAnswer, onNext, onBack, onFinishLater } = props;
   const f = (t?: string) => (t ? fillCopy(t, ctx) : undefined);
@@ -124,7 +138,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       eyebrow={screen.eyebrow}
       timeLeft={screen.timeLeft}
       sub={f(screen.sub)}
-      roman={f(screen.roman)}
+      roman={f(props.romanOverride ?? screen.roman)}
       question={f(screen.question) ?? ''}
       long={screen.longQuestion}
       why={f(screen.why)}
@@ -229,7 +243,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
       const showCta = !!screen.cta && (multi || !screen.autoAdvance);
       return frame(
         <View>
-          <View style={s.chips} accessibilityRole={multi ? undefined : 'radiogroup'}>
+          <View style={screen.big ? s.chipsBig : s.chips} accessibilityRole={multi ? undefined : 'radiogroup'} testID={screen.big ? 'consult-chips-big' : undefined}>
             {options.map((o) => (
               <Chip
                 key={o.value}
@@ -275,12 +289,12 @@ export default function QuestionScreen(props: QuestionScreenProps) {
         <View>
           <Text style={s.small}>{P8_COPY.intro}</Text>
           <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 4 }]}>{P8_COPY.guidanceTitle}</Text>
-          {P8_COPY.guidance.map((t) => (
-            <Text key={t} style={s.listItem}>{fillCopy(t, ctx)}</Text>
+          {P8_COPY.guidance.map((t) => fillCopy(t, ctx)).filter(Boolean).map((t) => (
+            <Text key={t} style={s.listItem}>{t}</Text>
           ))}
           <Text style={[s.eyebrow, { marginTop: 20, marginBottom: 4 }]}>{P8_COPY.nextTitle}</Text>
-          {P8_COPY.next.map((t) => (
-            <Text key={t} style={s.listItem}>{fillCopy(t, ctx)}</Text>
+          {P8_COPY.next.map((t) => fillCopy(t, ctx)).filter(Boolean).map((t) => (
+            <Text key={t} style={s.listItem}>{t}</Text>
           ))}
           <Text style={[s.small, { marginTop: 20 }]} testID="p8-physician-line">{P8_COPY.physician}</Text>
           <Text style={[s.mutedSmall, { marginTop: 12 }]}>{P8_COPY.emergency}</Text>
@@ -296,7 +310,7 @@ export default function QuestionScreen(props: QuestionScreenProps) {
           <View style={{ paddingTop: 48 }}>
             <FadeIn><Text style={s.eyebrow}>{screen.eyebrow}</Text></FadeIn>
             <FadeIn delayIndex={1}>
-              <Text style={[s.display, { marginTop: 16 }]} accessibilityRole="header">{f(screen.question)}</Text>
+              <Headline level="display" style={{ marginTop: 16 }}>{f(screen.question)}</Headline>
             </FadeIn>
             {screen.roman ? (
               <FadeIn delayIndex={2} style={{ marginTop: 12 }}>
@@ -347,13 +361,42 @@ function DobBody(props: BodyProps) {
   const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   const draft = { ...answers, B2: iso };
   const v = validateScreen(screen, draft, now);
+  // Prototype 45: an age under 16 leads to a calm, final stop screen (no
+  // form, nothing saved) whose only action returns to the wheels.
+  const minAge = screen.validation?.ageRange?.min ?? 16;
+  const age = ageOn(iso, now);
+  const under = !Number.isNaN(age) && age < minAge;
+  const [stopped, setStopped] = useState(false);
+  if (stopped) {
+    return (
+      <Frame
+        onBack={() => setStopped(false)}
+        onFinishLater={null}
+        footer={<PrimaryButton label="Change my date of birth" onPress={() => setStopped(false)} testID="consult-under-age-change" />}
+        testID="consult-screen-UNDER_AGE"
+      >
+        <View style={{ paddingTop: 96 }}>
+          <Text style={s.eyebrow}>{screen.eyebrow}</Text>
+          <Headline style={{ marginTop: 16 }}>{`The Growth Project is for ages ${minAge} and up.`}</Headline>
+          <Text style={[s.mutedSmall, { marginTop: 12 }]}>If the date was entered by mistake, go back and change it.</Text>
+        </View>
+      </Frame>
+    );
+  }
   const commit = (ny = y, nm = m, nd = d) =>
     onAnswer('B2', `${ny}-${String(nm).padStart(2, '0')}-${String(nd).padStart(2, '0')}`);
   return (
     <BodyFrame
       props={props}
       header={header}
-      footer={<PrimaryButton label="Continue" disabled={!v.valid} onPress={() => onNext({ B2: iso })} testID="consult-continue" />}
+      footer={
+        <PrimaryButton
+          label="Continue"
+          disabled={!v.valid && !under}
+          onPress={() => (under ? setStopped(true) : onNext({ B2: iso }))}
+          testID="consult-continue"
+        />
+      }
     >
       <View style={s.wheels}>
         <View style={[s.wheelCol, { flex: 1.6 }]}>
@@ -366,7 +409,7 @@ function DobBody(props: BodyProps) {
           <Wheel label="Birth year" values={range(now.getFullYear() - 100, now.getFullYear() - 10)} value={y} onChange={(x) => { setY(x); commit(x, m, d); }} testID="wheel-dob-year" />
         </View>
       </View>
-      {v.message ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
+      {v.message && !under ? <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consult-validation">{v.message}</Text> : null}
     </BodyFrame>
   );
 }
@@ -374,7 +417,9 @@ function DobBody(props: BodyProps) {
 function MeasureBody(props: BodyProps) {
   const { answers, onAnswer, onNext, header } = props;
   const existing = answers.B3 as MeasureAnswer | undefined;
-  const [unit, setUnit] = useState<'imperial' | 'metric'>(existing?.unit ?? 'imperial');
+  // Prototype B3: the unit tabs default from the phone's region (US, Liberia
+  // and Myanmar imperial, everywhere else metric); a saved answer keeps its unit.
+  const [unit, setUnit] = useState<'imperial' | 'metric'>(() => existing?.unit ?? defaultMeasureUnit(phoneRegion()));
   const [heightCm, setHeightCm] = useState(existing?.height_cm ?? 167.6);
   const [weightLbs, setWeightLbs] = useState(existing?.weight_lbs ?? 172);
   const value: MeasureAnswer = { height_cm: heightCm, weight_lbs: weightLbs, unit };
@@ -415,18 +460,19 @@ export function goalWeightNote(goalLbs: number, currentLbs: number, goal: unknow
     return "That's above your current weight. Is that right?";
   }
   if (currentLbs > 0 && Math.abs(goalLbs - currentLbs) / currentLbs > 0.3) {
-    return "That's a long road. Your coach will set milestones with you.";
+    return "That's a long road. {Coach} will set milestones with you.";
   }
   return '';
 }
 
 function GoalWeightBody(props: BodyProps) {
-  const { answers, onNext, onAnswer, header, screen } = props;
+  const { answers, onNext, onAnswer, header, screen, ctx } = props;
   const m = answers.B3 as MeasureAnswer | undefined;
   const current = m?.weight_lbs ?? 172;
   const unit = m?.unit ?? 'imperial';
   const [lbs, setLbs] = useState<number>(typeof answers.B4 === 'number' ? answers.B4 : Math.round(current));
-  const note = goalWeightNote(lbs, current, answers.G1);
+  // fillCopy swaps in the coachless version (COACHLESS_COPY) for a client with no coach.
+  const note = fillCopy(goalWeightNote(lbs, current, answers.G1), ctx);
   const kg = Math.round(lbs * 0.453592);
   return (
     <BodyFrame
@@ -520,7 +566,7 @@ function ConsentBody(props: BodyProps) {
           <PrimaryButton
             label={props.screen.cta ?? 'Continue'}
             disabled={!checked || blocked}
-            hint={checked ? undefined : 'Tick the first box to continue'}
+            accessibilityHint={checked ? undefined : 'Tick the first box to continue'}
             onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
             testID="consult-continue"
           />

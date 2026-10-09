@@ -118,7 +118,7 @@ describe('live workout row ghost values and action parity', () => {
       'Move Bench press down', 'Swap Bench press', ...[60, 90, 120].map((n) => `Set rest for Bench press to ${n} seconds`)]) {
       await fireEvent.press(view.getByLabelText(label));
     }
-    await fireEvent.press(view.getByText('Add Set'));
+    await fireEvent.press(view.getByText('Add set'));
     await fireEvent.changeText(view.getByLabelText('Notes for Bench press'), 'Smooth');
     await fireEvent.changeText(view.getByTestId('set-weight-1-0'), '65');
     await fireEvent.changeText(view.getByTestId('set-reps-1-0'), '8');

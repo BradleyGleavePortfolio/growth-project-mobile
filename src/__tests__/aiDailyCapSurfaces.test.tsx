@@ -34,7 +34,8 @@ jest.mock('react-native-reanimated', () => {
 jest.mock('../theme/ThemeProvider', () => {
   const colors = new Proxy({}, { get: (_t, prop) => (typeof prop === 'string' ? `#${prop}` : '#000') });
   const Pass = ({ children }: { children: React.ReactNode }) => children;
-  return { __esModule: true, ThemeProvider: Pass, default: Pass, useTheme: () => ({ colors }) };
+  const { lightTokens } = jest.requireActual('../theme/tokens');
+  return { __esModule: true, ThemeProvider: Pass, default: Pass, useTheme: () => ({ colors, semanticColors: lightTokens }) };
 });
 
 jest.mock('../theme/useTheme', () => {

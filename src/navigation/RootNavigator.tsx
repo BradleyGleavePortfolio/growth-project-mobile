@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, View, StyleSheet, Linking, AppState } from 'react-native';
+import { Linking, AppState } from 'react-native';
 import { logger } from '../utils/logger';
 import { triggerSync as triggerWorkoutSync } from '../offline';
 import {
@@ -19,7 +19,8 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 // implementation and future rollback. See the file header for context.
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
-import LeanOnboardingNavigator from './LeanOnboardingNavigator';
+// B14 (CONSULT-ALL-M-133): the lean flow is no longer mounted; every new
+// client gets the consultation. LEAN-CUT-133 deletes the lean files.
 import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
@@ -33,7 +34,6 @@ import { isScreenshotMode } from '../screenshots';
 // contributes nothing, so no `tgp://community*` route exists in the parser.
 import { featureFlags } from '../config/featureFlags';
 import { firstWinApi, WinType } from '../services/firstWinApi';
-import { consultationApi } from '../api/consultationApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
 import { prefsStorage } from '../storage/mmkv';
@@ -63,7 +63,9 @@ type AuthState =
   | 'coach_wizard'
   | 'coach'
   | 'package_prompt'
-  | 'student';
+  | 'student'
+  // START-HANG-134 (B37): a startup read on this phone did not answer in time.
+  | 'startup_error';
 
 // Audit fix CR-1: Supabase password-recovery emails carry the
 // access_token + refresh_token pair in the URL fragment (after `#`).
@@ -85,6 +87,8 @@ import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 import { profileOnboardingCompleted } from '../lib/profileOnboarding';
 import { wasDay1WinSkipped } from '../lib/day1WinSkip';
+import { createLatestRunGuard, isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
+import { StartupErrorScreen, StartupPending } from '../components/StartupErrorScreen';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -327,28 +331,13 @@ function openUpdateCard(params: { autostart: boolean; surface: string }): void {
   }
 }
 
-/** B-REV-1: per-user marker that this client was sent to the standard onboarding. */
-const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
-
 /**
- * S-REVENUE-124 (B-REV-1): with the consultation flag on, the consultation
- * runs only for a client the server can finish it for. GET /me/onboarding
- * `consultation_available: false` (no coach yet, or a coach without a clinic
- * program set: POST /complete would answer not_attached or
- * clinic_not_configured forever) means the standard onboarding.
- * A missing field (older server), a 404 or
- * a failed read keeps the consultation, as before.
+ * B-REV-1: per-user marker that this client was sent to the standard (lean)
+ * onboarding by an earlier build. Read only for a client who finished that
+ * flow (they may still choose a first win); cleared when a client who never
+ * finished it is sent to the consultation instead (B14).
  */
-async function consultationApplies(): Promise<boolean> {
-  if (!featureFlags.consultationOnboarding) return false;
-  try {
-    const state = await consultationApi.getState();
-    return state?.consultation_available !== false;
-  } catch (err) {
-    logger.warn('RootNavigator', 'consultation availability not read', err);
-    return true;
-  }
-}
+const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
 
 function signOutFromLockout(): void {
   signOut().catch((err: unknown) => {
@@ -372,9 +361,10 @@ export function extractAcceptInviteToken(url: string): string | null {
 }
 
 export default function RootNavigator() {
-  const [authState, setAuthState] = useState<AuthState>('loading');
-  // B-REV-1: consultation or the standard onboarding, decided per client at boot.
-  const [consultationMode, setConsultationMode] = useState<boolean>(featureFlags.consultationOnboarding);
+  // START-HANG-134 (B35): bootstrapAuth commits through its latest-run guard;
+  // setAuthStateNow is for the user-driven transitions outside it.
+  const [authState, setAuthStateNow] = useState<AuthState>('loading');
+  const [bootGuard] = useState(createLatestRunGuard);
 
   // Push-tap routing: hand the container ref to pushTapRouter once. The
   // session effect below (after sessionUserId is declared) tells the router
@@ -386,7 +376,7 @@ export default function RootNavigator() {
   // no pending role selection. `undefined` = bootstrap outcome unknown (gate
   // holds, touches nothing); `null` = committed logged-out; string = user id.
   // Set on every bootstrap outcome, including the failure paths.
-  const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(undefined);
+  const [sessionUserId, setSessionUserIdNow] = useState<string | null | undefined>(undefined);
   useEffect(() => {
     // Audit #304 (Sol B3, Opus C3): explicit session state, not route names.
     setPushSession(pushSessionFor(authState, sessionUserId));
@@ -665,12 +655,29 @@ export default function RootNavigator() {
   }, []);
 
   const bootstrapAuth = async () => {
+    // START-HANG-134 (B35): latest bootstrap wins. A run overtaken by a newer
+    // one (an auth event during a cold start, or Try again) commits nothing,
+    // so a slow earlier run can never overwrite the newer outcome.
+    const isLatest = bootGuard.begin();
+    const setAuthState = (next: AuthState) => {
+      if (isLatest()) setAuthStateNow(next);
+    };
+    const setSessionUserId = (next: string | null) => {
+      if (isLatest()) setSessionUserIdNow(next);
+    };
     try {
       // secureStorage.getItem migrates any legacy AsyncStorage token into
       // SecureStore on first read, so existing users stay logged in.
-      const token = await secureStorage.getItem('supabase_token');
-      const parsedUser = await readUserCache();
-      const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
+      // B37: this phone's stored session, account and role flag share one time
+      // limit; no answer shows the calm startup error (the session is kept).
+      const [token, parsedUser, needsRoleSelection] = await withStartupTimeout(
+        Promise.all([
+          secureStorage.getItem('supabase_token'),
+          readUserCache(),
+          AsyncStorage.getItem('needs_role_selection'),
+        ]),
+        'stored session',
+      );
 
       if (!token || !parsedUser) {
         setSessionUserId(null);
@@ -724,7 +731,11 @@ export default function RootNavigator() {
         // through to the dashboard so a flaky API can never hard-block an
         // already-onboarded coach from reaching their clients.
         try {
-          const onboardingRes = await api.get<{ is_complete: boolean }>('/coach/onboarding');
+          // B35: no answer within the startup limit fails open like a network error.
+          const onboardingRes = await withStartupTimeout(
+            api.get<{ is_complete: boolean }>('/coach/onboarding'),
+            'coach setup',
+          );
           if (onboardingRes.data.is_complete === false) {
             setAuthState('coach_wizard');
             return;
@@ -734,7 +745,7 @@ export default function RootNavigator() {
           if (status === 404) {
             // Wizard row missing — start it and enter the wizard.
             try {
-              await api.post('/coach/onboarding/start', {});
+              await withStartupTimeout(api.post('/coach/onboarding/start', {}), 'coach setup start');
               setAuthState('coach_wizard');
               return;
             } catch (startErr) {
@@ -753,21 +764,23 @@ export default function RootNavigator() {
 
       if (role === 'student') {
         // Check if onboarding quiz has been completed
-        const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
+        const onboardingDone = await withStartupTimeout(AsyncStorage.getItem('onboarding_complete'), 'onboarding flag');
         const profileDone = profileOnboardingCompleted(user?.profile);
         const standardKey =
           typeof user?.id === 'string' && user.id ? `${STANDARD_ONBOARDING_KEY}:${user.id}` : null;
 
         if (onboardingDone !== 'true' && !profileDone) {
-          // Psych Report #1: route new users to 3-question lean flow.
-          // Existing users who already have the old 10-step onboarding_complete
-          // flag bypass this entirely — the check above handles them.
-          // B-REV-1: the consultation only where the server can finish it.
-          const useConsultation = await consultationApplies();
-          setConsultationMode(useConsultation);
-          if (!useConsultation && featureFlags.consultationOnboarding && standardKey) {
-            await AsyncStorage.setItem(standardKey, 'true').catch((err: unknown) =>
-              logger.warn('RootNavigator', 'standard onboarding marker not saved', err),
+          // B14 (owner decisions 27-28): every new client, with or without a
+          // coach, gets the full consultation. GET /me/onboarding
+          // consultation_available is no longer read here: an older server that
+          // cannot finish it answers POST /complete with not_attached /
+          // clinic_not_configured, and the consultation shows its calm server
+          // state with Try again (prototype 44). A lean marker left by an earlier
+          // build is cleared, so the consultation's finish is never followed by
+          // the lean flow's first-win step.
+          if (standardKey) {
+            await withStartupTimeout(AsyncStorage.removeItem(standardKey), 'lean marker').catch((err: unknown) =>
+              logger.warn('RootNavigator', 'standard onboarding marker not cleared', err),
             );
           }
           setAuthState('onboarding');
@@ -776,7 +789,9 @@ export default function RootNavigator() {
 
         // Sync: if backend says done but AsyncStorage doesn't, fix it
         if (profileDone && onboardingDone !== 'true') {
-          await AsyncStorage.setItem('onboarding_complete', 'true');
+          await withStartupTimeout(AsyncStorage.setItem('onboarding_complete', 'true'), 'onboarding flag').catch(
+            (err: unknown) => logger.warn('RootNavigator', 'onboarding flag not saved', err),
+          );
         }
 
         // Consultation onboarding (flag on, Opus B-05): the consultation, its
@@ -787,7 +802,7 @@ export default function RootNavigator() {
         let standardPath = !featureFlags.consultationOnboarding;
         if (!standardPath && standardKey) {
           try {
-            standardPath = (await AsyncStorage.getItem(standardKey)) === 'true';
+            standardPath = (await withStartupTimeout(AsyncStorage.getItem(standardKey), 'lean marker')) === 'true';
           } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         }
         if (standardPath) {
@@ -797,8 +812,9 @@ export default function RootNavigator() {
           // A client who tapped "Skip for now" is not shown it again on every
           // open (lib/day1WinSkip); the server only records a tapped win.
           try {
-            if (!(await wasDay1WinSkipped(user?.id))) {
-              const statusResponse = await firstWinApi.getStatus();
+            if (!(await withStartupTimeout(wasDay1WinSkipped(user?.id), 'first win skip'))) {
+              // B35: no answer within the startup limit skips the win screen.
+              const statusResponse = await withStartupTimeout(firstWinApi.getStatus(), 'first win');
               if (!statusResponse.data.completed) {
                 setAuthState('day1win');
                 return;
@@ -824,13 +840,14 @@ export default function RootNavigator() {
         try {
           const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
           const dismissedAt = user?.id
-            ? await prefsStorage.getStringAsync(
-                `onboarding.package_prompt_dismissed_at:${user.id}`,
+            ? await withStartupTimeout(
+                prefsStorage.getStringAsync(`onboarding.package_prompt_dismissed_at:${user.id}`),
+                'package prompt',
               )
             : null;
           if (dismissedAt) {
             const elapsed = Date.now() - new Date(dismissedAt).getTime();
-            if (elapsed > TWENTY_FOUR_HOURS && (await shouldOfferPackagePrompt())) {
+            if (elapsed > TWENTY_FOUR_HOURS && (await withStartupTimeout(shouldOfferPackagePrompt(), 'package prompt'))) {
               // Suppressed for active (comp) entitlements and on iOS while
               // client purchase surfaces are hidden (App Review 3.1).
               setAuthState('package_prompt');
@@ -848,9 +865,21 @@ export default function RootNavigator() {
       setAuthState('unauthenticated');
     } catch (err) {
       logger.warn('RootNavigator', 'non-fatal', err);
+      // B37: a read on this phone that never answered is not a sign-out: the
+      // calm startup error offers Try again and the session is untouched.
+      if (isStartupTimeout(err)) {
+        setAuthState('startup_error');
+        return;
+      }
       setSessionUserId(null);
       setAuthState('unauthenticated');
     }
+  };
+
+  // B37: Try again on the startup error runs the bootstrap again (latest wins).
+  const retryStartup = () => {
+    setAuthStateNow('loading');
+    void bootstrapAuth();
   };
 
   // Called by Day1WinScreen when the client completes the win OR skips.
@@ -859,7 +888,7 @@ export default function RootNavigator() {
   // ClientNavigator mounts.
   const handleDay1WinComplete = (target?: WinType) => {
     pendingDay1Target.current = target ?? null;
-    setAuthState('student');
+    setAuthStateNow('student');
   };
 
   // After auth flips to 'student' and the navigator mounts, route the user
@@ -907,12 +936,15 @@ export default function RootNavigator() {
     } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
   };
 
+  // B35/B37: the loading view never spins forever. After STARTUP_CEILING_MS it
+  // becomes the calm startup error (prototype 44); Try again runs the
+  // bootstrap again, and a bootstrap that finishes meanwhile opens the app.
   if (authState === 'loading') {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+    return <StartupPending onRetry={() => void bootstrapAuth()} />;
+  }
+
+  if (authState === 'startup_error') {
+    return <StartupErrorScreen kind="device" onRetry={retryStartup} />;
   }
 
   // Phase 7A: Day1WinScreen renders outside NavigationContainer because it is
@@ -949,22 +981,13 @@ export default function RootNavigator() {
           stays false and the replay effects above keep waiting as before. */}
       <PersistedQueryCacheGate
         userId={sessionUserId}
-        renderRestoring={() => (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
-          </View>
-        )}
+        renderRestoring={() => <StartupPending testID="persisted-cache-pending" onRetry={() => void bootstrapAuth()} />}
       >
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
-        // Consultation onboarding (consult-v1) when the flag is on; it has no
-        // skip-to-finish path. Flag off: the lean flow, unchanged.
-        consultationMode ? (
-          <ConsultationOnboardingNavigator />
-        ) : (
-          <LeanOnboardingNavigator />
-        )
+        // B14: the consultation for every new client; it has no skip-to-finish path.
+        <ConsultationOnboardingNavigator />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />
@@ -999,8 +1022,8 @@ export default function RootNavigator() {
           </DunningLockoutProvider>
           <PackageSelectionSheet
             visible
-            onDismiss={() => setAuthState('student')}
-            onPaymentSuccess={() => setAuthState('student')}
+            onDismiss={() => setAuthStateNow('student')}
+            onPaymentSuccess={() => setAuthStateNow('student')}
           />
         </EntitlementProvider>
       ) : (
@@ -1033,12 +1056,3 @@ export default function RootNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: Colors.background,
-  },
-});

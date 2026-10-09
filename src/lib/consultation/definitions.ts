@@ -534,9 +534,9 @@ export const SCREENS: readonly ScreenDef[] = [
     template: 'message',
     eyebrow: chapterEyebrow(7),
     pause: true,
-    question: 'Thank you for answering so carefully, {first}.',
+    question: 'Thanks for answering honestly, {first}.',
     longQuestion: true,
-    roman: 'That helps me look after you properly.',
+    roman: 'That helps me keep you safe.',
     cta: 'Continue',
     showWhen: {
       any: SCREENING_KEYS.map((k) => ({ key: k, equals: 'yes' })),
@@ -559,6 +559,43 @@ export const SCREENS: readonly ScreenDef[] = [
     validation: { required: true },
   },
 ];
+
+/**
+ * Coachless copy (owner 15:29: a client without a coach can do everything a
+ * coached client can, except direct coaching). Every consultation line that
+ * names the coach has a coachless version here, keyed by the template text,
+ * so a coachless client is never told a coach will read, know or act on
+ * something. An empty string drops the line. `fillCopy` applies it when the
+ * copy context says `coachless`. The P0 agreement is versioned and hashed
+ * (T4) and is not listed.
+ */
+export const COACHLESS_COPY: Readonly<Record<string, string>> = {
+  // W1
+  "I'm Roman. Before {coach} builds anything for you, I'd like to understand you properly, the way a good trainer would at a first consultation. It takes about five minutes. You can pause at any point, and I'll keep your place.":
+    "I'm Roman. Before anything is built for you, I'd like to understand you properly, the way a good trainer would at a first consultation. It takes about five minutes. You can pause at any point, and I'll keep your place.",
+  // G2, T2, T3, N5, P1-P7 notes
+  'Your reasons help Roman and {coach} keep you going on harder days.': 'Your reasons help Roman keep you going on harder days.',
+  '{Coach} can build around what you already like.': 'Your plan can build around what you already like.',
+  'Anything {coach} should know? (optional)': 'Anything else worth knowing? (optional)',
+  '{Coach} will focus on what actually gets in your way.': 'Roman will focus on what actually gets in your way.',
+  'So your coach knows what you avoid.': 'So what you avoid is noted from the start.',
+  'Tell {coach} more (optional)': 'Add a note (optional)',
+  // B4 soft note (QuestionScreen goalWeightNote)
+  "That's a long road. {Coach} will set milestones with you.": "That's a long road. Smaller milestones along the way will help.",
+  // P8 (copy.ts P8_COPY)
+  'Stop if you feel chest discomfort, unusual shortness of breath, dizziness or sharp pain. Rest, and tell {coach}.':
+    'Stop if you feel chest discomfort, unusual shortness of breath, dizziness or sharp pain, and rest.',
+  '{Coach} will be told, so they can check in with you.': '',
+  'Your safest next step: book a visit with your physician and mention you are starting a training program. Once you have their OK, message {coach} and your plan can be adjusted.':
+    'Your safest next step: book a visit with your physician and mention you are starting a training program.',
+  // Reveals and paused (copy.ts REVEAL_COPY)
+  'Start once your physician gives you the OK. {Coach} has been told.': 'Start once your physician gives you the OK.',
+  'Your first day is already scheduled in Train. Does something feel off? Message {coach}. Your coach can adjust anything in this plan.':
+    'Your first day is already scheduled in Train.',
+  'Questions about your numbers? Message {coach} any time from Messages. Your coach can adjust these targets for you.': '',
+  "Whenever you're ready, you can pick up exactly where you left off. {Coach} will see your answers once you finish.":
+    "Whenever you're ready, you can pick up exactly where you left off.",
+};
 
 export function screenById(id: string): ScreenDef | undefined {
   return SCREENS.find((s) => s.id === id);

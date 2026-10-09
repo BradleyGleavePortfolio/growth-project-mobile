@@ -12,12 +12,12 @@ import {
   Text,
   StyleSheet,
   TouchableWithoutFeedback,
-  SafeAreaView,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import HapticPressable from '../HapticPressable';
 import { Colors } from '../../constants/colors';
-import { Spacing, Radius } from '../../theme/index';
-import { typography, shadows } from '../../theme/tokens';
+import { Spacing } from '../../theme/index';
+import { radius, typography, shadows } from '../../theme/tokens';
 
 export interface TrustExplainerContent {
   title: string;
@@ -46,8 +46,9 @@ export default function TrustExplainerSheet({ visible, content, onDismiss }: Pro
         <View style={styles.overlay} />
       </TouchableWithoutFeedback>
 
-      <SafeAreaView style={styles.safeArea} pointerEvents="box-none">
-        <View style={styles.sheet}>
+      <View style={styles.safeArea} pointerEvents="box-none">
+        {/* The sheet runs to the screen edge; its padding clears the gesture bar. */}
+        <SafeAreaView edges={['bottom']} style={styles.sheet}>
           {/* Handle bar */}
           <View style={styles.handle} />
 
@@ -63,8 +64,8 @@ export default function TrustExplainerSheet({ visible, content, onDismiss }: Pro
           >
             <Text style={styles.dismissBtnText}>Got it</Text>
           </HapticPressable>
-        </View>
-      </SafeAreaView>
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 }
@@ -80,8 +81,8 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.xl,
-    borderTopRightRadius: Radius.xl,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
     paddingHorizontal: Spacing.lg,
     paddingTop: 12,
     paddingBottom: 32,
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 40,
     height: 4,
-    borderRadius: 2,
+    borderRadius: radius.chip,
     backgroundColor: Colors.border,
     marginBottom: 20,
   },
@@ -110,7 +111,7 @@ const styles = StyleSheet.create({
   },
   dismissBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: Radius.full,
+    borderRadius: radius.button,
     paddingVertical: 14,
     alignItems: 'center',
   },

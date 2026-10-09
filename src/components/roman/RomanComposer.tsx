@@ -7,8 +7,10 @@
  * blank or oversized turn can never reach the backend (mirrors SendMessageDto
  * @MinLength(1)/@MaxLength(8000), roman.dto.ts L30-33).
  *
- * Touch target: the send control is a minimum 48x48dp hit area (brief §7 /
- * Apple HIG), enforced in `styles.sendButton`.
+ * Touch target: the send control is a 44x44 pt forest square inside the field
+ * (prototype 69, Apple HIG minimum), enforced in `styles.sendButton`. It stays
+ * forest while the draft is empty (the arrow rests at half strength) so the
+ * room never shows a grey dead square (owner S8, B30).
  *
  * Composer growth (R1 UX finding P2): the input grows with its content rather
  * than being pinned to a fixed 120dp cap, which becomes cramped at large
@@ -17,6 +19,7 @@
  * starts to scroll once it reaches that dynamic ceiling.
  */
 import React, { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import {
   ActivityIndicator,
   StyleSheet,
@@ -29,10 +32,12 @@ import {
   type TextInputContentSizeChangeEventData,
 } from 'react-native';
 import { ROMAN_MESSAGE_MAX_LENGTH } from '../../api/romanApi';
-import { colors, lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
+import { ROMAN_COMPOSER_PLACEHOLDER } from './romanVoice';
 
-/** Single-line input floor (matches the 48dp touch target). */
-const COMPOSER_MIN_HEIGHT = 48;
+/** Single-line input floor (matches the 44pt send square inside the field). */
+const COMPOSER_MIN_HEIGHT = 44;
 /**
  * Fraction of the window height the composer may grow to before it scrolls.
  * Viewport-relative (not a fixed 120dp) so it stays comfortable under large
@@ -49,6 +54,10 @@ export interface RomanComposerProps {
   sending: boolean;
   /** Disables input + send entirely (e.g. Roman unavailable). */
   disabled?: boolean;
+  /** Quick-start chips (prototype 69) rendered above the field. */
+  accessory?: React.ReactNode;
+  /** One quiet line under the field (prototype 69 footer). */
+  footer?: string | null;
   testID?: string;
 }
 
@@ -58,8 +67,11 @@ export default function RomanComposer({
   onSend,
   sending,
   disabled = false,
+  accessory,
+  footer,
   testID,
 }: RomanComposerProps): React.ReactElement {
+  const { semanticColors: c, colors: themeColors } = useTheme();
   const trimmed = value.trim();
   const overCap = value.length > ROMAN_MESSAGE_MAX_LENGTH;
   const canSend = !disabled && !sending && trimmed.length > 0 && !overCap;
@@ -84,92 +96,104 @@ export default function RomanComposer({
   };
 
   return (
+    // Sits in the Screen footer (src/ui), which owns the gutter, the gesture
+    // bar inset and the keyboard: the composer floats above both.
     <View style={styles.container} testID={testID}>
+      {accessory}
       {overCap ? (
-        <Text style={styles.capNote} accessibilityRole="text">
+        <Text style={[styles.capNote, { color: themeColors.error }]} accessibilityRole="text">
           {`Message is too long by ${value.length - ROMAN_MESSAGE_MAX_LENGTH} characters.`}
         </Text>
       ) : null}
-      <View style={styles.row}>
+      <View style={[styles.field, { backgroundColor: c.bgSurface, borderColor: c.border }]} testID="roman-composer-field">
         <TextInput
-          style={[styles.input, { height: inputHeight, maxHeight }]}
+          style={[styles.input, { height: inputHeight, maxHeight, color: c.textPrimary }]}
           value={value}
           onChangeText={onChangeText}
           onContentSizeChange={onContentSizeChange}
           scrollEnabled={inputScrollEnabled}
           editable={!disabled && !sending}
-          placeholder="Message Roman"
-          placeholderTextColor={lightTokens.textMuted}
+          placeholder={ROMAN_COMPOSER_PLACEHOLDER}
+          placeholderTextColor={c.textMuted}
           multiline
           maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
           accessibilityLabel="Message Roman"
           testID="roman-composer-input"
         />
         <TouchableOpacity
-          style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+          style={[styles.sendButton, { backgroundColor: c.accent }]}
           onPress={onSend}
           disabled={!canSend}
+          activeOpacity={0.8}
           accessibilityRole="button"
           accessibilityState={{ disabled: !canSend, busy: sending }}
           accessibilityLabel={sending ? 'Sending message' : 'Send message'}
           testID="roman-composer-send"
         >
           {sending ? (
-            <ActivityIndicator color={colors.bone} testID="roman-composer-spinner" />
+            <ActivityIndicator color={c.textOnAccent} testID="roman-composer-spinner" />
           ) : (
-            <Text style={[styles.sendLabel, !canSend && styles.sendLabelDisabled]} accessible={false}>→</Text>
+            <Ionicons
+              name="arrow-forward"
+              size={20}
+              color={c.textOnAccent}
+              style={canSend ? undefined : styles.sendIconIdle}
+              accessible={false}
+            />
           )}
         </TouchableOpacity>
       </View>
+      {footer ? (
+        <Text style={[styles.footer, { color: c.textMuted }]} testID="roman-composer-footer">
+          {footer}
+        </Text>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: lightTokens.border,
-    backgroundColor: colors.bone,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
-  row: {
+  field: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    // Owner 17:07: rounded, never a rectangle (radius tokens, Q10b).
+    borderRadius: radius.input,
+    paddingLeft: spacing.lg,
+    padding: spacing.xs,
   },
   input: {
     flex: 1,
     minHeight: COMPOSER_MIN_HEIGHT,
     ...typography.body,
-    color: colors.ink,
     paddingHorizontal: 0,
-    paddingVertical: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    textAlignVertical: 'center',
   },
   sendButton: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.forest,
-    borderRadius: radius.sm,
+    borderRadius: radius.button,
+    marginBottom: 2,
   },
-  sendButtonDisabled: {
-    backgroundColor: lightTokens.disabledBg,
+  /** Empty draft: the forest square stays, its arrow rests at half strength. */
+  sendIconIdle: {
+    opacity: 0.5,
   },
-  sendLabel: {
-    ...typography.body,
-    fontSize: 24,
-    lineHeight: 30,
-    color: colors.bone,
-  },
-  sendLabelDisabled: {
-    color: lightTokens.textOnDisabled,
+  footer: {
+    ...typography.bodySmall,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   capNote: {
     ...typography.bodySmall,
-    color: colors.error,
   },
 });

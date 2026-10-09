@@ -40,6 +40,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { layout, radius, typography } from '../../theme/tokens';
+import { Headline, ScreenTopBar, useScreenInsets } from '../../ui';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { warningTap, successTap } from '../../utils/haptics';
 import { signOut } from '../../services/authActions';
@@ -174,6 +176,7 @@ function reauthErrorMessage(err: unknown, method: ReauthMethod): string {
 export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const insets = useScreenInsets();
   const currentUser = useCurrentUser();
 
   const [phase, setPhase] = useState<LoadPhase>('loading');
@@ -391,19 +394,11 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
     ]);
   };
 
+  // Insets from safe-area-context plus the shared gap under the status bar.
   const header = (
-    <View style={styles.topBar}>
-      <HapticPressable
-        intent="light"
-        onPress={() => navigation.goBack()}
-        style={styles.backBtn}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-      >
-        <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-      </HapticPressable>
-      <Text style={styles.topTitle}>Delete account</Text>
-      <View style={styles.backBtn} />
+    <View style={{ paddingTop: insets.top + layout.statusBarGap, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <ScreenTopBar onBack={() => navigation.goBack()} backLabel="Go back" />
+      <Headline level="h1" style={styles.topTitle}>Delete account</Headline>
     </View>
   );
 
@@ -791,24 +786,10 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
       backgroundColor: colors.background,
     },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 56,
-      paddingBottom: 12,
-    },
-    backBtn: {
-      width: 40,
-      height: 40,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
     topTitle: {
-      fontFamily: 'CormorantGaramond_500Medium',
-      fontSize: 22,
-      color: colors.textPrimary,
+      paddingHorizontal: layout.gutter,
+      paddingTop: 8,
+      paddingBottom: 4,
     },
     content: {
       paddingHorizontal: 24,
@@ -830,11 +811,8 @@ const makeStyles = (colors: ThemeColors) =>
       fontWeight: '500',
     },
     sectionHeading: {
-      fontSize: 13,
-      fontWeight: '500',
+      ...typography.eyebrow,
       color: colors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 1.5,
       marginBottom: 8,
       marginTop: 24,
     },
@@ -883,7 +861,7 @@ const makeStyles = (colors: ThemeColors) =>
     confirmInput: {
       marginTop: 12,
       backgroundColor: colors.background,
-      borderRadius: 2,
+      borderRadius: radius.input,
       borderWidth: 1,
       borderColor: colors.border,
       paddingHorizontal: 14,
@@ -903,7 +881,9 @@ const makeStyles = (colors: ThemeColors) =>
     deleteBtn: {
       marginTop: 28,
       backgroundColor: colors.error,
-      borderRadius: 2,
+      borderRadius: radius.button,
+      minHeight: layout.buttonHeight,
+      justifyContent: 'center',
       paddingVertical: 16,
       alignItems: 'center',
     },
@@ -928,7 +908,7 @@ const makeStyles = (colors: ThemeColors) =>
     reauthInput: {
       marginTop: 12,
       backgroundColor: colors.background,
-      borderRadius: 2,
+      borderRadius: radius.input,
       borderWidth: 1,
       borderColor: colors.border,
       paddingHorizontal: 14,
@@ -945,11 +925,12 @@ const makeStyles = (colors: ThemeColors) =>
     appleBtn: {
       marginTop: 14,
       backgroundColor: colors.textPrimary,
-      borderRadius: 2,
+      borderRadius: radius.button,
+      minHeight: layout.buttonHeight,
+      justifyContent: 'center',
       paddingVertical: 16,
       alignItems: 'center',
       flexDirection: 'row',
-      justifyContent: 'center',
       gap: 8,
     },
     appleBtnText: {
@@ -960,13 +941,16 @@ const makeStyles = (colors: ThemeColors) =>
     statusDate: {
       fontFamily: 'CormorantGaramond_500Medium',
       fontSize: 26,
+      lineHeight: 33,
       color: colors.textPrimary,
       marginTop: 6,
     },
     keepBtn: {
       marginTop: 28,
       backgroundColor: colors.primary,
-      borderRadius: 2,
+      borderRadius: radius.button,
+      minHeight: layout.buttonHeight,
+      justifyContent: 'center',
       paddingVertical: 16,
       alignItems: 'center',
     },

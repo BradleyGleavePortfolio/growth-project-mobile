@@ -1,5 +1,11 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
+import { layout, radius, typography } from '../../../theme/tokens';
+
+// REDO-COACH-133 (QA-COACH-SET-129 visual pass, coach-home-solo reference):
+// bone page, serif title and name, 11 pt overlines, rounded hairline groups
+// with no cream fills (owner 17:07: rounded, not rectangles), 56 pt rows,
+// sentence case, radius from the tokens only. Insets come from the screen.
 
 export const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -11,138 +17,136 @@ export const makeStyles = (colors: ThemeColors) =>
     paddingBottom: 100,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '500',
-    color: colors.textPrimary,
+    paddingHorizontal: layout.gutter,
+    marginBottom: 12,
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    marginHorizontal: 24,
-    borderRadius: 4, // radius.lg
-    padding: 20,
+    marginHorizontal: layout.gutter,
+    paddingTop: 12,
+    paddingBottom: 24,
     gap: 16,
     marginBottom: 28,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.primaryDark,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: colors.textOnPrimary,
-    fontSize: 20,
-    fontWeight: '500',
+    ...typography.h3,
+    color: colors.textSecondary,
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
-    fontSize: 18,
-    fontWeight: '500',
+    ...typography.h2,
     color: colors.textPrimary,
   },
   profileEmail: {
-    fontSize: 13,
+    ...typography.bodySmall,
+    fontSize: 14,
     color: colors.textSecondary,
     marginTop: 2,
   },
   profileRole: {
-    fontSize: 11,
-    color: colors.primary,
-    fontWeight: '500',
-    marginTop: 4,
+    ...typography.eyebrow,
+    color: colors.textMuted,
+    marginBottom: 4,
   },
   sectionHeader: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginHorizontal: 24,
-    marginBottom: 8,
+    marginHorizontal: layout.gutter,
+    marginBottom: 10,
     marginTop: 4,
   },
+  // A rounded hairline group, no fill and no shadow.
   section: {
-    marginHorizontal: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    marginBottom: 24,
+    marginHorizontal: layout.gutter,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.card,
+    marginBottom: layout.sectionGap + 4,
     overflow: 'hidden',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    minHeight: layout.rowMinHeight,
     paddingHorizontal: 16,
-    paddingVertical: 14,
-    gap: 12,
+    paddingVertical: 12,
+    gap: 14,
   },
   rowLabel: {
+    ...typography.body,
     flex: 1,
-    fontSize: 15,
     color: colors.textPrimary,
   },
   rowSubLabel: {
-    fontSize: 12,
+    ...typography.bodySmall,
+    fontSize: 13,
+    lineHeight: 18,
     color: colors.textMuted,
     marginTop: 2,
   },
   rowValue: {
+    ...typography.bodySmall,
     fontSize: 14,
     color: colors.textSecondary,
+    flexShrink: 1,
   },
   rowValueMuted: {
+    ...typography.bodySmall,
     fontSize: 14,
     color: colors.textMuted,
     maxWidth: 140,
   },
   rowValueHighlight: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.primary,
+    ...typography.h3,
+    fontVariant: ['tabular-nums'],
+    color: colors.textPrimary,
   },
   divider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: colors.border,
-    marginLeft: 48,
+    marginLeft: 50,
   },
+  // Quiet outlined action: signing out is not an alarm, so no red.
   signOutButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginHorizontal: 24,
-    paddingVertical: 16,
-    borderRadius: 2, // radius.md
-    borderWidth: 1,
-    borderColor: colors.error,
-    marginBottom: 24,
+    marginHorizontal: layout.gutter,
+    minHeight: layout.buttonHeight,
+    borderRadius: radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.textSecondary,
+    marginBottom: 28,
   },
   signOutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.error,
+    ...typography.bodyMd,
+    color: colors.textPrimary,
   },
   aboutSection: {
     alignItems: 'center',
     paddingBottom: 20,
-    gap: 2,
+    gap: 4,
   },
   aboutText: {
+    ...typography.bodySmall,
     fontSize: 13,
     color: colors.textMuted,
   },
   aboutSubText: {
-    fontSize: 11,
+    ...typography.eyebrow,
     color: colors.textMuted,
   },
   modalOverlay: {
@@ -153,13 +157,12 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   modalContent: {
     width: '85%',
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    backgroundColor: colors.background,
+    borderRadius: radius.card,
     padding: 24,
   },
   modalTitle: {
-    fontSize: 18,
-    fontWeight: '500',
+    ...typography.h2,
     color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 16,
@@ -172,16 +175,19 @@ export const makeStyles = (colors: ThemeColors) =>
     marginBottom: 20,
   },
   modalInput: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.input,
+    minHeight: 48,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
     color: colors.textPrimary,
   },
   bioInput: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    borderRadius: radius.input,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -189,7 +195,8 @@ export const makeStyles = (colors: ThemeColors) =>
     height: 100,
   },
   charCount: {
-    fontSize: 11,
+    ...typography.bodySmall,
+    fontSize: 13,
     color: colors.textMuted,
     textAlign: 'right',
     marginTop: 4,
@@ -202,26 +209,29 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   modalCancelBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surfaceElevated,
+    minHeight: 48,
+    justifyContent: 'center',
+    borderRadius: radius.button,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     alignItems: 'center',
   },
   modalCancelText: {
+    ...typography.bodyMd,
     fontSize: 15,
-    fontWeight: '600',
     color: colors.textSecondary,
   },
   modalSaveBtn: {
     flex: 1,
-    paddingVertical: 12,
-    borderRadius: 4, // radius.lg
+    minHeight: 48,
+    justifyContent: 'center',
+    borderRadius: radius.button,
     backgroundColor: colors.primary,
     alignItems: 'center',
   },
   modalSaveText: {
+    ...typography.bodyMd,
     fontSize: 15,
-    fontWeight: '500',
     color: colors.textOnPrimary,
   },
 

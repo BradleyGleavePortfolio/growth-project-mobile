@@ -6,7 +6,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, Modal, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { spacing, typography } from '../../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../../theme/tokens';
+import { footerBottomPadding, useScreenInsets } from '../../../ui';
 import { useReduceMotion } from '../../../screens/client/wearables/components/useReduceMotion';
 import { DAY_LABELS, type ProgramDay } from '../../../api/programsApi';
 import {
@@ -58,6 +59,7 @@ const dayTitle = (d: ProgramDay) => `${DAY_LABELS[d.day_index] ?? `Day ${d.day_i
 export default function WeekAiSheet({ action, week, days, status, onClose, onApplied }: Props) {
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReduceMotion();
+  const insets = useScreenInsets();
   const blocked = blockedCopy(status);
   const queue = useRef([...days].sort((a, b) => a.day_index - b.day_index).slice(0, MAX_DAYS)).current;
   const [phase, setPhase] = useState<'thinking' | 'review' | 'applying'>(blocked ? 'review' : 'thinking');
@@ -158,12 +160,14 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
   return (
     <Modal visible transparent animationType={reduceMotion ? 'fade' : 'slide'} onRequestClose={close}>
       <View style={[styles.backdrop, { backgroundColor: sc.overlay }]}>
-        <View testID="week-ai-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border }]}>
+        <View testID="week-ai-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border, paddingBottom: footerBottomPadding(insets.bottom) }]}>
+          <View style={[styles.handle, { backgroundColor: sc.border }]} accessible={false} />
           <View style={styles.row}>
-            <Text accessibilityRole="header" style={[typography.h4, styles.grow, { color: sc.textPrimary }]}>
+            <Text accessibilityRole="header" style={[typography.h2, styles.grow, { color: sc.textPrimary }]}>
               {`Week ${week + 1}: ${WEEK_AI_TITLES[action]}`}
             </Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={12} disabled={phase === 'applying'}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={close} hitSlop={12} disabled={phase === 'applying'}
+              style={({ pressed }) => [styles.close, pressed && styles.pressed]}>
               <Text style={[typography.bodyMd, { color: sc.accentText }]}>Close</Text>
             </Pressable>
           </View>
@@ -199,12 +203,12 @@ export default function WeekAiSheet({ action, week, days, status, onClose, onApp
           {pending.length ? (
             <View style={styles.row}>
               <Pressable testID="week-ai-discard" accessibilityRole="button" accessibilityLabel="Discard all suggestions" onPress={close}
-                disabled={phase === 'applying'} style={[styles.button, styles.outline, { borderColor: sc.border }]}>
+                disabled={phase === 'applying'} style={({ pressed }) => [styles.button, styles.outline, { borderColor: sc.border }, pressed && styles.pressed]}>
                 <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>Discard</Text>
               </Pressable>
               <Pressable testID="week-ai-apply" accessibilityRole="button" accessibilityLabel={applyLabel(n)}
                 accessibilityState={{ disabled: phase !== 'review' || !n }} disabled={phase !== 'review' || !n} onPress={() => void apply()}
-                style={[styles.button, styles.grow, { backgroundColor: n ? sc.accent : sc.disabledBg }]}>
+                style={({ pressed }) => [styles.button, styles.grow, { backgroundColor: n ? sc.accent : sc.disabledBg }, pressed && styles.pressed]}>
                 <Text style={[typography.bodyMd, { color: n ? sc.textOnAccent : sc.textOnDisabled }]}>{phase === 'applying' ? 'Applying' : applyLabel(n)}</Text>
               </Pressable>
             </View>
@@ -231,7 +235,7 @@ function WeekChangeRow({ id, change, kept, delay, reduceMotion, onToggle }: RowP
   const after = formatRow(change.after);
   const delta = before && after ? `${before} -> ${after}` : after || before;
   return (
-    <Animated.View testID={`week-ai-change-${id}`} style={[styles.card, { borderColor: sc.border, backgroundColor: sc.bgSurface, opacity: anim }]}>
+    <Animated.View testID={`week-ai-change-${id}`} style={[styles.card, { borderColor: sc.border, opacity: anim }]}>
       <View style={styles.row}>
         <Text style={[typography.caption, styles.badge, { color: sc.accentText, borderColor: sc.accentText }]}>{kind}</Text>
         {removedId ? <CoachExerciseName id={removedId} fallback={removedId} prefix="" style={titleStyle} /> : <Text numberOfLines={2} style={titleStyle}>{name}</Text>}
@@ -248,15 +252,18 @@ function WeekChangeRow({ id, change, kept, delay, reduceMotion, onToggle }: RowP
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '90%', minHeight: '50%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg },
+  sheet: { maxHeight: '90%', minHeight: '50%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, paddingHorizontal: layout.gutter, paddingTop: spacing.sm },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.chip, marginBottom: spacing.md },
+  pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   grow: { flex: 1 },
   stages: { gap: spacing.xs, marginVertical: spacing.md },
   alert: { borderLeftWidth: 3, paddingLeft: spacing.sm, marginVertical: spacing.sm },
   day: { gap: spacing.xs, marginBottom: spacing.md },
-  card: { borderWidth: 1, borderRadius: 12, padding: spacing.md, gap: spacing.xs },
-  badge: { borderWidth: 1, borderRadius: 8, paddingHorizontal: spacing.sm, paddingVertical: 2 },
+  close: { minHeight: 44, justifyContent: 'center' },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, gap: spacing.xs },
+  badge: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.control, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   strike: { textDecorationLine: 'line-through' },
-  button: { borderRadius: 12, paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
+  button: { borderRadius: radius.button, minHeight: 48, justifyContent: 'center', paddingVertical: spacing.md, paddingHorizontal: spacing.lg, alignItems: 'center' },
   outline: { borderWidth: 1 },
 });

@@ -16,7 +16,8 @@ import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } fro
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import HapticPressable from '../../components/HapticPressable';
 import { errorMessage } from '../../types/common';
 import { toServerMuscleGroup } from '../../utils/workout/muscleGroup';
@@ -217,8 +218,10 @@ export default function RoutineBuilderScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
+    <Screen
+      edges={['top']}
+      contentStyle={styles.content}
+      header={<View style={styles.topBar}>
         <TouchableOpacity style={styles.iconButton} accessibilityRole="button" accessibilityLabel="Cancel routine" onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back-outline" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
@@ -230,9 +233,13 @@ export default function RoutineBuilderScreen() {
         ) : (
           <View style={styles.iconButton} />
         )}
-      </View>
-
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      </View>}
+      footer={
+        <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy: isSaving }} disabled={isSaving} onPress={handleSave}>
+          <Text style={styles.saveBtnText}>{isSaving ? 'Saving routine…' : 'Save routine'}</Text>
+        </HapticPressable>
+      }
+    >
         <Text style={styles.overline}>Routine name</Text>
         <TextInput
           accessibilityLabel="Routine name"
@@ -309,13 +316,6 @@ export default function RoutineBuilderScreen() {
           <Ionicons name="add-outline" size={22} color={colors.textPrimary} />
           <Text style={styles.addBtnText}>Add exercise</Text>
         </TouchableOpacity>
-      </ScrollView>
-
-      <View style={styles.footer}>
-        <HapticPressable style={styles.saveBtn} disableAnimation accessibilityLabel="Save routine" accessibilityState={{ busy: isSaving }} disabled={isSaving} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>{isSaving ? 'Saving routine…' : 'Save routine'}</Text>
-        </HapticPressable>
-      </View>
 
       {/* Exercise Picker Modal */}
       <Modal visible={showAddModal} animationType="none" presentationStyle="pageSheet" onRequestClose={() => setShowAddModal(false)}>
@@ -378,13 +378,12 @@ export default function RoutineBuilderScreen() {
           />
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
   iconButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   overline: { ...typography.eyebrow, color: colors.textMuted, marginBottom: 12 },
   topBar: {
@@ -392,14 +391,14 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 12,
     backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
   topTitle: { ...typography.h2, color: colors.textPrimary },
-  content: { padding: 24, paddingBottom: 120 },
+  // Screen pins the save button above the tab bar, so no 120 pt clearance.
+  content: { paddingTop: 24, paddingBottom: 24 },
   nameInput: {
     ...typography.h1,
     paddingVertical: 14,
@@ -455,22 +454,13 @@ const makeStyles = (colors: ThemeColors) =>
     marginTop: 4,
   },
   addBtnText: { ...typography.bodyMd, color: colors.textPrimary, textDecorationLine: 'underline' },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 20,
-    paddingBottom: 36,
-    backgroundColor: colors.background,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
   saveBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.button,
+    minHeight: 54,
     paddingVertical: 16,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   saveBtnText: { ...typography.bodyMd, color: colors.textOnPrimary },
   // Modal

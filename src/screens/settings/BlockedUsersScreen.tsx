@@ -15,9 +15,10 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { layout, radius, typography } from '../../theme/tokens';
+import { Headline, Lede, Screen, ScreenTopBar } from '../../ui';
 import { useBlockedUsersStore, BlockedUser } from '../../store/blockedUsersStore';
 import { messagesModerationApi } from '../../api/messagesApi';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -96,18 +97,15 @@ export default function BlockedUsersScreen(): React.ReactElement {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </Pressable>
-        <Text style={styles.title}>Blocked users</Text>
-        <View style={styles.backBtn} />
+    <Screen
+      edges={['top']}
+      scroll={false}
+      contentStyle={styles.frame}
+      header={<ScreenTopBar onBack={() => navigation.goBack()} backLabel="Go back" />}
+    >
+      <View style={styles.titleBlock}>
+        <Headline level="h1">Blocked users</Headline>
+        <Lede>People you have blocked in messages are listed here.</Lede>
       </View>
 
       {loading ? (
@@ -116,7 +114,6 @@ export default function BlockedUsersScreen(): React.ReactElement {
         </View>
       ) : fetchError && store.blocked.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="cloud-offline-outline" size={28} color={colors.textMuted} />
           <Text style={styles.emptyTitle}>Couldn't load your block list</Text>
           <Text style={styles.emptyBody}>{fetchError}</Text>
           <Pressable
@@ -150,7 +147,6 @@ export default function BlockedUsersScreen(): React.ReactElement {
           }
           ListEmptyComponent={
             <View style={styles.empty}>
-              <Ionicons name="shield-checkmark-outline" size={28} color={colors.textMuted} />
               <Text style={styles.emptyTitle}>No blocked users</Text>
               <Text style={styles.emptyBody}>
                 When you block someone from a conversation, they'll appear here.
@@ -198,32 +194,22 @@ export default function BlockedUsersScreen(): React.ReactElement {
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 12,
-      paddingTop: 52,
-      paddingBottom: 8,
-      borderBottomWidth: StyleSheet.hairlineWidth,
-      borderBottomColor: colors.border,
-    },
-    backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-    title: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, color: colors.textPrimary },
-    list: { paddingHorizontal: 24, paddingBottom: 48 },
+    frame: { paddingHorizontal: 0 },
+    titleBlock: { paddingHorizontal: layout.gutter, paddingTop: 8, paddingBottom: 20, gap: 8 },
+    list: { paddingHorizontal: layout.gutter, paddingBottom: 48, flexGrow: 1,
+      borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border },
     hairline: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border },
     stale: { paddingVertical: 12, gap: 8, alignItems: 'flex-start' },
     loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    empty: { alignItems: 'center', paddingTop: 72, gap: 10, paddingHorizontal: 32 },
-    emptyTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
-    emptyBody: { fontSize: 15, lineHeight: 22, color: colors.textSecondary, textAlign: 'center' },
+    empty: { paddingTop: 40, gap: 8 },
+    emptyTitle: { ...typography.h3, color: colors.textPrimary },
+    emptyBody: { ...typography.bodySmall, fontSize: 15, color: colors.textSecondary },
 
     row: {
       flexDirection: 'row',
@@ -236,7 +222,7 @@ const makeStyles = (colors: ThemeColors) =>
     avatar: {
       width: 40,
       height: 40,
-      borderRadius: 4,
+      borderRadius: radius.chip,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       justifyContent: 'center',
@@ -251,8 +237,8 @@ const makeStyles = (colors: ThemeColors) =>
       minWidth: 88,
       justifyContent: 'center',
       alignItems: 'center',
-      paddingHorizontal: 14,
-      borderRadius: 4,
+      paddingHorizontal: 16,
+      borderRadius: radius.button,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.primary,
     },

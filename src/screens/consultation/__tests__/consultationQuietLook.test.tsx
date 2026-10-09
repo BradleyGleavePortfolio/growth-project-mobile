@@ -1,7 +1,7 @@
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
-import { lightTokens, darkTokens } from '../../../theme/tokens';
+import { lightTokens, darkTokens, radius } from '../../../theme/tokens';
 import { fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { RESULT } from '../../../lib/consultation/__fixtures__/flowHarness';
 import { Checkbox, Chip, Frame, LabeledInput, OptionRow, PrimaryButton, UnitTabs, Wheel, STEP_MS } from '../components';
@@ -9,6 +9,8 @@ import { CompleteProblemScreen, MacroRevealScreen, PausedScreen, PlanRevealScree
 
 let mockTokens = lightTokens;
 jest.mock('../../../theme/useTheme', () => ({ useTheme: () => ({ semanticColors: mockTokens }) }));
+// The shared src/ui primitives read the theme from ThemeProvider directly.
+jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ semanticColors: mockTokens }) }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 const mockOpen = jest.fn();
@@ -26,7 +28,8 @@ it.each([lightTokens, darkTokens])('uses active semantic tokens and unfilled hai
   const row = StyleSheet.flatten(r.getByTestId('row').props.style);
   const chip = StyleSheet.flatten(r.getByTestId('chip').props.style);
   expect(row).toMatchObject({ borderBottomWidth: StyleSheet.hairlineWidth, backgroundColor: tokens.bgPrimary });
-  expect(chip).toMatchObject({ borderWidth: StyleSheet.hairlineWidth, backgroundColor: tokens.bgPrimary, borderRadius: 4 });
+  // The merged Chip style (components.tsx `chip`) reads radius.chip: chips are pills (owner 17:07).
+  expect(chip).toMatchObject({ borderWidth: StyleSheet.hairlineWidth, backgroundColor: tokens.bgPrimary, borderRadius: radius.chip });
   expect(StyleSheet.flatten(r.getByTestId('cta').props.style).backgroundColor).toBe(tokens.accent);
   expect(STEP_MS).toBe(280);
 });

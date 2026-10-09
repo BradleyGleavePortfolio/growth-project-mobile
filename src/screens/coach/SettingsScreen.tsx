@@ -48,6 +48,8 @@ import { DangerZone } from './settings/DangerZone';
 import { BookingOptionsEntry } from './settings/BookingOptionsEntry';
 import { AICreditsRow } from './settings/AICreditsRow';
 import { HELP_UNAVAILABLE_COPY, deletionErrorCopy } from '../settings/deletionErrors';
+import { Headline, Overline, useScreenInsets } from '../../ui';
+import { layout } from '../../theme/tokens';
 
 /**
  * COACH-SETTINGS-131: GET /coach/clients is paged (20 rows unless `take` is
@@ -63,6 +65,8 @@ export function formatClientCount(count: number | null): string {
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The Settings tab hides the stack header: the screen owns the top inset.
+  const insets = useScreenInsets();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const headCoachHandlesMoney = useHeadCoachHandlesMoney();
@@ -380,9 +384,9 @@ export default function SettingsScreen() {
 
   const handleSignOut = () => {
     warningTap();
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+    Alert.alert('Sign out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      { text: 'Sign out', style: 'destructive', onPress: signOut },
     ]);
   };
 
@@ -398,8 +402,8 @@ export default function SettingsScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
+      <View style={[styles.header, { paddingTop: insets.top + layout.statusBarGap + 12 }]} testID="settings-header">
+        <Headline level="h1">Settings</Headline>
       </View>
 
       <ProfileSection
@@ -420,7 +424,7 @@ export default function SettingsScreen() {
       {/* M-FEATURED-123 — owner-only: the coachless banner, offer, code and Roman pitch. */}
       {currentUser?.role === 'owner' ? (
         <>
-          <Text style={styles.sectionHeader}>Owner</Text>
+          <Overline style={styles.sectionHeader}>Owner</Overline>
           <View style={styles.section}>
             <TouchableOpacity
               style={styles.row}
@@ -441,7 +445,7 @@ export default function SettingsScreen() {
       ) : null}
 
       {/* Client Management */}
-      <Text style={styles.sectionHeader}>Client Management</Text>
+      <Overline style={styles.sectionHeader}>Client management</Overline>
       <View style={styles.section}>
         <View
           style={styles.row}
@@ -452,7 +456,7 @@ export default function SettingsScreen() {
           testID="settings-active-clients"
         >
           <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Active Clients</Text>
+          <Text style={styles.rowLabel}>Active clients</Text>
           <Text style={styles.rowValueHighlight} testID="settings-active-clients-value">
             {formatClientCount(clientCount)}
           </Text>
@@ -485,7 +489,7 @@ export default function SettingsScreen() {
           accessibilityLabel="Manage invite codes"
         >
           <Ionicons name="link-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Invite Codes</Text>
+          <Text style={styles.rowLabel}>Invite codes</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -519,7 +523,7 @@ export default function SettingsScreen() {
           actionable config-required state if the backend module isn't
           deployed in this env, so it's safe to keep these rows visible
           unconditionally. */}
-      <Text style={styles.sectionHeader}>Payments</Text>
+      <Overline style={styles.sectionHeader}>Payments</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -572,7 +576,7 @@ export default function SettingsScreen() {
 
       {/* Coach Tools — surfaces the per-coach building tools that previously
           had no inbound nav (audit P0: 6 dead routes).  */}
-      <Text style={styles.sectionHeader}>Coach Tools</Text>
+      <Overline style={styles.sectionHeader}>Coach tools</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -584,7 +588,7 @@ export default function SettingsScreen() {
           accessibilityLabel="Open workout builder"
         >
           <Ionicons name="barbell-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Workout Builder</Text>
+          <Text style={styles.rowLabel}>Workout builder</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -598,7 +602,7 @@ export default function SettingsScreen() {
           accessibilityLabel="Open booking inbox"
         >
           <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Booking Inbox</Text>
+          <Text style={styles.rowLabel}>Booking inbox</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -648,7 +652,7 @@ export default function SettingsScreen() {
           testID="settings-appointment-types"
         >
           <Ionicons name="list-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Appointment Types</Text>
+          <Text style={styles.rowLabel}>Appointment types</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -663,7 +667,7 @@ export default function SettingsScreen() {
           testID="settings-time-off"
         >
           <Ionicons name="airplane-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Time Off</Text>
+          <Text style={styles.rowLabel}>Time off</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -687,7 +691,7 @@ export default function SettingsScreen() {
       />
 
       {/* Security */}
-      <Text style={styles.sectionHeader}>Security</Text>
+      <Overline style={styles.sectionHeader}>Security</Overline>
       <View style={styles.section}>
         <BiometricUnlockSetting />
       </View>
@@ -698,7 +702,7 @@ export default function SettingsScreen() {
           behind the same flag (CoachNavigator). Routes into the coach surface. */}
       {featureFlags.romanChat ? (
         <>
-          <Text style={styles.sectionHeader}>Concierge</Text>
+          <Overline style={styles.sectionHeader}>Concierge</Overline>
           <View style={styles.section} role="list">
             {/* listitem wrapper exposes list structure to assistive tech while
                 the inner pressable keeps its button role + action (R3 P1-3).
@@ -728,7 +732,7 @@ export default function SettingsScreen() {
 
       {/* iMessage-grade DM — Apple App Review 1.2 compliance. The coach must
           be able to view and undo their blocks from Settings. */}
-      <Text style={styles.sectionHeader}>Privacy</Text>
+      <Overline style={styles.sectionHeader}>Privacy</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -739,7 +743,7 @@ export default function SettingsScreen() {
         >
           <Ionicons name="ban-outline" size={20} color={colors.textSecondary} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.rowLabel}>Blocked Users</Text>
+            <Text style={styles.rowLabel}>Blocked users</Text>
             <Text style={styles.rowSubLabel}>
               Review and unblock people you've blocked from DMs
             </Text>
@@ -774,7 +778,7 @@ export default function SettingsScreen() {
           enters the nested CrossPillarNavigator, which runs the
           practice-selection flow on first open and the live dashboard
           afterwards. */}
-      <Text style={styles.sectionHeader}>Cross-pillar practice</Text>
+      <Overline style={styles.sectionHeader}>Cross-pillar practice</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -809,7 +813,7 @@ export default function SettingsScreen() {
       />
 
       {/* Support */}
-      <Text style={styles.sectionHeader}>Support</Text>
+      <Overline style={styles.sectionHeader}>Support</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -844,14 +848,14 @@ export default function SettingsScreen() {
       {/* About */}
       <View style={styles.aboutSection}>
         <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
-        <Text style={styles.aboutSubText}>Coach Edition</Text>
+        <Text style={styles.aboutSubText}>Coach edition</Text>
       </View>
 
       {/* Bio Modal */}
       <Modal visible={showBioModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Edit Bio</Text>
+            <Text style={styles.modalTitle}>Edit bio</Text>
             <TextInput
               style={styles.bioInput}
               value={bioText}
@@ -906,7 +910,7 @@ export default function SettingsScreen() {
       <Modal visible={showPasswordModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Change Password</Text>
+            <Text style={styles.modalTitle}>Change password</Text>
             <TextInput
               style={styles.modalInput}
               value={newPassword}

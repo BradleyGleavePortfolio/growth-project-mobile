@@ -37,7 +37,7 @@ import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { typography, radius, type SemanticTokens } from '../../theme/tokens';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
@@ -51,8 +51,8 @@ import { contentRejectedMessage } from '../../api/communitySafetyApi';
 function ScoreBar({ score, sc }: { score: number; sc: SemanticTokens }) {
   const barStyles = useMemo(
     () => StyleSheet.create({
-      track: { height: 3, backgroundColor: sc.bgSurface, borderRadius: 2, overflow: 'hidden' },
-      fill:  { height: 3, backgroundColor: sc.accent,    borderRadius: 2 },
+      track: { height: 3, backgroundColor: sc.bgSurface, borderRadius: radius.chip, overflow: 'hidden' },
+      fill:  { height: 3, backgroundColor: sc.accent,    borderRadius: radius.chip },
     }),
     [sc],
   );
@@ -169,8 +169,8 @@ function OptInCard({
       card:        { margin: 20, paddingVertical: 24, borderTopWidth: StyleSheet.hairlineWidth, borderColor: sc.border },
       heading:     { ...typography.h2, color: sc.textPrimary, marginBottom: 12 },
       body:        { fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textMuted, lineHeight: 22, marginBottom: 12 },
-      nameInput:   { borderWidth: 1, borderColor: sc.border, padding: 12, fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textPrimary, backgroundColor: sc.bgPrimary, marginBottom: 16, marginTop: 4 },
-      btn:         { backgroundColor: sc.accent, borderRadius: 4, minHeight: 48, paddingVertical: 14, alignItems: 'center' as const },
+      nameInput:   { borderWidth: StyleSheet.hairlineWidth, borderColor: sc.border, borderRadius: radius.input, minHeight: 48, padding: 12, fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textPrimary, backgroundColor: sc.bgPrimary, marginBottom: 16, marginTop: 4 },
+      btn:         { backgroundColor: sc.accent, borderRadius: radius.button, minHeight: 54, justifyContent: 'center' as const, paddingVertical: 14, alignItems: 'center' as const },
       btnDisabled: { backgroundColor: sc.disabledBg },
       btnText:     { fontFamily: 'Inter-Medium', fontSize: 14, color: saving ? sc.textOnDisabled : sc.textOnAccent, letterSpacing: 0.5 },
     }),
@@ -501,7 +501,7 @@ const makeStyles = (sc: SemanticTokens) =>
     retryButton: {
       minHeight: 48,
       justifyContent: 'center',
-      borderRadius: 4,
+      borderRadius: radius.button,
       paddingVertical: 10,
       paddingHorizontal: 24,
       borderWidth: 1,

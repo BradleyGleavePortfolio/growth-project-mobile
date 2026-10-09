@@ -46,7 +46,7 @@ beforeEach(async () => {
 });
 
 describe('templates', () => {
-  it('B2 wheels are adjustable and stop under-16s with a calm message', async () => {
+  it('B2 wheels are adjustable and stop under-16s with a calm stop screen', async () => {
     const a = fullAnswers();
     delete a.B2;
     await seed(a, 'B2');
@@ -60,8 +60,14 @@ describe('templates', () => {
       await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     }
     expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
-    expect(r.getByTestId('consult-validation').props.children).toMatch(/16 and over/);
-    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    // Prototype 45: Continue leads to a calm, final stop screen; nothing is sent.
+    expect(r.queryByTestId('consult-validation')).toBeNull();
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    expect(r.getByTestId('consult-screen-UNDER_AGE')).toBeTruthy();
+    expect(r.getByText('The Growth Project is for ages 16 and up.')).toBeTruthy();
+    expect(mockPut).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('consult-under-age-change'));
+    expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
   });
 
   it('B3 converts units in place without resetting', async () => {
@@ -242,18 +248,22 @@ describe('rollback flag', () => {
     });
   });
 
-  it('is on only in the clinic EAS profile', () => {
+  it('B14/B40: is on in every store and test EAS profile, so every build the owner installs runs the consultation', () => {
     const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
-    expect(eas.build.clinic.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
-    for (const name of Object.keys(eas.build).filter((n) => n !== 'clinic')) {
-      expect(eas.build[name].env?.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBeUndefined();
+    const env = (name: string): Record<string, string> => {
+      const b = eas.build[name];
+      return { ...(b.extends ? env(b.extends) : {}), ...(b.env ?? {}) };
+    };
+    for (const name of ['preview', 'production', 'clinic', 'clinic-apk']) {
+      expect([name, env(name).EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING]).toEqual([name, 'true']);
+      expect([name, env(name).EXPO_PUBLIC_FF_CLIENT_TUTORIAL]).toEqual([name, 'true']);
     }
   });
 
-  it('RootNavigator mounts the consultation instead of the lean flow when on', () => {
+  it('B14: RootNavigator mounts the consultation for every new client and never the lean flow', () => {
     const src = fs.readFileSync(path.join(root, 'src/navigation/RootNavigator.tsx'), 'utf8');
-    // B-REV-1: the per-client decision starts from the flag; the server can turn it off for one client.
-    expect(src).toMatch(/useState<boolean>\(featureFlags\.consultationOnboarding\)/);
-    expect(src).toMatch(/consultationMode \? \(\s*<ConsultationOnboardingNavigator \/>\s*\) : \(\s*<LeanOnboardingNavigator \/>/);
+    expect(src).toMatch(/authState === 'onboarding' \? \([^)]*<ConsultationOnboardingNavigator \/>/);
+    expect(src).not.toMatch(/<LeanOnboardingNavigator/);
+    expect(src).not.toMatch(/consultationApplies|consultationMode/);
   });
 });

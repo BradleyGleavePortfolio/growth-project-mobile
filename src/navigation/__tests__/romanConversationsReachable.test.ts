@@ -47,9 +47,9 @@ it('Settings > Privacy > Roman and AI opens the list', () => {
 
 it('the coach Settings Privacy section opens the list', () => {
   const s = read('screens/coach/SettingsScreen.tsx');
-  const privacy = s.indexOf('<Text style={styles.sectionHeader}>Privacy</Text>');
+  const privacy = s.indexOf('<Overline style={styles.sectionHeader}>Privacy</Overline>');
   const row = s.indexOf("navigation.navigate('RomanConversations')");
-  const next = s.indexOf('<Text style={styles.sectionHeader}>', privacy + 1);
+  const next = s.indexOf('<Overline style={styles.sectionHeader}>', privacy + 1);
   expect(privacy).toBeGreaterThan(-1);
   expect(row).toBeGreaterThan(privacy);
   expect(row).toBeLessThan(next);
