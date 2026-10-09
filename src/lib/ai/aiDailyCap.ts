@@ -22,6 +22,7 @@
  * app never blocks the composer after a cap hit: a crisis message sent later
  * still reaches the safety answer.
  */
+import { signedInClientIsCoachless } from './aiCoachless';
 
 export const ROMAN_RATE_LIMIT_CODE = 'ROMAN_RATE_LIMIT';
 export const ROMAN_CAPACITY_REACHED_CODE = 'ROMAN_CAPACITY_REACHED';
@@ -129,15 +130,21 @@ export function aiDailyCapResetPhrase(resetsAt: Date, now: Date = new Date()): s
   return `on ${day} at ${time}`;
 }
 
-/** Pop-up body: when it resets, then what still works. */
+/**
+ * Pop-up body: when it resets, then what still works. A client with no coach
+ * (`coachless`, defaults to the signed-in user) is never pointed to a coach.
+ */
 export function aiDailyCapBody(
   cap: AiDailyCap,
   audience: AiDailyCapAudience,
   now: Date = new Date(),
+  coachless: boolean = signedInClientIsCoachless(),
 ): string {
   const next =
-    audience === 'client'
-      ? 'Your coach is in Messages any time, and your plan and logs work as usual.'
-      : 'Your clients, messages and the rest of the app work as usual.';
+    audience === 'coach'
+      ? 'Your clients, messages and the rest of the app work as usual.'
+      : coachless
+        ? 'Logging and the rest of the app work as usual.'
+        : 'Your coach is in Messages any time, and your plan and logs work as usual.';
   return `AI help resets ${aiDailyCapResetPhrase(cap.resetsAt, now)}. ${next}`;
 }

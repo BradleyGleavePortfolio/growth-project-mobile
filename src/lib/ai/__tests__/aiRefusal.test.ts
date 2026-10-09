@@ -142,6 +142,27 @@ describe('aiRefusalCopy (owner copy rules)', () => {
     expect(copy.referenceLine).toBeNull();
   });
 
+  it('client consent, coachless: no coach is mentioned; the coached wording is unchanged (REFUSAL-COACHLESS-134)', () => {
+    for (const surface of ['roman', 'guide', 'insight'] as const) {
+      const coached = aiRefusalCopy({ kind: 'consent_required' }, 'client', surface, false);
+      const coachless = aiRefusalCopy({ kind: 'consent_required' }, 'client', surface, true);
+      expect(coached.body).toContain('Your coach still sees your training information as usual');
+      expect(coached.body).toContain('Roman and your coach’s AI tools');
+      expect(coachless.body).not.toMatch(/coach/i);
+      expect(coachless.body).toContain('because AI help is not on for your account');
+      expect(coachless.body).toContain('including Roman');
+      expect(coachless.body).toContain('Anthropic');
+      expect(coachless.body).not.toContain('!');
+      expect(coachless.title).toBe(coached.title);
+    }
+    // The coach audience and the service failure ignore the flag.
+    expect(aiRefusalCopy({ kind: 'consent_required' }, 'coach', 'draft', true)).toEqual(
+      aiRefusalCopy({ kind: 'consent_required' }, 'coach', 'draft', false),
+    );
+    const blocked: AiRefusal = { kind: 'egress_blocked', reference: null, serverMessage: null };
+    expect(aiRefusalCopy(blocked, 'client', 'roman', true)).toEqual(aiRefusalCopy(blocked, 'client', 'roman', false));
+  });
+
   it('coach consent: the client has not allowed it, the coach still coaches, where the client turns it on', () => {
     const copy = aiRefusalCopy({ kind: 'consent_required' }, 'coach', 'draft');
     expect(copy.title).toBe('AI help is off for this client');
