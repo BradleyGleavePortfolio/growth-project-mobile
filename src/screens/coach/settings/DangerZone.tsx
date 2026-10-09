@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { AccountStatus } from '../../../services/api';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { SettingsStyles } from './styles';
+import { Overline } from '../../../ui';
 
 export function DangerZone({
   accountStatus,
@@ -33,7 +34,7 @@ export function DangerZone({
   return (
     <>
       {/* Privacy & data */}
-      <Text style={styles.sectionHeader}>Privacy & Data</Text>
+      <Overline style={styles.sectionHeader}>Privacy and data</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
@@ -42,7 +43,7 @@ export function DangerZone({
           accessibilityLabel="Open trust and privacy center"
         >
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Trust & Privacy</Text>
+          <Text style={styles.rowLabel}>Trust and privacy</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
@@ -112,7 +113,7 @@ export function DangerZone({
         accessibilityLabel="Sign out"
       >
         <Ionicons name="log-out-outline" size={20} color={colors.error} />
-        <Text style={styles.signOutText}>Sign Out</Text>
+        <Text style={styles.signOutText}>Sign out</Text>
       </TouchableOpacity>
     </>
   );

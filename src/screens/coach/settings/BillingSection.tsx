@@ -3,6 +3,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { SettingsStyles } from './styles';
+import { Overline } from '../../../ui';
 
 export function BillingSection({
   onOpenTeamProfile,
@@ -20,7 +21,7 @@ export function BillingSection({
       {/* Business — Stripe Connect-backed business metrics + business profile.
           Both screens render honest empty states when the backend hasn't
           provisioned the relevant endpoints. agent 132 */}
-      <Text style={styles.sectionHeader}>Business</Text>
+      <Overline style={styles.sectionHeader}>Business</Overline>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
