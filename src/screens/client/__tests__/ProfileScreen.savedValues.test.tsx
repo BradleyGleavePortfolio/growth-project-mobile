@@ -39,7 +39,8 @@ jest.mock('../../../hooks/useIdentity', () => ({ useFoundingNumber: () => ({ dat
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../components/community/MilestoneCabinet', () => () => null);
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: require('../../../constants/colors').default }),
+  useTheme: () => ({ colors: require('../../../constants/colors').default,
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }),
 }));
 jest.mock('../../../components/HapticPressable', () => {
   const React = require('react'), { View } = require('react-native');
