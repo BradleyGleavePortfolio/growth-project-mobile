@@ -17,11 +17,11 @@ jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
-jest.mock('react-native-safe-area-context', () => {
-  const R = jest.requireActual<typeof import('react')>('react');
-  const insets = { top: 47, bottom: 0, left: 0, right: 0 };
-  return { useSafeAreaInsets: () => insets, SafeAreaInsetsContext: R.createContext(insets) };
-});
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
+  // COACH-INSETS-B-134: Team now sits in the shared Screen, which reads this context.
+  SafeAreaInsetsContext: jest.requireActual('react-native-safe-area-context').SafeAreaInsetsContext,
+}));
 const mockMe = jest.fn();
 jest.mock('../services/api', () => ({
   __esModule: true,

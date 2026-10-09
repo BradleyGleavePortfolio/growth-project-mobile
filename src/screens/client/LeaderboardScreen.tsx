@@ -32,7 +32,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -45,6 +44,7 @@ import {
   LeaderboardResponse,
 } from '../../services/leaderboardApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import { Screen } from '../../ui';
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -222,7 +222,6 @@ export default function LeaderboardScreen() {
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   // The board ranks one coach's clients: no coach, no board (never an error).
   const client = useCurrentUser();
-  const insets = useSafeAreaInsets();
   const hasCoach = Boolean(client?.coach_id);
   // Both host stacks hide the native header; context works outside a navigator.
   const navigation = React.useContext(NavigationContext);
@@ -312,10 +311,9 @@ export default function LeaderboardScreen() {
 
   // Loading, error and no-coach share one shell so Back is always reachable.
   const shell = (testID: string, children: React.ReactNode) => (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      {topBar}
+    <Screen edges={['top']} scroll={false} header={topBar} contentStyle={styles.bare} testID="leaderboard-screen">
       <View style={styles.centered} testID={testID}>{children}</View>
-    </SafeAreaView>
+    </Screen>
   );
 
   if (!hasCoach) {
@@ -351,59 +349,57 @@ export default function LeaderboardScreen() {
   const selfEntry = data?.entries.find((e) => e.isRequester);
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {topBar}
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Leaderboard</Text>
-        {isOptedIn && data?.selfRank != null && selfEntry && (
-          <View testID="leaderboard-self-hero" style={{ marginTop: 20, gap: 4 }}>
-            <Text style={styles.selfRankLabel}>Your rank: {data.selfRank}</Text>
-            <Text style={styles.heroScore}>{selfEntry.combinedScore} of 100</Text>
+    <Screen edges={['top']} scroll={false} header={topBar} contentStyle={styles.bare} testID="leaderboard-screen">
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.title}>Leaderboard</Text>
+          {isOptedIn && data?.selfRank != null && selfEntry && (
+            <View testID="leaderboard-self-hero" style={{ marginTop: 20, gap: 4 }}>
+              <Text style={styles.selfRankLabel}>Your rank: {data.selfRank}</Text>
+              <Text style={styles.heroScore}>{selfEntry.combinedScore} of 100</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Column headers */}
+        {publicEntries.length > 0 && (
+          <View style={styles.columnHeaders}>
+            <Text style={styles.colHeaderRank}>#</Text>
+            <Text style={styles.colHeaderName}>Member</Text>
+            <Text style={styles.colHeaderScore}>Score</Text>
           </View>
         )}
-      </View>
 
-      {/* Column headers */}
-      {publicEntries.length > 0 && (
-        <View style={styles.columnHeaders}>
-          <Text style={styles.colHeaderRank}>#</Text>
-          <Text style={styles.colHeaderName}>Member</Text>
-          <Text style={styles.colHeaderScore}>Score</Text>
-        </View>
-      )}
+        <FlatList
+          data={publicEntries}
+          keyExtractor={(item) => item.userId}
+          renderItem={({ item }) => <RankRow entry={item} sc={sc} />}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            isOptedIn ? (
+              <View style={styles.emptyState} testID="leaderboard-empty-opted-in">
+                <Text style={styles.emptyText}>
+                  No leaderboard entries to show yet.
+                </Text>
+              </View>
+            ) : null
+          }
+          ListFooterComponent={
+            !isOptedIn ? (
+              <OptInCard onOptIn={handleOptIn} saving={saving} sc={sc} />
+            ) : null
+          }
+        />
 
-      <FlatList
-        data={publicEntries}
-        keyExtractor={(item) => item.userId}
-        renderItem={({ item }) => <RankRow entry={item} sc={sc} />}
-        contentContainerStyle={styles.list}
-        ListEmptyComponent={
-          isOptedIn ? (
-            <View style={styles.emptyState} testID="leaderboard-empty-opted-in">
-              <Text style={styles.emptyText}>
-                No leaderboard entries to show yet.
-              </Text>
-            </View>
-          ) : null
-        }
-        ListFooterComponent={
-          !isOptedIn ? (
-            <OptInCard onOptIn={handleOptIn} saving={saving} sc={sc} />
-          ) : null
-        }
-      />
-
-      {/* Sticky self-row when not already visible at top */}
-      {isOptedIn && selfEntry && selfEntry.rank > 5 && (
-        <View style={styles.stickyRow} testID="leaderboard-sticky-self-row">
-          <RankRow entry={selfEntry} sc={sc} />
-        </View>
-      )}
-    </KeyboardAvoidingView>
+        {/* Sticky self-row when not already visible at top */}
+        {isOptedIn && selfEntry && selfEntry.rank > 5 && (
+          <View style={styles.stickyRow} testID="leaderboard-sticky-self-row">
+            <RankRow entry={selfEntry} sc={sc} />
+          </View>
+        )}
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
@@ -411,10 +407,9 @@ export default function LeaderboardScreen() {
 
 const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: sc.bgPrimary,
-    },
+    // Screen (src/ui) owns the top inset, background and side insets (B13, B28).
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
+    fill: { flex: 1 },
     centered: {
       flex: 1,
       alignItems: 'center',

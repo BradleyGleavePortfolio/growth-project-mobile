@@ -80,6 +80,19 @@ describe('pop-up copy', () => {
     expect(aiDailyCapBody({ resetsAt: later }, 'client', local)).toContain('Your coach is in Messages');
     expect(aiDailyCapBody({ resetsAt: later }, 'coach', local)).not.toContain('Your coach');
   });
+
+  it('a coachless client is never pointed to a coach; coached and coach copy unchanged (REFUSAL-COACHLESS-134)', () => {
+    const local = new Date(2026, 9, 5, 9, 0);
+    const cap = { resetsAt: new Date(2026, 9, 5, 17, 0) };
+    const coachless = aiDailyCapBody(cap, 'client', local, true);
+    expect(coachless).not.toMatch(/coach/i);
+    expect(coachless).toContain('Logging and the rest of the app work as usual.');
+    expect(coachless).not.toMatch(FIRST_PERSON);
+    expect(aiDailyCapBody(cap, 'client', local, false)).toContain(
+      'Your coach is in Messages any time, and your plan and logs work as usual.',
+    );
+    expect(aiDailyCapBody(cap, 'coach', local, true)).toBe(aiDailyCapBody(cap, 'coach', local, false));
+  });
 });
 
 describe('romanApi.sendMessage maps the daily cap', () => {

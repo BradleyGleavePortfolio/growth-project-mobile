@@ -44,6 +44,7 @@ import {
 } from './queryClient';
 import type { IdentityPersistence } from './queryClient';
 import { withStartupTimeout } from '../lib/startupTimebox';
+import { logger } from '../utils/logger';
 
 /** Upper bound on the restoring phase for one identity (hung storage read). */
 export const PERSISTED_CACHE_RESTORE_TIMEOUT_MS = 4000;
@@ -125,7 +126,7 @@ export function PersistedQueryCacheGate({ userId, children, renderRestoring }: P
           purgePersistedQueryCacheForAllUsers(),
           'persisted cache purge',
           PERSISTED_CACHE_PURGE_TIMEOUT_MS,
-        ).catch(() => undefined);
+        ).catch((err: unknown) => logger.warn('PersistedQueryCacheGate', 'logged-out cache purge did not finish', err));
         if (!isCurrent()) return;
         setCommitted(null);
         return;

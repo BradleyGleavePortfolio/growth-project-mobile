@@ -32,6 +32,7 @@ jest.mock('../../ui/haptics/haptics.service', () => ({
 import {
   __resetTutorialStoreForTests,
   attachTutorialSignals,
+  clearTutorialNotice,
   buildCopyContext,
   dispatchTutorial,
   hydrateTutorial,
@@ -153,9 +154,9 @@ describe('signals and feedback', () => {
     startClientTutorial(PAYLOAD);
     dispatchTutorial({ type: 'ACK' });
     setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
-    emitTutorialSignal('plan_card_opened');
-    setTutorialRoute(['Home', 'HomeMain']);
-    emitTutorialSignal('macro_card_opened');
+    emitTutorialSignal('plan_card_opened'); // not the gate: the first day is
+    setTutorialRoute(['MoreTab', 'WorkoutAssignmentDetail']);
+    dispatchTutorial({ type: 'ACK' }); // first exercise
     setTutorialRoute(['Log']);
   }
 
@@ -165,6 +166,9 @@ describe('signals and feedback', () => {
     emitTutorialSignal('message_sent'); // wrong signal: ignored
     expect(step()).toBe('first_meal');
     emitTutorialSignal('meal_logged');
+    expect(step()).toBe('macros');
+    setTutorialRoute(['Home', 'HomeMain']);
+    emitTutorialSignal('macro_card_opened');
     expect(step()).toBe('first_message');
     setTutorialRoute(['Home', 'Messages']);
     emitTutorialSignal('message_sent');
@@ -172,6 +176,8 @@ describe('signals and feedback', () => {
     dispatchTutorial({ type: 'ACK' });
     const s = useTutorialStore.getState().tutorial;
     expect(s.status).toBe('completed');
+    expect(s.outcomes.plan).toBe('done');
+    expect(s.outcomes.roman).toBe('unavailable');
     expect(s.outcomes.first_meal).toBe('done');
     expect(s.outcomes.first_message).toBe('done');
     await flush();
@@ -203,12 +209,18 @@ describe('signals and feedback', () => {
     expect(buildCopyContext(useTutorialStore.getState(), 'full').communityAvailable).toBe(true);
     mockFlags.communityTab = false;
     expect(buildCopyContext(useTutorialStore.getState(), 'full').communityAvailable).toBe(false);
+  });
+
+  it('shows a pending beat once, with its line, and Continue clears it (66)', async () => {
+    await hydrateTutorial('u1', 'Maya', true);
+    startClientTutorial({ ...PAYLOAD, program: null });
     dispatchTutorial({ type: 'ACK' });
-    setTutorialRoute(['WorkoutTab', 'WorkoutMain']);
-    dispatchTutorial({ type: 'SIGNAL', signal: 'plan_card_opened' });
-    setTutorialRoute(['Home', 'HomeMain']);
-    dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
+    const st = useTutorialStore.getState();
+    expect(st.tutorial.outcomes.plan).toBe('pending');
+    expect(st.notice?.stepId).toBe('plan');
     expect(step()).toBe('first_meal');
+    clearTutorialNotice();
+    expect(useTutorialStore.getState().notice).toBeNull();
   });
 });
 

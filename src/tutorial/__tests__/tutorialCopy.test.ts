@@ -89,24 +89,49 @@ describe.each([
 });
 
 describe('real numbers', () => {
-  it('speaks the payload macros and plan exactly', () => {
+  it('speaks the payload macros, plan and names exactly', () => {
     const lines = allLines(CTX).join('\n');
     expect(lines).toContain('1,789 calories');
     expect(lines).toContain('150 grams of protein');
     expect(lines).toContain('185 grams of carbohydrate');
     expect(lines).toContain('50 grams of fat');
-    expect(lines).toContain('Foundations: 4 weeks, 3 days a week.');
+    expect(lines).toContain('Bradley assigned you Foundations.');
     expect(lines).toContain('Welcome, Maya.');
+  });
+});
+
+describe('prototype copy (46-61), re-voiced without contractions', () => {
+  const line = (id: string, gate = 0, ctx = CTX) => TUTORIAL_STEPS.find((s) => s.id === id)!.gates[gate].line(ctx);
+  it('welcome, Train, Food, targets, coach and completion', () => {
+    expect(line('welcome')).toBe(
+      'Welcome, Maya. I am Roman. I work with Bradley to help you get the most from your plan. This takes about two minutes. I will show you where everything lives.',
+    );
+    expect(line('plan')).toBe('This is Train. Bradley assigned you Foundations. Tap Train to see it.');
+    expect(line('first_exercise')).toContain('tap Start workout. There is no need to do that now.');
+    expect(line('first_meal')).toMatch(/^This is Food\./);
+    expect(line('macros', 1)).toContain('Bradley set these for you.');
+    expect(line('first_message')).toContain('A real person, not me.');
+    expect(line('complete')).toBe(
+      'That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message.',
+    );
   });
 
   it('folds Calendar, Community and devices into the completion (decision 133-5)', () => {
-    const done = TUTORIAL_STEPS.find((s) => s.id === 'complete')!.gates[0];
-    expect(done.line(CTX)).toBe('That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message.');
-    expect(done.sub!(CTX)).toBe(
+    const sub = TUTORIAL_STEPS.find((s) => s.id === 'complete')!.gates[0].sub!;
+    expect(sub(CTX)).toBe(
       'Calendar and Community have their own tabs, and connected devices live under You. Book your welcome call with Bradley from Calendar when it suits you. One thing at a time. You do not need to be perfect, just consistent.',
     );
-    expect(done.sub!({ ...CTX, calendarAvailable: false, communityAvailable: false })).toMatch(/^Connected devices live under You\. One thing/);
-    expect(done.sub!({ ...CTX, coachLinked: false })).not.toContain('welcome call');
+    expect(sub({ ...CTX, calendarAvailable: false, communityAvailable: false })).toMatch(/^Connected devices live under You\. One thing/);
+    expect(sub({ ...CTX, coachLinked: false })).not.toContain('welcome call');
+  });
+
+  it('a client without a coach hears no coach name anywhere', () => {
+    const ctx: CopyContext = { ...CTX, coachLinked: false, outcomes: { plan: 'done', macros: 'done' } };
+    const lines = TUTORIAL_STEPS.filter((s) => s.id !== 'first_message')
+      .flatMap((s) => [...s.gates.map((g) => g.line(ctx)), s.doneLine?.(ctx) ?? '', s.pendingLine?.(ctx) ?? ''])
+      .join(' ');
+    expect(lines).not.toContain('Bradley');
+    expect(line('roman', 0, ctx)).toContain('ask me');
   });
 });
 
@@ -116,7 +141,7 @@ describe('fix round (audit B1, C1)', () => {
   it('the first-meal step points at a food entry and never invites water (B1)', () => {
     const lines = meal.gates.map((g) => g.line(CTX)).join(' ');
     expect(lines).not.toMatch(/water|drunk|drink/i);
-    expect(lines).toContain('Add Food');
+    expect(lines).toContain('Add food');
     expect(meal.title).toBe('Log your first meal');
     const gate = meal.gates[1];
     expect(gate.kind === 'signal' && gate.signal).toBe('meal_logged');
@@ -150,10 +175,10 @@ describe('lighter start: the macro step in the simple view', () => {
     expect(line).toMatch(/^This first week keeps it to two numbers: 1,789 calories and 150 grams of protein\./);
     expect(line).toContain('Carbohydrate and fat are already worked out');
     expect(line).not.toMatch(/185|\b50 grams/);
-    expect(line).toMatch(/Tap How to use these numbers\.$/);
+    expect(line).toMatch(/Tap How to use these numbers any time for what each one means\.$/);
   });
 
-  it('full (or absent) mode keeps the four-number line unchanged', () => {
+  it('full (or absent) mode speaks all four numbers', () => {
     const full = step.gates[1].line(CTX);
     expect(full).toContain('185 grams of carbohydrate and 50 grams of fat');
     expect(step.gates[1].line({ ...CTX, macroMode: 'full' })).toBe(full);

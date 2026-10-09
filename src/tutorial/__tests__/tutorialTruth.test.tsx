@@ -1,8 +1,8 @@
 /**
  * FW-ONB-128 B2 (ONB-TOUR-131): Roman's tour says only what is true for the
  * client in front of it.
- *  - No coach linked: Roman names no coach, and the step about a coach
- *    (first message) is skipped as `unavailable`, with no done line.
+ *  - No coach linked: Roman names no coach, and beat six is the Roman beat
+ *    instead of "message your coach" (TOUR-133, decision 28).
  *  - The closing line repeats only what this tour really did.
  *  - Settings says "Take the tour" until a tour has been completed.
  *  - TutorialHost hands the store `user.coach_id`, the same signal Home uses
@@ -22,6 +22,7 @@ jest.mock('../../config/featureFlags', () => {
       clientTutorial: true,
       communityTab: true,
       clientCalendar: true,
+      romanChat: true,
       consultationOnboarding: false,
     },
   };
@@ -75,6 +76,7 @@ type Move = TutorialAction | { route: string[] };
 const env = (over: Partial<MachineEnv> = {}): MachineEnv => ({
   hasProgram: false,
   hasMacros: true,
+  romanAvailable: true,
   currentPath: ['Home', 'HomeMain'],
   now: '2026-10-08T16:00:00.000Z',
   ...over,
@@ -94,16 +96,16 @@ function run(moves: Move[], over: Partial<MachineEnv> = {}): TutorialState {
   return s;
 }
 
-/** A client with numbers but no plan, standing on Home, takes the tour. */
-const TO_COMPLETE: Move[] = [
+/** A client with numbers but no plan, standing on Home, takes the tour (66). */
+const TO_BEAT_SIX: Move[] = [
   { type: 'START' },
-  { type: 'ACK' }, // welcome; plan is pending; Home is already focused
-  { type: 'SIGNAL', signal: 'macro_card_opened' },
+  { type: 'ACK' }, // welcome; plan and first exercise are pending
   { route: ['Log'] },
   { type: 'SIGNAL', signal: 'meal_logged' },
+  { route: ['Home', 'HomeMain'] },
+  { type: 'SIGNAL', signal: 'macro_card_opened' },
 ];
-
-const COACH_STEPS: TutorialStepId[] = ['first_message'];
+const TO_COMPLETE: Move[] = [...TO_BEAT_SIX, { type: 'ACK' }];
 
 const BASE: CopyContext = {
   firstName: 'Maya',
@@ -117,33 +119,39 @@ const COACHLESS: CopyContext = { ...BASE, coachName: 'your coach', program: null
 const lineOf = (id: TutorialStepId, c: CopyContext): string =>
   TUTORIAL_STEPS.find((s) => s.id === id)!.gates[0].line(c);
 
-describe('no coach linked: the machine skips every step about a coach', () => {
-  it('records the coach steps as unavailable and reaches the closing line', () => {
+describe('no coach linked: beat six is Roman, never a lock', () => {
+  it('records the coach beat as unavailable, shows the Roman beat, and reaches the completion', () => {
+    const six = run(TO_BEAT_SIX, { coachLinked: false });
+    expect(currentStep(six)?.id).toBe('roman');
+    expect(six.outcomes.first_message).toBe('unavailable');
     const s = run(TO_COMPLETE, { coachLinked: false });
     expect(currentStep(s)?.id).toBe('complete');
-    for (const id of COACH_STEPS) expect(s.outcomes[id]).toBe('unavailable');
-    expect(s.outcomes).toMatchObject({ plan: 'pending', macros: 'done', first_meal: 'done' });
+    expect(s.outcomes).toMatchObject({ plan: 'pending', first_exercise: 'pending', macros: 'done', first_meal: 'done', roman: 'done' });
   });
 
   it('treats an env without coachLinked as no coach', () => {
-    expect(currentStep(run(TO_COMPLETE))?.id).toBe('complete');
+    expect(currentStep(run(TO_BEAT_SIX))?.id).toBe('roman');
   });
 
-  it('with a coach linked the same client is asked to message the coach next', () => {
-    expect(currentStep(run(TO_COMPLETE, { coachLinked: true }))?.id).toBe('first_message');
+  it('with a coach linked the same client is shown the coach beat, and Roman is skipped', () => {
+    const s = run(TO_BEAT_SIX, { coachLinked: true });
+    expect(currentStep(s)?.id).toBe('first_message');
+    const after = run([...TO_BEAT_SIX, { type: 'DEFER' }], { coachLinked: true });
+    expect(after.outcomes.roman).toBe('unavailable');
+    expect(currentStep(after)?.id).toBe('complete');
   });
 });
 
 describe('the welcome line', () => {
   it('names the coach only when one is linked', () => {
     expect(lineOf('welcome', { ...BASE, coachLinked: true })).toBe(
-      'Welcome, Maya. I am Roman. I work with Bradley to help you get the most from your plan. This takes about three minutes. I will show you where everything lives, and then you will try two things yourself.',
+      'Welcome, Maya. I am Roman. I work with Bradley to help you get the most from your plan. This takes about two minutes. I will show you where everything lives.',
     );
     expect(lineOf('welcome', COACHLESS)).toBe(
-      'Welcome, Maya. I am Roman. This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself.',
+      'Welcome, Maya. I am Roman. I am here to help you get the most from your training. This takes about two minutes. I will show you where everything lives.',
     );
     expect(lineOf('welcome', { ...COACHLESS, firstName: null })).toMatch(/^Welcome\. I am Roman\. /);
-    expect(lineOf('welcome', COACHLESS)).not.toMatch(/coach|work with|two things|plan/i);
+    expect(lineOf('welcome', COACHLESS)).not.toMatch(/coach|work with/i);
   });
 
   it('speaks of a plan only when there is one', () => {
@@ -193,10 +201,11 @@ describe('the closing line repeats only what this tour did', () => {
     );
   });
 
-  it('every new variant keeps the voice rules', () => {
+  it('every variant keeps the voice rules', () => {
     const variants = [
       lineOf('welcome', COACHLESS),
       lineOf('welcome', { ...BASE, coachLinked: true, program: null }),
+      lineOf('roman', COACHLESS),
       lineOf('complete', { ...COACHLESS, outcomes: { macros: 'done' } }),
       lineOf('complete', { ...COACHLESS, firstName: null, outcomes: {} }),
       lineOf('complete', { ...BASE, coachName: 'your coach', outcomes: { first_message: 'done' } }),
@@ -206,7 +215,7 @@ describe('the closing line repeats only what this tour did', () => {
       expect(l).not.toMatch(/\b\w+'(t|ll|re|ve|d|m)\b/i);
       expect(l).toMatch(/\.$/);
     }
-    expect(variants[4]).toContain('Your coach has your message.');
+    expect(variants[5]).toContain('Your coach has your message.');
   });
 });
 
@@ -218,22 +227,21 @@ describe('the store and TutorialHost carry the coach link', () => {
     mockNavigate.mockClear();
   });
 
-  it('a client without a coach gets no coach step and no coach done line', async () => {
+  it('a client without a coach meets Roman at beat six and no coach done line', async () => {
     await hydrateTutorial('u1', 'Maya');
     setTutorialRoute(['Home', 'HomeMain']);
     startClientTutorial({ macros: { calories: 1789, protein_g: 150, carbs_g: 185, fat_g: 50 } });
     expect(buildCopyContext(useTutorialStore.getState(), 'full').coachLinked).toBe(false);
     dispatchTutorial({ type: 'ACK' });
-    dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
-    expect(currentStep(useTutorialStore.getState().tutorial)?.id).toBe('first_meal');
     setTutorialRoute(['Log']);
     dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
+    setTutorialRoute(['Home', 'HomeMain']);
+    dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
+    expect(currentStep(useTutorialStore.getState().tutorial)?.id).toBe('roman');
+    dispatchTutorial({ type: 'ACK' });
     const s = useTutorialStore.getState();
     expect(currentStep(s.tutorial)?.id).toBe('complete');
-    expect(s.celebration?.stepId).toBe('first_meal');
-    expect(lineOf('complete', buildCopyContext(s, 'full'))).toBe(
-      `That is everything, Maya. Your numbers are set.`,
-    );
+    expect(lineOf('complete', buildCopyContext(s, 'full'))).toBe('That is everything, Maya. Your numbers are set.');
   });
 
   it('TutorialHost passes user.coach_id to the store, and a later link updates it', async () => {
@@ -272,8 +280,9 @@ describe('Settings > Tutorial', () => {
     await act(async () => {
       dispatchTutorial({ type: 'ACK' });
       setTutorialRoute(['Log']);
-      dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
-      dispatchTutorial({ type: 'ACK' });
+      dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' }); // no numbers yet: targets pending
+      dispatchTutorial({ type: 'ACK' }); // Roman beat (no coach)
+      dispatchTutorial({ type: 'ACK' }); // completion
     });
     expect(useTutorialStore.getState().tutorial.status).toBe('completed');
     expect(screen.getByLabelText('Take the tour again')).toBeTruthy();
