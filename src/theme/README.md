@@ -53,6 +53,7 @@ Components are free to choose the ergonomic shape — the underlying values are 
 | `label` | Inter_500Medium | 11 / 13 | 500 | 1.98 (uppercase) |
 | `caption` | Inter_500Medium | 12 / 18 | 500 | 0.96 |
 | `button` | Inter_600SemiBold | 14 / 18 | 600 | 1.2 (uppercase) |
+| `tabLabel` / `tabLabelActive` | Inter_400Regular / Inter_500Medium | 11 / 14 | 400 / 500 | -0.2 (B26: "Community" fits one of six tabs at 360 pt) |
 
 Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: Cormorant's own line box is 1.211 em, so anything tighter clips descenders on Android (B15). `__tests__/serifLineHeight.test.ts` checks every serif role in `tokens`, `theme/index` and `constants/theme`.
 
