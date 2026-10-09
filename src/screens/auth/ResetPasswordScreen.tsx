@@ -43,7 +43,7 @@ import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-naviga
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { useTheme } from '../../theme/ThemeProvider';
-import { lightTokens, type SemanticTokens } from '../../theme/tokens';
+import { lightTokens, radius, type SemanticTokens } from '../../theme/tokens';
 import { env } from '../../config/env';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
@@ -313,7 +313,7 @@ const makeStyles = (colors: SemanticTokens) =>
     resetButton: {
       backgroundColor: colors.accent,
       paddingVertical: 16,
-      borderRadius: 2,
+      borderRadius: radius.button,
       alignItems: 'center',
     },
     disabledButton: { opacity: 0.5 },

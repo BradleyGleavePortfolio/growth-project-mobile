@@ -438,14 +438,42 @@ describe('CreateAccountScreen', () => {
       expect(utils.getByLabelText('Full name')).toBeTruthy();
     });
 
-    it('F1: a failed policy GET with nothing cached never asks the role question', async () => {
+    // ONB-SWEEP U3 (agent 135): with nothing known, the role question is asked
+    // (backend default: role choice on), so a coach is never made a client
+    // without choosing. A coach request the server does not apply is said
+    // plainly after sign-up (coach_request_not_applied, tested above).
+    it('U3: a failed policy GET with nothing cached still asks the role question', async () => {
       mockGetSignupPolicy.mockRejectedValue(new Error('network'));
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'u1', role: 'student' } });
       const utils = await renderScreen(undefined, null);
-      expect(utils.queryByTestId('role-choice')).toBeNull();
+      expect(await utils.findByTestId('role-choice')).toBeTruthy();
+      await chooseRole(utils, 'client');
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
-      expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: undefined, intendedRole: undefined });
+      expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: undefined, intendedRole: 'client' });
+    });
+
+    it('U3: a policy GET that never answers shows the role step at 8 s, and coach sends intended_role coach', async () => {
+      jest.useFakeTimers();
+      try {
+        mockGetSignupPolicy.mockReturnValue(new Promise(() => undefined));
+        mockRegister.mockResolvedValue({ data: { requires_verification: true, role: 'coach' } });
+        const nav = makeNav();
+        const utils = { nav, ...(await render(<CreateAccountScreen navigation={nav as never} route={undefined} />)) };
+        await act(async () => { await jest.advanceTimersByTimeAsync(7900); });
+        expect(utils.getByTestId('signup-policy-loading')).toBeTruthy();
+        await act(async () => { await jest.advanceTimersByTimeAsync(200); });
+        expect(utils.queryByTestId('signup-policy-loading')).toBeNull();
+        expect(utils.getByTestId('role-choice')).toBeTruthy();
+        await chooseRole(utils, 'coach');
+        expect(utils.getByText('Create your coach account.')).toBeTruthy();
+        await fillAndSubmit(utils);
+        await act(async () => { await jest.advanceTimersByTimeAsync(10); });
+        expect(mockRegister).toHaveBeenCalledTimes(1);
+        expect(mockRegister.mock.calls[0][1]).toBe('coach');
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('the form is held back until the policy answers', async () => {
