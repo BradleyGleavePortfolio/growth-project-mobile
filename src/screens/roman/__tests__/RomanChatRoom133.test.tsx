@@ -4,7 +4,8 @@
  * 390x844 for the QA evidence. Turn and composer styling: RomanChatGuidance.
  */
 import React from 'react';
-import { AccessibilityInfo, StyleSheet } from 'react-native';
+import { AccessibilityInfo, StyleSheet, type TextStyle } from 'react-native';
+import type { TestInstance } from 'test-renderer';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import RomanChatScreen from '../RomanChatScreen';
 import type { UseRomanChatResult } from '../useRomanChat';
@@ -45,12 +46,11 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-const flat = (node: { props: { style?: unknown } }) => StyleSheet.flatten(node.props.style as never) ?? {};
-type Node = { props: { style?: unknown }; parent: Node | null };
+const flat = (node: TestInstance): TextStyle => StyleSheet.flatten(node.props.style) ?? {};
 /** Opacity of the nearest wrapper that sets one (the reveal's Animated.View). */
-function opacityOf(node: Node): number {
-  for (let n: Node | null = node; n; n = n.parent) {
-    const o = (flat(n) as { opacity?: number }).opacity;
+function opacityOf(node: TestInstance): number {
+  for (let n: TestInstance | null = node; n; n = n.parent) {
+    const o = flat(n).opacity;
     if (typeof o === 'number') return o;
   }
   return 1;
@@ -63,8 +63,8 @@ describe('B30 launch state (prototype 69)', () => {
     const line = r.getByText(
       "Good afternoon, Maya. I can explain your targets, your plan and today's food, using your own numbers.",
     );
-    expect(flat(line).fontFamily).toBe(typography.h2.fontFamily);
-    expect(flat(line).lineHeight).toBeGreaterThanOrEqual(flat(line).fontSize * 1.2);
+    // Serif reading text, lineHeight 28 on 19 (over the 1.2x floor).
+    expect(flat(line)).toMatchObject({ fontFamily: typography.h2.fontFamily, fontSize: 19, lineHeight: 28 });
     const first = await render(<RomanGreeting surface="client" isFirstOpen firstName="" hour={8} />);
     expect(first.getByText(/^Good morning\. My name is Roman\. I can explain/)).toBeTruthy();
   });
@@ -135,15 +135,15 @@ describe('B30 replies read like prose', () => {
     let resolveSend: (v: 'sent') => void = () => undefined;
     state.send = jest.fn(() => new Promise<'sent'>((res) => { resolveSend = res; }));
     const r = await render(<RomanChatScreen surface="client" />);
-    expect(opacityOf(r.getByText('Earlier reply.') as unknown as Node)).toBe(1);
+    expect(opacityOf(r.getByText('Earlier reply.'))).toBe(1);
     await fireEvent.press(r.getByTestId('roman-quick-start-1'));
     state.messages = [old,
       { id: 'u1', role: 'user', content: "Today's workout", interrupted: false, createdAt: '2026-10-08' },
       { id: 'a1', role: 'assistant', content: 'Foundations, session one.', interrupted: false, createdAt: '2026-10-08' }];
     await act(async () => { resolveSend('sent'); });
     await r.rerender(<RomanChatScreen surface="client" />);
-    expect(opacityOf(r.getByText('Foundations, session one.') as unknown as Node)).toBe(start);
-    expect(opacityOf(r.getByText('Earlier reply.') as unknown as Node)).toBe(1);
+    expect(opacityOf(r.getByText('Foundations, session one.'))).toBe(start);
+    expect(opacityOf(r.getByText('Earlier reply.'))).toBe(1);
   });
 });
 
