@@ -132,6 +132,9 @@ describe("More: your plan rows (S-REACH)", () => {
     const labels = screen.getAllByRole("button").map((b) => b.props.accessibilityLabel);
     expect(labels[0]).toBe("Roman");
     expect(labels.slice(0, 3)).toEqual(["Roman", "Guidance", "Community"]);
+    // Prototype 67: Roman's row says what he is for, beside the guidance row.
+    expect(screen.getByText("Ask Roman about your plan and targets")).toBeTruthy();
+    expect(screen.getByLabelText("Roman").props.accessibilityHint).toBe("Opens a conversation with Roman");
   });
 });
 
