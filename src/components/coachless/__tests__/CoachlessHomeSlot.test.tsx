@@ -112,14 +112,14 @@ describe('CoachlessHomeSlot gate', () => {
   it('renders nothing and calls nothing while the server flag is off', async () => {
     mockFlagOn = false;
     await renderSlot();
-    expect(screen.queryByTestId('coachless-banner')).toBeNull();
+    expect(screen.queryByTestId('coachless-join-banner')).toBeNull();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
   it('renders nothing for a client who already has a coach', async () => {
     mockUser = { id: 'client-1', coach_id: 'coach-9' };
     await renderSlot();
-    expect(screen.queryByTestId('coachless-banner')).toBeNull();
+    expect(screen.queryByTestId('coachless-join-banner')).toBeNull();
     expect(mockGet).not.toHaveBeenCalled();
   });
 
@@ -127,27 +127,28 @@ describe('CoachlessHomeSlot gate', () => {
     mockGet.mockResolvedValueOnce({ data: { ...homeAccepting(), eligible: false, banner: null, roman_card: null } });
     await renderSlot();
     await waitFor(() => expect(mockGet).toHaveBeenCalledWith('/coachless/home', expect.anything()));
-    expect(screen.queryByTestId('coachless-banner')).toBeNull();
+    expect(screen.queryByTestId('coachless-join-banner')).toBeNull();
 
     mockGet.mockRejectedValueOnce({ response: { status: 404, data: { code: 'coachless_disabled' } } });
     await renderSlot();
-    expect(screen.queryByTestId('coachless-banner')).toBeNull();
+    expect(screen.queryByTestId('coachless-join-banner')).toBeNull();
   });
 });
 
 describe('CoachlessHomeSlot banner and story', () => {
-  it('shows the server banner, offer and featured coach; Use code -> live check -> Join -> welcome -> plan sheet', async () => {
+  it('shows Join a coach with the offer and featured coach; Join a coach -> live check -> Join -> welcome -> plan sheet', async () => {
     routePost({
       '/coachless/coach-code/check': () => ({ data: { valid: true, coach: COACH } }),
       '/coachless/coach-code/redeem': () => ({ data: redeemOk() }),
     });
     await renderSlot();
-    expect(await screen.findByText('Banner title from the server')).toBeTruthy();
+    expect(await screen.findByTestId('coachless-join-banner')).toBeTruthy();
+    expect(screen.queryByText('Banner title from the server')).toBeNull(); // one join offer on Home
     expect(screen.getByText(OFFER)).toBeTruthy();
     expect(screen.getByTestId('coachless-featured-coach')).toBeTruthy();
     expect(screen.getByText('Monthly coaching, $49.00 a month')).toBeTruthy();
 
-    await fireEvent.press(screen.getByTestId('coachless-use-code'));
+    await fireEvent.press(screen.getByTestId('coachless-join'));
     expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
     expect(await screen.findByText('Coach: Alex Rivera', {}, { timeout: 2000 })).toBeTruthy();
     expect(mockPost).toHaveBeenCalledWith('/coachless/coach-code/check', { code: 'GP-TOP' }, expect.anything());
@@ -172,7 +173,7 @@ describe('CoachlessHomeSlot banner and story', () => {
       '/coachless/coach-code/redeem': () => ({ data: redeemOk() }),
     });
     await renderSlot();
-    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(await screen.findByTestId('coachless-join'));
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText('Alex Rivera is now your coach.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
@@ -193,8 +194,8 @@ describe('CoachlessHomeSlot banner and story', () => {
       },
     });
     await renderSlot();
-    await fireEvent.press(await screen.findByTestId('coachless-enter-code'));
-    expect(screen.getByTestId('coach-code-input').props.value).toBe('');
+    await fireEvent.press(await screen.findByTestId('coachless-join'));
+    expect(screen.getByTestId('coach-code-input').props.value).toBe('GP-TOP');
     await fireEvent.changeText(screen.getByTestId('coach-code-input'), 'gp-one');
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText(refusalLine({ code: 'network', status: 0, requestId: null }))).toBeTruthy();
@@ -217,7 +218,7 @@ describe('CoachlessHomeSlot banner and story', () => {
         Promise.reject({ response: { status: 410, data: { code: 'code_expired', request_id: 'req-1' } } }),
     });
     await renderSlot();
-    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(await screen.findByTestId('coachless-join'));
     expect(
       await screen.findByText(refusalLine({ code: 'coach_not_accepting', status: 200, requestId: null }), {}, { timeout: 2000 }),
     ).toBeTruthy();
@@ -237,13 +238,13 @@ describe('CoachlessHomeSlot banner and story', () => {
       },
     });
     await renderSlot();
-    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(await screen.findByTestId('coachless-join'));
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText('Your plan with Alex Rivera is active.')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
     expect(screen.queryByTestId('coach-code-sheet')).toBeNull();
 
-    await fireEvent.press(screen.getByTestId('coachless-use-code'));
+    await fireEvent.press(screen.getByTestId('coachless-join'));
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText('Message Alex Rivera')).toBeTruthy();
     await fireEvent.press(screen.getByTestId('coach-code-next-cta'));
@@ -258,7 +259,7 @@ describe('CoachlessHomeSlot banner and story', () => {
       }),
     });
     await renderSlot();
-    await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+    await fireEvent.press(await screen.findByTestId('coachless-join'));
     await fireEvent.press(screen.getByTestId('coach-code-join'));
     expect(await screen.findByText(/This code includes a plan with Alex Rivera/)).toBeTruthy();
     expect(screen.queryByText('Choose a plan')).toBeNull();
@@ -267,7 +268,7 @@ describe('CoachlessHomeSlot banner and story', () => {
     expect(screen.queryByTestId('plan-sheet')).toBeNull();
   });
 
-  it('while the featured coach is not accepting: no offer, no featured coach, no Roman card, only Enter a coach code', async () => {
+  it('while the featured coach is not accepting: no offer, no featured coach, no Roman card; Join a coach opens an empty sheet', async () => {
     mockGet.mockResolvedValue({
       data: {
         ...homeAccepting(),
@@ -278,11 +279,11 @@ describe('CoachlessHomeSlot banner and story', () => {
       },
     });
     await renderSlot();
-    expect(await screen.findByText('Banner title from the server')).toBeTruthy();
+    expect(await screen.findByTestId('coachless-join-banner')).toBeTruthy();
     expect(screen.queryByTestId('coachless-offer')).toBeNull();
-    expect(screen.queryByTestId('coachless-use-code')).toBeNull();
     expect(screen.queryByTestId('coachless-roman-card')).toBeNull();
-    expect(screen.getByText('Enter a coach code')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('coachless-join'));
+    expect(screen.getByTestId('coach-code-input').props.value).toBe('');
     expect(mockPost).not.toHaveBeenCalledWith('/coachless/roman-card/seen', expect.anything(), expect.anything());
   });
 });

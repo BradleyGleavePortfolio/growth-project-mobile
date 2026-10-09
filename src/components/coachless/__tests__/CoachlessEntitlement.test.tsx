@@ -108,7 +108,7 @@ it('redeeming a code with a granted plan unlocks protected content without a res
   expect(screen.queryByTestId('workout-content')).toBeNull();
   expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
 
-  await fireEvent.press(await screen.findByTestId('coachless-use-code'));
+  await fireEvent.press(await screen.findByTestId('coachless-join'));
   await fireEvent.press(screen.getByTestId('coach-code-join'));
   expect(await screen.findByText('Your plan with Alex Rivera is active.')).toBeTruthy();
   await fireEvent.press(screen.getByTestId('coach-code-next-cta'));

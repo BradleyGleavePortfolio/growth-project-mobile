@@ -470,6 +470,8 @@ export default function HomeScreen() {
             Loading today's food and water…
           </Text>
         ) : null}
+        {/* Owner 10-09 00:0x: "Join a coach" for a client with no coach, every app session. */}
+        <CoachlessHomeSlot part="join" />
         {/* All current metrics in one row, without the former 96 pt gap. */}
         <View
           style={{
@@ -501,7 +503,7 @@ export default function HomeScreen() {
         </View>
         {/* Supporting sections keep their original relative order. */}
         <DunningBanner surface="HomeScreen" presentation="section" />
-        <CoachlessHomeSlot />
+        <CoachlessHomeSlot part="roman" />
         <PendingInviteBanner />
         <PushPermissionCard presentation="section" />
         {showProfileNudge ? (
