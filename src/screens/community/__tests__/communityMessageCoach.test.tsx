@@ -46,6 +46,7 @@ jest.mock('../../../config/featureFlags', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaInsetsContext: jest.requireActual('react').createContext(null),
 }));
 
 const mockToday = {

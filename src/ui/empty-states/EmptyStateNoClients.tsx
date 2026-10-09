@@ -237,7 +237,7 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
       width: '100%',
       borderWidth: 1,
       borderColor: colors.border,
-      borderRadius: radius.lg,
+      borderRadius: radius.input,
       paddingVertical: 12,
       paddingHorizontal: 16,
       alignItems: 'center',
@@ -263,7 +263,7 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
       minHeight: 44,
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: radius.lg,
+      borderRadius: radius.button,
       marginTop: 8,
     },
     primaryBtnText: {
@@ -285,7 +285,7 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
     skeletonCode: {
       width: '100%',
       height: 44,
-      borderRadius: radius.lg,
+      borderRadius: radius.input,
       backgroundColor: legacy.surface,
     },
     skeletonLine: {
@@ -296,7 +296,7 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
     skeletonBtn: {
       width: '100%',
       height: 48,
-      borderRadius: radius.lg,
+      borderRadius: radius.button,
       backgroundColor: legacy.surface,
     },
   });

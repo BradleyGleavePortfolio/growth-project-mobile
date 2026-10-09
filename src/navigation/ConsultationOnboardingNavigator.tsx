@@ -1,12 +1,11 @@
 /**
- * ConsultationOnboardingNavigator: mounts the consultation onboarding for a
- * new client when `featureFlags.consultationOnboarding` is on (see
+ * ConsultationOnboardingNavigator: mounts the consultation onboarding for
+ * every new client, coached or coachless (B14, owner decisions 27-28; see
  * RootNavigator). It replaces the lean flow entirely, including the lean
  * flow's skip-to-finish path: the consultation can only finish through
- * POST /me/onboarding/complete.
- *
- * Rollback is the flag: with it off, RootNavigator mounts the lean flow as
- * before and nothing here is reachable.
+ * POST /me/onboarding/complete. An older server that cannot finish it for
+ * this client (409 not_attached / clinic_not_configured) gets the calm
+ * server state with Try again (prototype 44), never a dead end.
  *
  * After "Show me around" (Opus B-05): the consultation replaces the Day-1
  * flow and the Day-1 win, so this marks onboarding done locally and in the

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { CoachSettings } from './types';
 import type { SettingsStyles } from './styles';
+import { Overline } from '../../../ui';
 
 export function SettingsToggles({
   settings,
@@ -21,7 +22,7 @@ export function SettingsToggles({
   return (
     <>
       {/* Notifications */}
-      <Text style={styles.sectionHeader}>Notifications</Text>
+      <Overline style={styles.sectionHeader}>Notifications</Overline>
       <View style={styles.section}>
         {/* HUNT-05-124 B-H05-1: the Daily Check-in, New Client Alerts and Weekly
             Summary switches were removed. The server stored them but sends no
@@ -42,7 +43,7 @@ export function SettingsToggles({
       </View>
 
       {/* App Preferences */}
-      <Text style={styles.sectionHeader}>App Preferences</Text>
+      <Overline style={styles.sectionHeader}>App preferences</Overline>
       <View style={styles.section}>
         <View style={styles.row}>
           <Ionicons name="phone-portrait-outline" size={20} color={colors.textSecondary} />

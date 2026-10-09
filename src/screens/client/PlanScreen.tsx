@@ -4,15 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Platform,
-  SafeAreaView,
   RefreshControl,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FadeInView from '../../components/FadeInView';
 import HapticPressable from '../../components/HapticPressable';
 import LogPlannedMealButton, { plannedMealFromFoods } from '../../components/mealplan/LogPlannedMealButton';
@@ -333,7 +332,7 @@ export default function PlanScreen() {
   const hasPlans = (plans?.length || 0) > 0;
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView edges={['left', 'right']} style={styles.safe}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -541,7 +540,7 @@ const makeStyles = (colors: SemanticTokens) =>
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'android' ? 50 : 20,
+    paddingTop: 20, // the stack header owns the status-bar inset on both platforms
     paddingBottom: 16,
   },
   title: {
@@ -557,7 +556,7 @@ const makeStyles = (colors: SemanticTokens) =>
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 10,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
     flexDirection: 'row',
@@ -573,7 +572,7 @@ const makeStyles = (colors: SemanticTokens) =>
     marginHorizontal: 20,
     marginTop: 40,
     padding: 24,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     alignItems: 'center',
@@ -597,7 +596,7 @@ const makeStyles = (colors: SemanticTokens) =>
     gap: 32,
   },
   planCard: {
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
@@ -620,7 +619,7 @@ const makeStyles = (colors: SemanticTokens) =>
     marginTop: 2,
   },
   notesBox: {
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     paddingVertical: 10,
     marginTop: 4,
     marginBottom: 12,
@@ -727,6 +726,6 @@ const makeStyles = (colors: SemanticTokens) =>
     color: colors.textMuted,
   },
   retry: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 16,
-    borderRadius: 4, backgroundColor: colors.accent },
+    borderRadius: radius.button, backgroundColor: colors.accent },
   retryText: { ...typography.bodySmall, color: colors.textOnAccent },
   });

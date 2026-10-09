@@ -3,7 +3,7 @@
  * (AI_BUTLER_ROMAN_IDENTITY_SPEC §1) and the Quiet Luxury doctrine §4, and
  * every number it speaks is the real one from the payload.
  */
-import { buildTutorialSteps, stepRequirements, TUTORIAL_STEPS, wearableName, type CopyContext } from '../tutorialSteps';
+import { TUTORIAL_STEPS, type CopyContext } from '../tutorialSteps';
 
 const CTX: CopyContext = {
   firstName: 'Maya',
@@ -16,6 +16,8 @@ const CTX: CopyContext = {
   ],
   platform: 'ios',
   coachLinked: true,
+  calendarAvailable: true,
+  communityAvailable: true,
   outcomes: { plan: 'done', macros: 'done', first_message: 'done' },
 };
 
@@ -32,9 +34,11 @@ const SIMPLE: CopyContext = { ...CTX, macroMode: 'simple' };
 
 function allLines(ctx: CopyContext): string[] {
   const out: string[] = [];
-  // Every line in the build, including the flag-gated Calendar steps.
-  for (const s of buildTutorialSteps(true)) {
-    for (const g of s.gates) out.push(g.line(ctx));
+  for (const s of TUTORIAL_STEPS) {
+    for (const g of s.gates) {
+      out.push(g.line(ctx));
+      if (g.sub) out.push(g.sub(ctx));
+    }
     if (s.doneLine) out.push(s.doneLine(ctx));
     if (s.pendingLine) out.push(s.pendingLine(ctx));
   }
@@ -92,16 +96,17 @@ describe('real numbers', () => {
     expect(lines).toContain('185 grams of carbohydrate');
     expect(lines).toContain('50 grams of fat');
     expect(lines).toContain('Foundations: 4 weeks, 3 days a week.');
-    expect(lines).toContain('All members and Foundations group');
     expect(lines).toContain('Welcome, Maya.');
   });
 
-  it('names the platform health store', () => {
-    expect(wearableName(CTX)).toBe('Apple Health');
-    expect(wearableName(SPARSE)).toBe('Health Connect');
-    const wear = TUTORIAL_STEPS.find((s) => s.id === 'wearables')!;
-    expect(wear.gates[0].line(CTX)).toContain('Apple Health');
-    expect(wear.gates[0].line(SPARSE)).toContain('Health Connect');
+  it('folds Calendar, Community and devices into the completion (decision 133-5)', () => {
+    const done = TUTORIAL_STEPS.find((s) => s.id === 'complete')!.gates[0];
+    expect(done.line(CTX)).toBe('That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message.');
+    expect(done.sub!(CTX)).toBe(
+      'Calendar and Community have their own tabs, and connected devices live under You. Book your welcome call with Bradley from Calendar when it suits you. One thing at a time. You do not need to be perfect, just consistent.',
+    );
+    expect(done.sub!({ ...CTX, calendarAvailable: false, communityAvailable: false })).toMatch(/^Connected devices live under You\. One thing/);
+    expect(done.sub!({ ...CTX, coachLinked: false })).not.toContain('welcome call');
   });
 });
 
@@ -152,40 +157,5 @@ describe('lighter start: the macro step in the simple view', () => {
     const full = step.gates[1].line(CTX);
     expect(full).toContain('185 grams of carbohydrate and 50 grams of fat');
     expect(step.gates[1].line({ ...CTX, macroMode: 'full' })).toBe(full);
-  });
-});
-
-describe('S-SCHED Calendar steps', () => {
-  const steps = buildTutorialSteps(true);
-  it('the Calendar intro comes right after messaging your coach', () => {
-    const ids = steps.map((s) => s.id);
-    expect(ids.indexOf('calendar')).toBe(ids.indexOf('coach_messages') + 1);
-  });
-
-  it('the tour ends with the welcome call, skippable, then the completion', () => {
-    const ids = steps.map((s) => s.id);
-    expect(ids.slice(-2)).toEqual(['welcome_call', 'complete']);
-    const gate = steps.find((s) => s.id === 'welcome_call')!.gates[0];
-    expect(gate.kind).toBe('signal');
-    if (gate.kind !== 'signal') return;
-    expect(gate.allowDefer).toBe(true);
-    expect(gate.signal).toBe('welcome_call_booked');
-    expect(gate.action?.label(CTX)).toBe('Book your welcome call with Bradley');
-    expect(gate.action?.label(SPARSE)).toBe('Book your welcome call with your coach');
-    expect(gate.action?.target).toEqual({ tab: 'CalendarTab', screen: 'CalendarBook', params: { welcome: true } });
-  });
-
-  it('uses the assigned coach name, never a hardcoded one', () => {
-    const lines = steps
-      .filter((s) => stepRequirements(s).includes('calendar'))
-      .flatMap((s) => s.gates.map((g) => g.line({ ...CTX, coachName: 'Ana' })))
-      .join(' ');
-    expect(lines).toContain('Ana');
-    expect(lines).not.toContain('Bradley');
-  });
-
-  it('flag off: the default build has neither Calendar step', () => {
-    expect(TUTORIAL_STEPS.some((s) => stepRequirements(s).includes('calendar'))).toBe(false);
-    expect(buildTutorialSteps(false).map((s) => s.id)).toEqual(TUTORIAL_STEPS.map((s) => s.id));
   });
 });
