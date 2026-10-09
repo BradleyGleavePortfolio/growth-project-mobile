@@ -16,7 +16,8 @@ jest.mock('../../services/sentry', () => ({
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('../../theme/ThemeProvider', () => {
   const CanonicalColors = jest.requireActual('../../constants/colors').default;
-  return { useTheme: () => ({ colors: CanonicalColors }) };
+  const { lightTokens } = jest.requireActual('../../theme/tokens');
+  return { useTheme: () => ({ colors: CanonicalColors, semanticColors: lightTokens }) };
 });
 const mockTrack = jest.fn();
 jest.mock('../../lib/analytics', () => ({ track: (...a: unknown[]) => mockTrack(...a) }));
@@ -50,8 +51,9 @@ describe.each(Object.keys(FILES))('%s look', (name) => {
     expect(code).not.toMatch(/#[0-9A-Fa-f]{6}\b/);
   });
 
-  it('keeps radius <= 4, Cormorant <= 500 and text >= 13 pt (overlines use the 11 pt eyebrow token)', () => {
-    for (const m of code.matchAll(/borderRadius:\s*(\d+)/g)) expect(Number(m[1])).toBeLessThanOrEqual(4);
+  // Owner 17:07 (Q10b): rounded corners from the radius tokens, never a literal.
+  it('takes every radius from the tokens, Cormorant <= 500 and text >= 13 pt (overlines use the 11 pt eyebrow token)', () => {
+    expect(code).not.toMatch(/borderRadius:\s*\d/);
     expect(code).not.toMatch(/Radius\.(xl|full)|borderRadius:\s*Radius\.lg \* /);
     expect(code).not.toMatch(/CormorantGaramond_(600|700)/);
     for (const m of code.matchAll(/fontSize:\s*(\d+)/g)) expect(Number(m[1])).toBeGreaterThanOrEqual(13);

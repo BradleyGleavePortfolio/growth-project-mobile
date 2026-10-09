@@ -3,13 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Linking,
   ActivityIndicator,
-  ScrollView,
   AppState,
 } from "react-native";
 import { SkeletonList } from "../../ui/skeletons/Skeleton";
+import { Headline, PrimaryButton, Screen, ScreenTopBar, TextLink } from "../../ui";
+import { NavigationContext } from "@react-navigation/native";
+import { radius, typography } from "../../theme/tokens";
 import { useTheme } from "../../theme/useTheme";
 import {
   dataExportApi,
@@ -300,6 +301,8 @@ const MAX_DEADLINE_WAIT_MS = 6 * 60 * 60 * 1000;
  */
 export default function DataExportScreen() {
   const { colors } = useTheme();
+  // Context, not useNavigation: the screen also renders outside a navigator (tests).
+  const navigation = React.useContext(NavigationContext);
   const styles = makeStyles(colors);
   const user = useCurrentUser();
 
@@ -641,12 +644,12 @@ export default function DataExportScreen() {
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      accessibilityLabel="Data export screen"
+    <Screen
+      edges={["top"]}
+      testID="data-export-screen"
+      header={<ScreenTopBar onBack={navigation ? () => navigation.goBack() : undefined} backLabel="Go back" />}
     >
-      <Text style={styles.heading}>Request my data</Text>
+      <Headline level="h1" style={styles.heading}>Request my data</Headline>
 
       <Text style={styles.body}>
         Under UK/EU data protection law (GDPR Article 20), you have the right to
@@ -677,14 +680,12 @@ export default function DataExportScreen() {
       {state.phase === "idle" && (
         <>
           {renderNotice(state.notice)}
-          <TouchableOpacity
-            style={styles.primaryButton}
+          <PrimaryButton
+            label="Request my data"
             onPress={handleRequest}
-            accessibilityLabel="Request my data export"
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Request my data</Text>
-          </TouchableOpacity>
+            accessibilityHint="Starts a copy of your personal data"
+            style={styles.primaryButton}
+          />
         </>
       )}
 
@@ -724,26 +725,13 @@ export default function DataExportScreen() {
               : ""}
           </Text>
           {renderNotice(state.notice)}
-          <TouchableOpacity
-            style={[
-              styles.primaryButton,
-              state.downloading && styles.buttonBusy,
-            ]}
+          <PrimaryButton
+            label="Download file"
             onPress={() => handleDownload(state.record)}
-            disabled={state.downloading}
-            accessibilityLabel="Download your data file"
-            accessibilityRole="button"
-            accessibilityState={{
-              disabled: state.downloading,
-              busy: state.downloading,
-            }}
-          >
-            {state.downloading ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text style={styles.primaryButtonText}>Download file</Text>
-            )}
-          </TouchableOpacity>
+            loading={state.downloading}
+            accessibilityHint="Opens your data file in the browser"
+            style={styles.primaryButton}
+          />
           <Text style={styles.caption}>
             The download opens in your browser, which saves the file. The file
             is not stored inside the app.
@@ -754,14 +742,12 @@ export default function DataExportScreen() {
               {formatDateTime(state.record.next_request_at)}.
             </Text>
           ) : (
-            <TouchableOpacity
-              style={styles.ghostButton}
+            <TextLink
+              label="Request a new export"
+              tone="accent"
               onPress={handleRequest}
-              accessibilityLabel="Request a new data export"
-              accessibilityRole="button"
-            >
-              <Text style={styles.ghostButtonText}>Request a new export</Text>
-            </TouchableOpacity>
+              accessibilityHint="Starts a new copy of your personal data"
+            />
           )}
         </View>
       )}
@@ -776,14 +762,12 @@ export default function DataExportScreen() {
             Your data is unchanged. Request a new export and it will be ready
             here in about a minute.
           </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
+          <PrimaryButton
+            label="Request a new export"
             onPress={handleRequest}
-            accessibilityLabel="Request a new data export"
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Request a new export</Text>
-          </TouchableOpacity>
+            accessibilityHint="Starts a new copy of your personal data"
+            style={styles.primaryButton}
+          />
         </View>
       )}
 
@@ -797,32 +781,21 @@ export default function DataExportScreen() {
             </Text>
           ) : null}
           {state.next === "reload" ? (
-            <TouchableOpacity
-              style={styles.primaryButton}
+            <PrimaryButton
+              label="Check again"
               onPress={handleReload}
-              accessibilityLabel="Check your export status again"
-              accessibilityRole="button"
-            >
-              <Text style={styles.primaryButtonText}>Check again</Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
+              accessibilityHint="Checks your export status again"
               style={styles.primaryButton}
+            />
+          ) : (
+            <PrimaryButton
+              label="Request my data"
               onPress={handleRequest}
-              accessibilityLabel="Request my data again"
-              accessibilityRole="button"
-            >
-              <Text style={styles.primaryButtonText}>Request my data</Text>
-            </TouchableOpacity>
+              accessibilityHint="Asks for your data again"
+              style={styles.primaryButton}
+            />
           )}
-          <TouchableOpacity
-            style={styles.ghostButton}
-            onPress={handleReset}
-            accessibilityLabel="Go back to the start"
-            accessibilityRole="button"
-          >
-            <Text style={styles.ghostButtonText}>Cancel</Text>
-          </TouchableOpacity>
+          <TextLink label="Cancel" onPress={handleReset} accessibilityHint="Goes back to the start" />
         </View>
       )}
 
@@ -833,14 +806,12 @@ export default function DataExportScreen() {
             Your last export has expired (files are kept for {KEEP_DAYS} days).
             You can request a fresh export below.
           </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
+          <PrimaryButton
+            label="Request new export"
             onPress={handleRequest}
-            accessibilityLabel="Request a fresh data export"
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Request new export</Text>
-          </TouchableOpacity>
+            accessibilityHint="Starts a fresh copy of your personal data"
+            style={styles.primaryButton}
+          />
         </View>
       )}
 
@@ -848,7 +819,7 @@ export default function DataExportScreen() {
         If you plan to delete your account, download your data first. Once
         deletion is confirmed your data cannot be recovered.
       </Text>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -879,18 +850,7 @@ const INCLUDED_DATA = [
 
 function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
   return StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    content: {
-      padding: 24,
-      paddingBottom: 48,
-    },
     heading: {
-      fontFamily: "CormorantGaramond_500Medium",
-      fontSize: 28,
-      color: colors.textPrimary,
       marginBottom: 16,
     },
     body: {
@@ -918,7 +878,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
     bullet: {
       width: 4,
       height: 4,
-      borderRadius: 2,
+      borderRadius: radius.chip,
       backgroundColor: colors.textMuted,
       marginTop: 9,
       marginRight: 10,
@@ -953,13 +913,11 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       gap: 12,
     },
     statusHeading: {
-      fontFamily: "CormorantGaramond_500Medium",
-      fontSize: 22,
+      ...typography.h2,
       color: colors.textPrimary,
     },
     errorHeading: {
-      fontFamily: "CormorantGaramond_500Medium",
-      fontSize: 22,
+      ...typography.h2,
       color: colors.textPrimary,
     },
     statusBody: {
@@ -969,22 +927,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       color: colors.textPrimary,
     },
     primaryButton: {
-      backgroundColor: colors.primary,
-      minHeight: 48,
-      paddingVertical: 14,
-      paddingHorizontal: 24,
-      borderRadius: 4,
-      alignItems: "center",
-      justifyContent: "center",
       marginTop: 8,
-    },
-    primaryButtonText: {
-      fontFamily: "Inter_600SemiBold",
-      fontSize: 15,
-      color: colors.background,
-    },
-    buttonBusy: {
-      opacity: 0.7,
     },
     noticeBox: {
       paddingVertical: 12,
@@ -998,24 +941,12 @@ function makeStyles(colors: ReturnType<typeof useTheme>["colors"]) {
       fontSize: 15,
       color: colors.textPrimary,
     },
-    ghostButton: {
-      minHeight: 44,
-      paddingHorizontal: 24,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    ghostButtonText: {
-      fontFamily: "Inter_500Medium",
-      fontSize: 15,
-      color: colors.primary,
-    },
     legalNote: {
       fontFamily: "Inter_400Regular",
       fontSize: 13,
       lineHeight: 19,
       color: colors.textSecondary,
       marginTop: 32,
-      textAlign: "center",
     },
   });
 }
