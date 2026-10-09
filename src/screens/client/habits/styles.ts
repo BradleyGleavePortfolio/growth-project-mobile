@@ -1,121 +1,32 @@
+/**
+ * Habits & check-in styles. The page (REDO-HABITS-CAL-COMM-133): date
+ * overline, serif headline, underlined text tabs, one sentence for the day,
+ * one forest action. Corners come from the radius tokens; no literal radius.
+ */
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import type { SemanticTokens } from '../../../theme/tokens';
+import { layout, typography, type SemanticTokens } from '../../../theme/tokens';
 
 export const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: sc.bgPrimary },
-  header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 24 },
-  title: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 32,
-    lineHeight: 35,
-    letterSpacing: 0.6,
-    fontWeight: '400',
-    color: colors.textPrimary,
-  },
-  subtitle: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    lineHeight: 13,
-    letterSpacing: 1.98,
-    fontWeight: '500',
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-    marginTop: 8,
-  },
+  header: { marginTop: 8, marginBottom: 20, gap: 6 },
   tabRow: {
     flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 10,
-    marginBottom: 12,
-  },
-  tabBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    minHeight: 44,
-    paddingVertical: 12,
-    borderRadius: 4, // radius.lg
-    backgroundColor: sc.bgPrimary,
+    gap: 24,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-  },
-  tabBtnActive: {
-    backgroundColor: sc.bgPrimary,
-    borderColor: colors.primary,
-  },
-  tabLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.4,
-    color: colors.textSecondary,
-  },
-  tabLabelActive: { color: colors.primary },
-  dotBadge: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.error,
-  },
-  scrollContent: { paddingHorizontal: 24 },
-  progressCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: sc.bgPrimary,
-    borderRadius: 4, // radius.lg
-    paddingVertical: 24,
+    borderBottomColor: sc.border,
     marginBottom: 8,
-    gap: 20,
   },
-  progressCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primaryPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  progressPct: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 22,
-    lineHeight: 26,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.primary,
-  },
-  progressLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-  },
-  progressStats: { flex: 1, gap: 6 },
-  progressStatValue: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 28,
-    lineHeight: 34,
-    fontVariant: ['tabular-nums'],
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  progressStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
-  progressBar: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
-  },
+  tab: { minHeight: layout.touchMin, justifyContent: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  tabActive: { borderBottomColor: sc.accent },
+  tabLabel: { ...typography.bodySmall, color: sc.textMuted },
+  tabLabelActive: { ...typography.bodySmall, fontFamily: 'Inter_500Medium', fontWeight: '500', color: sc.textPrimary },
+  pressed: { opacity: 0.6 },
+  narrative: { ...typography.h2, color: sc.textPrimary, marginBottom: 6 },
+  addLink: { marginTop: 12 },
+  note: { ...typography.bodySmall, color: sc.textMuted },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: layout.touchMin },
+  savedText: { ...typography.bodySmall, color: sc.accentText },
   habitCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -156,41 +67,6 @@ export const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
     justifyContent: 'center',
     alignItems: 'center',
   },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 4, // radius.lg
-    minHeight: 44,
-    marginTop: 4,
-  },
-  addBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0,
-    color: colors.primary,
-  },
-  savedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: sc.bgPrimary,
-    padding: 12,
-    borderRadius: 2, // radius.md
-    marginBottom: 16,
-  },
-  savedBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.primary },
-  lastCheckInRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  lastCheckInText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted },
   checkInCard: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
@@ -278,23 +154,7 @@ export const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
-  saveBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: sc.accent,
-    borderRadius: 4, // radius.lg
-    paddingVertical: 16,
-    marginTop: 8,
-  },
-  saveBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0,
-    color: sc.textOnAccent,
-  },
+  saveBtn: { marginTop: 8 },
   modalOverlay: {
     flex: 1,
     backgroundColor: sc.overlay,
