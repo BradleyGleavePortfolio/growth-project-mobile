@@ -37,7 +37,7 @@ import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import { isSubCoachBillingBlocked } from '../../../lib/coachSetup/errors';
 import type { CoachHomeSources } from './coachHomeSources';
 import { clientsNarrative, heroAmount, payoutWords, retentionPct } from './coachHomeCopy';
-import { CalmLine, ClientCard, CountRow, EarningsHero, HomeOverline, StatRow, type EarningsState, type StatCell } from './CoachHomeSections';
+import { CalmLine, ClientCard, CountRow, EarningsHero, HomeOverline, StatRow, hasMonthMoney, type EarningsState, type StatCell } from './CoachHomeSections';
 
 type LoadState = 'loading' | 'refreshing' | 'data' | 'error';
 
@@ -148,7 +148,7 @@ export default function OverviewScreen({
     { label: 'Active streaks', n: d.win_streak_count, words: undefined, onPress: onNavigateToWinStreaks, id: 'win-streaks', a11y: `${d.win_streak_count} clients on active streaks. View win streaks.` },
   ] : [];
   const urgent = roster > 0 && (d?.at_risk_count ?? 0) > 0 ? extras.urgent.slice(0, 3) : [];
-  const earned = earnings.kind === 'ok' && (earnings.summary.totals.chargeCount > 0 || cells.length > 0);
+  const earned = earnings.kind === 'ok' && (hasMonthMoney(earnings.summary) || cells.length > 0);
 
   return (
     <ScrollView

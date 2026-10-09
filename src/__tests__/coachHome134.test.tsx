@@ -57,7 +57,11 @@ describe('the hero: a real month-so-far figure, or one calm line', () => {
     expect(screen.getByText(/^Up \$620 on this point in /)).toBeTruthy();
     expect(screen.getByText(/^\d+ days? in/)).toBeTruthy();
   });
-  it('says "No earnings yet this month." with no number when nothing sold; a sub-coach reads who takes payments', async () => {
+  it('a real net with no own charge (split income, a refund) is the hero; only a truly empty month says "No earnings yet"', async () => {
+    const split = await render(<OverviewScreen sources={sources({ monthSoFar: async () => summary(52000, 0, null) })} />);
+    expect(within(await split.findByTestId('coach-home-hero')).getByText('$520')).toBeTruthy();
+    const refund = await render(<OverviewScreen sources={sources({ monthSoFar: async () => summary(-12000, 0, null) })} />);
+    expect(await refund.findByTestId('coach-home-hero-amount')).toBeTruthy();
     const empty = await render(<OverviewScreen sources={sources({ monthSoFar: async () => summary(0, 0, null) })} />);
     expect(await empty.findByText('No earnings yet this month.')).toBeTruthy();
     expect(empty.queryByTestId('coach-home-hero-amount')).toBeNull();

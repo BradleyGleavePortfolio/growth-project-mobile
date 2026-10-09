@@ -15,6 +15,8 @@ import type { AtRiskEntry } from '../../../services/commandCenterApi';
 import { changeVsLastMonth, dateOverline, greetingOverline, heroAmount, lastActiveWords, monthOverline, paceLine } from './coachHomeCopy';
 
 export type EarningsState = { kind: 'loading' | 'blocked' | 'error' } | { kind: 'ok'; summary: MoneySummary };
+// B-633-SOL-D-134-1: head-coach split income and refunds of earlier sales move net with no own charge.
+export const hasMonthMoney = (s: MoneySummary) => s.totals.chargeCount > 0 || s.totals.netCents !== 0;
 export interface StatCell { key: string; label: string; value: string; sub?: string; testID: string; subTestID?: string }
 
 export function HomeOverline({ firstName, now }: { firstName?: string | null; now: Date }) {
@@ -41,7 +43,7 @@ export function CalmLine({ title, detail, testID }: { title: string; detail?: st
 export function EarningsHero({ state, now, onRetry }: { state: EarningsState; now: Date; onRetry: () => void }) {
   const { semanticColors: sc } = useTheme();
   let body: React.ReactNode = <View style={styles.heroPlaceholder} testID="coach-home-hero-loading" />;
-  if (state.kind === 'ok' && state.summary.totals.chargeCount > 0) {
+  if (state.kind === 'ok' && hasMonthMoney(state.summary)) {
     const { totals, changeCents, currency } = state.summary;
     const amount = heroAmount(totals.netCents, currency);
     const change = changeVsLastMonth(changeCents, currency, now);
