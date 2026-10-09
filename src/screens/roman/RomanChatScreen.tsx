@@ -47,6 +47,7 @@ import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
+import { useRomanReveal } from '../../components/roman/useRomanReveal';
 import {
   romanPoolEmpty,
   romanRateLimited,
@@ -266,11 +267,18 @@ export default function RomanChatScreen({
     onRetrySend();
   }, [sendError, clearSendError, onRetrySend]);
 
+  // B30: the reply that arrives after a send fades in like reading.
+  const freshId = useRomanReveal(messages, sending);
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<RomanMessage>) => (
-      <RomanMessageBubble message={item} testID={`roman-message-${item.id}`} />
+      <RomanMessageBubble
+        message={item}
+        reveal={item.id === freshId}
+        reduceMotion={reduceMotion}
+        testID={`roman-message-${item.id}`}
+      />
     ),
-    [],
+    [freshId, reduceMotion],
   );
 
   const header = (
