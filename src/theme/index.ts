@@ -18,7 +18,12 @@ export {
   radius as radiusTokens,
   shadows as shadowTokens,
   motion,
+  layout,
+  wheel,
+  SERIF_MIN_LINE_RATIO,
+  serifRoles,
 } from './tokens';
+export type { SerifRole } from './tokens';
 export { default as tokens } from './tokens';
 export type { Tokens } from './tokens';
 
@@ -112,10 +117,10 @@ export const colors = {
 // CRITICAL: weight 400 for headings — not 700/800; body uses the readable muted role.
 export const Typography = {
   // Map legacy keys → new token values
-  hero:     { fontFamily: 'CormorantGaramond_400Regular', fontSize: 44, lineHeight: 46, fontWeight: '400' as const, letterSpacing: 0.4 },
-  h1:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, fontWeight: '400' as const, letterSpacing: 0.6, color: CanonicalColors.textPrimary },
-  h2:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 29, fontWeight: '400' as const, letterSpacing: 0.5, color: CanonicalColors.textPrimary },
-  h3:       { fontFamily: 'CormorantGaramond_500Medium',  fontSize: 20, lineHeight: 24, fontWeight: '500' as const, letterSpacing: 0.4, color: CanonicalColors.textPrimary },
+  hero:     { fontFamily: 'CormorantGaramond_400Regular', fontSize: 44, lineHeight: 55, fontWeight: '400' as const, letterSpacing: 0.4 },
+  h1:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 40, fontWeight: '400' as const, letterSpacing: 0.6, color: CanonicalColors.textPrimary },
+  h2:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 30, fontWeight: '400' as const, letterSpacing: 0.5, color: CanonicalColors.textPrimary },
+  h3:       { fontFamily: 'CormorantGaramond_500Medium',  fontSize: 20, lineHeight: 25, fontWeight: '500' as const, letterSpacing: 0.4, color: CanonicalColors.textPrimary },
   body:     { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: CanonicalColors.textMuted },
   bodyDark: { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: CanonicalColors.textPrimary },
   label:    { fontFamily: 'Inter_500Medium',              fontSize: 11, lineHeight: 13, fontWeight: '500' as const, letterSpacing: 1.98, textTransform: 'uppercase' as const, color: CanonicalColors.primary },
