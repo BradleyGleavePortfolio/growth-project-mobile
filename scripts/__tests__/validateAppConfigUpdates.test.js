@@ -71,9 +71,9 @@ describe('validate-app-config — EAS Update gate', () => {
     expect(eas.build.clinic.environment).toBe('production');
     expect(eas.build['clinic-apk'].channel).toBe('clinic-apk');
     expect(eas.build['clinic-apk'].environment).toBe('production');
-    expect(app.ios.buildNumber).toBe('8');
-    // Build 8 (agent 134): 7 installs over the versionCode 6 build 7 Android app.
-    expect(app.android.versionCode).toBe(7);
+    expect(app.ios.buildNumber).toBe('9');
+    // Build 9 (agent 135): 8 installs over the versionCode 7 build 8 Android app.
+    expect(app.android.versionCode).toBe(8);
     withWorkspace((dir) => {
       const r = run(dir);
       expect(r.status).toBe(0);

@@ -441,7 +441,7 @@ The orphan coach `CoachMealTemplates` route is not registered. No entry action o
 - Messages is not behind the client paywall: basic text DM with the coach is free server-side (only voice upload is paid).
 - The Membership screen's website link is not rendered on hidden iOS builds.
 - API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy`. The backend does not read the policy header yet (planned follow-up), so today it is advisory. The OTA publish guard is planned in #305; expo-updates is not configured at this head.
-- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 8 (build 7 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
+- `IOS_P2P_ONLY_MIN_NATIVE_BUILD` is 6, the native anchor; `app.json` `ios.buildNumber` is 9 (build 8 is already uploaded). `scripts/validate-app-config.js` fails anything below 6.
 Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
 New clients see `LeanOnboardingNavigator`, or `ConsultationOnboardingNavigator` (the full consultation, `src/screens/consultation/README.md`) when `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` is on. That flag is off by default and on in the `clinic` EAS profile.

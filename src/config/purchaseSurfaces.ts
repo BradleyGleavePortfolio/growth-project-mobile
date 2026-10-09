@@ -43,7 +43,7 @@ import { featureFlags } from './featureFlags';
  *
  * This is defence in depth, not a proof. An authorised publisher can still
  * ship JS that edits this function. What exists at this head:
- *   - this native anchor (app.json ios.buildNumber is 8, and
+ *   - this native anchor (app.json ios.buildNumber is 9, and
  *     scripts/validate-app-config.js fails a build number below
  *     IOS_P2P_ONLY_MIN_NATIVE_BUILD);
  *   - expo-updates is NOT configured in this repo yet, so there is no OTA
