@@ -36,8 +36,8 @@ export const K8_COPY = {
   linkLabel: 'Your link',
   linkReady: 'Your link is ready to share.',
   linkInSettings: 'Your link is in Settings > Invite Codes.',
-  roman: "Next, I'll show you around and help you create your first package.",
-  cta: 'Show me around',
+  roman: 'Next is your Clients page. Share your link there to bring in your first client.',
+  cta: 'Go to my clients',
 } as const;
 
 /** The share sheet message: the coach's real join link. */

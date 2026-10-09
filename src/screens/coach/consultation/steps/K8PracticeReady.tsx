@@ -1,5 +1,5 @@
 /**
- * K8 Practice ready (prototype 85): summary sentences, Roman's hand-off line and one button, "Show me around" (onNext:
+ * K8 Practice ready (prototype 85): summary sentences, Roman's hand-off line and one button, "Go to my clients" (onNext:
  * the flow completes on the server and lands on Clients, 86 K-LAND). No bar, no Finish later; spinner while completing.
  */
 import React from 'react';
