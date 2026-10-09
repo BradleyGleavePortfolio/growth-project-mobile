@@ -101,6 +101,10 @@ export default function HomeHeaderActions() {
 
   const openRoman = () => navigation.navigate('MoreTab', { screen: 'RomanChat', initial: false });
   const hasCoach = !!coachId;
+  // useCurrentUser reads the cache asynchronously (first render is null): choose
+  // coach or Roman only once the user is known, so a coached client never sees
+  // "Ask Roman" flash first (U1 on m#618).
+  const userKnown = currentUser !== null;
 
   return (
     <View style={styles.row}>
@@ -121,7 +125,7 @@ export default function HomeHeaderActions() {
           </Text>
           <NotificationBadge count={unreadMessages} />
         </Pressable>
-      ) : featureFlags.romanChat ? (
+      ) : userKnown && featureFlags.romanChat ? (
         <Pressable
           onPress={openRoman}
           accessibilityRole="button"

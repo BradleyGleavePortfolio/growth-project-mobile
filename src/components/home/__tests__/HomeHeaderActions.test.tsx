@@ -80,6 +80,21 @@ describe('HomeHeaderActions', () => {
     expect(mockGet).not.toHaveBeenCalled();
   });
 
+  it('chooses coach or Roman only once the cached user is known (no Ask Roman flash for a coached client)', async () => {
+    mockRomanChat.mockReturnValue(true);
+    mockUser.mockReturnValue(null);
+    mockGet.mockResolvedValue({ data: { name: 'Bradley Gleave' } });
+    const view = await render(<HomeHeaderActions />);
+    expect(view.queryByText('Ask Roman')).toBeNull();
+    expect(view.queryByTestId('home-message-coach')).toBeNull();
+    expect(view.getByTestId('home-leading-empty')).toBeTruthy();
+    expect(view.getByTestId('home-notification-bell')).toBeTruthy();
+    mockUser.mockReturnValue({ id: 'u1', coach_id: 'c1' });
+    await view.rerender(<HomeHeaderActions />);
+    expect(await view.findByText('Message Bradley')).toBeTruthy();
+    expect(view.queryByText('Ask Roman')).toBeNull();
+  });
+
   it('shows a coachless client only the bell when Roman chat is off', async () => {
     mockUser.mockReturnValue({ id: 'u1', coach_id: null });
     const view = await render(<HomeHeaderActions />);
