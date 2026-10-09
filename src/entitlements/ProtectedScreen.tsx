@@ -24,6 +24,12 @@
  *     workout survives leaving the app and weak gym signal. Only a confirmed
  *     inactive result (or a 402) gates. The backend guard still answers
  *     every paid call, so nothing new is exposed.
+ *   - B22/B24 (b#888): a client with no coach is never gated on a screen
+ *     marked `openToCoachless` (the client's own logging, workouts, plans,
+ *     fasting, macros, check-ins and Roman guidance). These mirror the
+ *     server routes marked @OpenToCoachlessClient(), which let a coachless
+ *     client through without a package. A client with a coach (for example
+ *     one whose plan lapsed) keeps the gate below unchanged.
  */
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
@@ -37,14 +43,20 @@ import { useCoachlessClient } from '../hooks/useCoachlessClient';
 
 interface ProtectedScreenProps {
   children: React.ReactNode;
+  /** The screen's server routes let a client with no coach through (B22/B24). */
+  openToCoachless?: boolean;
 }
 
-export function ProtectedScreen({ children }: ProtectedScreenProps) {
+export function ProtectedScreen({ children, openToCoachless = false }: ProtectedScreenProps) {
   const {
     entitlementActive, status, confirmedActive, refreshEntitlement, openPlans, messageCoach,
   } = useEntitlement();
   const { colors, tokens } = useTheme();
   const noCoach = useCoachlessClient();
+
+  if (openToCoachless && noCoach) {
+    return <>{children}</>;
+  }
 
   if (confirmedActive === true && (status === 'checking' || status === 'unavailable')) {
     return <>{children}</>;

@@ -141,20 +141,20 @@ it.each([false, true])('explains inactive access before editing and uses the exi
   }));
 });
 
-it.each([false, true])('a coachless client can enter a code, not message an absent coach (hidden=%s)', async (hidden) => {
+// CLIENT-POLISH-134 item 5 (B22/B24): check-ins are open to a client with no
+// coach server-side (b#888), so the check-in is never gated for them.
+it.each([false, true])('a coachless client checks in without a gate or an access line (hidden=%s)', async (hidden) => {
   mockHidden = hidden;
   mockCoachId = undefined;
   mockEntitlement = { ...mockEntitlement, entitlementActive: false, status: 'inactive', confirmedActive: false };
   const screen = await openCheckIn();
-  expect(screen.getByText(REQUIREMENT)).toBeTruthy();
-  expect(screen.getByText('Logging comes with coaching')).toBeTruthy();
-  expectNoForm(screen);
-  expect(screen.queryByText('Message your coach')).toBeNull();
-  expect(screen.queryByText('View Plans')).toBeNull();
-  await fireEvent.press(screen.getByText('Enter a coach code'));
-  expect(mockMessageCoach).toHaveBeenCalledTimes(1);
-  expect(mockOpenPlans).not.toHaveBeenCalled();
-  expect(mockGetCheckIns).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.getByText('How are you feeling?')).toBeTruthy());
+  expect(mockGetCheckIns).toHaveBeenCalled();
+  expect(screen.queryByText(REQUIREMENT)).toBeNull();
+  for (const line of ['Logging comes with coaching', 'This part comes with a coach', 'Choose a Plan', 'Your coach manages your access']) {
+    expect(screen.queryByText(line)).toBeNull();
+  }
+  expect(screen.queryByText('Enter a coach code')).toBeNull();
 });
 
 it.each<EntitlementStatus>(['unknown', 'loading', 'checking'])('waits for confirmed access without fetching check-ins (%s)', async (status) => {

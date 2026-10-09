@@ -12,7 +12,8 @@ What `ProtectedScreen` shows:
 | unknown, loading, checking | Spinner |
 | active | The screen |
 | inactive, client with a coach | "Choose a Plan" with View Plans; on hidden iOS builds "Your coach manages your access" with Message your coach |
-| inactive, coachless client | "Logging comes with coaching", "Join a coach with their code. Each coach sets up what their coaching includes." with Enter a coach code (the existing code sheet) |
+| any state, coachless client, screen marked `openToCoachless` | The screen. Logging, workouts, plans, fasting, macros, check-ins and Roman guidance call routes the server opens to a client with no coach (`@OpenToCoachlessClient()`, b#888, B22/B24), so they are never gated |
+| inactive, coachless client, coach-only screen (Community, sessions, Calendar) | "This part comes with a coach", "Join a coach with their code. Each coach sets up what their coaching includes." with Enter a coach code (the existing code sheet) |
 | unavailable (the check failed: weak signal, server error) | "Your access could not be checked", "Check the connection, then try again." with Try again, which re-runs the check. The screen stays closed until the server confirms access (FOOD-GATE-RETRY-130). |
 | checking or unavailable after access was confirmed in this session | The screen stays mounted, so a live workout survives weak signal (TRAIN-GATE-128) |
 
