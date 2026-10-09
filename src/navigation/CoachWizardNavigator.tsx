@@ -57,6 +57,11 @@ import FirstPackageForm, {
 import InviteShareCard from "../components/coach/setup/InviteShareCard";
 import SetupNotice from "../components/coach/setup/SetupNotice";
 import { useCurrentUser } from "../hooks/useCurrentUser";
+import CoachConsultationFlow from "../screens/coach/consultation/CoachConsultationFlow";
+import { readUserCache } from "../lib/userCache";
+import type { CurrentUser } from "../hooks/useCurrentUser";
+import { signOut } from "../services/authActions";
+import { featureFlags } from "../config/featureFlags";
 import {
   loadSetupStatus,
   type SetupSnapshot,
@@ -726,7 +731,13 @@ export function resumeRoute(currentStep: number): keyof CoachWizardParamList {
   return "CoachWizardStep1";
 }
 
-export default function CoachWizardNavigator() {
+/**
+ * The earlier five-step setup (practice basics, Get paid, first package,
+ * invite, ready). Not routed since COACH-CONSULT-M-134: new coaches get the
+ * coach consultation below. Kept, unrouted, for its tests until a follow-up
+ * removes it.
+ */
+export function CoachSetupWizard() {
   const { colors } = useTheme();
   const [initial, setInitial] = useState<keyof CoachWizardParamList | null>(
     null,
@@ -944,3 +955,42 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 8,
     },
   });
+
+/**
+ * Every new coach (GET /coach/onboarding not complete) gets the coach
+ * consultation, the only coach onboarding (COACH-CONSULT-M-134, B02). Get
+ * paid, first package and invite are optional next steps afterwards, on the
+ * Overview checklist; they are never asked before the practice is set up.
+ */
+export default function CoachWizardNavigator() {
+  const { colors } = useTheme();
+  const [who, setWho] = useState<CurrentUser | null | undefined>(undefined);
+  useEffect(() => {
+    let alive = true;
+    readUserCache().then(
+      (u) => alive && setWho(u),
+      () => alive && setWho(null),
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  if (who === undefined) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background }}>
+        <ActivityIndicator color={colors.primary} accessibilityLabel="Loading your setup" />
+      </View>
+    );
+  }
+  return (
+    <CoachConsultationFlow
+      userId={who?.id ?? "coach"}
+      user={who}
+      importOn={featureFlags.extensionImport}
+      onComplete={() => {
+        void persistWizardCompleteFlag().then(() => authEvents.emit());
+      }}
+      onSignOut={() => void signOut(who?.id ?? null)}
+    />
+  );
+}

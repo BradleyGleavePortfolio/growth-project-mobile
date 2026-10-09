@@ -1,10 +1,11 @@
 /**
  * EmptyStateNoClients — Empty state for the coach's client roster screen.
  *
- * When the coach has no clients, shows a prominent invite-code block with:
+ * When the coach has no clients (prototype 86 K-LAND): Roman's neutral face,
+ * "No clients yet.", and one forest "Share my link", with:
  * - Optimistic MMKV hydration from 'coach.wizard.step_2_invite_code'
  * - Background fetch from GET /coach/invite-codes
- * - Share + Copy actions
+ * - Share + Copy actions (Copy shows the code)
  * - Skeleton while loading (no ActivityIndicator)
  * - Graceful fallback to Settings nudge on 404
  *
@@ -26,6 +27,7 @@ import { HapticService } from '../haptics/haptics.service';
 import { prefsStorage } from '../../storage/mmkv';
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import RomanAvatar from '../../components/roman/RomanAvatar';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -114,12 +116,14 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
     })();
   }, [cacheKey]);
 
+  const [shareProblem, setShareProblem] = useState(false);
   const handleShare = useCallback(() => {
     if (!code) return;
     const message = deepLink
       ? `Join me on Growth Project. Use code ${code} or tap: ${deepLink}`
       : `Join me on Growth Project. Use code ${code}`;
-    Share.share({ message }).catch(() => {});
+    setShareProblem(false);
+    Share.share({ message }).catch(() => setShareProblem(true));
   }, [code, deepLink]);
 
   const handleCopyCode = useCallback(async () => {
@@ -134,12 +138,20 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
     await HapticService.softImpact();
   }, [code]);
 
+  // Prototype 86 (K-LAND): Roman's neutral face, "No clients yet.", one forest button.
+  const intro = (
+    <>
+      <RomanAvatar crop="neutral" size={64} testID="empty-no-clients-roman" />
+      <Text style={styles.headline}>No clients yet.</Text>
+      <Text style={styles.body}>Share your link and your first client lands here.</Text>
+    </>
+  );
+
   // ── Not found — nudge to invite codes ─────────────────────────────────────
   if (state === 'notfound') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.headline}>Your first client is one link away.</Text>
-        <Text style={styles.body}>Set up your invite code to get started.</Text>
+      <View style={styles.container} testID="empty-no-clients">
+        {intro}
         {handleInviteCta ? (
           <TouchableOpacity
             style={styles.primaryBtn}
@@ -158,52 +170,37 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (state === 'loading') {
     return (
-      <View style={styles.container}>
-        <Text style={styles.headline}>Your first client is one link away.</Text>
-        <View style={styles.skeletonCode} />
-        <View style={[styles.skeletonLine, { width: '70%', marginTop: 8 }]} />
-        <View style={[styles.skeletonBtn, { marginTop: 24 }]} />
+      <View style={styles.container} testID="empty-no-clients">
+        {intro}
+        <View style={styles.skeletonBtn} />
       </View>
     );
   }
 
   // ── Loaded ─────────────────────────────────────────────────────────────────
   return (
-    <View style={styles.container}>
-      <Text style={styles.headline}>Your first client is one link away.</Text>
-
-      {/* Code block */}
-      <View style={styles.codeBlock} testID="invite-code-block">
-        <Text style={styles.codeText} testID="invite-code-text">{code}</Text>
-      </View>
-
-      {/* Deep link */}
-      {deepLink ? (
-        <Text style={styles.deepLinkText} numberOfLines={1} testID="invite-deep-link">
-          {deepLink}
-        </Text>
-      ) : null}
-
-      {/* Share button */}
+    <View style={styles.container} testID="empty-no-clients">
+      {intro}
       <TouchableOpacity
         style={styles.primaryBtn}
         onPress={handleShare}
         accessibilityRole="button"
-        accessibilityLabel="Share your invite code"
+        accessibilityLabel="Share my invite link"
         testID="share-code-btn"
       >
-        <Text style={styles.primaryBtnText}>Share your code</Text>
+        <Text style={styles.primaryBtnText}>Share my link</Text>
       </TouchableOpacity>
-
-      {/* Copy link */}
+      {shareProblem ? (
+        <Text style={styles.note} testID="share-code-problem">The share sheet did not open. Copy the code instead.</Text>
+      ) : null}
       <TouchableOpacity
         style={styles.copyBtn}
         onPress={handleCopyCode}
         accessibilityRole="button"
-        accessibilityLabel="Copy invite code to clipboard"
+        accessibilityLabel={`Copy invite code ${code ?? ''}`.trim()}
         testID="copy-code-btn"
       >
-        <Text style={styles.copyBtnText}>Copy code</Text>
+        <Text style={styles.copyBtnText} testID="invite-code-text">{`Copy code ${code ?? ''}`.trim()}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -215,14 +212,15 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
   StyleSheet.create({
     container: {
       alignItems: 'center',
-      paddingVertical: 48,
+      paddingTop: 72,
+      paddingBottom: 48,
       paddingHorizontal: 24,
     },
     headline: {
       ...typography.h2,
       color: colors.textPrimary,
       textAlign: 'center',
-      marginBottom: 24,
+      marginTop: 20,
     },
     body: {
       fontFamily: 'Inter_400Regular',
@@ -230,31 +228,14 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
       color: colors.textMuted,
       textAlign: 'center',
       lineHeight: 22,
-      marginBottom: 16,
+      marginTop: 8,
+      marginBottom: 32,
     },
-    // Unfilled (bone shows through) with the theme hairline.
-    codeBlock: {
-      width: '100%',
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.input,
-      paddingVertical: 12,
-      paddingHorizontal: 16,
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    codeText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 20,
-      letterSpacing: 3,
-      color: colors.textPrimary,
-    },
-    deepLinkText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
+    note: {
+      ...typography.bodySmall,
       color: colors.textMuted,
-      marginBottom: 24,
       textAlign: 'center',
+      marginTop: 8,
     },
     primaryBtn: {
       width: '100%',
@@ -280,18 +261,6 @@ const makeStyles = (colors: SemanticTokens, legacy: ThemeColors) =>
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
       color: colors.textMuted,
-    },
-    // Skeletons
-    skeletonCode: {
-      width: '100%',
-      height: 44,
-      borderRadius: radius.input,
-      backgroundColor: legacy.surface,
-    },
-    skeletonLine: {
-      height: 12,
-      borderRadius: 2,
-      backgroundColor: legacy.surface,
     },
     skeletonBtn: {
       width: '100%',

@@ -6,13 +6,13 @@
  *    through HapticPressable; the body uses the one muted grey.
  *  - components/EmptyState (Recipes, Fasting, Bloodwork, coach Brief, ...): Cormorant
  *    title, theme colours (follows the active scheme), the same CTA.
- *  - EmptyStateNoClients (a new coach's Clients and Messages): Cormorant h2 headline,
- *    sentence-case 44 pt buttons with radius.button (12), an unfilled code box with the theme
- *    hairline, a button label that names where it goes, and the copy haptic through
- *    HapticService so the Haptics switch is honoured.
+ *  - EmptyStateNoClients (a new coach's Clients and Messages, prototype 86 K-LAND): Roman's
+ *    neutral face, Cormorant h2 "No clients yet.", one forest 44 pt "Share my link" with
+ *    radius.button (12), a quiet Copy that shows the code, a button label that names where it
+ *    goes, and the copy haptic through HapticService so the Haptics switch is honoured.
  */
 import React from 'react';
-import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
+import { Share, StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 
 let mockSemantic = jest.requireActual('../../../theme/tokens').lightTokens;
@@ -141,24 +141,35 @@ describe('EmptyStateNoClients', () => {
     expect(queryByText(/Settings/)).toBeNull();
     expect(button.props.accessibilityLabel).toBe('Open invite codes');
     expectCalmCta(button, getByText('Open invite codes'));
-    expect(flat(getByText('Your first client is one link away.')).fontSize).toBe(typography.h2.fontSize);
+    expect(flat(getByText('No clients yet.')).fontSize).toBe(typography.h2.fontSize);
     await fireEvent.press(button);
     expect(onInvite).toHaveBeenCalledTimes(1);
   });
 
-  it('with a code: h2 headline, unfilled code box with the theme hairline, calm Share and 44 pt Copy', async () => {
+  it('with a code (86 K-LAND): Roman neutral, h2 "No clients yet.", one forest Share my link, 44 pt Copy with the code', async () => {
     mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
     const { findByTestId, getByTestId, getByText, queryByText } = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
-    const box = flat(await findByTestId('invite-code-block'));
-    expect(box.backgroundColor).toBeUndefined();
-    expect(box.borderColor).toBe(lightTokens.border);
-    expect(box.borderRadius).toBe(radius.input);
-    const headline = flat(getByText('Your first client is one link away.'));
+    const share = await findByTestId('share-code-btn');
+    expect(getByTestId('empty-no-clients-roman')).toBeTruthy();
+    const headline = flat(getByText('No clients yet.'));
     expect(headline.fontFamily).toBe(typography.h2.fontFamily);
     expect(headline.fontSize).toBe(typography.h2.fontSize);
-    expect(queryByText('SHARE YOUR CODE')).toBeNull();
-    expectCalmCta(getByTestId('share-code-btn'), getByText('Share your code'));
+    expect(getByText('Share your link and your first client lands here.')).toBeTruthy();
+    expectCalmCta(share, getByText('Share my link'));
+    expect(flat(share).backgroundColor).toBe(lightTokens.accent);
+    expect(queryByText('Share your code')).toBeNull();
+    expect(getByText('Copy code GP-TEST')).toBeTruthy();
     expect(flat(getByTestId('copy-code-btn')).minHeight).toBeGreaterThanOrEqual(44);
+    expect(flat(getByTestId('copy-code-btn')).backgroundColor).toBeUndefined();
+  });
+
+  it('says plainly when the share sheet does not open', async () => {
+    mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
+    const share = jest.spyOn(Share, 'share').mockRejectedValueOnce(new Error('no sheet'));
+    const { findByTestId, findByText } = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
+    await fireEvent.press(await findByTestId('share-code-btn'));
+    expect(await findByText('The share sheet did not open. Copy the code instead.')).toBeTruthy();
+    share.mockRestore();
   });
 
   it('Copy copies the code and taps through HapticService (honours the Haptics switch)', async () => {

@@ -50,7 +50,7 @@ jest.mock("react-native-safe-area-context", () => {
   };
 });
 
-import CoachWizardNavigator from "../CoachWizardNavigator";
+import { CoachSetupWizard as CoachWizardNavigator } from "../CoachWizardNavigator";
 import SetupNotice from "../../components/coach/setup/SetupNotice";
 import { COACH_SUPPORT_EMAIL, describeError } from "../../lib/coachSetup/errors";
 import { SUPPORT_EMAIL } from "../../constants/support";

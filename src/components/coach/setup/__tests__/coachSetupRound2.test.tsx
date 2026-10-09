@@ -82,7 +82,7 @@ import { loadSetupStatus } from "../../../../lib/coachSetup/setupStatus";
 import FirstPackageForm from "../FirstPackageForm";
 import CoachSetupChecklist, { buildChecklist } from "../CoachSetupChecklist";
 import CoachHomeCards from "../../../../screens/coach/command-center/CoachHomeCards";
-import CoachWizardNavigator from "../../../../navigation/CoachWizardNavigator";
+import { CoachSetupWizard as CoachWizardNavigator } from "../../../../navigation/CoachWizardNavigator";
 import {
   advanceWizardTo,
   coachSetupApi,
