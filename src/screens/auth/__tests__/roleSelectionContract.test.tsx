@@ -93,6 +93,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RoleSelectionScreen from '../RoleSelectionScreen';
 import { __resetSignupPolicyCacheForTests, loadSignupPolicy } from '../../../lib/signupPolicy';
+import { radius } from '../../../theme/tokens';
 
 function route(params?: { inviteAttachError?: string; inviteCode?: string }) {
   return { key: 'k', name: 'RoleSelection' as const, params };
@@ -294,3 +295,9 @@ describe('R3: server-confirmed attach survives a local persistence failure', () 
   });
 });
 
+describe('B-SMALLFIX-135: rounded forest action', () => {
+  it('Continue uses radius.button, not the old 4 pt literal', async () => {
+    const utils = await render(<RoleSelectionScreen navigation={{} as never} route={route()} />);
+    expect(await utils.findByTestId('role-continue')).toHaveStyle({ borderRadius: radius.button });
+  });
+});

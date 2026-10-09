@@ -37,7 +37,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { isValidInviteToken } from '../../utils/inviteToken';
 import { writePendingInviteCode } from '../../lib/pendingInviteCode';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 
 type FailureReason = 'expired' | 'already_accepted' | 'invalid' | 'network';
 
@@ -317,7 +317,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.primary,
       paddingVertical: 16,
       paddingHorizontal: 32,
-      borderRadius: 4,
+      borderRadius: radius.button,
       minHeight: 52,
       width: '100%',
       alignItems: 'center',

@@ -92,11 +92,11 @@ describe('Day1WinScreen package prompt is fail closed', () => {
     expect(r.onComplete).not.toHaveBeenCalled();
   });
 
-  it('hidden iOS build: no package sheet, only the card-visibility entitlement lookup', async () => {
+  it('hidden iOS build: no package sheet and no entitlement lookup (the cards no longer read it)', async () => {
     mockHidden = true;
     const r = await skipAndSettle(async () => ({ ok: true, data: { active: false, entitlement_active: false } }));
     await waitFor(() => expect(r.onComplete).toHaveBeenCalledTimes(1));
     expect(r.queryByTestId('package-sheet')).toBeNull();
-    expect(mockGetEntitlement).toHaveBeenCalledTimes(1);
+    expect(mockGetEntitlement).not.toHaveBeenCalled();
   });
 });

@@ -20,7 +20,20 @@ import { featureFlags } from '../../config/featureFlags';
 import { emitTutorialSignal } from '../../tutorial/tutorialEvents';
 import { useTutorialStore } from '../../tutorial/tutorialStore';
 import type { OnboardingProgram } from '../../tutorial/types';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import TutorialTarget from './TutorialTarget';
+
+/**
+ * The closing line under "Why this plan". A coached client's coach can change
+ * the plan. A coachless client has no coach and no way to edit the assigned
+ * plan (WorkoutAssignmentDetail only starts it), so their line names what they
+ * really can change: the session itself (ActiveWorkout: Swap, Add set, the
+ * weight field). Coachless copy never promises a coach.
+ */
+export const PLAN_NOTE_COACHED =
+  'Start each session light and learn the moves first. Your coach can adjust the plan at any time.';
+export const PLAN_NOTE_COACHLESS =
+  'Start each session light and learn the moves first. In a workout you can swap an exercise, add a set or change the weight.';
 
 export function planMeta(p: OnboardingProgram): string {
   const parts: string[] = [];
@@ -49,10 +62,13 @@ export function PlanExplanationCardView({
   program,
   coachName,
   next,
+  coachless = false,
 }: {
   program: OnboardingProgram;
   coachName: string | null;
   next?: PlanNextDay | null;
+  /** No coach on the account (`useCoachlessClient`): no coach claims. */
+  coachless?: boolean;
 }): React.ReactElement {
   const { semanticColors: sc } = useTheme();
   const [open, setOpen] = useState(false);
@@ -79,7 +95,13 @@ export function PlanExplanationCardView({
         <Pressable
           onPress={next.onPress}
           accessibilityRole="button"
-          accessibilityLabel={next.title ? `Next: ${next.title}${next.when ? `, ${next.when}` : ''}` : 'Your coach workouts'}
+          accessibilityLabel={
+            next.title
+              ? `Next: ${next.title}${next.when ? `, ${next.when}` : ''}`
+              : coachless
+                ? 'Your workouts'
+                : 'Your coach workouts'
+          }
           testID="plan-next-day"
           style={[styles.disclosure, { borderTopColor: sc.border }]}
         >
@@ -114,8 +136,8 @@ export function PlanExplanationCardView({
               It was chosen from your experience, the days you can train and where you train.
             </Text>
           )}
-          <Text style={[styles.note, { color: sc.textMuted }]}>
-            Start each session light and learn the moves first. Your coach can adjust the plan at any time.
+          <Text style={[styles.note, { color: sc.textMuted }]} testID="plan-explanation-note">
+            {coachless ? PLAN_NOTE_COACHLESS : PLAN_NOTE_COACHED}
           </Text>
         </View>
       ) : null}
@@ -136,6 +158,7 @@ export function firstPendingAssignment(
 export default function PlanExplanationCard(): React.ReactElement | null {
   const program = useTutorialStore((s) => s.payload?.program ?? null);
   const coachName = useTutorialStore((s) => s.payload?.coach?.display_name ?? null);
+  const coachless = useCoachlessClient();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const assignments = useMyWorkoutAssignments();
   if (!featureFlags.clientTutorial || !program?.name) return null;
@@ -154,7 +177,7 @@ export default function PlanExplanationCard(): React.ReactElement | null {
       : { title: null, when: null, onPress: () => open('ClientWorkoutViewer') };
   return (
     <TutorialTarget id="plan-card">
-      <PlanExplanationCardView program={program} coachName={coachName} next={next} />
+      <PlanExplanationCardView program={program} coachName={coachName} next={next} coachless={coachless} />
     </TutorialTarget>
   );
 }
