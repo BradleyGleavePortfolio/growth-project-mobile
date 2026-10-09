@@ -133,9 +133,16 @@ jest.mock('../components/useReduceMotion', () => ({
 
 const mockNavigate = jest.fn();
 const mockSetParams = jest.fn();
+const mockGoBack = jest.fn();
+let mockCanGoBack = false;
 let mockRouteParams: { bucket?: 'fitness' | 'recovery' } = {};
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, setParams: mockSetParams }),
+  useNavigation: () => ({
+    navigate: mockNavigate,
+    setParams: mockSetParams,
+    goBack: mockGoBack,
+    canGoBack: () => mockCanGoBack,
+  }),
   useRoute: () => ({ params: mockRouteParams }),
 }));
 
@@ -158,6 +165,8 @@ beforeEach(() => {
   mockInvalidateWearables.mockReset();
   mockNavigate.mockReset();
   mockSetParams.mockReset();
+  mockGoBack.mockReset();
+  mockCanGoBack = false;
   mockRouteParams = {};
   mockUseWearableConnections.mockReturnValue({
     data: [
@@ -467,5 +476,51 @@ describe('WearablesShell', () => {
     await render(<WearablesShell />);
     await waitFor(() => expect(warn).toHaveBeenCalled());
     expect(warn).toHaveBeenCalledWith('[wearables] on-device refresh failed', { error: 'other' });
+  });
+});
+
+// B-HEALTHBACK-135 (B29): the More stack hides the native header and iOS has
+// no hardware back, so the pushed shell draws the coach screens' Back (m#638).
+describe('WearablesShell Back', () => {
+  /** The first announced node (a label or a text) in render order. */
+  const firstAnnounced = (n: unknown): string | undefined => {
+    if (n == null || typeof n !== 'object') return undefined;
+    if (Array.isArray(n)) {
+      for (const c of n) {
+        const hit = firstAnnounced(c);
+        if (hit) return hit;
+      }
+      return undefined;
+    }
+    const node = n as { props?: { accessibilityLabel?: unknown }; children?: unknown[] | null };
+    if (typeof node.props?.accessibilityLabel === 'string') return node.props.accessibilityLabel;
+    const text = node.children?.find((c) => typeof c === 'string');
+    return typeof text === 'string' ? text : firstAnnounced(node.children ?? null);
+  };
+
+  it('shows a 44 pt Back first under the Screen top and goes back once', async () => {
+    mockCanGoBack = true;
+    const r = await render(<WearablesShell />);
+    const back = screen.getByTestId('health-back');
+    expect(back.props.accessibilityRole).toBe('button');
+    expect(back.props.accessibilityLabel).toBe('Back');
+    const s = StyleSheet.flatten(back.props.style) as { width?: number; height?: number };
+    expect(s.width).toBe(44);
+    expect(s.height).toBe(44);
+    expect(firstAnnounced(r.toJSON())).toBe('Back');
+    await fireEvent.press(back);
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    // Every route stays: the freshness chip still opens Connections.
+    await fireEvent.press(screen.getByText('All sources current'));
+    expect(mockNavigate).toHaveBeenCalledWith('Connections');
+  });
+
+  it('has no Back when there is nothing to go back to', async () => {
+    mockCanGoBack = false;
+    await render(<WearablesShell />);
+    expect(screen.queryByTestId('health-back')).toBeNull();
+    expect(screen.queryByLabelText('Back')).toBeNull();
+    expect(screen.getByRole('header', { name: 'Health and sleep' })).toBeTruthy();
   });
 });

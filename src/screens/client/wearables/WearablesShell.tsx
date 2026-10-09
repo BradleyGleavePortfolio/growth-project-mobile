@@ -20,7 +20,8 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   useNavigation,
   useRoute,
@@ -28,7 +29,7 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import { spacing, typography } from '../../../theme/tokens';
+import { layout, spacing, typography } from '../../../theme/tokens';
 import { useTheme } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
 import { Headline, Overline, Screen, quietActions } from '../../../ui';
@@ -219,6 +220,22 @@ export default function WearablesShell() {
     navigation.navigate('Connections');
   }, [navigation]);
 
+  // B-HEALTHBACK-135 (B29): the More stack hides the native header, so the
+  // pushed shell draws its own Back (iOS has no hardware back). Same arrow,
+  // size and place as the coach detail screens (m#638); 44 pt target. With
+  // nothing below it there is no dead Back.
+  const back = navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}
+      testID="health-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={sc.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   /**
    * S-WEAR-3: the notice button does what its message says: Try again
    * re-runs the refresh, Log in again ends the expired session, Open Health
@@ -337,6 +354,7 @@ export default function WearablesShell() {
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.column} testID="health-shell">
       <View style={styles.titleBlock}>
+        {back}
         <Overline>Health data</Overline>
         <Headline level="h1">Health and sleep</Headline>
       </View>
@@ -400,6 +418,12 @@ const styles = StyleSheet.create({
   titleBlock: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
+  },
+  back: {
+    width: layout.touchMin,
+    height: layout.touchMin,
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
   header: {
     flexDirection: 'row',

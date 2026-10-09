@@ -22,6 +22,7 @@ import {
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 
 import { workoutApi } from '../../services/api';
 import {
@@ -351,6 +352,9 @@ export default function WorkoutScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
   const currentUser = useCurrentUser();
+  // B22/B29: coach guidelines are package-only on the server, so a client
+  // with no coach gets no button that only opens a coach gate.
+  const coachless = useCoachlessClient();
   const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
   const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
@@ -687,15 +691,18 @@ export default function WorkoutScreen() {
             >
               <Ionicons name="library-outline" size={22} color={sc.textMuted} />
             </HapticPressable>
-            <HapticPressable
-              intent="light"
-              onPress={() => navigation.navigate('CoachGuidelines')}
-              hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
-              accessibilityRole="button"
-              accessibilityLabel="Coach guidelines"
-            >
-              <Ionicons name="clipboard-outline" size={22} color={sc.textMuted} />
-            </HapticPressable>
+            {coachless ? null : (
+              <HapticPressable
+                intent="light"
+                onPress={() => navigation.navigate('CoachGuidelines')}
+                hitSlop={{ top: 11, bottom: 11, left: 11, right: 11 }}
+                accessibilityRole="button"
+                accessibilityLabel="Coach guidelines"
+                testID="workout-coach-guidelines"
+              >
+                <Ionicons name="clipboard-outline" size={22} color={sc.textMuted} />
+              </HapticPressable>
+            )}
           </View>
         </View>
 

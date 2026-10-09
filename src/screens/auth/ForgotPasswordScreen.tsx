@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi } from '../../services/api';
 import { useTheme } from '../../theme/ThemeProvider';
-import { lightTokens, type SemanticTokens } from '../../theme/tokens';
+import { lightTokens, radius, type SemanticTokens } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
@@ -213,7 +213,7 @@ const makeStyles = (colors: SemanticTokens) =>
   resetButton: {
     backgroundColor: colors.accent,
     paddingVertical: 16,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.button,
     alignItems: 'center',
   },
   resetButtonText: {
