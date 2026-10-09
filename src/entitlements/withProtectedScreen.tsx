@@ -15,11 +15,14 @@
  */
 import React from 'react';
 import { ProtectedScreen } from './ProtectedScreen';
+import { DunningOwnScreen } from './dunning/DunningOwnScreen';
 
 export interface ProtectedScreenOptions {
   /**
    * B22/B24: the screen only calls server routes marked
    * @OpenToCoachlessClient(), so a client with no coach is never gated.
+   * These are also the client's own logging, which stays open under the
+   * payment lockout (DunningOwnScreen, owner ruling 2026-10-08 23:5x).
    */
   openToCoachless?: boolean;
 }
@@ -28,12 +31,18 @@ export function withProtectedScreen<P extends object>(
   Component: React.ComponentType<P>,
   options: ProtectedScreenOptions = {},
 ): React.ComponentType<P> {
+  const displayName = Component.displayName || Component.name || 'Component';
   const Wrapped: React.FC<P> = (props) => (
     <ProtectedScreen openToCoachless={options.openToCoachless}>
-      <Component {...props} />
+      {options.openToCoachless ? (
+        <DunningOwnScreen surface={displayName}>
+          <Component {...props} />
+        </DunningOwnScreen>
+      ) : (
+        <Component {...props} />
+      )}
     </ProtectedScreen>
   );
-  const displayName = Component.displayName || Component.name || 'Component';
   Wrapped.displayName = `withProtectedScreen(${displayName})`;
   return Wrapped;
 }

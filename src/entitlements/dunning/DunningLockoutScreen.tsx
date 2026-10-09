@@ -36,6 +36,11 @@ export interface DunningLockoutScreenProps {
   onSignOut: () => void;
   /** Request id of the 403 that locked the app, for the support email. */
   supportReference: string | null;
+  /** Set over a screen that stays open while locked: Back returns there. */
+  onBack?: () => void;
+  /** Own logging stays open (owner ruling 2026-10-08 23:5x); the lockout covers the tab bar. */
+  onOpenFood?: () => void;
+  onOpenTrain?: () => void;
 }
 
 /**
@@ -91,6 +96,11 @@ export function lockoutSummary(status: ClientDunningStatus | null): string {
   const what = amount ? `Your payment of ${amount} to ${coach}` : `Your payment to ${coach}`;
   const when = since ? ` has not gone through since ${since}` : ' has not gone through for 10 days';
   return `${what}${when}, so your plan is paused. ${safe}`;
+}
+
+/** The lockout's headline; the open logging screens' notice reuses it. */
+export function lockoutTitle(status: ClientDunningStatus | null | undefined): string {
+  return isDisputeCycle(status) ? 'Your access has ended' : 'Your plan is paused';
 }
 
 /**
@@ -155,6 +165,9 @@ export function DunningLockoutScreen({
   onOpenDeleteAccount,
   onSignOut,
   supportReference,
+  onBack,
+  onOpenFood,
+  onOpenTrain,
 }: DunningLockoutScreenProps) {
   const { semanticColors } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
@@ -227,9 +240,14 @@ export function DunningLockoutScreen({
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {onBack ? (
+          <TouchableOpacity style={styles.back} onPress={onBack} accessibilityRole="button" testID="dunning-lockout-back">
+            <Text style={styles.rowText}>Back</Text>
+          </TouchableOpacity>
+        ) : null}
         <Text style={styles.eyebrow}>Payment</Text>
         <Text style={styles.title} accessibilityRole="header">
-          {dispute ? 'Your access has ended' : 'Your plan is paused'}
+          {lockoutTitle(status)}
         </Text>
         <Text style={styles.body} testID="dunning-lockout-summary">
           {lockoutSummary(status)}
@@ -289,6 +307,8 @@ export function DunningLockoutScreen({
         ) : null}
 
         <Text style={styles.sectionLabel}>{dispute ? 'Still available' : 'Still available while your plan is paused'}</Text>
+        {onOpenFood ? <Row label="Log food" onPress={onOpenFood} styles={styles} testID="dunning-lockout-food" /> : null}
+        {onOpenTrain ? <Row label="Log a workout" onPress={onOpenTrain} styles={styles} testID="dunning-lockout-train" /> : null}
         <Row label="Download my data" onPress={onOpenDataExport} styles={styles} testID="dunning-lockout-data-export" />
         <Row label="Delete my account" onPress={onOpenDeleteAccount} styles={styles} testID="dunning-lockout-delete-account" />
         <Row label="Email support" onPress={handleContactSupport} styles={styles} testID="dunning-lockout-support" />
@@ -354,6 +374,7 @@ const makeStyles = (c: SemanticTokens) =>
     },
     secondaryText: { color: c.textPrimary, fontSize: 15, fontWeight: '500' },
     sectionLabel: { fontSize: 13, color: c.textMuted, marginTop: 32, marginBottom: 4 },
+    back: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start', marginBottom: 8 },
     row: { paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border },
     rowText: { fontSize: 15, color: c.textPrimary },
     footnote: { fontSize: 12, color: c.textMuted, marginTop: 24 },
