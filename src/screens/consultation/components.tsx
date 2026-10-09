@@ -1,8 +1,10 @@
 /**
  * Consultation building blocks: frame, progress, rows, chips, wheels,
- * checkbox, buttons and Roman's line. Tokens only (theme/tokens), weights
- * 400/500, radius 4 or less, and every control carries
- * an accessibility role, label and state.
+ * checkbox and Roman's line. The button, quiet link, top bar and headline
+ * are the shared src/ui primitives (DS-PRIMITIVES-133). Tokens only
+ * (theme/tokens), weights 400/500, corners from the radius tokens (owner
+ * 17:07: rounded), and every control carries an accessibility role, label
+ * and state.
  */
 import React, { useContext, useEffect, useMemo, useRef } from 'react';
 import {
@@ -21,7 +23,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaInsetsContext } from 'react-native-safe-area-context';
 import { CormorantGaramond_400Regular_Italic, useFonts } from '@expo-google-fonts/cormorant-garamond';
-import { lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { layout, lightTokens, radius, spacing, typography } from '../../theme/tokens';
+import { footerBottomPadding, Headline, PrimaryButton, ScreenTopBar, TextLink } from '../../ui';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import RomanAvatar from '../../components/roman/RomanAvatar';
@@ -129,65 +132,9 @@ export function RomanLine({ text, size = 28 }: { text: string; size?: number }) 
 }
 
 // ─── Buttons ─────────────────────────────────────────────────────────────────
-
-export function PrimaryButton({
-  label,
-  onPress,
-  disabled,
-  testID,
-  hint,
-}: {
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-  testID?: string;
-  hint?: string;
-}) {
-  const { s } = useConsultationStyles();
-  return (
-    <Pressable
-      onPress={disabled ? undefined : onPress}
-      disabled={disabled}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityHint={hint}
-      accessibilityState={{ disabled: !!disabled }}
-      testID={testID}
-      style={({ pressed }) => [s.cta, disabled && s.ctaDisabled, pressed && !disabled && s.pressed]}
-    >
-      <Text style={[s.ctaText, disabled && s.ctaTextDisabled]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-export function TextLink({
-  label,
-  onPress,
-  testID,
-  accent,
-  role = 'button',
-}: {
-  label: string;
-  onPress: () => void;
-  testID?: string;
-  accent?: boolean;
-  /** "link" for a control that leaves the app (opens a web page). */
-  role?: 'button' | 'link';
-}) {
-  const { s } = useConsultationStyles();
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole={role}
-      accessibilityLabel={label}
-      testID={testID}
-      hitSlop={8}
-      style={s.link}
-    >
-      <Text style={[s.linkText, accent && s.linkAccent]}>{label}</Text>
-    </Pressable>
-  );
-}
+// The one filled forest button and the quiet text link are the shared
+// primitives; re-exported so the consultation screens keep one import.
+export { PrimaryButton, TextLink };
 
 // ─── Frame ───────────────────────────────────────────────────────────────────
 
@@ -259,44 +206,37 @@ export function useConsultInsets() {
   return useContext(SafeAreaInsetsContext) ?? ZERO_INSETS;
 }
 
+/**
+ * The consultation frame: the shared ScreenTopBar (Back and the underlined
+ * "Finish later"), the chapter progress, a scroll body and the pinned footer,
+ * with the shared Screen's insets and footer spacing. It keeps its own scroll
+ * body because src/ui Screen cannot yet carry the analytics marker on the
+ * scroll view or `automaticallyAdjustKeyboardInsets` (Opus C-6).
+ */
 export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, footer, testID }: FrameProps) {
-  const { s, palette } = useConsultationStyles();
+  const { s } = useConsultationStyles();
   const insets = useConsultInsets();
   return (
     <View
       ph-no-capture
-      style={[s.root, { paddingTop: insets.top, paddingLeft: insets.left, paddingRight: insets.right }]}
+      style={[s.root, { paddingTop: insets.top + layout.statusBarGap, paddingLeft: insets.left, paddingRight: insets.right }]}
       testID={testID}
     >
-      <View style={s.topbar} testID="consult-topbar">
-        {onBack ? (
-          <Pressable
-            onPress={onBack}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            hitSlop={10}
-            testID="consult-back"
-            style={s.iconBtn}
-          >
-            <Ionicons name="chevron-back" size={22} color={palette.ink} />
-          </Pressable>
-        ) : (
-          <View style={s.iconBtn} />
-        )}
-        {onFinishLater ? (
-          <Pressable
-            onPress={onFinishLater}
-            accessibilityRole="button"
-            accessibilityLabel={pauseLabel ? 'Pause' : 'Finish later'}
-            accessibilityHint="Saves your answers so you can continue later"
-            hitSlop={10}
-            testID="consult-finish-later"
-            style={s.finishButton}
-          >
-            <Text style={s.finishText}>{pauseLabel ? 'Pause' : 'Finish later'}</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      <ScreenTopBar
+        onBack={onBack ?? undefined}
+        testID="consult"
+        trailing={
+          onFinishLater ? (
+            <TextLink
+              label={pauseLabel ? 'Pause' : 'Finish later'}
+              size="small"
+              onPress={onFinishLater}
+              accessibilityHint="Saves your answers so you can continue later"
+              testID="consult-finish-later"
+            />
+          ) : null
+        }
+      />
       {progress ? <ProgressBar progress={progress} /> : null}
       {/* Opus C-6: the notes inputs scroll above the keyboard on iOS. */}
       <ScrollView
@@ -310,11 +250,11 @@ export function Frame({ progress, onBack, onFinishLater, pauseLabel, children, f
         {children}
       </ScrollView>
       {footer ? (
-        <View ph-no-capture style={[s.footer, { paddingBottom: spacing.xl + insets.bottom }]} testID="consult-footer">
+        <View ph-no-capture style={[s.footer, { paddingBottom: footerBottomPadding(insets.bottom) }]} testID="consult-footer">
           {footer}
         </View>
       ) : (
-        <View style={{ height: 34 + insets.bottom }} testID="consult-footer" />
+        <View style={{ height: footerBottomPadding(insets.bottom) }} testID="consult-footer" />
       )}
     </View>
   );
@@ -346,9 +286,9 @@ export function QuestionHeader({
       </View>
       {sub ? <Text style={s.sub}>{sub}</Text> : null}
       {roman ? <RomanLine text={roman} /> : null}
-      <Text style={[long ? s.h2 : s.h1, s.question]} accessibilityRole="header">
+      <Headline level={long ? 'h2' : 'h1'} style={s.question}>
         {question}
-      </Text>
+      </Headline>
       {why ? <Text style={s.why}>{why}</Text> : null}
     </View>
   );
@@ -606,23 +546,11 @@ export function Wheel<T extends string | number>({
 
 const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet.create({
   root: { flex: 1, backgroundColor: palette.bg },
-  topbar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    minHeight: 48,
-  },
-  iconBtn: { width: 44, height: 44, justifyContent: 'center' },
-  finishText: { ...typography.bodySmall, color: palette.muted },
-  finishButton: { minHeight: 44, justifyContent: 'center' },
-  progress: { flexDirection: 'row', gap: 4, paddingHorizontal: spacing.xl, marginTop: spacing.xs },
+  progress: { flexDirection: 'row', gap: 4, paddingHorizontal: layout.gutter, marginTop: spacing.xs },
   seg: { flex: 1, height: 2, backgroundColor: palette.border, overflow: 'hidden' },
   segFill: { height: 2, backgroundColor: palette.accent },
-  scroll: { paddingHorizontal: spacing.xl, paddingTop: spacing.xl, paddingBottom: spacing.xl },
-  footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, paddingTop: spacing.md, gap: spacing.md },
-  footerSpacer: { height: 34 },
+  scroll: { paddingHorizontal: layout.gutter, paddingTop: spacing.xl, paddingBottom: spacing.xl },
+  footer: { paddingHorizontal: layout.gutter, paddingTop: layout.footerTopGap, gap: layout.footerItemGap },
   eyerow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eyebrow: { ...typography.eyebrow, color: palette.muted },
   timeLeft: { ...typography.bodySmall, color: palette.muted },
@@ -669,14 +597,14 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
   radio: {
     width: 20,
     height: 20,
-    borderRadius: radius.pill,
+    borderRadius: radius.chip,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.stone,
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioSel: { borderColor: palette.accent },
-  radioDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: palette.accent },
+  radioDot: { width: 10, height: 10, borderRadius: radius.chip, backgroundColor: palette.accent },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   chip: {
     flexDirection: 'row',
@@ -685,7 +613,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     paddingHorizontal: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: palette.border,
-    borderRadius: radius.pill,
+    borderRadius: radius.chip,
     backgroundColor: palette.surface,
   },
   // S1 / N3: large 56 pt chips, two to a row, serif numerals (prototype 17, 23).
@@ -714,7 +642,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.card,
     backgroundColor: palette.surface,
     marginTop: spacing.lg,
   },
@@ -723,7 +651,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     height: 22,
     borderWidth: 1,
     borderColor: palette.charcoal,
-    borderRadius: radius.md,
+    borderRadius: radius.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
@@ -737,7 +665,7 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     color: palette.ink,
     borderWidth: 1,
     borderColor: palette.border,
-    borderRadius: radius.md,
+    borderRadius: radius.input,
     backgroundColor: palette.field,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -777,18 +705,6 @@ const createStyles = (palette: ReturnType<typeof semanticPalette>) => StyleSheet
     color: palette.muted,
   },
   wheelTextOn: { fontSize: 28, lineHeight: 34, color: palette.ink },
-  cta: {
-    minHeight: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: palette.accent,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  ctaDisabled: { backgroundColor: palette.disabledBg },
-  ctaText: { ...typography.bodyMd, color: palette.onAccent },
-  ctaTextDisabled: { color: palette.onDisabled },
-  link: { alignSelf: 'center', paddingVertical: spacing.sm, minHeight: 44, justifyContent: 'center' },
   linkText: { ...typography.bodySmall, color: palette.muted },
   linkAccent: { color: palette.accentText },
   pressed: { opacity: 0.85 },
