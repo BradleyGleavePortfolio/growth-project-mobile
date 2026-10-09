@@ -27,12 +27,18 @@
  * R11-C2C (owner 2026-10-07 11:46): Roman's notes are deleted only with the account (backend #845);
  * there is no control that deletes them. Until #845 is live, production deletes them on memory off, so
  * the off copy says neither "deleted" nor "kept": it is true on both.
+ *
+ * Prototype 74 (ROMAN-ROOM-133, presentation only): the shared src/ui Screen (real insets, so Android
+ * clears the status bar), a "Privacy" overline over the serif title, Roman's portrait beside a one-line
+ * on/off state, and rounded radius tokens. The consent wording, choices and ledger writes are unchanged.
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { ActivityIndicator, Alert, StyleSheet, Switch, Text, View } from 'react-native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
+import RomanAvatar from '../../components/roman/RomanAvatar';
+import { Headline, Overline, Screen, ScreenTopBar } from '../../ui';
+import { layout, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   aiConsentApi as defaultApi,
@@ -114,6 +120,11 @@ export const ROMAN_AI_COPY = {
   memoryOffDone: 'Roman\u2019s memory is off. Roman no longer uses his notes about you.',
   memoryChanged:
     'The wording of this option changed before your choice was saved, so nothing changed. The current wording and choice are shown here.',
+  overline: 'Privacy',
+  // Prototype 74: the state beside Roman's portrait (on = a live server grant, as the heading).
+  stateOn:
+    'Roman is on. Turning Roman off stops sending your data to Anthropic. Your past conversations stay until you delete them.',
+  stateOff: 'Roman is off. Your past conversations stay until you delete them.',
 } as const;
 
 /** The server's v5 paragraph for a live client-ai-v5 (memory) grant, or null. */
@@ -403,6 +414,20 @@ export default function RomanAiConsentScreen({
     );
   }
 
+  /** Prototype 74: Roman's portrait beside the on/off state ("on" exactly when the heading says Allowed). */
+  function renderStateRow() {
+    if (view.phase !== 'ready') return null;
+    const on = headOf(view.status) === ROMAN_AI_COPY.allowedHead;
+    return (
+      <View style={styles.stateRow} testID="roman-ai-state-row">
+        <RomanAvatar crop="neutral" size={40} testID="roman-ai-portrait" />
+        <Text style={styles.stateLine} testID="roman-ai-state-line">
+          {on ? ROMAN_AI_COPY.stateOn : ROMAN_AI_COPY.stateOff}
+        </Text>
+      </View>
+    );
+  }
+
   /** The "Roman's memory" switch at the very bottom (never during a pending "no"). */
   function renderMemorySwitch() {
     const sw = view.phase === 'ready' && !pendingWithdraw ? memorySwitchOf(view.status) : null;
@@ -440,20 +465,10 @@ export default function RomanAiConsentScreen({
     // C-310-4: excluded from analytics autocapture, so the Allow / Withdraw
     // choice never reaches product analytics.
     <View style={styles.container} testID="roman-ai-screen" ph-no-capture>
-      <View style={styles.topBar}>
-        <HapticPressable
-          intent="light"
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </HapticPressable>
-        <Text style={styles.topTitle} accessibilityRole="header">{ROMAN_AI_COPY.title}</Text>
-        <View style={styles.backBtn} />
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
+      <Screen edges={['top']} header={<ScreenTopBar onBack={() => navigation.goBack()} />} contentStyle={styles.content}>
+        <Overline>{ROMAN_AI_COPY.overline}</Overline>
+        <Headline level="h1">{ROMAN_AI_COPY.title}</Headline>
+        {renderStateRow()}
         <Text style={styles.body} testID="roman-ai-paragraph">
           {(view.phase === 'ready' && isMemoryAllowed(view.status) && memoryParagraphOf(view.status)) ||
             (view.phase === 'ready' && allowCopyOf(view.status)?.paragraph.text) ||
@@ -470,7 +485,7 @@ export default function RomanAiConsentScreen({
         <Text style={styles.caption} testID="roman-ai-account-line">{ROMAN_AI_COPY.accountLine}</Text>
         {button(ROMAN_AI_COPY.deleteAccount, () => navigation.navigate('DeleteAccount'), 'roman-ai-delete-account', true)}
         {renderMemorySwitch()}
-      </ScrollView>
+      </Screen>
     </View>
   );
 }
@@ -478,21 +493,13 @@ export default function RomanAiConsentScreen({
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    topBar: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingTop: 56,
-      paddingBottom: 12,
-    },
-    backBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-    topTitle: { fontFamily: 'Inter_500Medium', fontSize: 17, color: colors.textPrimary },
-    content: { padding: 24, paddingBottom: 48, gap: 16 },
+    content: { gap: 16 },
+    stateRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    stateLine: { flex: 1, fontFamily: 'Inter_400Regular', fontSize: 15, lineHeight: 22, color: colors.textPrimary },
     card: {
-      borderWidth: 1,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 16,
       gap: 12,
       backgroundColor: colors.surface,
@@ -505,8 +512,8 @@ function makeStyles(colors: ThemeColors) {
     switchRow: { flexDirection: 'row', alignItems: 'center', gap: 16, minHeight: 44 },
     switchText: { flex: 1, gap: 4 },
     button: {
-      minHeight: 44,
-      borderRadius: 4,
+      minHeight: layout.touchMin,
+      borderRadius: radius.button,
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.primary,
@@ -514,8 +521,8 @@ function makeStyles(colors: ThemeColors) {
     },
     buttonText: { fontFamily: 'Inter_500Medium', fontSize: 15, color: colors.textOnPrimary },
     buttonQuiet: {
-      minHeight: 44,
-      borderRadius: 4,
+      minHeight: layout.touchMin,
+      borderRadius: radius.button,
       alignItems: 'center',
       justifyContent: 'center',
       borderWidth: 1,
