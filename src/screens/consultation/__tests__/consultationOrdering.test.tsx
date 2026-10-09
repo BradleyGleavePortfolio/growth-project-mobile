@@ -14,6 +14,8 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
+import { layout } from '../../../theme/tokens';
+import { footerBottomPadding } from '../../../ui';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
 import type { SaveConsultationRequest, SaveConsultationResponse } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
@@ -261,9 +263,9 @@ describe('B-04 safe-area insets', () => {
     const r = await render(<SafeAreaProvider initialMetrics={metrics}>{flow(makeApi())}</SafeAreaProvider>);
     await waitFor(() => r.getByTestId('consult-screen-G2'));
     const root = StyleSheet.flatten(r.getByTestId('consult-screen-G2').props.style);
-    expect(root.paddingTop).toBe(47);
+    expect(root.paddingTop).toBe(47 + layout.statusBarGap);
     const footer = StyleSheet.flatten(r.getByTestId('consult-footer').props.style);
-    expect(footer.paddingBottom).toBeGreaterThanOrEqual(34 + 16);
+    expect(footer.paddingBottom).toBe(footerBottomPadding(34));
     // Back sits below the inset, inside the padded frame, not under the status bar.
     expect(r.getByTestId('consult-back')).toBeTruthy();
   });
@@ -272,14 +274,14 @@ describe('B-04 safe-area insets', () => {
     await seedLocal(fullAnswers(), 'SUM');
     const r = await render(<SafeAreaProvider initialMetrics={metrics}>{flow(makeApi())}</SafeAreaProvider>);
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
-    expect(StyleSheet.flatten(r.getByTestId('consult-screen-SUM').props.style).paddingTop).toBe(47);
+    expect(StyleSheet.flatten(r.getByTestId('consult-screen-SUM').props.style).paddingTop).toBe(47 + layout.statusBarGap);
   });
 
   it('no provider means no inset (no double padding under a parent safe area)', async () => {
     await seedLocal(fullAnswers(), 'SUM');
     const plain = await renderFlow(makeApi());
     await waitFor(() => plain.getByTestId('consult-screen-SUM'));
-    expect(StyleSheet.flatten(plain.getByTestId('consult-screen-SUM').props.style).paddingTop).toBe(0);
+    expect(StyleSheet.flatten(plain.getByTestId('consult-screen-SUM').props.style).paddingTop).toBe(layout.statusBarGap);
   });
 });
 

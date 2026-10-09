@@ -987,7 +987,7 @@ describe("B-332-3 no invented money: invalid payloads fail with specific copy", 
     expect(code(() => toSummary(SUMMARY))).toBe("parsed");
   });
 
-  it("the invalid-payload copy is specific and carries the request reference", () => {
+  it("the invalid-payload copy is specific and carries a separate request reference", () => {
     let err: unknown;
     try {
       toSummary({ totals: {} }, undefined, { "x-request-id": "req_bad1" });
@@ -997,7 +997,8 @@ describe("B-332-3 no invented money: invalid payloads fail with specific copy", 
     const f = describeError(err, "load your Money numbers");
     expect(f.title).toBe("These money figures could not be checked");
     expect(f.body).toMatch(/not showing them/);
-    expect(f.body).toMatch(/req_bad1/);
+    expect(f.requestId).toBe("req_bad1");
+    expect(f.body).not.toMatch(/req_bad1/);
     expect(f.retryable).toBe(true);
     expect(`${f.title} ${f.body}`).not.toMatch(
       /\bwe\b|something went wrong|!/i,
