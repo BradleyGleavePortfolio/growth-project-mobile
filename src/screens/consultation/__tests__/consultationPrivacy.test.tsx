@@ -1008,7 +1008,7 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
     const r = await renderFlow(api, { onSignOut });
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
-    await waitFor(() => r.getByTestId('consult-problem-not_attached'));
+    await waitFor(() => r.getByTestId('consult-problem-unknown'));
     expect(r.getByTestId('consult-problem-action')).toBeTruthy();
     await fireEvent.press(r.getByTestId('consult-support'));
     expect(SUPPORT_EMAIL).toBe('Bradleyapple1031@gmail.com');
