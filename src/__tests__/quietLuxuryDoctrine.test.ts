@@ -244,6 +244,43 @@ beforeEach(() => {
   mockAssignments = []; mockRoutines = []; mockSessions = []; mockWeights = [];
   mockConsent = [true, false]; mockOwnerAccess = false;
 });
+describe('Rounded corners (owner 17:07, decision 133-4) and the src/ui primitives', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { radius } = require('../theme/tokens');
+  const UI_PRIMITIVES = ['layout', 'buttons', 'rows', 'text', 'wheel'].flatMap((d) => walk(path.join(ROOT, 'ui', d)));
+
+  it('semantic radius tokens are soft, never near-square', () => {
+    expect(radius.button).toBe(12);
+    expect(radius.input).toBe(12);
+    expect(radius.card).toBe(16);
+    expect(radius.sheet).toBe(24);
+    expect(radius.chip).toBe(999);
+    expect(radius.control).toBeGreaterThanOrEqual(6);
+  });
+
+  it('the primitives take corners from the tokens, never a literal', () => {
+    expect(UI_PRIMITIVES.length).toBeGreaterThan(0);
+    for (const f of UI_PRIMITIVES) {
+      expect({ f, hit: /borderRadius:\s*\d/.test(stripComments(fs.readFileSync(f, 'utf8'))) }).toEqual({ f, hit: false });
+    }
+    const button = fs.readFileSync(path.join(ROOT, 'ui', 'buttons', 'PrimaryButton.tsx'), 'utf8');
+    expect(button).toMatch(/borderRadius: radius\.button/);
+  });
+
+  it('no primitive uses SafeAreaView from react-native', () => {
+    for (const f of UI_PRIMITIVES) {
+      const src = stripComments(fs.readFileSync(f, 'utf8'));
+      expect({ f, hit: /import\s*\{[^}]*\bSafeAreaView\b[^}]*\}\s*from\s*'react-native'/.test(src) }).toEqual({ f, hit: false });
+    }
+  });
+
+  it('the doctrine no longer asks for 4 pt corners', () => {
+    const doc = fs.readFileSync(path.resolve(ROOT, '..', 'docs', 'QUIET_LUXURY_DOCTRINE.md'), 'utf8');
+    expect(doc).not.toMatch(/radius\.lg = 4/);
+    expect(doc).toMatch(/radius\.button/);
+  });
+});
+
 describe('Truthful client copy and routes/actions parity', () => {
   it('puts Quick workout, routines and history before both collapsed charts on day one', async () => {
     const s = await render(React.createElement(WorkoutScreen));
