@@ -4,6 +4,7 @@ import {
   useBiometricGate,
   __resetForTests,
   BIOMETRIC_OPT_IN_KEY,
+  BIOMETRIC_CHECK_TIMEOUT_MS,
 } from '../useBiometricGate';
 
 // expo-local-authentication isn't shimmed by jest-expo for our setup, so we
@@ -81,5 +82,42 @@ describe('useBiometricGate', () => {
 
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     expect(mockAuthenticate).not.toHaveBeenCalled();
+  });
+
+  // START-HANG-134 (B35, B36).
+  it('opt-in read that never answers: unlocks after the time limit (never blocks)', async () => {
+    jest.useFakeTimers();
+    try {
+      const spy = jest
+        .spyOn(SecureStore, 'getItemAsync')
+        .mockImplementationOnce(() => new Promise<string | null>(() => undefined));
+      const { result } = await renderHook(() => useBiometricGate());
+      expect(result.current.status).toBe('checking');
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(BIOMETRIC_CHECK_TIMEOUT_MS);
+      });
+      expect(result.current.status).toBe('unlocked');
+      expect(mockAuthenticate).not.toHaveBeenCalled();
+      spy.mockRestore();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('not opted in: checking again never leaves the unlocked state (the app is not unmounted)', async () => {
+    await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'false');
+    const seen: string[] = [];
+    const { result } = await renderHook(() => {
+      const gate = useBiometricGate();
+      seen.push(gate.status);
+      return gate;
+    });
+    await waitFor(() => expect(result.current.status).toBe('unlocked'));
+    seen.length = 0;
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(seen).not.toContain('checking');
+    expect(result.current.status).toBe('unlocked');
   });
 });
