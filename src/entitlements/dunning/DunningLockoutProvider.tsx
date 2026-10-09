@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, StyleSheet, View, type AppStateStatus } from 'react-native';
+import { NavigationContainerRefContext } from '@react-navigation/native';
 import { queryClient } from '../../services/queryClient';
 import { captureError } from '../../services/sentry';
 import { dunningApi, type CancelPlanResponse, type ClientDunningStatus } from './dunningApi';
@@ -19,6 +20,39 @@ export const REACHABLE_WHILE_LOCKED: ReadonlySet<string> = new Set([
   'Messages',
   'UpdateCard',
 ]);
+
+/**
+ * Owner ruling 2026-10-08 23:5x: no client is ever locked out of basic
+ * functions. The screens ClientNavigator wraps OWN (@OpenToCoachlessClient
+ * routes, which pass the lockout, b#899) and the Train and Food tabs stay
+ * open and show the DunningBanner (DunningOwnScreen). AIGuide is OWN but is
+ * Roman on /ai, a locked paid surface. Home and the rest keep the lockout.
+ */
+export const OPEN_FOR_OWN_LOGGING: ReadonlySet<string> = new Set([
+  'WorkoutTab', 'Log', 'WorkoutMain', 'ActiveWorkout', 'WorkoutHistoryEdit', 'ClientWorkoutViewer',
+  'WorkoutAssignmentDetail', 'Plan', 'ClientDailyMealPlan', 'Fast', 'ClientMacros',
+]);
+
+function openWhileLocked(name: string | undefined): boolean {
+  return Boolean(name && (REACHABLE_WHILE_LOCKED.has(name) || OPEN_FOR_OWN_LOGGING.has(name)));
+}
+
+interface NavStateLike {
+  type?: string;
+  index?: number;
+  routes?: ReadonlyArray<{ name: string; state?: NavStateLike }>;
+}
+
+/** The focused screen is on a stack over an open one (New routine over Train): Back returns there. */
+export function backReachesOpenScreen(root: NavStateLike | undefined): boolean {
+  for (let state = root; state?.routes && typeof state.index === 'number'; ) {
+    const route = state.routes[state.index];
+    if (!route) return false;
+    if (!route.state) return state.type === 'stack' && state.index > 0 && openWhileLocked(state.routes[state.index - 1]?.name);
+    state = route.state;
+  }
+  return false;
+}
 
 export type EndPlanResult =
   | { ok: true; response: CancelPlanResponse }
@@ -92,6 +126,13 @@ export function DunningLockoutProvider({
   const [loadError, setLoadError] = useState<DunningErrorCopy | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [routeName, setRouteName] = useState<string | undefined>(getCurrentRouteName());
+  // RootNavigator's container, above this provider (absent in unit tests).
+  const navRoot = useContext(NavigationContainerRefContext);
+  const readBack = useCallback(
+    () => Boolean(navRoot?.isReady() && backReachesOpenScreen(navRoot.getRootState())),
+    [navRoot],
+  );
+  const [backToOpen, setBackToOpen] = useState(readBack);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const wasLockedRef = useRef(locked);
   // B-353-1 (Sol): every status read is owned by this provider's lifetime,
@@ -189,18 +230,35 @@ export function DunningLockoutProvider({
   }, [enabled, refresh]);
 
   useEffect(
-    () => subscribeToRouteChanges(() => setRouteName(getCurrentRouteName())),
-    [getCurrentRouteName, subscribeToRouteChanges],
+    () =>
+      subscribeToRouteChanges(() => {
+        setRouteName(getCurrentRouteName());
+        setBackToOpen(readBack());
+      }),
+    [getCurrentRouteName, subscribeToRouteChanges, readBack],
   );
 
-  const showLockout = enabled && locked && !(routeName && REACHABLE_WHILE_LOCKED.has(routeName));
+  const showLockout = enabled && locked && !openWhileLocked(routeName);
 
-  // Android back must not reveal the locked screen underneath.
+  const goBackToOpen = useCallback(() => {
+    if (navRoot?.isReady() && navRoot.canGoBack()) navRoot.goBack();
+  }, [navRoot]);
+  const openFood = useCallback(() => {
+    if (navRoot?.isReady()) navRoot.navigate('Log');
+  }, [navRoot]);
+  const openTrain = useCallback(() => {
+    if (navRoot?.isReady()) navRoot.navigate('WorkoutTab');
+  }, [navRoot]);
+
+  // Android back must not reveal a locked screen underneath; it only returns to an open one.
   useEffect(() => {
     if (!showLockout) return undefined;
-    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (backToOpen) goBackToOpen();
+      return true;
+    });
     return () => sub.remove();
-  }, [showLockout]);
+  }, [showLockout, backToOpen, goBackToOpen]);
 
   const updateCard = useCallback(
     (surface: string) => {
@@ -274,6 +332,9 @@ export function DunningLockoutProvider({
             onOpenDeleteAccount={onOpenDeleteAccount}
             onSignOut={onSignOut}
             supportReference={dunningLockoutStore.lastSignal()?.requestId ?? null}
+            onBack={backToOpen ? goBackToOpen : undefined}
+            onOpenFood={navRoot ? openFood : undefined}
+            onOpenTrain={navRoot ? openTrain : undefined}
           />
         </View>
       ) : null}

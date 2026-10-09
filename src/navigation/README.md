@@ -233,7 +233,7 @@ the client falls back to the local AsyncStorage flag (fail-open).
 
 ## Payment lockout (S-DUNNING)
 
-Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockoutProvider` (see `src/entitlements/dunning/README.md`). The provider uses the module-level `navigationRef` to read the focused route and to open `MoreTab > DataExport`, `MoreTab > DeleteAccount` and `Home > Messages` from the lockout screen.
+Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockoutProvider` (see `src/entitlements/dunning/README.md`). The provider uses the module-level `navigationRef` to read the focused route and to open `MoreTab > DataExport`, `MoreTab > DeleteAccount` and `Home > Messages` from the lockout screen. It also reads the container from `NavigationContainerRefContext` to open the Food and Train tabs from the lockout and to go back to an open screen; every screen wrapped OWN in `ClientNavigator.tsx` stays open while locked (owner ruling 2026-10-08 23:5x), so a new OWN screen joins `OPEN_FOR_OWN_LOGGING` or `dunningOwnLogging135.test.tsx` fails.
 
 ## Client tab labels (B26)
 

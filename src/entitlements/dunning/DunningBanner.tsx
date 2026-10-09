@@ -1,12 +1,12 @@
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { layout, typography, type SemanticTokens } from '../../theme/tokens';
 import { QuietOverline, QuietSection, quietActions } from '../../ui/sections/QuietSection';
 import { formatDunningAmount, formatDunningDate, type ClientDunningStatus } from './dunningApi';
 import { disputePauseFacts } from './dunningErrorCopy';
 import { useDunning } from './DunningLockoutProvider';
-import { isDisputeCycle, isRefundCycle } from './DunningLockoutScreen';
+import { isDisputeCycle, isRefundCycle, lockoutTitle } from './DunningLockoutScreen';
 
 /**
  * The lock date, only while it is still ahead and the lock is not waived
@@ -55,6 +55,11 @@ export function bannerCopy(status: ClientDunningStatus, now: number = Date.now()
   return { title: 'Your payment did not go through', body: `${charge}${when}. ${keep}` };
 }
 
+/** Day 10+ on an open logging screen: the lockout's own title, no new copy. */
+function lockedCopy(status: ClientDunningStatus): { title: string; body: null } {
+  return { title: isDisputeCycle(status) ? bannerCopy(status).title : lockoutTitle(status), body: null };
+}
+
 /**
  * Inline (in-screen, not floating) past-due notice for Days 0-9 of a failed
  * payment (S-DUNNING). Renders nothing unless the backend reports an active,
@@ -65,8 +70,12 @@ export function DunningBanner({
   presentation = 'card',
 }: {
   surface: string;
-  /** 'section' = Home's hairline look (DES-K2-128); other callers keep the card. */
-  presentation?: 'card' | 'section';
+  /**
+   * 'section' = Home's hairline look (DES-K2-128); 'locked' = the same look at
+   * the foot of an open logging screen, only while locked (DunningOwnScreen);
+   * other callers keep the card.
+   */
+  presentation?: 'card' | 'section' | 'locked';
 }) {
   const dunning = useDunning();
   const { semanticColors } = useTheme();
@@ -78,16 +87,18 @@ export function DunningBanner({
   }, [dunning, surface]);
 
   const status = dunning?.status;
-  if (!dunning || !status || !status.enabled || status.state !== 'past_due') return null;
-  const copy = bannerCopy(status);
+  const lockedHere = presentation === 'locked';
+  if (!dunning || !status || !status.enabled) return null;
+  if (lockedHere ? !dunning.locked : status.state !== 'past_due') return null;
+  const copy = lockedHere ? lockedCopy(status) : bannerCopy(status);
   const dispute = isDisputeCycle(status);
 
-  if (presentation === 'section') {
+  if (presentation === 'section' || lockedHere) {
     return (
-      <QuietSection testID="dunning-banner" accessibilityRole="alert">
+      <QuietSection testID="dunning-banner" accessibilityRole="alert" style={lockedHere ? styles.locked : undefined}>
         <QuietOverline>PAYMENT</QuietOverline>
         <Text style={[styles.sectionTitle, { color: semanticColors.textPrimary }]}>{copy.title}</Text>
-        <Text style={[styles.sectionBody, { color: semanticColors.textPrimary }]}>{copy.body}</Text>
+        {copy.body ? <Text style={[styles.sectionBody, { color: semanticColors.textPrimary }]}>{copy.body}</Text> : null}
         <View style={quietActions.row}>
           {dispute ? null : (
             <TouchableOpacity
@@ -167,4 +178,6 @@ const makeStyles = (c: SemanticTokens) =>
     secondaryText: { color: c.textPrimary, fontSize: 13, fontWeight: '500' },
     sectionTitle: { ...typography.bodyMd, marginBottom: 4 },
     sectionBody: { ...typography.bodySmall },
+    // Above the tab bar, which owns the bottom inset.
+    locked: { marginBottom: 0, paddingHorizontal: layout.gutter, paddingVertical: 12, backgroundColor: c.bgPrimary },
   });
