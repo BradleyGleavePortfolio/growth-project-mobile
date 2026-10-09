@@ -53,6 +53,8 @@ jest.mock('../theme/ThemeProvider', () => ({
       streak: '#aa0',
       primaryTint: '#000',
     },
+    // COACH-INSETS-B-134: the shared Screen reads the page colour.
+    semanticColors: jest.requireActual('../theme/tokens').lightTokens,
   }),
   ThemeColors: {},
 }));

@@ -493,7 +493,7 @@ const makeStyles = (colors: ThemeColors) =>
   avatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.chip,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     justifyContent: 'center',
@@ -526,7 +526,7 @@ const makeStyles = (colors: ThemeColors) =>
   statusDot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radius.chip,
   },
   avatarArchived: {
     borderStyle: 'dashed',

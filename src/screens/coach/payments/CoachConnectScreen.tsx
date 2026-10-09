@@ -10,7 +10,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -28,6 +27,8 @@ import { mediumTap, successTap } from '../../../utils/haptics';
 import { assertStripeUrl } from '../../../utils/stripeUrlValidator';
 import { track } from '../../../lib/analytics';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { Screen } from '../../../ui';
+import { layout, radius } from '../../../theme/tokens';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -65,21 +66,27 @@ export default function CoachConnectScreen({ navigation }: Props) {
     }
   }, []);
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.topTitle}>Payouts</Text>
-        <View style={styles.backBtn} />
-      </View>
-      <ScrollView contentContainerStyle={styles.content}>
+    <Screen
+      edges={['top']}
+      testID="coach-connect"
+      header={
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <Text style={styles.topTitle}>Payouts</Text>
+          <View style={styles.backBtn} />
+        </View>
+      }
+    >
         <GetPaidPanel key={panelVersion} onChange={setView} testID="payout-setup" />
         {view?.accountId ? (
           <View style={styles.section}>
@@ -102,8 +109,7 @@ export default function CoachConnectScreen({ navigation }: Props) {
           Stripe collects payment and bank details on its secure pages. Check the
           Stripe dashboard for your payout schedule and bank arrival estimates.
         </Text>
-      </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
@@ -154,27 +160,24 @@ const statusRowStyles = StyleSheet.create({
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'center',
     },
     topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
-    content: { paddingHorizontal: 24, paddingBottom: 40 },
     loadingWrap: { paddingVertical: 60, alignItems: 'center' },
     heroCard: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 20,
       marginBottom: 18,
     },
@@ -188,7 +191,7 @@ const makeStyles = (colors: ThemeColors) =>
     heroBody: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
     section: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 18,
       marginBottom: 18,
     },
@@ -207,7 +210,7 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       backgroundColor: colors.primary,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
       marginBottom: 12,
     },
     primaryBtnDisabled: { opacity: 0.6 },
@@ -228,7 +231,7 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 8,
       marginTop: 10,
       padding: 10,
-      borderRadius: 4,
+      borderRadius: radius.card,
       backgroundColor: colors.noticeWarningIconBg,
     },
     warningText: {
@@ -239,7 +242,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     errorCard: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 20,
       gap: 8,
       alignItems: 'center',
@@ -266,7 +269,7 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 12,
       paddingHorizontal: 18,
       paddingVertical: 10,
-      borderRadius: 4,
+      borderRadius: radius.button,
       borderWidth: 1,
       borderColor: colors.primary,
     },

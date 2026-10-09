@@ -15,6 +15,7 @@ import type { TutorialState } from '../types';
 const baseEnv = (over: Partial<MachineEnv> = {}): MachineEnv => ({
   hasProgram: true,
   hasMacros: true,
+  romanAvailable: true,
   coachLinked: true,
   currentPath: ['Home', 'HomeMain'],
   now: '2026-10-01T00:00:00.000Z',
@@ -41,30 +42,33 @@ function run(
 
 const id = (s: TutorialState) => currentStep(s)?.id;
 
-/** The full happy path, every gate met by its real action. */
+/** The full happy path (prototype 46-60), every gate met by its real action. */
 const HAPPY: Array<TutorialAction | { route: string[] }> = [
   { type: 'START' },
-  { type: 'ACK' }, // welcome
-  { route: ['WorkoutTab', 'WorkoutMain'] },
-  { type: 'SIGNAL', signal: 'plan_card_opened' },
-  { route: ['Home', 'HomeMain'] },
-  { type: 'SIGNAL', signal: 'macro_card_opened' },
-  { route: ['Log'] },
-  { type: 'SIGNAL', signal: 'meal_logged' },
-  { route: ['Home', 'Messages'] },
-  { type: 'SIGNAL', signal: 'message_sent' },
-  { type: 'ACK' }, // completion
+  { type: 'ACK' }, // 1 welcome
+  { route: ['WorkoutTab', 'WorkoutMain'] }, // 2 Train tab
+  { route: ['MoreTab', 'WorkoutAssignmentDetail'] }, // 2 first day from the plan card
+  { type: 'ACK' }, // 3 first exercise
+  { route: ['Log'] }, // 4 Food tab
+  { type: 'SIGNAL', signal: 'meal_logged' }, // 4 saved
+  { route: ['Home', 'HomeMain'] }, // 5 Home
+  { type: 'SIGNAL', signal: 'macro_card_opened' }, // 5 targets card
+  { route: ['Home', 'Messages'] }, // 6 coach thread
+  { type: 'SIGNAL', signal: 'message_sent' }, // 6 sent
+  { type: 'ACK' }, // 7 completion
 ];
 
 describe('tutorial steps', () => {
-  it('follow the owner order and end with the quiet completion', () => {
-    expect(TUTORIAL_STEPS.map((s) => s.id)).toEqual([
-      'welcome',
-      'plan',
-      'macros',
-      'first_meal',
-      'first_message',
-      'complete',
+  it('are the seven prototype beats, with the Roman beat as the coachless form of six', () => {
+    expect(TUTORIAL_STEPS.map((s) => [s.id, s.ordinal])).toEqual([
+      ['welcome', 1],
+      ['plan', 2],
+      ['first_exercise', 3],
+      ['first_meal', 4],
+      ['macros', 5],
+      ['first_message', 6],
+      ['roman', 6],
+      ['complete', 7],
     ]);
   });
 
@@ -74,7 +78,9 @@ describe('tutorial steps', () => {
     expect(meal.gates.some((g) => g.kind === 'signal' && g.signal === 'meal_logged')).toBe(true);
     expect(msg.gates.some((g) => g.kind === 'signal' && g.signal === 'message_sent')).toBe(true);
     expect([...meal.gates, ...msg.gates].some((g) => g.kind === 'ack')).toBe(false);
-    expect([...meal.gates, ...msg.gates].some((g) => g.kind === 'signal' && g.allowDefer)).toBe(false);
+    // The message beat is freely skippable on both gates (prototype Tutorial 4); the meal is not.
+    expect(meal.gates.some((g) => g.allowDefer)).toBe(false);
+    expect(msg.gates.every((g) => g.allowDefer)).toBe(true);
   });
 });
 
@@ -95,16 +101,19 @@ describe('tutorialReducer — gating', () => {
     expect(state.gateIndex).toBe(0);
   });
 
-  it('advances a route gate only on the matching focused route', () => {
+  it('the plan beat needs Train, then the real first day opened from the card', () => {
     let { state } = run([{ type: 'START' }, { type: 'ACK' }, { route: ['Log'] }]);
-    expect(id(state)).toBe('plan');
-    expect(state.gateIndex).toBe(0);
+    expect([id(state), state.gateIndex]).toEqual(['plan', 0]);
     ({ state } = run([{ route: ['WorkoutTab', 'WorkoutMain'] }], {}, state));
-    expect(state.gateIndex).toBe(1);
-    expect(currentGate(state)?.kind).toBe('signal');
+    expect([id(state), state.gateIndex]).toEqual(['plan', 1]);
+    ({ state } = run([{ type: 'SIGNAL', signal: 'plan_card_opened' }], {}, state));
+    expect([id(state), state.gateIndex]).toEqual(['plan', 1]);
+    ({ state } = run([{ route: ['MoreTab', 'WorkoutAssignmentDetail'] }], {}, state));
+    expect(id(state)).toBe('first_exercise');
+    expect(state.outcomes.plan).toBe('done');
   });
 
-  it('ignores unrelated signals on a signal gate', () => {
+  it('ignores unrelated signals on a gate', () => {
     const { state } = run([
       { type: 'START' },
       { type: 'ACK' },
@@ -117,76 +126,72 @@ describe('tutorialReducer — gating', () => {
   });
 
   it('auto-satisfies a route gate when the client already stands on it', () => {
-    // After the plan step the client is on Train; macros asks for Home.
-    // Starting the macros step while already on Home skips the "tap Home" gate.
-    const { state } = run(
-      [
-        { type: 'START' },
-        { type: 'ACK' },
-        { route: ['WorkoutTab', 'WorkoutMain'] },
-        { route: ['Home', 'HomeMain'] },
-      ],
-      {},
-    );
-    // Still on plan gate 1 (needs the card), route changes do not skip a signal.
-    expect(id(state)).toBe('plan');
-    const next = tutorialReducer(state, { type: 'SIGNAL', signal: 'plan_card_opened' }, baseEnv());
-    expect(id(next)).toBe('macros');
-    expect(next.gateIndex).toBe(1);
+    // The meal is saved while the client is back on Home: "tap Home" is skipped.
+    const { state } = run([
+      ...HAPPY.slice(0, 6),
+      { route: ['Home', 'HomeMain'] },
+      { type: 'SIGNAL', signal: 'meal_logged' },
+    ]);
+    expect([id(state), state.gateIndex]).toEqual(['macros', 1]);
   });
 
-  it('completes the happy path with every step done', () => {
+  it('completes the happy path with every beat done and the Roman beat not shown', () => {
     const { state } = run(HAPPY);
     expect(state.status).toBe('completed');
     expect(state.completedAt).toBe('2026-10-01T00:00:00.000Z');
-    for (const s of TUTORIAL_STEPS) expect(state.outcomes[s.id]).toBe('done');
-    expect(progressOf(state)).toEqual({ position: 5, total: 5 });
+    for (const s of TUTORIAL_STEPS) expect(state.outcomes[s.id]).toBe(s.id === 'roman' ? 'unavailable' : 'done');
+    expect(progressOf(state)).toEqual({ position: 7, total: 7 });
   });
 
-  it('cannot complete without logging a meal and sending a message', () => {
-    const withoutMeal = HAPPY.filter(
-      (a) => !('type' in a && a.type === 'SIGNAL' && a.signal === 'meal_logged'),
-    );
+  it('cannot complete without logging a meal', () => {
+    const withoutMeal = HAPPY.filter((a) => !('type' in a && a.type === 'SIGNAL' && a.signal === 'meal_logged'));
     const { state } = run(withoutMeal);
     expect(state.status).toBe('active');
     expect(id(state)).toBe('first_meal');
-
-    const withoutMsg = HAPPY.filter(
-      (a) => !('type' in a && a.type === 'SIGNAL' && a.signal === 'message_sent'),
-    );
-    const r2 = run(withoutMsg);
-    expect(r2.state.status).toBe('active');
-    expect(id(r2.state)).toBe('first_message');
   });
-});
 
-describe('tutorialReducer — no defer', () => {
-  it('refuses DEFER where it is not offered', () => {
-    const { state } = run([...HAPPY.slice(0, 7), { type: 'DEFER' }]);
+  it('Later on the message beat records a deferral and moves to the completion', () => {
+    for (const n of [9, 10]) {
+      const { state } = run([...HAPPY.slice(0, n), { type: 'DEFER' }]);
+      expect(state.outcomes.first_message).toBe('deferred');
+      expect(id(state)).toBe('complete');
+    }
+  });
+
+  it('refuses DEFER anywhere it is not offered', () => {
+    const { state } = run([...HAPPY.slice(0, 6), { type: 'DEFER' }]);
     expect(id(state)).toBe('first_meal');
     expect(state.outcomes.first_meal).toBeUndefined();
   });
 });
 
 describe('tutorialReducer — missing data and availability', () => {
-  it('marks plan pending without a program and moves on (T-3)', () => {
+  it('without a program, beats 2 and 3 are pending and the tour moves to Food (66, T-3)', () => {
     const { state } = run([{ type: 'START' }, { type: 'ACK' }], { hasProgram: false });
     expect(state.outcomes.plan).toBe('pending');
-    expect(id(state)).toBe('macros');
+    expect(state.outcomes.first_exercise).toBe('pending');
+    expect(id(state)).toBe('first_meal');
+    expect(progressOf(state).position).toBe(4);
   });
 
   it('marks macros pending without numbers', () => {
-    const { state } = run(
-      [{ type: 'START' }, { type: 'ACK' }, { route: ['WorkoutTab', 'WorkoutMain'] }, { type: 'SIGNAL', signal: 'plan_card_opened' }],
-      { hasMacros: false },
-    );
+    const { state } = run(HAPPY.slice(0, 7), { hasMacros: false });
     expect(state.outcomes.macros).toBe('pending');
-    expect(id(state)).toBe('first_meal');
+    expect(id(state)).toBe('first_message');
   });
 
-  it('marks the message step unavailable without a coach', () => {
-    const { state } = run(HAPPY.slice(0, 8), { coachLinked: false });
+  it('a client without a coach meets the Roman beat instead of the coach beat', () => {
+    const { state } = run(HAPPY.slice(0, 9), { coachLinked: false });
     expect(state.outcomes.first_message).toBe('unavailable');
+    expect(id(state)).toBe('roman');
+    expect(progressOf(state)).toEqual({ position: 6, total: 7 });
+    const done = tutorialReducer(state, { type: 'ACK' }, baseEnv({ coachLinked: false }));
+    expect(id(done)).toBe('complete');
+  });
+
+  it('skips the Roman beat when Roman chat is not in the build', () => {
+    const { state } = run(HAPPY.slice(0, 9), { coachLinked: false, romanAvailable: false });
+    expect(state.outcomes.roman).toBe('unavailable');
     expect(id(state)).toBe('complete');
   });
 });
@@ -198,7 +203,7 @@ describe('tutorialReducer — skip and resume', () => {
     state = tutorialReducer(state, { type: 'PAUSE' }, baseEnv());
     expect(state.status).toBe('paused');
     // Paused: nothing advances.
-    const ignored = tutorialReducer(state, { type: 'SIGNAL', signal: 'macro_card_opened' }, baseEnv());
+    const ignored = tutorialReducer(state, { type: 'ROUTE' }, baseEnv({ currentPath: ['MoreTab', 'WorkoutAssignmentDetail'] }));
     expect(ignored).toBe(state);
     state = tutorialReducer(state, { type: 'RESUME' }, baseEnv({ currentPath: ['Log'] }));
     expect(state.status).toBe('active');
@@ -209,7 +214,7 @@ describe('tutorialReducer — skip and resume', () => {
     let { state } = run([...HAPPY.slice(0, 4), { type: 'PAUSE' }]);
     state = tutorialReducer(state, { type: 'START' }, baseEnv({ currentPath: ['Log'] }));
     expect(state.status).toBe('active');
-    expect(id(state)).toBe('macros');
+    expect(id(state)).toBe('first_exercise');
   });
 
   it('START does not rerun a completed tour unless restart is asked', () => {
@@ -225,30 +230,30 @@ describe('tutorialReducer — skip and resume', () => {
 describe('helpers', () => {
   it('newlyFinishedSteps reports each step once, never unavailable ones', () => {
     const a = run(HAPPY.slice(0, 3)).state;
-    const b = tutorialReducer(a, { type: 'SIGNAL', signal: 'plan_card_opened' }, baseEnv());
+    const b = run([{ route: ['MoreTab', 'WorkoutAssignmentDetail'] }], {}, a).state;
     expect(newlyFinishedSteps(a, b)).toEqual(['plan']);
-    const c = run(HAPPY.slice(0, 8), { coachLinked: false }).state;
-    const d = run(HAPPY.slice(0, 7), { coachLinked: false }).state;
-    expect(newlyFinishedSteps(d, c)).toEqual(['first_meal']);
+    const c = run(HAPPY.slice(0, 11)).state;
+    const d = run(HAPPY.slice(0, 10)).state;
+    expect(newlyFinishedSteps(d, c)).toEqual(['first_message']);
   });
 
-  it('progressOf counts five steps', () => {
-    expect(progressOf(run([{ type: 'START' }]).state)).toEqual({ position: 1, total: 5 });
+  it('progressOf speaks "Step n of 7"', () => {
+    expect(progressOf(run([{ type: 'START' }]).state)).toEqual({ position: 1, total: 7 });
   });
 
   it('parseTutorialState round-trips and rejects garbage', () => {
     const s = run(HAPPY.slice(0, 5)).state;
     expect(parseTutorialState(JSON.parse(JSON.stringify(s)))).toEqual(s);
     expect(parseTutorialState(null)).toBeNull();
-    expect(parseTutorialState({ version: 3 })).toBeNull();
+    expect(parseTutorialState({ version: 4 })).toBeNull();
     expect(parseTutorialState({ ...s, stepIndex: 99 })).toBeNull();
     expect(parseTutorialState({ ...s, status: 'weird' })).toBeNull();
     expect(parseTutorialState({ ...s, gateIndex: 42 })?.gateIndex).toBe(0);
   });
 
-  it('the retired eleven-step version keeps what the client chose, at the welcome', () => {
-    const old = { version: 1, status: 'completed', stepIndex: 10, gateIndex: 2, outcomes: { wearables: 'done' }, completedAt: 'x' };
-    expect(parseTutorialState(old)).toMatchObject({ version: 2, status: 'completed', completedAt: 'x', outcomes: {} });
+  it.each([1, 2])('an older step list (v%i) keeps what the client chose, at the welcome', (version) => {
+    const old = { version, status: 'completed', stepIndex: 5, gateIndex: 2, outcomes: { wearables: 'done' }, completedAt: 'x' };
+    expect(parseTutorialState(old)).toMatchObject({ version: 3, status: 'completed', completedAt: 'x', outcomes: {} });
     // Skipped stays skipped (never restarts by itself, B-310-4).
     expect(parseTutorialState({ ...old, status: 'paused', stepIndex: 5 })).toMatchObject({ status: 'paused', stepIndex: 0, gateIndex: 0, completedAt: null });
     expect(parseTutorialState({ ...old, status: 'active', stepIndex: 5 })).toMatchObject({ status: 'active', stepIndex: 0 });

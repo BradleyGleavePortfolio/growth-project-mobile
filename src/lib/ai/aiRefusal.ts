@@ -21,6 +21,7 @@
  * its tests share one mapping.
  */
 import { shortReference, supportReferenceOf } from '../../utils/correlation';
+import { signedInClientIsCoachless } from './aiCoachless';
 
 export const AI_CONSENT_REQUIRED_CODE = 'ai_consent_required';
 export const AI_EGRESS_BLOCKED_CODE = 'ai_egress_blocked';
@@ -135,12 +136,15 @@ const SURFACE_PHRASE: Record<AiSurface, { name: string; isAre: 'is' | 'are' }> =
 
 /**
  * User-facing copy for a refusal. Plain, warm, no emojis or exclamation
- * marks, and always says what happened and what to do next.
+ * marks, and always says what happened and what to do next. `coachless`
+ * (client audience only) drops every coach mention: a client with no coach
+ * is never told a coach sees their data. Defaults to the signed-in user.
  */
 export function aiRefusalCopy(
   refusal: AiRefusal,
   audience: AiAudience,
   surface: AiSurface,
+  coachless: boolean = signedInClientIsCoachless(),
 ): AiRefusalCopy {
   const { name: what, isAre } = SURFACE_PHRASE[surface];
   if (refusal.kind === 'consent_required') {
@@ -152,8 +156,10 @@ export function aiRefusalCopy(
           // AI help was never allowed or the wording changed and needs a new
           // OK; the sheet says which once it reads the status.
           `${what} cannot use your information because AI help is not on for your account. ` +
-          'Your coach still sees your training information as usual. ' +
-          'If you allow it, Roman and your coach’s AI tools can use your information, processed by Anthropic.',
+          (coachless
+            ? 'If you allow it, the app’s AI help, including Roman, can use your information, processed by Anthropic.'
+            : 'Your coach still sees your training information as usual. ' +
+              'If you allow it, Roman and your coach’s AI tools can use your information, processed by Anthropic.'),
         referenceLine: null,
       };
     }

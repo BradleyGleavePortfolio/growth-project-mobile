@@ -296,7 +296,7 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
                     <Text style={[styles.secondaryText, { color: sc.textPrimary }]}>Take me there</Text>
                   </Pressable>
                 ) : null}
-                {gate.kind === 'signal' && gate.allowDefer ? (
+                {gate.kind !== 'ack' && gate.allowDefer ? (
                   <Pressable
                     onPress={() => dispatchTutorial({ type: 'DEFER' })}
                     accessibilityRole="button"

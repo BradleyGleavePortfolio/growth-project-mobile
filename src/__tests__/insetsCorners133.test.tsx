@@ -69,6 +69,7 @@ const SCREENS = [
   'WorkoutScreen', 'EditProfileScreen', 'EducationScreen', 'GroceryListScreen', 'PrepGuideScreen', 'RecipesScreen',
   'RecipeDetailScreen', 'RoutineBuilderScreen', 'WidgetsScreen', 'ClientPackagesScreen', 'PackageCheckoutScreen',
   'PurchaseUnpackScreen', 'CoachGuidelinesScreen', 'MessagesScreen', 'LeaderboardScreen', 'TimelineScreen',
+  'LeaderboardSettingsScreen', // CLIENT-POLISH-134
 ].map((n) => path.join(ROOT, 'screens', 'client', `${n}.tsx`));
 const SHARED = ['MessageBubble', 'ThreadV2Parts'].map((n) => path.join(ROOT, 'components', 'messaging', `${n}.tsx`));
 const strip = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
@@ -90,7 +91,8 @@ describe('insets and corners on the redo screens (source)', () => {
   });
 
   it('takes the top from the Screen wrapper (or its inset hook) everywhere a header does not own it', () => {
-    const own = SCREENS.filter((f) => !/LeaderboardScreen|TimelineScreen/.test(f));
+    // CLIENT-POLISH-134: Leaderboard is on Screen now; only Timeline (native header) is exempt.
+    const own = SCREENS.filter((f) => !/TimelineScreen/.test(f));
     for (const f of own) {
       expect({ f, wrapper: /import \{[^}]*\b(?:Screen|useScreenInsets)\b[^}]*\} from '\.\.\/\.\.\/ui'/.test(read(f)) }).toEqual({ f, wrapper: true });
     }

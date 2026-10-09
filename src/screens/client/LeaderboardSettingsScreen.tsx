@@ -25,16 +25,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
 } from '../../services/leaderboardApi';
 import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import { Screen } from '../../ui';
 
 // ─── Explainer component ──────────────────────────────────────────────────────
 
@@ -97,7 +97,6 @@ export default function LeaderboardSettingsScreen() {
   const [savedName, setSavedName]       = useState('');
   // Both host stacks hide the native header.
   const navigation = React.useContext(NavigationContext);
-  const insets = useSafeAreaInsets();
   const canGoBack = navigation?.canGoBack() ?? false;
 
   const load = useCallback(async () => {
@@ -177,107 +176,103 @@ export default function LeaderboardSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { paddingTop: insets.top }]}>
-        {backBar}
+      <Screen edges={['top']} scroll={false} header={backBar} contentStyle={styles.bare} testID="leaderboard-settings-screen">
         <View style={styles.centered} testID="leaderboard-settings-loading">
           <ActivityIndicator color={sc.accent} size="large" accessibilityLabel="Loading leaderboard settings" />
         </View>
-      </View>
+      </Screen>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.container, { paddingTop: insets.top }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {backBar}
-      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+    <Screen edges={['top']} scroll={false} header={backBar} contentStyle={styles.bare} testID="leaderboard-settings-screen">
+      <KeyboardAvoidingView style={styles.fill} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
 
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Leaderboard settings</Text>
-          <Text style={styles.subtitle}>
-            Opt in to compare your habit consistency with others on your coach's roster.
-          </Text>
-        </View>
-
-        {/* Toggle row */}
-        <View style={styles.section}>
-          <View style={styles.toggleRow} testID="leaderboard-settings-toggle-row">
-            <View style={styles.toggleLeft}>
-              <Text style={styles.toggleLabel}>Appear on leaderboard</Text>
-              <Text style={styles.toggleSub}>
-                {isOptedIn ? 'Visible to your coach\'s roster.' : 'Hidden from this leaderboard.'}
-              </Text>
-            </View>
-            <Switch
-              value={isOptedIn}
-              onValueChange={handleToggle}
-              disabled={saving}
-              trackColor={{ false: sc.border, true: sc.accent }}
-              thumbColor={sc.textOnAccent}
-              testID="leaderboard-opt-in-switch"
-              accessibilityLabel="Toggle leaderboard opt-in"
-            />
-          </View>
-        </View>
-
-        {/* Display name */}
-        {isOptedIn && (
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>Display name</Text>
-            <Text style={styles.sectionSub}>
-              Shown to your coach's other clients. Max 40 characters. Leave blank to use
-              your first name and last initial.
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Leaderboard settings</Text>
+            <Text style={styles.subtitle}>
+              Opt in to compare your habit consistency with others on your coach's roster.
             </Text>
-            <TextInput
-              style={styles.nameInput}
-              value={displayName}
-              onChangeText={setDisplayName}
-              placeholder="e.g. Alex T."
-              placeholderTextColor={sc.textMuted}
-              maxLength={40}
-              autoCapitalize="words"
-              testID="leaderboard-settings-name-input"
-            />
-            {nameChanged && (
-              <Pressable
-                style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-                onPress={handleSaveName}
+          </View>
+
+          {/* Toggle row */}
+          <View style={styles.section}>
+            <View style={styles.toggleRow} testID="leaderboard-settings-toggle-row">
+              <View style={styles.toggleLeft}>
+                <Text style={styles.toggleLabel}>Appear on leaderboard</Text>
+                <Text style={styles.toggleSub}>
+                  {isOptedIn ? 'Visible to your coach\'s roster.' : 'Hidden from this leaderboard.'}
+                </Text>
+              </View>
+              <Switch
+                value={isOptedIn}
+                onValueChange={handleToggle}
                 disabled={saving}
-                testID="leaderboard-settings-save-name"
-                accessibilityRole="button"
-                accessibilityLabel="Save display name"
-              >
-                <Text style={[styles.saveButtonText, saving && { color: sc.textOnDisabled }]}>{saving ? 'Saving…' : 'Save name'}</Text>
-              </Pressable>
-            )}
+                trackColor={{ false: sc.border, true: sc.accent }}
+                thumbColor={sc.textOnAccent}
+                testID="leaderboard-opt-in-switch"
+                accessibilityLabel="Toggle leaderboard opt-in"
+              />
+            </View>
           </View>
-        )}
 
-        {/* Error */}
-        {error && (
-          <View style={styles.errorBanner} testID="leaderboard-settings-error">
-            <Text style={styles.errorText}>{error}</Text>
-          </View>
-        )}
+          {/* Display name */}
+          {isOptedIn && (
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>Display name</Text>
+              <Text style={styles.sectionSub}>
+                Shown to your coach's other clients. Max 40 characters. Leave blank to use
+                your first name and last initial.
+              </Text>
+              <TextInput
+                style={styles.nameInput}
+                value={displayName}
+                onChangeText={setDisplayName}
+                placeholder="e.g. Alex T."
+                placeholderTextColor={sc.textMuted}
+                maxLength={40}
+                autoCapitalize="words"
+                testID="leaderboard-settings-name-input"
+              />
+              {nameChanged && (
+                <Pressable
+                  style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                  onPress={handleSaveName}
+                  disabled={saving}
+                  testID="leaderboard-settings-save-name"
+                  accessibilityRole="button"
+                  accessibilityLabel="Save display name"
+                >
+                  <Text style={[styles.saveButtonText, saving && { color: sc.textOnDisabled }]}>{saving ? 'Saving…' : 'Save name'}</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
 
-        {/* Explainer */}
-        <MeasuredExplainer styles={styles} />
+          {/* Error */}
+          {error && (
+            <View style={styles.errorBanner} testID="leaderboard-settings-error">
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
 
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {/* Explainer */}
+          <MeasuredExplainer styles={styles} />
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: sc.bgPrimary,
-  },
+  // Screen (src/ui) owns the top inset, background and side insets (B13, B28).
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
+  fill: { flex: 1 },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -350,6 +345,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   nameInput: {
     borderWidth: 1,
     borderColor: sc.border,
+    borderRadius: radius.input,
     padding: 12,
     fontFamily: 'Inter-Regular',
     fontSize: 14,
@@ -359,7 +355,7 @@ const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
   },
   saveButton: {
     backgroundColor: sc.accent,
-    borderRadius: 4,
+    borderRadius: radius.button,
     minHeight: 48,
     justifyContent: 'center',
     paddingVertical: 12,

@@ -107,10 +107,11 @@ describe('Log weight sheet on iPhone (B1)', () => {
     mockLog.mockImplementationOnce(
       () => new Promise((resolve) => { resolveLog = resolve; }),
     );
-    const { getByTestId, getByText } = await openSheet();
+    const { getByTestId, getByLabelText } = await openSheet();
     await fireEvent.changeText(getByTestId('log-weight-input'), '182.4');
     await fireEvent.press(getByTestId('log-weight-save'));
-    expect(getByText('Saving')).toBeTruthy();
+    // PrimaryButton shows its spinner and keeps the label for screen readers.
+    expect(getByLabelText('Saving')).toBeTruthy();
     expect(getByTestId('log-weight-save').props.accessibilityState).toEqual(
       expect.objectContaining({ disabled: true, busy: true }),
     );

@@ -32,7 +32,9 @@ import {
   PersistedQueryCacheGate,
   PERSISTED_CACHE_RESTORE_TIMEOUT_MS,
   PERSISTED_CACHE_DRAIN_TIMEOUT_MS,
+  PERSISTED_CACHE_PURGE_TIMEOUT_MS,
 } from '../PersistedQueryCacheGate';
+import { logger } from '../../utils/logger';
 
 const ME = ['me'] as const;
 const A = { id: 'user-A', email: 'a@example.com', secret: 'A-private' };
@@ -572,5 +574,22 @@ describe('createIdentityPersistence (unit, real primitives)', () => {
     await settle(10);
     expect(removeItemSpy.mock.calls.some((c) => c[0] === KEY_A)).toBe(true);
     expect(await AsyncStorage.getItem(KEY_A)).toBeNull();
+  });
+});
+
+// START-HANG-FOLLOW-134 (U-619-SOL-A2-1): the bounded purge names its cause.
+describe('a logged-out purge that never answers', () => {
+  it('logs a warning naming the gate and still commits the logged-out state', async () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const keys = jest.spyOn(AsyncStorage, 'getAllKeys').mockImplementationOnce(() => new Promise(() => undefined));
+    await render(<Harness userId={null} />);
+    await settle(PERSISTED_CACHE_PURGE_TIMEOUT_MS - 1);
+    expect(frames.some((f) => f.session === 'anon')).toBe(false);
+    expect(warn).not.toHaveBeenCalled();
+    await settle(1);
+    expect(frames.some((f) => f.session === 'anon')).toBe(true);
+    expect(warn).toHaveBeenCalledWith('PersistedQueryCacheGate', 'logged-out cache purge did not finish', expect.anything());
+    keys.mockRestore();
+    warn.mockRestore();
   });
 });
