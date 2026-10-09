@@ -18,6 +18,8 @@
  * provider fails mid-flow.
  */
 
+import { STARTUP_STEP_TIMEOUT_MS, withStartupTimeout } from './startupTimebox';
+
 export type AuthProvider = 'email' | 'google' | 'apple';
 
 export interface SignupPolicyResponse {
@@ -162,20 +164,29 @@ export function getLastKnownSignupPolicy(): SignupPolicy | null {
  * GET on a later screen reuses what the user was already shown instead of
  * falling back. `fetchPolicy` is injected so this module stays free of the
  * API client.
+ *
+ * ONB-SWEEP U3: the GET gives up after the startup step limit (8 s, not
+ * axios's 30 s), so "Preparing sign-up." never holds a person on a stalled
+ * network. A late answer is still remembered for the next screen.
  */
 export async function loadSignupPolicy(
   fetchPolicy: () => Promise<{ data?: unknown } | undefined>,
+  timeoutMs: number = STARTUP_STEP_TIMEOUT_MS,
 ): Promise<{ policy: SignupPolicy; source: SignupPolicySource }> {
   try {
-    const res = await fetchPolicy();
-    const raw = res?.data;
-    if (raw && typeof raw === 'object') {
-      const policy = normalizeSignupPolicy(raw);
-      lastKnown = policy;
-      return { policy, source: 'live' };
-    }
+    const live = Promise.resolve()
+      .then(fetchPolicy)
+      .then((res) => {
+        const raw = res?.data;
+        if (!raw || typeof raw !== 'object') return null;
+        const policy = normalizeSignupPolicy(raw);
+        lastKnown = policy;
+        return policy;
+      });
+    const policy = await withStartupTimeout(live, 'signup policy', timeoutMs);
+    if (policy) return { policy, source: 'live' };
   } catch {
-    // fall through
+    // fall through (failed, malformed or no answer in time)
   }
   if (lastKnown) return { policy: lastKnown, source: 'last_known' };
   return { policy: UNKNOWN_SIGNUP_POLICY, source: 'unknown' };

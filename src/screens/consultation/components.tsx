@@ -504,6 +504,16 @@ export function Wheel<T extends string | number>({
     if (values[clamped] !== value) onChange(values[clamped]);
   };
 
+  // ONB-SWEEP U4: a flick settles on momentum end. Settling at the release
+  // row would scroll back to it and stop the flick there. A release with no
+  // velocity (or, on iOS, one already at its snap target) has no momentum
+  // to wait for, so it settles at once.
+  const settleAfterDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { velocity, targetContentOffset, contentOffset } = e.nativeEvent;
+    const flick = Math.abs(velocity?.y ?? 0) > 0 && targetContentOffset?.y !== contentOffset.y;
+    if (!flick) settle(e);
+  };
+
   const onAction = (e: AccessibilityActionEvent) => {
     if (e.nativeEvent.actionName === 'increment' && idx < values.length - 1) onChange(values[idx + 1]);
     if (e.nativeEvent.actionName === 'decrement' && idx > 0) onChange(values[idx - 1]);
@@ -523,11 +533,14 @@ export function Wheel<T extends string | number>({
       <View pointerEvents="none" style={s.wheelBand} />
       <ScrollView
         ref={ref}
+        testID={testID ? `${testID}-scroll` : undefined}
+        // Android: the wheel keeps its own drag inside the scrolling page.
+        nestedScrollEnabled
         showsVerticalScrollIndicator={false}
         snapToInterval={ROW_H}
         decelerationRate="fast"
         onMomentumScrollEnd={settle}
-        onScrollEndDrag={settle}
+        onScrollEndDrag={settleAfterDrag}
         contentOffset={{ x: 0, y: idx * ROW_H }}
         contentContainerStyle={{ paddingVertical: ROW_H * 2 }}
         importantForAccessibility="no-hide-descendants"
