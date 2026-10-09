@@ -6,10 +6,11 @@ import {
   FlatList,
   ActivityIndicator,
   Image,
-  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Radius } from '../../theme/index';
+import { layout, radius, typography } from '../../theme/tokens';
+import HapticPressable from '../HapticPressable';
+import { QuietOverline } from '../../ui/sections/QuietSection';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import FoodImage from '../FoodImage';
@@ -115,9 +116,9 @@ export default function FoodSearchView({
         />
         {searching && <ActivityIndicator size="small" color={sc.accentText} />}
         {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
+          <HapticPressable intent="light" disableAnimation onPress={onClearSearch} style={styles.clearButton} accessibilityRole="button" accessibilityLabel="Clear food search">
             <Ionicons name="close-circle" size={18} color={sc.textMuted} />
-          </TouchableOpacity>
+          </HapticPressable>
         )}
       </View>
 
@@ -142,53 +143,52 @@ export default function FoodSearchView({
               {repeatMeal.entries.map((e) => e.name).join(', ')} · {Math.round(repeatMeal.calories)} kcal
             </Text>
           </View>
-          <TouchableOpacity
-            style={[styles.repeatButton, saving && { opacity: 0.6 }]}
+          <HapticPressable
+            intent="medium"
+            style={[styles.repeatButton, saving && styles.repeatButtonBusy]}
             onPress={onRepeatMeal}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel={`${repeatMealTitle}: add all ${repeatMeal.entries.length} ${repeatMeal.entries.length === 1 ? 'food' : 'foods'}`}
           >
             {saving ? (
-              <ActivityIndicator size="small" color={sc.textOnAccent} />
+              <ActivityIndicator size="small" color={sc.accentText} />
             ) : (
               <Text style={styles.repeatButtonText}>Add all</Text>
             )}
-          </TouchableOpacity>
+          </HapticPressable>
         </View>
       ) : null}
 
       {searchQuery.length < 2 && (
         <View style={styles.tabRow}>
-          <TouchableOpacity
-            style={[styles.tabChip, recentTab === 'recent' && styles.tabChipActive]}
-            onPress={() => onRecentTabChange('recent')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>Recent</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tabChip, recentTab === 'frequent' && styles.tabChipActive]}
-            onPress={() => onRecentTabChange('frequent')}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.tabChipText, recentTab === 'frequent' && styles.tabChipTextActive]}>Frequent</Text>
-          </TouchableOpacity>
+          {(['recent', 'frequent'] as const).map((tab) => (
+            <HapticPressable
+              key={tab}
+              intent="light"
+              disableAnimation
+              style={[styles.tabChip, recentTab === tab && styles.tabChipActive]}
+              onPress={() => onRecentTabChange(tab)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: recentTab === tab }}
+            >
+              <Text style={[styles.tabChipText, recentTab === tab && styles.tabChipTextActive]}>{tab === 'recent' ? 'Recent' : 'Frequent'}</Text>
+            </HapticPressable>
+          ))}
         </View>
       )}
 
       {didYouMean.length > 0 && (
         <View style={styles.didYouMeanContainer}>
           <View style={styles.didYouMeanHeaderRow}>
-            <Ionicons name="bulb-outline" size={16} color={sc.textMuted} />
-            <Text style={styles.didYouMeanHeaderText}>Did you mean…?</Text>
+            <QuietOverline style={styles.overlineFlush}>Did you mean</QuietOverline>
           </View>
           {didYouMean.map((item, idx) => (
-            <TouchableOpacity
+            <HapticPressable
               key={`dym-${idx}`}
+              intent="light"
               style={styles.didYouMeanItem}
               onPress={() => onSelectFood(item)}
-              activeOpacity={0.7}
             >
               <View style={styles.searchResultLeft}>
                 <Text style={styles.searchResultName}>{item.name}</Text>
@@ -201,7 +201,7 @@ export default function FoodSearchView({
                 <Text style={styles.searchResultMacros}>{basisLabel(item)}</Text>
               </View>
               <Text style={styles.searchResultCals}>{Number.isFinite(item.calories) ? Math.round(item.calories) : '—'} kcal</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           ))}
         </View>
       )}
@@ -211,9 +211,9 @@ export default function FoodSearchView({
         keyExtractor={(item, index) => `${item.id || item.name}-${index}`}
         ListHeaderComponent={
           searchQuery.length < 2 && browseList.length > 0 ? (
-            <Text style={styles.listHeader}>
+            <QuietOverline style={styles.listHeader}>
               {recentTab === 'recent' ? 'Recent foods, last 7 days' : 'Most logged, last 7 days'}
-            </Text>
+            </QuietOverline>
           ) : searchQuery.length < 2 && browseList.length === 0 ? (
             <View style={styles.emptyStateContainer}>
               {browseUnavailable ? (
@@ -230,25 +230,21 @@ export default function FoodSearchView({
             </View>
           ) : showEmpty ? (
             <View style={styles.emptyStateContainer}>
-              <Ionicons name="search-outline" size={36} color={sc.textMuted} />
               <Text style={styles.emptyStateTitle}>{searchError ? 'Search unavailable' : 'No results found'}</Text>
               <Text style={styles.emptyStateSubtitle}>
                 {searchError ? 'Check the connection and retry, or enter food details manually below.' : 'Try a simpler name, check spelling, or log it manually below.'}
               </Text>
-              <TouchableOpacity
-                style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
-                onPress={onRetrySearch}
-              >
-                <Text style={{ color: sc.accentText, fontWeight: '600', fontSize: 14 }}>Try again</Text>
-              </TouchableOpacity>
+              <HapticPressable intent="light" style={styles.retryButton} onPress={onRetrySearch}>
+                <Text style={styles.retryText}>Try again</Text>
+              </HapticPressable>
             </View>
           ) : null
         }
         renderItem={({ item }) => (
-          <TouchableOpacity
+          <HapticPressable
+            intent="light"
             style={styles.searchResultItem}
             onPress={() => onSelectFood(item)}
-            activeOpacity={0.7}
           >
             <FoodThumb item={item} />
             <View style={styles.searchResultLeft}>
@@ -265,21 +261,21 @@ export default function FoodSearchView({
               {logNote(item) ? <Text style={styles.logNote}>{logNote(item)}</Text> : null}
             </View>
             <Text style={styles.searchResultCals}>{Number.isFinite(item.calories) ? Math.round(item.calories) : '—'} kcal</Text>
-          </TouchableOpacity>
+          </HapticPressable>
         )}
         contentContainerStyle={styles.searchList}
         keyboardShouldPersistTaps="handled"
       />
 
-      <TouchableOpacity
+      <HapticPressable
+        intent="light"
         style={styles.manualButton}
         onPress={onEnterManualMode}
-        activeOpacity={0.8}
+        accessibilityRole="button"
       >
-        {/* usePressFeedback not needed here — TouchableOpacity retained to avoid FlatList interaction conflict */}
         <Ionicons name="create-outline" size={18} color={sc.accentText} />
         <Text style={styles.manualButtonText}>Enter manually</Text>
-      </TouchableOpacity>
+      </HapticPressable>
     </View>
   );
 }
@@ -288,41 +284,49 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   repeatCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginBottom: 12,
-    padding: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border,
+    padding: 16,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    backgroundColor: sc.bgSurface,
     gap: 12,
   },
   repeatText: { flex: 1 },
-  repeatTitle: { fontSize: 14, fontWeight: '600', color: sc.textPrimary },
-  repeatSubtitle: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
+  repeatTitle: { ...typography.h3, color: sc.textPrimary },
+  repeatSubtitle: { fontSize: 13, lineHeight: 19, color: sc.textMuted, marginTop: 2, fontVariant: ['tabular-nums'] },
   repeatButton: {
-    minHeight: 44,
+    minHeight: layout.touchMin,
     minWidth: 88,
     paddingHorizontal: 16,
-    borderRadius: 999,
+    borderRadius: radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: sc.accent,
+    borderWidth: 1,
+    borderColor: sc.accent,
   },
-  repeatButtonText: { color: sc.textOnAccent, fontWeight: '600', fontSize: 14 },
+  repeatButtonBusy: { borderColor: sc.border },
+  repeatButtonText: { color: sc.accentText, fontFamily: typography.bodyMd.fontFamily, fontSize: 14 },
   logNote: { fontSize: 13, color: sc.textMuted, marginTop: 2 },
-  clearButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  clearButton: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   modalBody: {
     flex: 1,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginTop: 16,
     marginBottom: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingLeft: 14,
+    paddingRight: 4,
     gap: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: sc.border,
+    minHeight: layout.buttonHeight,
+    borderRadius: radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    backgroundColor: sc.bgSurface,
   },
   searchInput: {
     minHeight: 44, fontFamily: 'Inter_400Regular',
@@ -334,9 +338,9 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginBottom: 8,
-    padding: 10,
+    paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
@@ -346,77 +350,66 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     flex: 1,
   },
   slowSearchBanner: {
-    alignItems: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginBottom: 8,
   },
   slowSearchText: {
     fontSize: 13,
     color: sc.textMuted,
-    fontStyle: 'italic',
   },
   tabRow: {
     flexDirection: 'row',
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginBottom: 8,
-    gap: 8,
+    gap: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   tabChip: {
-    minHeight: 44,
+    minHeight: layout.touchMin,
     justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -StyleSheet.hairlineWidth,
   },
   tabChipActive: {
     borderBottomColor: sc.accent,
   },
   tabChipText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
     color: sc.textMuted,
   },
   tabChipTextActive: {
-    color: sc.accentText,
+    fontFamily: typography.bodyMd.fontFamily,
+    color: sc.textPrimary,
   },
+  overlineFlush: { marginBottom: 0 },
   didYouMeanContainer: {
-    marginHorizontal: 20,
+    marginHorizontal: layout.gutter,
     marginBottom: 10,
-    overflow: 'hidden',
   },
   didYouMeanHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    padding: 12,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
-  },
-  didYouMeanHeaderText: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: sc.textMuted,
   },
   didYouMeanItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
   emptyStateContainer: {
     alignItems: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 20,
+    paddingVertical: 40,
+    paddingHorizontal: 8,
     gap: 8,
   },
   emptyStateTitle: {
-    fontSize: 15,
-    fontWeight: '500',
+    ...typography.h3,
     color: sc.textPrimary,
-    marginTop: 8,
+    textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 13,
@@ -424,27 +417,27 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     textAlign: 'center',
     lineHeight: 19,
   },
+  retryButton: { minHeight: layout.touchMin, justifyContent: 'center', paddingHorizontal: 24, marginTop: 4 },
+  retryText: { color: sc.accentText, fontFamily: typography.bodyMd.fontFamily, fontSize: 14 },
   searchList: {
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.gutter,
     paddingBottom: 80,
   },
   listHeader: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: sc.textMuted,
-    marginBottom: 8,
-    marginTop: 4,
+    marginBottom: 4,
+    marginTop: 8,
   },
   foodThumb: {
     width: 48,
     height: 48,
-    borderRadius: Radius.md,
+    borderRadius: radius.input,
     marginRight: 12,
   },
   searchResultItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
+    minHeight: layout.rowMinHeight,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
@@ -453,8 +446,8 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     marginRight: 12,
   },
   searchResultName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 22,
     color: sc.textPrimary,
   },
   searchResultBrand: {
@@ -466,26 +459,28 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     fontSize: 13,
     color: sc.textMuted,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   searchResultCals: {
     fontSize: 14,
-    fontWeight: '500',
-    color: sc.accentText,
+    color: sc.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   manualButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 14,
-    marginHorizontal: 20,
-    marginBottom: 20,
+    minHeight: layout.touchMin,
+    paddingVertical: 12,
+    marginHorizontal: layout.gutter,
+    marginBottom: 8,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
   },
   manualButtonText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontFamily: typography.bodyMd.fontFamily,
     color: sc.accentText,
   },
 });

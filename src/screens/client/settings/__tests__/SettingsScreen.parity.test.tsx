@@ -106,7 +106,7 @@ it('groups every existing row into seven ordered sections without disclosure tap
     expect(section.getByRole('header', { name: title })).toBeTruthy();
     for (const row of rows) expect(section.getByText(row)).toBeTruthy();
   }
-  expect(within(view.getByTestId('settings-section-support')).getByLabelText('Support inbox')).toBeTruthy();
+  expect(within(view.getByTestId('settings-section-support')).getByLabelText('Support, Chat with the support team.')).toBeTruthy();
   const training = within(view.getByTestId('settings-section-training-food'));
   for (const label of ['Decrease meals per day', 'Increase meals per day',
     'Decrease water goal', 'Increase water goal']) expect(training.getByLabelText(label)).toBeTruthy();
@@ -141,9 +141,9 @@ it('keeps every navigation row, preference, biometric and tutorial action on thi
   expect(navigationStub.goBack).toHaveBeenCalled();
   for (const [label, route] of [
     ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
-    ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
+    ['Support, Chat with the support team.', 'SupportInbox'], ['Trust & Privacy, How your data is protected.', 'TrustCenter'],
     ['Coach sharing', 'CoachSharing'], ['Roman and AI', 'RomanAiConsent'],
-    ['Blocked users', 'BlockedUsers'], ['Request my data export', 'DataExport'],
+    ['Blocked users', 'BlockedUsers'], ['My data, Request a copy of your data.', 'DataExport'],
   ]) {
     await fireEvent.press(view.getByLabelText(label));
     expect(navigationStub.navigate).toHaveBeenLastCalledWith(route);
@@ -297,6 +297,6 @@ it('keeps Support available when the tutorial flag is off', async () => {
   mockTutorialEnabled = false;
   const view = await render(<SettingsScreen navigation={navigation} />);
   expect(view.queryByTestId('tutorial-settings-button')).toBeNull();
-  await fireEvent.press(view.getByLabelText('Support inbox'));
+  await fireEvent.press(view.getByLabelText('Support, Chat with the support team.'));
   expect(navigationStub.navigate).toHaveBeenLastCalledWith('SupportInbox');
 });

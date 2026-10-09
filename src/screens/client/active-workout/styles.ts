@@ -1,6 +1,12 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { lightTokens as sc } from '../../../theme/tokens';
+import { layout, lightTokens as sc, radius } from '../../../theme/tokens';
+
+// REDO-LIVE-133 (owner 17:07, decision 133-4): every corner comes from the
+// semantic radius tokens; the page margin is layout.gutter (24). The live
+// workout takes its insets, top bar and Finish button from src/ui (Screen,
+// ScreenTopBar, PrimaryButton). topBar / topCenter / topTitle / finishBtn /
+// content are kept for WorkoutHistoryEditScreen, which shares these styles.
 
 export const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -9,48 +15,65 @@ export const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.gutter,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
   topCenter: { alignItems: 'center', flex: 1, paddingHorizontal: 8 },
   topTitle: { fontFamily: 'Inter_500Medium', fontSize: 16, fontWeight: '500', color: colors.textPrimary },
-  timerText: { fontFamily: 'Inter_500Medium', fontVariant: ['tabular-nums'], fontSize: 20, fontWeight: '500', color: colors.primary, marginTop: 2 },
+  timerText: { fontFamily: 'Inter_500Medium', fontVariant: ['tabular-nums'], fontSize: 17, lineHeight: 22, fontWeight: '500', color: colors.textPrimary, letterSpacing: 0.3 },
   finishBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.button,
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
   finishBtnText: { fontFamily: 'Inter_500Medium', color: colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
+  // Live workout hero: overline, serif name (Headline), set count, hairline progress.
+  screenContent: { paddingHorizontal: 0, paddingTop: 8 },
+  hero: {
+    marginHorizontal: layout.gutter,
+    paddingBottom: 24,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
+  },
+  heroMeta: { fontFamily: 'Inter_400Regular', fontVariant: ['tabular-nums'], fontSize: 14, lineHeight: 20, color: sc.textMuted, marginTop: 8 },
   progressBar: {
-    height: 3,
-    backgroundColor: colors.primaryPale,
+    height: 2,
+    marginTop: 16,
+    borderRadius: radius.chip,
+    backgroundColor: sc.border,
+    overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
   },
+  listOverline: { marginHorizontal: layout.gutter, marginTop: 28, marginBottom: 0 },
+  emptyList: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: sc.textMuted, marginHorizontal: layout.gutter, marginTop: 8 },
+  readback: { marginHorizontal: layout.gutter - 16, marginTop: 12 },
   content: { paddingVertical: 16, paddingBottom: 100 },
   exerciseCard: {
-    marginHorizontal: 16,
-    marginBottom: 12,
+    marginHorizontal: layout.gutter,
     backgroundColor: colors.background,
-    borderRadius: 0,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
-    padding: 16,
+    paddingVertical: 20,
   },
   exerciseHeader: {
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 4,
+    gap: 12,
     marginBottom: 8,
   },
+  exerciseHeaderText: { flex: 1, gap: 2 },
   exerciseName: { fontFamily: 'Inter_500Medium', fontSize: 17, lineHeight: 24, fontWeight: '500', color: colors.textPrimary },
-  exerciseSummary: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18, color: sc.textMuted },
+  exerciseSummary: { fontFamily: 'Inter_400Regular', fontVariant: ['tabular-nums'], fontSize: 13, lineHeight: 18, color: sc.textMuted },
+  coachNote: { fontFamily: 'Inter_400Regular', fontSize: 14, lineHeight: 20, color: colors.textSecondary, marginTop: 4, marginBottom: 4 },
   exerciseTools: { flexDirection: 'row', alignItems: 'center', gap: 4, marginVertical: 4 },
   exerciseRestTools: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
   toolButton: { minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
@@ -59,7 +82,22 @@ export const makeStyles = (colors: ThemeColors) =>
   previousSetLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: sc.textMuted },
   previousSetValue: { fontFamily: 'Inter_500Medium', fontVariant: ['tabular-nums'], fontSize: 13, color: colors.textSecondary },
   previousSetText: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
-  notesInput: { fontFamily: 'Inter_400Regular', minHeight: 44, padding: 12, fontSize: 14, color: colors.textPrimary, backgroundColor: colors.background, marginTop: 8 },
+  notesInput: {
+    fontFamily: 'Inter_400Regular',
+    minHeight: 48,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textPrimary,
+    backgroundColor: colors.background,
+    borderRadius: radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    textAlignVertical: 'top',
+    marginTop: 8,
+  },
+  notesSection: { marginHorizontal: layout.gutter, paddingTop: 24, paddingBottom: 8 },
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -67,22 +105,24 @@ export const makeStyles = (colors: ThemeColors) =>
     gap: 4,
     paddingRight: 72, // Reserve the trailing Previous cell without changing ExerciseCard.
   },
-  setHeaderText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: sc.textMuted, textAlign: 'center' },
+  setHeaderText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', letterSpacing: 0.3, color: sc.textMuted, textAlign: 'center' },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 6,
+    marginBottom: 4,
     paddingVertical: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
-    borderRadius: 0, // radius.sm
   },
-  setRowCompleted: { backgroundColor: colors.primaryPale },
+  // A done set reads as a soft forest tint with rounded ends, no hairline under it.
+  setRowCompleted: { backgroundColor: colors.primaryPale, borderRadius: radius.input, borderBottomColor: colors.primaryPale },
   setText: { fontFamily: 'Inter_600SemiBold', fontVariant: ['tabular-nums'], fontSize: 14, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
   setInput: {
     backgroundColor: colors.background,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
     paddingVertical: 12,
     paddingHorizontal: 4,
     minWidth: 44,
@@ -94,10 +134,11 @@ export const makeStyles = (colors: ThemeColors) =>
     color: colors.textPrimary,
     textAlign: 'center',
   },
+  // The completion mark is a circle, as in the clientfile-workouts reference.
   checkBtn: {
     width: 44,
     height: 44,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
     backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
@@ -111,24 +152,22 @@ export const makeStyles = (colors: ThemeColors) =>
   addSetBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingVertical: 12,
+    alignSelf: 'flex-start',
+    gap: 6,
+    minHeight: 44,
+    paddingRight: 8,
     marginTop: 4,
   },
-  addSetText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: colors.primary },
+  addSetText: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.primary },
+  // A quiet hairline row, not a dashed box: the page keeps one filled action (Finish).
   addExerciseBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 16,
-    paddingVertical: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
-    borderStyle: 'dashed',
+    gap: 10,
+    marginHorizontal: layout.gutter,
+    minHeight: layout.rowMinHeight,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   addExerciseText: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: colors.primary },
 
@@ -138,42 +177,45 @@ export const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.gutter,
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: sc.border,
   },
+  modalClose: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center' },
   modalTitle: { fontFamily: 'Inter_500Medium', fontSize: 17, fontWeight: '500', color: colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    marginHorizontal: 20,
+    backgroundColor: colors.background,
+    marginHorizontal: layout.gutter,
     marginTop: 16,
-    marginBottom: 8,
-    borderRadius: 2, // radius.md
+    marginBottom: 12,
+    borderRadius: radius.input,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 48,
     gap: 8,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
   },
   searchInput: { fontFamily: 'Inter_400Regular', flex: 1, fontSize: 16, color: colors.textPrimary },
   muscleFilter: { maxHeight: 44, marginBottom: 8 },
-  muscleFilterContent: { paddingHorizontal: 20, gap: 8 },
+  muscleFilterContent: { paddingHorizontal: layout.gutter, gap: 8, alignItems: 'center' },
+  // Pill chips; the chosen one is outlined in forest, never filled (one filled action per screen).
   muscleChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 4, // radius.lg
-    backgroundColor: colors.surface,
+    minHeight: 36,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    borderRadius: radius.chip,
+    backgroundColor: colors.background,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
   },
-  muscleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  muscleChipText: { fontFamily: 'Inter_600SemiBold', fontSize: 13, fontWeight: '600', color: colors.textSecondary },
-  muscleChipTextActive: { color: colors.textOnPrimary },
-  exerciseList: { paddingHorizontal: 16, paddingBottom: 40 },
+  muscleChipActive: { borderColor: colors.primary, borderWidth: 1 },
+  muscleChipText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textSecondary },
+  muscleChipTextActive: { color: colors.primary },
+  exerciseList: { paddingHorizontal: layout.gutter, paddingBottom: 40 },
 
   // Exercise list item with image
   exerciseListItem: {
@@ -189,19 +231,6 @@ export const makeStyles = (colors: ThemeColors) =>
     gap: 4,
   },
   exerciseListName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: colors.textPrimary },
-  muscleBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4, // radius.lg
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  muscleBadgeText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
   exerciseListEquipment: { fontFamily: 'Inter_400Regular', fontSize: 13, color: sc.textMuted },
 
   // Empty state
@@ -226,30 +255,24 @@ export const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 32,
   },
 
-  // Rest Timer Overlay
+  // Rest timer: a hairline row in the pinned footer, above Finish (no shadow, no float).
   restOverlay: {
-    position: 'absolute',
-    bottom: 100,
-    left: 16,
-    right: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: sc.border,
-    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    elevation: 4,
-    shadowColor: colors.textPrimary,
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    gap: 8,
+    minHeight: layout.rowMinHeight,
+    paddingLeft: 16,
+    paddingRight: 4,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+    backgroundColor: colors.background,
   },
   restLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flex: 1,
   },
   restLabel: {
     fontFamily: 'Inter_500Medium',
@@ -258,17 +281,19 @@ export const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
   },
   restCountdown: {
-    fontFamily: 'Inter_600SemiBold',
+    fontFamily: 'Inter_500Medium',
     fontVariant: ['tabular-nums'],
-    fontSize: 28,
-    fontWeight: '600',
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '500',
     color: colors.textPrimary,
+    marginRight: 4,
   },
   restSkip: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
     color: colors.primary,
-    fontWeight: '600',
+    fontWeight: '500',
   },
 
   });

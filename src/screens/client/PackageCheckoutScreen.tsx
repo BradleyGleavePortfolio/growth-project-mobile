@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -41,7 +42,12 @@ import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
 import { planTerms, purchasableFromPublicPackage } from '../../lib/planTerms';
 import { track } from '../../lib/analytics';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { SemanticTokens, Tokens } from '../../theme/tokens';
+import { radius, type SemanticTokens, type Tokens } from '../../theme/tokens';
+import { Screen, type ScreenEdge } from '../../ui';
+
+// Presented as a modal: on iOS a page sheet that already starts below the
+// status bar, so only Android (full-screen, edge-to-edge) takes the top inset.
+const MODAL_EDGES: readonly ScreenEdge[] = Platform.OS === 'ios' ? [] : ['top'];
 import PackageDetailSurface, {
   type PackageDetailViewModel,
 } from './packageDetail/PackageDetailSurface';
@@ -179,7 +185,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     purchase.state.priceChange !== null;
 
   return (
-    <View style={styles.container}>
+    <Screen edges={MODAL_EDGES} scroll={false} contentStyle={styles.bare}>
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -224,19 +230,19 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
           }
         />
       ) : null}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
+      paddingTop: Platform.OS === 'ios' ? 12 : 0,
       paddingBottom: 12,
     },
     backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
@@ -272,7 +278,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginTop: 8,
       paddingHorizontal: 18,
       paddingVertical: 10,
-      borderRadius: tokens.radius.lg,
+      borderRadius: radius.button,
       borderWidth: 1,
       borderColor: semanticColors.accent,
       minHeight: 44, justifyContent: 'center', backgroundColor: semanticColors.accent,

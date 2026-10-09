@@ -18,15 +18,15 @@ import {
   Text,
   FlatList,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import HapticPressable from '../../components/HapticPressable';
+import { Headline, Overline, QuietTextButton, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { layout, radius, typography } from '../../theme/tokens';
 import {
   AppNotification,
   NotificationPage,
@@ -36,13 +36,7 @@ import {
   markAllNotificationsRead,
 } from '../../services/notificationsApi';
 import { routeInAppNotification } from '../../services/pushTapRouter';
-import type { IoniconName } from '../../types/common';
 
-const KIND_ICON: Record<AppNotification['kind'], IoniconName> = {
-  coach: 'person-outline', milestone: 'document-outline', check_in: 'checkmark-circle-outline',
-  message: 'chatbubble-outline', build_week: 'layers-outline', system: 'information-circle-outline',
-  reminder: 'alarm-outline', tip: 'bulb-outline',
-};
 function relativeTime(iso: string): string {
   const minutes = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (minutes < 1) return 'Just now';
@@ -118,7 +112,7 @@ function reducer(state: State, action: Action): State {
     case 'LOAD_MORE_START':
       return { ...state, isLoadingMore: true, error: null };
     case 'LOAD_MORE_ERROR':
-      return { ...state, isLoadingMore: false, error: 'Could not load more notifications. Pull down to try again.' };
+      return { ...state, isLoadingMore: false, error: 'Could not load more notifications.' };
     case 'LOAD_MORE_SUCCESS':
       return {
         ...state,
@@ -184,7 +178,7 @@ export default function NotificationCenterScreen() {
       ]);
       dispatch({ type: 'LOAD_FIRST_SUCCESS', payload: page, unreadCount: count });
     } catch {
-      dispatch({ type: 'LOAD_FIRST_ERROR', error: 'Could not load notifications. Pull down to try again.' });
+      dispatch({ type: 'LOAD_FIRST_ERROR', error: 'Could not load notifications. Check the connection, then try again.' });
     }
   }, []);
 
@@ -249,111 +243,79 @@ export default function NotificationCenterScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: AppNotification }) => (
-      <TouchableOpacity onPress={() => handlePress(item)} activeOpacity={0.72} style={styles.row}
+      <HapticPressable intent="light" onPress={() => handlePress(item)} style={styles.row}
         disabled={item.read && !item.actionScreen}
         accessibilityRole={item.read && !item.actionScreen ? 'text' : 'button'}
         accessibilityLabel={`${item.read ? '' : 'Unread. '}${item.title}. ${item.body}`}
         accessibilityHint={item.actionScreen ? 'Open notification' : item.read ? undefined : 'Mark as read'}>
-        <Ionicons name={KIND_ICON[item.kind]} size={20} color={colors.textMuted} accessibilityElementsHidden />
         <View style={styles.rowContent}>
           <View style={styles.rowTitleLine}>
-            <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
             {!item.read && <View style={styles.unreadDot} accessibilityLabel="Unread" />}
+            <Text style={[styles.rowTitle, !item.read && styles.rowTitleUnread]}>{item.title}</Text>
+            <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
           </View>
           <Text style={styles.rowBody}>{item.body}</Text>
-          <Text style={styles.rowTime}>{relativeTime(item.createdAt)}</Text>
         </View>
-      </TouchableOpacity>
+      </HapticPressable>
     ),
-    [handlePress, colors, styles],
+    [handlePress, styles],
   );
 
+  // A failed load says what happened and offers a quiet retry in place.
   const ListFooter = state.isLoadingMore ? (
     <ActivityIndicator
       color={colors.primary}
       style={styles.loadingMore}
       accessibilityLabel="Loading more notifications"
     />
-  ) : state.error && state.notifications.length > 0
-    ? <Text style={styles.emptyBody} accessibilityLiveRegion="polite">{state.error}</Text> : null;
+  ) : state.error && state.notifications.length > 0 ? (
+    <View style={styles.inlineError} accessibilityLiveRegion="polite">
+      <Text style={styles.emptyBody}>{state.error}</Text>
+      <QuietTextButton label="Try again" onPress={() => { void loadMore(); }} testID="notification-more-retry" />
+    </View>
+  ) : null;
 
   const ListEmpty = !state.isLoadingFirst ? (
     <View style={styles.emptyContainer} accessibilityLiveRegion="polite">
-      <Ionicons
-        name={'notifications-off-outline' as IoniconName}
-        size={44}
-        color={colors.textMuted}
-        accessibilityElementsHidden
-      />
-      <Text style={styles.emptyTitle}>
-        {state.error ?? 'No notifications.'}
-      </Text>
-      {!state.error && (
-        <Text style={styles.emptyBody}>
-          Pull down to refresh.
-        </Text>
+      <Text style={styles.emptyTitle}>{state.error ?? 'No notifications.'}</Text>
+      {state.error ? (
+        <QuietTextButton label="Try again" onPress={() => { void loadFirst(); }} testID="notification-retry" />
+      ) : (
+        <Text style={styles.emptyBody}>Coach notes, reminders and milestones arrive here.</Text>
       )}
     </View>
   ) : null;
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.headerAction}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons
-            name={'arrow-back-outline' as IoniconName}
-            size={24}
-            color={colors.textPrimary}
-          />
-        </TouchableOpacity>
-        <Text style={styles.title}>Notifications</Text>
-        {state.unreadCount > 0 ? (
-          <TouchableOpacity
-            onPress={handleMarkAllRead}
-            style={styles.headerAction}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel="Mark all notifications as read"
-          >
-            <Text style={[styles.markAllText, { color: colors.primary }]}>Mark all read</Text>
-          </TouchableOpacity>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+    <Screen
+      edges={['top']}
+      scroll={false}
+      testID="notification-center"
+      contentStyle={styles.frame}
+      header={(
+        <ScreenTopBar
+          onBack={() => navigation.goBack()}
+          backLabel="Go back"
+          trailing={state.unreadCount > 0 ? (
+            <TextLink label="Mark all read" size="small" tone="accent" underline={false}
+              accessibilityHint="Marks every notification as read" onPress={() => { void handleMarkAllRead(); }} />
+          ) : undefined}
+        />
+      )}
+    >
+      <View style={styles.titleBlock}>
+        <Headline level="h1">Notifications</Headline>
+        <Overline style={styles.overline}>
+          {state.unreadCount > 0
+            ? `${state.unreadCount} unread notification${state.unreadCount !== 1 ? 's' : ''}`
+            : 'Nothing unread'}
+        </Overline>
+        <TextLink label="Notification preferences" size="small" align="start"
+          onPress={() => navigation.navigate('NotificationPreferences')} />
       </View>
-      <TouchableOpacity style={styles.preferencesLink} accessibilityRole="button"
-        onPress={() => navigation.navigate('NotificationPreferences')}>
-        <Text style={[styles.markAllText, { color: colors.textSecondary }]}>Notification preferences</Text>
-      </TouchableOpacity>
 
-      {/* Unread count banner */}
-      {state.unreadCount > 0 && (
-        <View style={styles.unreadBanner}>
-          <Ionicons
-            name={'notifications-outline' as IoniconName}
-            size={15}
-            color={colors.primary}
-            accessibilityElementsHidden
-          />
-          <Text style={[styles.unreadBannerText, { color: colors.primary }]}>
-            {state.unreadCount} unread notification{state.unreadCount !== 1 ? 's' : ''}
-          </Text>
-        </View>
-      )}
+      {state.isLoadingFirst && <SkeletonList count={8} />}
 
-      {/* Loading skeleton */}
-      {state.isLoadingFirst && (
-        <SkeletonList count={8} />
-      )}
-
-      {/* List */}
       {!state.isLoadingFirst && (
         <FlatList
           testID="notification-list"
@@ -377,96 +339,34 @@ export default function NotificationCenterScreen() {
           }
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ReturnType<typeof useTheme>['colors']) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-    },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 20,
-      paddingTop: 56,
-      paddingBottom: 12,
-    },
-    title: {
-      ...typography.h2,
-      fontSize: 24,
-      lineHeight: 29,
-      color: colors.textPrimary,
-      letterSpacing: 0.5,
-    },
-    markAllText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 13,
-      lineHeight: 18,
-    },
-    headerSpacer: {
-      width: 44,
-    },
-    headerAction: { minHeight: 44, minWidth: 44, justifyContent: 'center' },
-    preferencesLink: { minHeight: 44, justifyContent: 'center', marginHorizontal: 20 },
-    row: { flexDirection: 'row', gap: 12, minHeight: 44, paddingVertical: 20,
+    frame: { paddingHorizontal: 0 },
+    titleBlock: { paddingHorizontal: layout.gutter, paddingTop: 8, paddingBottom: 12 },
+    overline: { marginTop: 4, marginBottom: 8, fontVariant: ['tabular-nums'] },
+    row: { minHeight: layout.rowMinHeight, paddingVertical: 18,
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
     rowContent: { flex: 1, gap: 6 },
-    rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     rowTitle: { ...typography.bodySmall, fontSize: 15, color: colors.textPrimary, flex: 1 },
     rowTitleUnread: { fontFamily: 'Inter_500Medium', fontWeight: '500' },
-    rowBody: { ...typography.bodySmall, fontSize: 13, color: colors.textSecondary },
+    rowBody: { ...typography.bodySmall, fontSize: 14, color: colors.textSecondary },
     rowTime: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted, fontVariant: ['tabular-nums'] },
-    unreadDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
-    unreadBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginHorizontal: 20,
-      marginBottom: 10,
-      paddingHorizontal: 0,
-      paddingVertical: 10,
-    },
-    unreadBannerText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 13,
-      lineHeight: 18,
-      fontVariant: ['tabular-nums'],
-    },
-    loadingFirst: {
-      marginTop: 60,
-    },
+    unreadDot: { width: 6, height: 6, borderRadius: radius.chip, backgroundColor: colors.primary },
     listContent: {
-      paddingHorizontal: 24,
+      paddingHorizontal: layout.gutter,
       paddingBottom: 40,
-      paddingTop: 4,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.divider,
       flexGrow: 1,
     },
-    loadingMore: {
-      paddingVertical: 20,
-    },
-    emptyContainer: {
-      flex: 1,
-      alignItems: 'center',
-      paddingTop: 80,
-      gap: 12,
-    },
-    emptyTitle: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 17,
-      lineHeight: 22,
-      color: colors.textPrimary,
-      textAlign: 'center',
-    },
-    emptyBody: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      lineHeight: 22,
-      color: colors.textSecondary,
-      textAlign: 'center',
-      paddingHorizontal: 32,
-    },
+    loadingMore: { paddingVertical: 20 },
+    inlineError: { paddingVertical: 16, gap: 4 },
+    emptyContainer: { flex: 1, paddingTop: 48, gap: 8 },
+    emptyTitle: { ...typography.h3, color: colors.textPrimary },
+    emptyBody: { ...typography.bodySmall, color: colors.textSecondary },
   });

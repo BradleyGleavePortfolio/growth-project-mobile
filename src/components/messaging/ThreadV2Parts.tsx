@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useThreadColors, type ThreadColors } from './thread/useThreadColors';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
 import ActionMenu, { type ActionMenuOption } from './ActionMenu';
 import { messageActionOptions, type ThreadV2Fields } from './threadV2';
 import type { useThreadV2 } from '../../hooks/useThreadV2';
@@ -197,14 +197,14 @@ const makeStyles = (colors: ThreadColors) =>
     barLabel: { ...typography.eyebrow, color: colors.textMuted },
     barPreview: { ...typography.bodySmall, fontSize: 13, color: colors.textPrimary },
     backdrop: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-    sheet: { backgroundColor: colors.background, borderTopLeftRadius: 4, borderTopRightRadius: 4, padding: 16, paddingBottom: 36, gap: 10 },
+    sheet: { backgroundColor: colors.background, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, padding: 16, paddingBottom: 36, gap: 10 },
     sheetTitle: { ...typography.h2, color: colors.textPrimary },
     sheetHint: { ...typography.bodySmall, fontSize: 13, color: colors.textMuted },
     input: { ...typography.body, minHeight: 80, maxHeight: 200, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: colors.border, padding: 10, color: colors.textPrimary, textAlignVertical: 'top' },
     actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
     cancel: { minHeight: 44, paddingHorizontal: 16, paddingVertical: 10 },
     cancelText: { ...typography.bodySmall, color: colors.textPrimary },
-    save: { minHeight: 44, paddingHorizontal: 18, paddingVertical: 10, borderRadius: 4, backgroundColor: colors.primary, minWidth: 72, alignItems: 'center' },
+    save: { minHeight: 44, paddingHorizontal: 18, paddingVertical: 10, borderRadius: radius.button, backgroundColor: colors.primary, minWidth: 72, alignItems: 'center' },
     saveOff: { backgroundColor: colors.disabledBg },
     saveText: { ...typography.bodyMd, color: colors.textOnPrimary },
   });
