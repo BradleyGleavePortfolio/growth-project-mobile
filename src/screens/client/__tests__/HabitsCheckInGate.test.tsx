@@ -100,9 +100,9 @@ async function openCheckIn() {
 
 function expectNoForm(screen: Awaited<ReturnType<typeof openCheckIn>>) {
   expect(screen.queryByText('How are you feeling?')).toBeNull();
-  expect(screen.queryByText('Energy level')).toBeNull();
+  expect(screen.queryByText('How is your energy?')).toBeNull();
   expect(screen.queryByLabelText('Increase sleep hours')).toBeNull();
-  expect(screen.queryByPlaceholderText("How's your day going? Anything noteworthy?")).toBeNull();
+  expect(screen.queryByPlaceholderText('Anything worth noting about today')).toBeNull();
   expect(screen.queryByText('Save check-in')).toBeNull();
   expect(screen.queryByText('Update check-in')).toBeNull();
   expect(mockSaveCheckIn).not.toHaveBeenCalled();
@@ -117,7 +117,7 @@ it.each([false, true])('explains inactive access before editing and uses the exi
   expect(screen.getByText(REQUIREMENT)).toBeTruthy();
   expect(screen.getByText(hidden ? 'Your coach manages your access' : 'Choose a Plan')).toBeTruthy();
   expectNoForm(screen);
-  expect(screen.queryByText('Saved.')).toBeNull();
+  expect(screen.queryByText('Saved for today. Change anything and update.')).toBeNull();
   expect(mockGetCheckIns).not.toHaveBeenCalled();
 
   let scroll = screen.getByText(REQUIREMENT).parent;
@@ -192,7 +192,7 @@ it('keeps mood, energy, sleep, notes and save reachable for active access', asyn
   await fireEvent.press(screen.getByLabelText('Great'));
   await fireEvent.press(screen.getByLabelText('High'));
   await fireEvent.press(screen.getByLabelText('Increase sleep hours'));
-  await fireEvent.changeText(screen.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Slept well.');
+  await fireEvent.changeText(screen.getByPlaceholderText('Anything worth noting about today'), 'Slept well.');
   await fireEvent.press(screen.getByText('Save check-in'));
   await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith({
     date: TODAY, mood: 5, energy: 4, sleep_hours: 7.5, notes: 'Slept well.',
@@ -205,7 +205,7 @@ it('hydrates and updates an existing check-in without changing the accepted payl
   mockGetCheckIns.mockResolvedValue({ data: [savedRow] });
   const screen = await openCheckIn();
   await waitFor(() => expect(screen.getByText('Update check-in')).toBeTruthy());
-  expect(screen.getByPlaceholderText("How's your day going? Anything noteworthy?").props.value).toBe(savedRow.notes);
+  expect(screen.getByPlaceholderText('Anything worth noting about today').props.value).toBe(savedRow.notes);
   expect(screen.getByText('6.5h')).toBeTruthy();
   await fireEvent.press(screen.getByText('Update check-in'));
   await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(savedRow));
@@ -214,16 +214,16 @@ it('hydrates and updates an existing check-in without changing the accepted payl
 it('retains check-in read retry and visible save failure instead of silently dropping notes', async () => {
   mockGetCheckIns.mockRejectedValueOnce(new Error('Check-in read unavailable'));
   const screen = await openCheckIn();
-  await waitFor(() => expect(screen.getByText("Today's check-in could not be loaded.")).toBeTruthy());
-  await fireEvent.press(screen.getByText('Retry check-in'));
+  await waitFor(() => expect(screen.getByText("Today's check-in did not load. Check your connection, then try again.")).toBeTruthy());
+  await fireEvent.press(screen.getByText('Try again'));
   await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
   mockSaveCheckIn.mockRejectedValueOnce(new Error('Check-in service unavailable'));
-  await fireEvent.changeText(screen.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Keep these notes.');
+  await fireEvent.changeText(screen.getByPlaceholderText('Anything worth noting about today'), 'Keep these notes.');
   await fireEvent.press(screen.getByText('Save check-in'));
   await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith(
     "Couldn't save check-in", 'Check-in service unavailable',
   ));
-  expect(screen.getByPlaceholderText("How's your day going? Anything noteworthy?").props.value).toBe('Keep these notes.');
+  expect(screen.getByPlaceholderText('Anything worth noting about today').props.value).toBe('Keep these notes.');
   expect(screen.queryByText('Check-in saved')).toBeNull();
 });
 
