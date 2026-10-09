@@ -9,7 +9,8 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CoachStepProps } from '../../types';
 
-jest.mock('../../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach_1' }) }));
+let mockUserId = 'coach_1';
+jest.mock('../../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: mockUserId }) }));
 const mockInviteLink = jest.fn();
 jest.mock('../../../../../api/coachSetupApi', () => ({ coachSetupApi: { inviteLink: () => mockInviteLink() } }));
 const mockCopy = jest.fn();
@@ -24,9 +25,12 @@ import { STEP_MS } from '../../../../consultation/components';
 import K6PersonalLink from '../K6PersonalLink';
 import K7ImportOffer from '../K7ImportOffer';
 import K8PracticeReady from '../K8PracticeReady';
-import { PRACTICE_STEPS } from '../practiceSteps';
 import CoachConsultationFlow from '../../CoachConsultationFlow';
 import { STEP_COMPONENTS } from '../../registry';
+
+it('the default registry carries K5-K8', () => {
+  expect(Object.keys(STEP_COMPONENTS)).toEqual(['K0', 'K1', 'K2', 'K3', 'K4', 'K5', 'K6', 'K7', 'K8']);
+});
 import { draftKey } from '../../../../../lib/coachConsultation/draft';
 import type { CoachConsultApi } from '../../../../../lib/coachConsultation/api';
 
@@ -49,6 +53,7 @@ function props(over: Partial<CoachStepProps> = {}): CoachStepProps {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUserId = 'coach_1';
   mockInviteLink.mockResolvedValue(LINK);
   mockCopy.mockResolvedValue(true);
 });
@@ -178,7 +183,7 @@ describe('K8 Practice ready', () => {
   });
 });
 
-describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
+describe('K5-K8 in the flow (default registry, nothing injected)', () => {
   async function walk(importOn: boolean) {
     await AsyncStorage.setItem(
       draftKey('c1'),
@@ -196,7 +201,6 @@ describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
         user={{ name: 'Jordan Reyes' }}
         api={api}
         onComplete={onComplete}
-        steps={{ ...STEP_COMPONENTS, ...PRACTICE_STEPS }}
         importOn={importOn}
       />,
     );
@@ -217,9 +221,21 @@ describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
     const { ui, api, onComplete } = await walk(false);
     expect(ui.queryByTestId('coach-step-K7')).toBeNull();
     expect(ui.getByText('Jordan Reyes.')).toBeTruthy();
+    expect(ui.getByText('Your link is ready to share.')).toBeTruthy();
     await fireEvent.press(ui.getByTestId('k8-show-me-around'));
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(api.complete).toHaveBeenCalledWith(expect.objectContaining({ programming_style: 'own', clients_today: '1_10' }));
+  });
+
+  it('after a failed link load and Later, K8 points to Settings instead of claiming the link is ready', async () => {
+    mockInviteLink.mockRejectedValue(Object.assign(new Error('x'), { response: { status: 503, data: {} } }));
+    mockUserId = 'coach_2'; // a coach whose link never loaded on this phone
+    await AsyncStorage.setItem(draftKey('c2'), JSON.stringify({ v: 1, step: 'K6', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Ana', clients_today: 'none' } }));
+    const api = { load: jest.fn().mockResolvedValue(null), saveDraft: jest.fn().mockResolvedValue('unavailable'), complete: jest.fn() };
+    const ui = await render(<CoachConsultationFlow userId="c2" user={{ name: 'Ana' }} api={api} onComplete={jest.fn()} />);
+    await waitFor(() => expect(ui.getByTestId('k6-error')).toBeTruthy());
+    await fireEvent.press(ui.getByTestId('k6-later'));
+    expect(ui.getByText('Your link is in Settings > Invite Codes.')).toBeTruthy();
   });
 
   it('offers K7 between K6 and K8 when the importer is on and the coach has clients', async () => {

@@ -14,19 +14,13 @@ import {
 } from '../practiceCopy';
 
 describe('K8 summary sentences', () => {
-  it('reads like the prototype: card, specialties, link', () => {
-    expect(practiceSummary({ name: 'Jordan Reyes', business: 'Reyes Strength', specialtyLabels: ['Strength', 'Fat loss', 'Beginners'] })).toEqual([
-      { key: 'card', label: 'Your card', sentence: 'Jordan Reyes, Reyes Strength.' },
-      { key: 'specialties', label: 'You specialise in', sentence: 'Strength, fat loss and beginners.' },
-      { key: 'link', label: 'Your link', sentence: 'Your link is ready to share.' },
-    ]);
-  });
-
   it('leaves out a section the coach skipped and never prints an empty sentence', () => {
     const out = practiceSummary({ name: 'Jordan Reyes', business: '  ', specialtyLabels: [] });
     expect(out.map((s) => s.key)).toEqual(['card', 'link']);
     expect(out[0].sentence).toBe('Jordan Reyes.');
     expect(practiceSummary({}).map((s) => s.key)).toEqual(['link']);
+    expect(practiceSummary({}).slice(-1)[0].sentence).toBe('Your link is in Settings > Invite Codes.');
+    expect(practiceSummary({ linkLoaded: true }).slice(-1)[0].sentence).toBe('Your link is ready to share.');
   });
 
   it('joins one, two and many labels', () => {

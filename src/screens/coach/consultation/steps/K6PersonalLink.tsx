@@ -1,13 +1,7 @@
 /**
- * K6 Your personal link (prototype 83). The coach's real join link from
- * GET /coaches/me/invite-link (live on production today; the server creates
- * the invite code on first read), as a 240 pt QR (the existing CodeQr:
- * on-phone toqr encoder + react-native-svg, dark on light with a 4-module
- * quiet zone so every camera reads it), the printed link and the code. "Share my link" opens the system share sheet (no permission needed),
- * "Copy link" copies it, "Later" moves on. Sharing or copying ticks
- * "Invite your first client" on the Overview checklist (same key as the
- * setup screen's InviteShareCard) and records `link_shared` locally.
- * A failed load names the problem (coachSetup/errors) and offers Try again.
+ * K6 Your personal link (prototype 83): the coach's real join link (GET /coaches/me/invite-link) as a 240 pt QR (CodeQr,
+ * dark on light), the printed link and the code. Share (system sheet), Copy, Later. Sharing or copying sets `link_shared`
+ * and ticks the Overview checklist; a failed load names the problem and offers Try again (Later still moves on).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Share, StyleSheet, Text, View } from 'react-native';
@@ -25,6 +19,10 @@ import { CoachStepFrame } from '../CoachStepFrame';
 import type { CoachStepProps } from '../types';
 import CodeQr from '../../../../components/coach/CodeQr';
 import { K6_COPY, displayUrl, shareMessage } from './practiceCopy';
+
+/** Coaches whose link loaded on this phone this session (K8 only claims "ready" for them). */
+const loadedFor = new Set<string>();
+export const linkLoadedFor = (coachId: string | null | undefined): boolean => !!coachId && loadedFor.has(coachId);
 
 type Load = { kind: 'loading' } | { kind: 'ready'; link: InviteLink } | { kind: 'error'; error: FriendlyError };
 
@@ -45,11 +43,12 @@ export default function K6PersonalLink({ setAnswers, onNext, onBack, onFinishLat
     setLoad({ kind: 'loading' });
     try {
       const link = await coachSetupApi.inviteLink();
+      if (coachId) loadedFor.add(coachId);
       if (alive.current) setLoad({ kind: 'ready', link });
     } catch (err) {
       if (alive.current) setLoad({ kind: 'error', error: describeError(err, 'load your link') });
     }
-  }, []);
+  }, [coachId]);
 
   useEffect(() => {
     void fetchLink();

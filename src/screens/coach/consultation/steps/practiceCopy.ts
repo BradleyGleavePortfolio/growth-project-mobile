@@ -40,6 +40,7 @@ export const K8_COPY = {
   specialtiesLabel: 'You specialise in',
   linkLabel: 'Your link',
   linkReady: 'Your link is ready to share.',
+  linkInSettings: 'Your link is in Settings > Invite Codes.',
   roman: "Next, I'll show you around and help you create your first package.",
   cta: 'Show me around',
 } as const;
@@ -84,13 +85,18 @@ export interface SummarySection {
 }
 
 /** K8 summary sections, in prototype order; an empty section is left out. */
-export function practiceSummary(input: { name?: string | null; business?: string | null; specialtyLabels?: readonly string[] }): SummarySection[] {
+export function practiceSummary(input: {
+  name?: string | null;
+  business?: string | null;
+  specialtyLabels?: readonly string[];
+  linkLoaded?: boolean;
+}): SummarySection[] {
   const out: SummarySection[] = [];
   const card = cardSentence(input.name, input.business);
   if (card) out.push({ key: 'card', label: K8_COPY.cardLabel, sentence: card });
   const spec = joinSentence(input.specialtyLabels ?? []);
   if (spec) out.push({ key: 'specialties', label: K8_COPY.specialtiesLabel, sentence: spec });
-  // Every coach has a link: the server creates the invite code on first read.
-  out.push({ key: 'link', label: K8_COPY.linkLabel, sentence: K8_COPY.linkReady });
+  // "Ready" only when K6 showed the link; otherwise point to where it always is.
+  out.push({ key: 'link', label: K8_COPY.linkLabel, sentence: input.linkLoaded ? K8_COPY.linkReady : K8_COPY.linkInSettings });
   return out;
 }

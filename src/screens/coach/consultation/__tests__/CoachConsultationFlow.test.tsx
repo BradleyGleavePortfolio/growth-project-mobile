@@ -73,10 +73,10 @@ describe('coach consultation flow (prototype 77-79)', () => {
   it('completes with every answer once the required ones are given', async () => {
     await AsyncStorage.setItem(
       draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K4', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] } }),
+      JSON.stringify({ v: 1, step: 'K8', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] } }),
     );
     const { getByTestId, api, onComplete } = await mount();
-    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
+    await fireEvent.press(getByTestId('k8-show-me-around')); // K8 Practice ready is the last step (COACH-CONSULT-M2-134)
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(api.complete).toHaveBeenCalledWith(expect.objectContaining({ display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] }));
     expect(await AsyncStorage.getItem(draftKey('c1'))).toBeNull();
@@ -85,11 +85,11 @@ describe('coach consultation flow (prototype 77-79)', () => {
   it('shows a specific problem with Try again when completion fails, and keeps the answers', async () => {
     await AsyncStorage.setItem(
       draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K4', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan', clients_today: 'none' } }),
+      JSON.stringify({ v: 1, step: 'K8', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan', clients_today: 'none' } }),
     );
     const api = makeApi({ complete: jest.fn().mockRejectedValueOnce(Object.assign(new Error('x'), { response: { status: 429 } })).mockResolvedValueOnce(undefined) });
     const { getByTestId, getByText, onComplete } = await mount(api);
-    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
+    await fireEvent.press(getByTestId('k8-show-me-around'));
     await waitFor(() => expect(getByTestId('coach-consult-problem')).toBeTruthy());
     expect(getByText('Too many tries in a row')).toBeTruthy();
     expect(getByText(/Your answers are kept on this phone\./)).toBeTruthy();

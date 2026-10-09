@@ -11,6 +11,7 @@ import K1Card from './steps/K1Card';
 import K2Specialties from './steps/K2Specialties';
 import K3ClientsToday from './steps/K3ClientsToday';
 import K4CoachingTouch from './steps/K4CoachingTouch';
+import { PRACTICE_STEPS } from './steps/practiceSteps';
 
 export type StepRegistry = Partial<Record<CoachStepId, React.ComponentType<CoachStepProps>>>;
 
@@ -20,4 +21,5 @@ export const STEP_COMPONENTS: StepRegistry = {
   K2: K2Specialties,
   K3: K3ClientsToday,
   K4: K4CoachingTouch,
+  ...PRACTICE_STEPS, // K5-K8 (COACH-CONSULT-M2-134)
 };

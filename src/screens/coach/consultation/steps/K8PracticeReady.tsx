@@ -1,11 +1,6 @@
 /**
- * K8 Practice ready (prototype 85): the summary sentences (T-F light) of the
- * coach's card, specialties and link, Roman's hand-off line and one button,
- * "Show me around". No chapter bar and no Finish later. The button calls
- * onNext, which completes the consultation on the server (BE sets the coach's
- * consultation completed time) and lands on Clients (86 K-LAND, decision
- * D13); while that runs the button shows a spinner and ignores presses (a
- * failed completion is the flow's own problem state, with Try again).
+ * K8 Practice ready (prototype 85): summary sentences, Roman's hand-off line and one button, "Show me around" (onNext:
+ * the flow completes on the server and lands on Clients, 86 K-LAND). No bar, no Finish later; spinner while completing.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -13,13 +8,17 @@ import { PrimaryButton, QuietOverline } from '../../../../ui';
 import { useTheme } from '../../../../theme/ThemeProvider';
 import { spacing, typography } from '../../../../theme/tokens';
 import { RomanLine } from '../../../consultation/components';
+import { useCurrentUser } from '../../../../hooks/useCurrentUser';
+import { linkLoadedFor } from './K6PersonalLink';
 import { CoachStepFrame } from '../CoachStepFrame';
 import type { CoachStepProps } from '../types';
 import { K8_COPY, practiceSummary, specialtyLabels } from './practiceCopy';
 
 export default function K8PracticeReady({ answers, onNext, onBack, eyebrow, firstName, completing }: CoachStepProps) {
   const { semanticColors: sc } = useTheme();
+  const user = useCurrentUser();
   const sections = practiceSummary({
+    linkLoaded: linkLoadedFor(user?.id),
     name: answers.display_name?.trim() || firstName,
     business: answers.business_name,
     specialtyLabels: specialtyLabels(answers.specialties),

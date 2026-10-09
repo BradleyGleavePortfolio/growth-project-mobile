@@ -26,6 +26,14 @@ async function openAt(step: string, answers: Record<string, unknown>) {
   return { ...r, api, onComplete };
 }
 
+/** K5-K8 (COACH-CONSULT-M2-134) sit after K4: skip K5, leave K6 for later, then finish on K8. */
+async function finishPractice(r: Awaited<ReturnType<typeof render>>) {
+  await waitFor(() => expect(r.getByTestId('coach-step-K5')).toBeTruthy());
+  await fireEvent.press(r.getByTestId('k5-skip'));
+  await fireEvent.press(r.getByTestId('k6-later'));
+  await fireEvent.press(r.getByTestId('k8-show-me-around'));
+}
+
 beforeEach(async () => {
   await AsyncStorage.clear();
 });
@@ -58,6 +66,7 @@ describe('coach consultation K3 and K4 (prototype 80, 81)', () => {
     expect(r.getByText('Your practice · 4 of 5')).toBeTruthy();
     expect(r.getByTestId('coach-consult-K4-close').props.accessibilityLabel).toBe('Close guidance. Frequent check-ins');
     await fireEvent.press(r.getByTestId('coach-consult-K4-balanced'));
+    await finishPractice(r);
     await waitFor(() => expect(r.onComplete).toHaveBeenCalledTimes(1));
     expect(r.api.complete).toHaveBeenCalledWith(
       expect.objectContaining({ display_name: 'Jordan Reyes', clients_today: '1_10', specialties: ['strength'], coaching_touch: 'balanced' }),
@@ -67,6 +76,7 @@ describe('coach consultation K3 and K4 (prototype 80, 81)', () => {
   it('K4 Skip leaves the coaching touch unset', async () => {
     const r = await openAt('K4', { display_name: 'Jordan Reyes', clients_today: 'none', coaching_touch: 'close' });
     await fireEvent.press(r.getByTestId('coach-consult-K4-skip'));
+    await finishPractice(r);
     await waitFor(() => expect(r.onComplete).toHaveBeenCalled());
     expect(r.api.complete.mock.calls[0][0].coaching_touch).toBeUndefined();
   });
