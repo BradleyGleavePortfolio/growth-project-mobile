@@ -44,7 +44,8 @@ import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActio
 import { DisputePausedPlansCard } from '../../components/coach/DisputePausedPlansCard';
 import { featureFlags } from '../../config/featureFlags';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
-import { typography } from '../../theme/tokens';
+import { layout, radius, typography } from '../../theme/tokens';
+import { useScreenInsets } from '../../ui';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   // S14 round 3: the coach wearable-prompts screen is reachable from this
@@ -56,6 +57,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     serverFlags.flags.coach_community_wearable_prompts === true;
   const { colors, semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The Screen wrapper's inset top (insets.top + 12), never a fixed 56 (B13 B28).
+  const insets = useScreenInsets();
+  const top = { paddingTop: insets.top + layout.statusBarGap };
   const { clientId, clientName } = route.params;
   const currentUser = useCurrentUser();
 
@@ -348,7 +352,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   if (isLoading && !refreshing) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView style={[styles.container, top]} contentContainerStyle={{ paddingBottom: 40 }}>
         <SkeletonProfileHeader />
         <View style={{ paddingHorizontal: 16, gap: 8 }}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -372,7 +376,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   // no logs yet.
   if (loadError && !profile) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
+      <View style={[styles.container, top, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
         <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
         <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 12, marginBottom: 16 }}>
           {loadError}
@@ -385,7 +389,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             backgroundColor: colors.primary,
             paddingVertical: 12,
             paddingHorizontal: 24,
-            borderRadius: 4,
+            borderRadius: radius.button,
           }}
         >
           <Text style={{ color: colors.textOnPrimary, fontWeight: '600', letterSpacing: 1.1, textTransform: 'uppercase' }}>
@@ -397,7 +401,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, top]} testID="client-detail">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
