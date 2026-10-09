@@ -120,6 +120,17 @@ describe('Truthful numbers (WEIGH-KB-128 U12)', () => {
     expect(getByText('over the last 30 days')).toBeTruthy();
   });
 
+  it('names a run only from two days in a row (never "1 days in a row")', async () => {
+    const one = await screen();
+    // The Since overline lands in the same update as the run count.
+    await waitFor(() => expect(one.getByText(formatSince(day(80).slice(0, 10)) as string)).toBeTruthy());
+    expect(one.queryByText(/in a row/)).toBeNull();
+    one.unmount();
+    mockAll = [mockAll[0], mockAll[1], { id: 'd', date: day(2), weight_lbs: 184 }, mockAll[2]];
+    const two = await screen();
+    expect(await two.findByText('2 days in a row with a weigh-in')).toBeTruthy();
+  });
+
   it('a new client sees one calm line and the action, not an empty chart', async () => {
     mockAll = [];
     mockProfile = {};

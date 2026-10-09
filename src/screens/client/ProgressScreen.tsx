@@ -403,7 +403,8 @@ export default function ProgressScreen() {
         {/* Under the native back header (MoreStack): no extra top padding. */}
         <Headline level="h1">The full picture</Headline>
         {since ? <QuietOverline style={styles.since}>{since}</QuietOverline> : null}
-        {loggingStreak > 0 && (
+        {/* A run is two or more days; one day would read "1 days in a row". */}
+        {loggingStreak >= 2 && (
           <View style={styles.runRow}>
             <Text style={styles.runText}>{runLabel}</Text>
             {/* Phase 11: Share streak card when streak >= 3 days */}
