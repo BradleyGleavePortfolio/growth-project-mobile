@@ -5,7 +5,7 @@
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import type { JoinOutcome } from '../../../lib/joinPackage';
 import { readPendingJoin, presentJoinFrom, takePresentedJoin } from '../../../lib/joinPackage';
 import JoinPackageScreen from '../JoinPackageScreen';
@@ -36,7 +36,13 @@ jest.mock('../../../hooks/usePackagePurchase', () => ({
   },
 }));
 jest.mock('../../../entitlements/EntitlementProvider', () => ({ useEntitlement: () => ({ refreshEntitlement: mockRefresh }) }));
-jest.mock('../../../services/api', () => ({ __esModule: true, default: {}, authApi: { me: () => mockMe() } }));
+jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  default: {},
+  authApi: { me: () => mockMe(), getSignupPolicy: async () => ({ data: { coach_sharing_notice: 'coach_sharing_join_v1' } }) },
+}));
+const mockAccept = jest.fn(async (_v: string) => true);
+jest.mock('../../../api/coachSharingApi', () => ({ acceptFirstSignInSharing: (v: string) => mockAccept(v) }));
 jest.mock('../../../lib/userCache', () => ({ patchUserCache: (p: unknown) => mockPatch(p) }));
 
 const PAID: JoinOutcome = {
@@ -133,4 +139,24 @@ it('paid: after the payment the user is re-read; the pending join clears once th
   expect(mockMe).toHaveBeenCalledTimes(1);
   expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
   expect(await readPendingJoin()).toBeNull();
+  expect(mockAccept).not.toHaveBeenCalled(); // no tap under the sharing sentence, nothing recorded
+});
+
+it('paid: the sharing sentence sits above Continue to payment; once me() shows the coach it is recorded once', async () => {
+  presentJoinFrom({ coach_id: null, already_attached: false, join: PAID });
+  mockMe.mockResolvedValue({ data: { id: 'u-1', coach_id: 'coach-1' } });
+  const ui = await render(<JoinPackageScreen join={PAID} onClose={onClose} />);
+  const notice = await ui.findByTestId('coach-sharing-notice');
+  expect(notice.props.children).toMatch(/^Joining shares your workouts, food logs, weigh-ins and check-ins with Bradley\./);
+  await act(async () => {
+    fireEvent.press(ui.getByTestId('join-package-pay'));
+  });
+  mockPhase = 'success';
+  await ui.rerender(<JoinPackageScreen join={PAID} onClose={onClose} />);
+  await act(async () => {
+    fireEvent.press(ui.getByTestId('payment-continue'));
+  });
+  await waitFor(() => expect(mockAccept).toHaveBeenCalledTimes(1));
+  expect(mockAccept).toHaveBeenCalledWith('coach_sharing_join_v1');
+  expect(mockPatch).toHaveBeenCalledWith({ coach_id: 'coach-1' });
 });

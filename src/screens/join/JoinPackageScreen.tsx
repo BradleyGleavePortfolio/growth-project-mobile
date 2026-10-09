@@ -6,7 +6,7 @@
  * A client package is 1:1 coaching with an individual coach
  * (config/purchaseSurfaces.ts, Guideline 3.1.3(d)): same PaymentSheet, no new path.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useRef } from 'react';
 import { Platform, StyleSheet, View } from 'react-native';
 import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -14,6 +14,9 @@ import { usePackagePurchase } from '../../hooks/usePackagePurchase';
 import { usePaymentSheetAppearance } from '../../components/purchase/usePaymentSheetAppearance';
 import PlanTermsBlock from '../../components/purchase/PlanTermsBlock';
 import PurchaseFeedback from '../../components/purchase/PurchaseFeedback';
+import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
+import { acceptFirstSignInSharing } from '../../api/coachSharingApi';
+import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
 import { clearPendingJoin, coachNameOf, type JoinOutcome } from '../../lib/joinPackage';
 import { patchUserCache } from '../../lib/userCache';
@@ -29,15 +32,18 @@ const MODAL_EDGES: readonly ScreenEdge[] = Platform.OS === 'ios' ? ['bottom'] : 
 /**
  * After the paid join's purchase the webhook attached the client: re-read the
  * user (coach_id) and the coachless Home. The pending join is cleared only
- * once the server shows the coach.
+ * once the server shows the coach. A paid join writes no coach sharing on the
+ * server, so the sharing sentence shown above the tapped "Continue to payment"
+ * (`sharingVersion`) is recorded here, once the coach shows.
  */
-export async function refreshAfterJoinPaid(): Promise<void> {
+export async function refreshAfterJoinPaid(sharingVersion: string | null = null): Promise<void> {
   try {
     const me = await authApi.me();
     const coachId = (me?.data as { coach_id?: unknown } | undefined)?.coach_id;
     if (typeof coachId === 'string' && coachId) {
       await patchUserCache({ coach_id: coachId });
       await clearPendingJoin();
+      if (sharingVersion) await acceptFirstSignInSharing(sharingVersion);
     }
   } catch (err) {
     logger.warn('JoinPackage', 'user refresh after payment failed', err);
@@ -59,6 +65,9 @@ export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenPr
   const packageName = join.package.name.trim() || 'This package';
   const paid = join.status === 'checkout_required';
   const sellable = useMemo(() => purchasableFromCoachPackage(join.package), [join.package]);
+  const sharingVersion = useCoachSharingNotice();
+  // The sharing sentence the client saw when they tapped "Continue to payment"; sent once.
+  const sharedAtTap = useRef<string | null>(null);
   const refresh = useCallback(() => {
     void refreshEntitlement().catch((err: unknown) =>
       logger.warn('JoinPackage', 'entitlement refresh failed', err),
@@ -75,7 +84,9 @@ export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenPr
   const leave = useCallback(() => {
     purchase.reset();
     refresh();
-    void refreshAfterJoinPaid();
+    const shared = sharedAtTap.current;
+    sharedAtTap.current = null;
+    void refreshAfterJoinPaid(shared);
     onClose();
   }, [onClose, purchase, refresh]);
   const start = useCallback(() => {
@@ -94,12 +105,18 @@ export default function JoinPackageScreen({ join, onClose }: JoinPackageScreenPr
   const footer = paid ? (
     <View>
       {hidePay ? null : (
-        <PrimaryButton
-          label="Continue to payment"
-          onPress={() => sellable && void purchase.start(sellable)}
-          loading={purchase.busy}
-          testID="join-package-pay"
-        />
+        <>
+          <CoachSharingNotice version={sharingVersion} coachName={join.coach.first_name} />
+          <PrimaryButton
+            label="Continue to payment"
+            onPress={() => {
+              sharedAtTap.current = sharingVersion;
+              if (sellable) void purchase.start(sellable);
+            }}
+            loading={purchase.busy}
+            testID="join-package-pay"
+          />
+        </>
       )}
       {phase === 'success' ? null : (
         <TextLink label="Not now" onPress={onClose} disabled={purchase.busy} testID="join-package-not-now" />
