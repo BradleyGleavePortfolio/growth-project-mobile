@@ -92,7 +92,7 @@ describe('RiskBoardScreen — source guards', () => {
 //   (b) jest.mock itself is still hoisted but its *factory argument* closes
 //       over the module scope at call time.
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn() }),
+  useNavigation: () => ({ navigate: jest.fn(), canGoBack: () => false }),
   useRoute: () => ({ params: {} }),
 }));
 const mockUseCurrentUser = jest.fn(() => ({

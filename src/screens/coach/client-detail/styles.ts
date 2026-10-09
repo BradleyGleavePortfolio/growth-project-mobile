@@ -1,6 +1,6 @@
 import { StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { radius } from '../../../theme/tokens';
+import { layout, radius } from '../../../theme/tokens';
 
 export const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
@@ -10,7 +10,7 @@ export const makeStyles = (colors: ThemeColors) =>
     flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background,
   },
   header: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16, gap: 14,
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: layout.gutter, marginBottom: 16, gap: 14,
   },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
@@ -47,7 +47,7 @@ export const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center', alignItems: 'center',
   },
   tabScroll: { maxHeight: 44, marginBottom: 16 },
-  tabRow: { paddingHorizontal: 20, gap: 8 },
+  tabRow: { paddingHorizontal: layout.gutter, gap: 8 },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: radius.chip,
@@ -56,7 +56,7 @@ export const makeStyles = (colors: ThemeColors) =>
   tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   tabText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textSecondary, letterSpacing: 0.4 },
   tabTextActive: { color: colors.textOnPrimary },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
+  scrollContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
   sectionTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 20,
@@ -417,7 +417,7 @@ export const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.gutter,
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
@@ -431,7 +431,7 @@ export const makeStyles = (colors: ThemeColors) =>
     fontWeight: '400',
     color: colors.textPrimary,
   },
-  planModalContent: { padding: 20, paddingBottom: 60 },
+  planModalContent: { paddingHorizontal: layout.gutter, paddingVertical: 20, paddingBottom: 60 },
   planFieldLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,

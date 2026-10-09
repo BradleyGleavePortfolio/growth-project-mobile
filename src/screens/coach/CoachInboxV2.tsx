@@ -38,7 +38,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { radius } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import ActionMenu, { ActionMenuOption } from '../../components/messaging/ActionMenu';
@@ -403,13 +403,13 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     // Screen (src/ui) owns the top: insets.top + 12; the header adds 12 like the Clients and Settings tabs (B13 B28).
     bare: { paddingHorizontal: 0, paddingBottom: 0 },
-    header: { paddingHorizontal: 24, paddingTop: 12, marginBottom: 8 },
+    header: { paddingHorizontal: layout.gutter, paddingTop: 12, marginBottom: 8 },
     // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
     headerRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
     headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
     title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 39, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
     unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
-    searchContainer: { paddingHorizontal: 24, marginBottom: 8, gap: 10 },
+    searchContainer: { paddingHorizontal: layout.gutter, marginBottom: 8, gap: 10 },
     searchBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -427,7 +427,7 @@ const makeStyles = (colors: ThemeColors) =>
     filterChipOn: { backgroundColor: colors.primary, borderColor: colors.primary },
     filterText: { fontSize: 13, color: colors.textSecondary, fontWeight: '500' },
     filterTextOn: { color: colors.textOnPrimary },
-    listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+    listContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
     convoCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, marginBottom: 8, gap: 12 },
     convoAvatar: { width: 48, height: 48, borderRadius: radius.chip, backgroundColor: colors.primaryDark, justifyContent: 'center', alignItems: 'center' },
     convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },

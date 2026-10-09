@@ -14,14 +14,16 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
-import { radius } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import {
   subCoachApi,
@@ -179,28 +181,47 @@ export default function SubCoachDetailScreen() {
     );
   }, [detail, subCoachId, navigation, load]);
 
+  // COACH-INSETS-A-134 follow-up (B08): the Team stack hides the native
+  // header, so a pushed detail draws its own Back (iOS has no hardware back).
+  // Same arrow and place as the other coach detail screens; 44 pt target.
+  const back = navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}
+      testID="sub-coach-detail-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   if (loading) {
     return <SkeletonScreen count={5} />;
   }
 
   if (error !== null || detail === null) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'Sub-coach not found.'}</Text>
-        <Pressable
-          onPress={load}
-          style={styles.retryBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading"
-        >
-          <Text style={styles.retryBtnText}>Retry</Text>
-        </Pressable>
-      </View>
+      <Screen edges={['top']} scroll={false} testID="sub-coach-detail-error">
+        {back}
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error ?? 'Sub-coach not found.'}</Text>
+          <Pressable
+            onPress={load}
+            style={styles.retryBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading"
+          >
+            <Text style={styles.retryBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      </Screen>
     );
   }
 
   return (
     <Screen edges={['top']} contentStyle={styles.content} testID="sub-coach-detail">
+      {back}
       {/* Header */}
       <Text style={styles.name}>{detail.name}</Text>
       <Text style={styles.email}>{detail.email}</Text>
@@ -275,15 +296,20 @@ export default function SubCoachDetailScreen() {
 const styles = StyleSheet.create({
   // Screen (src/ui) owns the top (insets.top + 12) and the 24 pt gutter; never a fixed 56 (B13 B28).
   content: {
-    paddingTop: 12,
     paddingBottom: 40,
   },
+  back: {
+    width: layout.touchMin,
+    height: layout.touchMin,
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  // Screen owns the 24 pt gutter; the error copy is centred inside it.
   center: {
     flex: 1,
-    backgroundColor: Colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    paddingVertical: 24,
   },
   name: {
     fontSize: 26,

@@ -13,7 +13,7 @@ import { layout } from '../../../theme/tokens';
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), pop: jest.fn() }),
+  useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn(), pop: jest.fn(), canGoBack: () => false }),
   useRoute: () => ({ params: { draftId: 'd1', clientId: 'c1', clientName: 'Ana Ruiz', fromSubCoachId: 's0' } }),
   usePreventRemove: jest.fn(),
 }));

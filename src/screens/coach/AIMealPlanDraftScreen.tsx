@@ -35,7 +35,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { radius } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import coachAiApi from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
@@ -570,7 +570,7 @@ const makeStyles = (colors: ThemeColors) =>
     header: {
       flexDirection: 'row',
       alignItems: 'center',
-      paddingHorizontal: 20,
+      paddingHorizontal: layout.gutter,
       paddingBottom: 12,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
@@ -587,7 +587,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textMuted,
       marginTop: 2,
     },
-    scrollContent: { padding: 20, paddingBottom: 40 },
+    scrollContent: { paddingHorizontal: layout.gutter, paddingVertical: 20, paddingBottom: 40 },
     summaryCard: {
       backgroundColor: colors.surface,
       borderRadius: radius.card,
@@ -730,7 +730,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderTopWidth: 1,
       borderTopColor: colors.border,
       backgroundColor: colors.surface,
-      paddingHorizontal: 20,
+      paddingHorizontal: layout.gutter,
       paddingTop: 12,
       paddingBottom: 20,
       gap: 10,

@@ -354,14 +354,14 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     return (
       <ScrollView style={[styles.container, top]} contentContainerStyle={{ paddingBottom: 40 }}>
         <SkeletonProfileHeader />
-        <View style={{ paddingHorizontal: 16, gap: 8 }}>
+        <View style={{ paddingHorizontal: layout.gutter, gap: 8 }}>
           <View style={{ flexDirection: 'row', gap: 8 }}>
             <SkeletonStatTile />
             <SkeletonStatTile />
             <SkeletonStatTile />
           </View>
         </View>
-        <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 8 }}>
+        <View style={{ paddingHorizontal: layout.gutter, marginTop: 16, gap: 8 }}>
           <SkeletonWorkoutRow />
           <SkeletonWorkoutRow />
           <SkeletonWorkoutRow />
