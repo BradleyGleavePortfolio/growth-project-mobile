@@ -15,8 +15,12 @@ author deletes their own post from its "..." menu after a confirm
 (DELETE /community/posts/:postId); replies have no delete endpoint. Pull to refresh
 reloads the post and its replies. Tests: `CommunityThreadScreen.test.tsx`.
 
-Today is a calm date-led column on the theme background: small-caps sections,
-text-first hairline rows and one forest action. The server supplies cohort name
+Today is a calm date-led column built from `src/ui` (`Screen`, `Headline`,
+`Overline`, `QuietSection`, `PrimaryButton`): a TODAY overline over the serif
+date, one hairline section per item (overline, serif title, muted meta, chevron)
+and one rounded forest action pinned in the footer (New post, or the empty
+state's destination). Loading is the shared skeleton and a failed load is the
+shared QuietError text retry (REDO-HABITS-CAL-COMM-133). The server supplies cohort name
 and count, pinned title, event start and challenge end; no author name, post body,
 post timestamp or engagement count is invented. “Pinned post” does not imply its
 author is the client's coach.

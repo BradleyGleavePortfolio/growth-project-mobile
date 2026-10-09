@@ -30,7 +30,7 @@ jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../utils/haptics', () => ({ mediumTap: jest.fn() }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 const mockColors = new Proxy({}, { get: () => '#000000' });
-jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: mockColors }) }));
+jest.mock('../../../theme/ThemeProvider', () => ({ useTheme: () => ({ colors: mockColors, semanticColors: jest.requireActual('../../../theme/tokens').lightTokens }) }));
 
 import CoachBillingScreen from '../CoachBillingScreen';
 import { BillingSection } from '../settings/BillingSection';

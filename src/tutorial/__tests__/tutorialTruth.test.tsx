@@ -1,9 +1,8 @@
 /**
  * FW-ONB-128 B2 (ONB-TOUR-131): Roman's tour says only what is true for the
  * client in front of it.
- *  - No coach linked: Roman names no coach, and the steps about a coach
- *    (community, messaging, calendar, first message, welcome call) are
- *    skipped as `unavailable`, with no done line.
+ *  - No coach linked: Roman names no coach, and the step about a coach
+ *    (first message) is skipped as `unavailable`, with no done line.
  *  - The closing line repeats only what this tour really did.
  *  - Settings says "Take the tour" until a tour has been completed.
  *  - TutorialHost hands the store `user.coach_id`, the same signal Home uses
@@ -76,8 +75,6 @@ type Move = TutorialAction | { route: string[] };
 const env = (over: Partial<MachineEnv> = {}): MachineEnv => ({
   hasProgram: false,
   hasMacros: true,
-  communityAvailable: true,
-  calendarAvailable: true,
   currentPath: ['Home', 'HomeMain'],
   now: '2026-10-08T16:00:00.000Z',
   ...over,
@@ -98,28 +95,15 @@ function run(moves: Move[], over: Partial<MachineEnv> = {}): TutorialState {
 }
 
 /** A client with numbers but no plan, standing on Home, takes the tour. */
-const TO_WEARABLES: Move[] = [
+const TO_COMPLETE: Move[] = [
   { type: 'START' },
   { type: 'ACK' }, // welcome; plan is pending; Home is already focused
   { type: 'SIGNAL', signal: 'macro_card_opened' },
-];
-const TO_COMPLETE: Move[] = [
-  ...TO_WEARABLES,
-  { route: ['MoreTab', 'Connections'] },
-  { type: 'DEFER' },
-  { route: ['MoreTab', 'Health'] },
-  { type: 'ACK' },
   { route: ['Log'] },
   { type: 'SIGNAL', signal: 'meal_logged' },
 ];
 
-const COACH_STEPS: TutorialStepId[] = [
-  'community',
-  'coach_messages',
-  'calendar',
-  'first_message',
-  'welcome_call',
-];
+const COACH_STEPS: TutorialStepId[] = ['first_message'];
 
 const BASE: CopyContext = {
   firstName: 'Maya',
@@ -133,22 +117,20 @@ const COACHLESS: CopyContext = { ...BASE, coachName: 'your coach', program: null
 const lineOf = (id: TutorialStepId, c: CopyContext): string =>
   TUTORIAL_STEPS.find((s) => s.id === id)!.gates[0].line(c);
 
-const CLOSE = 'One thing at a time. Consistency matters more than perfection.';
-
 describe('no coach linked: the machine skips every step about a coach', () => {
   it('records the coach steps as unavailable and reaches the closing line', () => {
     const s = run(TO_COMPLETE, { coachLinked: false });
     expect(currentStep(s)?.id).toBe('complete');
     for (const id of COACH_STEPS) expect(s.outcomes[id]).toBe('unavailable');
-    expect(s.outcomes).toMatchObject({ plan: 'pending', macros: 'done', wearables: 'deferred', first_meal: 'done' });
+    expect(s.outcomes).toMatchObject({ plan: 'pending', macros: 'done', first_meal: 'done' });
   });
 
   it('treats an env without coachLinked as no coach', () => {
-    expect(currentStep(run(TO_WEARABLES))?.id).toBe('wearables');
+    expect(currentStep(run(TO_COMPLETE))?.id).toBe('complete');
   });
 
-  it('with a coach linked the same client is shown the community step next', () => {
-    expect(currentStep(run(TO_WEARABLES, { coachLinked: true }))?.id).toBe('community');
+  it('with a coach linked the same client is asked to message the coach next', () => {
+    expect(currentStep(run(TO_COMPLETE, { coachLinked: true }))?.id).toBe('first_message');
   });
 });
 
@@ -177,25 +159,25 @@ const CLOSE_CASES: CloseCase[] = [
     'plan, numbers and message',
     { plan: 'done', macros: 'done', first_message: 'done' },
     'Maya',
-    `That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message. ${CLOSE}`,
+    `That is everything, Maya. Your plan is set, your numbers are set, and Bradley has your message.`,
   ],
   [
     'no coach to message',
     { plan: 'done', macros: 'done', first_message: 'unavailable' },
     'Maya',
-    `That is everything, Maya. Your plan is set and your numbers are set. ${CLOSE}`,
+    `That is everything, Maya. Your plan is set and your numbers are set.`,
   ],
   [
     'no plan yet',
     { plan: 'pending', macros: 'done', first_message: 'done' },
     'Maya',
-    `That is everything, Maya. Your numbers are set and Bradley has your message. ${CLOSE}`,
+    `That is everything, Maya. Your numbers are set and Bradley has your message.`,
   ],
   [
     'nothing set and nothing sent',
     { plan: 'pending', macros: 'pending', first_message: 'unavailable' },
     null,
-    `That is everything. ${CLOSE}`,
+    `That is everything.`,
   ],
 ];
 
@@ -207,7 +189,7 @@ describe('the closing line repeats only what this tour did', () => {
   it('a coachless client with numbers hears only that the numbers are set', () => {
     const outcomes = run(TO_COMPLETE, { coachLinked: false }).outcomes;
     expect(lineOf('complete', { ...COACHLESS, outcomes })).toBe(
-      `That is everything, Maya. Your numbers are set. ${CLOSE}`,
+      `That is everything, Maya. Your numbers are set.`,
     );
   });
 
@@ -243,18 +225,14 @@ describe('the store and TutorialHost carry the coach link', () => {
     expect(buildCopyContext(useTutorialStore.getState(), 'full').coachLinked).toBe(false);
     dispatchTutorial({ type: 'ACK' });
     dispatchTutorial({ type: 'SIGNAL', signal: 'macro_card_opened' });
-    expect(currentStep(useTutorialStore.getState().tutorial)?.id).toBe('wearables');
-    setTutorialRoute(['MoreTab', 'Connections']);
-    dispatchTutorial({ type: 'DEFER' });
-    setTutorialRoute(['MoreTab', 'Health']);
-    dispatchTutorial({ type: 'ACK' });
+    expect(currentStep(useTutorialStore.getState().tutorial)?.id).toBe('first_meal');
     setTutorialRoute(['Log']);
     dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });
     const s = useTutorialStore.getState();
     expect(currentStep(s.tutorial)?.id).toBe('complete');
     expect(s.celebration?.stepId).toBe('first_meal');
     expect(lineOf('complete', buildCopyContext(s, 'full'))).toBe(
-      `That is everything, Maya. Your numbers are set. ${CLOSE}`,
+      `That is everything, Maya. Your numbers are set.`,
     );
   });
 
@@ -292,10 +270,6 @@ describe('Settings > Tutorial', () => {
     expect(useTutorialStore.getState().tutorial.status).toBe('active');
     expect(screen.getByLabelText('The tour is in progress')).toBeTruthy();
     await act(async () => {
-      dispatchTutorial({ type: 'ACK' });
-      setTutorialRoute(['MoreTab', 'Connections']);
-      dispatchTutorial({ type: 'DEFER' });
-      setTutorialRoute(['MoreTab', 'Health']);
       dispatchTutorial({ type: 'ACK' });
       setTutorialRoute(['Log']);
       dispatchTutorial({ type: 'SIGNAL', signal: 'meal_logged' });

@@ -3,6 +3,7 @@ import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { SettingsStyles } from './styles';
+import { Overline } from '../../../ui';
 
 export function ProfileSection({
   initials,
@@ -33,16 +34,16 @@ export function ProfileSection({
           <Text style={styles.avatarText}>{initials}</Text>
         </View>
         <View style={styles.profileInfo}>
-          <Text style={styles.profileName}>
+          <Text style={styles.profileRole}>Coach</Text>
+          <Text style={styles.profileName} numberOfLines={2}>
             {firstName} {lastName}
           </Text>
           <Text style={styles.profileEmail}>{email}</Text>
-          <Text style={styles.profileRole}>COACH</Text>
         </View>
       </View>
 
       {/* Account */}
-      <Text style={styles.sectionHeader}>Account</Text>
+      <Overline style={styles.sectionHeader}>Account</Overline>
       <View style={styles.section}>
         <View style={styles.row}>
           <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
@@ -79,7 +80,7 @@ export function ProfileSection({
           accessibilityLabel="Change password"
         >
           <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Change Password</Text>
+          <Text style={styles.rowLabel}>Change password</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>

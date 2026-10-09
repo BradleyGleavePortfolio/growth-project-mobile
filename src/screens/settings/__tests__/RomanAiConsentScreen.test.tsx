@@ -32,6 +32,7 @@ jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jes
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => '#123456' }),
+    semanticColors: new Proxy({}, { get: () => '#123456' }),
   }),
 }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
@@ -93,6 +94,27 @@ afterEach(() => {
 });
 
 describe('RomanAiConsentScreen', () => {
+  it('prototype 74: Privacy overline, serif title, Roman beside the on/off state, rounded tokens, real insets', async () => {
+    const { radius, typography } = jest.requireActual('../../../theme/tokens');
+    const { StyleSheet } = jest.requireActual('react-native');
+    const on = await renderScreen(makeApi({ kind: 'ok', status: ALLOWED }));
+    await waitFor(() => on.getByTestId('roman-ai-allowed'));
+    expect(on.getByText('Privacy')).toBeTruthy();
+    expect(StyleSheet.flatten(on.getByText(ROMAN_AI_COPY.title).props.style).fontFamily).toBe(typography.h1.fontFamily);
+    expect(on.getByTestId('roman-ai-portrait')).toBeTruthy();
+    expect(on.getByTestId('roman-ai-state-line').props.children).toBe(ROMAN_AI_COPY.stateOn);
+    expect(StyleSheet.flatten(on.getByTestId('roman-ai-allowed').props.style).borderRadius).toBe(radius.card);
+    expect(StyleSheet.flatten(on.getByTestId('roman-ai-withdraw').props.style).borderRadius).toBe(radius.button);
+    await fireEvent.press(on.getByLabelText('Back'));
+    expect(navigation.goBack).toHaveBeenCalled();
+    const off = await renderScreen(makeApi({ kind: 'ok', status: WITHDRAWN }));
+    await waitFor(() => off.getByTestId('roman-ai-not_allowed'));
+    expect(off.getByTestId('roman-ai-state-line').props.children).toBe(ROMAN_AI_COPY.stateOff);
+    // The consent wording itself is unchanged.
+    expect(off.getByTestId('roman-ai-paragraph').props.children).toBe(AI_CONSENT_PARAGRAPH);
+    expect(fs.readFileSync(path.join(__dirname, '..', 'RomanAiConsentScreen.tsx'), 'utf8')).not.toMatch(/paddingTop: \d|borderRadius: \d/);
+  });
+
   it('allowed: shows the state and the D2 paragraph; Withdraw asks first, then DELETEs', async () => {
     const api = makeApi({ kind: 'ok', status: ALLOWED });
     const r = await renderScreen(api);

@@ -7,8 +7,7 @@
  * removal. Booking action notifications can route to this registered screen.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Linking, ScrollView, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { Alert, Linking, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { resolveCallLink, resolveClientTimezone, type CallLink, type CoachingSession } from '../../../api/schedulingApi';
 import { useMyCoaches } from '../../../hooks/useCalendar';
@@ -18,7 +17,11 @@ import { addSessionToPhoneCalendar, phoneCalendarResultMessage } from '../../../
 import { calendarErrorMessage } from '../../../calendar/schedulingErrors';
 import type { CalendarStackParamList } from '../../../navigation/calendarRoutes';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { Body, Note, PrimaryButton, SecondaryButton, Section, SessionTime, Title, calendarStyles, sessionLength, statusLabel, useOpenMessages } from './calendarUi';
+import { radius, spacing } from '../../../theme/tokens';
+import { Headline, Lede, Overline, PrimaryButton, QuietSection, Screen } from '../../../ui';
+import { QuietRow } from '../../../ui/rows/QuietRow';
+import { QuietError, QuietLoading } from '../../../ui/states/QuietStates';
+import { Body, Note, SessionTime, sessionLength, statusLabel, useOpenMessages } from './calendarUi';
 
 type Props = NativeStackScreenProps<CalendarStackParamList, 'CalendarSession'>;
 
@@ -93,29 +96,33 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
     return () => clearInterval(timer);
   }, []);
 
-  const wrap = (children: React.ReactNode) => (
-    <SafeAreaView style={[calendarStyles.screen, { backgroundColor: sc.bgPrimary }]} edges={['bottom']}>
-      <ScrollView contentContainerStyle={calendarStyles.content} testID="calendar-session">
-        {children}
-      </ScrollView>
-    </SafeAreaView>
+  // Under the Calendar stack's native header inside the tab bar: the header
+  // owns the top inset and the tab bar the bottom. The one forest action
+  // (Join, or Open calendar) is pinned in the footer.
+  const wrap = (children: React.ReactNode, footer?: React.ReactNode) => (
+    <Screen edges={[]} footer={footer} testID="calendar-session">
+      <View style={styles.page}>{children}</View>
+    </Screen>
   );
 
   if (!sessionId) {
     return wrap(
       <View testID="calendar-session-incomplete-link">
-        <Body>This session link is incomplete. Open Calendar to find your session.</Body>
-        <PrimaryButton label="See Calendar" onPress={() => navigation.navigate('CalendarHome')} />
+        <Headline level="h2">This link is incomplete</Headline>
+        <Lede>Open Calendar to find your session.</Lede>
       </View>,
+      <PrimaryButton label="Open calendar" onPress={() => navigation.navigate('CalendarHome')} testID="calendar-session-open-home" />,
     );
   }
-  if (q.isLoading) return wrap(<Note text="Loading this session." />);
+  if (q.isLoading) return wrap(<QuietLoading label="Loading this session" rows={4} testID="calendar-session-loading" />);
   if (!q.data) {
     return wrap(
-      <View testID="calendar-session-missing">
-        <Body>{calendarErrorMessage(q.error, 'load this session')}</Body>
-        <SecondaryButton label="Try again" onPress={() => void q.refetch()} />
-      </View>,
+      <QuietError
+        message={calendarErrorMessage(q.error, 'load this session')}
+        onRetry={() => void q.refetch()}
+        retrying={q.isRefetching}
+        testID="calendar-session-missing"
+      />,
     );
   }
 
@@ -161,51 +168,57 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
     setMsg(phoneCalendarResultMessage(r));
   };
 
+  const joinable = canJoin(s, now) && !!link;
+  const confirmed = s.status === 'scheduled';
+
   return wrap(
     <View>
-      <Title>{s.title}</Title>
-      <Body testID="calendar-session-status">{statusLabel(s.status)}</Body>
-      <SessionTime session={s} />
-      {coachClock ? <Note text={coachClock} /> : null}
-      <Note text={`With ${coachName}.`} />
-      <Note text={sessionLength(s)} />
+      <Overline>{`With ${coachName}`}</Overline>
+      <Headline level="h1">{s.title}</Headline>
+      <View style={styles.statusRow}>
+        <View style={[styles.statusDot, confirmed ? { backgroundColor: sc.accent, borderColor: sc.accent } : { borderColor: sc.textMuted }]} />
+        <Body testID="calendar-session-status">{statusLabel(s.status)}</Body>
+      </View>
 
-      {canJoin(s, now) && link ? (
-        <PrimaryButton
-          label={link.kind === 'phone' ? `Call ${link.display}` : 'Join'}
-          onPress={() => void openCallLink(link, coachName).then((m) => { if (m) setMsg(m); })}
-          accessibilityHint={link.kind === 'phone' ? 'Opens your phone app to call your coach' : 'Opens the video call'}
-          testID="calendar-join"
-        />
-      ) : null}
-      {s.status === 'scheduled' && link && !canJoin(s, now) && live ? (
-        <Note
-          text={
-            link.kind === 'phone'
-              ? `This is a phone call on ${link.display}. Call opens 15 minutes before the start.`
-              : 'Join opens 15 minutes before the start.'
-          }
-          testID="calendar-join-later"
-        />
-      ) : null}
-      {linkLine ? <Note text={linkLine} testID="calendar-session-link-pending" /> : null}
+      <QuietSection title="When" style={styles.firstSection}>
+        <SessionTime session={s} />
+        {coachClock ? <Note text={coachClock} /> : null}
+        <Note text={sessionLength(s)} />
+        {s.status === 'scheduled' && link && !canJoin(s, now) && live ? (
+          <Note
+            text={
+              link.kind === 'phone'
+                ? `This is a phone call on ${link.display}. Call opens 15 minutes before the start.`
+                : 'Join opens 15 minutes before the start.'
+            }
+            testID="calendar-join-later"
+          />
+        ) : null}
+        {linkLine ? <Note text={linkLine} testID="calendar-session-link-pending" /> : null}
+      </QuietSection>
 
-      {live && s.status === 'scheduled' ? (
-        <SecondaryButton label="Add to calendar" onPress={() => void onAdd()} testID="calendar-add-phone" />
+      {s.client_recap_md ? (
+        <QuietSection title={`Recap from ${coachName}`}>
+          <Body testID="calendar-recap">{s.client_recap_md}</Body>
+        </QuietSection>
       ) : null}
-      {live && !changeable ? (
-        <Note
-          text={
-            s.cancellable === false
-              ? 'This session has started, so it can no longer be changed here. Message your coach if you need help.'
-              : 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.'
-          }
-        />
-      ) : null}
-      {changeable ? (
-        <>
-          {movable ? (
-          <SecondaryButton
+
+      <QuietSection title="This session" style={styles.lastSection}>
+        {msg ? <Note text={msg} testID="calendar-session-msg" /> : null}
+        {live && !changeable ? (
+          <Note
+            text={
+              s.cancellable === false
+                ? 'This session has started, so it can no longer be changed here. Message your coach if you need help.'
+                : 'Changes are locked within 24 hours of the start. Message your coach if you need help changing this session.'
+            }
+          />
+        ) : null}
+        {live && s.status === 'scheduled' ? (
+          <QuietRow label="Add to calendar" onPress={() => void onAdd()} accessibilityHint="Saves a copy to your phone calendar" testID="calendar-add-phone" />
+        ) : null}
+        {changeable && movable ? (
+          <QuietRow
             label="Reschedule"
             onPress={() =>
               navigation.navigate('CalendarBook', {
@@ -216,28 +229,42 @@ export default function CalendarSessionScreen({ route, navigation }: Props) {
             }
             testID="calendar-reschedule"
           />
-          ) : null}
-          <SecondaryButton label="Cancel session" onPress={onCancel} disabled={cancel.isPending} testID="calendar-cancel" />
-        </>
-      ) : null}
-      {s.status === 'expired' ? (
-        <SecondaryButton
-          label="Pick another time"
-          onPress={() =>
-            navigation.navigate('CalendarBook', { coachId: s.coach_id, sessionTypeId: s.session_type_id ?? undefined })
-          }
-          testID="calendar-expired-rebook"
-        />
-      ) : null}
-      {msg ? <Note text={msg} testID="calendar-session-msg" /> : null}
-
-      {s.client_recap_md ? (
-        <Section title={`Recap from ${coachName}`}>
-          <Body testID="calendar-recap">{s.client_recap_md}</Body>
-        </Section>
-      ) : null}
-
-      <SecondaryButton label="Message your coach" onPress={openMessages} testID="calendar-session-message" />
+        ) : null}
+        {s.status === 'expired' ? (
+          <QuietRow
+            label="Pick another time"
+            onPress={() =>
+              navigation.navigate('CalendarBook', { coachId: s.coach_id, sessionTypeId: s.session_type_id ?? undefined })
+            }
+            testID="calendar-expired-rebook"
+          />
+        ) : null}
+        <QuietRow label="Message your coach" onPress={openMessages} testID="calendar-session-message" />
+        {changeable ? (
+          <QuietRow
+            label={cancel.isPending ? 'Cancelling session' : 'Cancel session'}
+            onPress={cancel.isPending ? () => undefined : onCancel}
+            chevron={false}
+            testID="calendar-cancel"
+          />
+        ) : null}
+      </QuietSection>
     </View>,
+    joinable && link ? (
+      <PrimaryButton
+        label={link.kind === 'phone' ? `Call ${link.display}` : 'Join'}
+        onPress={() => void openCallLink(link, coachName).then((m) => { if (m) setMsg(m); })}
+        accessibilityHint={link.kind === 'phone' ? 'Opens your phone app to call your coach' : 'Opens the video call'}
+        testID="calendar-join"
+      />
+    ) : undefined,
   );
 }
+
+const styles = StyleSheet.create({
+  page: { paddingTop: spacing.lg },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
+  statusDot: { width: 8, height: 8, borderRadius: radius.chip, borderWidth: 1 },
+  firstSection: { marginTop: spacing.xl },
+  lastSection: { marginBottom: 0 },
+});

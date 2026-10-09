@@ -242,18 +242,22 @@ describe('rollback flag', () => {
     });
   });
 
-  it('is on only in the clinic EAS profile', () => {
+  it('B14/B40: is on in every store and test EAS profile, so every build the owner installs runs the consultation', () => {
     const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
-    expect(eas.build.clinic.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
-    for (const name of Object.keys(eas.build).filter((n) => n !== 'clinic')) {
-      expect(eas.build[name].env?.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBeUndefined();
+    const env = (name: string): Record<string, string> => {
+      const b = eas.build[name];
+      return { ...(b.extends ? env(b.extends) : {}), ...(b.env ?? {}) };
+    };
+    for (const name of ['preview', 'production', 'clinic', 'clinic-apk']) {
+      expect([name, env(name).EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING]).toEqual([name, 'true']);
+      expect([name, env(name).EXPO_PUBLIC_FF_CLIENT_TUTORIAL]).toEqual([name, 'true']);
     }
   });
 
-  it('RootNavigator mounts the consultation instead of the lean flow when on', () => {
+  it('B14: RootNavigator mounts the consultation for every new client and never the lean flow', () => {
     const src = fs.readFileSync(path.join(root, 'src/navigation/RootNavigator.tsx'), 'utf8');
-    // B-REV-1: the per-client decision starts from the flag; the server can turn it off for one client.
-    expect(src).toMatch(/useState<boolean>\(featureFlags\.consultationOnboarding\)/);
-    expect(src).toMatch(/consultationMode \? \(\s*<ConsultationOnboardingNavigator \/>\s*\) : \(\s*<LeanOnboardingNavigator \/>/);
+    expect(src).toMatch(/authState === 'onboarding' \? \([^)]*<ConsultationOnboardingNavigator \/>/);
+    expect(src).not.toMatch(/<LeanOnboardingNavigator/);
+    expect(src).not.toMatch(/consultationApplies|consultationMode/);
   });
 });

@@ -14,8 +14,6 @@
  *     "Show me around", the 200 was lost, or the client signed in again on
  *     a fresh install. Only from `not_started`, so a finished or paused tour
  *     on this device never restarts by itself;
- *   - treat an already-connected wearable (connections list) as the
- *     wearable gate's real action;
  *   - render the overlay.
  *
  * Route focus is reported by ClientNavigator through `setTutorialRoute`.
@@ -25,18 +23,15 @@ import { View, StyleSheet } from 'react-native';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCurrentMacrosForSelf } from '../../hooks/useMacros';
-import { useWearableConnections } from '../../hooks/useWearableConnections';
 import api from '../../services/api';
 import {
   attachTutorialSignals,
-  dispatchTutorial,
   hydrateTutorial,
   setTutorialLiveMacros,
   setTutorialPayload,
   startClientTutorial,
   useTutorialStore,
 } from '../../tutorial/tutorialStore';
-import { currentGate } from '../../tutorial/tutorialMachine';
 import { macrosFromTarget, parseOnboardingPayload } from '../../tutorial/onboardingPayload';
 import type { TutorialNavTarget } from '../../tutorial/tutorialSteps';
 import TutorialOverlay from './TutorialOverlay';
@@ -55,12 +50,7 @@ function TutorialEffects(): null {
   const tourUserId = useTutorialStore((s) => s.userId);
   const status = useTutorialStore((s) => s.tutorial.status);
   const hasPayload = useTutorialStore((s) => !!s.payload);
-  const onWearableGate = useTutorialStore((s) => {
-    const g = currentGate(s.tutorial);
-    return s.tutorial.status === 'active' && g?.kind === 'signal' && g.signal === 'wearable_connected';
-  });
   const macrosQuery = useCurrentMacrosForSelf();
-  const connections = useWearableConnections();
 
   const firstName = user?.firstName ?? user?.name?.split(' ')[0] ?? null;
   const coachLinked = !!user?.coach_id;
@@ -113,12 +103,6 @@ function TutorialEffects(): null {
       cancelled = true;
     };
   }, [hydrated, status, tourUserId]);
-
-  useEffect(() => {
-    if (onWearableGate && hasConnectedWearable(connections.data)) {
-      dispatchTutorial({ type: 'SIGNAL', signal: 'wearable_connected' });
-    }
-  }, [onWearableGate, connections.data]);
 
   return null;
 }
