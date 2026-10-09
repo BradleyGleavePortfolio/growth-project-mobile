@@ -8,16 +8,17 @@
  * Standardized on semanticColors and typography tokens.
  */
 import React from 'react';
-import { Text, View, StyleSheet, ScrollView } from 'react-native';
+import { Text, View, StyleSheet } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, typography } from '../../theme/tokens';
+import { spacing, typography } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityToday } from '../../hooks/useCommunity';
 import HapticPressable from '../../components/HapticPressable';
-import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import { Headline, Lede, Overline, PrimaryButton, QuietSection, Screen } from '../../ui';
+import { QuietError, QuietLoading } from '../../ui/states/QuietStates';
 import { featureFlags } from '../../config/featureFlags';
 import type { CommunityNav } from './communityNavTypes';
 
@@ -36,10 +37,17 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
   const today = useCommunityToday();
 
   const data = today.data;
-  const dateTitle = (
-    <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
-      {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-    </Text>
+  // The Community tab container owns the top inset and the tab bar the bottom.
+  const page = (children: React.ReactNode, footer?: React.ReactNode) => (
+    <Screen edges={[]} footer={footer} testID="community-today-screen">
+      <View style={styles.header}>
+        <Overline>Today</Overline>
+        <Headline level="h1">
+          {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
+        </Headline>
+      </View>
+      {children}
+    </Screen>
   );
   const isEmpty =
     !today.isLoading &&
@@ -92,12 +100,7 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
     : featureFlags.communityDm ? 'Messages' : hasCoach ? 'Send your coach a message' : undefined;
 
   if (today.isLoading) {
-    return (
-      <View testID="community-today-screen" accessibilityLabel="Loading community Today"
-        accessibilityState={{ busy: true }} style={{ flex: 1, backgroundColor: semanticColors.bgPrimary }}>
-        <SkeletonScreen count={3} />
-      </View>
-    );
+    return page(<QuietLoading label="Loading community Today" rows={3} testID="community-today-loading" />);
   }
 
   // A `useCommunityToday` LOAD FAILURE must render a calm retryable error,
@@ -106,272 +109,126 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
   // failure and sends members to another surface while the root today object is
   // unavailable (R65 #36/#44). Resolve the error branch BEFORE the empty state.
   if (!today.isLoading && today.isError) {
-    return (
-      <ScrollView
-        contentContainerStyle={styles.center}
-        style={{ backgroundColor: semanticColors.bgPrimary }}
-        testID="community-today-screen"
-      >
-        {dateTitle}
-        <View style={styles.errorBox} testID="community-today-error">
-          <Ionicons
-            name="alert-circle-outline"
-            size={28}
-            color={semanticColors.textMuted}
-          />
-          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            Today did not load. Check your connection, then try again.
-          </Text>
-          <HapticPressable
-            intent="light"
-            onPress={() => today.refetch()}
-            accessibilityRole="button"
-            accessibilityLabel="Try again"
-            testID="community-today-retry"
-            style={[styles.retry, { backgroundColor: semanticColors.accent }]}
-          >
-            <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>
-              Try again
-            </Text>
-          </HapticPressable>
-        </View>
-      </ScrollView>
+    return page(
+      <QuietError
+        layout="inline"
+        message="Today did not load. Check your connection, then try again."
+        onRetry={() => void today.refetch()}
+        testID="community-today-error"
+      />,
     );
   }
 
   // Empty state describes only this successful Today response.
   if (isEmpty) {
     const noMembership = data?.empty_reason === 'no_membership';
-    return (
-      <ScrollView
-        contentContainerStyle={styles.center}
-        style={{ backgroundColor: semanticColors.bgPrimary }}
-        testID="community-today-screen"
-      >
-        {dateTitle}
-        <TodayEmptyState
-          body={noMembership ? 'A community space is not available for this account.' : 'No posts, events or challenges are shown here.'}
-          title={noMembership ? 'No cohort yet' : 'No updates in Today'}
-          actionLabel={
-            noMembership
-              ? hasCoach
-                ? 'Send your coach a message'
-                : undefined
-              : hallLabel
-          }
-          onAction={noMembership ? (hasCoach ? goToMessages : undefined) : (hallLabel ? goToHall : undefined)}
-          testID="community-today-empty"
-        />
-      </ScrollView>
+    const actionLabel = noMembership ? (hasCoach ? 'Send your coach a message' : undefined) : hallLabel;
+    const onAction = noMembership ? (hasCoach ? goToMessages : undefined) : (hallLabel ? goToHall : undefined);
+    return page(
+      <QuietSection testID="community-today-empty">
+        <Text style={[styles.narrative, { color: semanticColors.textPrimary }]}>
+          {noMembership ? 'No cohort yet' : 'No updates in Today'}
+        </Text>
+        <Lede>
+          {noMembership ? 'A community space is not available for this account.' : 'No posts, events or challenges are shown here.'}
+        </Lede>
+      </QuietSection>,
+      actionLabel && onAction ? (
+        <PrimaryButton label={actionLabel} onPress={onAction} testID="community-today-empty-action" />
+      ) : undefined,
     );
   }
 
-  return (
-    <ScrollView
-      contentContainerStyle={styles.content}
-      style={{ backgroundColor: semanticColors.bgPrimary }}
-      testID="community-today-screen"
-    >
-      {dateTitle}
-      {data?.cohort ? <CardLabel color={semanticColors.textMuted}>Your spaces</CardLabel> : null}
+  const canCompose =
+    data?.feature_flag_state === 'enabled' && data.empty_reason !== 'no_membership' && featureFlags.communityHall;
+  const members = data?.cohort ? `${data.cohort.member_count} ${data.cohort.member_count === 1 ? 'member' : 'members'}` : '';
 
+  return page(
+    <>
       {data?.cohort ? (
-        <Card
-          border={semanticColors.border}
-          onPress={() =>
-            navigation.navigate('CommunitySpace', {
-              space: 'cohort',
-              cohortId: data.cohort?.id,
-            })
-          }
+        <TodayItem
+          overline="Your cohort"
+          title={data.cohort.name}
+          meta={members}
+          onPress={() => navigation.navigate('CommunitySpace', { space: 'cohort', cohortId: data.cohort?.id })}
           testID="community-today-cohort"
-        >
-          <CardLabel color={semanticColors.textMuted}>Your cohort</CardLabel>
-          <CardTitle color={semanticColors.textPrimary}>
-            {data.cohort.name}
-          </CardTitle>
-          <CardMeta color={semanticColors.textMuted}>
-            {data.cohort.member_count} members
-          </CardMeta>
-        </Card>
+        />
       ) : null}
-
-      {data?.pinned_post ? <CardLabel color={semanticColors.textMuted}>Today</CardLabel> : null}
       {data?.pinned_post ? (
-        <Card
-          border={semanticColors.border}
-          onPress={() =>
-            navigation.navigate('CommunityThread', {
-              postId: data.pinned_post!.id,
-            })
-          }
+        <TodayItem
+          overline="Pinned post"
+          title={data.pinned_post.title}
+          titleLines={2}
+          onPress={() => navigation.navigate('CommunityThread', { postId: data.pinned_post!.id })}
           testID="community-today-pinned"
-        >
-          <CardLabel color={semanticColors.textMuted}>Pinned post</CardLabel>
-          <CardTitle color={semanticColors.textPrimary} numberOfLines={2}>
-            {data.pinned_post.title}
-          </CardTitle>
-        </Card>
+        />
       ) : null}
-
-      {data?.event ? <CardLabel color={semanticColors.textMuted}>Events</CardLabel> : null}
       {data?.event ? (
-        <Card
-          border={semanticColors.border}
+        <TodayItem
+          overline="Upcoming event"
+          title={data.event.title}
+          meta={new Date(data.event.starts_at).toLocaleString(undefined, {
+            weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit',
+          })}
           onPress={() => goToEvent(data.event!.id)}
           testID="community-today-event"
-        >
-          <CardLabel color={semanticColors.textMuted}>Upcoming event</CardLabel>
-          <CardTitle color={semanticColors.textPrimary}>
-            {data.event.title}
-          </CardTitle>
-          <CardMeta color={semanticColors.textMuted}>{new Date(data.event.starts_at).toLocaleString()}</CardMeta>
-        </Card>
+        />
       ) : null}
-
       {data?.challenge ? (
-        <Card
-          border={semanticColors.border}
+        <TodayItem
+          overline="Challenge"
+          title={data.challenge.title}
+          meta={`Ends ${new Date(data.challenge.ends_at).toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}`}
           onPress={() => goToChallenge(data.challenge!.id)}
           testID="community-today-challenge"
-        >
-          <CardLabel color={semanticColors.textMuted}>Challenge</CardLabel>
-          <CardTitle color={semanticColors.textPrimary}>
-            {data.challenge.title}
-          </CardTitle>
-          <CardMeta color={semanticColors.textMuted}>Ends {new Date(data.challenge.ends_at).toLocaleDateString()}</CardMeta>
-        </Card>
+        />
       ) : null}
-      {data?.feature_flag_state === 'enabled' && data.empty_reason !== 'no_membership' && featureFlags.communityHall ? (
-        <HapticPressable intent="medium" accessibilityRole="button" accessibilityLabel="New post"
-          testID="community-today-compose" onPress={() => navigation.navigate('CommunityComposer', { mode: 'post' })}
-          style={[styles.retry, { backgroundColor: semanticColors.accent }]}>
-          <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>New post</Text>
-        </HapticPressable>
-      ) : null}
-    </ScrollView>
+    </>,
+    canCompose ? (
+      <PrimaryButton
+        label="New post"
+        onPress={() => navigation.navigate('CommunityComposer', { mode: 'post' })}
+        testID="community-today-compose"
+      />
+    ) : undefined,
   );
 }
 
-// ─── tiny presentational helpers (kept local to the today surface) ───────────
+// ─── one Today item: overline, serif title, muted meta, chevron ─────────────
 
-function Card({
-  children,
-  border,
-  onPress,
-  testID,
-}: {
-  children: React.ReactNode;
-  border: string;
-  onPress: () => void;
-  testID?: string;
-}): React.ReactElement {
-  return (
-    <HapticPressable
-      intent="light"
-      onPress={onPress}
-      accessibilityRole="button"
-      testID={testID}
-      style={[styles.card, { borderColor: border }]}
-    >
-      {children}
-    </HapticPressable>
-  );
-}
-
-function TodayEmptyState({ title, body, actionLabel, onAction, testID }: {
-  title: string; body: string; actionLabel?: string; onAction?: () => void; testID: string;
+function TodayItem({ overline, title, titleLines, meta, onPress, testID }: {
+  overline: string; title: string; titleLines?: number; meta?: string; onPress: () => void; testID: string;
 }): React.ReactElement {
   const { semanticColors } = useTheme();
   return (
-    <View style={styles.errorBox} testID={testID}>
-      <Text style={[typography.h2, { color: semanticColors.textPrimary }]}>{title}</Text>
-      <Text style={[styles.muted, { color: semanticColors.textMuted }]}>{body}</Text>
-      {actionLabel && onAction ? (
-        <HapticPressable intent="medium" accessibilityRole="button" accessibilityLabel={actionLabel}
-          testID={`${testID}-action`} onPress={onAction}
-          style={[styles.retry, { backgroundColor: semanticColors.accent }]}>
-          <Text style={[styles.retryLabel, { color: semanticColors.textOnAccent }]}>{actionLabel}</Text>
-        </HapticPressable>
-      ) : null}
-    </View>
+    <QuietSection style={styles.item}>
+      <HapticPressable
+        intent="light"
+        disableAnimation
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={[overline, title, meta].filter(Boolean).join(', ')}
+        testID={testID}
+        style={({ pressed }) => [styles.itemRow, pressed && styles.pressed]}
+      >
+        <View style={styles.itemText}>
+          <Overline>{overline}</Overline>
+          <Text numberOfLines={titleLines} style={[styles.itemTitle, { color: semanticColors.textPrimary }]}>{title}</Text>
+          {meta ? <Text style={[styles.itemMeta, { color: semanticColors.textMuted }]}>{meta}</Text> : null}
+        </View>
+        <Ionicons name="chevron-forward" size={18} color={semanticColors.textMuted} />
+      </HapticPressable>
+    </QuietSection>
   );
 }
 
-function CardLabel({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: string;
-}): React.ReactElement {
-  return <Text style={[styles.cardLabel, { color }]}>{children}</Text>;
-}
-function CardTitle({
-  children,
-  color,
-  numberOfLines,
-}: {
-  children: React.ReactNode;
-  color: string;
-  numberOfLines?: number;
-}): React.ReactElement {
-  return <Text numberOfLines={numberOfLines} style={[styles.cardTitle, { color }]}>{children}</Text>;
-}
-function CardMeta({
-  children,
-  color,
-}: {
-  children: React.ReactNode;
-  color: string;
-}): React.ReactElement {
-  return <Text style={[styles.cardMeta, { color }]}>{children}</Text>;
-}
-
 const styles = StyleSheet.create({
-  content: {
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  center: {
-    flexGrow: 1,
-    padding: spacing.xl,
-    gap: spacing['3xl'],
-  },
-  errorBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing['3xl'],
-  },
-  muted: { ...typography.bodySmall, textAlign: 'center' },
-  retry: {
-    marginTop: spacing.sm,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    minHeight: 48,
-    justifyContent: 'center',
-  },
-  retryLabel: { ...typography.bodyMd },
-  heading: {
-    ...typography.h1,
-    marginBottom: spacing.sm,
-  },
-  card: {
-    minHeight: 48,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.xs,
-  },
-  cardLabel: {
-    ...typography.eyebrow,
-  },
-  cardTitle: {
-    ...typography.bodyMd,
-  },
-  cardMeta: {
-    ...typography.bodySmall,
-    fontVariant: ['tabular-nums'],
-  },
+  header: { paddingTop: spacing.xl, paddingBottom: spacing.lg, gap: spacing.xs },
+  narrative: { ...typography.h2, marginBottom: spacing.sm },
+  item: { marginBottom: 0 },
+  itemRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 56 },
+  itemText: { flex: 1, gap: spacing.xs },
+  itemTitle: { ...typography.h3 },
+  itemMeta: { ...typography.bodySmall, fontVariant: ['tabular-nums'] },
+  pressed: { opacity: 0.6 },
 });
