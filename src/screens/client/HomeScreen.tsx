@@ -51,6 +51,7 @@ import {
 } from '../../storage/activeWorkoutSession';
 import {
   getProfileCompletion,
+  profileNudgeLine,
   summarizeMissing,
 } from '../../lib/profileCompletion';
 import { getTodayString } from '../../utils/date';
@@ -341,6 +342,10 @@ export default function HomeScreen() {
   const completion = getProfileCompletion(currentUser);
   const showProfileNudge = !completion.isComplete && completion.missing.length > 0;
   const missingSummary = showProfileNudge ? summarizeMissing(completion.missing) : '';
+  // B29: the sentence names what the missing answers change; targets only when a target input is missing and none are shown.
+  const profileLine = showProfileNudge
+    ? profileNudgeLine(completion.missing, { hasCoachPlan, hasTargets: !!calorieTarget && calorieTarget > 0 })
+    : '';
 
   // Fire impression once per user/session combination so we can attribute
   // cold-outbound conversion to nudge exposure later.
@@ -503,7 +508,7 @@ export default function HomeScreen() {
               FINISH YOUR PROFILE
             </Text>
             <Text style={{ ...typography.body, color: sc.textPrimary }}>
-              {hasCoachPlan ? `Add ${missingSummary} so your plan reflects you.` : `Add ${missingSummary} to set daily targets.`}
+              {profileLine}
             </Text>
             <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6, fontVariant: ['tabular-nums'] }}>
               {`${completion.percentComplete}% complete`}
