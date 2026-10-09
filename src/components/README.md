@@ -18,9 +18,9 @@ Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133):
 
 | File | What it does |
 | --- | --- |
-| `HapticPressable.tsx` | Pressable that fires a haptic on press. The right primitive for any tap that commits state. |
+| `HapticPressable.tsx` | Pressable that fires a haptic on press through `HapticService`, so the Settings Haptics switch is honoured; press-in scales to 0.97, release is a 120 ms timing (no spring). |
 | `FadeInView.tsx` | Mount-time fade-in wrapper. Used for hero copy and milestone tiles. |
-| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, radius 4, 44 pt, Inter 16, HapticPressable). |
+| `EmptyState.tsx` | Bone empty state: Cormorant title (`typography.h3`), one muted Inter line, theme colours; the optional CTA matches `ui/empty-states` (forest, `radius.button`, 44 pt, Inter 16, HapticPressable). |
 | `ErrorBoundary.tsx` | Top-level error boundary. Reports to Sentry, renders a soft error card. |
 | `SkeletonLoader.tsx` | Shimmering placeholder for list / card load. |
 | `../ui/states/QuietStates.tsx` | `QuietError` (calm sentence, forest "Try again" text action, muted extra steps, no red) and `QuietLoading` (shared skeleton rows, spoken label), plus `loadFailureMessage` ("Check your connection" only for no-answer failures). Used by the coach booking inbox, invites, pending AI drafts, risk board and Programs. |

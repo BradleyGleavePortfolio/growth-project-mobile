@@ -38,7 +38,7 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 ## 5. Restrained motion, restrained color, restrained chrome
 
 - Corners are rounded, soft and premium, never a near-square rectangle (owner ruling 17:07 on 8 October 2026: "I want nice rounded corners, luxurious, not rectangles"; decision 133-4). Use the semantic radius tokens in `src/theme/tokens.ts`, never a literal: `radius.button` 12 and `radius.input` 12, `radius.card` 16, `radius.sheet` 24 on bottom-sheet and modal top corners, `radius.chip` (pill) for chips, `radius.control` 6 for boxes under 28 pt such as a checkbox.
-- The legacy keys `radius.sm` / `md` / `lg` / `xl` / `2xl` (0 / 2 / 4 / 4 / 4) are deprecated for new code and move to the semantic keys screen by screen.
+- The legacy keys `radius.sm` / `md` / `lg` / `xl` / `2xl` and the `Radius` exports now resolve to the rounded scale (12 / 12 / 16 / 16 / 24), so older screens round too; new code still names the semantic key.
 - Backgrounds: `bone` (`#F5EFE4`) is the global background. Cards sit on `cream` or `surface`. Never use `#000`; ink (`#1A1A18`) is the dark.
 - Single accent: forest (`#2C4A36`). Avoid neon greens (`#52B788`, `#2D6A4F`), terra-cottas, steel blues, and the rest of the legacy palette.
 - Shadows are capped at `shadows.lg` (12px radius, 8% opacity). No drop shadows above that.
