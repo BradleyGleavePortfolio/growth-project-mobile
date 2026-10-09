@@ -12,6 +12,10 @@ export default function K2Specialties({ answers, setAnswers, onNext, onBack, onF
   const { semanticColors: sc } = useTheme();
   const chosen = answers.specialties ?? [];
   const full = chosen.length >= SPECIALTY_CAP;
+  const skip = () => {
+    setAnswers({ specialties: [] });
+    onNext();
+  };
   return (
     <CoachStepFrame
       testID="coach-consult-K2"
@@ -23,14 +27,7 @@ export default function K2Specialties({ answers, setAnswers, onNext, onBack, onF
       onFinishLater={onFinishLater}
       footer={
         <>
-          <TextLink
-            label="Skip"
-            onPress={() => {
-              setAnswers({ specialties: [] });
-              onNext();
-            }}
-            testID="coach-consult-K2-skip"
-          />
+          <TextLink label="Skip" onPress={skip} testID="coach-consult-K2-skip" />
           <PrimaryButton label="Continue" onPress={onNext} disabled={chosen.length === 0} testID="coach-consult-K2-cta" />
         </>
       }

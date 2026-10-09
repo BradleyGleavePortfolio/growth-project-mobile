@@ -6,7 +6,7 @@
  * optional next steps on the Overview checklist after the coach lands (B02).
  */
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, BackHandler, StyleSheet, View } from 'react-native';
 import { Screen } from '../../../ui/layout/Screen';
 import { PrimaryButton, TextLink } from '../../../ui/buttons/PrimaryButton';
 import { Headline, Lede } from '../../../ui/text/Headline';
@@ -33,23 +33,14 @@ export interface CoachConsultationFlowProps {
 }
 
 type Phase = 'loading' | 'step' | 'paused' | 'saving' | 'problem';
+type SaveJob = { a: CoachConsultAnswers; s: CoachStepId; r: number };
 
 const DRAFT_DEBOUNCE_MS = 300;
 
-export default function CoachConsultationFlow({
-  userId,
-  user,
-  onComplete,
-  onSignOut,
-  api = coachConsultApi,
-  steps = STEP_COMPONENTS,
-  importOn = false,
-}: CoachConsultationFlowProps) {
+export default function CoachConsultationFlow(props: CoachConsultationFlowProps) {
+  const { userId, user, onComplete, onSignOut, api = coachConsultApi, steps = STEP_COMPONENTS, importOn = false } = props;
   const { semanticColors: sc } = useTheme();
-  const ctx: FlowContext = useMemo(
-    () => ({ built: new Set(Object.keys(steps) as CoachStepId[]), importOn }),
-    [steps, importOn],
-  );
+  const ctx: FlowContext = useMemo(() => ({ built: new Set(Object.keys(steps) as CoachStepId[]), importOn }), [steps, importOn]);
   const [phase, setPhase] = useState<Phase>('loading');
   const [step, setStep] = useState<CoachStepId>('K0');
   const [answers, setAnswersState] = useState<CoachConsultAnswers>({});
@@ -59,23 +50,29 @@ export default function CoachConsultationFlow({
   answersRef.current = answers;
   const busy = useRef(false);
   const done = useRef(false);
+  const stepRef = useRef(step);
+  stepRef.current = step;
+  // Draft sync (B-621-B2-1): `rev` counts local changes, `acked` is the newest one
+  // the server stored. Saves go one at a time, latest last, so an older snapshot
+  // never lands after a newer one; an unsynced phone draft always wins on resume.
+  const rev = useRef(0);
+  const acked = useRef(-1);
+  const sync = useRef<{ busy: boolean; next: SaveJob | null }>({ busy: false, next: null });
 
-  // Resume: the newer of the local draft and the server draft wins; a fresh
-  // start is prefilled from the server (sign-up name, saved profile) or the cached user.
+  // Resume: an unsynced phone draft, else the server draft, else the synced phone
+  // draft; a fresh start is prefilled from the server (sign-up name) or the cached user.
   useEffect(() => {
     let alive = true;
     void (async () => {
       const [local, server] = await Promise.all([readDraft(userId), api.load()]);
       if (!alive) return;
       const serverDraft = server && server.status !== 'not_started' ? server : null;
-      const winner =
-        serverDraft && (!local || (serverDraft.updatedAt ?? '') > local.updatedAt) ? serverDraft : null;
-      const a: CoachConsultAnswers = winner
-        ? { ...winner.answers }
-        : { ...(server?.answers ?? {}), ...(local?.answers ?? {}) };
+      const winner = local && (!local.synced || !serverDraft) ? local : serverDraft;
+      const a: CoachConsultAnswers = { ...(winner?.answers ?? server?.answers ?? {}) };
       if (a.display_name === undefined && user?.name) a.display_name = user.name.trim();
+      acked.current = winner && (winner === serverDraft || local?.synced) ? 0 : -1;
       setAnswersState(a);
-      setStep(resumeStep(winner ? winner.step : local?.step ?? null, a, ctx));
+      setStep(resumeStep(winner?.step ?? null, a, ctx));
       setPhase('step');
     })();
     return () => {
@@ -85,29 +82,48 @@ export default function CoachConsultationFlow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  const saveLocal = useCallback(() => {
+    if (!done.current) void writeDraft(userId, answersRef.current, stepRef.current, acked.current === rev.current);
+  }, [userId]);
+
+  const pushDraft = useCallback(
+    async (s: CoachStepId) => {
+      sync.current.next = { a: answersRef.current, s, r: rev.current };
+      if (sync.current.busy) return;
+      sync.current.busy = true;
+      for (let job: SaveJob | null = sync.current.next; job; job = sync.current.next) {
+        sync.current.next = null;
+        if ((await api.saveDraft(job.a, job.s)) === 'saved') acked.current = Math.max(acked.current, job.r);
+      }
+      sync.current.busy = false;
+      saveLocal();
+    },
+    [api, saveLocal],
+  );
+
   // Local draft on every answer or step change (debounced).
   useEffect(() => {
     if (phase === 'loading' || done.current) return;
-    const t = setTimeout(() => {
-      if (!done.current) void writeDraft(userId, answers, step);
-    }, DRAFT_DEBOUNCE_MS);
+    const t = setTimeout(saveLocal, DRAFT_DEBOUNCE_MS);
     return () => clearTimeout(t);
-  }, [answers, step, phase, userId]);
+  }, [answers, step, phase, saveLocal]);
 
   // The ref updates at once so a step that sets an answer and moves on in one
   // tap (Skip) completes with that answer.
   const setAnswers = useCallback((patch: Partial<CoachConsultAnswers>) => {
+    rev.current += 1;
     answersRef.current = { ...answersRef.current, ...patch };
     setAnswersState(answersRef.current);
   }, []);
 
   const goTo = useCallback(
     (id: CoachStepId) => {
+      rev.current += 1;
       setStep(id);
       setPhase('step');
-      void api.saveDraft(answersRef.current, id);
+      void pushDraft(id);
     },
-    [api],
+    [pushDraft],
   );
 
   const complete = useCallback(async () => {
@@ -146,19 +162,27 @@ export default function CoachConsultationFlow({
 
   const prev = previousStep(step, answers, ctx);
   const onBack = useMemo(() => (prev ? () => goTo(prev) : null), [goTo, prev]);
+  // Android back steps back (like the client consultation); on K0 the system takes it (B-621-1).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (phase === 'paused' || phase === 'problem') setPhase('step');
+      else if (phase === 'step' && onBack) onBack();
+      else return phase === 'saving';
+      return true;
+    });
+    return () => sub.remove();
+  }, [onBack, phase]);
+
   const onFinishLater = useCallback(() => {
-    void writeDraft(userId, answersRef.current, step);
-    void api.saveDraft(answersRef.current, step);
+    saveLocal();
+    void pushDraft(step);
     setPhase('paused');
-  }, [api, step, userId]);
+  }, [pushDraft, saveLocal, step]);
 
   if (phase === 'loading' || phase === 'saving') {
     return (
       <View style={[styles.center, { backgroundColor: sc.bgPrimary }]} testID={`coach-consult-${phase}`}>
-        <ActivityIndicator
-          color={sc.accent}
-          accessibilityLabel={phase === 'loading' ? 'Loading your practice setup' : 'Saving your practice'}
-        />
+        <ActivityIndicator color={sc.accent} accessibilityLabel={phase === 'loading' ? 'Loading your practice setup' : 'Saving your practice'} />
       </View>
     );
   }
@@ -205,14 +229,8 @@ export default function CoachConsultationFlow({
 }
 
 /** Paused and problem screens: serif title, a line, one forest button, one quiet link. */
-function Rest(props: {
-  id: 'paused' | 'problem';
-  title: string;
-  action: string;
-  onAction: () => void;
-  link?: { label: string; onPress: () => void };
-  children: React.ReactNode;
-}) {
+type RestProps = { id: 'paused' | 'problem'; title: string; action: string; onAction: () => void; children: React.ReactNode };
+function Rest(props: RestProps & { link?: { label: string; onPress: () => void } }) {
   const { id, title, action, onAction, link, children } = props;
   const footer = (
     <>
