@@ -52,7 +52,7 @@ describe('coach consultation flow (prototype 77-79)', () => {
     expect(field.borderRadius).toBe(radius.input);
   });
 
-  it('K2 caps specialties at five with pill chips; nothing is sent without the required answers', async () => {
+  it('K2 caps specialties at five with pill chips, then opens K3', async () => {
     const { getByTestId, queryByTestId, api, onComplete } = await mount();
     await fireEvent.press(getByTestId('coach-consult-K0-cta'));
     await fireEvent.press(getByTestId('coach-consult-K1-cta'));
@@ -63,20 +63,20 @@ describe('coach consultation flow (prototype 77-79)', () => {
     expect(getByTestId('coach-consult-K2-cap')).toBeTruthy();
     expect(getByTestId('coach-consult-K2-sports').props.accessibilityState.checked).toBe(false);
     expect(StyleSheet.flatten(getByTestId('coach-consult-K2-strength').props.style).borderRadius).toBe(radius.chip);
-    // K3 (clients today) is required: without it nothing is sent and the coach stays on a real screen.
+    // K3 (clients today) is required, so Continue opens it and nothing is sent yet.
     await fireEvent.press(getByTestId('coach-consult-K2-cta'));
     expect(api.complete).not.toHaveBeenCalled();
     expect(onComplete).not.toHaveBeenCalled();
-    expect(queryByTestId('coach-consult-K2')).toBeTruthy();
+    expect(queryByTestId('coach-consult-K3')).toBeTruthy();
   });
 
   it('completes with every answer once the required ones are given', async () => {
     await AsyncStorage.setItem(
       draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K2', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none' } }),
+      JSON.stringify({ v: 1, step: 'K4', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] } }),
     );
     const { getByTestId, api, onComplete } = await mount();
-    await fireEvent.press(getByTestId('coach-consult-K2-skip'));
+    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
     await waitFor(() => expect(onComplete).toHaveBeenCalled());
     expect(api.complete).toHaveBeenCalledWith(expect.objectContaining({ display_name: 'Jordan Reyes', clients_today: 'none', specialties: [] }));
     expect(await AsyncStorage.getItem(draftKey('c1'))).toBeNull();
@@ -85,11 +85,11 @@ describe('coach consultation flow (prototype 77-79)', () => {
   it('shows a specific problem with Try again when completion fails, and keeps the answers', async () => {
     await AsyncStorage.setItem(
       draftKey('c1'),
-      JSON.stringify({ v: 1, step: 'K2', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan', clients_today: 'none' } }),
+      JSON.stringify({ v: 1, step: 'K4', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan', clients_today: 'none' } }),
     );
     const api = makeApi({ complete: jest.fn().mockRejectedValueOnce(Object.assign(new Error('x'), { response: { status: 429 } })).mockResolvedValueOnce(undefined) });
     const { getByTestId, getByText, onComplete } = await mount(api);
-    await fireEvent.press(getByTestId('coach-consult-K2-skip'));
+    await fireEvent.press(getByTestId('coach-consult-K4-skip'));
     await waitFor(() => expect(getByTestId('coach-consult-problem')).toBeTruthy());
     expect(getByText('Too many tries in a row')).toBeTruthy();
     expect(getByText(/Your answers are kept on this phone\./)).toBeTruthy();
