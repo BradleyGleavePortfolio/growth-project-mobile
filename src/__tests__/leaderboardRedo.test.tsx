@@ -17,8 +17,10 @@ jest.mock('@react-navigation/native', () => ({
     canGoBack: () => true, addListener: () => () => {},
   }),
 }));
+// Screen (src/ui) reads SafeAreaInsetsContext; null = no provider = zero insets.
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: jest.requireActual('react-native').View,
+  SafeAreaInsetsContext: jest.requireActual('react').createContext(null),
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 const api = { get: jest.mocked(getLeaderboard), save: jest.mocked(setLeaderboardOptIn) };
