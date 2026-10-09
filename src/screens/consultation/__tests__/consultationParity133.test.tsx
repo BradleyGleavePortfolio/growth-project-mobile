@@ -10,7 +10,7 @@ import React from 'react';
 import { StyleSheet } from 'react-native';
 import { render } from '@testing-library/react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import QuestionScreen from '../QuestionScreen';
+import QuestionScreen, { goalWeightNote } from '../QuestionScreen';
 import { ROMAN_VOICE_FONT, wheelOpacity } from '../components';
 import { COACHLESS_COPY, SCREENS, screenById } from '../../../lib/consultation/definitions';
 import { defaultMeasureUnit, fillCopy, type CopyContext } from '../../../lib/consultation/engine';
@@ -49,6 +49,8 @@ function renderScreen(id: string, answers: Answers = {}, ctx: CopyContext = { fi
   );
 }
 
+/** Lines produced by helpers rather than the screen data (the sweep covers them too). */
+const HELPER_LINES = [goalWeightNote(100, 172, 'fat_loss'), goalWeightNote(200, 172, 'fat_loss')].filter(Boolean);
 const flat = (style: unknown) => StyleSheet.flatten(style as never) as Record<string, unknown>;
 
 /** Every template string a screen shows. */
@@ -127,18 +129,27 @@ describe('copy and defaults', () => {
   });
 
   it('every coachless variant replaces a line the consultation really shows', async () => {
-    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next]);
+    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...HELPER_LINES]);
     for (const key of Object.keys(COACHLESS_COPY)) expect(shown.has(key)).toBe(true);
   });
 
   it('a coachless client is never told about a coach, on any question or P8 line', async () => {
     const ctx: CopyContext = { firstName: 'Maya', coachless: true, coachName: 'Bradley', now: NOW };
-    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next];
+    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...HELPER_LINES];
     for (const t of lines) expect(fillCopy(t, ctx)).not.toMatch(/coach|Bradley/i);
     // A coached client keeps the coach's name.
     expect(fillCopy('{Coach} can build around what you already like.', { coachName: 'Bradley' })).toBe(
       'Bradley can build around what you already like.',
     );
+  });
+
+  it('B4 long-road note: coached keeps the coach, coachless is never promised one (B-579-SOL-B-1)', async () => {
+    const b3 = { B3: { height_cm: 167.6, weight_lbs: 172, unit: 'imperial' }, G1: 'fat_loss', B4: 100 };
+    const coached = await renderScreen('B4', b3, { firstName: 'Maya', coachName: 'Bradley', now: NOW });
+    expect(coached.getByTestId('goal-weight-note').props.children).toBe("That's a long road. Bradley will set milestones with you.");
+    await coached.unmount();
+    const solo = await renderScreen('B4', b3, { firstName: 'Maya', coachless: true, now: NOW });
+    expect(solo.getByTestId('goal-weight-note').props.children).toBe("That's a long road. Smaller milestones along the way will help.");
   });
 
   it('P8 for a coachless client drops the coach line and keeps the physician step', async () => {

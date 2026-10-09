@@ -580,6 +580,8 @@ export const COACHLESS_COPY: Readonly<Record<string, string>> = {
   '{Coach} will focus on what actually gets in your way.': 'Roman will focus on what actually gets in your way.',
   'So your coach knows what you avoid.': 'So what you avoid is noted from the start.',
   'Tell {coach} more (optional)': 'Add a note (optional)',
+  // B4 soft note (QuestionScreen goalWeightNote)
+  "That's a long road. {Coach} will set milestones with you.": "That's a long road. Smaller milestones along the way will help.",
   // P8 (copy.ts P8_COPY)
   'Stop if you feel chest discomfort, unusual shortness of breath, dizziness or sharp pain. Rest, and tell {coach}.':
     'Stop if you feel chest discomfort, unusual shortness of breath, dizziness or sharp pain, and rest.',
