@@ -108,6 +108,13 @@ jest.mock("../navigation/LeanOnboardingNavigator", () => {
   return () =>
     R.createElement(Text, { testID: "nav-onboarding" }, "onboarding");
 });
+// B14: every new student gets the consultation (the lean flow is no longer mounted).
+jest.mock("../navigation/ConsultationOnboardingNavigator", () => {
+  const { Text } = jest.requireActual("react-native");
+  const R = jest.requireActual("react");
+  return () =>
+    R.createElement(Text, { testID: "nav-onboarding" }, "onboarding");
+});
 jest.mock("../navigation/CoachWizardNavigator", () => () => null);
 jest.mock("../navigation/Day1OnboardingNavigator", () => () => null);
 jest.mock("../components/OfflineBanner", () => () => null);
