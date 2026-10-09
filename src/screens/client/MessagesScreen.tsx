@@ -23,7 +23,8 @@ import CoachCodeSheet from '../../components/coachless/CoachCodeSheet';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
 import { useThreadColors, type ThreadColors } from '../../components/messaging/thread/useThreadColors';
-import { typography } from '../../theme/tokens';
+import { typography, radius, layout } from '../../theme/tokens';
+import { useScreenInsets } from '../../ui';
 import { errorStatus, errorCode } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
 import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
@@ -74,6 +75,10 @@ export function cacheKeyFor(userId: string): string {
 export default function MessagesScreen() {
   const colors = useThreadColors();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The Screen wrapper's inset top (insets.top + 12), applied to the thread
+  // headers so the surface band runs up under the status bar on both platforms.
+  const insets = useScreenInsets();
+  const headerTop = { paddingTop: insets.top + layout.statusBarGap };
   const textOnPrimaryDim = colors.textMuted;
   const textOnPrimaryFaint = colors.textMuted;
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
@@ -477,7 +482,7 @@ export default function MessagesScreen() {
     return (
       <>
       <View style={styles.container}>
-        <View style={styles.chatHeader}>
+        <View style={[styles.chatHeader, headerTop]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -511,7 +516,7 @@ export default function MessagesScreen() {
     return (
       <>
       <View style={styles.noCoachContainer}>
-        <View style={styles.noCoachHeader}>
+        <View style={[styles.noCoachHeader, headerTop]}>
           <TouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.backBtn}
@@ -578,7 +583,7 @@ export default function MessagesScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.chatHeader}>
+      <View style={[styles.chatHeader, headerTop]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -882,20 +887,19 @@ const makeStyles = (colors: ThreadColors) => {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
     paddingBottom: 12,
   },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
-  noCoachTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 20, lineHeight: 24, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
+  noCoachTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 20, lineHeight: 25, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
   noCoachBody: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40, gap: 12 },
-  noCoachHeadline: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
+  noCoachHeadline: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 28, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
   noCoachText: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center' },
   noCoachAction: {
     marginTop: 16,
     minHeight: 44,
     paddingHorizontal: 20,
     justifyContent: 'center',
-    borderRadius: 4,
+    borderRadius: radius.button,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.primary,
   },
@@ -909,7 +913,6 @@ const makeStyles = (colors: ThreadColors) => {
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -926,14 +929,14 @@ const makeStyles = (colors: ThreadColors) => {
   skeletonRow: { marginBottom: 12 },
   skeletonBubble: {
     height: 44,
-    borderRadius: 4,
+    borderRadius: radius.card,
     backgroundColor: colors.border,
     opacity: 0.5,
   },
   loadingOlderDot: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     opacity: 0.5,
   },
@@ -972,8 +975,10 @@ const makeStyles = (colors: ThreadColors) => {
   chatInput: {
     flex: 1,
     backgroundColor: colors.background,
-    borderRadius: 2,
-    paddingHorizontal: 0,
+    borderRadius: radius.input,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
     paddingVertical: 12,
     ...typography.body,
     color: colors.textPrimary,
@@ -983,7 +988,7 @@ const makeStyles = (colors: ThreadColors) => {
   sendBtn: {
     width: 44,
     height: 44,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

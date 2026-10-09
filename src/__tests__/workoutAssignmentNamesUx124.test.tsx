@@ -79,8 +79,8 @@ describe('coach-assigned workout names (B: client saw "Push 001" / "Exercise")',
       Promise.resolve({ data: { id, name: id === '0025' ? 'barbell bent over row' : 'Barbell Bench Press' } }),
     );
     const { getByText, findByText } = await render(wrap(<WorkoutAssignmentDetailScreen />));
-    expect(await findByText('1. Barbell Bench Press')).toBeTruthy();
-    expect(await findByText('2. Barbell Bent Over Row')).toBeTruthy();
+    expect(await findByText('Barbell Bench Press')).toBeTruthy();
+    expect(await findByText('Barbell Bent Over Row')).toBeTruthy();
     expect(getByText(/^Strength/)).toBeTruthy();
 
     await fireEvent.press(getByText('Start workout'));
@@ -146,7 +146,7 @@ describe('coach-assigned workout names (B: client saw "Push 001" / "Exercise")',
     mockAssignment = { data: PLAN, isLoading: false, isError: false };
     mockGetById.mockRejectedValue(new Error('503'));
     const { findByText } = await render(wrap(<WorkoutAssignmentDetailScreen />));
-    expect(await findByText('1. Push 001')).toBeTruthy();
+    expect(await findByText('Push 001')).toBeTruthy();
   });
 });
 

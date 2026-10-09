@@ -17,7 +17,8 @@ import { prepGuideApi, listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { getLocalWeekStart } from '../../utils/date';
 import { RecipeAllergenFields, recipeAllergenSummary } from '../../lib/recipeAllergens';
 
@@ -146,7 +147,7 @@ export default function PrepGuideScreen() {
   }, [data, addToGroceryMutation]);
 
   return (
-    <View style={styles.container} testID="grocery-prep-screen">
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="grocery-prep-screen">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -320,19 +321,19 @@ export default function PrepGuideScreen() {
           </>
         )}
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textSecondary' | 'textOnPrimary' | 'border' | 'primaryPale'>) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 60,
     marginBottom: 12,
     gap: 12,
   },
@@ -349,7 +350,6 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.surface,
     marginHorizontal: 16,
     marginBottom: 12,
-    borderRadius: 2, // radius.md
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
   },
@@ -364,7 +364,8 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.primaryPale,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
+    overflow: 'hidden',
   },
 
   content: { flex: 1 },
@@ -374,8 +375,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   loadingText: { ...typography.bodySmall, color: colors.textMuted },
 
   section: {
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    // A hairline section, not a box: no fill, no corners.
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     paddingVertical: 16,
@@ -397,7 +397,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.primaryPale,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
   },
   prepDayText: { ...typography.eyebrow, color: colors.textMuted },
   prepDayHint: { ...typography.bodySmall, color: colors.textMuted },
@@ -407,7 +407,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   recipeIcon: {
     width: 38,
     height: 38,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     backgroundColor: colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
@@ -426,7 +426,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     backgroundColor: colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 4,
+    borderRadius: radius.button,
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
   addToGroceryBtnText: { ...typography.bodySmall, color: colors.textOnPrimary },
@@ -435,7 +435,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   ingredientBullet: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     marginTop: 7,
     flexShrink: 0,
