@@ -23,9 +23,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
+import { withStartupTimeout } from '../lib/startupTimebox';
 
 export const BIOMETRIC_OPT_IN_KEY = 'biometric_unlock_enabled';
 export const BACKGROUND_TIMEOUT_MS = 5 * 60 * 1000;
+/**
+ * START-HANG-134 (B35, B36): the longest the gate waits for the opt-in read
+ * or the device capability checks. No answer counts as "not opted in" /
+ * "cannot check", so the app opens; the gate never blocks on them.
+ */
+export const BIOMETRIC_CHECK_TIMEOUT_MS = 2000;
 
 export type GateStatus = 'checking' | 'locked' | 'unlocked';
 
@@ -41,7 +48,11 @@ export function __resetForTests() {
 
 async function readOptIn(): Promise<boolean> {
   try {
-    const v = await SecureStore.getItemAsync(BIOMETRIC_OPT_IN_KEY);
+    const v = await withStartupTimeout(
+      SecureStore.getItemAsync(BIOMETRIC_OPT_IN_KEY),
+      'biometric opt-in',
+      BIOMETRIC_CHECK_TIMEOUT_MS,
+    );
     return v === 'true';
   } catch {
     return false;
@@ -52,9 +63,17 @@ async function tryAuthenticate(): Promise<AuthResult> {
   // Web has no biometric concept — skip the gate entirely.
   if (Platform.OS === 'web') return { success: true };
   try {
-    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const hasHardware = await withStartupTimeout(
+      LocalAuthentication.hasHardwareAsync(),
+      'biometric hardware',
+      BIOMETRIC_CHECK_TIMEOUT_MS,
+    );
     if (!hasHardware) return { success: true };
-    const enrolled = await LocalAuthentication.isEnrolledAsync();
+    const enrolled = await withStartupTimeout(
+      LocalAuthentication.isEnrolledAsync(),
+      'biometric enrolment',
+      BIOMETRIC_CHECK_TIMEOUT_MS,
+    );
     if (!enrolled) {
       // Opt-in is on but the user has no biometrics enrolled (e.g. they
       // turned Face ID off after opting in). Don't lock them out.
@@ -69,7 +88,8 @@ async function tryAuthenticate(): Promise<AuthResult> {
     });
     return { success: !!result.success };
   } catch {
-    // If the module can't load (web, missing native), don't block the user.
+    // If the module can't load (web, missing native) or a capability check
+    // does not answer in time, don't block the user.
     return { success: true };
   }
 }
@@ -84,13 +104,16 @@ export function useBiometricGate(): UseBiometricGateResult {
   const mountedRef = useRef(true);
 
   const evaluate = useCallback(async () => {
-    setStatus('checking');
+    // B36: the opt-in is read before anything is shown. A person who never
+    // turned biometric unlock on is never moved to 'checking' again (which
+    // would unmount the whole app on every return from the background).
     const optedIn = await readOptIn();
     if (!optedIn) {
       lastForegroundedAt = Date.now();
       if (mountedRef.current) setStatus('unlocked');
       return;
     }
+    if (mountedRef.current) setStatus('checking');
     const auth = await tryAuthenticate();
     if (!mountedRef.current) return;
     if (auth.success) {
