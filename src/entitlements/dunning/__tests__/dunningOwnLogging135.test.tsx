@@ -1,8 +1,8 @@
 /**
  * B-DUNNINGOWN-135, owner ruling 2026-10-08 23:5x: a client in the Day 10+ lockout (or a disputed or refunded
  * cycle that uses it) keeps their own logging. The real ClientNavigator inside the real DunningLockoutProvider,
- * wired as RootNavigator wires it, with the real withProtectedScreen; leaf screens are stubs. The entitlement
- * read reports the plan active, as it does for a past-due purchase (the OWN gate for every client is m#650).
+ * wired as RootNavigator wires it, with the real withProtectedScreen and ProtectedScreen; leaf screens are stubs.
+ * The entitlement read says inactive (a disputed plan has ended): OWN screens open for every client (m#650).
  */
 import React from 'react';
 import { AppState, BackHandler, DeviceEventEmitter, Text, TouchableOpacity } from 'react-native';
@@ -26,7 +26,7 @@ jest.mock('../../../ui/haptics/haptics.service', () => ({ HapticService: { selec
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../UpdateCardScreen', () => () => null);
 jest.mock('../../EntitlementProvider', () => ({
-  useEntitlement: () => ({ entitlementActive: true, status: 'active', confirmedActive: true, refreshEntitlement: jest.fn() }),
+  useEntitlement: () => ({ entitlementActive: false, status: 'inactive', confirmedActive: false, refreshEntitlement: jest.fn() }),
 }));
 jest.mock('../../../services/sentry', () => ({ captureError: jest.fn() }));
 jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
