@@ -176,7 +176,7 @@ describe('RootNavigator start never waits forever (B35, B37)', () => {
     // The session was not touched (no sign-out on a slow read).
     expect(mockSecure['supabase_token']).toBe('jwt-S');
     mockHangToken = false;
-    fireEvent.press(r.getByTestId('startup-error-retry'));
+    await fireEvent.press(r.getByTestId('startup-error-retry'));
     await r.findByTestId('nav-client');
   });
 

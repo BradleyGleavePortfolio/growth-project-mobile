@@ -88,9 +88,7 @@ describe('useBiometricGate', () => {
   it('opt-in read that never answers: unlocks after the time limit (never blocks)', async () => {
     jest.useFakeTimers();
     try {
-      const spy = jest
-        .spyOn(SecureStore, 'getItemAsync')
-        .mockImplementationOnce(() => new Promise<string | null>(() => undefined));
+      (SecureStore.getItemAsync as jest.Mock).mockImplementationOnce(() => new Promise(() => undefined));
       const { result } = await renderHook(() => useBiometricGate());
       expect(result.current.status).toBe('checking');
       await act(async () => {
@@ -98,7 +96,6 @@ describe('useBiometricGate', () => {
       });
       expect(result.current.status).toBe('unlocked');
       expect(mockAuthenticate).not.toHaveBeenCalled();
-      spy.mockRestore();
     } finally {
       jest.useRealTimers();
     }
