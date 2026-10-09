@@ -88,6 +88,7 @@ import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInvit
 import { profileOnboardingCompleted } from '../lib/profileOnboarding';
 import { wasDay1WinSkipped } from '../lib/day1WinSkip';
 import { createLatestRunGuard, isStartupTimeout, withStartupTimeout } from '../lib/startupTimebox';
+import { readDraft as readCoachConsultDraft } from '../lib/coachConsultation/draft';
 import { StartupErrorScreen, StartupPending } from '../components/StartupErrorScreen';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
@@ -338,6 +339,8 @@ function openUpdateCard(params: { autostart: boolean; surface: string }): void {
  * finished it is sent to the consultation instead (B14).
  */
 const STANDARD_ONBOARDING_KEY = 'onboarding_standard_path';
+/** ONB-SWEEP-SOL-135 B2: limit for the coach's own phone draft read at start. */
+export const COACH_DRAFT_READ_MS = 2000;
 
 function signOutFromLockout(): void {
   signOut().catch((err: unknown) => {
@@ -730,6 +733,7 @@ export default function RootNavigator() {
         // before entering the wizard. Any other failure (network, 5xx) falls
         // through to the dashboard so a flaky API can never hard-block an
         // already-onboarded coach from reaching their clients.
+        let setupReadFailed = false;
         try {
           // B35: no answer within the startup limit fails open like a network error.
           const onboardingRes = await withStartupTimeout(
@@ -752,10 +756,28 @@ export default function RootNavigator() {
               // If start fails too, fail open to the dashboard rather than
               // trap the coach behind an un-startable wizard.
               logger.warn('RootNavigator', 'onboarding/start failed', startErr);
+              setupReadFailed = true;
             }
           } else {
             // Network / 5xx / unknown — fail open to coach dashboard.
             logger.warn('RootNavigator', 'non-fatal', err);
+            setupReadFailed = true;
+          }
+        }
+        // ONB-SWEEP-SOL-135 B2: a failed or stalled setup read does not mean
+        // setup is finished. Before the dashboard fallback, a bounded read of
+        // this coach's own phone draft (coach_consult_v1:<id>, written on every
+        // answer, purged on completion) resumes an unfinished consultation;
+        // its loader already falls back to that draft offline. No draft, or no
+        // answer within 2 s (a phone read; a stalled setup read plus this one
+        // stays under the 15 s loading ceiling): the dashboard, as before.
+        const coachId = typeof user?.id === 'string' && user.id ? user.id : null;
+        if (setupReadFailed && coachId) {
+          const draft = await withStartupTimeout(readCoachConsultDraft(coachId), 'coach draft', COACH_DRAFT_READ_MS)
+            .catch(() => null);
+          if (draft) {
+            setAuthState('coach_wizard');
+            return;
           }
         }
         setAuthState('coach');
