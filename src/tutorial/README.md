@@ -41,7 +41,7 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 6 | roman (no coach, `romanChat` on) | the You tab is spotlit; Continue | button |
 | 7 | complete (60) | Got it | button |
 
-- Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, we will look at logging.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
+- Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, the tour carries on with Food.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
 - Push priming (61-62, `pushPriming.ts`): after Got it, the overlay shows one card, only when the OS can still ask and the account never answered Home's push card: "Want a nudge when {coach} messages you, or when the day's workout is ready? I will only ask once." Only "Turn on notifications" shows the OS dialog; "Not now" goes straight on. Both answers use Home's `push_primer_dismissed:<user>` key, so Home never asks again, and Home's card hides while the tour runs.
 - Re-offer (65): one quiet line on Home, "Pick up the quick tour in Settings, under Tutorial.", which resumes it; never a re-triggered prompt (owner T-5).
 - Only a beat really done earns its done line and success haptic, never Later.
