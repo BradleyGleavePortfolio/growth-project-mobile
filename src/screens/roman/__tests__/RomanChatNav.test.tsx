@@ -26,7 +26,10 @@ jest.mock('@expo/vector-icons', () => ({
     }),
 }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: { textPrimary: 'theme-foreground' } }),
+  useTheme: () => ({
+    colors: { textPrimary: 'theme-foreground' },
+    semanticColors: { ...jest.requireActual('../../../theme/tokens').lightTokens, textPrimary: 'theme-foreground' },
+  }),
 }));
 jest.mock('../../../screens/client/wearables/components/useReduceMotion', () => ({
   useReduceMotion: () => true,
