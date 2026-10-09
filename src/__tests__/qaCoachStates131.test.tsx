@@ -15,7 +15,7 @@ import Colors from '../constants/colors';
 jest.mock('../services/sentry', () => ({ captureError: jest.fn() }));
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn(), canGoBack: () => false }),
   useIsFocused: () => true,
   useFocusEffect: jest.fn(),
 }));

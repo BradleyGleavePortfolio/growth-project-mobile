@@ -33,7 +33,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import InviteShareCard from '../../components/coach/setup/InviteShareCard';
 import { QuietError } from '../../ui/states/QuietStates';
-import { radius, typography, withAlpha } from '../../theme/tokens';
+import { layout, radius, typography, withAlpha } from '../../theme/tokens';
 import { Screen } from '../../ui';
 
 const BUSINESS_NAME_MAX_LENGTH = 120;
@@ -44,6 +44,7 @@ export default function CoachTeamProfileScreen() {
   const navigation = useNavigation<{
     navigate: (route: string, params?: Record<string, unknown>) => void;
     goBack: () => void;
+    canGoBack: () => boolean;
   }>();
 
   const [team, setTeam] = useState<TeamResult<TeamProfile> | null>(null);
@@ -86,6 +87,22 @@ export default function CoachTeamProfileScreen() {
     }
   };
 
+  // COACH-INSETS-A-134 follow-up (B08): the Settings stack hides the native
+  // header, so a pushed Business profile draws its own Back (iOS has no
+  // hardware back). Same arrow and place as the other coach detail screens;
+  // 44 pt target.
+  const back = navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}
+      testID="team-profile-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+
   if (!team) {
     return <SkeletonScreen count={5} />;
   }
@@ -93,6 +110,7 @@ export default function CoachTeamProfileScreen() {
   if (!team.ok && team.reason === 'error') {
     return (
       <Screen edges={['top']} scroll={false} testID="team-profile">
+        {back}
         <Text style={styles.header}>Business profile</Text>
         <QuietError message={team.message} onRetry={load} />
       </Screen>
@@ -103,6 +121,7 @@ export default function CoachTeamProfileScreen() {
   if (!team.ok) {
     return (
       <Screen edges={['top']} scroll={false} testID="team-profile">
+        {back}
         <Text style={styles.header}>Business profile</Text>
         <View style={styles.gate}>
           <Ionicons name="business-outline" size={36} color={colors.textMuted} />
@@ -172,6 +191,7 @@ export default function CoachTeamProfileScreen() {
 
   return (
     <Screen edges={['top']} contentStyle={styles.content} testID="team-profile">
+      {back}
       <Text style={styles.header}>{profile.business_name}</Text>
       <Text style={styles.subheader}>Business profile</Text>
 
@@ -228,6 +248,12 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
     // Screen (src/ui) owns the top (insets.top + 12) and the 24 pt gutter; never a fixed 56 (B13 B28).
     content: { paddingBottom: 32 },
+    back: {
+      width: layout.touchMin,
+      height: layout.touchMin,
+      justifyContent: 'center',
+      marginBottom: 4,
+    },
     header: { ...typography.h1, color: colors.textPrimary },
     subheader: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: 16 },
     codeLabel: { ...typography.eyebrow, color: colors.textMuted, marginTop: 12, marginBottom: 8 },
@@ -258,7 +284,7 @@ const makeStyles = (colors: ThemeColors) =>
     ctaDisabled: { opacity: 0.5 },
     ctaText: { ...typography.bodyMd, color: colors.textOnPrimary },
     cancelText: { ...typography.bodySmall, color: colors.textSecondary, paddingVertical: 12, paddingHorizontal: 16 },
-    modalOverlay: { flex: 1, backgroundColor: withAlpha(colors.textPrimary, 0.4), justifyContent: 'center', padding: 20 },
+    modalOverlay: { flex: 1, backgroundColor: withAlpha(colors.textPrimary, 0.4), justifyContent: 'center', padding: layout.gutter },
     modalContent: { backgroundColor: colors.background, borderRadius: radius.card, padding: 20 },
     modalTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: 12 },
     label: { ...typography.bodySmall, color: colors.textMuted, marginBottom: 6 },

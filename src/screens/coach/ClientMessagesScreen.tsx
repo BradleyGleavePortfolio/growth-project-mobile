@@ -569,13 +569,13 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
-  errorBanner: { backgroundColor: colors.error + '22', paddingVertical: 8, paddingHorizontal: 16 },
+  errorBanner: { backgroundColor: colors.error + '22', paddingVertical: 8, paddingHorizontal: layout.gutter },
   errorBannerText: { color: colors.error, fontSize: 13, textAlign: 'center' },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
+    paddingHorizontal: layout.gutter,
     paddingBottom: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
@@ -593,7 +593,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatAvatarText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
   chatHeaderName: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
   chatHeaderStatus: { fontSize: 12, color: colors.textSecondary },
-  chatList: { padding: 16, paddingBottom: 8 },
+  chatList: { paddingHorizontal: layout.gutter, paddingVertical: 16, paddingBottom: 8 },
   chatEmpty: { alignItems: 'center', paddingTop: 60, gap: 12 },
   chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
@@ -601,7 +601,7 @@ const makeStyles = (colors: ThemeColors) =>
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
+    paddingHorizontal: layout.gutter,
     paddingVertical: 12,
     paddingBottom: 36,
     backgroundColor: colors.surface,

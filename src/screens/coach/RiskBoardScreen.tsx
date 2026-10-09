@@ -20,7 +20,9 @@ import {
   StyleSheet,
   FlatList,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { QuietError, QuietLoading, loadFailureMessage } from '../../ui/states/QuietStates';
 import HapticPressable from '../../components/HapticPressable';
@@ -28,7 +30,7 @@ import RiskDot from '../../components/RiskDot';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { radius } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { ptmApi, RiskBoardEntry } from '../../services/ptmApi';
 import type { PtmRiskBucket } from '../../types/ptm';
@@ -129,10 +131,27 @@ export default function RiskBoardScreen() {
     fetchPage('next', filter);
   }, [cursor, fetchPage, filter, loadingMore]);
 
+  // COACH-INSETS-A-134 follow-up (B08): the stack hides the native header,
+  // so a pushed Risk board draws its own Back (iOS has no hardware back).
+  // Same arrow and place as the other coach detail screens; 44 pt target.
+  const back = navigation.canGoBack() ? (
+    <TouchableOpacity
+      onPress={() => navigation.goBack()}
+      accessibilityRole="button"
+      accessibilityLabel="Back"
+      style={styles.back}
+      testID="risk-board-back"
+    >
+      <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+    </TouchableOpacity>
+  ) : null;
+  const headerStyle = back ? styles.header : [styles.header, styles.headerRoot];
+
   if (!canViewBoard) {
     return (
       <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="risk-board">
-        <View style={styles.header}>
+        <View style={headerStyle}>
+          {back}
           <Text style={styles.title}>Risk Board</Text>
         </View>
         <View style={styles.placeholder} testID="risk-board-locked">
@@ -191,7 +210,8 @@ export default function RiskBoardScreen() {
 
   return (
     <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="risk-board">
-      <View style={styles.header}>
+      <View style={headerStyle}>
+        {back}
         <Text style={styles.title}>Risk Board</Text>
         <Text style={styles.subtitle}>Sorted by churn risk</Text>
       </View>
@@ -269,9 +289,17 @@ const makeStyles = (colors: ThemeColors) =>
     // Screen (src/ui) owns the top: insets.top + 12, never a fixed 60 (B13 B28).
     bare: { paddingHorizontal: 0, paddingBottom: 0 },
     header: {
-      paddingHorizontal: 24,
-      paddingTop: 12,
+      paddingHorizontal: layout.gutter,
       marginBottom: 16,
+    },
+    // Opened with nothing below it (a resume or deep link): no Back, and the
+    // title sits where the Clients and Settings tab titles do.
+    headerRoot: { paddingTop: 12 },
+    back: {
+      width: layout.touchMin,
+      height: layout.touchMin,
+      justifyContent: 'center',
+      marginBottom: 4,
     },
     title: {
       fontFamily: 'CormorantGaramond_400Regular',
@@ -286,7 +314,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     filterRow: {
       flexDirection: 'row',
-      paddingHorizontal: 24,
+      paddingHorizontal: layout.gutter,
       gap: 8,
       marginBottom: 16,
     },
@@ -311,7 +339,7 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textOnPrimary,
     },
     listContent: {
-      paddingHorizontal: 24,
+      paddingHorizontal: layout.gutter,
       paddingBottom: 100,
     },
     row: {

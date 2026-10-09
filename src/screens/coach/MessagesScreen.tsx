@@ -15,7 +15,7 @@ import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { radius } from '../../theme/tokens';
+import { layout, radius } from '../../theme/tokens';
 import { Screen } from '../../ui';
 import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 import { useFeatureFlags } from '../../hooks/useFeatureFlags';
@@ -230,14 +230,14 @@ const makeStyles = (colors: ThemeColors) =>
     // Title + Reports + Broadcasts can be wider than a phone: wrap, never clip.
     flexWrap: 'wrap',
     gap: 8,
-    paddingHorizontal: 24,
+    paddingHorizontal: layout.gutter,
     paddingTop: 12,
     marginBottom: 8,
   },
   headerEntries: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 39, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
   unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
-  searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
+  searchContainer: { paddingHorizontal: layout.gutter, marginBottom: 8 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -250,7 +250,7 @@ const makeStyles = (colors: ThemeColors) =>
     borderColor: colors.border,
   },
   searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
-  listContent: { paddingHorizontal: 16, paddingBottom: 100 },
+  listContent: { paddingHorizontal: layout.gutter, paddingBottom: 100 },
   convoCard: {
     flexDirection: 'row',
     alignItems: 'center',
