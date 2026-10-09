@@ -9,7 +9,7 @@ The approach is Duolingo mechanics inside Quiet Luxury visuals: "Step n of 7", a
 | Flag | Env | What the tour does with it |
 |---|---|---|
 | `clientTutorial` | `EXPO_PUBLIC_FF_CLIENT_TUTORIAL` | The tour, the pinned macro and plan cards, the Home "Message your coach" row, the spotlight targets and Settings > Tutorial. OFF rolls all of it back. ON in every store profile with CONSULT-ALL-M-133 (it was `clinic` / `clinic-apk` only). |
-| `romanChat` | `EXPO_PUBLIC_FF_ROMAN_CHAT` | Beat six for a client without a coach points at Roman under You. OFF: that beat is `unavailable` and skipped. |
+| `romanChat` | `EXPO_PUBLIC_FF_ROMAN_CHAT` | Beat six for a client without a coach points at Roman under You and says Roman opens once they join a coach (`ROMAN_BEAT_COACHLESS_LINE`; m#651 locks Roman for clients with no coach). OFF: that beat is `unavailable` and skipped. |
 | `clientCalendar`, `communityTab` | `EXPO_PUBLIC_FF_CLIENT_CALENDAR`, `EXPO_PUBLIC_FF_COMMUNITY_TAB` | Not steps any more (decision 133-5). The completion names the tabs that exist, and, with Calendar and a coach, the welcome call. |
 
 ## Integration with onboarding (one line)
@@ -53,7 +53,7 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 ## Truthful tour (FW-ONB-128 B2)
 
 - "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`; it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). The first unmet requirement of a beat decides its outcome.
-- Without a coach Roman names no coach anywhere, beat six is the Roman beat (decision 28: nothing is locked), and the push line drops the coach.
+- Without a coach Roman names no coach anywhere, beat six is the Roman beat (decision 28: nothing is locked; since m#651 it says Roman opens once they join a coach), and the push line drops the coach.
 - Settings > Tutorial reads "Take the tour" until a tour has been completed on this device, then "Take the tour again".
 
 ## Files

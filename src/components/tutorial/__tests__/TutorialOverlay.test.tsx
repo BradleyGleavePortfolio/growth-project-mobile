@@ -71,6 +71,7 @@ import {
   useTutorialStore,
 } from '../../../tutorial/tutorialStore';
 import type { OnboardingCompletePayload } from '../../../tutorial/types';
+import { ROMAN_BEAT_COACHLESS_LINE } from '../../../tutorial/tutorialSteps';
 
 const PAYLOAD: OnboardingCompletePayload = {
   macros: { calories: 1789, protein_g: 150, carbs_g: 185, fat_g: 50 },
@@ -317,7 +318,8 @@ describe('TutorialOverlay', () => {
     await render(<TutorialOverlay tabs={TABS} onNavigate={jest.fn()} />);
     await act(async () => toMessageBeat());
     expect(screen.getByTestId('tutorial-step-count').props.children).toBe('Step 6 of 7');
-    expect(line()).toMatch(/ask me\. You will find me under You/);
+    expect(line()).toBe(ROMAN_BEAT_COACHLESS_LINE);
+    expect(line()).not.toMatch(/ask me|at any time/);
     expect(screen.getByLabelText('Continue')).toBeTruthy();
   });
 
