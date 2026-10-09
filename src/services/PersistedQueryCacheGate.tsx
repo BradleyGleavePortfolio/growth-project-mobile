@@ -43,11 +43,19 @@ import {
   settleAndClearQueryCache,
 } from './queryClient';
 import type { IdentityPersistence } from './queryClient';
+import { withStartupTimeout } from '../lib/startupTimebox';
+import { logger } from '../utils/logger';
 
 /** Upper bound on the restoring phase for one identity (hung storage read). */
 export const PERSISTED_CACHE_RESTORE_TIMEOUT_MS = 4000;
 /** Upper bound on waiting for the previous identity's in-flight writes. */
 export const PERSISTED_CACHE_DRAIN_TIMEOUT_MS = 1000;
+/**
+ * START-HANG-134 (B35, B37): upper bound on the logged-out purge (a hung
+ * storage key listing). Like a failed purge (already non-fatal), the
+ * logged-out state then commits; the next sign-in or sign-out purges again.
+ */
+export const PERSISTED_CACHE_PURGE_TIMEOUT_MS = 4000;
 
 export interface PersistedQueryCacheGateProps {
   userId: string | null | undefined;
@@ -114,7 +122,11 @@ export function PersistedQueryCacheGate({ userId, children, renderRestoring }: P
       }
       // Step 4.
       if (userId === null) {
-        await purgePersistedQueryCacheForAllUsers();
+        await withStartupTimeout(
+          purgePersistedQueryCacheForAllUsers(),
+          'persisted cache purge',
+          PERSISTED_CACHE_PURGE_TIMEOUT_MS,
+        ).catch((err: unknown) => logger.warn('PersistedQueryCacheGate', 'logged-out cache purge did not finish', err));
         if (!isCurrent()) return;
         setCommitted(null);
         return;

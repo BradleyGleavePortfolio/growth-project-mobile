@@ -27,6 +27,8 @@ import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
+import { Screen } from '../../../ui';
+import { layout, radius } from '../../../theme/tokens';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -136,8 +138,10 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
     );
   };
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="coach-packages">
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -199,7 +203,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
           )}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
@@ -279,18 +283,18 @@ function PackageRow({
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
+    // The list keeps its own 24 pt sides and foot.
+    body: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: 'center',
       alignItems: 'center',
     },
@@ -320,7 +324,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       backgroundColor: semanticColors.accent,
       paddingHorizontal: 18,
       paddingVertical: 12,
-      borderRadius: 2,
+      borderRadius: radius.button,
       marginTop: 12,
     },
     primaryBtnText: {
@@ -330,7 +334,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     card: {
       backgroundColor: semanticColors.bgSurface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 16,
     },
     cardArchived: { opacity: 0.6 },
@@ -347,7 +351,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       fontWeight: '500',
       color: semanticColors.textPrimary,
     },
-    pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+    pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.chip },
     pillActive: { backgroundColor: tokens.brand[50] },
     pillArchived: { backgroundColor: semanticColors.bgSurface },
     pillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
@@ -367,7 +371,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     errorBanner: {
       backgroundColor: tokens.semantic.warning.bg,
       padding: 10,
-      borderRadius: 4,
+      borderRadius: radius.card,
       marginBottom: 12,
     },
     errorBannerText: { fontSize: 13, color: semanticColors.textPrimary },

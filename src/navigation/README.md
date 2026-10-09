@@ -121,7 +121,7 @@ Both `ClientNavigator` and `CoachNavigator` now inject a bell icon into the head
 ### ClientNavigator
 - Clinic tutorial (featureFlags.clientTutorial, default OFF): the tab navigator is wrapped in `TutorialHost`, and `screenListeners` is now a function. It reports the focused route path (`state` event, via `src/tutorial/navigationFocus.ts`) to the tutorial step machine and captures the tab navigation object so the overlay's "Take me there" can open `Home/Messages`, `MoreTab/Connections` and `MoreTab/Health`. Tab list and routes are unchanged. With the flag OFF the host is a pass-through. See `src/tutorial/README.md`.
 
-Home renders the bell in `HomeHeaderActions` (not `headerRight`), alongside the coach-message entry with its unread count. The bell's `NotificationBadge` shows the live unread count (polled every 30 s, refreshed on foreground); tapping opens `HomeStack → NotificationCenter`. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar in a 44 pt target opens the existing `MoreTab → RomanChat` destination with `initial: false`, preserving `MoreIndex` underneath on first entry. Roman chat has its own labelled 44 pt Back control in every load state for both client and coach stacks. The More entry, Messages and tab list remain unchanged.
+Home renders the bell in `HomeHeaderActions` (not `headerRight`), alongside the coach-message entry with its unread count (clients with a coach only; a coachless client sees "Ask Roman" or nothing there, B25). The bell's `NotificationBadge` shows the live unread count (polled every 30 s, refreshed on foreground); tapping opens `HomeStack → NotificationCenter`. When `featureFlags.romanChat` is on, a 32 pt neutral Roman avatar in a 44 pt target opens the existing `MoreTab → RomanChat` destination with `initial: false`, preserving `MoreIndex` underneath on first entry. Roman chat has its own labelled 44 pt Back control in every load state for both client and coach stacks. The More entry, Messages and tab list remain unchanged.
 
 New screen names added to `HomeStackParamList`:
 
@@ -233,3 +233,7 @@ the client falls back to the local AsyncStorage flag (fail-open).
 ## Payment lockout (S-DUNNING)
 
 Both client branches of `RootNavigator` wrap `ClientNavigator` in `DunningLockoutProvider` (see `src/entitlements/dunning/README.md`). The provider uses the module-level `navigationRef` to read the focused route and to open `MoreTab > DataExport`, `MoreTab > DeleteAccount` and `Home > Messages` from the lockout screen.
+
+## Client tab labels (B26)
+
+The six labelled tabs keep their names; the label uses `typography.tabLabel` / `tabLabelActive` (Inter 11 pt, -0.2 tracking), one line with shrink-to-fit, and `tabBarItemStyle` drops the item's side padding, so "Community" (58.5 pt) fits the 60 pt each tab gets on a 360 pt wide Android phone.

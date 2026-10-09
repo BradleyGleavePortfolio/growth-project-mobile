@@ -55,6 +55,7 @@ const axiosMock = jest.requireMock<{
 }>('axios');
 
 import {
+  SESSION_REFRESH_WAIT_MS,
   __resetRefreshStateForTests,
   __setRefreshSessionForTests,
   __setSignOutForTests,
@@ -95,6 +96,32 @@ describe('session renewal without signal (SESSION-KEEP-130)', () => {
   });
 
   afterAll(() => __resetRefreshStateForTests());
+
+  // START-HANG-134 (B35): supabase-js renews over fetch, which has no time
+  // limit on React Native; a renewal that never answers must not keep the
+  // request (or the app's start) waiting forever.
+  it('a renewal that never answers: the request fails as "no connection" at the bound; nobody is signed out', async () => {
+    jest.useFakeTimers();
+    try {
+      refreshSession.mockImplementationOnce(() => new Promise(() => undefined));
+      const pending = handler(fake401()).catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(SESSION_REFRESH_WAIT_MS - 1);
+      let settled = false;
+      void pending.then(() => {
+        settled = true;
+      });
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      const failure = (await pending) as Failure;
+      expect(failure.code).toBe('ERR_NETWORK');
+      expect(failure.response).toBeUndefined();
+      expect(signOut).not.toHaveBeenCalled();
+      expect(axiosMock.__instance.request).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
   it('no signal during renewal: nobody is signed out, the request fails as "no connection", the next 401 renews', async () => {
     refreshSession.mockResolvedValueOnce({

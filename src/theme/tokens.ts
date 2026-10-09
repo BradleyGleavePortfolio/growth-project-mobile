@@ -226,6 +226,26 @@ export const typography = {
     letterSpacing: 0.5,
     fontWeight:    '600' as const,
   },
+  /**
+   * Bottom tab labels (B26). Six tabs share 60 pt on a 360 pt Android phone.
+   * "Community" in Inter Medium is 5.484 em: 60.3 pt at 11 pt with no
+   * tracking (it wrapped), 58.5 pt with -0.2 tracking. ClientNavigator also
+   * drops the tab item's 5 pt side padding and keeps the label on one line.
+   */
+  tabLabel: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      11,
+    lineHeight:    14,
+    letterSpacing: -0.2,
+    fontWeight:    '400' as const,
+  },
+  tabLabelActive: {
+    fontFamily:    'Inter_500Medium',
+    fontSize:      11,
+    lineHeight:    14,
+    letterSpacing: -0.2,
+    fontWeight:    '500' as const,
+  },
 } as const;
 
 /**
@@ -255,8 +275,8 @@ export const spacing = {
 // not rectangles". Decision 133-4 answered: rounded. New code uses the
 // SEMANTIC keys (button, input, card, sheet, chip, control); never a literal.
 // The prototype frames show square corners; the owner's ruling wins over them.
-// Legacy keys md / lg / xl / 2xl (and every theme/index `Radius` key) now resolve
-// to the rounded scale so existing users round at once (DS-THEME-133); sm waits.
+// Legacy keys sm / md / lg / xl / 2xl (and every theme/index `Radius` key) now
+// resolve to the rounded scale so every existing user rounds at once.
 export const radius = {
   // Semantic (use these)
   button:  12,   // PrimaryButton, filled or outlined actions
@@ -266,9 +286,7 @@ export const radius = {
   chip:    999,  // chips and pills
   control: 6,    // small boxes under 28 pt (checkbox, tag)
   // Legacy names (deprecated for new code), mapped onto the rounded scale
-  // EXCEPTION: sm stays 0 — awaits agent 132 OK, nativeCardUpdate.test.tsx:423
-  // (the card-payment sheet button reads radius.sm). New code: radius.button.
-  sm:   0,
+  sm:   12,   // was 0: buttons -> button (card-payment sheet button included)
   md:   12,   // was 2: inputs -> input
   lg:   16,   // was 4: cards -> card
   xl:   16,   // was 4 -> card

@@ -60,6 +60,8 @@ import { mediumTap, successTap, warningTap } from "../../../utils/haptics";
 import { track } from "../../../lib/analytics";
 import { useTheme } from "../../../theme/ThemeProvider";
 import type { SemanticTokens, Tokens } from "../../../theme/tokens";
+import { layout, radius } from "../../../theme/tokens";
+import { useScreenInsets } from "../../../ui";
 import { parseDollarsToCents } from "../../../utils/currency";
 import {
   packagePriceHelper,
@@ -127,6 +129,16 @@ function serverMessageOf(err: unknown): string | null {
 }
 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
+  // COACH-INSETS-B-134 (B13 B28 B39): the top bars take the real status-bar
+  // inset from the shared Screen module (react-native-safe-area-context) plus
+  // 12 pt, never a fixed 56. The keyboard-aware column stays as it was.
+  const insets = useScreenInsets();
+  const topBarInset = { paddingTop: insets.top + layout.statusBarGap };
+  // The buyer preview is an iOS page sheet (below the status bar); Android
+  // opens it full screen, under the status bar.
+  const previewBarInset = {
+    paddingTop: (Platform.OS === "ios" ? 0 : insets.top) + layout.statusBarGap,
+  };
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(
     () => makeStyles(semanticColors, tokens),
@@ -634,8 +646,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
+      testID="coach-package-edit"
     >
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, topBarInset]}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
@@ -1024,7 +1037,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         onRequestClose={() => setPreviewOpen(false)}
       >
         <View style={styles.container}>
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, previewBarInset]} testID="coach-package-preview-bar">
             <TouchableOpacity
               onPress={() => setPreviewOpen(false)}
               style={styles.backBtn}
@@ -1088,12 +1101,11 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
     backBtn: {
-      width: 40,
-      height: 40,
+      width: layout.touchMin,
+      height: layout.touchMin,
       justifyContent: "center",
       alignItems: "center",
     },
@@ -1107,7 +1119,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       flexDirection: "row",
       gap: 8,
       padding: 10,
-      borderRadius: 4,
+      borderRadius: radius.card,
       backgroundColor: tokens.semantic.warning.bg,
       marginBottom: 12,
     },
@@ -1119,7 +1131,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginTop: 10,
       paddingVertical: 10,
       paddingHorizontal: 12,
-      borderRadius: tokens.radius.lg,
+      borderRadius: radius.card,
       borderWidth: 1,
       borderColor: tokens.semantic.warning.border,
       backgroundColor: tokens.semantic.warning.bg,
@@ -1140,7 +1152,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       backgroundColor: semanticColors.bgSurface,
       paddingHorizontal: 14,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.input,
       fontSize: 15,
       color: semanticColors.textPrimary,
     },
@@ -1151,14 +1163,14 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     segment: {
       flexDirection: "row",
       backgroundColor: semanticColors.bgSurface,
-      borderRadius: 4,
+      borderRadius: radius.input,
       padding: 4,
       gap: 4,
     },
     segmentItem: {
       flex: 1,
       paddingVertical: 10,
-      borderRadius: 2,
+      borderRadius: radius.button,
       alignItems: "center",
     },
     segmentItemActive: { backgroundColor: semanticColors.accent },
@@ -1176,7 +1188,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       gap: 8,
       backgroundColor: semanticColors.accent,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
     },
     primaryBtnDisabled: { opacity: 0.6 },
     primaryBtnText: {
@@ -1191,7 +1203,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
       borderWidth: 1,
       borderColor: semanticColors.accent,
     },
@@ -1207,7 +1219,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
       borderWidth: 1,
       borderColor: semanticColors.border,
       backgroundColor: semanticColors.bgSurface,
@@ -1224,7 +1236,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       justifyContent: "center",
       gap: 8,
       paddingVertical: 14,
-      borderRadius: 2,
+      borderRadius: radius.button,
     },
     tertiaryBtnText: {
       color: tokens.semantic.warning.icon,

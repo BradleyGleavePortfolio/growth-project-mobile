@@ -7,7 +7,7 @@ import {
   Modal,
   Alert,
   ActivityIndicator,
-  SafeAreaView,
+  Platform,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,8 @@ import { usePostClientGuidelines } from '../../hooks/useApi';
 import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Screen } from '../../ui';
+import { radius } from '../../theme/tokens';
 
 // ── Program Templates ──────────────────────────────────────────────────────
 
@@ -141,8 +143,10 @@ export default function ProgramTemplatesScreen() {
 
   const activeClients = clients.filter((c) => c.status === 'active');
 
+  // COACH-INSETS-B-134 (B13 B28 B39): SafeAreaView from 'react-native' pads
+  // nothing on Android; the shared Screen owns the status-bar inset instead.
   return (
-    <SafeAreaView style={styles.safe}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="program-templates">
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
@@ -246,7 +250,13 @@ export default function ProgramTemplatesScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setClientModalVisible(false)}
       >
-        <SafeAreaView style={styles.modalSafe}>
+        {/* iOS page sheet sits below the status bar; Android opens full screen. */}
+        <Screen
+          edges={Platform.OS === 'ios' ? ['bottom'] : ['top', 'bottom']}
+          scroll={false}
+          contentStyle={styles.modalBody}
+          testID="program-templates-client-sheet"
+        >
           <View style={styles.modalHeader}>
             <View>
               <Text style={styles.modalTitle}>Select Client</Text>
@@ -289,18 +299,16 @@ export default function ProgramTemplatesScreen() {
               ))
             )}
           </ScrollView>
-        </SafeAreaView>
+        </Screen>
       </Modal>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  // The ScrollView keeps its own sides and foot.
+  body: { paddingHorizontal: 0, paddingBottom: 0 },
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -310,7 +318,6 @@ const makeStyles = (colors: ThemeColors) =>
   },
   header: {
     paddingHorizontal: 24,
-    paddingTop: 60,
     paddingBottom: 20,
   },
   title: {
@@ -328,7 +335,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginHorizontal: 20,
     marginBottom: 12,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     borderWidth: 1,
     borderColor: colors.border,
     overflow: 'hidden',
@@ -347,7 +354,7 @@ const makeStyles = (colors: ThemeColors) =>
   emojiCircle: {
     width: 48,
     height: 48,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -378,7 +385,7 @@ const makeStyles = (colors: ThemeColors) =>
   tagChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
   },
   tagText: {
     fontSize: 10,
@@ -420,7 +427,7 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 2, // radius.md
+    borderRadius: radius.button,
     marginTop: 8,
   },
   applyBtnText: {
@@ -442,10 +449,8 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '600',
   },
   // Modal
-  modalSafe: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+  // Screen keeps the bottom inset; rows keep their own sides.
+  modalBody: { paddingHorizontal: 0 },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -473,7 +478,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.card,
     padding: 14,
     gap: 12,
     borderWidth: 1,
@@ -483,7 +488,7 @@ const makeStyles = (colors: ThemeColors) =>
   clientAvatar: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radius.chip,
     backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',

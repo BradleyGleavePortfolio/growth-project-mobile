@@ -24,6 +24,8 @@ import { errorMessage, errorStatus } from '../../../types/common';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
+import { Screen } from '../../../ui';
+import { layout, radius } from '../../../theme/tokens';
 
 type ParamList = {
   CoachPackageSubscribers: { packageId: string; title: string };
@@ -111,8 +113,10 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
     }
   };
 
+  // COACH-INSETS-B-134 (B13 B28 B39): the shared Screen owns the status-bar
+  // inset (Android edge-to-edge included); the tab bar owns the bottom.
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.body} testID="coach-package-subscribers">
       <View style={styles.topBar}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -246,22 +250,22 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
           }}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
+    // The list keeps its own 16 pt sides and foot.
+    body: { paddingHorizontal: 0, paddingBottom: 0 },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       paddingHorizontal: 16,
-      paddingTop: 56,
       paddingBottom: 12,
     },
-    backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+    backBtn: { width: layout.touchMin, height: layout.touchMin, justifyContent: 'center', alignItems: 'center' },
     topTitle: {
       flex: 1,
       textAlign: 'center',
@@ -280,7 +284,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     summaryItem: {
       flex: 1,
       backgroundColor: semanticColors.bgSurface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 14,
       alignItems: 'center',
     },
@@ -299,7 +303,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     row: {
       flexDirection: 'row',
       backgroundColor: semanticColors.bgSurface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 14,
       alignItems: 'center',
       gap: 12,
@@ -308,7 +312,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     rowName: { fontSize: 14, color: semanticColors.textPrimary, fontWeight: '500' },
     rowMeta: { fontSize: 12, color: semanticColors.textMuted, marginTop: 2 },
     rowRight: { alignItems: 'flex-end', gap: 4 },
-    pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+    pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.chip },
     pillOk: { backgroundColor: tokens.brand[50] },
     pillAttention: { backgroundColor: tokens.semantic.warning.bg },
     pillMuted: { backgroundColor: semanticColors.bgSurface },

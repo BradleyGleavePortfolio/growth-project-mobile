@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { fireEvent, render } from '@testing-library/react-native';
 import * as fs from 'fs';
 import * as path from 'path';
-import { lightTokens, colors } from '../../theme/tokens';
+import { lightTokens, colors, typography } from '../../theme/tokens';
 
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../../config/featureFlags', () => ({
@@ -55,10 +55,22 @@ it('keeps six labelled outline tabs and their original stack destinations', asyn
     await fireEvent.press(view.getByLabelText(accessibility));
     expect(await view.findByText(destination)).toBeTruthy();
     expect(view.getAllByTestId(icon).some((glyph) => glyph.props.style.color === colors.forest)).toBe(true);
-    expect(StyleSheet.flatten(view.getByText(label).props.style)).toMatchObject({
-      fontFamily: 'Inter_500Medium', fontSize: 11, fontWeight: '500',
-    });
+    const text = view.getByText(label);
+    expect(StyleSheet.flatten(text.props.style)).toMatchObject({ ...typography.tabLabelActive });
+    // B26: one line, shrinking instead of wrapping ("Communi / ty" on a 360 pt Android phone).
+    expect(text.props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true });
   }
   const inactive = view.getByText('Home');
-  expect(StyleSheet.flatten(inactive.props.style)).toMatchObject({ color: lightTokens.textMuted });
+  expect(StyleSheet.flatten(inactive.props.style)).toMatchObject({ ...typography.tabLabel, color: lightTokens.textMuted });
+});
+
+it('fits "Community" inside one of six tabs on a 360 pt wide phone (B26)', () => {
+  // Advance width of "Community" measured from @expo-google-fonts/inter 0.4
+  // Inter_500Medium.ttf (hmtx / unitsPerEm): 5.484 em; Regular is 5.396 em.
+  const COMMUNITY_EM = 5.484;
+  const t = typography.tabLabelActive;
+  const width = COMMUNITY_EM * t.fontSize + t.letterSpacing * 'Community'.length;
+  expect(width).toBeLessThanOrEqual(360 / 6);
+  // The tab item keeps no side padding, so the whole 60 pt is the label's.
+  expect(navSource).toContain('tabBarItemStyle: { paddingHorizontal: 0 }');
 });

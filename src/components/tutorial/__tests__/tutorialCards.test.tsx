@@ -28,6 +28,8 @@ const mockNavigate = jest.fn();
 const mockUser = { id: 'u1', coach_id: 'c1' };
 jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUser }));
 const mockParentNavigate = jest.fn();
+let mockAssignments: { data?: unknown[]; isLoading: boolean } = { data: [], isLoading: false };
+jest.mock('../../../hooks/useWorkoutBuilder', () => ({ useMyWorkoutAssignments: () => mockAssignments }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({
     navigate: mockNavigate,
@@ -73,6 +75,7 @@ beforeEach(async () => {
   mockUser.coach_id = 'c1';
   mockNavigate.mockClear();
   mockParentNavigate.mockClear();
+  mockAssignments = { data: [], isLoading: false };
   seen.length = 0;
   unsub = subscribeTutorialSignals((s) => seen.push(s));
 });
@@ -169,6 +172,37 @@ describe('PlanExplanationCard', () => {
     startClientTutorial(PAYLOAD);
     await rerender(<PlanExplanationCard />);
     expect(screen.getByTestId('plan-explanation-card')).toBeTruthy();
+  });
+
+  it('Next opens the first coach workout still to do, in the You stack (48)', async () => {
+    mockAssignments = {
+      isLoading: false,
+      data: [
+        { id: 'a2', scheduled_for: '2026-10-14', completed_at: null, workout_plan: { name: 'Day 2, Pull' } },
+        { id: 'a0', scheduled_for: '2026-10-10', completed_at: '2026-10-10T08:00:00Z', workout_plan: { name: 'Done' } },
+        { id: 'a1', scheduled_for: '2026-10-12', completed_at: null, workout_plan: { name: 'Day 1, Push' } },
+      ],
+    };
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial(PAYLOAD);
+    await render(<PlanExplanationCard />);
+    expect(screen.getByText('Next: Day 1, Push')).toBeTruthy();
+    expect(screen.getByText('Monday')).toBeTruthy();
+    await fireEvent.press(screen.getByTestId('plan-next-day'));
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', {
+      screen: 'WorkoutAssignmentDetail',
+      params: { assignmentId: 'a1' },
+      initial: false,
+    });
+  });
+
+  it('with no workout scheduled yet, the row opens the coach workouts list', async () => {
+    mockAssignments = { isLoading: false, data: [] };
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial(PAYLOAD);
+    await render(<PlanExplanationCard />);
+    await fireEvent.press(screen.getByLabelText('Your coach workouts'));
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
   });
 });
 

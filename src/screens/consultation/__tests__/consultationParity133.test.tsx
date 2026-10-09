@@ -14,7 +14,7 @@ import QuestionScreen, { goalWeightNote } from '../QuestionScreen';
 import { ROMAN_VOICE_FONT, wheelOpacity } from '../components';
 import { COACHLESS_COPY, SCREENS, screenById } from '../../../lib/consultation/definitions';
 import { defaultMeasureUnit, fillCopy, type CopyContext } from '../../../lib/consultation/engine';
-import { P8_COPY } from '../../../lib/consultation/copy';
+import { P8_COPY, REVEAL_COPY } from '../../../lib/consultation/copy';
 import type { Answers, ScreenDef } from '../../../lib/consultation/types';
 
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
@@ -129,13 +129,13 @@ describe('copy and defaults', () => {
   });
 
   it('every coachless variant replaces a line the consultation really shows', async () => {
-    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...HELPER_LINES]);
+    const shown = new Set<string>([...SCREENS.flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...Object.values(REVEAL_COPY), ...HELPER_LINES]);
     for (const key of Object.keys(COACHLESS_COPY)) expect(shown.has(key)).toBe(true);
   });
 
-  it('a coachless client is never told about a coach, on any question or P8 line', async () => {
+  it('a coachless client is never told about a coach, on any question, P8, reveal or paused line', async () => {
     const ctx: CopyContext = { firstName: 'Maya', coachless: true, coachName: 'Bradley', now: NOW };
-    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...HELPER_LINES];
+    const lines = [...SCREENS.filter((s) => s.id !== 'P0').flatMap(screenStrings), ...P8_COPY.guidance, ...P8_COPY.next, ...Object.values(REVEAL_COPY), ...HELPER_LINES];
     for (const t of lines) expect(fillCopy(t, ctx)).not.toMatch(/coach|Bradley/i);
     // A coached client keeps the coach's name.
     expect(fillCopy('{Coach} can build around what you already like.', { coachName: 'Bradley' })).toBe(
