@@ -39,7 +39,8 @@ import HapticPressable from '../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Spacing } from '../theme/index';
-import { typography } from '../theme/tokens';
+import { layout, radius, typography } from '../theme/tokens';
+import { Headline, Lede, Screen, ScreenTopBar } from '../ui';
 import { track } from '../lib/analytics';
 import { dataExportApi } from '../services/dataExportApi';
 import { readCoachSharing } from '../api/coachSharingApi';
@@ -131,7 +132,7 @@ const makeBulletStyles = (colors: ThemeColors) =>
   dot: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radius.chip,
     backgroundColor: colors.textMuted,
     marginTop: 7,
   },
@@ -388,32 +389,23 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   }, [navigation]);
 
   return (
+    <Screen
+      edges={['top']}
+      scroll={false}
+      contentStyle={styles.frame}
+      header={<ScreenTopBar onBack={() => navigation?.goBack?.()} backLabel="Go back" />}
+    >
     <ScrollView
       ref={scrollRef}
       style={styles.container}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <HapticPressable
-          intent="light"
-          onPress={() => navigation?.goBack?.()}
-          style={styles.backBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
-        </HapticPressable>
-        <Text style={styles.headerTitle}>Trust & Privacy</Text>
-        <View style={styles.backBtn} />
-      </View>
-
-      {/* Hero lockup */}
       <View style={styles.heroSection}>
-        <Text style={styles.heroSubtitle}>
+        <Headline level="h1">Trust & Privacy</Headline>
+        <Lede style={styles.heroSubtitle}>
           Your health data is sensitive. Here is exactly how it is protected.
-        </Text>
+        </Lede>
       </View>
 
       {/* ── Section 1: Security metadata ─────────────────────────────────── */}
@@ -520,6 +512,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         ))}
       </View>
     </ScrollView>
+    </Screen>
   );
 }
 
@@ -527,51 +520,24 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+  frame: { paddingHorizontal: 0 },
   container: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 48,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: Spacing.lg,
-    paddingTop: 56,
-    paddingBottom: 12,
-    backgroundColor: colors.background,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontFamily: typography.h3.fontFamily,
-    fontSize: typography.h3.fontSize,
-    fontWeight: typography.h3.fontWeight,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
   heroSection: {
-    alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: 24,
-    gap: 12,
+    paddingHorizontal: layout.gutter,
+    paddingTop: 8,
+    paddingBottom: 28,
+    gap: 8,
   },
   heroSubtitle: {
-    fontFamily: typography.h3.fontFamily,
-    fontSize: 22,
-    lineHeight: 30,
-    color: colors.textPrimary,
-    textAlign: 'center',
     maxWidth: 320,
   },
   section: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: layout.gutter,
     marginBottom: 24,
   },
   sectionTitle: {
@@ -622,7 +588,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 12,
   },
   footer: {
-    paddingHorizontal: Spacing.lg,
+    paddingHorizontal: layout.gutter,
     alignItems: 'center',
     paddingTop: 8,
   },

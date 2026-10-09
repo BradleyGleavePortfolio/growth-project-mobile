@@ -6,7 +6,7 @@ const src = (name: string) => fs.readFileSync(path.join(__dirname, '..', name), 
 describe('primary tab-bar appearance and safe-area contracts', () => {
   it.each([
     ['ClientNavigator.tsx', 'forest', 'bgPrimary', 64],
-    ['CoachNavigator.tsx', 'accentText', 'bgSurface', 60],
+    ['CoachNavigator.tsx', 'accentText', 'bgPrimary', 60],
   ] as const)('%s uses readable tokens and preserves content above the safe inset', (name, active, bg, height) => {
     const nav = src(name);
     expect(nav).toMatch(/semanticColors:\s*sc/);
