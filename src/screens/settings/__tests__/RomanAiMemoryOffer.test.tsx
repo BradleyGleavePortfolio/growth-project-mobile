@@ -28,6 +28,7 @@ jest.mock('../../../utils/logger', () => ({ logger: { warn: jest.fn(), info: jes
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: new Proxy({}, { get: () => '#123456' }),
+    semanticColors: new Proxy({}, { get: () => '#123456' }),
   }),
 }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
