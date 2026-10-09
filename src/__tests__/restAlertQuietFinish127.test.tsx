@@ -191,7 +191,7 @@ describe('rest alert while the app is in the background', () => {
 
   it('Finish cancels the alert, and none is set while the workout saves', async () => {
     const view = await restInBackground();
-    await press(view.getByText('Finish'));
+    await press(view.getByText('Finish workout'));
     expect(mockCancel).toHaveBeenCalledWith('rest-alert-1');
     await moveApp('background');
     expect(mockSchedule).toHaveBeenCalledTimes(1);
@@ -252,7 +252,7 @@ describe('quiet finish summary', () => {
 
   it('a saved workout gives one success haptic instead of the heavy impact', async () => {
     mockLoadSession.mockResolvedValue(stored([true, true, false], [false]));
-    await press((await openScreen()).getByText('Finish'));
+    await press((await openScreen()).getByText('Finish workout'));
     await saved('srv-1');
     expect(mockSuccess).toHaveBeenCalledTimes(1);
     expect(mockHeavy).not.toHaveBeenCalled();
@@ -263,7 +263,7 @@ describe('parity: every finish and rest action stays in place', () => {
   it('Finish asks with Cancel and Finish, then saves and closes', async () => {
     mockLoadSession.mockResolvedValue(stored([true, false, false], [false]));
     await press((await openScreen()).getByTestId('finish-workout'));
-    expect(alerts[0]).toEqual({ title: 'Finish Workout?', buttons: ['Cancel', 'Finish'] });
+    expect(alerts[0]).toEqual({ title: 'Finish workout?', buttons: ['Cancel', 'Finish'] });
     expect(mockMutate).toHaveBeenCalledTimes(1);
     await saved('srv-2');
     expect(mockGoBack).toHaveBeenCalledTimes(1);
