@@ -15,6 +15,8 @@ jest.mock('react-native-safe-area-context', () => {
     SafeAreaView: ({ children }: { children: React.ReactNode }) =>
       ReactLocal.createElement(View, null, children),
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    // REDO-DEVICES-133: the shared Screen reads insets from this context.
+    SafeAreaInsetsContext: ReactLocal.createContext(null),
   };
 });
 const mockInvalidate = jest.fn();
