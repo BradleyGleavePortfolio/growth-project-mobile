@@ -1,13 +1,14 @@
 /**
- * ProgressScreen — Client progress dashboard.
+ * ProgressScreen — "The full picture" (REDO-PROGRESS-133, reference
+ * design-targets/mobile/progress-details/luxury.jpg).
  *
- * Displays weight trend, macros for today, body stats, and recent log entries.
- * The weight trend is rendered via ProgressChartCard (ED.4) — the SVG +
- * Reanimated card with a draw-in line, haptic scrubber, and auto-PR flag plus
- * inline Roman commentary on the same data — but ONLY when the
- * romanFirstPaymentBodyweightPolish flag is ON (audit R5 P2). When the flag is
- * OFF (the shipped build) the screen shows WeightTrendChart, a calm static
- * line drawn like progress-details/luxury.jpg, which never mounts the ED.4 card.
+ * A magazine spread, not a dashboard: serif title and "Since" overline, the
+ * Body numbers between hairlines with the one forest action (Log weight)
+ * inline, the weight trend with text period tabs, recent weigh-ins, today's
+ * food, and the report as a quiet link at the foot. No boxes, no FAB.
+ * The trend is ProgressChartCard (ED.4) ONLY when
+ * romanFirstPaymentBodyweightPolish is ON (audit R5 P2); otherwise, as in the
+ * shipped build, the calm static WeightTrendChart, which never mounts ED.4.
  */
 
 import React, {
@@ -21,12 +22,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Modal,
   TextInput,
   Alert,
-  Dimensions,
   RefreshControl,
   KeyboardAvoidingView,
   Keyboard,
@@ -35,7 +34,6 @@ import {
   InputAccessoryView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -45,7 +43,7 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { ShareCardMilestone } from '../share/ShareCardScreen';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-import { shadows as shadowTokens, typography } from '../../theme/tokens';
+import { radius, typography, type SemanticTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
 import { getTodayString, bucketDateLocal } from '../../utils/date';
 import { parseWeightLogRow, weightHistoryRows } from './progress/weightHistory';
@@ -59,8 +57,18 @@ import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import ProgressChartCard from './progress/ProgressChartCard';
 import PeriodTabs from '../../components/progress/PeriodTabs';
 import WeightTrendChart from '../../components/progress/WeightTrendChart';
-import { periodSummary, type Period } from '../../components/progress/progressFormat';
-import { Lede, QuietOverline, QuietSection } from '../../ui';
+import {
+  formatChange,
+  formatSince,
+  formatWeight,
+  periodSummary,
+  type Period,
+} from '../../components/progress/progressFormat';
+import TodayFood, { type TodayState } from '../../components/progress/TodayFood';
+import WeighInRows from '../../components/progress/WeighInRows';
+import BodyNumbers, { type BodyNumberCell } from '../../components/progress/BodyNumbers';
+import QuietBar from '../../ui/progress/QuietBar';
+import { Headline, Lede, PrimaryButton, QuietOverline, QuietRow, QuietSection, Screen } from '../../ui';
 import { featureFlags } from '../../config/featureFlags';
 // §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
 // voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
@@ -88,8 +96,6 @@ export function streakMilestoneTier(loggingStreak: number): RomanStreakTier | nu
   return null;
 }
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
-
 /** Server bounds for weight_lbs (backend weight DTO); checked before sending. */
 const WEIGHT_MIN_LBS = 40;
 const WEIGHT_MAX_LBS = 1500;
@@ -112,92 +118,9 @@ export function formatLogDate(date: string): string {
   return `${LOG_DATE_WEEKDAYS[d.getDay()]} ${d.getDate()} ${LOG_DATE_MONTHS[d.getMonth()]}`;
 }
 
-function CalorieRing({
-  eaten,
-  target,
-  size = 120,
-}: {
-  eaten: number;
-  target: number;
-  size?: number;
-}) {
-  const { colors } = useTheme();
-  const strokeWidth = 10;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const pct = target > 0 ? Math.min(eaten / target, 1) : 0;
-  const dashOffset = circumference * (1 - pct);
-  const center = size / 2;
-
-  const pctRound = Math.round(pct * 100);
-  const a11yLabel =
-    target > 0
-      ? `Calories: ${Math.round(eaten)} of ${target}, ${pctRound} percent of target`
-      : `Calories: ${Math.round(eaten)}, no daily target set`;
-
-  return (
-    <View
-      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
-      accessible
-      accessibilityRole="image"
-      accessibilityLabel={a11yLabel}
-    >
-      <Svg width={size} height={size}>
-        <G rotation="-90" origin={`${center}, ${center}`}>
-          <Circle
-            cx={center}
-            cy={center}
-            r={radius}
-            stroke={colors.surfaceElevated}
-            strokeWidth={strokeWidth}
-            fill="none"
-          />
-          <Circle
-            cx={center}
-            cy={center}
-            r={radius}
-            stroke={colors.primary}
-            strokeWidth={strokeWidth}
-            fill="none"
-            strokeDasharray={`${circumference}`}
-            strokeDashoffset={dashOffset}
-            strokeLinecap="round"
-          />
-        </G>
-      </Svg>
-      <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text
-          style={{
-            fontFamily: 'CormorantGaramond_400Regular',
-            fontSize: 26,
-            lineHeight: 30,
-            letterSpacing: 0.4,
-            fontWeight: '400',
-            color: colors.textPrimary,
-          }}
-        >
-          {Math.round(eaten)}
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'Inter_500Medium',
-            fontSize: 10,
-            letterSpacing: 1.5,
-            textTransform: 'uppercase',
-            color: colors.textMuted,
-            marginTop: 2,
-          }}
-        >
-          / {target} kcal
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 export default function ProgressScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors, semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
@@ -214,6 +137,14 @@ export default function ProgressScreen() {
   const [savingWeight, setSavingWeight] = useState(false);
   const savingWeightRef = useRef(false);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+  // U3 (WEIGH-KB-128): until today's read lands (or if it fails) no number is claimed.
+  const [todayState, setTodayState] = useState<TodayState>('loading');
+  // U12 (WEIGH-KB-128): the first weigh-in ever, not the period's first.
+  const [firstLog, setFirstLog] = useState<WeightLog | null>(null);
+  const [lastLog, setLastLog] = useState<WeightLog | null>(null);
+  // U2: the history response carries the profile height for BMI.
+  const [heightCm, setHeightCm] = useState<number | null>(null);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   // ED.4 (audit R3 P3): the chart-error retry calls loadData directly, but
@@ -236,6 +167,11 @@ export default function ProgressScreen() {
 
     const periodDays: Record<Period, number> = { '7D': 7, '30D': 30, '90D': 90, All: ALL_DAYS };
     const days = periodDays[period];
+    const toLogs = (body: unknown): WeightLog[] =>
+      weightHistoryRows(body)
+        .map((row) => parseWeightLogRow(row, userId))
+        .filter((x): x is WeightLog => x !== null)
+        .sort((a, b) => a.date.localeCompare(b.date));
 
     try {
       const res = await weightApi.getHistory(days);
@@ -245,19 +181,20 @@ export default function ProgressScreen() {
       // Boundary parse: each untyped server row is validated/normalised into a
       // WeightLog via parseWeightLogRow; rows missing an id or numeric weight
       // are dropped rather than force-cast through a double assertion (R69).
-      const rawRows: unknown[] = weightHistoryRows(res.data);
-      const logs: WeightLog[] = rawRows
-        .map((row) => parseWeightLogRow(row, userId))
-        .filter((x): x is WeightLog => x !== null);
-      // Sort by date ascending
-      logs.sort((a, b) => a.date.localeCompare(b.date));
+      const logs = toLogs(res.data);
       setWeightLogs(logs);
+      const h = (res.data as { height_cm?: unknown } | null)?.height_cm;
+      setHeightCm(typeof h === 'number' && h > 0 ? h : null);
+
+      // U12: Start, Change, goal progress and "Since" read every weigh-in
+      // ("All" already has them), and so does the run below.
+      const runLogs = period === 'All' ? logs : toLogs((await weightApi.getHistory(ALL_DAYS)).data);
+      setFirstLog(runLogs[0] ?? null);
+      setLastLog(runLogs[runLogs.length - 1] ?? null);
 
       // Calculate logging streak — bucket every comparison day in the user's
       // local timezone so a Sydney user who logs at 09:00 local doesn't see
       // the streak reset because UTC is still on yesterday's date.
-      const runLogs = days >= 60 ? logs : weightHistoryRows((await weightApi.getHistory(60)).data)
-        .map((row) => parseWeightLogRow(row, userId)).filter((row): row is WeightLog => row !== null);
       let streak = 0;
       const now = new Date();
       for (let i = 0; i < 60; i++) {
@@ -279,6 +216,8 @@ export default function ProgressScreen() {
       logger.error('progress', 'weight history load failed', {
         reason: errorMessage(err, 'weight history load failed'),
       });
+    } finally {
+      setHistoryLoaded(true);
     }
 
     // Load today's macros from API
@@ -292,9 +231,13 @@ export default function ProgressScreen() {
         carbs: data.total_carbs_g || 0,
         fat: data.total_fat_g || 0,
       });
+      setTodayState('ready');
     } catch (err) {
-      // Read-only; today's macro summary stays at previous value or zero.
-      console.error('ProgressScreen: today macros load failed', err);
+      // Read-only: say it did not load instead of showing zeros as fact.
+      setTodayState('error');
+      logger.error('progress', 'today food load failed', {
+        reason: errorMessage(err, 'today food load failed'),
+      });
     }
   }, [userId, period]);
 
@@ -369,8 +312,10 @@ export default function ProgressScreen() {
     loadData();
   };
 
-  const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : null;
-  const startWeight = weightLogs.length > 0 ? weightLogs[0].weight : null;
+  // U12 (WEIGH-KB-128): Start, Weight and Change come from every weigh-in,
+  // so switching the period never moves the starting point.
+  const latestWeight = lastLog ? lastLog.weight : null;
+  const startWeight = firstLog ? firstLog.weight : null;
   // U1 (FW-BODY-128): the consultation saves the goal on the profile
   // (target_weight_lbs); the macro-target cache never carried it.
   const goalWeight =
@@ -378,41 +323,40 @@ export default function ProgressScreen() {
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
   const runCount = loggingStreak === 60 ? '60+' : String(loggingStreak);
   const runLabel = `${runCount} days in a row with a weigh-in`;
+  const since = firstLog ? formatSince(firstLog.date) : null;
 
-  // BMI calculation — uses latest weight + profile height
+  // BMI (U2): server height first (height_cm on the history response), then
+  // the cached macro-target height in inches. Monochrome: a category is a
+  // word, not a warning colour.
   let bmi: number | null = null;
   let bmiCategory: string | null = null;
-  let bmiColor = colors.textMuted;
-  if (latestWeight && macroTargets?.height) {
-    const heightM = macroTargets.height * 0.0254; // inches to meters
+  const heightM = heightCm ? heightCm / 100 : macroTargets?.height ? macroTargets.height * 0.0254 : null;
+  if (latestWeight && heightM) {
     bmi = latestWeight * 0.453592 / (heightM * heightM); // lbs to kg / m^2
-    if (bmi < 18.5) { bmiCategory = 'Underweight'; bmiColor = colors.warning; }
-    else if (bmi < 25) { bmiCategory = 'Normal'; bmiColor = colors.success; }
-    else if (bmi < 30) { bmiCategory = 'Overweight'; bmiColor = colors.warning; }
-    else { bmiCategory = 'Obese'; bmiColor = colors.error; }
+    if (bmi < 18.5) bmiCategory = 'Underweight';
+    else if (bmi < 25) bmiCategory = 'Normal';
+    else if (bmi < 30) bmiCategory = 'Overweight';
+    else bmiCategory = 'Obese';
   }
+  const tdee = macroTargets?.tdee ? Math.round(macroTargets.tdee) : null;
 
-  // Macro adherence
-  const macroData = [
-    {
-      label: 'P',
-      actual: todayMacros.protein,
-      target: macroTargets?.protein || 0,
-      color: colors.protein,
-    },
-    {
-      label: 'C',
-      actual: todayMacros.carbs,
-      target: macroTargets?.carbs || 0,
-      color: colors.carbs,
-    },
-    {
-      label: 'F',
-      actual: todayMacros.fat,
-      target: macroTargets?.fat || 0,
-      color: colors.fat,
-    },
-  ];
+  // Body row: only values that exist; em dashes while the first read runs.
+  const bodyCells: BodyNumberCell[] = [];
+  if (!historyLoaded || weightHistoryError) {
+    bodyCells.push({ key: 'weight', label: 'Weight', value: '\u2014', unit: 'lb' });
+  } else if (latestWeight !== null) {
+    bodyCells.push({ key: 'weight', label: 'Weight', value: formatWeight(latestWeight), unit: 'lb' });
+    if (startWeight !== null) bodyCells.push({ key: 'start', label: 'Start', value: formatWeight(startWeight), unit: 'lb' });
+  }
+  if (goalWeight) bodyCells.push({ key: 'goal', label: 'Goal', value: formatWeight(goalWeight), unit: 'lb' });
+  if (change !== null && historyLoaded && !weightHistoryError) {
+    bodyCells.push({ key: 'change', label: 'Change', value: formatChange(change), unit: 'lb', testID: 'progress-weight-change' });
+  }
+  const noWeighIns = historyLoaded && !weightHistoryError && latestWeight === null;
+  const goalPct =
+    latestWeight && goalWeight && startWeight && startWeight !== goalWeight
+      ? Math.round(Math.min(Math.max(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100, 0), 100))
+      : null;
 
   // Chart data for ProgressChartCard — x is the *epoch milliseconds* of the log
   // day (parsed as midnight local); the card derives its own ordering and
@@ -429,7 +373,7 @@ export default function ProgressScreen() {
   // The line under the chart reads the period's own first and last entry.
   const summary =
     weightLogs.length >= 2
-      ? periodSummary(weightLogs[0].weight, weightLogs[weightLogs.length - 1].weight, period, null)
+      ? periodSummary(weightLogs[0].weight, weightLogs[weightLogs.length - 1].weight, period, since)
       : null;
 
   // ED.4 flag gate (audit R5 P2): the ProgressChartCard animated surface only
@@ -443,10 +387,10 @@ export default function ProgressScreen() {
   const streakFirstName = (currentUser?.firstName ?? '').trim() || 'there';
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+    <>
+      <Screen
+        edges={[]}
+        testID="progress-screen"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -456,16 +400,18 @@ export default function ProgressScreen() {
           />
         }
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Progress</Text>
-          <View style={styles.headerRight}>
-            {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
-                navigate directly instead of through the old ProfileStack parent. */}
+        {/* Under the native back header (MoreStack): no extra top padding. */}
+        <Headline level="h1">The full picture</Headline>
+        {since ? <QuietOverline style={styles.since}>{since}</QuietOverline> : null}
+        {/* A run is two or more days; one day would read "1 days in a row". */}
+        {loggingStreak >= 2 && (
+          <View style={styles.runRow}>
+            <Text style={styles.runText}>{runLabel}</Text>
             {/* Phase 11: Share streak card when streak >= 3 days */}
             {loggingStreak >= 3 && (
               <HapticPressable
                 intent="light"
-                style={{ marginRight: 8, padding: 4 }}
+                style={styles.inlineLink}
                 onPress={() => {
                   const milestone: ShareCardMilestone = {
                     variant: 'streak',
@@ -478,20 +424,11 @@ export default function ProgressScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={`Share ${runLabel}`}
               >
-                <Ionicons name="share-social-outline" size={22} color={colors.primary} />
+                <Text style={styles.linkText}>Share</Text>
               </HapticPressable>
             )}
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Report')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityLabel="View progress report"
-              accessibilityRole="button"
-            >
-              <Ionicons name="document-text-outline" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
           </View>
-        </View>
-        {loggingStreak > 0 && <Text style={[styles.runText, { marginHorizontal: 24, marginBottom: 8 }]}>{runLabel}</Text>}
+        )}
 
         {/* §2.7 Roman streak milestone — voiced beside his face. HIDE-UNTIL-LIVE
             (P1-B-02): `streakTier` is derived from a CLIENT-SIDE recomputed
@@ -520,104 +457,43 @@ export default function ProgressScreen() {
           </FadeInView>
         )}
 
-        {/* Calorie Ring + Macros */}
-        <FadeInView>
-          <View style={styles.ringCard}>
-            <CalorieRing
-              eaten={todayMacros.calories}
-              target={macroTargets?.calories || 2000}
-            />
-            <View style={styles.ringMacros}>
-              {macroData.map((m) => {
-                const pct = m.target > 0 ? Math.min((m.actual / m.target) * 100, 100) : 0;
-                return (
-                  <View key={m.label} style={styles.ringMacroItem}>
-                    <View style={styles.ringMacroHeader}>
-                      <View style={[styles.ringMacroDot, { backgroundColor: m.color }]} />
-                      <Text style={styles.ringMacroLabel}>{m.label === 'P' ? 'Protein' : m.label === 'C' ? 'Carbs' : 'Fat'}</Text>
-                    </View>
-                    <View style={styles.ringMacroTrack}>
-                      <View
-                        style={[styles.ringMacroFill, { width: `${pct}%`, backgroundColor: m.color }]}
-                      />
-                    </View>
-                    <Text style={styles.ringMacroValue}>
-                      {Math.round(m.actual)}/{Math.round(m.target)}g
-                    </Text>
-                  </View>
-                );
-              })}
+        {/* Body: the numbers, the goal, and the one forest action inline (the
+            FAB is gone; doctrine 6, DESIGN-QA-128 row 17). */}
+        <QuietSection title="Body" style={styles.firstSection}>
+          {noWeighIns ? (
+            <Lede style={styles.lede}>No weigh-ins yet. The first one sets the starting point.</Lede>
+          ) : null}
+          <BodyNumbers cells={bodyCells} />
+          {goalPct !== null && goalWeight && startWeight ? (
+            <View style={styles.goal}>
+              <QuietBar
+                label={`From ${formatWeight(startWeight)} to ${formatWeight(goalWeight)} lb`}
+                value={`${goalPct}% of the way`}
+                current={goalPct}
+                target={100}
+              />
             </View>
-          </View>
-        </FadeInView>
-
-        {/* Weight Stats Row */}
-        <FadeInView delay={50}>
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{startWeight ? Math.round(startWeight) : '--'}</Text>
-            <Text style={styles.statLabel}>Start</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: colors.primary }]}>
-              {latestWeight ? Math.round(latestWeight * 10) / 10 : '--'}
-            </Text>
-            <Text style={styles.statLabel}>Current</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{goalWeight ? Math.round(goalWeight) : '--'}</Text>
-            <Text style={styles.statLabel}>Goal</Text>
-          </View>
-          {change !== null && (
-            <View style={styles.statCard}>
-              <Text
-                style={styles.statValue}
-                testID="progress-weight-change"
-              >
-                {change > 0 ? '+' : ''}
-                {change.toFixed(1)}
-              </Text>
-              <Text style={styles.statLabel}>Change</Text>
+          ) : null}
+          {bmi !== null || tdee !== null ? (
+            <View style={styles.measures}>
+              {bmi !== null && <QuietRow label="BMI" detail={bmiCategory ?? undefined} value={bmi.toFixed(1)} />}
+              {tdee !== null && <QuietRow label="Daily energy need" value={`${tdee.toLocaleString('en-US')} kcal`} />}
             </View>
-          )}
-        </View>
-        </FadeInView>
-
-        {/* Goal Progress Card */}
-        {latestWeight && goalWeight && startWeight && startWeight !== goalWeight && (
-          <FadeInView delay={50}>
-            <View style={styles.goalCard}>
-              <View style={styles.goalHeader}>
-                <View style={styles.goalRule} />
-                <Text style={styles.goalTitle}>Goal Progress</Text>
-              </View>
-              <View style={styles.goalTrack}>
-                <View
-                  style={[
-                    styles.goalFill,
-                    {
-                      width: `${Math.min(Math.max(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100, 0), 100)}%`,
-                    },
-                  ]}
-                />
-              </View>
-              <View style={styles.goalLabels}>
-                <Text style={styles.goalLabelText}>{Math.round(startWeight)} lbs</Text>
-                <Text style={[styles.goalLabelText, { color: colors.primary, fontFamily: 'Inter_500Medium', fontWeight: '500' }]}>
-                  {Math.round(Math.min(Math.max(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100, 0), 100))}%
-                </Text>
-                <Text style={styles.goalLabelText}>{Math.round(goalWeight)} lbs</Text>
-              </View>
-            </View>
-          </FadeInView>
-        )}
+          ) : null}
+          <PrimaryButton
+            label="Log weight"
+            onPress={() => setShowLogModal(true)}
+            testID="progress-log-weight"
+            style={styles.logButton}
+          />
+        </QuietSection>
 
         {/* Weight trend — ED.4: ProgressChartCard (draw-in animation, haptic
             scrubber, auto-PR flag + Roman commentary) when its flag is on;
             chartData is already the {x: epoch ms, y: weight} shape it expects. */}
-        <QuietSection style={styles.trend}>
+        <QuietSection>
           <QuietOverline>Weight trend</QuietOverline>
-          <PeriodTabs value={period} onChange={setPeriod} />
+          {noWeighIns ? null : <PeriodTabs value={period} onChange={setPeriod} />}
           {weightHistoryError ? (
             // Honest load-failure state (audit R2 P2): a fetch error must NOT be
             // dressed up as the benign empty copy. CoachErrorState co-mounts
@@ -656,77 +532,48 @@ export default function ProgressScreen() {
                 </View>
               ) : null}
             </View>
-          ) : (
+          ) : historyLoaded ? (
             <Lede size="small" style={styles.trendNote}>
-              {weightLogs.length === 0
-                ? 'No weigh-ins in this period.'
-                : 'One weigh-in in this period. The line appears after the second.'}
+              {noWeighIns
+                ? 'The trend appears after two weigh-ins.'
+                : weightLogs.length === 0
+                  ? 'No weigh-ins in this period.'
+                  : 'One weigh-in in this period. The line appears after the second.'}
             </Lede>
-          )}
+          ) : null}
         </QuietSection>
 
-        {/* Body Stats */}
-        <FadeInView delay={200}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Body Stats</Text>
-          <View style={styles.bodyStatsGrid}>
-            {bmi !== null && (
-              <View style={styles.bodyStatCard}>
-                <Text style={[styles.bodyStatValue, { color: bmiColor }]}>
-                  {bmi.toFixed(1)}
-                </Text>
-                <Text style={styles.bodyStatLabel}>BMI</Text>
-                <Text style={[styles.bodyStatSub, { color: bmiColor }]}>{bmiCategory}</Text>
-              </View>
-            )}
-            {macroTargets?.tdee && (
-              <View style={styles.bodyStatCard}>
-                <Text style={styles.bodyStatValue}>{Math.round(macroTargets.tdee)}</Text>
-                <Text style={styles.bodyStatLabel}>TDEE</Text>
-              </View>
-            )}
-          </View>
-        </View>
-        </FadeInView>
-
-        {/* Recent Weight Logs */}
+        {/* Recent weigh-ins, read-only rows like "Recent check-ins". */}
         {weightLogs.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Recent Entries</Text>
-            {weightLogs
-              .slice()
-              .reverse()
-              .slice(0, 10)
-              .map((log) => (
-                <View key={log.id} style={styles.logRow}>
-                  <Text style={styles.logDate}>{formatLogDate(log.date)}</Text>
-                  <View style={styles.logRight}>
-                    <Text style={styles.logWeight}>
-                      {log.weight} {log.unit}
-                    </Text>
-                    {log.notes ? (
-                      <Text style={styles.logNotes} numberOfLines={1}>
-                        {log.notes}
-                      </Text>
-                    ) : null}
-                  </View>
-                </View>
-              ))}
-          </View>
+          <QuietSection title="Recent weigh-ins">
+            <WeighInRows
+              rows={weightLogs
+                .slice()
+                .reverse()
+                .slice(0, 10)
+                .map((log) => ({ id: log.id, day: formatLogDate(log.date), weight: log.weight, notes: log.notes }))}
+            />
+          </QuietSection>
         )}
-      </ScrollView>
 
-      {/* FAB */}
-      <TouchableOpacity
-        style={styles.fab}
-        onPress={() => setShowLogModal(true)}
-        activeOpacity={0.85}
-        accessibilityLabel="Log weight"
-        accessibilityRole="button"
-      >
-        {/* Round 3: hex → theme token */}
-        <Ionicons name="add" size={28} color={colors.textOnPrimary} />
-      </TouchableOpacity>
+        {/* Today's food, against the targets that exist (U3). */}
+        <QuietSection title="Today's food">
+          <TodayFood
+            state={todayState}
+            totals={todayMacros}
+            targets={{
+              calories: macroTargets?.calories,
+              protein: macroTargets?.protein,
+              carbs: macroTargets?.carbs,
+              fat: macroTargets?.fat,
+            }}
+          />
+        </QuietSection>
+
+        {/* Round 3: Progress lives inside MoreStack, so Report is a sibling. The
+            single quiet link at the foot, as in the reference. */}
+        <QuietRow label="View progress report" onPress={() => navigation.navigate('Report')} style={styles.reportRow} />
+      </Screen>
 
       {/* Weight Log Modal. B1 (FW-BODY-128): the sheet rides above the
           iPhone number pad (KeyboardAvoidingView), tapping outside the fields
@@ -755,14 +602,14 @@ export default function ProgressScreen() {
               testID="log-weight-sheet"
             >
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Log weight</Text>
+                <Headline level="h2">Log weight</Headline>
                 <TouchableOpacity
                   onPress={closeLogModal}
                   style={styles.modalClose}
                   accessibilityLabel="Close log weight modal"
                   accessibilityRole="button"
                 >
-                  <Ionicons name="close" size={24} color={colors.textSecondary} />
+                  <Ionicons name="close" size={24} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
               <TextInput
@@ -780,7 +627,7 @@ export default function ProgressScreen() {
                 testID="log-weight-input"
               />
               <TextInput
-                style={[styles.input, { marginTop: 12 }]}
+                style={[styles.input, styles.inputGap]}
                 placeholder="Notes (optional)"
                 placeholderTextColor={colors.textMuted}
                 value={newNotes}
@@ -790,27 +637,19 @@ export default function ProgressScreen() {
                 onSubmitEditing={Keyboard.dismiss}
                 accessibilityLabel="Enter optional notes"
               />
-              <TouchableOpacity
-                style={[
-                  styles.saveBtn,
-                  (savingWeight || !newWeight.trim()) && styles.saveBtnDisabled,
-                ]}
+              <PrimaryButton
+                // The doctrine parity test presses this by its label; a
+                // shorter visible "Save" waits on a PrimaryButton
+                // accessibilityLabel prop (NEED in ops/reports/REDO-PROGRESS-133.md).
+                label={savingWeight ? 'Saving' : 'Save weight log entry'}
                 onPress={() => {
                   void handleLogWeight();
                 }}
-                disabled={savingWeight || !newWeight.trim()}
-                accessibilityLabel="Save weight log entry"
-                accessibilityRole="button"
-                accessibilityState={{
-                  disabled: savingWeight || !newWeight.trim(),
-                  busy: savingWeight,
-                }}
+                disabled={!newWeight.trim()}
+                loading={savingWeight}
                 testID="log-weight-save"
-              >
-                <Text style={styles.saveBtnText}>
-                  {savingWeight ? 'Saving' : 'Save'}
-                </Text>
-              </TouchableOpacity>
+                style={styles.saveBtn}
+              />
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
@@ -830,180 +669,55 @@ export default function ProgressScreen() {
           </InputAccessoryView>
         ) : null}
       </Modal>
-    </View>
+    </>
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
+  since: {
+    marginTop: 8,
+    marginBottom: 0,
   },
-  content: {
-    paddingBottom: 100,
-  },
-  header: {
+  runRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    marginBottom: 20,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  title: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 32,
-    lineHeight: 35,
-    letterSpacing: 0.6,
-    fontWeight: '400',
-    color: colors.textPrimary,
+    columnGap: 16,
+    marginTop: 12,
   },
   runText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 12,
-    letterSpacing: 0.4,
-    color: colors.textSecondary,
+    ...typography.bodySmall,
+    color: colors.textMuted,
   },
-  goalRule: {
-    width: 18,
-    height: 1,
-    backgroundColor: colors.border,
+  inlineLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  linkText: {
+    ...typography.bodyMd,
+    fontSize: 15,
+    color: colors.primary,
   },
   romanStreakWrap: {
-    marginHorizontal: 24,
-    marginBottom: 16,
+    marginTop: 16,
   },
-  ringCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 24,
-    marginBottom: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    padding: 16,
-    gap: 20,
+  firstSection: {
+    marginTop: 24,
   },
-  ringMacros: {
-    flex: 1,
-    gap: 10,
-  },
-  ringMacroItem: {
-    gap: 3,
-  },
-  ringMacroHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  ringMacroDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  ringMacroLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
-  },
-  ringMacroTrack: {
-    height: 6,
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  ringMacroFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  ringMacroValue: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    fontWeight: '500',
-    color: colors.textMuted,
-  },
-  statsRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 8,
-    marginBottom: 16,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    padding: 14,
-    alignItems: 'center',
-    gap: 4,
-  },
-  statValue: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 22,
-    lineHeight: 26,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  statLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-  },
-  goalCard: {
-    marginHorizontal: 24,
-    marginBottom: 16,
-    backgroundColor: colors.surface,
-    borderRadius: 4,
-    padding: 16,
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  goalTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  goalTrack: {
-    height: 10,
-    backgroundColor: colors.primaryPale,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  goalFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-  },
-  goalLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  lede: {
     marginTop: 8,
   },
-  goalLabelText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.textSecondary,
+  goal: {
+    marginTop: 24,
   },
-  trend: {
-    marginHorizontal: 24,
+  measures: {
+    marginTop: 16,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
+  },
+  logButton: {
+    marginTop: 24,
   },
   summary: {
     marginTop: 20,
@@ -1023,107 +737,24 @@ const makeStyles = (colors: ThemeColors) =>
   trendNote: {
     marginTop: 16,
   },
-  section: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 20,
-    lineHeight: 24,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    marginBottom: 12,
-  },
-  bodyStatsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  bodyStatCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 2,
-    padding: 16,
-    alignItems: 'center',
-    minWidth: (SCREEN_WIDTH - 58) / 2,
-    flex: 1,
-    gap: 2,
-  },
-  bodyStatValue: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 22,
-    lineHeight: 26,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: colors.textPrimary,
-    textTransform: 'capitalize',
-  },
-  bodyStatLabel: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 10,
-    fontWeight: '500',
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    color: colors.textMuted,
-  },
-  bodyStatSub: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  logRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  logDate: {
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  logRight: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  logWeight: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    fontWeight: '500',
-    color: colors.textPrimary,
-  },
-  logNotes: {
-    fontSize: 12,
-    color: colors.textMuted,
-    maxWidth: 160,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: 90,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    ...shadowTokens.md,
+  reportRow: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: sc.border,
   },
   modalAvoider: {
     flex: 1,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(26,26,24,0.5)',
+    backgroundColor: sc.overlay,
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: colors.surfaceElevated,
-    borderTopLeftRadius: 4,
-    borderTopRightRadius: 4,
-    padding: 24,
+    backgroundColor: sc.bgSurface,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    paddingHorizontal: 24,
+    paddingTop: 24,
     paddingBottom: 40,
   },
   modalHeader: {
@@ -1138,39 +769,28 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-  modalTitle: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 24,
-    lineHeight: 29,
-    letterSpacing: 0.5,
-    fontWeight: '400',
-    color: colors.textPrimary,
-  },
   input: {
-    backgroundColor: colors.surface,
-    borderRadius: 2,
-    padding: 14,
-    fontSize: 16,
+    ...typography.body,
+    backgroundColor: sc.bgPrimary,
+    borderRadius: radius.input,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
+  },
+  inputGap: {
+    marginTop: 12,
   },
   saveBtn: {
-    marginTop: 20,
-    backgroundColor: colors.primary,
-    borderRadius: 2,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  saveBtnDisabled: {
-    opacity: 0.5,
+    marginTop: 24,
   },
   keyboardBar: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
-    backgroundColor: colors.surfaceElevated,
+    backgroundColor: sc.bgSurface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: sc.border,
     paddingHorizontal: 16,
   },
   keyboardDone: {
@@ -1184,13 +804,5 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 16,
     fontWeight: '500',
     color: colors.primary,
-  },
-  saveBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 13,
-    fontWeight: '500',
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    color: colors.textOnPrimary,
   },
   });

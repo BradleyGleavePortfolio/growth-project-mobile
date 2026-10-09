@@ -226,6 +226,26 @@ export const typography = {
     letterSpacing: 0.5,
     fontWeight:    '600' as const,
   },
+  /**
+   * Bottom tab labels (B26). Six tabs share 60 pt on a 360 pt Android phone.
+   * "Community" in Inter Medium is 5.484 em: 60.3 pt at 11 pt with no
+   * tracking (it wrapped), 58.5 pt with -0.2 tracking. ClientNavigator also
+   * drops the tab item's 5 pt side padding and keeps the label on one line.
+   */
+  tabLabel: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      11,
+    lineHeight:    14,
+    letterSpacing: -0.2,
+    fontWeight:    '400' as const,
+  },
+  tabLabelActive: {
+    fontFamily:    'Inter_500Medium',
+    fontSize:      11,
+    lineHeight:    14,
+    letterSpacing: -0.2,
+    fontWeight:    '500' as const,
+  },
 } as const;
 
 /**

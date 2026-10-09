@@ -51,6 +51,7 @@ import RomanComposer from '../../components/roman/RomanComposer';
 import RomanState from '../../components/roman/RomanState';
 import AiRefusalNotice from '../../components/ai/AiRefusalNotice';
 import AiDailyCapModal from '../../components/ai/AiDailyCapModal';
+import RomanConsentGate from '../../components/roman/RomanConsentGate';
 import { aiRefusalCopy } from '../../lib/ai/aiRefusal';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import { useRomanReveal } from '../../components/roman/useRomanReveal';
@@ -439,6 +440,9 @@ export default function RomanChatScreen({
           onClose={clearSendError}
           testID="roman-daily-cap"
         />
+
+        {/* B32 (prototype 68): consent before Roman's first answer. */}
+        <RomanConsentGate surface={surface} />
 
         {askAgainHint && sendError == null ? (
           <View style={styles.sendError} testID="roman-ask-again" accessibilityLiveRegion="polite">
