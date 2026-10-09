@@ -176,80 +176,50 @@ it('does not guess the water unit before settings load', async () => {
   expect(screen.getByTestId('home-value-WATER').props.children).toBe('—');
 });
 
-it.each([false, true])('inactive access: an actionable Home instead of a connection error or locked CTA (assigned: %s)', async (assigned) => {
-  Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
-  mockDay.loadError = 'Food and water data could not refresh. Check your connection and try again.';
-  if (assigned) mockAssignments.mockResolvedValue([
-    { id: 'assignment', completed_at: null, workout_plan: { name: 'Foundations' } },
-  ]);
-  await render(<HomeScreen />);
-  expect(screen.queryByText(mockDay.loadError)).toBeNull();
-  expect(screen.getByText('Food and water logging need active access.')).toBeTruthy();
-  expect(mockDay.loadDayData).not.toHaveBeenCalled();
-  expect(mockAssignments).not.toHaveBeenCalled();
-  await fireEvent.press(await screen.findByLabelText('View access'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Membership', initial: false });
-  for (const prompt of screen.getAllByLabelText('View access to log food')) {
-    await fireEvent.press(prompt);
-    expect(mockNavigate).toHaveBeenLastCalledWith('MoreTab', { screen: 'Membership', initial: false });
-  }
-  for (const [id, destination] of [
-    ['home-message-coach', 'Messages'], ['home-notification-bell', 'NotificationCenter'],
-  ]) {
-    await fireEvent.press(screen.getByTestId(id));
-    expect(mockNavigate).toHaveBeenLastCalledWith(destination);
-  }
-});
-
-it('waits for the access check before reading food and loads when access is confirmed', async () => {
-  Object.assign(mockEntitlement, { entitlementActive: null, confirmedActive: false, status: 'loading' });
-  const view = await render(<HomeScreen />);
-  expect(mockDay.loadDayData).not.toHaveBeenCalled();
-  expect(screen.getByTestId('cta-skeleton')).toBeTruthy();
-  Object.assign(mockEntitlement, { entitlementActive: true, confirmedActive: true, status: 'active' });
-  await view.rerender(<HomeScreen />);
-  expect(mockDay.loadDayData).toHaveBeenCalledWith(mockUser.id, getTodayString());
-});
-
-it('does not treat an unavailable access check as an inactive plan', async () => {
-  Object.assign(mockEntitlement, { entitlementActive: null, confirmedActive: false, status: 'unavailable' });
-  await render(<HomeScreen />);
-  expect(mockDay.loadDayData).not.toHaveBeenCalled();
-  expect(screen.queryByText('Food and water logging need active access.')).toBeNull();
-  await fireEvent.press(await screen.findByLabelText('View access'));
-  expect(mockNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'Membership', initial: false });
-});
-
-it('pull-to-refresh rechecks inactive access without making locked food requests', async () => {
-  Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
-  mockEntitlement.refreshEntitlement.mockResolvedValue(false);
-  await render(<HomeScreen />);
-  await act(async () => screen.getByTestId('home-scroll').props.refreshControl.props.onRefresh());
-  expect(mockEntitlement.refreshEntitlement).toHaveBeenCalledTimes(1);
-  expect(mockDay.loadDayData).not.toHaveBeenCalled();
-});
-
-// CLIENT-POLISH-134 item 5 (B22/B24): the server lets a client with no coach
-// log food and water (b#888), so Home never shows them an access line.
-it.each<[string, Partial<typeof mockEntitlement>]>([
-  ['inactive', { entitlementActive: false, confirmedActive: false, status: 'inactive' }],
-  ['unavailable', { entitlementActive: null, confirmedActive: false, status: 'unavailable' }],
-  ['loading', { entitlementActive: null, confirmedActive: false, status: 'loading' }],
-])('coachless client, access %s: today loads and logging stays open', async (_label, state) => {
-  Object.assign(mockUser, { coach_id: null });
+// B1 (owner ruling 10-08 23:5x): food, water and workouts are the client's own
+// basic functions and open to every client, so Home never waits on the
+// entitlement check and never shows an access line or a View access button.
+const ACCESS_LINES = ['Food and water logging need active access.', 'Your access could not be checked.'];
+it.each<[string, string | null, Partial<typeof mockEntitlement>]>([
+  ['coached, no package (inactive)', 'coach', { entitlementActive: false, confirmedActive: false, status: 'inactive' }],
+  ['coached, check failed', 'coach', { entitlementActive: null, confirmedActive: false, status: 'unavailable' }],
+  ['coached, check running', 'coach', { entitlementActive: null, confirmedActive: false, status: 'loading' }],
+  ['coached, active', 'coach', { entitlementActive: true, confirmedActive: true, status: 'active' }],
+  ['coachless, inactive', null, { entitlementActive: false, confirmedActive: false, status: 'inactive' }],
+  ['coachless, check failed', null, { entitlementActive: null, confirmedActive: false, status: 'unavailable' }],
+])('%s: today and workouts load and logging stays open', async (_label, coachId, state) => {
+  Object.assign(mockUser, { coach_id: coachId });
   Object.assign(mockEntitlement, state);
+  mockAssignments.mockResolvedValue([]);
   await render(<HomeScreen />);
   expect(mockDay.loadDayData).toHaveBeenCalledWith(mockUser.id, getTodayString());
+  expect(mockAssignments).toHaveBeenCalled();
   expect(screen.queryByTestId('home-access-note')).toBeNull();
-  expect(screen.queryByText('Food and water logging need active access.')).toBeNull();
+  expect(screen.queryByTestId('home-access-cta')).toBeNull();
+  for (const line of ACCESS_LINES) expect(screen.queryByText(line)).toBeNull();
   expect(screen.queryByLabelText('View access')).toBeNull();
   expect(screen.queryByLabelText('View access to log food')).toBeNull();
+  await fireEvent.press(await screen.findByLabelText('Log a meal'));
+  expect(mockNavigate).toHaveBeenLastCalledWith('Log');
+  for (const prompt of screen.getAllByLabelText(/^Log a meal to see your /)) {
+    await fireEvent.press(prompt);
+    expect(mockNavigate).toHaveBeenLastCalledWith('Log');
+  }
+  expect(mockNavigate).not.toHaveBeenCalledWith('MoreTab', { screen: 'Membership', initial: false });
 });
 
-it('a coached client whose plan lapsed keeps the access line', async () => {
+it('a coached client without a package sees the assigned workout on Home', async () => {
+  Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
+  mockAssignments.mockResolvedValue([{ id: 'assignment', completed_at: null, workout_plan: { name: 'Foundations' } }]);
+  await render(<HomeScreen />);
+  expect(await screen.findByLabelText('Start Foundations')).toBeTruthy();
+});
+
+it('pull-to-refresh reloads today without an access recheck', async () => {
   Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
   await render(<HomeScreen />);
-  expect(screen.getByTestId('home-access-note')).toBeTruthy();
-  expect(screen.getByText('Food and water logging need active access.')).toBeTruthy();
-  expect(mockDay.loadDayData).not.toHaveBeenCalled();
+  mockDay.loadDayData.mockClear();
+  await act(async () => screen.getByTestId('home-scroll').props.refreshControl.props.onRefresh());
+  expect(mockDay.loadDayData).toHaveBeenCalledWith(mockUser.id, getTodayString());
+  expect(mockEntitlement.refreshEntitlement).not.toHaveBeenCalled();
 });

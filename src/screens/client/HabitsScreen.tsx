@@ -40,9 +40,7 @@ import { buildCheckInPayload } from './habits/checkInPayload';
 import { AddHabitSheet } from './habits/AddHabitSheet';
 import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
-import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
-import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -62,17 +60,13 @@ export default function HabitsScreen() {
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
-  const { entitlementActive, status, confirmedActive, refreshEntitlement } = useEntitlement();
-  // Match ProtectedScreen's confirmed-access policy before making a paid read.
-  // B22/B24 (b#888): check-ins are open to a client with no coach.
-  const coachless = useCoachlessClient();
-  const checkInAccessible = coachless || entitlementActive === true ||
-    (confirmedActive && (status === 'checking' || status === 'unavailable'));
 
-  // Server reads (React Query)
+  // Server reads (React Query). B1 (owner ruling 10-08 23:5x): check-ins are
+  // the client's own basic function, open to every client with or without a
+  // package, so the read never waits on the entitlement check.
   const habitsQ = useHabits();
   const logsQ = useHabitLogs(today);
-  const todayCheckInQ = useTodayCheckIn(today, checkInAccessible);
+  const todayCheckInQ = useTodayCheckIn(today);
 
   // Server writes
   const logHabit = useLogHabit();
@@ -168,8 +162,7 @@ export default function HabitsScreen() {
   const onRefresh = () => {
     habitsQ.refetch();
     logsQ.refetch();
-    if (checkInAccessible) todayCheckInQ.refetch();
-    else if (tab === 'checkin') void refreshEntitlement();
+    todayCheckInQ.refetch();
   };
 
   const checkInSaved = !!todayCheckInQ.data;
@@ -356,9 +349,6 @@ export default function HabitsScreen() {
         </>
       ) : (
         <>
-          {status === 'inactive' && !coachless && (
-            <Text style={[styles.note, { marginVertical: 12 }]}>Daily check-ins need active coaching access.</Text>
-          )}
           <ProtectedScreen openToCoachless>
             {todayCheckInQ.isLoading ? (
               <QuietLoading label="Loading check-in" rows={4} testID="checkin-loading" />
