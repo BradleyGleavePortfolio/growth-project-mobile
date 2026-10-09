@@ -11,15 +11,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, RefreshControl, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { addDays, getLocalWeekStart, getTodayString } from '../../utils/date';
@@ -36,6 +28,9 @@ import {
   type ApiHabit,
   type ApiHabitLog,
 } from '../../hooks/useApi';
+import HapticPressable from '../../components/HapticPressable';
+import { Headline, Lede, Overline, PrimaryButton, QuietSection, Screen, TextLink } from '../../ui';
+import { QuietError, QuietLoading } from '../../ui/states/QuietStates';
 
 import { makeStyles } from './habits/styles';
 import { type HabitView, type TabMode } from './habits/constants';
@@ -48,22 +43,21 @@ import { featureFlags } from '../../config/featureFlags';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
 
+const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
+const word = (n: number) => WORDS[n] ?? String(n);
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** Today's habits as one sentence ("Two of three done today."). */
+export function habitsSummary(done: number, total: number): string {
+  if (total === 1) return done ? 'Done for today.' : 'One habit waiting today.';
+  if (done >= total) return `All ${word(total)} done today.`;
+  if (done === 0) return `${cap(word(total))} habits waiting today.`;
+  return `${cap(word(done))} of ${word(total)} done today.`;
+}
+
 export default function HabitsScreen() {
-  const { colors: themeColors, semanticColors: sc } = useTheme();
-  // Bridge the existing child props to semantic tokens, not the fixed palette.
-  const colors = useMemo(() => ({
-    ...themeColors,
-    primary: sc.accentText,
-    primaryPale: sc.bgPrimary,
-    background: sc.bgPrimary,
-    surface: sc.bgPrimary,
-    textPrimary: sc.textPrimary,
-    textSecondary: sc.textMuted,
-    textMuted: sc.textMuted,
-    textOnPrimary: sc.textOnAccent,
-    border: sc.border,
-  }), [themeColors, sc]);
-  const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -136,7 +130,7 @@ export default function HabitsScreen() {
       id: h.id,
       name: h.name,
       icon: h.icon || h.emoji || 'checkmark-circle',
-      color: h.color || colors.primary,
+      color: h.color || sc.accent,
       frequency: h.frequency || 'daily',
       targetCount: h.target_count || h.target_value || 1,
       unit: h.unit || 'times',
@@ -153,6 +147,7 @@ export default function HabitsScreen() {
   );
   const weekStart = getLocalWeekStart();
   const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const todayIndex = weekDates.indexOf(today);
   const habits: HabitView[] = allHabits.map((h, index) => ({
     ...h,
     log: logsMap.get(h.id) || null,
@@ -260,200 +255,177 @@ export default function HabitsScreen() {
   };
 
   const completedCount = habits.filter((h) => h.log?.completed).length;
+  const dateLabel = new Date(today + 'T00:00:00').toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  const tabButton = (mode: TabMode, label: string) => {
+    const on = tab === mode;
+    return (
+      <HapticPressable
+        intent="light"
+        disableAnimation
+        style={({ pressed }) => [styles.tab, on && styles.tabActive, pressed && styles.pressed]}
+        onPress={() => setTab(mode)}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: on }}
+        testID={`habits-tab-${mode}`}
+      >
+        <Text style={on ? styles.tabLabelActive : styles.tabLabel}>{label}</Text>
+      </HapticPressable>
+    );
+  };
 
   return (
-    <View style={styles.container}>
+    // Under the Home stack's back-only native header inside the tab bar: the
+    // header owns the top inset and the tab bar the bottom (no paddingTop 60).
+    <Screen
+      edges={[]}
+      testID="habits-screen"
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={sc.accent} colors={[sc.accent]} />
+      }
+    >
       <View style={styles.header}>
-        <Text style={styles.title}>Habits & check-in</Text>
-        <Text style={styles.subtitle}>
-          {new Date(today + 'T00:00:00').toLocaleDateString('en-US', {
-            weekday: 'long',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </Text>
+        <Overline>{dateLabel}</Overline>
+        <Headline level="h1">Habits & check-in</Headline>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabRow}>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'habits' && styles.tabBtnActive]}
-          onPress={() => setTab('habits')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === 'habits' }}
-        >
-          <Ionicons
-            name="checkmark-done-outline"
-            size={16}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.tabLabel, tab === 'habits' && styles.tabLabelActive]}>
-            Habits
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabBtn, tab === 'checkin' && styles.tabBtnActive]}
-          onPress={() => setTab('checkin')}
-          accessibilityRole="tab"
-          accessibilityState={{ selected: tab === 'checkin' }}
-        >
-          <Ionicons
-            name="heart-outline"
-            size={16}
-            color={colors.textSecondary}
-          />
-          <Text style={[styles.tabLabel, tab === 'checkin' && styles.tabLabelActive]}>
-            Daily check-in
-          </Text>
-        </TouchableOpacity>
+      <View style={styles.tabRow} accessibilityRole="tablist">
+        {tabButton('habits', 'Habits')}
+        {tabButton('checkin', 'Daily check-in')}
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
-        }
-      >
-        {tab === 'habits' ? (
-          <>
-            {habitsQ.isLoading || logsQ.isLoading ? (
-              <View style={styles.progressCard}>
-                <ActivityIndicator color={colors.primary} accessibilityLabel="Loading habits" />
-                <Text style={styles.progressStatLabel}>Loading habits</Text>
-              </View>
-            ) : habitsQ.isError || logsQ.isError ? (
-              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
-                <Text style={styles.progressStatLabel}>Habits could not be loaded.</Text>
-                <TouchableOpacity style={styles.addBtn} onPress={onRefresh} accessibilityRole="button">
-                  <Text style={styles.addBtnText}>Retry habits</Text>
-                </TouchableOpacity>
-              </View>
-            ) : habits.length === 0 ? (
-              <View style={[styles.progressCard, { flexDirection: 'column', alignItems: 'flex-start' }]}>
-                <Text style={styles.progressStatLabel}>No habits yet. Add a daily habit to start tracking.</Text>
-              </View>
+      {tab === 'habits' ? (
+        <>
+          {habitsQ.isLoading || logsQ.isLoading ? (
+            <QuietLoading label="Loading habits" rows={3} testID="habits-loading" />
+          ) : habitsQ.isError || logsQ.isError ? (
+            <QuietError
+              layout="inline"
+              message="Habits did not load. Check your connection, then try again."
+              onRetry={onRefresh}
+              retrying={refreshing}
+              testID="habits-error"
+            />
+          ) : habits.length === 0 ? (
+            <QuietSection style={{ borderTopWidth: 0 }}>
+              <Overline>Today</Overline>
+              <Text style={styles.narrative}>No habits yet.</Text>
+              <Lede size="small">Add a daily habit to start tracking it here.</Lede>
+            </QuietSection>
+          ) : (
+            <>
+              <QuietSection style={{ borderTopWidth: 0, marginBottom: 8 }}>
+                <Overline>Today</Overline>
+                <Text style={styles.narrative} testID="habits-summary">
+                  {habitsSummary(completedCount, habits.length)}
+                </Text>
+                <Lede size="small">Tap a habit to mark it done. Hold it to delete.</Lede>
+              </QuietSection>
+              <Overline>This week</Overline>
+              {habits.map((habit) => (
+                <HabitCard
+                  key={habit.id}
+                  habit={habit}
+                  onToggle={handleToggle}
+                  onLongPress={handleDelete}
+                  todayIndex={todayIndex}
+                  sc={sc}
+                  styles={styles}
+                />
+              ))}
+            </>
+          )}
+
+          <TextLink
+            label="Add habit"
+            tone="accent"
+            underline={false}
+            align="start"
+            onPress={() => setShowAddModal(true)}
+            accessibilityHint="Opens the new habit sheet"
+            style={styles.addLink}
+            testID="habits-add"
+          />
+        </>
+      ) : (
+        <>
+          {status === 'inactive' && (
+            <Text style={[styles.note, { marginVertical: 12 }]}>Daily check-ins need active coaching access.</Text>
+          )}
+          <ProtectedScreen>
+            {todayCheckInQ.isLoading ? (
+              <QuietLoading label="Loading check-in" rows={4} testID="checkin-loading" />
+            ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (
+              <QuietError
+                layout="inline"
+                message="Today's check-in did not load. Check your connection, then try again."
+                onRetry={() => void todayCheckInQ.refetch()}
+                retrying={todayCheckInQ.isRefetching}
+                testID="checkin-error"
+              />
             ) : (
               <>
-                {/* Progress */}
-                <View style={styles.progressCard}>
-                  <View style={styles.progressStats}>
-                    <Text style={styles.progressStatValue}>
-                      {`${completedCount} of ${habits.length} today`}
-                    </Text>
-                    <Text style={styles.progressStatLabel}>habits completed · hold a habit to delete</Text>
+                {checkInToast ? (
+                  <View style={styles.savedRow} accessibilityLiveRegion="polite">
+                    <Ionicons name="checkmark-circle-outline" size={18} color={sc.accentText} />
+                    <Text style={styles.savedText}>Check-in saved</Text>
                   </View>
-                </View>
-                {/* Habit Cards */}
-                {habits.map((habit) => (
-                  <HabitCard
-                    key={habit.id}
-                    habit={habit}
-                    onToggle={handleToggle}
-                    onLongPress={handleDelete}
-                    colors={colors}
-                    styles={styles}
+                ) : checkInSaved ? (
+                  <View style={styles.savedRow}>
+                    <Ionicons name="checkmark-circle-outline" size={18} color={sc.accentText} />
+                    <Text style={styles.savedText}>Saved for today. Change anything and update.</Text>
+                  </View>
+                ) : null}
+                {lastCheckInDate && lastCheckInDate !== today ? (
+                  <Text style={[styles.note, { marginBottom: 8 }]}>
+                    {`Last check-in ${new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}`}
+                  </Text>
+                ) : null}
+
+                {/* ED.6 — coach-is-watching micro-signal, gated by the mobile flag; it
+                    renders only once a coach has reviewed today's check-in. */}
+                {featureFlags.romanCompetencePill && checkInSaved ? (
+                  <CompetencePill
+                    reviewedAt={coachReviewedAt}
+                    surface="checkIn"
+                    placement="bottom"
+                    testID="checkin-competence-pill"
                   />
-                ))}
+                ) : null}
+
+                <MoodEnergyPicker
+                  mood={mood}
+                  setMood={setMood}
+                  energy={energy}
+                  setEnergy={setEnergy}
+                  sleepHours={sleepHours}
+                  setSleepHours={setSleepHours}
+                  notes={notes}
+                  setNotes={setNotes}
+                  sc={sc}
+                  styles={styles}
+                />
+
+                <PrimaryButton
+                  label={checkInSaved ? 'Update check-in' : 'Save check-in'}
+                  onPress={handleSaveCheckIn}
+                  loading={saveCheckIn.isPending}
+                  style={styles.saveBtn}
+                  testID="checkin-save"
+                />
               </>
             )}
-
-            <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-              <Ionicons name="add-outline" size={22} color={colors.primary} />
-              <Text style={styles.addBtnText}>Add habit</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <>
-            {status === 'inactive' && (
-              <View style={styles.checkInCard}>
-                <Text style={styles.progressStatLabel}>
-                  Daily check-ins need active coaching access.
-                </Text>
-              </View>
-            )}
-            <ProtectedScreen>
-              {todayCheckInQ.isLoading ? (
-                <View style={styles.progressCard}>
-                  <ActivityIndicator color={sc.accent} accessibilityLabel="Loading check-in" />
-                  <Text style={styles.progressStatLabel}>Loading check-in</Text>
-                </View>
-              ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (
-                <View style={styles.checkInCard}>
-                  <Text style={styles.progressStatLabel}>Today's check-in could not be loaded.</Text>
-                  <TouchableOpacity style={styles.addBtn} onPress={() => todayCheckInQ.refetch()} accessibilityRole="button">
-                    <Text style={styles.addBtnText}>Retry check-in</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <>
-                  {checkInToast && (
-                    <View style={styles.savedBanner} accessibilityLiveRegion="polite">
-                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                      <Text style={styles.savedBannerText}>Check-in saved</Text>
-                    </View>
-                  )}
-                  {!checkInToast && checkInSaved && (
-                    <View style={styles.savedBanner}>
-                      <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                      <Text style={styles.savedBannerText}>Saved.</Text>
-                    </View>
-                  )}
-                  {lastCheckInDate && lastCheckInDate !== today && (
-                    <View style={styles.lastCheckInRow}>
-                      <Ionicons name="time-outline" size={14} color={colors.textMuted} />
-                      <Text style={styles.lastCheckInText}>
-                        Last check-in: {new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
-                          weekday: 'short',
-                          month: 'short',
-                          day: 'numeric',
-                        })}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* ED.6 — coach-is-watching micro-signal below the check-in body.
-                      Gated by the mobile flag; only renders once a coach has reviewed
-                      today's check-in (coachReviewedAt non-null, which the backend
-                      only stamps when its own flag is ON). placement=bottom draws the
-                      hairline above the pill so it reads as a quiet seam under the
-                      body it annotates. */}
-                  {featureFlags.romanCompetencePill && checkInSaved ? (
-                    <CompetencePill
-                      reviewedAt={coachReviewedAt}
-                      surface="checkIn"
-                      placement="bottom"
-                      testID="checkin-competence-pill"
-                    />
-                  ) : null}
-
-                  <MoodEnergyPicker
-                    mood={mood}
-                    setMood={setMood}
-                    energy={energy}
-                    setEnergy={setEnergy}
-                    sleepHours={sleepHours}
-                    setSleepHours={setSleepHours}
-                    notes={notes}
-                    setNotes={setNotes}
-                    colors={colors}
-                    styles={styles}
-                  />
-
-                  <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn} disabled={saveCheckIn.isPending}>
-                    <Ionicons name="checkmark-circle-outline" size={20} color={sc.textOnAccent} />
-                    <Text style={styles.saveBtnText}>
-                      {saveCheckIn.isPending ? 'Saving check-in' : checkInSaved ? 'Update check-in' : 'Save check-in'}
-                    </Text>
-                  </TouchableOpacity>
-                </>
-              )}
-            </ProtectedScreen>
-          </>
-        )}
-
-        <View style={{ height: 100 }} />
-      </ScrollView>
+          </ProtectedScreen>
+        </>
+      )}
 
       <AddHabitSheet
         visible={showAddModal}
@@ -466,9 +438,9 @@ export default function HabitsScreen() {
         setNewUnit={setNewUnit}
         onAdd={handleAddHabit}
         isSaving={createHabit.isPending}
-        colors={colors}
+        sc={sc}
         styles={styles}
       />
-    </View>
+    </Screen>
   );
 }

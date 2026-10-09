@@ -1,17 +1,19 @@
-import * as Haptics from 'expo-haptics';
+// Legacy helpers, routed through HapticService so the Settings "Haptics"
+// switch is honoured (DESIGN-QA-128 U1, DS-THEME-133).
+import { HapticService } from '../ui/haptics/haptics.service';
 
 export function lightTap() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  void HapticService.softImpact();
 }
 
 export function mediumTap() {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  void HapticService.mediumImpact();
 }
 
 export function warningTap() {
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  void HapticService.warning();
 }
 
 export function successTap() {
-  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  void HapticService.success();
 }

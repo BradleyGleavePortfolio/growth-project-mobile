@@ -31,6 +31,7 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
+import { radius } from "../../../theme/tokens";
 import { coachSetupApi, type ConnectView } from "../../../api/coachSetupApi";
 import { connectCopy } from "../../../lib/coachSetup/connectCopy";
 import {
@@ -45,10 +46,12 @@ export const CONNECT_RETURN_PREFIX = "tgp://connect/onboarding";
 
 interface Props {
   onChange?: (view: ConnectView) => void;
+  /** The wizard keeps Continue as its only filled action. agent 132 */
+  secondaryAction?: boolean;
   testID?: string;
 }
 
-export default function GetPaidPanel({ onChange, testID = "get-paid" }: Props) {
+export default function GetPaidPanel({ onChange, secondaryAction = false, testID = "get-paid" }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [view, setView] = useState<ConnectView | null>(null);
@@ -213,9 +216,10 @@ export default function GetPaidPanel({ onChange, testID = "get-paid" }: Props) {
     );
   }
 
-  const copy = view ? connectCopy(view) : null;
+  const unavailable = error?.code === "CONNECT_NOT_CONFIGURED";
+  const copy = view && (!unavailable || view.state !== "not_started") ? connectCopy(view) : null;
   return (
-    <View style={styles.card} testID={testID}>
+    <View style={unavailable ? styles.unavailable : styles.card} testID={testID}>
       {copy ? (
         <>
           <Text
@@ -247,12 +251,16 @@ export default function GetPaidPanel({ onChange, testID = "get-paid" }: Props) {
           ) : null}
         </>
       ) : null}
-      {error ? (
+      {unavailable && error ? (
+        <Text style={styles.body} accessibilityLiveRegion="polite" testID={`${testID}-unavailable`}>
+          {`${error.title}. ${error.body}`}
+        </Text>
+      ) : error ? (
         <SetupNotice error={error} onRetry={retry} testID={`${testID}-error`} />
       ) : null}
-      {copy?.action ? (
+      {copy?.action && !unavailable ? (
         <TouchableOpacity
-          style={[styles.primary, opening && styles.disabled]}
+          style={[secondaryAction ? styles.secondary : styles.primary, opening && styles.disabled]}
           onPress={openStripe}
           disabled={opening}
           accessibilityRole="button"
@@ -262,13 +270,13 @@ export default function GetPaidPanel({ onChange, testID = "get-paid" }: Props) {
           testID={`${testID}-open`}
         >
           {opening ? (
-            <ActivityIndicator color={colors.textOnPrimary} />
+            <ActivityIndicator color={secondaryAction ? colors.primary : colors.textOnPrimary} />
           ) : (
-            <Text style={styles.primaryText}>{copy.action}</Text>
+            <Text style={secondaryAction ? styles.secondaryText : styles.primaryText}>{copy.action}</Text>
           )}
         </TouchableOpacity>
       ) : null}
-      {view && view.state === "pending_verification" ? (
+      {view && view.state === "pending_verification" && !unavailable ? (
         <TouchableOpacity
           style={styles.secondary}
           onPress={checkAgain}
@@ -287,10 +295,12 @@ export default function GetPaidPanel({ onChange, testID = "get-paid" }: Props) {
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+    unavailable: { marginVertical: 8 },
     card: {
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
+      borderRadius: radius.card,
       padding: 16,
       marginVertical: 8,
     },
@@ -322,6 +332,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     primary: {
       backgroundColor: colors.primary,
+      borderRadius: radius.button,
       minHeight: 48,
       alignItems: "center",
       justifyContent: "center",

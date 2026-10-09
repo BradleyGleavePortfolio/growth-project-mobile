@@ -7,7 +7,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 import HapticPressable from '../../components/HapticPressable';
 import api from '../../services/api';
 import { makeStyles as makeActiveStyles } from './active-workout/styles';
-import { spacing, typography } from '../../theme/tokens';
+import { layout, spacing, typography } from '../../theme/tokens';
+import { useScreenInsets } from '../../ui';
 import { SetLogger } from './active-workout/SetLogger';
 import type { SessionSet } from './active-workout/types';
 import { loggedWorkoutEditPayload, loggedWorkoutExercises, type LoggedWorkout } from './active-workout/sessionQuality';
@@ -17,14 +18,17 @@ export default function WorkoutHistoryEditScreen() {
   const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
   const qc = useQueryClient();
   const { colors, semanticColors: sc } = useTheme();
+  // The top bar starts under the real status bar (Android edge-to-edge and the
+  // iPhone notch alike), not at a fixed 56 (REDO-INSETS-133).
+  const insetTop = useScreenInsets().top;
   const styles = useMemo(() => {
     const base = makeActiveStyles(colors);
     return StyleSheet.create({
       ...base,
       container: { ...base.container, backgroundColor: sc.bgPrimary },
-      topBar: { ...base.topBar, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
+      topBar: { ...base.topBar, paddingTop: insetTop + layout.statusBarGap, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
       topTitle: { ...base.topTitle, color: sc.textMuted },
-      finishBtn: { ...base.finishBtn, minHeight: 44, justifyContent: 'center', backgroundColor: sc.accent, borderRadius: 4 },
+      finishBtn: { ...base.finishBtn, minHeight: 44, justifyContent: 'center', backgroundColor: sc.accent },
       finishBtnText: { ...base.finishBtnText, color: sc.textOnAccent },
       content: { ...base.content, paddingTop: spacing.xl },
       exerciseCard: { ...base.exerciseCard, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
@@ -34,13 +38,13 @@ export default function WorkoutHistoryEditScreen() {
       setHeaderText: { ...base.setHeaderText, color: sc.textMuted },
       setText: { ...base.setText, color: sc.textMuted },
       setRow: { ...base.setRow, borderBottomColor: sc.border },
-      setRowCompleted: { backgroundColor: sc.bgPrimary },
+      setRowCompleted: { ...base.setRowCompleted, backgroundColor: sc.bgPrimary, borderBottomColor: sc.border },
       setInput: { ...base.setInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
       notesInput: { ...base.notesInput, color: sc.textPrimary, backgroundColor: sc.bgPrimary,
         borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
     });
-  }, [colors, sc]);
+  }, [colors, sc, insetTop]);
   const workout = useMemo(() => JSON.parse(route.params.workout) as LoggedWorkout, [route.params.workout]);
   const [exercises, setExercises] = useState(() => loggedWorkoutExercises(workout));
   const [notes, setNotes] = useState(workout.notes ?? '');
@@ -76,7 +80,7 @@ export default function WorkoutHistoryEditScreen() {
   };
 
   return <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <View style={styles.topBar}>
+    <View style={styles.topBar} testID="workout-history-edit-top">
       <HapticPressable intent="light" style={styles.toolButton} onPress={close} disabled={saving} accessibilityLabel="Cancel workout editing">
         <Text style={styles.addSetText}>Cancel</Text>
       </HapticPressable>

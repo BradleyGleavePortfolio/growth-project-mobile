@@ -9,16 +9,10 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
-import HapticPressable from '../../components/HapticPressable';
+import { Headline, Lede, Overline, PrimaryButton, QuietTextButton, Screen } from '../../ui';
 import TutorialTarget from '../../components/tutorial/TutorialTarget';
 import {
   RouteProp,
@@ -32,9 +26,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { loadActiveWorkoutSession } from '../../storage/activeWorkoutSession';
 import { useExerciseNames } from '../../hooks/useExerciseNames';
 import { formatPlanType } from '../../utils/workout/formatPlanType';
-import { spacing, typography } from '../../theme/tokens';
+import { layout, spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { SemanticTokens } from '../../theme/tokens';
 import {
   buildActiveWorkoutExercises,
   prettifyExerciseName,
@@ -47,7 +40,6 @@ type RouteParams = {
 
 export default function WorkoutAssignmentDetailScreen() {
   const { semanticColors: sc } = useTheme();
-  const styles = useMemo(() => makeStyles(sc), [sc]);
   const route =
     useRoute<RouteProp<RouteParams, 'WorkoutAssignmentDetail'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -156,22 +148,18 @@ export default function WorkoutAssignmentDetailScreen() {
   if (isError || !data) {
     // The old copy said "Pull to retry" on a screen that cannot be pulled.
     return (
-      <View style={styles.center}>
-        <Text style={[typography.body, { color: sc.textMuted, textAlign: 'center' }]}>
-          This workout did not load. Check the connection, then try again.
-        </Text>
-        <HapticPressable
-          intent="light"
-          style={styles.retryBtn}
+      <Screen edges={['top']} scroll={false} centerContent>
+        <Headline level="h2">This workout did not load.</Headline>
+        <Lede>Check the connection, then try again.</Lede>
+        <QuietTextButton
+          label={isRefetching ? 'Loading' : 'Try again'}
           onPress={onRefresh}
           disabled={isRefetching}
-          accessibilityRole="button"
-          accessibilityLabel="Try loading the workout again"
+          accessibilityHint="Loads the workout again"
           testID="assignment-retry"
-        >
-          <Text style={styles.retryBtnText}>{isRefetching ? 'Loading' : 'Try again'}</Text>
-        </HapticPressable>
-      </View>
+          style={styles.retry}
+        />
+      </Screen>
     );
   }
 
@@ -180,10 +168,13 @@ export default function WorkoutAssignmentDetailScreen() {
   const isCompleted = !!data.completed_at;
   const actionLabel = canResume ? 'Resume workout' : 'Start workout';
 
+  // REDO-LIVE-133 (reference: clientfile-workouts): overline, serif title,
+  // numbered hairline rows, and the one forest action pinned at the bottom.
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
+    <Screen
+      edges={['top']}
+      keyboardAware={false}
+      testID="assignment-detail"
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
@@ -191,131 +182,90 @@ export default function WorkoutAssignmentDetailScreen() {
           tintColor={sc.accent}
         />
       }
+      footer={
+        isCompleted ? undefined : (
+          <PrimaryButton
+            label={namesLoading ? 'Loading exercise names' : actionLabel}
+            onPress={handleStart}
+            loading={namesLoading}
+            accessibilityHint={`Opens ${plan.name} as a live workout`}
+            testID="assignment-start"
+          />
+        )
+      }
     >
-      <Text style={[typography.h2, { color: sc.textPrimary }]}>
-        {plan.name}
-      </Text>
-      <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-        {formatPlanType(plan.type)}
+      <Overline>{formatPlanType(plan.type)}</Overline>
+      <Headline level="h1">{plan.name}</Headline>
+      <Lede size="small" style={styles.tabular}>
         {plan.duration_estimate_minutes
-          ? ` • about ${plan.duration_estimate_minutes} min`
+          ? `About ${plan.duration_estimate_minutes} min · `
           : ''}
-        {' • '}
         {sorted.length} exercise{sorted.length === 1 ? '' : 's'}
-      </Text>
+      </Lede>
+      {isCompleted ? (
+        <View style={styles.completed}>
+          <Ionicons name="checkmark-circle-outline" size={18} color={sc.textMuted} />
+          <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+            Completed{data.post_rpe ? ` · RPE ${data.post_rpe}` : ''}
+          </Text>
+        </View>
+      ) : null}
 
-      <View style={styles.list}>
+      <View style={[styles.list, { borderTopColor: sc.border }]}>
+        <Overline style={styles.listOverline}>Exercises</Overline>
         {sorted.map((ex, i) => (
           // TOUR-133: the tour's first-exercise beat spotlights the first row.
           <TutorialTarget key={ex.id} id={i === 0 ? 'first-exercise' : undefined}>
-          <View style={styles.exerciseRow}>
-            <Text style={[typography.h3, { color: sc.textPrimary }]}>
-              {ex.order}. {nameFor(ex.exercise_external_id)}
+          <View style={[styles.exerciseRow, { borderBottomColor: sc.border }]} testID={`assignment-row-${ex.order}`}>
+            <Text style={[styles.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
+              {ex.order}
             </Text>
-            <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-              {ex.sets} sets × {ex.reps_or_duration_seconds} reps
-              {ex.weight_lbs ? ` • ${ex.weight_lbs} lbs` : ''}
-              {ex.rest_seconds ? ` • ${ex.rest_seconds}s rest` : ''}
-            </Text>
-            {overlay.adjustedOrders.has(ex.order) ? (
-              <Text
-                style={[typography.bodySmall, { color: sc.accent, marginTop: 4 }]}
-                testID={`assignment-adjusted-${ex.order}`}
-              >
-                Updated by your coach
+            <View style={styles.exerciseText}>
+              <Text style={[typography.h3, { color: sc.textPrimary }]}>
+                {nameFor(ex.exercise_external_id)}
               </Text>
-            ) : null}
-            {ex.notes ? (
-              <Text
-                style={[typography.bodySmall, { color: sc.textMuted, marginTop: 4 }]}
-              >
-                {ex.notes}
+              <Text style={[typography.bodySmall, styles.tabular, { color: sc.textMuted }]}>
+                {ex.sets} sets × {ex.reps_or_duration_seconds} reps
+                {ex.weight_lbs ? ` · ${ex.weight_lbs} lb` : ''}
+                {ex.rest_seconds ? ` · ${ex.rest_seconds}s rest` : ''}
               </Text>
-            ) : null}
+              {overlay.adjustedOrders.has(ex.order) ? (
+                <Text
+                  style={[typography.bodySmall, { color: sc.accentText, marginTop: 2 }]}
+                  testID={`assignment-adjusted-${ex.order}`}
+                >
+                  Updated by your coach
+                </Text>
+              ) : null}
+              {ex.notes ? (
+                <Text style={[typography.bodySmall, { color: sc.textMuted, marginTop: 2 }]}>
+                  {ex.notes}
+                </Text>
+              ) : null}
+            </View>
           </View>
           </TutorialTarget>
         ))}
       </View>
-
-      {isCompleted ? (
-        <View style={styles.completedBadge}>
-          <Text style={[typography.bodySmall, { color: sc.textMuted }]}>
-            Completed{data.post_rpe ? ` • RPE ${data.post_rpe}` : ''}
-          </Text>
-        </View>
-      ) : (
-        <HapticPressable
-          intent="success"
-          style={[styles.startBtn, namesLoading && { opacity: 0.6 }]}
-          onPress={handleStart}
-          disabled={namesLoading}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: namesLoading, busy: namesLoading }}
-          accessibilityLabel={namesLoading ? 'Loading exercise names' : `${actionLabel} ${plan.name}`}
-          testID="assignment-start"
-        >
-          {namesLoading ? (
-            <ActivityIndicator color={sc.bgPrimary} />
-          ) : (
-            <Text style={styles.startBtnText}>{actionLabel}</Text>
-          )}
-        </HapticPressable>
-      )}
-    </ScrollView>
+    </Screen>
   );
 }
 
-function makeStyles(sc: SemanticTokens) {
-  return StyleSheet.create({
-    screen: { flex: 1, backgroundColor: sc.bgPrimary },
-    center: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: sc.bgPrimary,
-    },
-    content: { padding: spacing.lg, gap: spacing.sm },
-    retryBtn: {
-      marginTop: spacing.md,
-      minHeight: 44,
-      paddingHorizontal: spacing.lg,
-      justifyContent: 'center',
-      borderRadius: 4,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-    },
-    retryBtnText: { color: sc.textPrimary, fontSize: 14, fontWeight: '600' },
-    list: {
-      marginTop: spacing.md,
-      gap: spacing.sm,
-    },
-    exerciseRow: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 12,
-      padding: spacing.md,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: sc.border,
-    },
-    startBtn: {
-      backgroundColor: sc.accent,
-      borderRadius: 4,
-      paddingVertical: 16,
-      alignItems: 'center',
-      marginTop: spacing.lg,
-    },
-    startBtnText: {
-      color: sc.bgPrimary,
-      fontSize: 14,
-      fontWeight: '600',
-      letterSpacing: 1.2,
-      textTransform: 'uppercase',
-    },
-    completedBadge: {
-      backgroundColor: sc.bgSurface,
-      borderRadius: 4,
-      paddingVertical: 12,
-      alignItems: 'center',
-      marginTop: spacing.lg,
-    },
-  });
-}
+const styles = StyleSheet.create({
+  retry: { marginTop: spacing.md },
+  tabular: { fontVariant: ['tabular-nums'] },
+  completed: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.md },
+  list: { marginTop: spacing.xl, paddingTop: layout.sectionPadY, borderTopWidth: StyleSheet.hairlineWidth },
+  listOverline: { marginBottom: spacing.xs },
+  exerciseRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    minHeight: layout.rowMinHeight,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  // Serif tabular index, as in the reference's numbered rows; decorative for screen readers.
+  index: { ...typography.h3, fontVariant: ['tabular-nums'], minWidth: 18 },
+  exerciseText: { flex: 1, gap: 2 },
+});

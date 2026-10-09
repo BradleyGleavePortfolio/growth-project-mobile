@@ -54,19 +54,22 @@ async function openEdit() {
 }
 
 describe('food edit screen uses the retained portion metadata', () => {
-  it('uses a themed scrim and a hairline edit sheet with radius four', async () => {
+  it('uses a themed scrim and a bottom sheet with rounded top corners (owner 17:07, radius.sheet)', async () => {
     await openEdit();
-    const theme = require('../../../theme/tokens').lightTokens;
-    expect(StyleSheet.flatten(screen.getByTestId('log-edit-backdrop').props.style).backgroundColor).toBe(theme.overlay);
+    const { lightTokens: theme, radius } = require('../../../theme/tokens');
+    expect(StyleSheet.flatten(screen.getByTestId('log-edit-backdrop').props.style)).toMatchObject({
+      backgroundColor: theme.overlay, justifyContent: 'flex-end',
+    });
     expect(StyleSheet.flatten(screen.getByTestId('log-edit-sheet').props.style)).toMatchObject({
-      backgroundColor: theme.bgPrimary, borderRadius: 4,
-      borderWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
+      backgroundColor: theme.bgPrimary,
+      borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet,
+      borderTopWidth: StyleSheet.hairlineWidth, borderColor: theme.border,
     });
   });
 
   it('keeps the saved almonds multiplier when saving an unchanged entry', async () => {
     await openEdit();
-    await act(async () => fireEvent.press(screen.getByLabelText('Save edit')));
+    await act(async () => fireEvent.press(screen.getByLabelText('Save changes')));
     await waitFor(() => expect(logApi.updateEntry).toHaveBeenCalledWith('entry', {
       quantity_multiplier: 0.28, original_quantity: 1, original_unit: 'serving', meal_type: 'lunch',
     }));
@@ -75,7 +78,7 @@ describe('food edit screen uses the retained portion metadata', () => {
   it('moves an entry to another meal without changing its nutrition', async () => {
     await openEdit();
     await act(async () => fireEvent.press(screen.getByRole('button', { name: 'Dinner' })));
-    await act(async () => fireEvent.press(screen.getByLabelText('Save edit')));
+    await act(async () => fireEvent.press(screen.getByLabelText('Save changes')));
     await waitFor(() => expect(logApi.updateEntry).toHaveBeenCalledWith('entry', expect.objectContaining({
       meal_type: 'dinner', quantity_multiplier: 0.28,
     })));

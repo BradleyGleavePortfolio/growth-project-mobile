@@ -68,7 +68,7 @@ import {
   runAiLedgerWrite,
   withdrawRomanWithRetry,
 } from '../../lib/consultation/aiConsent';
-import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
+import { AI_GRANT_NOTICE, AI_GRANT_UNCONFIRMED_NOTICE, AI_WITHDRAW_NOTICE, welcomeBackLine } from '../../lib/consultation/copy';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
   answersForSave,
@@ -165,6 +165,8 @@ export interface ConsultationFlowProps {
   userId: string | null;
   firstName?: string | null;
   coachName?: string | null;
+  /** The client has no coach (no coach_id): copy that names a coach uses its coachless version. */
+  coachless?: boolean;
   /** Called after "Show me around" on the plan reveal. */
   onFinished: (result: CompleteOnboardingResponse) => void;
   api?: ConsultationApi;
@@ -211,6 +213,7 @@ export default function ConsultationFlow({
   userId,
   firstName,
   coachName,
+  coachless = false,
   onFinished,
   api = defaultApi,
   now: nowFn = () => new Date(),
@@ -233,6 +236,8 @@ export default function ConsultationFlow({
   const coachSharingRef = useRef<FirstSignInSharing | null>(null);
   const coachSharingSent = useRef(false);
   const [consentNonce, setConsentNonce] = useState(0);
+  /** Prototype 42: the screen a resume landed on; Roman greets the client back there. */
+  const [welcomeBackId, setWelcomeBackId] = useState<string | null>(null);
   const answersRef = useRef<Answers>({});
   const screenRef = useRef<string>('W1');
   const phaseRef = useRef<Phase>('loading');
@@ -314,7 +319,14 @@ export default function ConsultationFlow({
   /** P0 Continue is handled once per visit to P0 (Opus C-1 double tap). */
   const p0Handled = useRef(false);
   const now = nowFn();
-  const ctx: CopyContext = { firstName, coachName: result?.coach?.display_name ?? coachName, now };
+  // The coach's name: the server's result, else the host's, else the name the
+  // coach-sharing notice carries (prototype 03 "Before Bradley builds ...").
+  const ctx: CopyContext = {
+    firstName,
+    coachName: coachless ? null : result?.coach?.display_name ?? coachName ?? coachSharing?.coachName ?? null,
+    coachless,
+    now,
+  };
 
   const setPhaseBoth = useCallback((p: Phase) => {
     phaseRef.current = p;
@@ -367,6 +379,7 @@ export default function ConsultationFlow({
         }
       }
       if (id === 'P0' && screenRef.current !== 'P0') p0Handled.current = false;
+      setWelcomeBackId(null);
       screenRef.current = id;
       setScreenId(id);
       setPhaseBoth('question');
@@ -603,6 +616,7 @@ export default function ConsultationFlow({
         setPhaseBoth('summary');
       } else {
         showScreen(id, ans);
+        if (id !== 'W1' && id !== 'P0' && hasAnswersBeyondConsent(ans)) setWelcomeBackId(id);
       }
     })();
     return () => {
@@ -1108,6 +1122,15 @@ export default function ConsultationFlow({
       return;
     }
     if (outcome.kind === 'conflict') {
+      // B14 (owner decision 28): every client finishes the consultation, with
+      // or without a coach. Only a server from before that rule answers
+      // not_attached / clinic_not_configured; that is the server's problem,
+      // not the client's, so it gets the calm server state (prototype 44:
+      // answers safe, Try again, support) and is reported, never the old
+      // "a coach link is needed" dead end.
+      if (outcome.code === 'not_attached' || outcome.code === 'clinic_not_configured') {
+        return fail('unknown', { where: 'POST /me/onboarding/complete', status: 409, code: outcome.code, requestId: outcome.requestId });
+      }
       if (outcome.code !== 'unknown') return fail(outcome.code);
       return fail('unknown', { where: 'POST /me/onboarding/complete', status: 409, code: 'unknown', requestId: outcome.requestId });
     }
@@ -1198,7 +1221,17 @@ export default function ConsultationFlow({
       );
     }
     if (phase === 'paused') {
-      return <PausedScreen ctx={ctx} onResume={() => showScreen(screenRef.current)} onSignOut={onSignOut} />;
+      return (
+        <PausedScreen
+          ctx={ctx}
+          onResume={() => {
+            const id = screenRef.current;
+            showScreen(id);
+            if (id !== 'W1' && id !== 'P0') setWelcomeBackId(id);
+          }}
+          onSignOut={onSignOut}
+        />
+      );
     }
     if (phase === 'macro' && result) {
       return <MacroRevealScreen result={result} answers={answers} ctx={ctx} onNext={() => setPhaseBoth('plan')} />;
@@ -1222,6 +1255,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
+        romanOverride={welcomeBackId === screen.id ? welcomeBackLine(screen.chapter) : null}
         consent={{ error: consentError, aiAllowed: aiShown, aiReady, aiUnconfirmed, aiUnknown, aiMemory, coachSharing }}
       />
     );

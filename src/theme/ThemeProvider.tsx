@@ -111,7 +111,9 @@ function buildTheme(
   return {
     tokens,
     tier,
-    colors: baseColors,
+    // One hairline colour app-wide (DESIGN-QA-128 drift 1): the legacy camel
+    // border/divider from constants/colors yield to the semantic grey.
+    colors: { ...baseColors, border: semanticColors.border, divider: semanticColors.border },
     tierColors,
     semanticColors,
     colorScheme,

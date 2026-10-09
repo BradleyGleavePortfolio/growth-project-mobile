@@ -15,7 +15,9 @@
  * The data layer is mocked so each render path is deterministic.
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
+import { render, screen, fireEvent, within } from '@testing-library/react-native';
+import { lightTokens, radius } from '../../../theme/tokens';
 
 // ── Theme: real light tokens, no ThemeProvider ───────────────────────────────
 jest.mock('../../../theme/useTheme', () => {
@@ -37,7 +39,7 @@ jest.mock('../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => mockUs
 const mockFlags = { communityHall: true, communityDm: true, communityEvents: true, communityChallenges: true };
 jest.mock('../../../config/featureFlags', () => ({ get featureFlags() { return mockFlags; } }));
 jest.mock('../../../ui/skeletons/Skeleton', () => ({
-  SkeletonScreen: () => null,
+  SkeletonRow: () => null,
 }));
 
 // ── useCommunityToday — the today query (mutable holder) ─────────────────────
@@ -149,7 +151,7 @@ describe('CommunityTodayScreen error state', () => {
     expect(screen.getByTestId('community-today-error')).toBeTruthy();
     expect(screen.queryByTestId('community-today-empty')).toBeNull();
 
-    await fireEvent.press(screen.getByTestId('community-today-retry'));
+    await fireEvent.press(screen.getByTestId('community-today-error-retry'));
     expect(mockToday.refetch).toHaveBeenCalledTimes(1);
   });
 
@@ -170,5 +172,37 @@ describe('CommunityTodayScreen error state', () => {
 
     expect(screen.getByTestId('community-today-empty')).toBeTruthy();
     expect(screen.queryByTestId('community-today-error')).toBeNull();
+  });
+});
+
+// ─── REDO-HABITS-CAL-COMM-133: Today on the shared primitives ────────────────
+
+describe('REDO-HABITS-CAL-COMM-133 Today look', () => {
+  const flat = (n: { props: { style?: unknown } }) => (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+  const forest = () =>
+    (screen.queryAllByRole('button') as { props: { style?: unknown } }[]).filter((b) => flat(b).backgroundColor === lightTokens.accent);
+  const populated = {
+    feature_flag_state: 'enabled',
+    cohort: { id: 'c-1', name: 'Morning group', member_count: 1 },
+    pinned_post: null, event: null, challenge: null, empty_reason: null,
+  };
+
+  it('one rounded forest New post in the footer, a serif date that never clips, a singular member count', async () => {
+    mockToday.data = populated;
+    await render(<CommunityTodayScreen />);
+    expect(forest()).toHaveLength(1);
+    expect(within(screen.getByTestId('community-today-screen-footer')).getByTestId('community-today-compose')).toBeTruthy();
+    expect(flat(forest()[0]).borderRadius).toBe(radius.button);
+    expect(screen.getByText('1 member')).toBeTruthy();
+    const date = flat(screen.getByRole('header'));
+    expect(date.fontFamily).toBe('CormorantGaramond_400Regular');
+    expect(Number(date.lineHeight)).toBeGreaterThanOrEqual(1.2 * Number(date.fontSize));
+  });
+
+  it('a failed load offers a text retry, never a filled 4 pt button', async () => {
+    mockToday.isError = true;
+    await render(<CommunityTodayScreen />);
+    expect(screen.getByTestId('community-today-error-retry')).toBeTruthy();
+    expect(forest()).toHaveLength(0);
   });
 });

@@ -83,6 +83,46 @@ export function romanGreeting(input: RomanGreetingInput): string {
 export const ROMAN_GREETING_SUBTITLE =
   'Whenever you need me, I am present. Send a message to begin.';
 
+/** Morning before noon, afternoon before 17:00, evening after (local time). */
+export function romanDayPeriod(hour: number): 'morning' | 'afternoon' | 'evening' {
+  return hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
+}
+
+/**
+ * B30 / prototype 69: the client launch line beside Roman's portrait. One
+ * line: the greeting, then what Roman can do with the client's own numbers.
+ * The first open adds his name once (identity spec 2.1 self-introduction).
+ */
+export function romanLaunchLine(input: RomanGreetingInput & { hour: number }): string {
+  const name = (input.firstName ?? '').trim();
+  const greeting = `Good ${romanDayPeriod(input.hour)}${name === '' ? '' : `, ${name}`}.`;
+  const intro = input.isFirstOpen ? ' My name is Roman.' : '';
+  return `${greeting}${intro} I can explain your targets, your plan and today's food, using your own numbers.`;
+}
+
+/**
+ * Prototype 69-73: the four quick-start chips above the composer. Each sends
+ * its label as a fixed prompt through the normal send path (no new API).
+ */
+export const ROMAN_QUICK_STARTS = [
+  'Explain my targets',
+  "Today's workout",
+  'Hit my protein',
+  'How was my week',
+] as const;
+
+/** Prototype 69: the overline under the "Roman" title. */
+export function romanRoomOverline(surface: RomanGreetingSurface, hasCoach: boolean): string {
+  if (surface === 'coach') return 'AI assistant · For your practice';
+  return hasCoach ? 'AI assistant · Working with your coach' : 'AI assistant';
+}
+
+/** Prototype 69: the composer placeholder. */
+export const ROMAN_COMPOSER_PLACEHOLDER = 'Ask Roman anything.';
+
+/** Prototype 69 persistent footer (client surface). */
+export const ROMAN_ROOM_FOOTER = 'Workout and food guidance only. Not medical advice.';
+
 /**
  * Transient send/system failure (retry available). Source: identity spec §2.10
  * "Generic error / system failure", Default variant — `"That request did not

@@ -2,17 +2,17 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Spacing } from '../../theme/index';
+import { layout, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { QuietText as Text } from '../../ui/progress/QuietBar';
 import { FoodLog, MealType } from '../../types';
-import type { IoniconName } from '../../types/common';
 import { foodMacroLine, type MacroDisplayMode } from '../../macros/macroDisplay';
 import TutorialTarget from '../tutorial/TutorialTarget';
 
 interface Props {
   label: string;
-  icon: string;
+  /** Kept for callers; the quiet layout shows no meal icons. */
+  icon?: string;
   mealType: MealType;
   logs: FoodLog[];
   mealCalories: number;
@@ -30,7 +30,6 @@ interface Props {
 
 export default function MealSectionCard({
   label,
-  icon,
   mealType,
   logs,
   mealCalories,
@@ -43,18 +42,11 @@ export default function MealSectionCard({
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
   return (
-    <View style={styles.mealSection}>
+    <View style={styles.mealSection} testID={`meal-section-${mealType}`}>
       <View style={styles.mealHeader}>
-        <View style={styles.mealHeaderLeft}>
-          <Ionicons name={icon as IoniconName} size={18} color={sc.accentText} />
-          <Text style={styles.mealTitle}>{label}</Text>
-        </View>
-        <Text style={styles.mealCals}>
-          {mealCalories > 0 ? `${Math.round(mealCalories)} kcal` : ''}
-        </Text>
+        <Text style={styles.mealTitle} accessibilityRole="header">{label}</Text>
+        {mealCalories > 0 ? <Text style={styles.mealCals}>{`${Math.round(mealCalories)} kcal`}</Text> : null}
       </View>
-
-      {logs.length > 0 && onEditPress ? <Text style={styles.emptyMealText}>Tap an entry to edit, move or delete it.</Text> : null}
 
       {logs.map((log) => {
         // F-3: prefer the original entered quantity/unit pair when the
@@ -109,7 +101,7 @@ export default function MealSectionCard({
         accessibilityRole="button"
         accessibilityLabel={`Add food to ${label.toLowerCase()}`}
       >
-        <Ionicons name="add-circle-outline" size={18} color={sc.accentText} />
+        <Ionicons name="add" size={18} color={sc.accentText} />
         <Text style={styles.addFoodText}>Add food</Text>
       </HapticPressable>
       </TutorialTarget>
@@ -119,86 +111,75 @@ export default function MealSectionCard({
 
 const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   mealSection: {
-    marginHorizontal: Spacing.lg,
-    marginBottom: 16,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: sc.border,
-    paddingVertical: Spacing.md,
+    paddingTop: layout.sectionPadY,
+    marginBottom: layout.sectionPadY,
   },
   mealHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  mealHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'baseline',
+    gap: 12,
+    marginBottom: 4,
   },
   mealTitle: {
-    fontSize: 16,
-    fontWeight: '500',
+    ...typography.h2,
     color: sc.textPrimary,
+    flexShrink: 1,
   },
   mealCals: {
     fontSize: 13,
-    fontWeight: '600',
+    lineHeight: 19,
     color: sc.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   foodItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 10,
-    minHeight: 44,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: sc.border,
+    paddingVertical: 12,
+    minHeight: layout.rowMinHeight,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   foodItemLeft: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 16,
   },
   foodName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 22,
     color: sc.textPrimary,
   },
   foodQuantityMuted: {
-    fontSize: 13,
-    fontWeight: '400',
+    fontSize: 14,
     color: sc.textMuted,
   },
   foodMacros: {
     fontSize: 13,
+    lineHeight: 19,
     color: sc.textMuted,
     marginTop: 2,
+    fontVariant: ['tabular-nums'],
   },
   foodCals: {
     fontSize: 15,
-    fontWeight: '500',
+    lineHeight: 22,
     color: sc.textPrimary,
+    fontVariant: ['tabular-nums'],
   },
   addFoodButton: {
-    minHeight: 44,
+    minHeight: layout.touchMin,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'flex-start',
     gap: 6,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: sc.border,
     marginTop: 4,
   },
   addFoodText: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontFamily: typography.bodyMd.fontFamily,
     color: sc.accentText,
-  },
-  emptyMealText: {
-    fontSize: 13,
-    color: sc.textMuted,
-    textAlign: 'center',
-    paddingVertical: 8,
   },
 });

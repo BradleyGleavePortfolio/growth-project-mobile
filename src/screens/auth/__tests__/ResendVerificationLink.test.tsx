@@ -47,7 +47,7 @@ beforeEach(() => {
 });
 
 describe('ResendVerificationLink states', () => {
-  it('sent: neutral copy, then a 60 s pause before Send another link', async () => {
+  it('sent: honest confirmation and a visible countdown, not a disappearing action', async () => {
     jest.useFakeTimers();
     try {
       mockResend.mockResolvedValue({ data: { message: 'Verification request submitted.' } });
@@ -56,10 +56,18 @@ describe('ResendVerificationLink states', () => {
       await fireEvent.press(ui.getByLabelText(RESEND_COPY.action));
       await waitFor(() => expect(mockResend).toHaveBeenCalledWith('pat@example.com'));
       expect(await ui.findByText(RESEND_COPY.sent)).toBeTruthy();
+      expect(RESEND_COPY.sent).toBe('Request sent. Check your inbox and your spam folder.');
       expect(RESEND_COPY.sent).not.toMatch(/sent to|has been sent|delivered/i);
-      expect(ui.queryByTestId('resend-verification-button')).toBeNull();
-      await act(async () => { jest.advanceTimersByTime(RESEND_COOLDOWN_MS); });
+      expect(ui.getByLabelText('Send another link in 60s').props.accessibilityState.disabled).toBe(true);
+      await fireEvent.press(ui.getByTestId('resend-verification-button'));
+      expect(mockResend).toHaveBeenCalledTimes(1);
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(ui.getByLabelText('Send another link in 59s')).toBeTruthy();
+      await act(async () => { jest.advanceTimersByTime(RESEND_COOLDOWN_MS - 1000); });
       expect(ui.getByLabelText(RESEND_COPY.again)).toBeTruthy();
+      await fireEvent.press(ui.getByLabelText(RESEND_COPY.again));
+      expect(mockResend).toHaveBeenCalledTimes(2);
+      await ui.unmount();
     } finally {
       jest.useRealTimers();
     }
@@ -76,7 +84,7 @@ describe('ResendVerificationLink states', () => {
     const ui = await render(<ResendVerificationLink email="pat@example.com" onContactSupport={onContactSupport} />);
     await fireEvent.press(ui.getByLabelText(RESEND_COPY.action));
     expect(await ui.findByText(copy)).toBeTruthy();
-    expect(ui.getByLabelText(RESEND_COPY.action)).toBeTruthy();
+    expect(ui.getByLabelText(copy === RESEND_COPY.limited ? 'Send a new link in 60s' : RESEND_COPY.action)).toBeTruthy();
     if (support) {
       await fireEvent.press(ui.getByTestId('resend-verification-support'));
       expect(onContactSupport).toHaveBeenCalled();
@@ -94,6 +102,20 @@ describe('ResendVerificationLink states', () => {
     await fireEvent.changeText(ui.getByLabelText('Email for a new link'), ' pat@example.com ');
     await fireEvent.press(ui.getByLabelText(RESEND_COPY.action));
     await waitFor(() => expect(mockResend).toHaveBeenCalledWith('pat@example.com'));
+  });
+
+  it('sending stays visible and a second tap cannot request another link', async () => {
+    let reject: (err: unknown) => void = () => undefined;
+    mockResend.mockImplementation(() => new Promise((_resolve, fail) => { reject = fail; }));
+    const ui = await render(<ResendVerificationLink email="pat@example.com" />);
+    const pending = fireEvent.press(ui.getByLabelText(RESEND_COPY.action));
+    expect((await ui.findByLabelText(RESEND_COPY.sending)).props.accessibilityState.busy).toBe(true);
+    await fireEvent.press(ui.getByTestId('resend-verification-button'));
+    expect(mockResend).toHaveBeenCalledTimes(1);
+    await act(async () => { reject(httpError(500)); await pending; });
+    expect(await ui.findByText(RESEND_COPY.failed)).toBeTruthy();
+    expect(ui.queryByText(RESEND_COPY.sent)).toBeNull();
+    expect(ui.getByLabelText(RESEND_COPY.action).props.accessibilityState.disabled).toBe(false);
   });
 });
 

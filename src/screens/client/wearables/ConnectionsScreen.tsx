@@ -8,12 +8,14 @@
  * lives ONLY on the Health destination tabs (PR-HK-3a/3b); the Connections Hub
  * is a FLAT list showing ALL providers (both buckets together).
  *
- * Each provider row shows:
- *   • brand icon (placeholder glyph until an asset lands) + provider name,
- *   • a status badge — connected (green) / expired (amber) / error (red) /
- *     disconnected (grey),
- *   • last-synced relative time ("12m ago"),
- *   • a primary action — Connect / Reconnect / Disconnect.
+ * REDO-DEVICES-133 (DES-AZ-127): an editorial page, not a grid of chips. A
+ * serif title stack, then two hairline sections, "In use" (connected and
+ * needs-attention sources) and "Available to connect". Each row shows:
+ *   • the provider name and, for cloud trackers, what it brings in,
+ *   • its status as a word with a small mark (forest = connected, warm =
+ *     sync stopped), and the real last sync ("Last synced 12m ago"; a
+ *     connected source with no sync yet says "No sync yet"),
+ *   • one text action on the right — Connect / Reconnect / Disconnect.
  *
  * Data comes from `useWearableConnections` (cache key ['wearable-connections']).
  * The list is the join of the user's existing connections with the sources
@@ -28,15 +30,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import {
   configFor,
   WEARABLE_PROVIDERS,
@@ -48,7 +42,11 @@ import {
   useLocalOnDeviceAuthorization,
   useWearableConnections,
 } from '../../../hooks/useWearableConnections';
-import { colors, radius, semantic, spacing, typography } from '../../../theme/tokens';
+import { layout, semantic, typography } from '../../../theme/tokens';
+import { useTheme } from '../../../theme/ThemeProvider';
+import HapticPressable from '../../../components/HapticPressable';
+import { Headline, Lede, Overline, QuietSection, Screen } from '../../../ui';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
 import ConnectProviderSheet from './ConnectProviderSheet';
 import {
   deviceSourceForPlatform,
@@ -87,12 +85,17 @@ function badgeTone(status: string): BadgeTone {
   }
 }
 
-const BADGE_COLORS: Record<BadgeTone, { bg: string; fg: string; label: string }> = {
-  connected: { bg: semantic.success.bg, fg: semantic.success.fg, label: 'Connected' },
-  notSyncing: { bg: semantic.warning.bg, fg: semantic.warning.fg, label: 'Not syncing here' },
-  expired: { bg: semantic.warning.bg, fg: semantic.warning.fg, label: 'Expired' },
-  error: { bg: semantic.danger.bg, fg: semantic.danger.fg, label: 'Error' },
-  disconnected: { bg: colors.cream, fg: colors.charcoal, label: 'Not connected' },
+/**
+ * REDO-DEVICES-133: status is a word with a small mark, not a tinted chip
+ * (CATALOG: no status hue swaps). The labels are the same words as before.
+ * `attention` rows (sync stopped) get the warm mark and ink label.
+ */
+const STATUS_TEXT: Record<BadgeTone, { label: string; attention: boolean }> = {
+  connected: { label: 'Connected', attention: false },
+  notSyncing: { label: 'Not syncing here', attention: true },
+  expired: { label: 'Expired', attention: true },
+  error: { label: 'Error', attention: true },
+  disconnected: { label: 'Not connected', attention: false },
 };
 
 /** The primary action a row offers, derived from its status. */
@@ -236,22 +239,38 @@ export function buildRows(
 
 interface ConnectionRowProps {
   row: ProviderRow;
+  first: boolean;
   disconnecting: boolean;
   onConnect: (provider: WearableProvider) => void;
   onDisconnect: (provider: WearableProvider) => void;
 }
 
+/**
+ * One hairline row: the source name, what it brings in, its status as a word
+ * and when it last synced; the one action sits on the right as forest text
+ * (Connect / Reconnect) or muted text (Disconnect), never a filled box.
+ */
 function ConnectionRow({
   row,
+  first,
   disconnecting,
   onConnect,
   onDisconnect,
 }: ConnectionRowProps) {
+  const { semanticColors: sc } = useTheme();
   const config = configFor(row.provider);
-  const badge = BADGE_COLORS[row.status];
+  const status = STATUS_TEXT[row.status];
   const action = rowAction(row.status);
   const synced = relativeTime(row.lastSyncedAt);
   const benefit = cloudBenefit(row.provider);
+  // A connected source that has not synced yet says so (it has no time to show).
+  const syncLine =
+    synced != null ? `Last synced ${synced}` : row.status === 'connected' ? 'No sync yet' : null;
+  const statusColor = status.attention
+    ? semantic.warning.fg
+    : row.status === 'connected'
+      ? sc.textPrimary
+      : sc.textMuted;
 
   const handlePress = useCallback(() => {
     if (action === 'disconnect') onDisconnect(row.provider);
@@ -260,66 +279,65 @@ function ConnectionRow({
 
   return (
     <View
-      style={styles.row}
-      accessibilityLabel={`${config.displayName}, ${badge.label}${
+      style={[styles.row, !first && { borderTopColor: sc.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+      accessibilityLabel={`${config.displayName}, ${status.label}${
         synced ? `, last synced ${synced}` : ''
       }${benefit ? `. ${benefit}` : ''}`}
+      testID={`connection-row-${row.provider}`}
     >
-      {/* Decorative brand glyph — conveyed to AT via the row label. */}
-      <Text style={styles.rowIcon} importantForAccessibility="no">
-        {config.icon}
-      </Text>
-
       <View style={styles.rowMain}>
-        <Text style={styles.rowName}>{config.displayName}</Text>
-        {benefit != null && <Text style={styles.benefit}>{benefit}</Text>}
+        <Text style={[styles.rowName, { color: sc.textPrimary }]}>{config.displayName}</Text>
+        {benefit != null && <Text style={[styles.detail, { color: sc.textMuted }]}>{benefit}</Text>}
         <View style={styles.rowMeta}>
-          <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-            <Text style={[styles.badgeText, { color: badge.fg }]}>
-              {badge.label}
-            </Text>
-          </View>
-          {synced != null && <Text style={styles.synced}>{synced}</Text>}
+          {row.status !== 'disconnected' && (
+            <View
+              importantForAccessibility="no"
+              style={[
+                styles.mark,
+                { backgroundColor: status.attention ? semantic.warning.fg : sc.accent },
+              ]}
+            />
+          )}
+          <Text style={[styles.status, { color: statusColor }]}>{status.label}</Text>
+          {syncLine != null && (
+            <Text style={[styles.synced, { color: sc.textMuted }]}>{syncLine}</Text>
+          )}
         </View>
         {row.status === 'notSyncing' && (
-          <Text style={styles.synced}>{notSyncingHereCopy(config.displayName)}</Text>
+          <Text style={[styles.detail, { color: sc.textMuted }]}>
+            {notSyncingHereCopy(config.displayName)}
+          </Text>
         )}
         {row.provider === 'SAMSUNG_HEALTH' && (
-          <Text style={styles.synced}>
+          <Text style={[styles.detail, { color: sc.textMuted }]}>
             Samsung Health shares its data through Health Connect, so this row shows the Health
             Connect connection.
           </Text>
         )}
       </View>
 
-      <Pressable
-        style={[
-          styles.action,
-          action === 'disconnect' && styles.actionSecondary,
-          disconnecting && styles.actionDisabled,
-        ]}
+      <HapticPressable
+        intent="light"
         onPress={handlePress}
         disabled={disconnecting}
         accessibilityRole="button"
-        accessibilityState={{ disabled: disconnecting }}
+        accessibilityState={{ disabled: disconnecting, busy: disconnecting }}
         accessibilityLabel={`${ACTION_LABEL[action]} ${config.displayName}`}
+        style={({ pressed }) => [styles.action, { opacity: pressed ? 0.6 : 1 }]}
       >
         {disconnecting ? (
-          <ActivityIndicator
-            size="small"
-            color={action === 'disconnect' ? colors.charcoal : colors.bone}
-          />
+          <ActivityIndicator size="small" color={sc.textMuted} />
         ) : (
           <Text
             style={[
               styles.actionText,
-              action === 'disconnect' && styles.actionTextSecondary,
+              { color: action === 'disconnect' ? sc.textMuted : sc.accentText },
             ]}
           >
             {ACTION_LABEL[action]}
           </Text>
         )}
-      </Pressable>
+      </HapticPressable>
     </View>
   );
 }
@@ -327,9 +345,10 @@ function ConnectionRow({
 // ─── Screen ────────────────────────────────────────────────────────────────────
 
 export default function ConnectionsScreen() {
-  const { data, isLoading, isError, refetch, isRefetching } =
+  const { data, isLoading, isError, error, refetch, isRefetching } =
     useWearableConnections();
   const disconnect = useDisconnectProvider();
+  const { semanticColors: sc } = useTheme();
 
   const [sheetProvider, setSheetProvider] = useState<WearableProvider | null>(
     null,
@@ -354,6 +373,9 @@ export default function ConnectionsScreen() {
     () => buildRows(data ?? [], local, deviceSource, cloud),
     [data, local, deviceSource, cloud],
   );
+  // REDO-DEVICES-133: sources in use first, then the ones this phone can add.
+  const inUse = useMemo(() => rows.filter((r) => r.status !== 'disconnected'), [rows]);
+  const available = useMemo(() => rows.filter((r) => r.status === 'disconnected'), [rows]);
 
   const openConnect = useCallback((provider: WearableProvider) => {
     setSheetProvider(provider);
@@ -412,66 +434,72 @@ export default function ConnectionsScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <Screen edges={['top']} testID="connections-loading">
         <Header />
-        <View
-          style={styles.center}
-          accessibilityLabel="Loading your connections"
-          accessibilityRole="progressbar"
-        >
-          <ActivityIndicator color={colors.forest} />
-        </View>
-      </SafeAreaView>
+        <QuietLoading label="Loading your connections" rows={3} />
+      </Screen>
     );
   }
 
   if (isError) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <Screen edges={['top']} testID="connections-error">
         <Header />
-        <View style={styles.center}>
-          <Text style={styles.errorTitle} accessibilityRole="alert">
-            Your connections did not load
-          </Text>
-          <Pressable
-            style={styles.retry}
-            onPress={() => refetch()}
-            accessibilityRole="button"
-            accessibilityLabel="Retry loading connections"
-          >
-            <Text style={styles.retryText}>Try again</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+        <QuietError
+          layout="inline"
+          message={loadFailureLine(error)}
+          onRetry={() => void refetch()}
+          retryHint="Loads your connections again"
+          testID="connections-error-state"
+        />
+      </Screen>
     );
   }
 
-  return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <Header />
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.provider}
-        contentContainerStyle={styles.listContent}
-        refreshing={isRefetching}
-        onRefresh={refetch}
-        ItemSeparatorComponent={Separator}
-        // The catalog is a small, fixed set (15 providers); render the whole
-        // list up front so there is no virtualization windowing on a short list.
-        initialNumToRender={WEARABLE_PROVIDERS.length}
-        windowSize={WEARABLE_PROVIDERS.length}
-        removeClippedSubviews={false}
-        renderItem={({ item }) => (
-          <ConnectionRow
-            row={item}
-            disconnecting={
-              disconnect.isPending && disconnect.variables === item.provider
-            }
-            onConnect={openConnect}
-            onDisconnect={handleDisconnect}
-          />
-        )}
+  const renderRows = (list: ProviderRow[]) =>
+    list.map((item, index) => (
+      <ConnectionRow
+        key={item.provider}
+        row={item}
+        first={index === 0}
+        disconnecting={disconnect.isPending && disconnect.variables === item.provider}
+        onConnect={openConnect}
+        onDisconnect={handleDisconnect}
       />
+    ));
+
+  return (
+    <Screen
+      edges={['top']}
+      testID="connections"
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefetching}
+          onRefresh={() => void refetch()}
+          tintColor={sc.accent}
+        />
+      }
+    >
+      <Header />
+      {inUse.length > 0 && (
+        <QuietSection testID="connections-in-use">
+          <Overline accessibilityRole="header">In use</Overline>
+          {renderRows(inUse)}
+        </QuietSection>
+      )}
+      {available.length > 0 && (
+        <QuietSection testID="connections-available">
+          <Overline accessibilityRole="header">Available to connect</Overline>
+          {renderRows(available)}
+        </QuietSection>
+      )}
+      {rows.length === 0 && (
+        <QuietSection>
+          <Text style={[styles.detail, { color: sc.textMuted }]}>
+            No health source can connect on this device.
+          </Text>
+        </QuietSection>
+      )}
       <ConnectProviderSheet
         provider={sheetProvider}
         visible={sheetVisible}
@@ -490,142 +518,75 @@ export default function ConnectionsScreen() {
         onConfirm={confirmDisconnect}
         coachless={coachless}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
+/** The failed-load line: says what failed; "check your connection" only when nothing answered. */
+function loadFailureLine(err: unknown): string {
+  return loadFailureMessage(err, 'Your connections');
+}
+
+/** Title stack: the same words as the More row that opens this screen. */
 function Header() {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle} accessibilityRole="header">
-        Connections
-      </Text>
-      <Text style={styles.headerSubtitle}>
-        Manage the apps and devices that feed your health data.
-      </Text>
+      <Overline>Health data</Overline>
+      <Headline level="h1">Connected devices</Headline>
+      <Lede>Manage the apps and devices that feed your health data.</Lede>
     </View>
   );
 }
 
-function Separator() {
-  return <View style={styles.separator} />;
-}
-
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bone,
-  },
   header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-  },
-  headerTitle: {
-    ...typography.h1,
-    color: colors.ink,
-  },
-  headerSubtitle: {
-    ...typography.bodySmall,
-    color: colors.charcoal,
-    marginTop: spacing.xs,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  listContent: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing['3xl'],
+    paddingBottom: layout.sectionGap,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  rowIcon: {
-    fontSize: 26,
-    marginRight: spacing.md,
-    width: 32,
-    textAlign: 'center',
+    minHeight: layout.rowMinHeight,
+    paddingVertical: 16,
   },
   rowMain: {
     flex: 1,
+    gap: 4,
   },
   rowName: {
-    ...typography.h4,
-    color: colors.ink,
+    ...typography.bodyMd,
   },
-  benefit: {
+  detail: {
     ...typography.bodySmall,
-    color: colors.charcoal,
-    marginTop: 2,
   },
   rowMeta: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.xs,
+    flexWrap: 'wrap',
+    columnGap: 8,
+    rowGap: 2,
+    marginTop: 2,
   },
-  badge: {
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 2,
+  mark: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  badgeText: {
-    ...typography.micro,
+  status: {
+    ...typography.bodySmall,
+    fontFamily: 'Inter_500Medium',
   },
   synced: {
     ...typography.bodySmall,
-    color: colors.stone,
-    marginLeft: spacing.md,
+    fontVariant: ['tabular-nums'],
   },
   action: {
-    backgroundColor: colors.forest,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    minWidth: 96,
-    minHeight: 40,
-    alignItems: 'center',
+    minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
+    paddingLeft: 16,
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    marginLeft: spacing.md,
-  },
-  actionSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.stone,
-  },
-  actionDisabled: {
-    opacity: 0.5,
   },
   actionText: {
-    ...typography.bodySmall,
-    color: colors.bone,
-    fontWeight: '500',
-  },
-  actionTextSecondary: {
-    color: colors.charcoal,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.stone,
-  },
-  errorTitle: {
-    ...typography.h3,
-    color: colors.ink,
-    textAlign: 'center',
-    marginBottom: spacing.lg,
-  },
-  retry: {
-    backgroundColor: colors.forest,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  retryText: {
     ...typography.bodyMd,
-    color: colors.bone,
   },
 });

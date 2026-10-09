@@ -228,10 +228,10 @@ describe("DataExportScreen", () => {
     await findByText("You already have a recent export");
     await findByText(/You can request a new export after/);
     expect(
-      queryByRole("button", { name: /Request a new data export/i }),
+      queryByRole("button", { name: /Request a new export/i }),
     ).toBeNull();
     expect(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     ).toBeTruthy();
   });
 
@@ -301,9 +301,9 @@ describe("DataExportScreen", () => {
 
     await findByText("Could not load your export");
     await fireEvent.press(
-      await findByRole("button", { name: /Check your export status again/i }),
+      await findByRole("button", { name: /Check again/i }),
     );
-    await findByRole("button", { name: /Request my data export/i });
+    await findByRole("button", { name: /Request my data/i });
   });
 
   // ── Status polling ─────────────────────────────────────────────────────────
@@ -346,7 +346,7 @@ describe("DataExportScreen", () => {
     const { findByRole } = await render(<DataExportScreen />);
 
     const btn = await findByRole("button", {
-      name: /Download your data file/i,
+      name: /Download file/i,
     });
     expect(btn).toBeTruthy();
   });
@@ -358,7 +358,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Download started in your browser");
@@ -380,7 +380,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Download started in your browser");
@@ -411,7 +411,7 @@ describe("DataExportScreen", () => {
 
       const { findByRole, findByText } = await render(<DataExportScreen />);
       await fireEvent.press(
-        await findByRole("button", { name: /Download your data file/i }),
+        await findByRole("button", { name: /Download file/i }),
       );
 
       await findByText("Your phone could not open the download");
@@ -448,7 +448,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Your download did not open");
@@ -466,7 +466,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Previous export expired");
@@ -480,12 +480,12 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("This file is no longer available");
     expect(
-      await findByRole("button", { name: /Request a new data export/i }),
+      await findByRole("button", { name: /Request a new export/i }),
     ).toBeTruthy();
   });
 
@@ -500,7 +500,7 @@ describe("DataExportScreen", () => {
 
     await findByText("This file is no longer available");
     expect(
-      queryByRole("button", { name: /Download your data file/i }),
+      queryByRole("button", { name: /Download file/i }),
     ).toBeNull();
   });
 
@@ -510,14 +510,14 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Your session has ended");
     await findByText(/Log in again/);
     // The Download button stays so the user can retry after logging in.
     expect(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     ).toBeTruthy();
   });
 
@@ -527,7 +527,7 @@ describe("DataExportScreen", () => {
 
     const { findByRole, findByText } = await render(<DataExportScreen />);
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Could not prepare your download");
@@ -594,7 +594,7 @@ describe("DataExportScreen", () => {
 
     await findByText("Previous export expired");
     const btn = await findByRole("button", {
-      name: /Request a fresh data export/i,
+      name: /Request new export/i,
     });
     await fireEvent.press(btn);
 
@@ -690,7 +690,7 @@ describe("DataExportScreen fix round 1", () => {
 
     const screen = await render(<DataExportScreen />);
     await pressHeld(
-      await screen.findByRole("button", { name: /Download your data file/i }),
+      await screen.findByRole("button", { name: /Download file/i }),
     );
     await screen.unmount();
     await act(async () => {
@@ -711,7 +711,7 @@ describe("DataExportScreen fix round 1", () => {
 
       const screen = await render(<DataExportScreen />);
       await pressHeld(
-        await screen.findByRole("button", { name: /Download your data file/i }),
+        await screen.findByRole("button", { name: /Download file/i }),
       );
       await act(async () => {
         authEvents.emit("logout");
@@ -737,7 +737,7 @@ describe("DataExportScreen fix round 1", () => {
 
     const screen = await render(<DataExportScreen />);
     await pressHeld(
-      await screen.findByRole("button", { name: /Download your data file/i }),
+      await screen.findByRole("button", { name: /Download file/i }),
     );
     mockUser = { id: "user-b", email: "b@example.test" };
     await screen.rerender(<DataExportScreen />);
@@ -750,7 +750,7 @@ describe("DataExportScreen fix round 1", () => {
     // Same account, no retirement: opens normally.
     const again = await render(<DataExportScreen />);
     await fireEvent.press(
-      await again.findByRole("button", { name: /Download your data file/i }),
+      await again.findByRole("button", { name: /Download file/i }),
     );
     await again.findByText("Download started in your browser");
     expect(openURL).toHaveBeenCalledTimes(1);
@@ -769,7 +769,7 @@ describe("DataExportScreen fix round 1", () => {
 
     const screen = await render(<DataExportScreen />);
     await pressHeld(
-      await screen.findByRole("button", { name: /Download your data file/i }),
+      await screen.findByRole("button", { name: /Download file/i }),
     );
     mockUser = { id: "user-b", email: "b@example.test" };
     await screen.rerender(<DataExportScreen />);
@@ -785,7 +785,7 @@ describe("DataExportScreen fix round 1", () => {
     expect(request.props.accessibilityState?.disabled).not.toBe(true);
     expect(screen.queryByText(/Your file is ready/)).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /Download your data file/i }),
+      screen.queryByRole("button", { name: /Download file/i }),
     ).toBeNull();
     openURL.mockRestore();
     await screen.unmount();
@@ -807,7 +807,7 @@ describe("DataExportScreen fix round 1", () => {
       <DataExportScreen />,
     );
     await fireEvent.press(
-      await findByRole("button", { name: /Download your data file/i }),
+      await findByRole("button", { name: /Download file/i }),
     );
 
     await findByText("Could not prepare your download");
@@ -933,7 +933,7 @@ describe("DataExportScreen fix round 1", () => {
     });
     await findByText("Your export was not found");
     expect(
-      await findByRole("button", { name: /Request my data export/i }),
+      await findByRole("button", { name: /Request my data/i }),
     ).toBeTruthy();
     const calls = mockGetStatus.mock.calls.length;
     await act(async () => {
@@ -954,13 +954,13 @@ describe("DataExportScreen fix round 1", () => {
     );
     await findByText(/You can request a new export after/);
     expect(
-      queryByRole("button", { name: /Request a new data export/i }),
+      queryByRole("button", { name: /Request a new export/i }),
     ).toBeNull();
     await act(async () => {
       jest.advanceTimersByTime(61_000);
     });
     expect(
-      await findByRole("button", { name: /Request a new data export/i }),
+      await findByRole("button", { name: /Request a new export/i }),
     ).toBeTruthy();
   });
 });

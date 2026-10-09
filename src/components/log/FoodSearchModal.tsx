@@ -9,7 +9,9 @@ import {
 } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, typographyTokens } from '../../theme/index';
+import { layout, typography, type SemanticTokens } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
+import { TextLink, useScreenInsets } from '../../ui';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { MealType } from '../../types';
 import type { PastMeal } from '../../hooks/useFoodBrowse';
@@ -67,26 +69,37 @@ export default function FoodSearchModal(props: Props) {
     onManualFieldChange,
     onManualLog,
   } = props;
+  const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
+  // iOS presents a page sheet below the status bar; Android shows a full
+  // edge-to-edge window, so only Android takes the top inset. Both take the
+  // bottom one so the last action clears the home indicator / nav bar.
+  const insets = useScreenInsets();
+  const frame = {
+    backgroundColor: sc.bgPrimary,
+    paddingTop: Platform.OS === 'android' ? insets.top : 0,
+    paddingBottom: insets.bottom,
+  };
 
   return (
     <Modal testID="food-search-sheet" visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      {props.portionPicker ?? (
+      {props.portionPicker ? (
+        <View style={[styles.modalContainer, frame]}>{props.portionPicker}</View>
+      ) : (
         <KeyboardAvoidingView
-          style={styles.modalContainer}
+          style={[styles.modalContainer, frame]}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <View style={styles.modalHeader}>
             <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button" accessibilityLabel="Close food search">
-              <Ionicons name="close" size={24} color={Colors.dark} />
+              <Ionicons name="close" size={22} color={sc.textPrimary} />
             </HapticPressable>
-            <Text style={styles.modalTitle}>
+            <Text style={styles.modalTitle} accessibilityRole="header" numberOfLines={1}>
               Add to {MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
             </Text>
             {props.addedFoodName ? (
-              <HapticPressable intent="light" onPress={onClose} disabled={props.saving} style={styles.closeButton} accessibilityRole="button">
-                <Text style={styles.doneText}>Done</Text>
-              </HapticPressable>
-            ) : <View style={{ width: 44 }} />}
+              <TextLink label="Done" tone="accent" underline={false} disabled={props.saving} onPress={onClose} style={styles.closeButton} />
+            ) : <View style={styles.closeButton} />}
           </View>
 
           {props.addedFoodName ? (
@@ -133,27 +146,26 @@ export default function FoodSearchModal(props: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  doneText: { ...typographyTokens.bodyMd, fontSize: 15, color: Colors.primary },
-  addedMessage: { ...typographyTokens.bodySmall, fontSize: 15, color: Colors.textSecondary, paddingHorizontal: 20, paddingVertical: 12 },
-  closeButton: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
+  addedMessage: { ...typography.bodySmall, color: sc.accentText, paddingHorizontal: layout.gutter, paddingTop: 12 },
+  closeButton: { minWidth: layout.touchMin, minHeight: layout.touchMin, alignItems: 'center', justifyContent: 'center' },
   modalContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: layout.gutter - 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '500',
-    color: Colors.dark,
+    ...typography.h3,
+    flexShrink: 1,
+    textAlign: 'center',
+    color: sc.textPrimary,
   },
 });

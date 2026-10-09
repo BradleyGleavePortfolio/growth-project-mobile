@@ -45,7 +45,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -62,7 +61,8 @@ import {
 
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useTheme } from '../../theme/ThemeProvider';
-import type { SemanticTokens, Tokens } from '../../theme/tokens';
+import { radius, type SemanticTokens, type Tokens } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import {
   clientPaymentsApi,
   type ClientCoachPackage,
@@ -223,10 +223,10 @@ function PurchaseUnpackContent({
     // deliverables. NEVER strand the buyer with an error banner; the
     // purchase was successful, surface that calmly.
     return (
-      <ScrollView
+      <Screen
+        edges={['top']}
         testID="purchase-unpack-not-configured"
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        contentStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -253,16 +253,16 @@ function PurchaseUnpackContent({
             <Text style={styles.ctaPrimaryText}>Done</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Screen>
     );
   }
 
   if (!dropsResult.ok) {
     return (
-      <ScrollView
+      <Screen
+        edges={['top']}
         testID="purchase-unpack-error"
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        contentStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -299,17 +299,17 @@ function PurchaseUnpackContent({
             <Text style={styles.ctaSecondaryText}>Done</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Screen>
     );
   }
 
   // ─── Empty (no buyer-visible drops yet) ──────────────────────────────
   if (visible.unlocked.length === 0 && visible.coming.length === 0) {
     return (
-      <ScrollView
+      <Screen
+        edges={['top']}
         testID="purchase-unpack-empty"
-        style={styles.container}
-        contentContainerStyle={styles.content}
+        contentStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -336,16 +336,16 @@ function PurchaseUnpackContent({
             <Text style={styles.ctaPrimaryText}>Done</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Screen>
     );
   }
 
   // ─── Healthy: unlocked + coming sections ─────────────────────────────
   return (
-    <ScrollView
+    <Screen
+      edges={['top']}
       testID="purchase-unpack-list"
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      contentStyle={styles.content}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -408,7 +408,7 @@ function PurchaseUnpackContent({
           <Text style={styles.ctaPrimaryText}>Done</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -550,12 +550,12 @@ export const __test = {
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
-    content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
+    // Screen owns the inset top (insets.top + 12) and the page colour.
+    content: { paddingHorizontal: 24, paddingBottom: 40 },
     receiptCard: {
       backgroundColor: semanticColors.bgSurface,
-      borderRadius: 14,
-      borderWidth: 1,
+      borderRadius: radius.card,
+      borderWidth: StyleSheet.hairlineWidth,
       borderColor: semanticColors.border,
       padding: 16,
       marginBottom: 20,
@@ -571,8 +571,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       color: semanticColors.textPrimary,
     },
     packageName: {
-      fontSize: 16,
-      fontWeight: '600',
+      ...tokens.typography.bodyMd,
       color: semanticColors.textPrimary,
       marginTop: 2,
     },
@@ -587,10 +586,8 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginTop: 4,
     },
     sectionTitle: {
-      fontSize: 12,
+      ...tokens.typography.eyebrow,
       color: semanticColors.textMuted,
-      textTransform: 'uppercase',
-      letterSpacing: 0.6,
       marginTop: 18,
       marginBottom: 4,
     },
@@ -601,8 +598,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     empty: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 12 },
     emptyTitle: {
-      fontSize: 18,
-      fontWeight: '600',
+      ...tokens.typography.h3,
       color: semanticColors.textPrimary,
       marginTop: 12,
       textAlign: 'center',
@@ -619,9 +615,11 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       backgroundColor: semanticColors.accent,
       paddingHorizontal: 20,
       paddingVertical: 10,
-      borderRadius: 10,
+      minHeight: 44,
+      justifyContent: 'center',
+      borderRadius: radius.button,
     },
-    retryBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    retryBtnText: { ...tokens.typography.bodyMd, color: semanticColors.textOnAccent, fontSize: 14 },
     footerCtas: {
       flexDirection: 'row',
       gap: 10,
@@ -631,12 +629,14 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       flex: 1,
       backgroundColor: semanticColors.accent,
       paddingVertical: 14,
-      borderRadius: 12,
+      minHeight: 54,
+      justifyContent: 'center',
+      borderRadius: radius.button,
       alignItems: 'center',
     },
     ctaPrimaryText: {
+      ...tokens.typography.bodyMd,
       color: semanticColors.textOnAccent,
-      fontWeight: '600',
       fontSize: 15,
     },
     ctaSecondary: {
@@ -644,13 +644,15 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       borderWidth: 1,
       borderColor: semanticColors.border,
       paddingVertical: 14,
-      borderRadius: 12,
+      minHeight: 54,
+      justifyContent: 'center',
+      borderRadius: radius.button,
       alignItems: 'center',
       backgroundColor: semanticColors.bgSurface,
     },
     ctaSecondaryText: {
+      ...tokens.typography.bodyMd,
       color: semanticColors.textPrimary,
-      fontWeight: '600',
       fontSize: 15,
     },
   });

@@ -742,6 +742,9 @@ const EXPECTED_CHANNELS = {
   'clinic-apk': { channel: 'clinic-apk', environment: 'production' },
 };
 
+// B14/B40: flags that must be "true" in every OTA store/test profile.
+const ALWAYS_ON_FLAGS = ['EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING', 'EXPO_PUBLIC_FF_CLIENT_TUTORIAL'];
+
 function validateUpdates(app) {
   const expo = (app && app.expo) || {};
   const pkgPath = path.join(ROOT, 'package.json');
@@ -853,6 +856,15 @@ function validateUpdates(app) {
       const flag = (eff.env || {}).EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES;
       if (flag !== 'true') {
         fail(`eas.json: build.${profile}.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true", got ${JSON.stringify(flag)}`);
+      }
+      // B14/B40 (CONSULT-ALL-M-133): the consultation and Roman's tour are
+      // on in every build the owner or a client installs, so no store or
+      // test build is ever a "general build" without them again.
+      for (const name of ALWAYS_ON_FLAGS) {
+        const v = (eff.env || {})[name];
+        if (v !== 'true') {
+          fail(`eas.json: build.${profile}.env.${name} must be "true" (B40: the consultation and the tour ship on in every store and test build), got ${JSON.stringify(v)}`);
+        }
       }
     }
     // One binary population per channel: two profiles on the same channel
