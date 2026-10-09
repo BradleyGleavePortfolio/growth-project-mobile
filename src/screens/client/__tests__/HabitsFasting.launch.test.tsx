@@ -149,7 +149,7 @@ describe('Habits — production DTO, check-off and server history', () => {
     await fireEvent.changeText(screen.getByLabelText('Habit name'), 'Walk daily');
     await fireEvent.press(screen.getByText('Create habit'));
     await waitFor(() => expect(mockCreateHabit).toHaveBeenCalledTimes(1));
-    await fireEvent.press(screen.getByText(/^(Create|Creating) habit$/));
+    await fireEvent.press(screen.getByRole('button', { name: /^(Create|Creating) habit$/ }));
     expect(mockCreateHabit).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(screen.getByRole('button', { name: 'Creating habit' })).toBeDisabled());
     expect(screen.getByRole('button', { name: 'Creating habit' }).props.accessibilityState.busy).toBe(true);
@@ -207,14 +207,14 @@ describe('Habits — production DTO, check-off and server history', () => {
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
     expect(screen.getByText('One habit waiting today.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Drink water'));
-    await waitFor(() => expect(screen.getByText('8/8 glasses')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('8 of 8 glasses')).toBeTruthy());
     expect(screen.getByText('Done for today.')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: true, value: 8,
     });
     expect(screen.getByTestId('habit-week-water-2').props.accessibilityLabel).toContain('completed');
     await fireEvent.press(screen.getByText('Drink water'));
-    await waitFor(() => expect(screen.getByText('0/8 glasses')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('0 of 8 glasses')).toBeTruthy());
     expect(screen.getByText('One habit waiting today.')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: false, value: 0,
@@ -269,7 +269,7 @@ describe('Habits — production DTO, check-off and server history', () => {
     await fireEvent.press(screen.getByLabelText('High'));
     await fireEvent.press(screen.getByLabelText('Increase sleep hours'));
     await fireEvent.press(screen.getByLabelText('Decrease sleep hours'));
-    await fireEvent.changeText(screen.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Rested');
+    await fireEvent.changeText(screen.getByPlaceholderText('Anything worth noting about today'), 'Rested');
     await fireEvent.press(screen.getByText('Save check-in'));
     await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(expect.objectContaining({
       mood: 5, energy: 4, sleep_hours: 7, notes: 'Rested',
@@ -313,8 +313,10 @@ describe('Habits — production DTO, check-off and server history', () => {
 
   it('uses semantic colours and keeps the outlined check at 44 pt for a future dark palette', async () => {
     mockSemanticColors = require('../../../theme/tokens').darkTokens;
-    const styles = makeStyles(require('../../../constants/colors').default, mockSemanticColors);
-    expect(styles.checkCircle).toMatchObject({ width: 44, height: 44 });
+    const styles = makeStyles(mockSemanticColors);
+    // The whole hairline row is the tap target (56 pt); the outlined check is its 28 pt mark.
+    expect(styles.habitRow).toMatchObject({ minHeight: 56 });
+    expect(styles.checkCircle).toMatchObject({ width: 28, height: 28, borderColor: mockSemanticColors.textMuted });
     expect(styles.stepperBtn).toMatchObject({ width: 44, height: 44 });
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
@@ -514,5 +516,21 @@ describe('REDO-HABITS-CAL-COMM-133 Habits page', () => {
     await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
     expect(forest(screen)).toHaveLength(1);
     expect(flat(forest(screen)[0]).borderRadius).toBe(radius.button);
+  });
+});
+
+describe('REDO-HABITS-CAL-COMM-133 habit rows and sheet', () => {
+  const flat = (n: { props: { style?: unknown } }) => (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+
+  it('serif habit names that never clip; a rounded sheet with rounded fields', async () => {
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    const name = flat(screen.getByText('Drink water'));
+    expect(name.fontFamily).toMatch(/^CormorantGaramond/);
+    expect(Number(name.lineHeight)).toBeGreaterThanOrEqual(1.2 * Number(name.fontSize));
+    await fireEvent.press(screen.getByText('Add habit'));
+    expect(flat(screen.getByTestId('add-habit-sheet'))).toMatchObject({ borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet });
+    expect(flat(screen.getByLabelText('Habit name')).borderRadius).toBe(radius.input);
+    expect(flat(screen.getByTestId('add-habit-create')).borderRadius).toBe(radius.button);
   });
 });

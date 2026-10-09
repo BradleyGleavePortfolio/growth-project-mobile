@@ -1,75 +1,71 @@
 import React from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ThemeColors } from '../../../theme/ThemeProvider';
+import HapticPressable from '../../../components/HapticPressable';
+import type { SemanticTokens } from '../../../theme/tokens';
 import { DAY_LABELS, type HabitView } from './constants';
 import type { HabitsStyles } from './styles';
 
+/** "3 of 8 glasses", "Once a day", "1 glass". */
+export function habitTargetLabel(habit: HabitView): string {
+  if (habit.targetCount > 1) return `${habit.log?.count || 0} of ${habit.targetCount} ${habit.unit}`;
+  return habit.unit === 'times' ? 'Once a day' : `1 ${habit.unit}`;
+}
+
+/**
+ * One habit as a hairline row (clientfile-workouts reference): outline
+ * circle that fills with a check when done, serif name, the target in
+ * tabular figures and this week as seven dots. Tap toggles; hold deletes.
+ */
 export function HabitCard({
   habit,
+  todayIndex,
   onToggle,
   onLongPress,
-  colors,
+  sc,
   styles,
 }: {
   habit: HabitView;
+  /** Index of today in the Monday-first week, or -1. */
+  todayIndex: number;
   onToggle: (habit: HabitView) => void;
   onLongPress: (habit: HabitView) => void;
-  colors: ThemeColors;
+  sc: SemanticTokens;
   styles: HabitsStyles;
 }) {
+  const done = habit.log?.completed ?? false;
   return (
-    <TouchableOpacity
+    <HapticPressable
+      intent="light"
+      disableAnimation
       accessibilityRole="checkbox"
       accessibilityLabel={habit.name}
-      accessibilityState={{ checked: habit.log?.completed ?? false }}
-      style={styles.habitCard}
+      accessibilityHint="Marks it done for today. Hold to delete."
+      accessibilityState={{ checked: done }}
+      style={({ pressed }) => [styles.habitRow, pressed && styles.pressed]}
       onPress={() => onToggle(habit)}
       onLongPress={() => onLongPress(habit)}
-      activeOpacity={0.7}
+      testID={`habit-row-${habit.id}`}
     >
-      <View style={styles.habitLeft}>
-        <View style={styles.habitInfo}>
-          <Text style={[styles.habitName, habit.log?.completed && styles.habitNameDone]}>
-            {habit.name}
-          </Text>
-          <View style={styles.habitMeta}>
-            {habit.runDays > 0 && (
-              <Text style={styles.runText}>· {habit.runDays}d</Text>
-            )}
-            <Text style={styles.habitTarget}>
-              {habit.targetCount > 1
-                ? `${habit.log?.count || 0}/${habit.targetCount} ${habit.unit}`
-                : habit.unit}
-            </Text>
-          </View>
-          <View style={styles.weekDots}>
-            {habit.weekDots.map((done, i) => (
-              <View key={i} style={styles.weekDotCol}>
-                <View
-                  testID={`habit-week-${habit.id}-${i}`}
-                  accessibilityLabel={`${DAY_LABELS[i]}: ${done ? 'completed' : 'not completed'}`}
-                  style={[
-                    styles.weekDot,
-                    done && { backgroundColor: colors.primary },
-                  ]}
-                />
-                <Text style={styles.weekDotLabel}>{DAY_LABELS[i]}</Text>
-              </View>
-            ))}
-          </View>
+      <View style={[styles.checkCircle, done && styles.checkCircleDone]}>
+        {done ? <Ionicons name="checkmark" size={16} color={sc.accentText} /> : null}
+      </View>
+      <View style={styles.habitInfo}>
+        <Text style={[styles.habitName, done && styles.habitNameDone]}>{habit.name}</Text>
+        <Text style={styles.habitTarget}>{habitTargetLabel(habit)}</Text>
+        <View style={styles.weekDots}>
+          {habit.weekDots.map((dayDone, i) => (
+            <View key={i} style={styles.weekDotCol}>
+              <Text style={[styles.weekDotLabel, i === todayIndex && styles.weekDotLabelToday]}>{DAY_LABELS[i]}</Text>
+              <View
+                testID={`habit-week-${habit.id}-${i}`}
+                accessibilityLabel={`${DAY_LABELS[i]}: ${dayDone ? 'completed' : 'not completed'}`}
+                style={[styles.weekDot, i === todayIndex && styles.weekDotToday, dayDone && styles.weekDotDone]}
+              />
+            </View>
+          ))}
         </View>
       </View>
-      <View
-        style={[
-          styles.checkCircle,
-          habit.log?.completed && { borderColor: colors.primary },
-        ]}
-      >
-        {habit.log?.completed && (
-          <Ionicons name="checkmark-outline" size={22} color={colors.primary} />
-        )}
-      </View>
-    </TouchableOpacity>
+    </HapticPressable>
   );
 }
