@@ -1118,6 +1118,15 @@ export default function ConsultationFlow({
       return;
     }
     if (outcome.kind === 'conflict') {
+      // B14 (owner decision 28): every client finishes the consultation, with
+      // or without a coach. Only a server from before that rule answers
+      // not_attached / clinic_not_configured; that is the server's problem,
+      // not the client's, so it gets the calm server state (prototype 44:
+      // answers safe, Try again, support) and is reported, never the old
+      // "a coach link is needed" dead end.
+      if (outcome.code === 'not_attached' || outcome.code === 'clinic_not_configured') {
+        return fail('unknown', { where: 'POST /me/onboarding/complete', status: 409, code: outcome.code, requestId: outcome.requestId });
+      }
       if (outcome.code !== 'unknown') return fail(outcome.code);
       return fail('unknown', { where: 'POST /me/onboarding/complete', status: 409, code: 'unknown', requestId: outcome.requestId });
     }

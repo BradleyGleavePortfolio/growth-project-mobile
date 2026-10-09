@@ -2,10 +2,12 @@
  * the saved workout never changes), open it with Ask AI and the client's context. The client gets it only when the coach assigns it.
  * Shown where Ask AI exists (status route present) in builds with the builder's autosave, the same rule as the library entry. */
 import React, { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, View } from 'react-native';
+import HapticPressable from '../../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { spacing, typography } from '../../../theme/tokens';
+import { layout, radius, spacing, typography } from '../../../theme/tokens';
+import { footerBottomPadding, useScreenInsets } from '../../../ui';
 import { featureFlags } from '../../../config/featureFlags';
 import { useSavedWorkouts } from '../../../hooks/usePrograms';
 import { workoutBuilderApi } from '../../../api/workoutBuilderApi';
@@ -34,6 +36,7 @@ export async function copyWorkoutForClient(sourcePlanId: string, firstName: stri
 
 function PickSheet({ firstName, onClose, onOpened }: { firstName: string; onClose: () => void; onOpened: (planId: string) => void }) {
   const { semanticColors: sc } = useTheme();
+  const insets = useScreenInsets();
   const saved = useSavedWorkouts('');
   const items: SavedWorkout[] = saved.data?.pages.flatMap((p) => p.items) ?? [];
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -56,12 +59,13 @@ function PickSheet({ firstName, onClose, onOpened }: { firstName: string; onClos
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
       <View style={[styles.backdrop, { backgroundColor: sc.overlay }]}>
-        <View testID="adjust-for-client-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border }]}>
+        <View testID="adjust-for-client-sheet" style={[styles.sheet, { backgroundColor: sc.bgPrimary, borderColor: sc.border, paddingBottom: footerBottomPadding(insets.bottom) }]}>
+          <View style={[styles.handle, { backgroundColor: sc.border }]} accessible={false} />
           <View style={styles.row}>
-            <Text accessibilityRole="header" style={[typography.h4, styles.grow, { color: sc.textPrimary }]}>{`Adjust a workout for ${firstName}`}</Text>
-            <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={12}>
+            <Text accessibilityRole="header" style={[typography.h2, styles.grow, { color: sc.textPrimary }]}>{`Adjust a workout for ${firstName}`}</Text>
+            <HapticPressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} hitSlop={12} style={styles.close}>
               <Text style={[typography.bodyMd, { color: sc.accentText }]}>Close</Text>
-            </Pressable>
+            </HapticPressable>
           </View>
           <Text style={[typography.caption, { color: sc.textMuted, marginBottom: spacing.sm }]}>
             {`Pick a saved workout. ${firstName} gets a copy to adjust with Ask AI; the saved workout stays as it is.`}
@@ -74,12 +78,12 @@ function PickSheet({ firstName, onClose, onOpened }: { firstName: string; onClos
               <Text style={[typography.body, { color: sc.textMuted }]}>No saved workouts yet. Build one in Programs, then adjust it here.</Text>
             ) : null}
             {items.map((w) => (
-              <Pressable key={w.id} testID={`adjust-for-client-${w.id}`} accessibilityRole="button" accessibilityLabel={`Adjust ${w.name} for ${firstName}`}
+              <HapticPressable key={w.id} testID={`adjust-for-client-${w.id}`} accessibilityRole="button" accessibilityLabel={`Adjust ${w.name} for ${firstName}`}
                 accessibilityState={{ disabled: !!busyId, busy: busyId === w.id }} disabled={!!busyId} onPress={() => void pick(w)}
-                style={[styles.item, { borderColor: sc.border, backgroundColor: sc.bgSurface }]}>
+                style={[styles.item, { borderColor: sc.border }]}>
                 <Text style={[typography.bodyMd, styles.grow, { color: sc.textPrimary }]} numberOfLines={2}>{w.name}</Text>
                 <Text style={[typography.caption, { color: sc.textMuted }]}>{busyId === w.id ? 'Copying' : `${w.exercise_count} exercises`}</Text>
-              </Pressable>
+              </HapticPressable>
             ))}
           </ScrollView>
         </View>
@@ -98,12 +102,12 @@ function Entry({ firstName, onOpened }: EntryProps) {
   if (!ai.visible) return null;
   return (
     <>
-      <Pressable testID="workouts-adjust-with-ai" accessibilityRole="button" accessibilityLabel={`Adjust a saved workout for ${firstName}`}
+      <HapticPressable testID="workouts-adjust-with-ai" accessibilityRole="button" accessibilityLabel={`Adjust a saved workout for ${firstName}`}
         accessibilityHint="Copies the workout for this client and opens Ask AI. Nothing reaches the client until you assign it."
-        onPress={() => { fireAiHaptic('light'); setOpen(true); }} style={[styles.entry, { borderColor: sc.border, backgroundColor: sc.bgSurface }]}>
+        onPress={() => setOpen(true)} style={[styles.entry, { borderColor: sc.border }]}>
         <Ionicons name="sparkles-outline" size={20} color={sc.accentText} />
         <Text style={[typography.bodyMd, { color: sc.textPrimary }]}>{`Adjust a saved workout for ${firstName}`}</Text>
-      </Pressable>
+      </HapticPressable>
       {open ? <PickSheet firstName={firstName} onClose={() => setOpen(false)} onOpened={(id) => { setOpen(false); onOpened(id); }} /> : null}
     </>
   );
@@ -111,9 +115,12 @@ function Entry({ firstName, onOpened }: EntryProps) {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { maxHeight: '80%', minHeight: '45%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, padding: spacing.lg },
+  sheet: { maxHeight: '80%', minHeight: '45%', borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderWidth: StyleSheet.hairlineWidth, borderBottomWidth: 0, paddingHorizontal: layout.gutter, paddingTop: spacing.sm },
+  handle: { alignSelf: 'center', width: 36, height: 4, borderRadius: radius.chip, marginBottom: spacing.md },
+  pressed: { opacity: 0.7 },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   grow: { flex: 1 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: 12, padding: spacing.md, marginBottom: spacing.sm },
-  entry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, borderWidth: 1, borderRadius: 12, padding: spacing.md, marginBottom: 12 },
+  close: { minHeight: 44, justifyContent: 'center' },
+  item: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 56, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card, padding: spacing.md, marginBottom: spacing.sm },
+  entry: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm, minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.button, padding: spacing.md, marginBottom: 12 },
 });

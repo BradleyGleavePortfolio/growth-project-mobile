@@ -22,9 +22,10 @@ jest.mock('../../../store/coachStore', () => ({
     getFilteredClients: () => [],
   }),
 }));
-jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
-}));
+jest.mock('../../../theme/ThemeProvider', () => {
+  const anyColor = new Proxy({}, { get: () => '#000000' });
+  return { useTheme: () => ({ colors: anyColor, semanticColors: anyColor }) };
+});
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../components/HapticPressable', () => {
   const { Pressable } = jest.requireActual('react-native');

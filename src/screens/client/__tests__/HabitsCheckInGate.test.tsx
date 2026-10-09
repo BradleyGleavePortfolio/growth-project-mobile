@@ -117,7 +117,7 @@ it.each([false, true])('explains inactive access before editing and uses the exi
   expect(screen.getByText(REQUIREMENT)).toBeTruthy();
   expect(screen.getByText(hidden ? 'Your coach manages your access' : 'Choose a Plan')).toBeTruthy();
   expectNoForm(screen);
-  expect(screen.queryByText('Saved.')).toBeNull();
+  expect(screen.queryByText('Saved for today. Change anything and update.')).toBeNull();
   expect(mockGetCheckIns).not.toHaveBeenCalled();
 
   let scroll = screen.getByText(REQUIREMENT).parent;
@@ -214,8 +214,8 @@ it('hydrates and updates an existing check-in without changing the accepted payl
 it('retains check-in read retry and visible save failure instead of silently dropping notes', async () => {
   mockGetCheckIns.mockRejectedValueOnce(new Error('Check-in read unavailable'));
   const screen = await openCheckIn();
-  await waitFor(() => expect(screen.getByText("Today's check-in could not be loaded.")).toBeTruthy());
-  await fireEvent.press(screen.getByText('Retry check-in'));
+  await waitFor(() => expect(screen.getByText("Today's check-in did not load. Check your connection, then try again.")).toBeTruthy());
+  await fireEvent.press(screen.getByText('Try again'));
   await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
   mockSaveCheckIn.mockRejectedValueOnce(new Error('Check-in service unavailable'));
   await fireEvent.changeText(screen.getByPlaceholderText("How's your day going? Anything noteworthy?"), 'Keep these notes.');

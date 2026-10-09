@@ -9,9 +9,14 @@
  * source highlighted. Tapping a chip writes the preferred-source preference
  * (optimistic, with an ACTIONABLE rollback toast — never a generic "Error").
  *
- * Composition:
- *   - headline value (per the metric's summary kind) + selected-day readout
+ * Composition (REDO-DEVICES-133, the progress-details reference):
+ *   - overline (bucket) + serif title, then the hero number with what it is
+ *     ("Total, last 30 days" / "Latest reading, 7 Oct") or the selected day
+ *   - a dated change line ("Up 12% from 8 Sep to 7 Oct")
  *   - RevolutGlowChart (tone follows the bucket)
+ *   - the Starter goal (DES-H constants, labelled "Starter goal") for the
+ *     metrics that have one, with the days it was reached
+ *   - "Recent days": dated values, newest first, as hairline rows
  *   - ProviderOverlapChips (only when ≥2 providers overlap)
  *
  * States (Bradley LAW §0.3 / §4.5):
@@ -21,15 +26,8 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useNavigation,
   useRoute,
@@ -37,13 +35,12 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import {
-  colors,
-  radius,
-  semantic,
-  spacing,
-  typography,
-} from '../../../theme/tokens';
+import { layout, radius, semantic, spacing, typography } from '../../../theme/tokens';
+import { useTheme } from '../../../theme/ThemeProvider';
+import HapticPressable from '../../../components/HapticPressable';
+import { Headline, Overline, QuietSection, Screen, TextLink, quietActions } from '../../../ui';
+import { QuietError, QuietLoading, loadFailureMessage } from '../../../ui/states/QuietStates';
+import { Skeleton } from '../../../ui/skeletons/Skeleton';
 import type { WearableProvider } from '../../../api/wearablesConnectionsApi';
 import type {
   SampleSeries,
@@ -52,8 +49,9 @@ import type {
 } from '../../../api/wearablesSamplesApi';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
 import { useReduceMotion } from './components/useReduceMotion';
-import { metricMeta, toneForBucket, toneTokens } from './wearablesTheme';
-import { seriesPoints, summariseValue, deltaPct } from './seriesSummary';
+import { metricMeta, toneForBucket, type MetricSummaryKind } from './wearablesTheme';
+import { seriesPoints, summariseValue, deltaPct, type SparkPoint } from './seriesSummary';
+import { STARTER_GOALS } from './starterGoals';
 import RevolutGlowChart, {
   type GlowChartPoint,
 } from './charts/RevolutGlowChart';
@@ -101,6 +99,80 @@ function providerOverlap(
   return { providers, autoProvider: providers[0] ?? null };
 }
 
+/**
+ * Day buckets start at UTC midnight, so their dates read in UTC (the same
+ * rule and format as the Health overview's ActivityBars): "7 Oct", or
+ * "Tue 7 Oct" with the weekday.
+ */
+export function dayLabel(ms: number, withWeekday = false): string {
+  return new Date(ms)
+    .toLocaleDateString('en-GB', {
+      ...(withWeekday ? { weekday: 'short' as const } : {}),
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    })
+    .replace(',', '');
+}
+
+/** Sentence case for a title ("Resting Heart Rate" -> "Resting heart rate"); acronyms such as VO₂ stay. */
+export function sentenceLabel(label: string): string {
+  return label
+    .split(' ')
+    .map((w, i) => (i === 0 || (w.length > 1 && w === w.toUpperCase()) ? w : w.toLowerCase()))
+    .join(' ');
+}
+
+/** What the hero number is, in words, so a 30-day total never reads as one day. */
+export function heroCaption(kind: MetricSummaryKind, points: readonly SparkPoint[]): string {
+  if (kind === 'sum') return `Total, last ${WINDOW_DAYS} days`;
+  if (kind === 'avg') return `Average, last ${WINDOW_DAYS} days`;
+  const last = points[points.length - 1];
+  return last ? `Latest reading, ${dayLabel(last.x)}` : 'Latest reading';
+}
+
+/**
+ * The change line names the two days it compares (deltaPct is first point vs
+ * last point), instead of the old "vs 30d ago".
+ */
+export function changeLine(points: readonly SparkPoint[]): string {
+  const delta = deltaPct(points);
+  if (delta === null) return `Last ${WINDOW_DAYS} days`;
+  const from = dayLabel(points[0].x);
+  const to = dayLabel(points[points.length - 1].x);
+  const pct = Math.abs(delta).toFixed(0);
+  if (pct === '0') return `Level from ${from} to ${to}`;
+  return `${delta > 0 ? 'Up' : 'Down'} ${pct}% from ${from} to ${to}`;
+}
+
+const GOAL_UNIT: Record<keyof typeof STARTER_GOALS, string> = {
+  ACTIVE_ENERGY_KCAL: 'kcal',
+  WORKOUT_DURATION_MIN: 'min',
+  STEPS: 'steps',
+};
+
+/**
+ * DES-H's Starter goal for the metrics that have one. Nobody sets a target
+ * on this route, so it is always labelled "Starter goal" (never "Goal").
+ */
+export function starterGoalFor(
+  metric: WearableMetricType,
+): { target: number; unit: string } | null {
+  if (!Object.prototype.hasOwnProperty.call(STARTER_GOALS, metric)) return null;
+  const key = metric as keyof typeof STARTER_GOALS;
+  return { target: STARTER_GOALS[key], unit: GOAL_UNIT[key] };
+}
+
+/** "Reached on 12 of 28 days with data" — only for per-day buckets, where one point is one day. */
+export function goalDetail(points: readonly SparkPoint[], target: number): string | null {
+  if (points.length === 0) return null;
+  const reached = points.filter((p) => p.y >= target).length;
+  const days = points.length === 1 ? 'day' : 'days';
+  return `Reached on ${reached} of ${points.length} ${days} with data`;
+}
+
+const RECENT_DAYS = 7;
+
 export default function MetricDetailScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, MetricDetailParams>, string>>();
@@ -108,8 +180,14 @@ export default function MetricDetailScreen() {
   const reduceMotion = useReduceMotion();
 
   const tone = toneForBucket(bucket);
-  const toneTk = toneTokens(tone);
   const meta = metricMeta(metric);
+  const title = sentenceLabel(meta.label);
+  // Mid-sentence form: "steps", "resting heart rate", "VO₂ max".
+  const inline = title
+    .split(' ')
+    .map((w, i) => (i === 0 && !(w.length > 1 && w === w.toUpperCase()) ? w.toLowerCase() : w))
+    .join(' ');
+  const { semanticColors: sc } = useTheme();
 
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -157,287 +235,228 @@ export default function MetricDetailScreen() {
   const activeProvider = series?.provider_used ?? autoProvider;
   const isAuto = activeProvider !== null && activeProvider === autoProvider;
 
-  const headline = useMemo(() => {
-    if (selectedIndex !== null && points[selectedIndex]) {
-      return meta.format(points[selectedIndex].y, series?.unit ?? '');
-    }
-    const summary = summariseValue(points, meta.summary);
-    return summary === null ? '—' : meta.format(summary, series?.unit ?? '');
-  }, [selectedIndex, points, meta, series?.unit]);
+  const unit = series?.unit ?? '';
+  const selected = selectedIndex !== null ? points[selectedIndex] ?? null : null;
 
-  const subline = useMemo(() => {
-    if (selectedIndex !== null && chartData[selectedIndex]) {
-      const d = new Date(chartData[selectedIndex].label);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    }
-    const delta = deltaPct(points);
-    if (delta === null) return `Last ${WINDOW_DAYS} days`;
-    const arrow = delta >= 0 ? '↑' : '↓';
-    return `${arrow} ${Math.abs(delta).toFixed(0)}% vs ${WINDOW_DAYS}d ago`;
-  }, [selectedIndex, chartData, points]);
+  const headline = useMemo(() => {
+    if (selected) return meta.format(selected.y, unit);
+    const summary = summariseValue(points, meta.summary);
+    return summary === null ? '—' : meta.format(summary, unit);
+  }, [selected, points, meta, unit]);
+
+  // The hero's caption: the selected day, or what the number is.
+  const caption = selected ? dayLabel(selected.x, true) : heroCaption(meta.summary, points);
+  const change = useMemo(() => changeLine(points), [points]);
+
+  const goal = starterGoalFor(metric);
+  const perDay = (series?.buckets?.length ?? 0) > 0;
+  const goalValue = goal != null ? `${goal.target.toLocaleString('en-US')} ${goal.unit}` : '';
+  const goalNote = goal != null && perDay ? goalDetail(points, goal.target) : null;
+  const recent = useMemo(() => points.slice(-RECENT_DAYS).reverse(), [points]);
 
   const onConnect = useCallback(() => {
     navigation.navigate('Connections');
   }, [navigation]);
 
   const hasData = points.length > 0;
+  const bucketLabel = bucket === 'HEALTH_FITNESS' ? 'Fitness' : 'Recovery';
 
-  // ── Loading skeleton (NOT a spinner) ──
+  const titleStack = (
+    <View style={styles.titleBlock}>
+      <Overline>{bucketLabel}</Overline>
+      <Headline level="h1">{title}</Headline>
+    </View>
+  );
+
+  // ── Loading skeleton of the real layout (NOT a spinner) ──
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <Header title={meta.label} icon={meta.icon} accent={toneTk.accent} />
-        <View style={styles.body}>
-          <View style={styles.skelHeadline} accessibilityElementsHidden />
-          <View style={styles.skelChart} accessibilityElementsHidden />
+      <Screen edges={['top']} testID="metric-detail-loading">
+        {titleStack}
+        <QuietLoading label={`Loading ${inline}`} rows={1} />
+        <View style={styles.skelChart} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+          <Skeleton width="100%" height={160} borderRadius={radius.card} />
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   // ── Error w/o cache → typed retry ──
   if (isError && !data) {
     return (
-      <SafeAreaView style={styles.safe} edges={['top']}>
-        <Header title={meta.label} icon={meta.icon} accent={toneTk.accent} />
-        <View style={styles.errorWrap}>
-          <Ionicons name="cloud-offline-outline" size={40} color={colors.stone} />
-          <Text style={styles.errorTitle} accessibilityRole="alert">
-            Couldn&apos;t load {meta.label.toLowerCase()}
-          </Text>
-          <Text style={styles.errorBody}>
-            Your data is safe — try again.
-          </Text>
-          <Pressable
-            onPress={() => void refetch()}
-            accessibilityRole="button"
-            accessibilityLabel="Try again"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
-          >
-            <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>Try again</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
+      <Screen edges={['top']} testID="metric-detail-error">
+        {titleStack}
+        <QuietError
+          layout="inline"
+          message={loadFailureMessage(query.error, title)}
+          onRetry={() => void refetch()}
+          retryHint={`Loads ${inline} again`}
+          testID="metric-detail-error-state"
+        />
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <Header title={meta.label} icon={meta.icon} accent={toneTk.accent} />
-      <ScrollView contentContainerStyle={styles.body}>
-        <Text style={styles.headline}>{headline}</Text>
-        <Text style={[styles.subline, { color: toneTk.accent }]}>{subline}</Text>
+    <Screen edges={['top']} testID="metric-detail">
+      {titleStack}
 
-        {hasData ? (
-          <View style={styles.chartWrap}>
-            <RevolutGlowChart
-              data={chartData}
-              tone={tone}
-              reduceMotion={reduceMotion}
-              onSelect={setSelectedIndex}
-              accessibilityLabel={`${meta.label} trend over the last ${WINDOW_DAYS} days`}
-            />
+      <QuietSection testID="metric-hero">
+        <Overline>{caption}</Overline>
+        <Text style={[styles.hero, { color: sc.textPrimary }]} accessibilityLabel={`${caption}: ${headline}`}>
+          {headline}
+        </Text>
+        {hasData && <Text style={[styles.change, { color: sc.textMuted }]}>{change}</Text>}
+      </QuietSection>
+
+      {hasData ? (
+        <View style={styles.chartWrap}>
+          <RevolutGlowChart
+            data={chartData}
+            tone={tone}
+            reduceMotion={reduceMotion}
+            onSelect={setSelectedIndex}
+            accessibilityLabel={`${title} trend over the last ${WINDOW_DAYS} days`}
+          />
+        </View>
+      ) : (
+        <QuietSection testID="metric-empty">
+          <Text style={[styles.emptyTitle, { color: sc.textPrimary }]}>No {inline} yet</Text>
+          <Text style={[styles.body, { color: sc.textMuted }]}>
+            Connect a source that records {inline} to see your
+            trend here.
+          </Text>
+          <TextLink label="Connect a source" onPress={onConnect} tone="accent" underline={false} align="start" />
+        </QuietSection>
+      )}
+
+      {goal != null && (
+        <QuietSection testID="metric-goal">
+          <Overline accessibilityRole="header">Goal</Overline>
+          <View style={styles.reading} accessible accessibilityLabel={`Starter goal, ${goalValue}${goalNote ? `, ${goalNote}` : ''}`}>
+            <View style={styles.goalMain}>
+              <Text style={[styles.readingValue, { color: sc.textPrimary }]}>Starter goal</Text>
+              {goalNote != null && (
+                <Text style={[styles.readingDate, { color: sc.textMuted }]}>{goalNote}</Text>
+              )}
+            </View>
+            <Text style={[styles.readingValue, { color: sc.textPrimary }]}>{goalValue}</Text>
           </View>
-        ) : (
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No {meta.label.toLowerCase()} yet</Text>
-            <Text style={styles.emptyBody}>
-              Connect a source that records {meta.label.toLowerCase()} to see your
-              trend here.
-            </Text>
-            <Pressable
-              onPress={onConnect}
-              accessibilityRole="button"
-              accessibilityLabel="Connect a source"
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
+        </QuietSection>
+      )}
+
+      {recent.length > 0 && (
+        <QuietSection testID="metric-recent">
+          <Overline accessibilityRole="header">Recent days</Overline>
+          {recent.map((p, i) => (
+            <View
+              key={`${p.x}-${i}`}
+              style={[styles.reading, i > 0 && { borderTopColor: sc.border, borderTopWidth: StyleSheet.hairlineWidth }]}
+              accessible
+              accessibilityLabel={`${dayLabel(p.x, true)}, ${meta.format(p.y, unit)}`}
             >
-              <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>
-                Connect a source
-              </Text>
-            </Pressable>
-          </View>
-        )}
+              <Text style={[styles.readingDate, { color: sc.textMuted }]}>{dayLabel(p.x, true)}</Text>
+              <Text style={[styles.readingValue, { color: sc.textPrimary }]}>{meta.format(p.y, unit)}</Text>
+            </View>
+          ))}
+        </QuietSection>
+      )}
 
-        <ProviderOverlapChips
-          metric={metric}
-          providers={providers}
-          activeProvider={activeProvider}
-          isAuto={isAuto}
-          tone={tone}
-          onError={setToast}
-        />
-      </ScrollView>
+      <ProviderOverlapChips
+        metric={metric}
+        providers={providers}
+        activeProvider={activeProvider}
+        isAuto={isAuto}
+        tone={tone}
+        onError={setToast}
+      />
 
       {toast && (
-        <View style={styles.toast} accessibilityRole="alert" accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle" size={16} color={semantic.warning.fg} />
-          <Text style={styles.toastText}>{toast}</Text>
-          <Pressable
+        <View
+          style={[styles.toast, { backgroundColor: sc.bgSurface, borderColor: sc.border }]}
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+        >
+          <Ionicons name="alert-circle-outline" size={18} color={semantic.warning.fg} />
+          <Text style={[styles.toastText, { color: sc.textPrimary }]}>{toast}</Text>
+          <HapticPressable
+            intent="light"
             onPress={() => setToast(null)}
             accessibilityRole="button"
             accessibilityLabel="Dismiss"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            style={({ pressed }) => [styles.toastDismissCta, pressed && styles.recoveryCtaPressed]}
+            style={({ pressed }) => [quietActions.action, styles.toastDismissCta, { opacity: pressed ? 0.6 : 1 }]}
           >
-            <Text style={[styles.toastDismiss, { color: toneTk.accent }]}>Dismiss</Text>
-          </Pressable>
+            <Text style={[quietActions.label, { color: sc.accentText }]}>Dismiss</Text>
+          </HapticPressable>
         </View>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
-function Header({
-  title,
-  icon,
-  accent,
-}: {
-  title: string;
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  accent: string;
-}) {
-  return (
-    <View style={styles.header}>
-      <View style={[styles.headerIcon, { borderColor: accent }]}>
-        <Ionicons name={icon} size={18} color={accent} />
-      </View>
-      <Text style={styles.headerTitle}>{title}</Text>
-    </View>
-  );
-}
-
+// Hero number: the Cormorant display role (lineHeight >= 1.25 x size from the
+// token), tabular figures like the progress-details reference.
 const styles = StyleSheet.create({
-  safe: {
-    flex: 1,
-    backgroundColor: colors.bone,
+  titleBlock: {
+    paddingBottom: layout.sectionGap,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.md,
+  hero: {
+    ...typography.display,
+    fontVariant: ['tabular-nums'],
   },
-  headerIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitle: {
-    ...typography.h3,
-    color: colors.ink,
-  },
-  body: {
-    padding: spacing.lg,
-    gap: spacing.sm,
-    paddingBottom: spacing['3xl'],
-  },
-  headline: {
-    ...typography.h1,
-    color: colors.ink,
-  },
-  subline: {
-    ...typography.bodyMd,
-    fontFamily: 'Inter_500Medium',
+  change: {
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
+    marginTop: spacing.xs,
   },
   chartWrap: {
-    marginTop: spacing.lg,
-  },
-  emptyWrap: {
-    marginTop: spacing.xl,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
-    gap: spacing.sm,
-  },
-  emptyTitle: {
-    ...typography.h4,
-    color: colors.ink,
-  },
-  emptyBody: {
-    ...typography.body,
-    color: colors.charcoal,
-  },
-  skelHeadline: {
-    height: 40,
-    width: '48%',
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
-    opacity: 0.6,
+    marginBottom: layout.sectionGap,
   },
   skelChart: {
     marginTop: spacing.lg,
-    height: 120,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
-    opacity: 0.55,
   },
-  errorWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.sm,
-  },
-  errorTitle: {
+  emptyTitle: {
     ...typography.h3,
-    color: colors.ink,
-    marginTop: spacing.sm,
-    textAlign: 'center',
   },
-  errorBody: {
+  body: {
     ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
+    marginTop: spacing.xs,
   },
-  // R1 visual P0 #2: recovery CTAs are real ≥44pt tap targets (Apple HIG),
-  // mirroring the praised HealthFitnessEmptyState CTA pattern.
-  recoveryCta: {
-    minHeight: 44,
+  reading: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.md,
-    marginTop: spacing.md,
+    justifyContent: 'space-between',
+    minHeight: layout.touchMin,
+    paddingVertical: 10,
   },
-  recoveryCtaPressed: {
-    opacity: 0.7,
+  goalMain: {
+    flex: 1,
+    gap: 2,
   },
-  recoveryCtaLabel: {
-    ...typography.bodyMd,
+  readingDate: {
+    ...typography.bodySmall,
+    fontVariant: ['tabular-nums'],
   },
+  readingValue: {
+    ...typography.body,
+    fontVariant: ['tabular-nums'],
+  },
+  // The toast sits on the page surface with a hairline, not a tinted box.
   toast: {
-    position: 'absolute',
-    left: spacing.lg,
-    right: spacing.lg,
-    bottom: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: semantic.warning.bg,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
+    marginTop: spacing.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.card,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
   toastText: {
     ...typography.bodySmall,
-    color: semantic.warning.fg,
     flex: 1,
   },
-  toastDismiss: {
-    ...typography.bodySmall,
-    fontFamily: 'Inter_600SemiBold',
-  },
-  // The toast "Dismiss" sits inline in a compact row, so it uses a tighter
-  // ≥44pt target (height + vertical centring) rather than a top margin.
   toastDismissCta: {
-    minHeight: 44,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
+    marginRight: 0,
   },
 });

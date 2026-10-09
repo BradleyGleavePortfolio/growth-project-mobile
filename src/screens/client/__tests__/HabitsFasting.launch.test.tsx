@@ -72,7 +72,8 @@ jest.mock('../../../components/FadeInView', () => {
   return ({ children }: { children: import('react').ReactNode }) => React.createElement(View, null, children);
 });
 
-import HabitsScreen from '../HabitsScreen';
+import HabitsScreen, { habitsSummary } from '../HabitsScreen';
+import { radius } from '../../../theme/tokens';
 import { makeStyles } from '../habits/styles';
 import FastingScreen from '../FastingScreen';
 import type { ApiHabitLog } from '../../../hooks/useApi';
@@ -204,17 +205,17 @@ describe('Habits — production DTO, check-off and server history', () => {
   it('check-off shows the saved quantity, and undo persists zero and clears today', async () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
-    expect(screen.getByText('0 of 1 today')).toBeTruthy();
+    expect(screen.getByText('One habit waiting today.')).toBeTruthy();
     await fireEvent.press(screen.getByText('Drink water'));
     await waitFor(() => expect(screen.getByText('8/8 glasses')).toBeTruthy());
-    expect(screen.getByText('1 of 1 today')).toBeTruthy();
+    expect(screen.getByText('Done for today.')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: true, value: 8,
     });
     expect(screen.getByTestId('habit-week-water-2').props.accessibilityLabel).toContain('completed');
     await fireEvent.press(screen.getByText('Drink water'));
     await waitFor(() => expect(screen.getByText('0/8 glasses')).toBeTruthy());
-    expect(screen.getByText('0 of 1 today')).toBeTruthy();
+    expect(screen.getByText('One habit waiting today.')).toBeTruthy();
     expect(mockLogHabit).toHaveBeenLastCalledWith('water', {
       date: '2026-10-07', completed: false, value: 0,
     });
@@ -232,16 +233,16 @@ describe('Habits — production DTO, check-off and server history', () => {
   it('shows a load failure and retry, not an empty 0% progress claim', async () => {
     mockGetHabits.mockRejectedValueOnce(new Error('Network unavailable'));
     const screen = await renderHabits();
-    await waitFor(() => expect(screen.getByText('Habits could not be loaded.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('Habits did not load. Check your connection, then try again.')).toBeTruthy());
     expect(screen.queryByText('0%')).toBeNull();
-    await fireEvent.press(screen.getByText('Retry habits'));
+    await fireEvent.press(screen.getByText('Try again'));
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
   });
 
   it('shows a useful empty state for a new client', async () => {
     mockGetHabits.mockResolvedValue({ data: [] });
     const screen = await renderHabits();
-    await waitFor(() => expect(screen.getByText('No habits yet. Add a daily habit to start tracking.')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('No habits yet.')).toBeTruthy());
   });
 
   it('keeps add/dismiss, long-press deletion, check-in editing/saving and tab return reachable', async () => {
@@ -263,7 +264,7 @@ describe('Habits — production DTO, check-off and server history', () => {
     await act(async () => { deletion?.onPress?.(); });
     await waitFor(() => expect(mockDeleteHabit).toHaveBeenCalledWith('water'));
     await fireEvent.press(screen.getByText('Daily check-in'));
-    expect(screen.queryByText('Saved.')).toBeNull();
+    expect(screen.queryByText('Saved for today. Change anything and update.')).toBeNull();
     await fireEvent.press(screen.getByLabelText('Great'));
     await fireEvent.press(screen.getByLabelText('High'));
     await fireEvent.press(screen.getByLabelText('Increase sleep hours'));
@@ -282,7 +283,7 @@ describe('Habits — production DTO, check-off and server history', () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
     await fireEvent.press(screen.getByText('Daily check-in'));
-    expect(screen.getByText('Saved.')).toBeTruthy();
+    expect(screen.getByText('Saved for today. Change anything and update.')).toBeTruthy();
     expect(screen.getByLabelText('Bad').props.accessibilityState.checked).toBe(true);
     await fireEvent.press(screen.getByText('Update check-in'));
     await waitFor(() => expect(mockSaveCheckIn).toHaveBeenCalledWith(expect.objectContaining({ mood: 2, energy: 1, sleep_hours: 6, notes: 'Tired' })));
@@ -293,9 +294,9 @@ describe('Habits — production DTO, check-off and server history', () => {
     const screen = await renderHabits();
     await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
     await fireEvent.press(screen.getByText('Daily check-in'));
-    expect(screen.getByText("Today's check-in could not be loaded.")).toBeTruthy();
+    expect(screen.getByText("Today's check-in did not load. Check your connection, then try again.")).toBeTruthy();
     expect(screen.queryByText('Save check-in')).toBeNull();
-    await fireEvent.press(screen.getByText('Retry check-in'));
+    await fireEvent.press(screen.getByText('Try again'));
     await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
   });
 
@@ -303,10 +304,10 @@ describe('Habits — production DTO, check-off and server history', () => {
     mockGetHabits.mockReturnValue(new Promise(() => {}));
     mockGetCheckIns.mockReturnValue(new Promise(() => {}));
     const screen = await renderHabits();
-    expect(screen.getByText('Loading habits')).toBeTruthy();
-    expect(screen.queryByText('0 of 1 today')).toBeNull();
+    expect(screen.getByLabelText('Loading habits')).toBeTruthy();
+    expect(screen.queryByText('One habit waiting today.')).toBeNull();
     await fireEvent.press(screen.getByText('Daily check-in'));
-    expect(screen.getByText('Loading check-in')).toBeTruthy();
+    expect(screen.getByLabelText('Loading check-in')).toBeTruthy();
     expect(screen.queryByText('Save check-in')).toBeNull();
   });
 
@@ -486,5 +487,32 @@ describe('Fasting — production protocol and completed status', () => {
     expect(screen.queryByTestId('fasting-completed-count')).toBeNull();
     await act(async () => { await screen.getByTestId('fasting-scroll').props.refreshControl.props.onRefresh(); });
     expect(mockGetHistory).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('REDO-HABITS-CAL-COMM-133 Habits page', () => {
+  const flat = (n: { props: { style?: unknown } }) => (StyleSheet.flatten(n.props.style as never) ?? {}) as Record<string, unknown>;
+  const forest = (screen: Awaited<ReturnType<typeof renderHabits>>) =>
+    (screen.queryAllByRole('button') as { props: { style?: unknown } }[]).filter((b) => flat(b).backgroundColor === mockSemanticColors.accent);
+
+  it('says the day in one sentence', () => {
+    expect([habitsSummary(0, 3), habitsSummary(2, 3), habitsSummary(3, 3), habitsSummary(1, 1), habitsSummary(4, 12)]).toEqual([
+      'Three habits waiting today.', 'Two of three done today.', 'All three done today.', 'Done for today.', 'Four of 12 done today.',
+    ]);
+  });
+
+  it('no fixed top gap under the native header; serif headline; one rounded forest button, only on check-in', async () => {
+    const screen = await renderHabits();
+    await waitFor(() => expect(screen.getByText('Drink water')).toBeTruthy());
+    expect(flat(screen.getByTestId('habits-screen')).paddingTop).toBe(0);
+    const title = flat(screen.getByText('Habits & check-in'));
+    expect(title.fontFamily).toMatch(/^CormorantGaramond/);
+    expect(Number(title.lineHeight)).toBeGreaterThanOrEqual(1.2 * Number(title.fontSize));
+    expect(screen.getByTestId('habits-tab-habits').props.accessibilityState).toMatchObject({ selected: true });
+    expect(forest(screen)).toHaveLength(0);
+    await fireEvent.press(screen.getByTestId('habits-tab-checkin'));
+    await waitFor(() => expect(screen.getByText('Save check-in')).toBeTruthy());
+    expect(forest(screen)).toHaveLength(1);
+    expect(flat(forest(screen)[0]).borderRadius).toBe(radius.button);
   });
 });

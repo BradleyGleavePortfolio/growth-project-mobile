@@ -59,6 +59,7 @@ jest.mock('../../utils/supabaseAuth', () => ({
 
 jest.mock('../../theme/ThemeProvider', () => ({
   useTheme: () => ({
+    semanticColors: jest.requireActual('../../theme/tokens').lightTokens,
     colors: {
       background: '#000',
       surface: '#111',
@@ -72,6 +73,8 @@ jest.mock('../../theme/ThemeProvider', () => ({
       error: '#f33',
       success: '#3f3',
     },
+    // REDO-COACH-133: Headline and Overline read the semantic tokens.
+    semanticColors: jest.requireActual('../../theme/tokens').lightTokens,
     appearanceOverride: 'system',
     setAppearanceOverride: jest.fn(),
     tokens: {},

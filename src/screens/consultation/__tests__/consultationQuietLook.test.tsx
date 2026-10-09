@@ -28,6 +28,7 @@ it.each([lightTokens, darkTokens])('uses active semantic tokens and unfilled hai
   const row = StyleSheet.flatten(r.getByTestId('row').props.style);
   const chip = StyleSheet.flatten(r.getByTestId('chip').props.style);
   expect(row).toMatchObject({ borderBottomWidth: StyleSheet.hairlineWidth, backgroundColor: tokens.bgPrimary });
+  // The merged Chip style (components.tsx `chip`) reads radius.chip: chips are pills (owner 17:07).
   expect(chip).toMatchObject({ borderWidth: StyleSheet.hairlineWidth, backgroundColor: tokens.bgPrimary, borderRadius: radius.chip });
   expect(StyleSheet.flatten(r.getByTestId('cta').props.style).backgroundColor).toBe(tokens.accent);
   expect(STEP_MS).toBe(280);

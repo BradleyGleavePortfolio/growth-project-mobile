@@ -1,13 +1,14 @@
 // Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
 // All existing routes preserved.
 import React, { useEffect, useState } from 'react';
-import { AppState, TouchableOpacity, View, StyleSheet } from 'react-native';
+import { AppState, Text, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
 import { logger } from '../utils/logger';
+import { HapticService } from '../ui/haptics/haptics.service';
 import ClientsListScreen from '../screens/coach/ClientsListScreen';
 import CoachHomeScreen from '../screens/coach/CoachHomeScreen';
 import MessagesScreen from '../screens/coach/MessagesScreen';
@@ -693,19 +694,38 @@ export default function CoachNavigator() {
       initialRouteName={initialTab}
       screenOptions={{
         headerShown: false,
+        // REDO-COACH-133 (QA-COACH-128): the coach bar wears the client
+        // chrome — bone page colour, one hairline, outline glyphs, 11 pt Inter
+        // labels (medium when focused) and a selection haptic. Tabs, order and
+        // routes are unchanged.
         tabBarActiveTintColor: sc.accentText,
         tabBarInactiveTintColor: sc.textMuted,
+        tabBarLabel: ({ focused, color, children }) => (
+          <Text
+            style={{
+              fontFamily: focused ? 'Inter_500Medium' : 'Inter_400Regular',
+              fontSize: 11,
+              lineHeight: 14,
+              fontWeight: focused ? '500' : '400',
+              color,
+            }}
+            numberOfLines={1}
+          >
+            {children}
+          </Text>
+        ),
         tabBarStyle: {
-          backgroundColor: sc.bgSurface,
+          backgroundColor: sc.bgPrimary,
           borderTopColor: sc.border,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           paddingBottom: 4 + insets.bottom,
           paddingTop: 4,
           height: 60 + insets.bottom,
         },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
+      }}
+      screenListeners={{
+        tabPress: () => {
+          HapticService.selection();
         },
       }}
     >
@@ -726,7 +746,7 @@ export default function CoachNavigator() {
         options={{
           tabBarLabel: 'Clients',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people" size={size} color={color} />
+            <Ionicons name="people-outline" size={size} color={color} />
           ),
         }}
       />
@@ -742,7 +762,7 @@ export default function CoachNavigator() {
           tabBarAccessibilityLabel: featureFlags.mwbPrograms ? 'Programs' : 'Templates',
           tabBarIcon: ({ color, size }) => (
             <Ionicons
-              name={featureFlags.mwbPrograms ? 'barbell' : 'document-text'}
+              name={featureFlags.mwbPrograms ? 'barbell-outline' : 'document-text-outline'}
               size={size}
               color={color}
             />
@@ -754,8 +774,15 @@ export default function CoachNavigator() {
         component={MessagesScreen}
         options={{
           tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
+          // Quiet forest count instead of the default red dot (no status hue).
+          tabBarBadgeStyle: {
+            backgroundColor: sc.accent,
+            color: sc.textOnAccent,
+            fontFamily: 'Inter_500Medium',
+            fontSize: 11,
+          },
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble" size={size} color={color} />
+            <Ionicons name="chatbubble-outline" size={size} color={color} />
           ),
         }}
       />
@@ -769,7 +796,7 @@ export default function CoachNavigator() {
           options={{
             tabBarLabel: 'Team',
             tabBarIcon: ({ color, size }) => (
-              <Ionicons name="people-circle" size={size} color={color} />
+              <Ionicons name="briefcase-outline" size={size} color={color} />
             ),
           }}
         />
@@ -796,7 +823,7 @@ export default function CoachNavigator() {
         options={{
           tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="settings" size={size} color={color} />
+            <Ionicons name="settings-outline" size={size} color={color} />
           ),
         }}
       />

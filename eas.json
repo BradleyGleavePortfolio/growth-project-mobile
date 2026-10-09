@@ -28,7 +28,9 @@
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
         "EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES": "true",
         "EXPO_PUBLIC_FF_DELIVERABLES": "true",
-        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true"
+        "EXPO_PUBLIC_FF_ANDROID_CREDIT_PACK_LINK": "true",
+        "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
       }
     },
     "production": {
@@ -48,7 +50,9 @@
         "EXPO_PUBLIC_FF_COMMUNITY_TAB": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_HALL": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
-        "EXPO_PUBLIC_FF_DELIVERABLES": "true"
+        "EXPO_PUBLIC_FF_DELIVERABLES": "true",
+        "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true",
+        "EXPO_PUBLIC_FF_CLIENT_TUTORIAL": "true"
       }
     },
     "clinic": {

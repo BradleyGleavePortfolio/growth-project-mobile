@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Switch,
   Alert,
   Modal,
@@ -32,7 +31,8 @@ import ClientTutorialSetting from './settings/ClientTutorialSetting';
 import { featureFlags } from '../../config/featureFlags';
 import { coachSharingCopy } from '../../components/coachSharing/coachSharingCopy';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { typography, withAlpha } from '../../theme/tokens';
+import { layout, radius, typography, withAlpha } from '../../theme/tokens';
+import { Headline, Overline, PrimaryButton, QuietRow, Screen, ScreenTopBar, TextLink } from '../../ui';
 import SettingsSection from './settings/SettingsSection';
 import { preferenceSaveFailureOf } from '../settings/notificationPreferenceErrors';
 
@@ -290,40 +290,28 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
     handleProfileSettingUpdate('waterGoalOz', next);
   };
 
-  return (
-    <View style={styles.container}>
-      <View style={styles.topBar}>
-        <HapticPressable intent="light" onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Back">
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </HapticPressable>
-        <Text style={styles.topTitle} accessibilityRole="header">Settings</Text>
-        <View style={styles.backBtn} />
-      </View>
+  const initial = currentUser?.name?.trim().charAt(0).toUpperCase() || '';
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Account */}
+  return (
+    <Screen edges={['top']} testID="settings-screen" header={<ScreenTopBar onBack={() => navigation.goBack()} />}>
+        <Headline level="h1">Settings</Headline>
+        <Overline style={styles.overline}>Account, privacy and this phone</Overline>
+
         <SettingsSection title="Account" id="account">
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Name</Text>
-            <Text style={styles.rowValue}>
-              {currentUser?.name || 'No name set'}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Email</Text>
-            <Text style={styles.rowValueMuted}>{currentUser?.email}</Text>
-          </View>
-          <HapticPressable intent="light" style={styles.row} onPress={() => setShowPasswordModal(true)}>
-            <Text style={styles.rowLabel}>Change password</Text>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          {initial ? (
+            <View style={styles.avatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
+          ) : null}
+          <QuietRow label="Name" value={currentUser?.name || 'No name set'} />
+          <QuietRow label="Email" detail={currentUser?.email} />
+          {currentUser && !currentUser.coach_id ? (
+            <QuietRow label="Add a coach code" detail="Connect this account to a coach." testID="settings-add-coach-code"
+              onPress={() => navigation.navigate('AddCoachCode')} />
+          ) : null}
+          <QuietRow label="Change password" onPress={() => setShowPasswordModal(true)} />
           {/* Appearance remains on this screen, with light rendering for launch. */}
-          <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
+          <View style={[styles.row, styles.rowStacked]}>
             <Text style={styles.rowLabel}>Appearance</Text>
             <View style={styles.appearanceRow}>
               {(['light', 'system'] as const).map((option: AppearanceOverride) => (
@@ -345,7 +333,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
                 </HapticPressable>
               ))}
             </View>
-            <Text style={styles.rowValue}>Light appearance is used for both options.</Text>
+            <Text style={styles.rowHint}>Light appearance is used for both options.</Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Haptics enabled</Text>
@@ -359,10 +347,7 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             />
           </View>
           <BiometricUnlockSetting />
-          <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
-            <Text style={styles.rowLabel}>Redo profile setup</Text>
-            <Ionicons name="refresh-outline" size={18} color={colors.warning} />
-          </HapticPressable>
+          <QuietRow label="Redo profile setup" detail="Answer the setup questions again." onPress={handleResetOnboarding} />
           {/* Settings > Account > Delete account (D2 contract wording). */}
           <HapticPressable
             intent="warning"
@@ -374,12 +359,10 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             accessibilityHint="Opens the account deletion screen with a 14-day grace period"
           >
             <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
-          <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={20} color={colors.error} />
-            <Text style={styles.signOutText}>Sign out</Text>
-          </HapticPressable>
+          <TextLink label="Sign out" tone="ink" underline={false} align="start" style={styles.signOut}
+            onPress={() => { void handleSignOut(); }} />
         </SettingsSection>
 
         <SettingsSection title="Training and food" id="training-food">
@@ -409,18 +392,11 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </View>
         </SettingsSection>
 
-        {/* Notifications */}
         <SettingsSection title="Notifications" id="notifications">
           {renderSwitch('Check-in reminders', 'A reminder after two days without a check-in.',
             serverSwitchOn('dailyCheckin'), (v) => { void handleServerToggle('dailyCheckin', v); })}
           {checkInLabel ? (
-            <View style={styles.row}>
-              <View style={styles.switchText}>
-                <Text style={styles.rowLabel}>Check-in time</Text>
-                <Text style={styles.rowHint}>The time you plan to check in each day.</Text>
-              </View>
-              <Text style={styles.rowValue}>{checkInLabel}</Text>
-            </View>
+            <QuietRow label="Check-in time" detail="The time you plan to check in each day." value={checkInLabel} />
           ) : null}
           {renderSwitch('Fasting alerts', 'A notification on this phone when your fasting window ends.',
             settings.fastingAlerts, handleFastingAlertsToggle)}
@@ -429,135 +405,45 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           {notificationError ? (
             <Text style={styles.saveError} accessibilityLiveRegion="polite">{notificationError}</Text>
           ) : null}
-          {/* Audit P1: surface the canonical NotificationPreferences screen
-              from Settings; full channel + quiet-hour control lives here. */}
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('NotificationSettings')}
-            accessibilityRole="button"
-            accessibilityLabel="Notification preferences"
-            accessibilityHint="Opens detailed channel and quiet-hour controls"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="notifications-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Notification preferences</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          {/* Audit P1: the canonical NotificationPreferences screen (every channel). */}
+          <QuietRow label="Notification preferences" onPress={() => navigation.navigate('NotificationSettings')}
+            accessibilityHint="Opens detailed channel and quiet-hour controls" />
         </SettingsSection>
 
         <SettingsSection title="Privacy and data" id="privacy">
-          {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('TrustCenter')}
-            accessibilityRole="button"
-            accessibilityLabel="Trust and Privacy"
-            accessibilityHint="Opens the Trust Center with security details and privacy controls"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Trust & Privacy</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          <QuietRow label="Trust & Privacy" detail="How your data is protected." onPress={() => navigation.navigate('TrustCenter')}
+            accessibilityHint="Opens the Trust Center with security details and privacy controls" />
           {/* B-SHARE-127: which logs the coach can see (four toggles). */}
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('CoachSharing')}
-            accessibilityRole="button"
-            accessibilityLabel={coachSharingCopy.settingsRow}
-            accessibilityHint={coachSharingCopy.settingsRowHint}
-            testID="settings-coach-sharing"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="people-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>{coachSharingCopy.settingsRow}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
-          {/* iMessage-grade DM — Apple 1.2 compliance. Users must be able to
-              view and undo their blocks from Settings. */}
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('BlockedUsers')}
-            accessibilityRole="button"
-            accessibilityLabel="Blocked users"
-            accessibilityHint="View and manage the users you've blocked"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="ban-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Blocked users</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          <QuietRow label={coachSharingCopy.settingsRow} onPress={() => navigation.navigate('CoachSharing')}
+            accessibilityHint={coachSharingCopy.settingsRowHint} testID="settings-coach-sharing" />
+          {/* Apple 1.2: blocks can be seen and undone from Settings. */}
+          <QuietRow label="Blocked users" onPress={() => navigation.navigate('BlockedUsers')}
+            accessibilityHint="View and manage the users you have blocked" />
           {/* Phase 10 — GDPR Article 20 data portability */}
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('DataExport')}
-            accessibilityRole="button"
-            accessibilityLabel="Request my data export"
-            accessibilityHint="Download a copy of your personal data"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="download-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>My data</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          <QuietRow label="My data" detail="Request a copy of your data." onPress={() => navigation.navigate('DataExport')}
+            accessibilityHint="Download a copy of your personal data" />
         </SettingsSection>
 
         {featureFlags.consultationOnboarding || featureFlags.romanChat ? (
           <SettingsSection title="Roman" id="roman">
-            <HapticPressable
-              intent="light"
-              style={styles.row}
-              onPress={() => navigation.navigate('RomanAiConsent')}
-              accessibilityRole="button"
-              accessibilityLabel="Roman and AI"
+            <QuietRow label="Roman and AI" onPress={() => navigation.navigate('RomanAiConsent')}
               accessibilityHint="Allow or withdraw Roman and your coach's AI tools using your information"
-              testID="settings-roman-ai"
-            >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
-                <Text style={styles.rowLabel}>Roman and AI</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </HapticPressable>
+              testID="settings-roman-ai" />
           </SettingsSection>
         ) : null}
 
         <SettingsSection title="Support" id="support">
-          <HapticPressable
-            intent="light"
-            style={styles.row}
-            onPress={() => navigation.navigate('SupportInbox')}
-            accessibilityRole="button"
-            accessibilityLabel="Support inbox"
-            accessibilityHint="Opens the live support chat"
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
-              <Text style={styles.rowLabel}>Support</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
+          <QuietRow label="Support" detail="Chat with the support team." onPress={() => navigation.navigate('SupportInbox')}
+            accessibilityHint="Opens the live support chat" />
           <ClientTutorialSetting />
         </SettingsSection>
 
-        {/* About */}
         <SettingsSection title="About" id="about">
           <View style={styles.about}>
             <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
             <Text style={styles.aboutSub}>A daily practice.</Text>
           </View>
         </SettingsSection>
-      </ScrollView>
 
       {/* Password Modal */}
       <Modal visible={showPasswordModal} transparent animationType="slide">
@@ -603,89 +489,56 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               At least 8 characters, with an uppercase letter, a number and a special character.
             </Text>
             {passwordError ? (
-              <Text
-                style={{ color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
-                accessibilityLiveRegion="assertive"
-              >
+              <Text style={styles.passwordError} accessibilityLiveRegion="assertive">
                 {passwordError}
               </Text>
             ) : null}
-            <HapticPressable
-              intent="success"
-              style={[styles.saveBtn, passwordBusy && { opacity: 0.6 }]}
-              onPress={handleChangePassword}
-              disabled={passwordBusy}
-              accessibilityRole="button"
-              accessibilityLabel="Update password"
-            >
-              <Text style={styles.saveBtnText}>{passwordBusy ? 'Updating…' : 'Update password'}</Text>
-            </HapticPressable>
+            <PrimaryButton label="Update password" onPress={() => { void handleChangePassword(); }}
+              loading={passwordBusy} style={styles.saveBtn} />
           </View>
         </View>
       </Modal>
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
-  },
-  backBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topTitle: {
-    ...typography.h1,
-    color: colors.textPrimary,
-  },
-  content: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+  overline: {
+    marginTop: 4,
   },
   avatar: {
-    alignSelf: 'center',
-    width: 60,
-    height: 60,
-    borderRadius: 4, // radius.lg
+    width: 56,
+    height: 56,
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginVertical: 16,
+    marginTop: 20,
+    marginBottom: 4,
   },
   avatarText: {
-    ...typography.h1,
+    ...typography.h2,
     color: colors.textPrimary,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    minHeight: 52,
-    paddingVertical: 14,
+    minHeight: layout.rowMinHeight,
+    paddingVertical: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  rowLabel: {
-    ...typography.bodySmall,
-    fontSize: 15,
-    color: colors.textPrimary,
+  rowStacked: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  rowValue: {
-    ...typography.bodySmall,
-    fontSize: 15,
-    fontWeight: '600',
+  rowLabel: {
+    ...typography.body,
+    lineHeight: 22,
     color: colors.textPrimary,
   },
   switchText: {
@@ -695,75 +548,36 @@ const makeStyles = (colors: ThemeColors) =>
   },
   rowHint: {
     ...typography.bodySmall,
-    fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   saveError: {
     ...typography.bodySmall,
-    fontSize: 13,
     color: colors.textPrimary,
     paddingVertical: 12,
-  },
-  rowValueMuted: {
-    ...typography.bodySmall,
-    fontSize: 15,
-    color: colors.textSecondary,
-  },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 0, // radius.sm
-    overflow: 'hidden',
-  },
-  segBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  segBtnActive: {
-    backgroundColor: colors.primary,
-  },
-  segText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
-  },
-  segTextActive: {
-    color: colors.textOnPrimary,
   },
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   stepBtn: {
-    width: 44,
-    height: 44,
+    width: layout.touchMin,
+    height: layout.touchMin,
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepValue: {
-    ...typography.bodyMd,
+    ...typography.h3,
     fontVariant: ['tabular-nums'],
-    fontSize: 16,
-    fontWeight: '500',
     color: colors.textPrimary,
-    minWidth: 30,
+    minWidth: 40,
     textAlign: 'center',
   },
-  signOutBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  signOutText: {
-    ...typography.bodyMd,
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.error,
+  signOut: {
+    marginTop: 8,
   },
   about: {
     paddingVertical: 16,
@@ -771,14 +585,11 @@ const makeStyles = (colors: ThemeColors) =>
   },
   aboutText: {
     ...typography.bodySmall,
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textSecondary,
+    color: colors.textPrimary,
   },
   aboutSub: {
     ...typography.bodySmall,
-    fontSize: 13,
-    color: colors.textSecondary,
+    color: colors.textMuted,
   },
   modalOverlay: {
     flex: 1,
@@ -786,10 +597,10 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: colors.surfaceElevated,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radius.sheet,
+    borderTopRightRadius: radius.sheet,
+    padding: layout.gutter,
     paddingBottom: 40,
   },
   modalHeader: {
@@ -804,52 +615,36 @@ const makeStyles = (colors: ThemeColors) =>
   },
   input: {
     ...typography.body,
-    backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
-    padding: 14,
-    fontSize: 16,
+    backgroundColor: colors.background,
+    borderRadius: radius.input,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     color: colors.textPrimary,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
+  },
+  passwordError: {
+    ...typography.bodySmall,
+    color: colors.error,
+    marginTop: 10,
   },
   saveBtn: {
     marginTop: 20,
-    backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    ...typography.bodyMd,
-    fontSize: 16,
-    fontWeight: '500',
-    color: colors.textOnPrimary,
-  },
-  exportText: {
-    fontSize: 15,
-    color: colors.textPrimary,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  exportHint: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    lineHeight: 20,
   },
   appearanceRow: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 20,
   },
   radioOption: {
-    minHeight: 44,
+    minHeight: layout.touchMin,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   radioCircle: {
     width: 18,
     height: 18,
-    borderRadius: 9,
+    borderRadius: radius.chip,
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
@@ -861,18 +656,17 @@ const makeStyles = (colors: ThemeColors) =>
   radioInner: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
   },
   radioLabel: {
     ...typography.bodySmall,
-    fontSize: 14,
+    fontSize: 15,
     color: colors.textSecondary,
-    fontWeight: '400' as const,
   },
   radioLabelActive: {
     color: colors.textPrimary,
+    fontFamily: 'Inter_500Medium',
     fontWeight: '500' as const,
   },
-
   });

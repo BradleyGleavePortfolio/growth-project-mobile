@@ -5,6 +5,7 @@
 // NEVER hardcode hex values in component files — always import from here.
 
 import CanonicalColors from '../constants/colors';
+import { radius as tokenRadius } from './tokens';
 
 // Re-export all canonical tokens (new code should import from here or tokens.ts)
 export {
@@ -138,13 +139,14 @@ export const Spacing = {
   xxl: 48,
 };
 
-// ─── Legacy Radius export (Wave 2: luxury scale) ──────────────────────────────
+// ─── Legacy Radius export (owner 17:07: rounded, not rectangles) ─────────────
+// Same values as tokens.radius so every Radius.* user rounds at once.
 export const Radius = {
-  sm:   0,    // buttons, primary CTAs (was 8)
-  md:   2,    // inputs (was 12)
-  lg:   4,    // cards (was 16)
-  xl:   4,    // remapped to lg (was 24)
-  full: 999,  // small chips only
+  sm:   tokenRadius.button,  // 12 (was 0)
+  md:   tokenRadius.input,   // 12 (was 2)
+  lg:   tokenRadius.card,    // 16 (was 4)
+  xl:   tokenRadius.card,    // 16 (was 4)
+  full: tokenRadius.chip,    // small chips only
 };
 
 // ─── Legacy Shadow export (Wave 2: luxury opacity caps) ───────────────────────

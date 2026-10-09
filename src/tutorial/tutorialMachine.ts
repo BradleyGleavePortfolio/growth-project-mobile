@@ -11,8 +11,8 @@
  *     the matching SIGNAL (or DEFER where `allowDefer`). Anything else is a
  *     no-op, so stray taps and unrelated signals never move the tour.
  *   - Entering a step whose data is missing marks it `pending` (no plan or no
- *     macros yet) or `unavailable` (community not in this build, or no coach
- *     linked for a step about the coach) and moves on; it never blocks the
+ *     macros yet) or `unavailable` (no coach linked for a step about the
+ *     coach) and moves on; it never blocks the
  *     client (owner decision T-3).
  *   - A route gate that is already satisfied by where the client is standing
  *     advances immediately (no pointless "tap Home" while on Home).
@@ -53,7 +53,7 @@ export type TutorialAction =
 
 export function initialTutorialState(): TutorialState {
   return {
-    version: 1,
+    version: 2,
     status: 'not_started',
     stepIndex: 0,
     gateIndex: 0,
@@ -82,10 +82,6 @@ function missingOutcome(
       return env.hasProgram ? null : 'pending';
     case 'macros':
       return env.hasMacros ? null : 'pending';
-    case 'community':
-      return env.communityAvailable ? null : 'unavailable';
-    case 'calendar':
-      return env.calendarAvailable ? null : 'unavailable';
     case 'coach':
       return env.coachLinked ? null : 'unavailable';
     default:
@@ -241,8 +237,22 @@ export function progressOf(state: TutorialState): { position: number; total: num
 /** Parse a persisted blob defensively; anything unexpected starts fresh. */
 export function parseTutorialState(raw: unknown): TutorialState | null {
   if (!raw || typeof raw !== 'object') return null;
-  const r = raw as Partial<TutorialState>;
-  if (r.version !== 1) return null;
+  const r = raw as Partial<Omit<TutorialState, 'version'>> & { version?: unknown };
+  // An older step list (v1: nine steps, eleven with Calendar): keep what the
+  // client chose. Finished stays finished; a skipped tour stays skipped (never
+  // restarts by itself, B-310-4) and resumes at the welcome; a running one
+  // restarts there.
+  if (r.version === 1 && (r.status === 'completed' || r.status === 'paused' || r.status === 'active')) {
+    return {
+      ...initialTutorialState(),
+      status: r.status,
+      stepIndex: r.status === 'completed' ? TUTORIAL_STEPS.length - 1 : 0,
+      startedAt: typeof r.startedAt === 'string' ? r.startedAt : null,
+      completedAt: r.status === 'completed' && typeof r.completedAt === 'string' ? r.completedAt : null,
+      updatedAt: typeof r.updatedAt === 'string' ? r.updatedAt : null,
+    };
+  }
+  if (r.version !== 2) return null;
   if (!['not_started', 'active', 'paused', 'completed'].includes(String(r.status))) return null;
   const stepIndex = Number(r.stepIndex);
   const gateIndex = Number(r.gateIndex);
@@ -251,7 +261,7 @@ export function parseTutorialState(raw: unknown): TutorialState | null {
   }
   const gates = TUTORIAL_STEPS[stepIndex].gates.length;
   return {
-    version: 1,
+    version: 2,
     status: r.status as TutorialState['status'],
     stepIndex,
     gateIndex: Number.isInteger(gateIndex) && gateIndex >= 0 && gateIndex < gates ? gateIndex : 0,

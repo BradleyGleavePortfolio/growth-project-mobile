@@ -66,9 +66,11 @@ Serif roles keep lineHeight at least `SERIF_MIN_LINE_RATIO` (1.25) x fontSize: C
 | `radius.sheet` | 24 | bottom-sheet and modal top corners |
 | `radius.chip` / `radius.pill` | 999 | chips |
 | `radius.control` | 6 | boxes under 28 pt (checkbox) |
-| `radius.sm/md/lg/xl/2xl` | 0/2/4/4/4 | legacy, not for new code; DS-THEME-133 moves them to the rounded scale |
+| `radius.md/lg/xl/2xl`, `Radius.*` | 12/16/16/24, `Radius.sm` 12 | legacy names on the rounded scale (DS-THEME-133); new code names the semantic key. `radius.sm` stays 0 until agent 132 OKs the card-payment sheet test |
 | `layout` | gutter 24, statusBarGap 12, footer gaps, buttonHeight 54, touchMin 44, rowMinHeight 56, section 18 + 24 | `ui/layout/Screen`, buttons, rows, sections |
 | `wheel` | 44 pt rows x 5, hairline band, serif 28 / 21 / 18 | consultation wheels (`ui/wheel/WheelBand`) |
+
+Hairlines: `useTheme().colors.border` and `colors.divider` now equal `semanticColors.border` (#DCD5CC light), so there is one hairline colour; camel stays for the founding-tier cue and `AccentRule` only.
 
 Spacing: `tokens.spacing` (lg 16, xl 24) is canonical; the legacy `Spacing` in `index.ts` (md 16, lg 24, xl 32) shares key names with different values and is deprecated for new code. The primitives use `layout`.
 
