@@ -79,11 +79,7 @@ import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { spacing, typography } from '../../theme/tokens';
 import RomanConversationsButton from '../../components/roman/RomanConversationsButton';
-import JoinCoachState, {
-  ROMAN_LOCK_BODY,
-  ROMAN_LOCK_TITLE,
-  useClientNeedsCoach,
-} from '../../components/coachless/JoinCoachState';
+import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { useTheme } from '../../theme/useTheme';
 
 export interface RomanChatScreenProps {

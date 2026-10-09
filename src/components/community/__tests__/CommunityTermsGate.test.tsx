@@ -169,7 +169,7 @@ describe('every Community entry sits behind the gate', () => {
   it('client Community stack', () => {
     const src = read('navigation/CommunityNavigator.tsx');
     expect(src).toMatch(
-      /export default function CommunityNavigator\(\): React\.ReactElement \{\s*return \(\s*<CommunityTermsGate>\s*<CommunityNavigatorStack \/>\s*<\/CommunityTermsGate>/,
+      /export default function CommunityNavigator\(\): React\.ReactElement \{\s*return \(\s*<CoachOnlyGate [^>]*>\s*<CommunityTermsGate>\s*<CommunityNavigatorStack \/>\s*<\/CommunityTermsGate>\s*<\/CoachOnlyGate>/,
     );
   });
 

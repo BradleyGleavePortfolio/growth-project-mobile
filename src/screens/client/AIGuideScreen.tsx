@@ -26,11 +26,7 @@ import { shortReference, supportReferenceOf, diagnosticReference } from '../../u
 import { captureError } from '../../services/sentry';
 import { typography } from '../../theme/tokens';
 import { romanRequiresCoachOf } from '../../lib/ai/romanRequiresCoach';
-import JoinCoachState, {
-  ROMAN_LOCK_BODY,
-  ROMAN_LOCK_TITLE,
-  useClientNeedsCoach,
-} from '../../components/coachless/JoinCoachState';
+import JoinCoachState, { ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE, useClientNeedsCoach } from '../../components/coachless/JoinCoachState';
 import { NavigationContext } from '@react-navigation/native';
 
 /** The HTTP status of a failed request, or null (no other error detail is reported). */

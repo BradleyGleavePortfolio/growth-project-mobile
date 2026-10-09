@@ -179,7 +179,7 @@ it('keeps Back, message-coach, coach-code and list retry paths reachable', async
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
   mockNoCoach = true;
   await r.rerender(<ClientPackagesScreen />);
-  await fireEvent.press(r.getByRole('button', { name: /coach code/i }));
+  await fireEvent.press(r.getByRole('button', { name: /join a coach/i }));
   expect(mockNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages', params: { openCoachCode: true } });
   mockNoCoach = false;
   jest.mocked(clientPaymentsApi.getPackages).mockResolvedValue({
