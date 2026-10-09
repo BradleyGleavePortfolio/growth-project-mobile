@@ -12,6 +12,8 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 
 ## Key files
 
+Client screens build from the shared primitives in `src/ui` (DS-PRIMITIVES-133): `Screen` / `ScreenTopBar` (safe-area insets plus 12 pt under the status bar, pinned keyboard-aware footer), `PrimaryButton` (the one filled forest button, 54 pt, `radius.button`), `TextLink` / `QuietTextButton`, `Headline` / `Lede` / `AccentRule` and `Overline`. Do not write a new button, page wrapper or headline here.
+
 ### Atoms / general
 
 | File | What it does |
