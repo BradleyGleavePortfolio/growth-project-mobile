@@ -10,7 +10,7 @@ import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Spacing } from '../../theme';
-import { lightTokens, typography } from '../../theme/tokens';
+import { lightTokens, radius, typography } from '../../theme/tokens';
 import type { IntendedRole } from '../../lib/intendedRole';
 
 export const ROLE_CHOICE_OPTIONS: ReadonlyArray<{ role: IntendedRole; title: string; body: string }> = [
@@ -91,10 +91,10 @@ const styles = StyleSheet.create({
   radio: {
     width: RADIO,
     height: RADIO,
-    borderRadius: RADIO / 2,
+    borderRadius: radius.chip,
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioDot: { width: RADIO / 2, height: RADIO / 2, borderRadius: RADIO / 4 },
+  radioDot: { width: RADIO / 2, height: RADIO / 2, borderRadius: radius.chip },
 });
