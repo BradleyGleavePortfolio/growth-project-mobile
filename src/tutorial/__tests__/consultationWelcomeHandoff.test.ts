@@ -40,7 +40,7 @@ describe('consultation (#310) -> tour', () => {
     const ctx = buildCopyContext(s, 'full');
     expect(ctx.coachName).toBe('Coach Kim');
     const plan = TUTORIAL_STEPS.find((st) => st.id === 'plan')!;
-    expect(plan.gates[0].line(ctx)).toBe('This is Train. Coach Kim has assigned you Gentle start. Tap Train to see it.');
+    expect(plan.gates[0].line(ctx)).toBe('This is Train. Coach Kim assigned you Gentle start. Tap Train to see it.');
     expect(TUTORIAL_STEPS.find((st) => st.id === 'macros')!.gates[1].line(ctx)).toContain('2,100 calories');
   });
 });

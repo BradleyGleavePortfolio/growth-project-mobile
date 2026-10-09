@@ -35,28 +35,31 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 - The payload is parsed defensively (`onboardingPayload.ts`). If the payload is missing, `TutorialHost` reads `GET /me/onboarding`. If there are still no macros or no program, that step is recorded as `pending` and the tour moves on (owner decision T-3).
 - The hand-off is recoverable (Sol B-310-4). With `consultationOnboarding` on, when the tour on this phone is `not_started`, `TutorialHost` reads `GET /me/onboarding` once per mount; if the server says `completed: true` (backend #607 sets it from the intake, so clients who never did the consultation are not touched) it starts the tour with `result`. This covers the app closing between the complete 200 and "Show me around", a lost 200, and a sign-in on a fresh install (owner T-2: a reinstall runs the tour again). A `paused` or `completed` tour never starts or resumes by itself. Offline, nothing starts; the next launch tries again.
 
-## Steps (owner order)
+## Steps (prototype 46-60, decision 133-5: seven)
 
-| # | Step | Gates (each must be met by a real action) | Detected by |
+| # | Beat | Gates (each met by a real action) | Detected by |
 |---|---|---|---|
-| 1 | welcome | Begin | button |
-| 2 | plan | focus Train, then open "Why this plan" on the pinned plan card | route `WorkoutMain`; `plan_card_opened` |
-| 3 | macros | focus Home, then open "How to use these numbers" on the pinned macro card | route `HomeMain`; `macro_card_opened` |
-| 4 | first_meal (teach-back) | focus Log, then save a food entry | `meal_logged`: `POST /log/food` 2xx, or an entry the offline queue accepts |
-| 5 | first_message (teach-back, coach linked) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
-| 6 | complete | Done | button |
+| 1 | welcome (46-47) | Begin, on a full scrim with no cut-out | button |
+| 2 | plan (48-49) | tap Train, then open the plan's next day from the pinned plan card ("Next: Day 1, ...", or the coach workouts list) | route `WorkoutMain`; route `WorkoutAssignmentDetail` or `ClientWorkoutViewer` |
+| 3 | first_exercise (50-51) | the first exercise row is spotlit; Continue (nothing is started) | button |
+| 4 | first_meal (52-54, teach-back) | tap Food, then save a food entry (Add food is spotlit) | `meal_logged`: `POST /log/food` 2xx, or an entry the offline queue accepts |
+| 5 | macros (55-56) | tap Home, then open "How to use these numbers" on the targets card | route `HomeMain`; `macro_card_opened` |
+| 6 | first_message (57-59, coach linked) | open the coach thread from Home, then send; **Later** on either gate (Tutorial 4: freely skippable) | route `Messages`; `message_sent`: `POST /messages` 2xx. Never RomanChat; nothing is sent for the client. |
+| 6 | roman (no coach, `romanChat` on) | the You tab is spotlit; Continue | button |
+| 7 | complete (60) | Got it | button |
 
-TOUR-133 (decision 133-5): Community, Calendar, connected devices and the welcome call are no longer steps. The completion card names them in a quieter second paragraph (`sub`): the tabs this build has, "connected devices live under You", and, with `clientCalendar` on and a coach linked, "Book your welcome call with {coach} from Calendar when it suits you." The `wearable_connected` and `welcome_call_booked` signals are still emitted; the tour no longer waits on them. Saved v1 states (the nine- or eleven-step list) map to the new list: completed stays completed, paused stays paused at the welcome, active restarts at the welcome.
+- Missing data (66, owner T-3): without a program, beats 2 and 3 are `pending`; Roman says so once ("{coach} is still setting up your first plan. It will appear on Train once it is ready. For now, the tour carries on with Food.") with Continue, and the tour moves to Food. Without numbers, beat 5 is `pending` the same way.
+- Only a beat really done earns its done line and success haptic, never Later.
+- Stored state is version 3. Older versions (v1: nine or eleven steps, v2: six) keep what the client chose: finished stays finished, skipped stays skipped (never restarts by itself) and resumes at the welcome.
 
 ## Truthful tour (FW-ONB-128 B2)
 
-- "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`, and it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). A step can name several requirements; the first one that is not met decides the outcome.
-- Without a coach, the step marked "coach linked" above is recorded as `unavailable` and skipped, with no done line.
-- Welcome: with a coach, "I work with {coach} to help you get the most from your plan" ("your training" when no plan is set), then "you will try two things yourself". Without a coach Roman names none: "This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself."
+- "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`; it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). The first unmet requirement of a beat decides its outcome.
+- Without a coach Roman names no coach anywhere, and beat six is the Roman beat (decision 28: nothing is locked).
 - Complete: built from this tour's outcomes. "Your plan is set" only when the plan step ended `done`, "your numbers are set" only when the macros step did, and "{coach} has your message" only when the first message was sent. With none of them: "That is everything." The second paragraph ends "One thing at a time. You do not need to be perfect, just consistent."
 - Settings > Tutorial reads "Take the tour" until a tour has been completed on this device, then "Take the tour again".
 
-The two teach-back steps have no button and no "Later". The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).
+Food has no button and no "Later"; the message beat has Later (Tutorial 4). The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).
 
 ## Files
 
