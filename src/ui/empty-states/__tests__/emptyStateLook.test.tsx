@@ -163,6 +163,20 @@ describe('EmptyStateNoClients', () => {
     expect(flat(getByTestId('copy-code-btn')).backgroundColor).toBeUndefined();
   });
 
+  it('Share my link always sends a join link, from the row or the universal invite link (U-622-B2-1)', async () => {
+    const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: Share.sharedAction });
+    mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
+    const first = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
+    await fireEvent.press(await first.findByTestId('share-code-btn'));
+    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: https://app.trygrowthproject.com/join/GP-TEST' });
+    await first.unmount();
+    mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST', deep_link_url: 'tgp://join/GP-TEST' }] });
+    const again = await render(<EmptyStateNoClients onInvite={jest.fn()} />);
+    await fireEvent.press(await again.findByTestId('share-code-btn'));
+    expect(share).toHaveBeenLastCalledWith({ message: 'Join me on Growth Project. Use code GP-TEST or tap: tgp://join/GP-TEST' });
+    share.mockRestore();
+  });
+
   it('says plainly when the share sheet does not open', async () => {
     mockListInviteCodes.mockResolvedValue({ data: [{ id: 'i1', code: 'GP-TEST' }] });
     const share = jest.spyOn(Share, 'share').mockRejectedValueOnce(new Error('no sheet'));

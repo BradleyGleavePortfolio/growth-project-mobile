@@ -28,6 +28,7 @@ import { prefsStorage } from '../../storage/mmkv';
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import RomanAvatar from '../../components/roman/RomanAvatar';
+import { buildInviteUniversalLink } from '../../utils/deepLink';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -119,9 +120,9 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
   const [shareProblem, setShareProblem] = useState(false);
   const handleShare = useCallback(() => {
     if (!code) return;
-    const message = deepLink
-      ? `Join me on Growth Project. Use code ${code} or tap: ${deepLink}`
-      : `Join me on Growth Project. Use code ${code}`;
+    // "Share my link" always carries a join link: the list row's deep link, or the app's universal invite link.
+    const link = deepLink ?? buildInviteUniversalLink(code);
+    const message = `Join me on Growth Project. Use code ${code} or tap: ${link}`;
     setShareProblem(false);
     Share.share({ message }).catch(() => setShareProblem(true));
   }, [code, deepLink]);
