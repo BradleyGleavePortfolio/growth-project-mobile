@@ -75,7 +75,10 @@ jest.mock('../../../services/queryClient', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({
+    colors: new Proxy({}, { get: () => '#000000' }),
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+  }),
 }));
 
 const mockEmit = jest.fn();
@@ -118,7 +121,9 @@ async function renderScreen(params?: { invite_code?: string }, role: 'client' | 
   // C13: without an invite code, and only when the live policy advertises
   // role_choice, the first step is the role choice.
   if (!params?.invite_code && role && utils.queryByTestId('role-choice')) {
+    // Prototype ROLE (01): a row tap selects, Continue commits.
     await fireEvent.press(utils.getByTestId(`role-choice-${role}`));
+    await fireEvent.press(utils.getByTestId('role-choice-continue'));
   }
   return { nav, ...utils };
 }
@@ -330,8 +335,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
 
     it('client title is neutral and the code is optional', async () => {
       const utils = await renderScreen();
-      expect(utils.getByText('Create your account')).toBeTruthy();
-      expect(utils.getByText('Have a code from your coach? Add it below, or add it later.')).toBeTruthy();
+      expect(utils.getByText('Create your account.')).toBeTruthy();
       expect(utils.getByText('INVITE CODE (OPTIONAL)')).toBeTruthy();
       expect(utils.queryByText('Join your coach')).toBeNull();
     });
@@ -339,7 +343,7 @@ describe('CreateAccountScreen, #306 fix round 5', () => {
     it('the coach path never asks for a code', async () => {
       mockGetSignupPolicy.mockResolvedValue({ data: COACH_POLICY });
       const utils = await renderScreen(undefined, 'coach');
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       expect(utils.queryByTestId('invite-code-input')).toBeNull();
     });
 
