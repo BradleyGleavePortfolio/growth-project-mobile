@@ -1,52 +1,126 @@
 /**
- * RomanMessageBubble — one editorial chat turn (legacy component name).
- *
- * FACE+VOICE (operator rule, P0 if violated): every ASSISTANT turn renders
- * Roman's face (reused RomanAvatar, neutral crop) beside its speaker label, so
- * Roman's voice is never disembodied. User turns render right-aligned with no
- * avatar. An interrupted assistant turn (backend persisted a partial on client
- * disconnect — toMessageView.interrupted, controller L210) shows a calm, typed
- * note rather than silently presenting a truncated reply as complete.
- *
- * The bubble text is rendered as plain Text (never dangerouslySetInnerHTML /
- * HTML) — FIFTY_FAILURES #4 (XSS via unescaped output) does not apply.
+ * RomanMessageBubble — one turn in the Roman room (B30, prototype 70-73; owner
+ * 14:57 "a premium Anthropic mixed with iMessage"). Roman: serif reading text
+ * on bone, no bubble, under a small portrait + ROMAN overline; blank lines,
+ * "-", "*", "•" and "1." lines become paragraphs and hanging bullets, and
+ * markdown emphasis markers are dropped. Client: a quiet right-aligned
+ * bubble. `reveal` fades a fresh reply in paragraph by paragraph (Reduce
+ * Motion: at once). FACE+VOICE: every assistant turn shows Roman's face.
+ * Plain Text only (never HTML), so FIFTY_FAILURES #4 does not apply.
  */
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
 import type { RomanMessage } from '../../api/romanApi';
-import { colors, lightTokens, spacing, typography } from '../../theme/tokens';
+import { radius, spacing, typography } from '../../theme/tokens';
+import { useTheme } from '../../theme/useTheme';
 
 export interface RomanMessageBubbleProps {
   message: RomanMessage;
+  /** Fade this reply in paragraph by paragraph (fresh replies only). */
+  reveal?: boolean;
+  /** Reduce Motion: when true a reveal shows the text at once. */
+  reduceMotion?: boolean;
   testID?: string;
 }
 
+export type RomanBlock =
+  | { kind: 'paragraph'; text: string }
+  | { kind: 'bullet'; marker: string; text: string };
+
+const BULLET = /^\s*(?:([-*\u2022])|(\d{1,2})[.)])\s+(.*)$/;
+
+/** Split plain reply text into paragraphs and bullet items. */
+export function romanBlocks(content: string): RomanBlock[] {
+  const clean = content.replace(/\*\*|__/g, '').replace(/\r\n/g, '\n');
+  const blocks: RomanBlock[] = [];
+  for (const chunk of clean.split(/\n\s*\n/)) {
+    let prose: string[] = [];
+    const flush = () => {
+      const text = prose.join('\n').trim();
+      if (text !== '') blocks.push({ kind: 'paragraph', text });
+      prose = [];
+    };
+    for (const line of chunk.split('\n')) {
+      const m = BULLET.exec(line);
+      if (m) {
+        flush();
+        blocks.push({ kind: 'bullet', marker: m[2] ? `${m[2]}.` : '\u2022', text: m[3].trim() });
+      } else {
+        prose.push(line);
+      }
+    }
+    flush();
+  }
+  return blocks.length > 0 ? blocks : [{ kind: 'paragraph', text: content }];
+}
+
+/** Paragraph fade: 240 ms each, 120 ms apart (doctrine: 300 ms or less). */
+const FADE_MS = 240;
+const STAGGER_MS = 120;
+
 function RomanMessageBubbleComponent({
   message,
+  reveal = false,
+  reduceMotion = false,
   testID,
 }: RomanMessageBubbleProps): React.ReactElement {
+  const { semanticColors: c } = useTheme();
   const isAssistant = message.role === 'assistant';
+  const blocks = useMemo(() => (isAssistant ? romanBlocks(message.content) : []), [isAssistant, message.content]);
+  const animate = isAssistant && reveal && !reduceMotion;
+  const opacities = useRef<Animated.Value[]>([]);
+  if (opacities.current.length !== blocks.length) {
+    opacities.current = blocks.map(() => new Animated.Value(animate ? 0 : 1));
+  }
+
+  useEffect(() => {
+    if (!animate) {
+      opacities.current.forEach((o) => o.setValue(1));
+      return undefined;
+    }
+    const run = Animated.stagger(
+      STAGGER_MS,
+      opacities.current.map((o) => Animated.timing(o, { toValue: 1, duration: FADE_MS, useNativeDriver: true })),
+    );
+    run.start();
+    return () => run.stop();
+  }, [animate]);
 
   if (isAssistant) {
+    const reading = [styles.reading, { color: c.textPrimary }];
     return (
       <View style={styles.assistantRow} testID={testID} role="listitem">
         <View style={styles.speakerRow}>
-          <RomanAvatar crop="neutral" size={24} testID="roman-bubble-avatar" />
-          <Text style={styles.speakerLabel}>ROMAN</Text>
+          <RomanAvatar crop="neutral" size={22} testID="roman-bubble-avatar" />
+          <Text style={[styles.speakerLabel, { color: c.textMuted }]}>ROMAN</Text>
         </View>
-        <View style={styles.assistantBody}>
-          <Text
-            style={styles.assistantText}
-            accessibilityLabel={`Roman said: ${message.content}`}
-          >
-            {message.content}
-          </Text>
+        <View
+          style={styles.assistantBody}
+          accessible
+          accessibilityRole="text"
+          accessibilityLabel={`Roman said: ${message.content}`}
+          testID={testID ? `${testID}-reply` : undefined}
+        >
+          {blocks.map((b, i) => (
+            <Animated.View
+              // eslint-disable-next-line react/no-array-index-key
+              key={i}
+              style={[b.kind === 'bullet' ? styles.bulletRow : null, { opacity: opacities.current[i] }]}
+            >
+              {b.kind === 'bullet' ? (
+                <>
+                  <Text style={[reading, styles.bulletMarker]}>{b.marker}</Text>
+                  <Text style={[reading, styles.bulletText]}>{b.text}</Text>
+                </>
+              ) : (
+                <Text style={reading}>{b.text}</Text>
+              )}
+            </Animated.View>
+          ))}
           {message.interrupted ? (
-            <Text style={styles.interruptedNote} accessibilityRole="text">
-              {ROMAN_INTERRUPTED_NOTE}
-            </Text>
+            <Text style={[styles.interruptedNote, { color: c.textMuted }]}>{ROMAN_INTERRUPTED_NOTE}</Text>
           ) : null}
         </View>
       </View>
@@ -55,9 +129,11 @@ function RomanMessageBubbleComponent({
 
   return (
     <View style={styles.userRow} testID={testID} role="listitem">
-      <View style={styles.userBody}>
-        <Text style={[styles.speakerLabel, styles.userLabel]}>YOU</Text>
-        <Text style={styles.userText} accessibilityLabel={`You said: ${message.content}`}>
+      <View
+        style={[styles.userBubble, { backgroundColor: c.bgSurface, borderColor: c.border }]}
+        testID={testID ? `${testID}-bubble` : undefined}
+      >
+        <Text style={[styles.userText, { color: c.textPrimary }]} accessibilityLabel={`You said: ${message.content}`}>
           {message.content}
         </Text>
       </View>
@@ -68,55 +144,29 @@ function RomanMessageBubbleComponent({
 const RomanMessageBubble = React.memo(RomanMessageBubbleComponent);
 export default RomanMessageBubble;
 
+/** Serif reading text: Cormorant 19 on 28 (lineHeight 1.47x, no descender clip). */
+export const ROMAN_READING = {
+  fontFamily: typography.h2.fontFamily,
+  fontSize: 19,
+  lineHeight: 28,
+  letterSpacing: 0.2,
+} as const;
+
 const styles = StyleSheet.create({
-  assistantRow: {
-    gap: spacing.md,
-    paddingVertical: spacing.xl,
-    marginHorizontal: spacing.xl,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: lightTokens.border,
+  assistantRow: { gap: spacing.sm, paddingTop: spacing.lg, paddingBottom: spacing.sm, marginHorizontal: spacing.xl },
+  speakerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  speakerLabel: { ...typography.eyebrow },
+  assistantBody: { gap: spacing.md },
+  reading: { ...ROMAN_READING },
+  bulletRow: { flexDirection: 'row', paddingLeft: spacing.xs },
+  bulletMarker: { width: 22 },
+  bulletText: { flex: 1 },
+  interruptedNote: { ...typography.bodySmall, marginTop: spacing.xs },
+  userRow: { alignItems: 'flex-end', paddingTop: spacing.lg, paddingBottom: spacing.xs, marginHorizontal: spacing.xl },
+  // Owner 17:07: rounded, never a rectangle (radius token, Q10b).
+  userBubble: {
+    maxWidth: '82%', borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.card,
+    paddingHorizontal: spacing.lg, paddingVertical: 10,
   },
-  speakerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  speakerLabel: {
-    ...typography.caption,
-    fontSize: 13,
-    letterSpacing: 1.6,
-    color: lightTokens.textMuted,
-  },
-  assistantBody: {
-    gap: spacing.xs,
-  },
-  assistantText: {
-    ...typography.h3,
-    lineHeight: 28,
-    color: colors.ink,
-  },
-  interruptedNote: {
-    ...typography.bodySmall,
-    color: colors.charcoal,
-    marginTop: spacing.xs,
-  },
-  userRow: {
-    alignItems: 'flex-end',
-    paddingVertical: spacing.xl,
-    marginHorizontal: spacing.xl,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: lightTokens.border,
-  },
-  userBody: {
-    maxWidth: '82%',
-    gap: spacing.sm,
-  },
-  userLabel: {
-    textAlign: 'right',
-  },
-  userText: {
-    ...typography.body,
-    color: colors.ink,
-    textAlign: 'right',
-  },
+  userText: { ...typography.body, lineHeight: 24 },
 });

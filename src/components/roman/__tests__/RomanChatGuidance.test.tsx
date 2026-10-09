@@ -3,7 +3,7 @@ import { AccessibilityInfo, StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
 import type { UseRomanChatResult } from '../../../screens/roman/useRomanChat';
-import { colors, radius, typography } from '../../../theme/tokens';
+import { lightTokens, radius, typography } from '../../../theme/tokens';
 import { ROMAN_INTERRUPTED_NOTE, romanPoolEmpty, romanRateLimited } from '../romanVoice';
 
 const mockUseRomanChat = jest.fn();
@@ -33,9 +33,10 @@ jest.mock('../../../components/ai/useOpenSupport', () => ({
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn(async () => true) }));
 jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => {
-    const { colors: c } = jest.requireActual('../../../theme/tokens');
+    const { colors: c, lightTokens: lt } = jest.requireActual('../../../theme/tokens');
     return { colors: { surface: c.bone, border: c.stone, textPrimary: c.ink,
-      textSecondary: c.charcoal, primary: c.forest, textOnPrimary: c.bone } };
+      textSecondary: c.charcoal, primary: c.forest, textOnPrimary: c.bone, error: c.error },
+    semanticColors: lt };
   },
 }));
 // Keep the real refusal notice; replace only the consent-network boundary.
@@ -66,29 +67,30 @@ beforeEach(() => {
 });
 afterEach(() => jest.restoreAllMocks());
 
-it('renders editorial Roman and right-aligned YOU turns without filled bubbles', async () => {
+it('renders serif Roman replies without a bubble and the client in a quiet right-aligned bubble (B30)', async () => {
   state.messages = [
     { id: 'a', role: 'assistant', content: 'Recovery guidance.', interrupted: true, createdAt: '2026-10-07' },
     { id: 'u', role: 'user', content: 'Explain that.', interrupted: false, createdAt: '2026-10-07' },
   ];
   const r = await render(<RomanChatScreen />);
   expect(r.getByText('ROMAN')).toBeTruthy();
-  expect(r.getByText('YOU')).toBeTruthy();
+  expect(r.queryByText('YOU')).toBeNull();
   expect(r.getByTestId('roman-bubble-avatar')).toBeTruthy();
   expect(r.getByText(ROMAN_INTERRUPTED_NOTE)).toBeTruthy();
-  const assistant = StyleSheet.flatten(r.getByLabelText('Roman said: Recovery guidance.').props.style);
-  expect(assistant.fontFamily).toBe(typography.h3.fontFamily);
-  expect(assistant.fontSize).toBe(20);
+  expect(StyleSheet.flatten(r.getByLabelText('Roman said: Recovery guidance.').props.style)?.backgroundColor).toBeUndefined();
+  const prose = StyleSheet.flatten(r.getByText('Recovery guidance.').props.style);
+  expect(prose.fontFamily).toBe(typography.h2.fontFamily);
+  expect(prose.lineHeight).toBeGreaterThanOrEqual(prose.fontSize * 1.2);
   expect(StyleSheet.flatten(r.getByText('Roman').props.style).fontFamily).toBe(typography.h1.fontFamily);
-  for (const label of ['Roman said: Recovery guidance.', 'You said: Explain that.']) {
-    expect(StyleSheet.flatten(r.getByLabelText(label).parent?.props.style)?.backgroundColor).toBeUndefined();
-  }
-  expect(StyleSheet.flatten(r.getByLabelText('You said: Explain that.').props.style).textAlign).toBe('right');
+  expect(StyleSheet.flatten(r.getByTestId('roman-message-u-bubble').props.style)).toMatchObject({
+    backgroundColor: lightTokens.bgSurface, borderRadius: radius.card,
+  });
   for (const id of ['a', 'u']) {
     const row = r.getByTestId(`roman-message-${id}`);
     expect(row.props.role).toBe('listitem');
-    expect(StyleSheet.flatten(row.props.style).borderBottomWidth).toBe(StyleSheet.hairlineWidth);
+    expect(StyleSheet.flatten(row.props.style).borderBottomWidth).toBeUndefined();
   }
+  expect(StyleSheet.flatten(r.getByTestId('roman-message-u').props.style).alignItems).toBe('flex-end');
 });
 
 it.each(['client', 'coach'] as const)('%s keeps history, editing, send, preserved draft, retry and older messages', async (surface) => {
@@ -114,14 +116,15 @@ it.each(['client', 'coach'] as const)('%s keeps history, editing, send, preserve
   expect(r.getByTestId('roman-composer-input').props.value).toBe('');
 });
 
-it('keeps a hairline Inter input, square forest send and sending/length guards', async () => {
+it('keeps a rounded Inter field, the forest send square and sending/length guards', async () => {
   const r = await render(<RomanChatScreen />);
   const input = r.getByTestId('roman-composer-input');
   expect(StyleSheet.flatten(input.props.style).backgroundColor).toBeUndefined();
   expect(StyleSheet.flatten(input.props.style).fontFamily).toBe(typography.body.fontFamily);
+  expect(StyleSheet.flatten(r.getByTestId('roman-composer-field').props.style).borderRadius).toBe(radius.input);
   await fireEvent.changeText(input, 'A question');
   const buttonStyle = StyleSheet.flatten(r.getByTestId('roman-composer-send').props.style);
-  expect(buttonStyle).toMatchObject({ backgroundColor: colors.forest, borderRadius: radius.sm, width: 48, height: 48 });
+  expect(buttonStyle).toMatchObject({ backgroundColor: lightTokens.accent, borderRadius: radius.button, width: 44, height: 44 });
   await fireEvent.changeText(input, 'x'.repeat(8001));
   expect(r.getByTestId('roman-composer-send').props.accessibilityState.disabled).toBe(true);
   state.sending = true;

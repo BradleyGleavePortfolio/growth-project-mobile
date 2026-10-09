@@ -1,0 +1,1651 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`QA evidence: the room at 360x800 and 390x844 360x800 launch state 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 12,
+      },
+      undefined,
+    ]
+  }
+  testID="roman-chat-screen"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        [
+          {
+            "borderBottomWidth": 0.5,
+          },
+          {
+            "borderBottomColor": "#DCD5CC",
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "justifyContent": "space-between",
+            "minHeight": 44,
+            "paddingHorizontal": 16,
+          }
+        }
+        testID="roman-chat"
+      >
+        <View
+          accessibilityLabel="Back"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          hitSlop={8}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            [
+              {
+                "height": 44,
+                "justifyContent": "center",
+                "paddingLeft": 6,
+                "width": 44,
+              },
+              false,
+            ]
+          }
+          testID="roman-chat-back"
+        />
+        <View
+          style={
+            {
+              "alignItems": "flex-end",
+              "flexShrink": 1,
+              "paddingRight": 8,
+            }
+          }
+        >
+          <View
+            collapsable={false}
+            style={
+              {
+                "opacity": 1,
+                "transform": [
+                  {
+                    "scale": 1,
+                  },
+                ],
+              }
+            }
+          >
+            <View
+              accessibilityHint="See, open and delete your past conversations with Roman"
+              accessibilityLabel="Your conversations with Roman"
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "height": 44,
+                  "justifyContent": "center",
+                  "marginLeft": "auto",
+                  "width": 44,
+                }
+              }
+              testID="roman-conversations-button"
+            />
+          </View>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "gap": 4,
+            "paddingBottom": 16,
+            "paddingHorizontal": 24,
+            "paddingTop": 8,
+          }
+        }
+      >
+        <Text
+          accessibilityRole="header"
+          maxFontSizeMultiplier={1.4}
+          style={
+            [
+              {
+                "fontFamily": "CormorantGaramond_400Regular",
+                "fontSize": 32,
+                "fontWeight": "400",
+                "letterSpacing": 0.6,
+                "lineHeight": 40,
+              },
+              {
+                "color": "#1A1A18",
+                "textAlign": "left",
+              },
+              undefined,
+            ]
+          }
+        >
+          Roman
+        </Text>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 6,
+                "textTransform": "uppercase",
+              },
+              {
+                "color": "#6B675F",
+              },
+              undefined,
+            ]
+          }
+          testID="roman-chat-overline"
+        >
+          AI assistant · Working with your coach
+        </Text>
+      </View>
+    </View>
+    <View
+      style={
+        [
+          {
+            "flex": 1,
+          },
+          [
+            {
+              "flexGrow": 1,
+              "paddingHorizontal": 24,
+            },
+            false,
+            {
+              "paddingBottom": 24,
+            },
+            {
+              "paddingBottom": 0,
+              "paddingHorizontal": 0,
+            },
+          ],
+        ]
+      }
+      testID="roman-chat-screen-scroll"
+    >
+      <View
+        style={
+          {
+            "flex": 1,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "flex": 1,
+            }
+          }
+        >
+          <View
+            style={
+              {
+                "alignItems": "flex-start",
+                "flexDirection": "row",
+                "gap": 12,
+                "paddingHorizontal": 24,
+                "paddingTop": 24,
+              }
+            }
+            testID="roman-empty-greeting"
+          >
+            <Image
+              accessibilityLabel="Roman"
+              accessibilityRole="image"
+              onError={[Function]}
+              source={
+                {
+                  "testUri": "../../../../../wt/ROMAN-ROOM-133-scratch/assets/roman/neutral.png",
+                }
+              }
+              style={
+                [
+                  {
+                    "backgroundColor": "transparent",
+                  },
+                  {
+                    "borderRadius": 20,
+                    "height": 40,
+                    "width": 40,
+                  },
+                  {
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                  },
+                ]
+              }
+              testID="roman-greeting-avatar"
+            />
+            <Text
+              accessibilityRole="text"
+              style={
+                [
+                  {
+                    "flex": 1,
+                    "fontFamily": "CormorantGaramond_400Regular",
+                    "fontSize": 19,
+                    "letterSpacing": 0.2,
+                    "lineHeight": 28,
+                    "paddingTop": 4,
+                  },
+                  {
+                    "color": "#1A1A18",
+                  },
+                ]
+              }
+            >
+              Good morning, Maya. I can explain your targets, your plan and today's food, using your own numbers.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 24,
+          },
+        ]
+      }
+      testID="roman-chat-screen-footer"
+    >
+      <View
+        style={
+          {
+            "gap": 8,
+          }
+        }
+        testID="roman-composer"
+      >
+        <RCTScrollView
+          contentContainerStyle={
+            {
+              "gap": 8,
+              "paddingHorizontal": 24,
+            }
+          }
+          horizontal={true}
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          style={
+            {
+              "flexGrow": 0,
+              "marginHorizontal": -24,
+            }
+          }
+          testID="roman-quick-starts"
+        >
+          <View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Explain my targets"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-0"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Explain my targets
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Today's workout"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-1"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Today's workout
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Hit my protein"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-2"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Hit my protein
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="How was my week"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-3"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  How was my week
+                </Text>
+              </View>
+            </View>
+          </View>
+        </RCTScrollView>
+        <View
+          style={
+            [
+              {
+                "alignItems": "flex-end",
+                "borderRadius": 12,
+                "borderWidth": 0.5,
+                "flexDirection": "row",
+                "gap": 8,
+                "padding": 4,
+                "paddingLeft": 16,
+              },
+              {
+                "backgroundColor": "#FFFDF8",
+                "borderColor": "#DCD5CC",
+              },
+            ]
+          }
+          testID="roman-composer-field"
+        >
+          <TextInput
+            accessibilityLabel="Message Roman"
+            editable={true}
+            maxLength={8001}
+            multiline={true}
+            onChangeText={[Function]}
+            onContentSizeChange={[Function]}
+            placeholder="Ask Roman anything."
+            placeholderTextColor="#6B675F"
+            scrollEnabled={false}
+            style={
+              [
+                {
+                  "flex": 1,
+                  "fontFamily": "Inter_400Regular",
+                  "fontSize": 16,
+                  "fontWeight": "400",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                  "minHeight": 44,
+                  "paddingBottom": 12,
+                  "paddingHorizontal": 0,
+                  "paddingTop": 12,
+                  "textAlignVertical": "center",
+                },
+                {
+                  "color": "#1A1A18",
+                  "height": 44,
+                  "maxHeight": 240,
+                },
+              ]
+            }
+            testID="roman-composer-input"
+            value=""
+          />
+          <View
+            accessibilityLabel="Send message"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": true,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={false}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": "#2C4A36",
+                "borderRadius": 12,
+                "height": 44,
+                "justifyContent": "center",
+                "marginBottom": 2,
+                "opacity": 1,
+                "width": 44,
+              }
+            }
+            testID="roman-composer-send"
+          />
+        </View>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 13,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 18,
+                "textAlign": "center",
+              },
+              {
+                "color": "#6B675F",
+              },
+            ]
+          }
+          testID="roman-composer-footer"
+        >
+          Workout and food guidance only. Not medical advice.
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+`;
+
+exports[`QA evidence: the room at 360x800 and 390x844 390x844 launch state 1`] = `
+<View
+  style={
+    [
+      {
+        "flex": 1,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "paddingLeft": 0,
+        "paddingRight": 0,
+        "paddingTop": 12,
+      },
+      undefined,
+    ]
+  }
+  testID="roman-chat-screen"
+>
+  <View
+    onLayout={[Function]}
+    style={
+      [
+        {
+          "flex": 1,
+        },
+        {
+          "paddingBottom": 0,
+        },
+      ]
+    }
+  >
+    <View
+      style={
+        [
+          {
+            "borderBottomWidth": 0.5,
+          },
+          {
+            "borderBottomColor": "#DCD5CC",
+          },
+        ]
+      }
+    >
+      <View
+        style={
+          {
+            "alignItems": "center",
+            "flexDirection": "row",
+            "justifyContent": "space-between",
+            "minHeight": 44,
+            "paddingHorizontal": 16,
+          }
+        }
+        testID="roman-chat"
+      >
+        <View
+          accessibilityLabel="Back"
+          accessibilityRole="button"
+          accessibilityState={
+            {
+              "busy": undefined,
+              "checked": undefined,
+              "disabled": undefined,
+              "expanded": undefined,
+              "selected": undefined,
+            }
+          }
+          accessibilityValue={
+            {
+              "max": undefined,
+              "min": undefined,
+              "now": undefined,
+              "text": undefined,
+            }
+          }
+          accessible={true}
+          collapsable={false}
+          focusable={true}
+          hitSlop={8}
+          onBlur={[Function]}
+          onClick={[Function]}
+          onFocus={[Function]}
+          onResponderGrant={[Function]}
+          onResponderMove={[Function]}
+          onResponderRelease={[Function]}
+          onResponderTerminate={[Function]}
+          onResponderTerminationRequest={[Function]}
+          onStartShouldSetResponder={[Function]}
+          style={
+            [
+              {
+                "height": 44,
+                "justifyContent": "center",
+                "paddingLeft": 6,
+                "width": 44,
+              },
+              false,
+            ]
+          }
+          testID="roman-chat-back"
+        />
+        <View
+          style={
+            {
+              "alignItems": "flex-end",
+              "flexShrink": 1,
+              "paddingRight": 8,
+            }
+          }
+        >
+          <View
+            collapsable={false}
+            style={
+              {
+                "opacity": 1,
+                "transform": [
+                  {
+                    "scale": 1,
+                  },
+                ],
+              }
+            }
+          >
+            <View
+              accessibilityHint="See, open and delete your past conversations with Roman"
+              accessibilityLabel="Your conversations with Roman"
+              accessibilityRole="button"
+              accessibilityState={
+                {
+                  "busy": undefined,
+                  "checked": undefined,
+                  "disabled": undefined,
+                  "expanded": undefined,
+                  "selected": undefined,
+                }
+              }
+              accessibilityValue={
+                {
+                  "max": undefined,
+                  "min": undefined,
+                  "now": undefined,
+                  "text": undefined,
+                }
+              }
+              accessible={true}
+              collapsable={false}
+              focusable={true}
+              onBlur={[Function]}
+              onClick={[Function]}
+              onFocus={[Function]}
+              onResponderGrant={[Function]}
+              onResponderMove={[Function]}
+              onResponderRelease={[Function]}
+              onResponderTerminate={[Function]}
+              onResponderTerminationRequest={[Function]}
+              onStartShouldSetResponder={[Function]}
+              style={
+                {
+                  "alignItems": "center",
+                  "height": 44,
+                  "justifyContent": "center",
+                  "marginLeft": "auto",
+                  "width": 44,
+                }
+              }
+              testID="roman-conversations-button"
+            />
+          </View>
+        </View>
+      </View>
+      <View
+        style={
+          {
+            "gap": 4,
+            "paddingBottom": 16,
+            "paddingHorizontal": 24,
+            "paddingTop": 8,
+          }
+        }
+      >
+        <Text
+          accessibilityRole="header"
+          maxFontSizeMultiplier={1.4}
+          style={
+            [
+              {
+                "fontFamily": "CormorantGaramond_400Regular",
+                "fontSize": 32,
+                "fontWeight": "400",
+                "letterSpacing": 0.6,
+                "lineHeight": 40,
+              },
+              {
+                "color": "#1A1A18",
+                "textAlign": "left",
+              },
+              undefined,
+            ]
+          }
+        >
+          Roman
+        </Text>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_500Medium",
+                "fontSize": 11,
+                "fontWeight": "500",
+                "letterSpacing": 1.98,
+                "lineHeight": 13,
+                "marginBottom": 6,
+                "textTransform": "uppercase",
+              },
+              {
+                "color": "#6B675F",
+              },
+              undefined,
+            ]
+          }
+          testID="roman-chat-overline"
+        >
+          AI assistant · Working with your coach
+        </Text>
+      </View>
+    </View>
+    <View
+      style={
+        [
+          {
+            "flex": 1,
+          },
+          [
+            {
+              "flexGrow": 1,
+              "paddingHorizontal": 24,
+            },
+            false,
+            {
+              "paddingBottom": 24,
+            },
+            {
+              "paddingBottom": 0,
+              "paddingHorizontal": 0,
+            },
+          ],
+        ]
+      }
+      testID="roman-chat-screen-scroll"
+    >
+      <View
+        style={
+          {
+            "flex": 1,
+          }
+        }
+      >
+        <View
+          style={
+            {
+              "flex": 1,
+            }
+          }
+        >
+          <View
+            style={
+              {
+                "alignItems": "flex-start",
+                "flexDirection": "row",
+                "gap": 12,
+                "paddingHorizontal": 24,
+                "paddingTop": 24,
+              }
+            }
+            testID="roman-empty-greeting"
+          >
+            <Image
+              accessibilityLabel="Roman"
+              accessibilityRole="image"
+              onError={[Function]}
+              source={
+                {
+                  "testUri": "../../../../../wt/ROMAN-ROOM-133-scratch/assets/roman/neutral.png",
+                }
+              }
+              style={
+                [
+                  {
+                    "backgroundColor": "transparent",
+                  },
+                  {
+                    "borderRadius": 20,
+                    "height": 40,
+                    "width": 40,
+                  },
+                  {
+                    "borderColor": "transparent",
+                    "borderWidth": 0,
+                  },
+                ]
+              }
+              testID="roman-greeting-avatar"
+            />
+            <Text
+              accessibilityRole="text"
+              style={
+                [
+                  {
+                    "flex": 1,
+                    "fontFamily": "CormorantGaramond_400Regular",
+                    "fontSize": 19,
+                    "letterSpacing": 0.2,
+                    "lineHeight": 28,
+                    "paddingTop": 4,
+                  },
+                  {
+                    "color": "#1A1A18",
+                  },
+                ]
+              }
+            >
+              Good morning, Maya. I can explain your targets, your plan and today's food, using your own numbers.
+            </Text>
+          </View>
+        </View>
+      </View>
+    </View>
+    <View
+      style={
+        [
+          {
+            "gap": 8,
+            "paddingHorizontal": 24,
+            "paddingTop": 12,
+          },
+          {
+            "paddingBottom": 24,
+          },
+        ]
+      }
+      testID="roman-chat-screen-footer"
+    >
+      <View
+        style={
+          {
+            "gap": 8,
+          }
+        }
+        testID="roman-composer"
+      >
+        <RCTScrollView
+          contentContainerStyle={
+            {
+              "gap": 8,
+              "paddingHorizontal": 24,
+            }
+          }
+          horizontal={true}
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+          style={
+            {
+              "flexGrow": 0,
+              "marginHorizontal": -24,
+            }
+          }
+          testID="roman-quick-starts"
+        >
+          <View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Explain my targets"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-0"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Explain my targets
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Today's workout"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-1"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Today's workout
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="Hit my protein"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-2"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  Hit my protein
+                </Text>
+              </View>
+            </View>
+            <View
+              collapsable={false}
+              style={
+                {
+                  "opacity": 1,
+                  "transform": [
+                    {
+                      "scale": 1,
+                    },
+                  ],
+                }
+              }
+            >
+              <View
+                accessibilityHint="Sends this question to Roman"
+                accessibilityLabel="How was my week"
+                accessibilityRole="button"
+                accessibilityState={
+                  {
+                    "busy": undefined,
+                    "checked": undefined,
+                    "disabled": false,
+                    "expanded": undefined,
+                    "selected": false,
+                  }
+                }
+                accessibilityValue={
+                  {
+                    "max": undefined,
+                    "min": undefined,
+                    "now": undefined,
+                    "text": undefined,
+                  }
+                }
+                accessible={true}
+                collapsable={false}
+                focusable={true}
+                onBlur={[Function]}
+                onClick={[Function]}
+                onFocus={[Function]}
+                onResponderGrant={[Function]}
+                onResponderMove={[Function]}
+                onResponderRelease={[Function]}
+                onResponderTerminate={[Function]}
+                onResponderTerminationRequest={[Function]}
+                onStartShouldSetResponder={[Function]}
+                style={
+                  [
+                    {
+                      "borderRadius": 999,
+                      "borderWidth": 0.5,
+                      "justifyContent": "center",
+                      "minHeight": 44,
+                      "paddingHorizontal": 16,
+                    },
+                    {
+                      "borderColor": "#DCD5CC",
+                    },
+                  ]
+                }
+                testID="roman-quick-start-3"
+              >
+                <Text
+                  style={
+                    [
+                      {
+                        "fontFamily": "Inter_400Regular",
+                        "fontSize": 15,
+                        "fontWeight": "400",
+                        "letterSpacing": 0,
+                        "lineHeight": 20,
+                      },
+                      {
+                        "color": "#1A1A18",
+                      },
+                    ]
+                  }
+                >
+                  How was my week
+                </Text>
+              </View>
+            </View>
+          </View>
+        </RCTScrollView>
+        <View
+          style={
+            [
+              {
+                "alignItems": "flex-end",
+                "borderRadius": 12,
+                "borderWidth": 0.5,
+                "flexDirection": "row",
+                "gap": 8,
+                "padding": 4,
+                "paddingLeft": 16,
+              },
+              {
+                "backgroundColor": "#FFFDF8",
+                "borderColor": "#DCD5CC",
+              },
+            ]
+          }
+          testID="roman-composer-field"
+        >
+          <TextInput
+            accessibilityLabel="Message Roman"
+            editable={true}
+            maxLength={8001}
+            multiline={true}
+            onChangeText={[Function]}
+            onContentSizeChange={[Function]}
+            placeholder="Ask Roman anything."
+            placeholderTextColor="#6B675F"
+            scrollEnabled={false}
+            style={
+              [
+                {
+                  "flex": 1,
+                  "fontFamily": "Inter_400Regular",
+                  "fontSize": 16,
+                  "fontWeight": "400",
+                  "letterSpacing": -0.16,
+                  "lineHeight": 26,
+                  "minHeight": 44,
+                  "paddingBottom": 12,
+                  "paddingHorizontal": 0,
+                  "paddingTop": 12,
+                  "textAlignVertical": "center",
+                },
+                {
+                  "color": "#1A1A18",
+                  "height": 44,
+                  "maxHeight": 253,
+                },
+              ]
+            }
+            testID="roman-composer-input"
+            value=""
+          />
+          <View
+            accessibilityLabel="Send message"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": false,
+                "checked": undefined,
+                "disabled": true,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={false}
+            onClick={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "backgroundColor": "#2C4A36",
+                "borderRadius": 12,
+                "height": 44,
+                "justifyContent": "center",
+                "marginBottom": 2,
+                "opacity": 1,
+                "width": 44,
+              }
+            }
+            testID="roman-composer-send"
+          />
+        </View>
+        <Text
+          style={
+            [
+              {
+                "fontFamily": "Inter_400Regular",
+                "fontSize": 13,
+                "fontWeight": "400",
+                "letterSpacing": 0,
+                "lineHeight": 18,
+                "textAlign": "center",
+              },
+              {
+                "color": "#6B675F",
+              },
+            ]
+          }
+          testID="roman-composer-footer"
+        >
+          Workout and food guidance only. Not medical advice.
+        </Text>
+      </View>
+    </View>
+  </View>
+</View>
+`;
