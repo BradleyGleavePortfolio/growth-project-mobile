@@ -9,8 +9,6 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { CoachStepProps } from '../../types';
 
-let mockReduced = false;
-jest.mock('../../../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => mockReduced }));
 jest.mock('../../../../../hooks/useCurrentUser', () => ({ useCurrentUser: () => ({ id: 'coach_1' }) }));
 const mockInviteLink = jest.fn();
 jest.mock('../../../../../api/coachSetupApi', () => ({ coachSetupApi: { inviteLink: () => mockInviteLink() } }));
@@ -21,7 +19,8 @@ jest.mock('../../../../../storage/mmkv', () => ({ prefsStorage: { set: (k: strin
 jest.mock('../../../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 jest.mock('../../../../../services/api', () => ({ __esModule: true, default: {} }));
 
-import K5ProgrammingStyle, { K5_ADVANCE_MS } from '../K5ProgrammingStyle';
+import K5ProgrammingStyle from '../K5ProgrammingStyle';
+import { STEP_MS } from '../../../../consultation/components';
 import K6PersonalLink from '../K6PersonalLink';
 import K7ImportOffer from '../K7ImportOffer';
 import K8PracticeReady from '../K8PracticeReady';
@@ -50,13 +49,12 @@ function props(over: Partial<CoachStepProps> = {}): CoachStepProps {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockReduced = false;
   mockInviteLink.mockResolvedValue(LINK);
   mockCopy.mockResolvedValue(true);
 });
 
 describe('K5 Programming style', () => {
-  it('shows the question and three rows, saves the tap and moves on after a short beat', async () => {
+  it('shows the question and three rows, saves the tap and moves on a moment later; a second tap changes it', async () => {
     jest.useFakeTimers();
     const p = props();
     const ui = await render(<K5ProgrammingStyle {...p} />);
@@ -64,28 +62,23 @@ describe('K5 Programming style', () => {
     expect(ui.getByText('Your practice · 4 of 5')).toBeTruthy();
     ['I write my own', 'I adapt templates', "I'd like help building them"].forEach((t) => expect(ui.getByText(t)).toBeTruthy());
     await fireEvent.press(ui.getByTestId('k5-templates'));
-    await fireEvent.press(ui.getByTestId('k5-own')); // a second tap while leaving is ignored
-    expect(p.setAnswers).toHaveBeenCalledTimes(1);
-    expect(p.setAnswers).toHaveBeenCalledWith({ programming_style: 'templates' });
+    await fireEvent.press(ui.getByTestId('k5-own'));
+    expect(p.setAnswers).toHaveBeenNthCalledWith(1, { programming_style: 'templates' });
+    expect(p.setAnswers).toHaveBeenLastCalledWith({ programming_style: 'own' });
     expect(p.onNext).not.toHaveBeenCalled();
     await act(async () => {
-      jest.advanceTimersByTime(K5_ADVANCE_MS);
+      jest.advanceTimersByTime(STEP_MS);
     });
     expect(p.onNext).toHaveBeenCalledTimes(1);
     jest.useRealTimers();
   });
 
-  it('moves on at once with Reduce Motion, and Skip saves nothing', async () => {
-    mockReduced = true;
-    const a = props();
-    const ui = await render(<K5ProgrammingStyle {...a} />);
-    await fireEvent.press(ui.getByTestId('k5-help'));
-    expect(a.onNext).toHaveBeenCalledTimes(1);
+  it('shows the saved choice, and Skip clears it and moves on', async () => {
     const b = props({ answers: { programming_style: 'own' } });
     const ui2 = await render(<K5ProgrammingStyle {...b} />);
     expect(ui2.getByTestId('k5-own').props.accessibilityState).toEqual(expect.objectContaining({ selected: true }));
     await fireEvent.press(ui2.getByTestId('k5-skip'));
-    expect(b.setAnswers).not.toHaveBeenCalled();
+    expect(b.setAnswers).toHaveBeenCalledWith({ programming_style: undefined });
     expect(b.onNext).toHaveBeenCalledTimes(1);
   });
 });
@@ -187,7 +180,6 @@ describe('K8 Practice ready', () => {
 
 describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
   async function walk(importOn: boolean) {
-    mockReduced = true;
     await AsyncStorage.setItem(
       draftKey('c1'),
       JSON.stringify({ v: 1, step: 'K2', updatedAt: '2026-10-08T20:00:00.000Z', answers: { display_name: 'Jordan Reyes', clients_today: '1_10' } }),
@@ -210,6 +202,10 @@ describe('K5-K8 in the flow (registry spreads PRACTICE_STEPS)', () => {
     );
     await waitFor(() => expect(ui.getByTestId('coach-consult-K2-skip')).toBeTruthy());
     await fireEvent.press(ui.getByTestId('coach-consult-K2-skip'));
+    await waitFor(() => expect(ui.getByTestId('coach-consult-K3')).toBeTruthy()); // clients today kept from the draft
+    await fireEvent.press(ui.getByTestId('coach-consult-K3-1_10'));
+    await waitFor(() => expect(ui.getByTestId('coach-consult-K4')).toBeTruthy());
+    await fireEvent.press(ui.getByTestId('coach-consult-K4-skip'));
     expect(ui.getByTestId('coach-step-K5')).toBeTruthy();
     await fireEvent.press(ui.getByTestId('k5-own'));
     await waitFor(() => expect(ui.getByTestId('k6-url')).toBeTruthy());
