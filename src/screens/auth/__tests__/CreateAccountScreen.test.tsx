@@ -102,6 +102,12 @@ const ROLE_CHOICE_POLICY = {
   role_choice_values: ['client', 'coach'],
 };
 
+// Prototype ROLE (01): a row tap selects, Continue commits.
+async function chooseRole(utils: { findByTestId: (id: string) => Promise<unknown>; getByTestId: (id: string) => unknown }, role: 'client' | 'coach') {
+  await fireEvent.press((await utils.findByTestId(`role-choice-${role}`)) as never);
+  await fireEvent.press(utils.getByTestId('role-choice-continue') as never);
+}
+
 async function renderScreen(params?: { invite_code?: string }, role: 'client' | 'coach' | null = 'client') {
   const nav = makeNav();
   const utils = await render(
@@ -113,7 +119,7 @@ async function renderScreen(params?: { invite_code?: string }, role: 'client' | 
   // C13: without an invite code, and only when the live policy advertises
   // role_choice, the first step is the role choice.
   if (!params?.invite_code && role && utils.queryByTestId('role-choice')) {
-    await fireEvent.press(utils.getByTestId(`role-choice-${role}`));
+    await chooseRole(utils, role);
   }
   return { nav, ...utils };
 }
@@ -135,7 +141,7 @@ describe('CreateAccountScreen', () => {
     const ui = await renderScreen();
     const root = ui.toJSON();
     expect(root && !Array.isArray(root) ? StyleSheet.flatten(root.props.style).backgroundColor : null).toBe(palette.bgPrimary);
-    expect(StyleSheet.flatten(ui.getByText('Create your account').props.style)).toMatchObject({
+    expect(StyleSheet.flatten(ui.getByText('Create your account.').props.style)).toMatchObject({
       fontFamily: 'CormorantGaramond_400Regular', fontWeight: '400', color: palette.textPrimary,
     });
     expect(StyleSheet.flatten(ui.getByText('FULL NAME').props.style)).toMatchObject({
@@ -152,7 +158,7 @@ describe('CreateAccountScreen', () => {
       expect(ui.getByLabelText(label).props.placeholderTextColor).toBe(palette.textMuted);
     }
     expect(StyleSheet.flatten(ui.getByLabelText('Create account').props.style)).toMatchObject({
-      backgroundColor: palette.accent, minHeight: 52,
+      backgroundColor: palette.accent, minHeight: 54, borderRadius: 12,
     });
     expect(StyleSheet.flatten(ui.getByText('Create account').props.style).color).toBe(palette.textOnAccent);
     expect(StyleSheet.flatten(ui.getByLabelText('Continue with Google').props.style).backgroundColor).toBeUndefined();
@@ -203,7 +209,7 @@ describe('CreateAccountScreen', () => {
     expect(await findByText('INVITE CODE')).toBeTruthy();
   });
 
-  it('B-IOSREV-2: states the Terms and Privacy agreement above the sign-up buttons, with both links', async () => {
+  it('B-IOSREV-2: states the Terms and Privacy agreement in the pinned footer, with both links', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
     const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const { findByTestId, getByTestId } = await renderScreen();
@@ -217,7 +223,7 @@ describe('CreateAccountScreen', () => {
             ? flat((node as { props: { children?: unknown } }).props.children)
             : '';
     expect(flat(line.props.children)).toBe(
-      'By creating an account, you agree to the Terms of Service and the Privacy Policy.',
+      'By continuing, you agree to the Terms of Service and the Privacy Policy.',
     );
     await fireEvent.press(getByTestId('create-account-terms-link'));
     expect(openUrl).toHaveBeenCalledWith(TERMS_URL);
@@ -391,7 +397,7 @@ describe('CreateAccountScreen', () => {
       const utils = await renderScreen(undefined, null);
       expect(utils.queryByTestId('role-choice')).toBeNull();
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
-      expect(utils.getByText('Create your account')).toBeTruthy();
+      expect(utils.getByText('Create your account.')).toBeTruthy();
       await fillAndSubmit(utils);
       await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
       expect(mockRegister.mock.calls[0][1]).toBeUndefined();
@@ -470,7 +476,7 @@ describe('CreateAccountScreen', () => {
       mockRegister.mockResolvedValue({ data: { requires_verification: true, role: 'coach' } });
       mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'coach' } } });
       const utils = await renderScreen(undefined, 'coach');
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       expect(utils.queryByTestId('invite-code-input')).toBeNull();
       await fillAndSubmit(utils);
       await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
@@ -624,12 +630,12 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
       const nav = makeNav();
       const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
-      await fireEvent.press(await utils.findByTestId('role-choice-coach'));
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await chooseRole(utils, 'coach');
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       utils.rerender(
         <CreateAccountScreen navigation={nav as never} route={{ params: { invite_code: 'GP-QR1' } }} />,
       );
-      expect(await utils.findByText('Create your account')).toBeTruthy();
+      expect(await utils.findByText('Create your account.')).toBeTruthy();
       expect(utils.getByTestId('invite-code-input').props.value).toBe('GP-QR1');
       expect(utils.queryByTestId('role-choice-change')).toBeNull();
     });
@@ -638,8 +644,8 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
       const utils = await renderScreen(undefined, 'coach');
       await fireEvent.press(utils.getByTestId('role-choice-change'));
-      await fireEvent.press(await utils.findByTestId('role-choice-client'));
-      expect(await utils.findByText('Create your account')).toBeTruthy();
+      await chooseRole(utils, 'client');
+      expect(await utils.findByText('Create your account.')).toBeTruthy();
       expect(utils.getByTestId('invite-code-input')).toBeTruthy();
     });
   });
@@ -656,8 +662,8 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
       const nav = makeNav();
       const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
-      await fireEvent.press(utils.getByTestId('role-choice-coach'));
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await chooseRole(utils, 'coach');
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       const disableLive = async () => {
         await act(async () => {
           resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'apple', 'google'], role_choice: false } });
@@ -716,7 +722,7 @@ describe('CreateAccountScreen', () => {
       expect(mockRegister).not.toHaveBeenCalled();
       // Explicit re-choice: only now does a client registration go out.
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
-      expect(await utils.findByText('Create your account')).toBeTruthy();
+      expect(await utils.findByText('Create your account.')).toBeTruthy();
       await fillAndSubmit(utils as never);
       await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
       expect(mockRegister.mock.calls[0][1]).toBeUndefined();
@@ -742,7 +748,7 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockResolvedValueOnce({ data: ROLE_CHOICE_POLICY });
       mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
-      expect(await utils.findByText('Create your coach account')).toBeTruthy();
+      expect(await utils.findByText('Create your coach account.')).toBeTruthy();
       await fireEvent.press(utils.getByTestId('apple-button'));
       await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
       expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: undefined, intendedRole: 'coach' });
@@ -757,7 +763,7 @@ describe('CreateAccountScreen', () => {
       await act(async () => {
         resolveLive({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
       });
-      expect(await utils.findByText('Create your account')).toBeTruthy();
+      expect(await utils.findByText('Create your account.')).toBeTruthy();
       expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
     });
 
@@ -784,8 +790,8 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
       const nav = makeNav();
       const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
-      await fireEvent.press(utils.getByTestId('role-choice-coach'));
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await chooseRole(utils, 'coach');
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       const disableLive = async () => {
         await act(async () => {
           resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS, role_choice: false } });
@@ -835,7 +841,7 @@ describe('CreateAccountScreen', () => {
       await disableLive();
       expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
       // The pending form stays the coach form the user submitted.
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
       expect(await utils.findByText('I verified my email')).toBeTruthy();
       expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
@@ -868,7 +874,7 @@ describe('CreateAccountScreen', () => {
       expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
       // The request is settled, so an explicit client choice is now allowed.
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
-      expect(await utils.findByText('Create your account')).toBeTruthy();
+      expect(await utils.findByText('Create your account.')).toBeTruthy();
     });
 
     it('in flight -> response lost (no answer): unconfirmed state, no "No account", no client re-choice; sign in or support offered', async () => {
@@ -897,7 +903,7 @@ describe('CreateAccountScreen', () => {
       // Coach sign-up comes back; the user retries with the same email.
       mockGetSignupPolicy.mockResolvedValueOnce({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS } });
       await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
-      expect(await utils.findByText('Create your coach account')).toBeTruthy();
+      expect(await utils.findByText('Create your coach account.')).toBeTruthy();
       mockRegister.mockRejectedValueOnce(Object.assign(new Error('Conflict'), { response: { status: 409, data: { message: 'Email already registered' } } }));
       await fireEvent.press(utils.getByLabelText('Create account'));
       expect(await utils.findByText(/Your earlier coach sign-up may have created it/)).toBeTruthy();
@@ -1019,7 +1025,7 @@ describe('CreateAccountScreen', () => {
       const pending = await startPendingCoachRegister(utils);
       await fireEvent.press(utils.getByTestId('role-choice-change'));
       expect(utils.queryByTestId('role-choice')).toBeNull();
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
     });
   });
@@ -1035,8 +1041,8 @@ describe('CreateAccountScreen', () => {
       mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
       const nav = makeNav();
       const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
-      await fireEvent.press(utils.getByTestId('role-choice-coach'));
-      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      await chooseRole(utils, 'coach');
+      expect(utils.getByText('Create your coach account.')).toBeTruthy();
       const disableLive = async () => {
         await act(async () => {
           resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS, role_choice: false } });

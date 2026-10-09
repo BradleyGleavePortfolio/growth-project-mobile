@@ -27,7 +27,8 @@ jest.mock('../../../hooks/useApi', () => ({
 }));
 jest.mock('../../../db/workoutDb', () => ({ getAllExercises: () => mockCatalog() }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: (_t, k) => String(k) }) }),
+  // semanticColors: the Screen wrapper (REDO-INSETS-133) reads the page colour from it.
+  useTheme: () => ({ colors: new Proxy({}, { get: (_t, k) => String(k) }), semanticColors: new Proxy({}, { get: (_t, k) => String(k) }) }),
 }));
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 jest.mock('../../../components/HapticPressable', () => require('react-native').Pressable);

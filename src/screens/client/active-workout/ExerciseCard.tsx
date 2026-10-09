@@ -1,9 +1,10 @@
 import React from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../../components/HapticPressable';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
-import { lightTokens as sc } from '../../../theme/tokens';
+import { lightTokens as sc, typography } from '../../../theme/tokens';
+import { Headline } from '../../../ui';
 import type { SessionExercise, SessionSet } from './types';
 import type { ActiveWorkoutStyles } from './styles';
 import { SetLogger } from './SetLogger';
@@ -46,16 +47,22 @@ export function ExerciseCard({
   return (
     <View style={styles.exerciseCard}>
       <View pointerEvents={disabled ? 'none' : 'auto'}>
+      {/* REDO-LIVE-133: numbered serif title, as in the clientfile-workouts reference. */}
       <View style={styles.exerciseHeader}>
-        <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-        <Text style={styles.exerciseSummary}>
-          {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
+        <Text style={[local.index, { color: sc.textMuted }]} accessible={false} importantForAccessibility="no">
+          {exIdx + 1}
         </Text>
+        <View style={styles.exerciseHeaderText}>
+          <Headline level="h3">{exercise.exerciseName}</Headline>
+          <Text style={styles.exerciseSummary}>
+            {exercise.sets.filter((set) => set.completed).length} of {exercise.sets.length} {exercise.sets.length === 1 ? 'set' : 'sets'} complete
+          </Text>
+        </View>
       </View>
       {/* FU-WORKLOG-126: the coach's note used to show only on the screen
           before Start, never while the client was doing the sets. */}
       {exercise.coachNote ? (
-        <Text style={[styles.previousSetText, { marginTop: 4 }]} testID={`coach-note-${exIdx}`}>
+        <Text style={styles.coachNote} testID={`coach-note-${exIdx}`}>
           Coach note: {exercise.coachNote}
         </Text>
       ) : null}
@@ -127,9 +134,9 @@ export function ExerciseCard({
         />
       ))}
 
-      <HapticPressable intent="medium" style={styles.addSetBtn} onPress={() => onAddSet(exIdx)}>
-        <Ionicons name="add-outline" size={24} color={colors.primary} />
-        <Text style={styles.addSetText}>Add Set</Text>
+      <HapticPressable intent="medium" style={styles.addSetBtn} onPress={() => onAddSet(exIdx)} accessibilityRole="button">
+        <Ionicons name="add-outline" size={20} color={colors.primary} />
+        <Text style={styles.addSetText}>Add set</Text>
       </HapticPressable>
       {onChangeNotes && <TextInput
         style={styles.notesInput}
@@ -146,3 +153,8 @@ export function ExerciseCard({
     </View>
   );
 }
+
+const local = StyleSheet.create({
+  // Serif tabular index beside the exercise name; decorative, so screen readers skip it.
+  index: { ...typography.h3, fontVariant: ['tabular-nums'], minWidth: 18 },
+});

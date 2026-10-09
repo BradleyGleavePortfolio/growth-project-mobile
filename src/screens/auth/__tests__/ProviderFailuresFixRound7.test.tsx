@@ -88,7 +88,10 @@ jest.mock('../../../services/queryClient', () => ({
 }));
 jest.mock('../../../lib/analytics', () => ({ identify: jest.fn(), track: jest.fn() }));
 jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
+  useTheme: () => ({
+    colors: new Proxy({}, { get: () => '#000000' }),
+    semanticColors: jest.requireActual('../../../theme/tokens').lightTokens,
+  }),
 }));
 const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
@@ -129,7 +132,9 @@ async function renderSignup(role: 'client' | 'coach') {
   mockPolicy.mockResolvedValue({ data: ON });
   const nav: Nav = { navigate: jest.fn(), replace: jest.fn() };
   const ui = await render(<CreateAccountScreen navigation={nav as never} />);
+  // Prototype ROLE (01): a row tap selects, Continue commits.
   await fireEvent.press(await ui.findByTestId(`role-choice-${role}`));
+  await fireEvent.press(ui.getByTestId('role-choice-continue'));
   return { nav, ...ui };
 }
 

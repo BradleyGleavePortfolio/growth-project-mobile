@@ -614,7 +614,8 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-empty')).toBeTruthy());
     expect(mockGetPurchaseDrops).toHaveBeenCalledTimes(1);
-    const sv = getByTestId('purchase-unpack-empty');
+    // The Screen wrapper (REDO-INSETS-133) puts the ScrollView at <testID>-scroll.
+    const sv = getByTestId('purchase-unpack-empty-scroll');
     await act(async () => {
       const refreshControl = sv.props.refreshControl;
       expect(refreshControl).toBeTruthy();

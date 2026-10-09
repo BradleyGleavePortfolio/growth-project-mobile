@@ -20,7 +20,8 @@ jest.mock('../../services/sentry', () => ({ captureErrorWithoutPii: jest.fn(), c
 jest.mock('expo-clipboard', () => ({ setStringAsync: jest.fn() }));
 jest.mock('../../theme/ThemeProvider', () => {
   const CanonicalColors = jest.requireActual('../../constants/colors').default;
-  return { useTheme: () => ({ colors: CanonicalColors }) };
+  const { lightTokens } = jest.requireActual('../../theme/tokens');
+  return { useTheme: () => ({ colors: CanonicalColors, semanticColors: lightTokens }) };
 });
 jest.mock('../../lib/analytics', () => ({ track: jest.fn() }));
 const mockGet = jest.fn();

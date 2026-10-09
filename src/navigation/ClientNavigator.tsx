@@ -122,6 +122,7 @@ import BrandedCheckoutWebViewScreen, {
 // are reachable from the Messages thread and from the Settings hub.
 import ContactView from '../screens/messaging/ContactView';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+import AddCoachCodeScreen from '../screens/client/settings/AddCoachCodeScreen';
 // PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
 // Additive registration only; mounts under MoreStack at AppTabs/Settings/Connections.
 import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
@@ -258,6 +259,8 @@ export type MoreStackParamList = {
   ProfileMain: undefined;
   EditProfile: undefined;
   Settings:    undefined;
+  // Decision 133-14: a client without a coach adds a code from Settings.
+  AddCoachCode: undefined;
   Widgets:     undefined;
   Report:      undefined;
   Learn:       undefined;
@@ -502,6 +505,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="CommunitySafety" component={CommunitySafetyScreen} />
       <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
+      <MoreStackNav.Screen name="AddCoachCode" component={AddCoachCodeScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
       <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
