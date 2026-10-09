@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
@@ -19,7 +18,8 @@ import { RecipeAllergenFields, isHiddenForAllergens, recipeAllergenDetail } from
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, SemanticTokens } from '../../theme/tokens';
+import { typography, radius, SemanticTokens } from '../../theme/tokens';
+import { Screen } from '../../ui';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe extends RecipeAllergenFields {
@@ -145,11 +145,7 @@ export default function RecipeDetailScreen() {
   }
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
+    <Screen edges={['top']} contentStyle={styles.content}>
       {/* Keep a stored image; without one, the title carries the screen. */}
       <View style={styles.hero}>
         <TouchableOpacity
@@ -269,51 +265,41 @@ export default function RecipeDetailScreen() {
           ))}
         </View>
       </FadeInView>
-    </ScrollView>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgPrimary },
-  content: { paddingBottom: 60 },
+  content: { paddingHorizontal: 0, paddingBottom: 60 },
 
+  // Top bar under the inset top that Screen supplies (was a fixed top: 56).
   hero: {
-    height: 104,
-    backgroundColor: colors.bgPrimary,
+    minHeight: 48,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    overflow: 'hidden',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
   },
   heroImage: {
     width: '100%',
     height: 200,
-    borderRadius: 4,
+    borderRadius: radius.card,
   },
   heroIcon: { opacity: 0.8 },
   backBtn: {
-    position: 'absolute',
-    top: 56,
-    left: 20,
     width: 44,
     height: 44,
     justifyContent: 'center',
-    zIndex: 10,
   },
   saveBtn: {
-    position: 'absolute',
-    top: 56,
-    right: 20,
     width: 44,
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.accent,
-    borderRadius: 4,
-    borderColor: colors.border,
-    zIndex: 10,
+    borderRadius: radius.button,
   },
 
   section: {
@@ -338,7 +324,9 @@ const makeStyles = (colors: SemanticTokens) =>
     backgroundColor: colors.bgPrimary,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
   tagText: { ...typography.bodySmall, color: colors.textMuted },
 
@@ -358,7 +346,7 @@ const makeStyles = (colors: SemanticTokens) =>
   bullet: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radius.chip,
     backgroundColor: colors.accent,
     marginTop: 7,
     flexShrink: 0,
@@ -369,7 +357,7 @@ const makeStyles = (colors: SemanticTokens) =>
   stepNumber: {
     width: 28,
     height: 28,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.chip,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
