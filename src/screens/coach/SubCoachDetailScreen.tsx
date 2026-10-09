@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -22,6 +21,8 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import {
   subCoachApi,
   SubCoachDetail,
@@ -199,7 +200,7 @@ export default function SubCoachDetailScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <Screen edges={['top']} contentStyle={styles.content} testID="sub-coach-detail">
       {/* Header */}
       <Text style={styles.name}>{detail.name}</Text>
       <Text style={styles.email}>{detail.email}</Text>
@@ -267,18 +268,14 @@ export default function SubCoachDetailScreen() {
           </View>
         ))
       )}
-    </ScrollView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
+  // Screen (src/ui) owns the top (insets.top + 12) and the 24 pt gutter; never a fixed 56 (B13 B28).
   content: {
-    padding: 16,
-    paddingTop: 56,
+    paddingTop: 12,
     paddingBottom: 40,
   },
   center: {
@@ -327,7 +324,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: 16,
     marginBottom: 24,
     gap: 10,
@@ -387,7 +384,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 4,
+    borderRadius: radius.card,
     padding: 12,
     marginBottom: 8,
     gap: 12,
@@ -406,7 +403,7 @@ const styles = StyleSheet.create({
   },
   reassignBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 8,
     paddingHorizontal: 14,
   },
@@ -419,7 +416,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 4,
+    borderRadius: radius.button,
     borderWidth: 1,
     borderColor: Colors.error,
     marginBottom: 24,
@@ -437,7 +434,7 @@ const styles = StyleSheet.create({
   },
   retryBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 10,
     paddingHorizontal: 24,
   },

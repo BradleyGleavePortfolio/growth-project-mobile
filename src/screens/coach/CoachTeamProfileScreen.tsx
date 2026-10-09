@@ -15,7 +15,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -34,7 +33,8 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import InviteShareCard from '../../components/coach/setup/InviteShareCard';
 import { QuietError } from '../../ui/states/QuietStates';
-import { typography, withAlpha } from '../../theme/tokens';
+import { radius, typography, withAlpha } from '../../theme/tokens';
+import { Screen } from '../../ui';
 
 const BUSINESS_NAME_MAX_LENGTH = 120;
 
@@ -92,17 +92,17 @@ export default function CoachTeamProfileScreen() {
 
   if (!team.ok && team.reason === 'error') {
     return (
-      <View style={styles.container}>
+      <Screen edges={['top']} scroll={false} testID="team-profile">
         <Text style={styles.header}>Business profile</Text>
         <QuietError message={team.message} onRetry={load} />
-      </View>
+      </Screen>
     );
   }
 
   // Not configured — render setup CTA.
   if (!team.ok) {
     return (
-      <View style={styles.container}>
+      <Screen edges={['top']} scroll={false} testID="team-profile">
         <Text style={styles.header}>Business profile</Text>
         <View style={styles.gate}>
           <Ionicons name="business-outline" size={36} color={colors.textMuted} />
@@ -164,14 +164,14 @@ export default function CoachTeamProfileScreen() {
             </View>
           </View>
         </Modal>
-      </View>
+      </Screen>
     );
   }
 
   const profile = team.data;
 
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+    <Screen edges={['top']} contentStyle={styles.content} testID="team-profile">
       <Text style={styles.header}>{profile.business_name}</Text>
       <Text style={styles.subheader}>Business profile</Text>
 
@@ -220,15 +220,14 @@ export default function CoachTeamProfileScreen() {
         <Text style={styles.linkText}>Invite codes</Text>
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
       </TouchableOpacity>
-    </ScrollView>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingHorizontal: 20, paddingTop: 56 },
-    page: { flex: 1, backgroundColor: colors.background },
-    content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 32 },
+    // Screen (src/ui) owns the top (insets.top + 12) and the 24 pt gutter; never a fixed 56 (B13 B28).
+    content: { paddingBottom: 32 },
     header: { ...typography.h1, color: colors.textPrimary },
     subheader: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: 16 },
     codeLabel: { ...typography.eyebrow, color: colors.textMuted, marginTop: 12, marginBottom: 8 },
@@ -255,19 +254,19 @@ const makeStyles = (colors: ThemeColors) =>
     gate: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 16 },
     gateTitle: { ...typography.bodyMd, color: colors.textPrimary, marginTop: 12, textAlign: 'center' },
     gateBody: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center', marginTop: 8 },
-    cta: { backgroundColor: colors.primary, borderRadius: 4, minHeight: 44, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 12, marginTop: 16 },
+    cta: { backgroundColor: colors.primary, borderRadius: radius.button, minHeight: 44, justifyContent: 'center', paddingHorizontal: 20, paddingVertical: 12, marginTop: 16 },
     ctaDisabled: { opacity: 0.5 },
     ctaText: { ...typography.bodyMd, color: colors.textOnPrimary },
     cancelText: { ...typography.bodySmall, color: colors.textSecondary, paddingVertical: 12, paddingHorizontal: 16 },
     modalOverlay: { flex: 1, backgroundColor: withAlpha(colors.textPrimary, 0.4), justifyContent: 'center', padding: 20 },
-    modalContent: { backgroundColor: colors.background, borderRadius: 4, padding: 20 },
+    modalContent: { backgroundColor: colors.background, borderRadius: radius.card, padding: 20 },
     modalTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: 12 },
     label: { ...typography.bodySmall, color: colors.textMuted, marginBottom: 6 },
     input: {
       ...typography.bodySmall,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 4,
+      borderRadius: radius.input,
       minHeight: 44,
       paddingHorizontal: 12,
       paddingVertical: 10,

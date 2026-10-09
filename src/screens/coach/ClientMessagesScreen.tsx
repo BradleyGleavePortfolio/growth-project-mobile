@@ -22,6 +22,8 @@ import { subscribeToMessages } from '../../services/realtime';
 
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { layout, radius } from '../../theme/tokens';
+import { useScreenInsets } from '../../ui';
 import { errorMessage } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
 import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
@@ -60,6 +62,10 @@ const FALLBACK_POLL_MS = 60000;
 export default function ClientMessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // The Screen wrapper's inset top (insets.top + 12) on the thread header, so its
+  // surface band runs up under the status bar on both platforms (B13 B28).
+  const insets = useScreenInsets();
+  const headerTop = { paddingTop: insets.top + layout.statusBarGap };
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
   const navigation = useNavigation<NativeStackNavigationProp<ClientsStackParamList>>();
   const { clientId, clientName, initialDraft } = route.params;
@@ -335,7 +341,7 @@ export default function ClientMessagesScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
-      <View style={styles.chatHeader}>
+      <View style={[styles.chatHeader, headerTop]} testID="coach-thread-header">
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -570,7 +576,6 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 12,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
@@ -580,7 +585,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radius.chip,
     backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -607,7 +612,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatInput: {
     flex: 1,
     backgroundColor: colors.background,
-    borderRadius: 22,
+    borderRadius: radius.input,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
@@ -619,7 +624,7 @@ const makeStyles = (colors: ThemeColors) =>
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: radius.chip,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

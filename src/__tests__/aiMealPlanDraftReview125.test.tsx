@@ -34,7 +34,7 @@ jest.mock('../theme/ThemeProvider', () => {
     __esModule: true,
     ThemeProvider: Pass,
     default: Pass,
-    useTheme: () => ({ colors }),
+    useTheme: () => ({ colors, semanticColors: jest.requireActual('../theme/tokens').lightTokens }),
   };
 });
 

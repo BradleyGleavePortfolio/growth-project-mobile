@@ -33,6 +33,8 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import coachAiApi from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import type { Draft, InsightPayload } from '../../types/coachAi';
@@ -129,7 +131,7 @@ export default function ClientInsightScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="client-insight">
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -203,8 +205,7 @@ export default function ClientInsightScreen() {
           <Text style={styles.actionPrimaryText}>Send check-in</Text>
         </TouchableOpacity>
       </View>
-
-    </View>
+    </Screen>
   );
 }
 
@@ -258,7 +259,8 @@ function BulletList({
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background, paddingTop: 56 },
+    // Screen (src/ui) owns the top: insets.top + 12, never a fixed 56 (B13 B28).
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
     centered: {
       flex: 1,
       justifyContent: 'center',
@@ -272,7 +274,7 @@ const makeStyles = (colors: ThemeColors) =>
       backgroundColor: colors.primary,
       paddingVertical: 10,
       paddingHorizontal: 20,
-      borderRadius: 4,
+      borderRadius: radius.button,
     },
     retryBtnText: {
       fontFamily: 'Inter_500Medium',
@@ -304,7 +306,7 @@ const makeStyles = (colors: ThemeColors) =>
     scrollContent: { padding: 20, paddingBottom: 40 },
     section: {
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 14,
       marginBottom: 12,
       borderWidth: 1,
@@ -337,7 +339,7 @@ const makeStyles = (colors: ThemeColors) =>
     bulletDot: {
       width: 5,
       height: 5,
-      borderRadius: 3,
+      borderRadius: radius.chip,
       backgroundColor: colors.textMuted,
       marginTop: 7,
     },
@@ -378,7 +380,7 @@ const makeStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
       gap: 6,
       paddingVertical: 12,
-      borderRadius: 4,
+      borderRadius: radius.button,
       backgroundColor: colors.primary,
     },
     actionPrimaryText: {

@@ -28,6 +28,8 @@ import RiskDot from '../../components/RiskDot';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { ptmApi, RiskBoardEntry } from '../../services/ptmApi';
 import type { PtmRiskBucket } from '../../types/ptm';
 
@@ -129,7 +131,7 @@ export default function RiskBoardScreen() {
 
   if (!canViewBoard) {
     return (
-      <View style={styles.container}>
+      <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="risk-board">
         <View style={styles.header}>
           <Text style={styles.title}>Risk Board</Text>
         </View>
@@ -139,7 +141,7 @@ export default function RiskBoardScreen() {
             The risk board is available to coaches and the operator account.
           </Text>
         </View>
-      </View>
+      </Screen>
     );
   }
 
@@ -188,7 +190,7 @@ export default function RiskBoardScreen() {
   );
 
   return (
-    <View style={styles.container}>
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="risk-board">
       <View style={styles.header}>
         <Text style={styles.title}>Risk Board</Text>
         <Text style={styles.subtitle}>Sorted by churn risk</Text>
@@ -258,19 +260,17 @@ export default function RiskBoardScreen() {
           }
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: colors.background,
-      paddingTop: 60,
-    },
+    // Screen (src/ui) owns the top: insets.top + 12, never a fixed 60 (B13 B28).
+    bare: { paddingHorizontal: 0, paddingBottom: 0 },
     header: {
       paddingHorizontal: 24,
+      paddingTop: 12,
       marginBottom: 16,
     },
     title: {
@@ -293,7 +293,7 @@ const makeStyles = (colors: ThemeColors) =>
     filterChip: {
       paddingHorizontal: 14,
       paddingVertical: 8,
-      borderRadius: 4,
+      borderRadius: radius.chip,
       backgroundColor: colors.surface,
       borderWidth: 1,
       borderColor: colors.border,
@@ -318,7 +318,7 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       backgroundColor: colors.surface,
-      borderRadius: 4,
+      borderRadius: radius.card,
       padding: 16,
       marginBottom: 10,
       gap: 12,
