@@ -597,6 +597,10 @@ export interface InvitePreview {
   accent_color?: string;
   logo_url?: string;
   reason?: string;
+  /** COACH-CARD-134 (backend b#897): coach consultation K1 headline; null or absent when unset. */
+  headline?: string | null;
+  /** COACH-CARD-134: K2 specialty keys (max five); [] or absent when unset. */
+  specialties?: string[] | null;
 }
 
 /**

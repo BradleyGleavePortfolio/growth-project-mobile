@@ -295,6 +295,27 @@ describe('CreateAccountScreen', () => {
     await waitFor(() => expect(mockPreview).toHaveBeenCalledWith('GP-TEST1'));
   });
 
+  it('COACH-CARD-134: the paired line carries the coach headline and specialties', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockGetString.mockResolvedValue('GP-TEST1');
+    mockPreview.mockResolvedValue({
+      data: { valid: true, coach_name: 'Bradley', headline: 'Calm, steady strength', specialties: ['older', 'other', 'mobility'] },
+    });
+    const { getByTestId, findByTestId } = await renderScreen();
+    await fireEvent.press(getByTestId('paste-invite-code'));
+    expect(await findByTestId('create-coach-card-headline')).toHaveTextContent('Calm, steady strength');
+    expect(getByTestId('create-coach-card-specialties')).toHaveTextContent('Specialises in older adults and mobility.');
+  });
+
+  it('COACH-CARD-134: a coach who skipped the card fields leaves no blank rows', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockGetString.mockResolvedValue('GP-TEST1');
+    const { getByTestId, findByText, queryByTestId } = await renderScreen();
+    await fireEvent.press(getByTestId('paste-invite-code'));
+    expect(await findByText(/You will be paired with/)).toBeTruthy();
+    expect(queryByTestId('create-coach-card')).toBeNull();
+  });
+
   it('paste with no code on the clipboard shows guidance and leaves the field empty', async () => {
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
     mockGetString.mockResolvedValue('see you at the clinic!');
