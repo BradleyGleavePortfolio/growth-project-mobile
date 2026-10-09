@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import RomanAvatar from '../../components/roman/RomanAvatar';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { radius } from '../../theme/tokens';
+import { radius, SERIF_MIN_LINE_RATIO } from '../../theme/tokens';
 import { Headline } from '../../ui';
 import type { Answers } from '../../lib/consultation/types';
 import type { CompleteOnboardingResponse } from '../../api/consultationApi';
@@ -329,7 +329,7 @@ export function MacroRevealScreen({
     <Frame testID="consult-screen-MACRO" footer={<PrimaryButton label="Next: your plan" onPress={onNext} testID="consult-macro-next" />}>
       <FadeIn><Text style={s.eyebrow}>Your daily targets</Text></FadeIn>
       <FadeIn delayIndex={1} style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 16 }}>
-        <Text style={[s.display, { fontSize: 64, lineHeight: 77 }]} accessibilityLabel={`${fmt(m.calories)} calories a day`} testID="macro-calories">
+        <Text style={[s.display, { fontSize: 64, lineHeight: Math.round(64 * SERIF_MIN_LINE_RATIO) }]} accessibilityLabel={`${fmt(m.calories)} calories a day`} testID="macro-calories">
           {fmt(m.calories)}
         </Text>
         <Text style={s.mutedSmall}>kcal</Text>
