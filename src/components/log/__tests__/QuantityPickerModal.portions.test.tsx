@@ -43,8 +43,10 @@ describe('portion preview matches the saved quantity parser', () => {
 
   it('shows save progress and does not invite another log while saving', async () => {
     await render(<QuantityPickerModal {...props} saving />);
-    expect(screen.getByText('Saving food…')).toBeTruthy();
-    fireEvent.press(screen.getByRole('button', { name: 'Saving food' }));
+    const button = screen.getByRole('button', { name: 'Log food' });
+    expect(button.props.accessibilityState).toMatchObject({ busy: true, disabled: true });
+    expect(screen.getByTestId('quantity-log-food-spinner')).toBeTruthy();
+    fireEvent.press(button);
     expect(props.onConfirm).not.toHaveBeenCalled();
   });
 });
