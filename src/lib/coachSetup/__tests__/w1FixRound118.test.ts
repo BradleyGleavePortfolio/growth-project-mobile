@@ -388,7 +388,7 @@ describe("B-345-3: unknown failures report no content and always carry a referen
     );
     expect(typeof ctx.reference).toBe("string");
     expect(e.requestId).toBe(String(ctx.reference).slice(0, 8));
-    expect(e.body).toContain(`mention reference ${e.requestId}`);
+    expect(e.body).not.toContain(e.requestId);
   });
 
   it("a server failure: the server id is the reference; body text and odd codes never reach Sentry", () => {
@@ -416,7 +416,7 @@ describe("B-345-3: unknown failures report no content and always carry a referen
       reference: "req_123",
     });
     expect(e.requestId).toBe("req_123");
-    expect(e.body).toContain("req_123");
+    expect(e.body).not.toContain("req_123");
   });
 
   it("no server id: the X-Request-Id this app sent is the reference", () => {

@@ -165,6 +165,8 @@ export interface ConsultationFlowProps {
   userId: string | null;
   firstName?: string | null;
   coachName?: string | null;
+  /** The client has no coach (no coach_id): copy that names a coach uses its coachless version. */
+  coachless?: boolean;
   /** Called after "Show me around" on the plan reveal. */
   onFinished: (result: CompleteOnboardingResponse) => void;
   api?: ConsultationApi;
@@ -211,6 +213,7 @@ export default function ConsultationFlow({
   userId,
   firstName,
   coachName,
+  coachless = false,
   onFinished,
   api = defaultApi,
   now: nowFn = () => new Date(),
@@ -314,7 +317,14 @@ export default function ConsultationFlow({
   /** P0 Continue is handled once per visit to P0 (Opus C-1 double tap). */
   const p0Handled = useRef(false);
   const now = nowFn();
-  const ctx: CopyContext = { firstName, coachName: result?.coach?.display_name ?? coachName, now };
+  // The coach's name: the server's result, else the host's, else the name the
+  // coach-sharing notice carries (prototype 03 "Before Bradley builds ...").
+  const ctx: CopyContext = {
+    firstName,
+    coachName: coachless ? null : result?.coach?.display_name ?? coachName ?? coachSharing?.coachName ?? null,
+    coachless,
+    now,
+  };
 
   const setPhaseBoth = useCallback((p: Phase) => {
     phaseRef.current = p;

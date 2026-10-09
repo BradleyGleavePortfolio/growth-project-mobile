@@ -296,16 +296,17 @@ describe("B-329-2 payouts not configured", () => {
         "open Stripe",
       ),
     ]) {
-      expect(e.title).toBe("Payouts are not switched on for your account yet");
-      expect(e.body).toMatch(/Get paid on the Overview tab/);
-      expect(e.body).toMatch(/Bradleyapple1031@gmail\.com/);
+      expect(e.title).toBe("Payouts are not available yet");
+      expect(e.body).toMatch(/finish setup now.*Get paid/i);
+      expect(e.body).not.toMatch(/@|reference/i);
       expect(e.body).not.toMatch(/version|Money|!/);
     }
     const withRef = describeError(
       httpError(503, { error: "CONNECT_NOT_CONFIGURED", request_id: "req_7" }),
       "open Stripe",
     );
-    expect(withRef.body).toContain("req_7");
+    expect(withRef.body).not.toContain("req_7");
+    expect(withRef.requestId).toBeNull();
   });
 });
 

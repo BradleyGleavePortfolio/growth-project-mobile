@@ -320,7 +320,8 @@ describe('CreateAccountScreen', () => {
     expect(await ui.findByText('I verified my email')).toBeTruthy();
     await fireEvent.press(ui.getByLabelText('Send a new link'));
     await waitFor(() => expect(mockResend).toHaveBeenCalledWith('pat@example.com'));
-    expect(await ui.findByText(/If an account is waiting for confirmation, a new link is on its way/)).toBeTruthy();
+    expect(await ui.findByText('Request sent. Check your inbox and your spam folder.')).toBeTruthy();
+    expect(ui.getByLabelText('Send another link in 60s').props.accessibilityState.disabled).toBe(true);
     expect(ui.getByText('Use a different email')).toBeTruthy();
   });
 

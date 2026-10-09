@@ -26,7 +26,7 @@ The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling 
 | `ConsultationFlow.tsx` | The flow state machine (question, summary, preparing, macro, plan, paused, problem). Takes an injectable `api` so every screen is testable with a mocked API. |
 | `QuestionScreen.tsx` | Renders one screen from its definition. Templates: `intro` (T-A), `rows` (T-B), `chips` (T-C), `dob` / `measure` / `goalWeight` (T-D wheels), `yesno` (T-E), `consent` (P0), `message` (P8). |
 | `RevealScreens.tsx` | Summary (T-F), preparing state, macro reveal and plan reveal (T-G), paused state, completion problem state. Active semantic theme, hairline sections, Inter supporting copy and tabular serif targets; the illustrative week is labelled suggested and setup errors make no timing promise. All edits, explanations, support and completion actions retained (`consultationQuietLook.test.tsx`). |
-| `components.tsx` | `AnalyticsExcluded`, Frame (safe-area insets), chapter progress bar, unfilled hairline rows/chips, wheels (VoiceOver `adjustable`), checkbox, buttons, Roman's line. `useConsultationStyles` follows the active semantic theme; primary buttons use its forest accent in launch light mode. Legacy `s`/`palette` exports remain semantic-light defaults for untouched consumers. Consent wording/handlers, analytics exclusion and 280ms STEP_MS are unchanged. |
+| `components.tsx` | `AnalyticsExcluded`, Frame (safe-area insets and footer spacing from `src/ui` Screen, the shared `ScreenTopBar` with an underlined "Finish later"), chapter progress bar, unfilled hairline rows/chips, wheels (VoiceOver `adjustable`), checkbox, Roman's line. `PrimaryButton`, `TextLink` and the question `Headline` are the shared `src/ui` primitives (DS-PRIMITIVES-133, #577), re-exported. Corners come from the semantic radius tokens (chips `radius.chip`, inputs `radius.input`, checkbox cards `radius.card`, boxes `radius.control`). `useConsultationStyles` follows the active semantic theme; primary buttons use its forest accent in launch light mode. Legacy `s`/`palette` exports remain semantic-light defaults for untouched consumers. Consent wording/handlers, analytics exclusion and 280ms STEP_MS are unchanged. |
 | `src/navigation/ConsultationOnboardingNavigator.tsx` | Mounts the flow with the cached user; on finish stores `onboarding_complete`, marks the cached profile `onboardingCompleted` (the backend key that `profileOnboardingCompleted` reads, #320), and emits `authEvents` so `RootNavigator` re-bootstraps straight into the app (with the flag on the old Day-1 flow and Day-1 win are skipped; Opus B-05). |
 | `src/lib/consultation/aiConsent.ts` | Box 2 grant body (`client-ai-v4`, copy hash, platform) and the one-retry, non-blocking grant. |
 | `src/api/aiConsentApi.ts` | `GET /me/ai-consent`, `POST` / `DELETE /me/ai-consent/roman` (backend R2a). Never throws; 404 / 503 is `unavailable`. |
@@ -102,10 +102,20 @@ Every failure says what happened and offers a next step that works; known status
 
 ## Quiet Luxury and accessibility
 
-- Tokens only (`theme/tokens`), weights 400 and 500, radius 4 or less (pills on chips only), forest accent, no confetti, no count-up, no emoji, no exclamation marks.
+- Tokens only (`theme/tokens`), weights 400 and 500, radius from the tokens only (pills on chips; owner 17:07 rounded corners), forest accent, no confetti, no count-up, no emoji, no exclamation marks.
 - Fades are 280ms decelerate, staggered 80ms; with Reduce Motion on they render at rest (`useReducedMotion`).
 - Every control has an accessibility role, label and state. Wheels are `adjustable` with increment and decrement actions; the progress bar exposes "Chapter n of 8, name".
 - Roman appears with his face through `RomanAvatar` (`crop="neutral"`), which resolves `romanFaceAsset` from `src/components/roman/romanAvatarAssets.ts`.
+
+## Prototype parity (CONSULT-PARITY-133, prototype screens 03-36)
+
+- Roman's chapter lines use the serif italic voice (`ROMAN_VOICE_FONT`, Cormorant Garamond 400 italic from the font package the app already ships; regular serif until it loads), 18/25, never clipped.
+- Wheels show serif numerals: the selected value 28/34 in ink, neighbours fading (`wheelOpacity`: 1, 0.6, 0.3), the hairline band behind the selected value.
+- B3 Imperial / Metric are quiet text tabs with a forest underline, not a second filled control. They open on the phone's region (`defaultMeasureUnit`: US, Liberia and Myanmar imperial, everywhere else metric, unknown imperial), the rule the lean flow had; a resumed answer keeps its unit.
+- S1 and N3 (`big`) use the large two-column grid (56 pt, serif numerals). Chips are pills (owner 17:07: rounded corners).
+- Coach names: a coached client sees the coach's name from the server or the coach-sharing notice. A coachless client (`coachless`, from `!user.coach_id` in the navigator; owner 15:29) gets `COACHLESS_COPY` in place of every line that names a coach, and P8's "Your coach will be told" line is dropped. P0 is never changed this way (its copy is hashed).
+- P8 opens "Thanks for answering honestly, {first}." with Roman: "That helps me keep you safe."
+- Deliberate differences from the prototype: P0 stays straight after W1 with two boxes (D2); T3's reason stays impersonal; N2 keeps "So your coach knows what you avoid."; P7 uses commas; P8's body keeps the approved safety copy.
 
 ## Tests
 
@@ -123,6 +133,7 @@ npx jest src/lib/consultation src/screens/consultation --maxWorkers=1
 - `src/lib/consultation/__tests__/aiConsentRetry.test.ts`: the one retry and the stop check between attempts.
 - `src/screens/consultation/__tests__/consultationOrdering.test.tsx`: auto-advance timer, serialized saves, resume reconciliation in the flow, safe-area insets, identity fencing.
 - `src/screens/consultation/__tests__/consultationTemplates.test.tsx`: wheels, unit tabs, soft notes, T3 expansion, summary Edit, API client routes and 409 mapping, the rollback flag.
+- `src/screens/consultation/__tests__/consultationParity133.test.tsx`: prototype parity at 360x800 and 390x844 (Roman's italic voice, quiet unit tabs and region default, serif wheels and band, the large grid, P8), and the coachless copy never naming a coach.
 
 ## Problem and paused screens
 
