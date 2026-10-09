@@ -21,9 +21,11 @@ jest.mock('../components/ProviderOverlapChips', () => ({ __esModule: true, defau
 jest.mock('../components/useReduceMotion', () => ({ useReduceMotion: () => true }));
 
 const mockNavigate = jest.fn();
+const mockGoBack = jest.fn();
+let mockCanGoBack = false;
 let mockParams: Record<string, unknown> = { metric: 'STEPS', bucket: 'HEALTH_FITNESS' };
 jest.mock('@react-navigation/native', () => ({
-  useNavigation: () => ({ navigate: mockNavigate, setParams: jest.fn() }),
+  useNavigation: () => ({ navigate: mockNavigate, setParams: jest.fn(), goBack: mockGoBack, canGoBack: () => mockCanGoBack }),
   useRoute: () => ({ params: mockParams }),
 }));
 
@@ -81,6 +83,8 @@ function expectQuietTree(json: unknown) {
 
 beforeEach(() => {
   mockNavigate.mockReset();
+  mockGoBack.mockReset();
+  mockCanGoBack = false;
   mockParams = { metric: 'STEPS', bucket: 'HEALTH_FITNESS' };
 });
 
@@ -167,5 +171,64 @@ describe.each(DEVICES)('Metric detail at $name', ({ frame, insets }) => {
     await render(wrap(<MetricDetailScreen />));
     expect(screen.getByLabelText('Loading steps')).toBeTruthy();
     expect(screen.queryByRole('progressbar')).toBeNull();
+  });
+});
+
+// B-HEALTHBACK-135 (B29): the More stack hides the native header and iOS has no hardware back, so the
+// pushed detail draws the coach screens' Back (m#638) on every branch, first under the Screen top.
+describe.each(DEVICES)('Metric detail Back at $name', ({ frame, insets }) => {
+  const wrap = (ui: React.ReactElement) => <SafeAreaProvider initialMetrics={{ frame, insets }}>{ui}</SafeAreaProvider>;
+  /** The first announced node (a label or a text) in render order. */
+  const firstAnnounced = (n: unknown): string | undefined => {
+    if (n == null || typeof n !== 'object') return undefined;
+    if (Array.isArray(n)) {
+      for (const c of n) {
+        const hit = firstAnnounced(c);
+        if (hit) return hit;
+      }
+      return undefined;
+    }
+    const node = n as { props?: { accessibilityLabel?: unknown }; children?: unknown[] | null };
+    if (typeof node.props?.accessibilityLabel === 'string') return node.props.accessibilityLabel;
+    const text = node.children?.find((c) => typeof c === 'string');
+    return typeof text === 'string' ? text : firstAnnounced(node.children ?? null);
+  };
+  const BRANCHES = [
+    { name: 'loaded', root: 'metric-detail', over: { data: stepsSeries([4000, 6000, 5000]) } },
+    { name: 'loading', root: 'metric-detail-loading', over: { isLoading: true } },
+    { name: 'error', root: 'metric-detail-error', over: { isError: true } },
+  ];
+
+  it.each(BRANCHES)('$name: a 44 pt Back first under the Screen top goes back once', async ({ root, over }) => {
+    mockCanGoBack = true;
+    mockSamples.mockReturnValue(samplesResult(over));
+    const r = await render(wrap(<MetricDetailScreen />));
+    expect(flat(r.getByTestId(root)).paddingTop).toBe(insets.top + layout.statusBarGap);
+    const back = screen.getByTestId('metric-detail-back');
+    expect(back.props.accessibilityRole).toBe('button');
+    expect(back.props.accessibilityLabel).toBe('Back');
+    expect(flat(back).width).toBe(44);
+    expect(flat(back).height).toBe(44);
+    expect(firstAnnounced(r.toJSON())).toBe('Back');
+    await fireEvent.press(back);
+    expect(mockGoBack).toHaveBeenCalledTimes(1);
+    expect(mockNavigate).not.toHaveBeenCalled();
+    expectQuietTree(r.toJSON());
+  });
+
+  it.each(BRANCHES)('$name: no Back when there is nothing to go back to', async ({ over }) => {
+    mockSamples.mockReturnValue(samplesResult(over));
+    await render(wrap(<MetricDetailScreen />));
+    expect(screen.queryByTestId('metric-detail-back')).toBeNull();
+    expect(screen.queryByLabelText('Back')).toBeNull();
+  });
+
+  it('keeps Connect a source next to Back on an empty metric', async () => {
+    mockCanGoBack = true;
+    mockSamples.mockReturnValue(samplesResult({ data: { series: [] } }));
+    await render(wrap(<MetricDetailScreen />));
+    await fireEvent.press(screen.getByLabelText('Connect a source'));
+    expect(mockNavigate).toHaveBeenCalledWith('Connections');
+    expect(mockGoBack).not.toHaveBeenCalled();
   });
 });

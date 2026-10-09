@@ -45,6 +45,8 @@ Shortcuts and fasting copy (SMALL-M-COPY-131): Profile uses the screen's own **S
 ### Health activity overview
 `wearables/HealthFitnessScreen.tsx` uses `cards/ActivityBars.tsx` instead of activity rings in loaded, loading and empty states. Each QuietBar shows the latest actual daily value and its sample date; completed missing samples show an absent value, not zero, while initial queries say “Loading samples”. `wearables/starterGoals.ts` is the sole fallback: 5,000 steps, 20 exercise minutes and 250 active kcal, visibly labelled “Starter goal”. Explicit typed coach/client targets override each fallback. The current API exposes no activity-target storage or goal editor, so no edit button is shown. Heart, Workouts, Body and Steps detail routes, refresh/retry, AI slot and Connections CTA remain; coach embeds stay read-only.
 
+Back on Health (B-HEALTHBACK-135, B29): the More stack hides the native header and iOS has no hardware back, so `wearables/WearablesShell.tsx` (Health and sleep) and `wearables/MetricDetailScreen.tsx` (loaded, loading and error) draw the coach screens' Back (m#638): `arrow-back` 24 in `textPrimary`, a 44 x 44 `layout.touchMin` box labelled "Back", first in the title block under the Screen top, shown only when `navigation.canGoBack()`. Every other route on both screens is unchanged. Tests: `wearables/__tests__/WearablesShell.test.tsx`, `wearables/__tests__/metricDetailRedesign133.test.tsx`.
+
 ### Logging and planning
 
 More → **Meal plan** opens `Plan`; its neutral “View meal plans” description does not promise a weekly plan or assume a coach/assignment exists.
