@@ -138,7 +138,9 @@ describe('eas-update-guard', () => {
       expect(c.clinic.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
       expect(c.clinic.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES).toBe('true');
       expect(c.clinic.env.TGP_ANDROID_HEALTH_CONNECT).toBe('1');
-      expect(c.production.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBeUndefined();
+      // B40 (CONSULT-ALL-M-133): the consultation and the tour ship on in every store build.
+      expect(c.production.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL).toBe('true');
+      expect(c.production.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
     });
 
     it('parses both --k v and --k=v forms', () => {

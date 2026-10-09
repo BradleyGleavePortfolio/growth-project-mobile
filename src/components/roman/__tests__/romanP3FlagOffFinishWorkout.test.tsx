@@ -202,7 +202,7 @@ describe('§2.8 producer: ActiveWorkoutScreen finish path is pre-P3 when romanCh
       // HapticPressable wrapping the label, so fire the press event (it bubbles)
       // rather than reading props off the Text node.
       await act(async () => {
-        await fireEvent.press(getByText('Finish'));
+        await fireEvent.press(getByText('Finish workout'));
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();

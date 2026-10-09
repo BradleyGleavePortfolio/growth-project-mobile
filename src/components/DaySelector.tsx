@@ -1,91 +1,111 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { formatDate, getTodayString, addDays } from '../utils/date';
 import { useTheme } from '../theme/useTheme';
-import { QuietText as Text } from '../ui/progress/QuietBar';
+import { layout, radius, typography } from '../theme/tokens';
+import HapticPressable from './HapticPressable';
 
 interface DaySelectorProps {
   selectedDate: string;
   onDateChange: (date: string) => void;
 }
 
+/**
+ * The Food log headline: the selected day in serif, today marked with the
+ * forest dot, previous and next as two quiet chevrons on the right. Same
+ * three controls as before (previous, jump to today, next).
+ */
 export default function DaySelector({
   selectedDate,
   onDateChange,
 }: DaySelectorProps) {
-  const isToday = selectedDate === getTodayString();
+  const today = getTodayString();
+  const isToday = selectedDate === today;
   const { semanticColors: sc } = useTheme();
+  const styles = makeStyles(sc);
   const displayLabel = isToday ? 'Today' : formatDate(selectedDate);
 
   return (
-    <View
-      style={styles.container}
-      accessible={false}
-    >
-      <TouchableOpacity
-        style={styles.arrow}
-        onPress={() => onDateChange(addDays(selectedDate, -1))}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        accessibilityRole="button"
-        accessibilityLabel="Previous day"
-      >
-        <Ionicons name="chevron-back" size={22} color={Colors.textSecondary} />
-      </TouchableOpacity>
+    <View style={styles.container} accessible={false}>
+      <View style={styles.dateCell}>
+        <HapticPressable
+          intent="light"
+          disableAnimation
+          style={styles.dateButton}
+          onPress={() => onDateChange(today)}
+          accessibilityRole="button"
+          accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${displayLabel}, tap to go to today`}
+          accessibilityHint={isToday ? undefined : 'Double tap to jump back to today'}
+        >
+          <Text
+            style={[styles.dateText, { color: selectedDate > today ? sc.textMuted : sc.textPrimary }]}
+            numberOfLines={2}
+            maxFontSizeMultiplier={1.4}
+          >
+            {displayLabel}
+          </Text>
+          {isToday ? <View testID="today-dot" style={styles.todayDot} /> : null}
+        </HapticPressable>
+      </View>
 
-      <TouchableOpacity
-        style={styles.dateButton}
-        onPress={() => onDateChange(getTodayString())}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${displayLabel}, tap to go to today`}
-        accessibilityHint={isToday ? undefined : 'Double tap to jump back to today'}
-      >
-        <Text style={[styles.dateText, { color: selectedDate > getTodayString() ? sc.textMuted : sc.textPrimary }]}>{displayLabel}</Text>
-        {isToday ? <View testID="today-dot" style={styles.todayDot} /> : null}
-      </TouchableOpacity>
+      <View style={styles.arrows}>
+        <HapticPressable
+          intent="light"
+          disableAnimation
+          style={styles.arrow}
+          onPress={() => onDateChange(addDays(selectedDate, -1))}
+          accessibilityRole="button"
+          accessibilityLabel="Previous day"
+        >
+          <Ionicons name="chevron-back" size={20} color={sc.textMuted} />
+        </HapticPressable>
 
-      <TouchableOpacity
-        style={styles.arrow}
-        onPress={() => {
-          if (!isToday) onDateChange(addDays(selectedDate, 1));
-        }}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        disabled={isToday}
-        accessibilityRole="button"
-        accessibilityLabel="Next day"
-        accessibilityState={{ disabled: isToday }}
-      >
-        <Ionicons
-          name="chevron-forward"
-          size={22}
-          color={isToday ? Colors.border : Colors.textSecondary}
-        />
-      </TouchableOpacity>
+        <HapticPressable
+          intent="light"
+          disableAnimation
+          style={styles.arrow}
+          onPress={() => {
+            if (!isToday) onDateChange(addDays(selectedDate, 1));
+          }}
+          disabled={isToday}
+          accessibilityRole="button"
+          accessibilityLabel="Next day"
+          accessibilityState={{ disabled: isToday }}
+        >
+          <Ionicons name="chevron-forward" size={20} color={isToday ? sc.border : sc.textMuted} />
+        </HapticPressable>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-    paddingVertical: 8,
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: layout.sectionGap,
   },
-  arrow: {
-    minHeight: 44, minWidth: 44, alignItems: 'center', justifyContent: 'center',
-    padding: 4,
+  dateCell: { flex: 1 },
+  dateButton: {
+    minHeight: layout.touchMin,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   dateText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: Colors.textPrimary,
-    minWidth: 120,
-    textAlign: 'center',
+    ...typography.h1,
+    fontVariant: ['lining-nums'],
+    flexShrink: 1,
   },
-  dateButton: { minHeight: 44, justifyContent: 'center', alignItems: 'center' },
-  todayDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: Colors.primary, marginTop: 4 },
+  todayDot: { width: 6, height: 6, borderRadius: radius.chip, backgroundColor: sc.accent },
+  arrows: { flexDirection: 'row', marginRight: -12 },
+  arrow: {
+    minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

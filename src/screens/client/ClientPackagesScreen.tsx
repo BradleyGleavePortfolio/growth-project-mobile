@@ -47,7 +47,6 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -66,6 +65,7 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
+import { Screen } from '../../ui';
 import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
@@ -285,7 +285,7 @@ export default function ClientPackagesScreen() {
 
   if (noCoach) {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <Screen edges={['top']} contentStyle={styles.content}>
         {navigation.canGoBack?.() ? (
           <TouchableOpacity
             onPress={() => navigation.goBack()}
@@ -311,7 +311,7 @@ export default function ClientPackagesScreen() {
             <Text style={styles.ctaText}>{COACHLESS_CTA}</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </Screen>
     );
   }
 
@@ -352,9 +352,9 @@ export default function ClientPackagesScreen() {
     ) : null;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
+    <Screen
+      edges={['top']}
+      contentStyle={styles.content}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
@@ -600,14 +600,14 @@ export default function ClientPackagesScreen() {
         testID="plans-refund-support-fallback"
         centered
       />
-    </ScrollView>
+    </Screen>
   );
 }
 
 const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
-    content: { paddingHorizontal: 24, paddingTop: 56, paddingBottom: 40 },
+    // Screen owns the inset top (insets.top + 12).
+    content: { paddingHorizontal: 24, paddingBottom: 40 },
     center: {
       flex: 1,
       alignItems: 'center',
@@ -638,7 +638,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       minHeight: 44, justifyContent: 'center',
       paddingHorizontal: 12,
       paddingVertical: 6,
-      borderRadius: tokens.radius.lg,
+      borderRadius: tokens.radius.button,
     },
     dunningBtnText: { ...tokens.typography.bodyMd, color: semanticColors.accentText, fontSize: 13 },
     currentPlanCard: {
@@ -697,7 +697,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     cta: {
       marginTop: 20,
       backgroundColor: semanticColors.accent,
-      borderRadius: tokens.radius.lg, minHeight: 44, justifyContent: 'center',
+      borderRadius: tokens.radius.button, minHeight: 44, justifyContent: 'center',
       paddingHorizontal: 20,
       paddingVertical: 12,
     },
@@ -719,7 +719,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginTop: 14,
       backgroundColor: semanticColors.accent,
       paddingVertical: 12,
-      borderRadius: tokens.radius.lg, minHeight: 44, justifyContent: 'center',
+      borderRadius: tokens.radius.button, minHeight: 44, justifyContent: 'center',
       alignItems: 'center',
     },
     // Explicit disabled fill + label tokens (no parent opacity). The previous

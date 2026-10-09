@@ -4,7 +4,8 @@
  * auto-advance and back, per-chapter save, the P0 two-box agreement (D2)
  * and its intake record, the P8 branch (shown on a yes, never blocks), resume,
  * the complete-call happy path through macro and plan reveals, and 409
- * handling (consultation_incomplete, consent_missing, not_attached).
+ * handling (consultation_incomplete, consent_missing; not_attached and
+ * clinic_not_configured from an older server get the calm server state, B14).
  */
 import React from 'react';
 import { Alert, Linking } from 'react-native';
@@ -317,19 +318,47 @@ describe('ConsultationFlow', () => {
     await waitFor(() => r.getByTestId('consult-screen-P0'));
   });
 
-  it('409 not_attached and network failures offer a retry', async () => {
-    const complete = jest
-      .fn<Promise<CompleteOutcome>, []>()
-      .mockResolvedValueOnce({ kind: 'conflict', code: 'not_attached' })
-      .mockResolvedValueOnce({ kind: 'ok', data: RESULT });
-    const api = makeApi({ complete });
+  it.each(['not_attached', 'clinic_not_configured'] as const)(
+    'B14: 409 %s from an older server shows the calm server state with Try again, never a coach-link dead end',
+    async (code) => {
+      const { captureError } = jest.requireMock('../../../services/sentry') as { captureError: jest.Mock };
+      captureError.mockClear();
+      const complete = jest
+        .fn<Promise<CompleteOutcome>, []>()
+        .mockResolvedValueOnce({ kind: 'conflict', code, requestId: '9a2b3c4d-1111-4222-8333-444455556666' })
+        .mockResolvedValueOnce({ kind: 'ok', data: RESULT });
+      const api = makeApi({ complete });
+      await seedLocal(fullAnswers(), 'SUM');
+      const r = await renderFlow(api);
+      await waitFor(() => r.getByTestId('consult-screen-SUM'));
+      await fireEvent.press(r.getByTestId('consult-prepare'));
+      await waitFor(() => r.getByTestId('consult-problem-unknown'));
+      expect(r.queryByTestId(`consult-problem-${code}`)).toBeNull();
+      expect(r.queryByText(/coach link|coach must be linked|coach setup/i)).toBeNull();
+      expect(r.getByText(/Your answers are kept on this phone/)).toBeTruthy();
+      expect(r.getByTestId('consult-problem-reference').props.children).toBe('Reference: 9a2b3c4d. Mention it if you write to support.');
+      // The operator sees an old server refusing a client.
+      expect(captureError).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({ where: 'POST /me/onboarding/complete', status: 409, code }),
+      );
+      // Try again runs the completion again; a ready server reveals the macros.
+      await fireEvent.press(r.getByTestId('consult-problem-action'));
+      await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+      expect(complete).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('B14: the calm server state goes back to the summary, answers intact', async () => {
+    const api = makeApi({ complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'conflict', code: 'not_attached' })) });
     await seedLocal(fullAnswers(), 'SUM');
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-SUM'));
     await fireEvent.press(r.getByTestId('consult-prepare'));
-    await waitFor(() => r.getByTestId('consult-problem-not_attached'));
-    await fireEvent.press(r.getByTestId('consult-problem-action'));
-    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    await waitFor(() => r.getByTestId('consult-problem-unknown'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    expect((await readLocalState('u1', NOW))?.answers).toEqual(expect.objectContaining({ G1: fullAnswers().G1 }));
   });
 
   it('a failed final save never calls complete', async () => {

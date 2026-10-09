@@ -16,7 +16,8 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { layout, radius, typography } from '../../theme/tokens';
+import { Overline, useScreenInsets } from '../../ui';
 import { SkeletonClientCard } from '../../ui/skeletons';
 import { EmptyState, EmptyStateNoClients, EmptyStateNoResults, IconPeople } from '../../ui/empty-states';
 import {
@@ -51,6 +52,9 @@ function initials(c: RosterClient): string {
 export default function ClientsListScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // REDO-COACH-133: the Clients tab hides the stack header, so the screen owns
+  // the top inset (status bar + breathing room) instead of a fixed 60 pt.
+  const insets = useScreenInsets();
   const currentUser = useCurrentUser();
   const {
     clients,
@@ -200,10 +204,10 @@ export default function ClientsListScreen({ navigation }: Props) {
   const listHeader = (
     <>
       <View style={styles.header}>
-        <Text style={styles.date} testID="clients-date">{dateLine}</Text>
+        <Overline style={styles.date} testID="clients-date">{dateLine}</Overline>
         <View style={styles.titleRow}>
           <View style={styles.titleBlock}>
-            <Text style={styles.title}>Clients</Text>
+            <Overline style={styles.title} accessibilityRole="header">Clients</Overline>
           </View>
           {canSeeRiskBoard ? (
             <HapticPressable
@@ -323,7 +327,7 @@ export default function ClientsListScreen({ navigation }: Props) {
       data={isLoading ? [] : shownClients}
       renderItem={renderClient}
       keyExtractor={(item) => item.id}
-      contentContainerStyle={styles.listContent}
+      contentContainerStyle={[styles.listContent, { paddingTop: insets.top + layout.statusBarGap + 12 }]}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
@@ -374,20 +378,22 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 24,
     marginBottom: 16,
   },
+  // Date line above a hairline, as in the coach-home reference.
   date: {
-    ...typography.eyebrow,
-    fontSize: 13,
-    lineHeight: 18,
     color: colors.textSecondary,
-    marginBottom: 12,
+    marginBottom: 20,
+    paddingBottom: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
   },
+  // Serif hero number; lineHeight 1.25 x size so Android never clips it.
   hero: {
     ...typography.display,
     fontSize: 64,
-    lineHeight: 68,
+    lineHeight: 80,
     fontVariant: ['tabular-nums'],
     color: colors.textPrimary,
-    marginTop: 8,
+    marginTop: 4,
   },
   pushCardWrap: {
     paddingHorizontal: 24,
@@ -399,10 +405,8 @@ const makeStyles = (colors: ThemeColors) =>
   },
   titleBlock: { flex: 1 },
   title: {
-    ...typography.eyebrow,
-    fontSize: 13,
-    lineHeight: 18,
     color: colors.textSecondary,
+    marginBottom: 0,
   },
   subtitle: {
     ...typography.bodySmall,
@@ -416,7 +420,7 @@ const makeStyles = (colors: ThemeColors) =>
     gap: 6,
     paddingHorizontal: 12,
     minHeight: 44,
-    borderRadius: 4,
+    borderRadius: radius.button,
     backgroundColor: colors.primary,
   },
   riskPill: {
@@ -475,7 +479,6 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.primary,
   },
   listContent: {
-    paddingTop: 60,
     paddingBottom: 100,
   },
   clientCard: {

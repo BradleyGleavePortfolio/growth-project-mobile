@@ -17,7 +17,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   ActivityIndicator,
   Linking,
   RefreshControl,
@@ -32,7 +31,8 @@ import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 import { HELP_CONTACT_URL } from '../../config/env';
 
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type FoundingInfo = { rank: number; total: number; isFoundingMember: boolean };
 type PlanRead = PaymentsResult<ClientPaymentStatus>;
@@ -208,7 +208,7 @@ export default function MembershipScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       <View style={styles.header}>
         <HapticPressable
           intent="light"
@@ -412,7 +412,7 @@ const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
   noticeText: { ...typography.bodySmall, color: sc.textPrimary, marginTop: 12 },
   primaryAction: {
     backgroundColor: sc.accent,
-    borderRadius: 4,
+    borderRadius: radius.button,
     minHeight: 48,
     paddingVertical: 14,
     alignItems: 'center',

@@ -19,7 +19,8 @@ import { listsApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { typography } from '../../theme/tokens';
+import { typography, radius } from '../../theme/tokens';
+import { Screen } from '../../ui';
 
 function EmptyState({ title, subtitle }: { icon: string; title: string; subtitle: string }) {
   const { semanticColors: sc } = useTheme();
@@ -224,7 +225,7 @@ export default function GroceryListScreen() {
   ];
 
   return (
-    <View style={styles.container} testID="grocery-prep-screen">
+    <Screen edges={['top']} scroll={false} contentStyle={styles.bare} testID="grocery-prep-screen">
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -342,19 +343,19 @@ export default function GroceryListScreen() {
           showsVerticalScrollIndicator={false}
         />
       )}
-    </View>
+    </Screen>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primary' | 'textPrimary' | 'textMuted' | 'textOnPrimary' | 'border' | 'error'>) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
+  bare: { paddingHorizontal: 0, paddingBottom: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 60,
     marginBottom: 16,
     gap: 12,
   },
@@ -367,7 +368,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     paddingHorizontal: 12,
     paddingVertical: 6,
     minHeight: 44, justifyContent: 'center',
-    borderRadius: 0, // radius.sm
+    borderRadius: radius.button,
   },
   clearBtnText: { ...typography.bodySmall, color: colors.textMuted },
 
@@ -384,7 +385,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     flex: 3,
     height: 44,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 12,
@@ -396,7 +397,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     flex: 1,
     height: 44,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 8,
@@ -409,7 +410,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     flex: 1,
     height: 44,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: radius.input,
     borderWidth: 1,
     borderColor: colors.border,
     paddingHorizontal: 8,
@@ -420,7 +421,7 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
     width: 44,
     height: 44,
     backgroundColor: colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -441,11 +442,10 @@ const makeStyles = (colors: Pick<ThemeColors, 'background' | 'surface' | 'primar
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
-    paddingVertical: 12,
+    // A hairline row, not a boxed card (CATALOG: hairline sections).
+    minHeight: 56,
+    paddingVertical: 6,
     paddingHorizontal: 0,
-    marginBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
     gap: 10,

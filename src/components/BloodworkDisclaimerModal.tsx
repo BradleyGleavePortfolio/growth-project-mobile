@@ -22,11 +22,12 @@ import {
   Modal,
   StyleSheet,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
 } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
+import { radius } from '../theme/tokens';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   BLOODWORK_DISCLAIMER_LONG,
   BLOODWORK_DISCLAIMER_MODAL_TITLE,
@@ -167,7 +168,7 @@ function makeStyles(colors: ThemeColors) {
     },
     ackBtn: {
       backgroundColor: colors.primary,
-      borderRadius: 10,
+      borderRadius: radius.button,
       paddingVertical: 14,
       alignItems: 'center',
       marginBottom: 16,

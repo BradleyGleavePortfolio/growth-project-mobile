@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { DEFAULT_SETTINGS, useSettings } from '../hooks/useSettings';
 import { useTheme } from '../theme/useTheme';
+import { layout, radius, typography } from '../theme/tokens';
+import { QuietOverline } from '../ui/sections/QuietSection';
 import { QuietText as Text } from '../ui/progress/QuietBar';
 import HapticPressable from './HapticPressable';
 import type { WaterEntry } from '../services/api';
@@ -46,12 +47,9 @@ export default function WaterTracker({
   const progressText = `${metric ? 'About ' : ''}${current} of ${target} ${spokenUnit}${isStarterGoal ? ', starter goal' : ''}`;
 
   return (
-    <View style={styles.card}>
+    <View style={styles.card} testID="water-section">
       <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="water-outline" size={20} color={sc.accent} />
-          <Text style={styles.title}>Water</Text>
-        </View>
+        <Text style={styles.title} accessibilityRole="header">Water</Text>
         <Text style={styles.total}>
           {metric ? '≈ ' : ''}{current} / {target} {unit}
         </Text>
@@ -72,17 +70,20 @@ export default function WaterTracker({
 
       <View style={styles.buttonRow}>
         {amounts.map((amount) => (
-          <TouchableOpacity
-            key={amount}
-            style={styles.addButton}
-            onPress={() => onAdd(metric ? amount / ML_PER_OZ : amount)}
-            disabled={removingId !== null}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel={`Add ${amount} ${spokenUnit} of water`}
-          >
-            <Text style={styles.addButtonText}>+{amount}{metric ? ' ml' : 'oz'}</Text>
-          </TouchableOpacity>
+          // HapticPressable wraps its Pressable in an Animated.View, so the
+          // equal-width cell lives on this View.
+          <View key={amount} style={styles.addCell}>
+            <HapticPressable
+              intent="light"
+              style={styles.addButton}
+              onPress={() => onAdd(metric ? amount / ML_PER_OZ : amount)}
+              disabled={removingId !== null}
+              accessibilityRole="button"
+              accessibilityLabel={`Add ${amount} ${spokenUnit} of water`}
+            >
+              <Text style={styles.addButtonText}>+{amount}{metric ? ' ml' : 'oz'}</Text>
+            </HapticPressable>
+          </View>
         ))}
       </View>
 
@@ -90,8 +91,8 @@ export default function WaterTracker({
         {glasses === 1 ? `1 glass (${glassSize})` : `${glasses} glasses (${glassSize} each)`}
       </Text>
       {entries.length > 0 && onRemove ? (
-        <View>
-          <Text style={styles.entriesTitle}>Logged water</Text>
+        <View style={styles.entries}>
+          <QuietOverline>Logged water</QuietOverline>
           {entries.map((entry, index) => {
             const amount = metric ? `${entry.amount_ml} ml` : `≈ ${Math.round(entry.amount_ml / ML_PER_OZ * 10) / 10} oz`;
             return (
@@ -107,7 +108,6 @@ export default function WaterTracker({
                   accessibilityState={{ disabled: removingId !== null, busy: removingId === entry.id }}
                   testID={`remove-water-${entry.id}`}
                 >
-                  <Ionicons name="trash-outline" size={18} color={sc.textMuted} />
                   <Text style={styles.removeLabel}>{removingId === entry.id ? 'Removing…' : 'Remove'}</Text>
                 </HapticPressable>
               </View>
@@ -123,34 +123,30 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   card: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: sc.border,
-    paddingVertical: 16,
-    gap: 12,
+    paddingTop: layout.sectionPadY,
+    gap: 14,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'baseline',
+    gap: 12,
   },
   title: {
-    fontSize: 15,
-    fontWeight: '500',
+    ...typography.h2,
     color: sc.textPrimary,
   },
   total: {
     fontSize: 13,
-    fontWeight: '600',
+    lineHeight: 19,
     color: sc.textMuted,
     fontVariant: ['tabular-nums'],
   },
   goalLabel: {
     fontSize: 13,
+    lineHeight: 19,
     color: sc.textMuted,
-    textAlign: 'right',
+    marginTop: -10,
   },
   progressTrack: {
     height: 4,
@@ -164,31 +160,32 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
   },
   buttonRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
+  addCell: { flex: 1 },
   addButton: {
-    flex: 1,
-    minHeight: 44,
-    paddingVertical: 10,
+    minHeight: layout.touchMin,
     alignItems: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: sc.border,
+    backgroundColor: sc.bgSurface,
   },
   addButtonText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontFamily: typography.bodyMd.fontFamily,
     color: sc.accent,
     fontVariant: ['tabular-nums'],
   },
   glasses: {
     fontSize: 13,
+    lineHeight: 19,
     color: sc.textMuted,
-    textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
-  entriesTitle: {
-    fontSize: 13,
-    color: sc.textMuted,
+  entries: {
+    marginTop: 6,
   },
   entryRow: {
     flexDirection: 'row',
@@ -198,17 +195,15 @@ const makeStyles = (sc: ReturnType<typeof useTheme>['semanticColors']) => StyleS
     borderBottomColor: sc.border,
   },
   entryAmount: {
-    fontSize: 13,
+    fontSize: 15,
     color: sc.textPrimary,
     fontVariant: ['tabular-nums'],
   },
   removeButton: {
-    minHeight: 44,
-    minWidth: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
+    minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
+    alignItems: 'flex-end',
     justifyContent: 'center',
-    gap: 6,
   },
   removeLabel: {
     fontSize: 13,

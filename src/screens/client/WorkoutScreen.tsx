@@ -33,7 +33,8 @@ import { logger } from '../../utils/logger';
 import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
 import { useTheme } from '../../theme/ThemeProvider';
-import { typography, type SemanticTokens } from '../../theme/tokens';
+import { typography, radius, type SemanticTokens } from '../../theme/tokens';
+import { Screen } from '../../ui';
 import { QuietOverline } from '../../ui/sections/QuietSection';
 import QuietBar from '../../ui/progress/QuietBar';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
@@ -666,13 +667,12 @@ export default function WorkoutScreen() {
   const showAllCoachRow = completedAssignments > 0 && pendingAssignments.length < 2;
 
   return (
-    <View style={styles.container}>
-      <ScrollView
-        testID="workout-scroll"
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={sc.accent} colors={[sc.accent]} />}
-      >
+    <Screen
+      edges={['top']}
+      testID="workout"
+      contentStyle={styles.content}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={sc.accent} colors={[sc.accent]} />}
+    >
         <View style={styles.header}>
           <Text style={styles.title}>Workouts</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -926,8 +926,7 @@ export default function WorkoutScreen() {
             </View>
           ) : <Text style={styles.chartEmptyText}>Log a workout to see muscle breakdown</Text>}
         </FadeInView>}
-      </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
@@ -977,7 +976,8 @@ const makeChart = (sc: SemanticTokens) =>
     justifyContent: 'flex-end',
   },
   bar: {
-    borderRadius: 2, // radius.md
+    borderTopLeftRadius: radius.control,
+    borderTopRightRadius: radius.control,
   },
   weekLabel: {
     ...chartLabel,
@@ -995,7 +995,8 @@ const makeChart = (sc: SemanticTokens) =>
 const makeStyles = (sc: SemanticTokens) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: sc.bgPrimary },
-  content: { paddingBottom: 100 },
+  // Screen owns the inset top (insets.top + 12); sections keep their 24 gutters.
+  content: { paddingHorizontal: 0, paddingBottom: 100 },
   romanWorkoutWrap: {
     marginHorizontal: 24,
     marginBottom: 16,
@@ -1005,14 +1006,13 @@ const makeStyles = (sc: SemanticTokens) =>
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 24,
-    paddingTop: 60,
     marginBottom: 24,
   },
   title: { ...typography.h1, color: sc.textPrimary },
   hero: { marginHorizontal: 24, marginBottom: 24 },
   heroTitle: { ...typography.h2, color: sc.textPrimary, marginBottom: 16 },
   heroNote: { ...typography.bodySmall, fontSize: 13, color: sc.textMuted, marginTop: 8 },
-  primaryButton: { minHeight: 48, borderRadius: 4, backgroundColor: sc.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  primaryButton: { minHeight: 54, borderRadius: radius.button, backgroundColor: sc.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   primaryLabel: { ...typography.bodyMd, color: sc.textOnAccent },
   rows: { marginHorizontal: 24, marginBottom: 24, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border },
   quietRow: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: sc.border },
