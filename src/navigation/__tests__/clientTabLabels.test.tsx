@@ -59,6 +59,8 @@ it('keeps six labelled outline tabs and their original stack destinations', asyn
     expect(StyleSheet.flatten(text.props.style)).toMatchObject({ ...typography.tabLabelActive });
     // B26: one line, shrinking instead of wrapping ("Communi / ty" on a 360 pt Android phone).
     expect(text.props).toMatchObject({ numberOfLines: 1, adjustsFontSizeToFit: true });
+    // SHOTS-134B 3: the label reaches over the tab button's 5 pt padding.
+    expect(StyleSheet.flatten(text.props.style)).toMatchObject({ marginHorizontal: -5, textAlign: 'center' });
   }
   const inactive = view.getByText('Home');
   expect(StyleSheet.flatten(inactive.props.style)).toMatchObject({ ...typography.tabLabel, color: lightTokens.textMuted });
@@ -70,7 +72,16 @@ it('fits "Community" inside one of six tabs on a 360 pt wide phone (B26)', () =>
   const COMMUNITY_EM = 5.484;
   const t = typography.tabLabelActive;
   const width = COMMUNITY_EM * t.fontSize + t.letterSpacing * 'Community'.length;
-  expect(width).toBeLessThanOrEqual(360 / 6);
-  // The tab item keeps no side padding, so the whole 60 pt is the label's.
+  // The tab item keeps no side padding, and the label reaches back over the
+  // tab button's own padding (read from the installed bottom-tabs), so the
+  // whole 60 pt is the label's even where text cannot shrink (SHOTS-134B 3).
   expect(navSource).toContain('tabBarItemStyle: { paddingHorizontal: 0 }');
+  const item = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'node_modules',
+    '@react-navigation', 'bottom-tabs', 'src', 'views', 'BottomTabItem.tsx'), 'utf8');
+  const pad = Number(/tabVerticalUiKit: \{[^}]*?padding: (\d+)/.exec(item)?.[1]);
+  expect(navSource).toContain(`const TAB_BUTTON_PADDING = ${pad};`);
+  expect(navSource).toContain('marginHorizontal: -TAB_BUTTON_PADDING');
+  expect(width).toBeLessThanOrEqual(360 / 6);
+  // Without reaching over the padding the label had 50 pt and clipped.
+  expect(width).toBeGreaterThan(360 / 6 - 2 * pad);
 });

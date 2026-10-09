@@ -190,6 +190,8 @@ const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcoming
 const ProtectedCalendarHomeScreen = withProtectedScreen(CalendarHomeScreen);
 const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);
 const ProtectedCalendarSessionScreen = withProtectedScreen(CalendarSessionScreen);
+/** Side padding @react-navigation/bottom-tabs puts on each tab button (BottomTabItem tabVerticalUiKit). */
+const TAB_BUTTON_PADDING = 5;
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
 export type HomeStackParamList = {
@@ -690,13 +692,20 @@ export default function ClientNavigator() {
         // B26: six labelled tabs on a 360 pt Android phone leave 60 pt each;
         // the label keeps one line (tokens typography.tabLabel*, no side
         // padding on the item, shrinks rather than wraps at large text).
+        // SHOTS-134B 3: the tab button inside the item keeps bottom-tabs' own
+        // 5 pt padding, which left the label 50 pt and clipped "Community"
+        // (58.5 pt) where text cannot shrink (web). The label reaches back over
+        // that padding so it gets the full 60 pt; it still shrinks on phones.
         tabBarLabel: ({ focused, color, children }) => (
           <Text
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.8}
             maxFontSizeMultiplier={1.3}
-            style={[focused ? typography.tabLabelActive : typography.tabLabel, { color }]}
+            style={[
+              focused ? typography.tabLabelActive : typography.tabLabel,
+              { color, marginHorizontal: -TAB_BUTTON_PADDING, textAlign: 'center' },
+            ]}
           >{children}</Text>
         ),
         tabBarItemStyle: { paddingHorizontal: 0 },
