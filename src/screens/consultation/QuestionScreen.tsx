@@ -460,18 +460,19 @@ export function goalWeightNote(goalLbs: number, currentLbs: number, goal: unknow
     return "That's above your current weight. Is that right?";
   }
   if (currentLbs > 0 && Math.abs(goalLbs - currentLbs) / currentLbs > 0.3) {
-    return "That's a long road. Your coach will set milestones with you.";
+    return "That's a long road. {Coach} will set milestones with you.";
   }
   return '';
 }
 
 function GoalWeightBody(props: BodyProps) {
-  const { answers, onNext, onAnswer, header, screen } = props;
+  const { answers, onNext, onAnswer, header, screen, ctx } = props;
   const m = answers.B3 as MeasureAnswer | undefined;
   const current = m?.weight_lbs ?? 172;
   const unit = m?.unit ?? 'imperial';
   const [lbs, setLbs] = useState<number>(typeof answers.B4 === 'number' ? answers.B4 : Math.round(current));
-  const note = goalWeightNote(lbs, current, answers.G1);
+  // fillCopy swaps in the coachless version (COACHLESS_COPY) for a client with no coach.
+  const note = fillCopy(goalWeightNote(lbs, current, answers.G1), ctx);
   const kg = Math.round(lbs * 0.453592);
   return (
     <BodyFrame
