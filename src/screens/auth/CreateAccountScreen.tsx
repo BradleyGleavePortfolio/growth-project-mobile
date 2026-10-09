@@ -98,7 +98,8 @@ interface Props {
 
 // 'policy': the live signup policy has not answered yet and nothing is
 // cached, so the screen does not know whether to ask the role question.
-// The form is held back until the answer (or the UNKNOWN fallback) arrives.
+// The form is held back until the answer arrives, or the GET fails or
+// gives no answer in 8 s (UNKNOWN fallback: the role question is asked).
 // 'coach-unavailable': the user chose coach, then the live policy said role
 // choice is off. Nothing has been created; the user is told and must choose
 // explicitly (client instead, or check again). Never switched silently.
@@ -420,11 +421,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       // The persisted marker is read alongside the policy, so a remount after
       // an unconfirmed coach attempt still knows about it before any policy
       // answer is applied (#306 r4, Sol B1-R3).
-      const [{ policy }, unresolved] = await Promise.all([
+      const [loaded, unresolved] = await Promise.all([
         loadSignupPolicy(() => authApi.getSignupPolicy()),
         hasAnyUnconfirmedCoachSignup(),
       ]);
       if (!mounted) return;
+      // ONB-SWEEP U3: no answer within 8 s and nothing known this session.
+      // The backend default is role choice on, so the role question is asked
+      // anyway: a coach on bad signal is never made a client without choosing.
+      // A coach request the server does not apply is said plainly after
+      // sign-up ('coach_request_not_applied'), never treated as a client signup.
+      const policy = loaded.source === 'unknown' ? { ...loaded.policy, roleChoice: true } : loaded.policy;
       if (unresolved) unresolvedCoachRef.current = true;
       if (attemptRef.current) {
         // A signup request is in flight: hold the answer until it settles.
