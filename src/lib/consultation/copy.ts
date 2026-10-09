@@ -343,6 +343,60 @@ export function trainingDayPattern(daysPerWeek: number): number[] {
   return map[Math.min(7, Math.max(1, Math.round(daysPerWeek)))] ?? [];
 }
 
+/** Reveal and paused lines that name the coach (coachless versions in COACHLESS_COPY). */
+export const REVEAL_COPY = {
+  physicianStart: 'Start once your physician gives you the OK. {Coach} has been told.',
+  planAdjust:
+    'Your first day is already scheduled in Train. Does something feel off? Message {coach}. Your coach can adjust anything in this plan.',
+  macroQuestions:
+    'Questions about your numbers? Message {coach} any time from Messages. Your coach can adjust these targets for you.',
+  paused:
+    "Whenever you're ready, you can pick up exactly where you left off. {Coach} will see your answers once you finish.",
+  /** Prototype 43: the summary while the phone is offline. */
+  offlineCta: "Prepare when I'm back online",
+  offlineRoman: "I'll prepare your numbers the moment you're connected. Nothing you've told me is lost.",
+  /** Prototype 42: Roman's chapter line on the first screen after a resume. */
+  welcomeBack: 'Welcome back, {first}. You were telling me about {topic}.',
+} as const;
+
+const RESUME_TOPIC: Record<number, string> = {
+  1: 'your goals',
+  2: 'your measurements',
+  3: 'your normal week',
+  4: 'your training',
+  5: 'your schedule',
+  6: 'how you eat',
+  7: 'your health',
+  8: 'when you will start',
+};
+
+/** Prototype 42 template for a chapter (fill with fillCopy); null for the welcome. */
+export function welcomeBackLine(chapter: number): string | null {
+  const topic = RESUME_TOPIC[chapter];
+  return topic ? REVEAL_COPY.welcomeBack.replace('{topic}', topic) : null;
+}
+
+const SESSION_LENGTH: Record<string, string> = {
+  '20_30': 'About 20 to 30 minutes each.',
+  '30_45': 'About 30 to 45 minutes each.',
+  '45_60': 'About 45 to 60 minutes each.',
+  '60_plus': 'Over an hour each.',
+};
+
+/** Plan reveal (prototype 40): the session length the client gave at T4, or null when skipped. */
+export function sessionLengthLine(t4: unknown): string | null {
+  return typeof t4 === 'string' ? SESSION_LENGTH[t4] ?? null : null;
+}
+
+/** Monday-based weekday (0 = Monday) of the C1 first-session date, or null. */
+export function firstSessionWeekday(c1: unknown): number | null {
+  if (typeof c1 !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(c1);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(d.getTime()) ? null : (d.getDay() + 6) % 7;
+}
+
 /** "Your first session is Thursday." from the C1 ISO date. */
 export function firstSessionLine(c1: unknown, now: Date = new Date()): string | null {
   if (typeof c1 !== 'string') return null;

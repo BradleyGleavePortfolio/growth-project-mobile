@@ -81,7 +81,7 @@ describe('Weight trend (progress-details reference)', () => {
   });
 
   it('says plainly when the period has none', async () => {
-    mockAll = [];
+    mockAll = [{ id: 'a', date: day(200), weight_lbs: 196 }];
     const { findByText, queryByText } = await render(<ProgressScreen />);
     expect(await findByText('No weigh-ins in this period.')).toBeTruthy();
     expect(queryByText('Log your weight to see your chart')).toBeNull();

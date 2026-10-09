@@ -4,8 +4,8 @@
  *
  * Calls the public POST /auth/resend-verification (live in production). The
  * backend answers the same way whether or not the address exists, is already
- * confirmed or the mail provider refused, so the sent copy only says a link
- * is on its way IF an account is waiting; it never claims delivery.
+ * confirmed or the mail provider refused, so confirmation says the request
+ * was sent, never that an email was delivered. agent 132
  *
  * States: idle -> sending -> sent (60 s pause before another request) |
  * limited (429) | offline | invalid (400) | failed (anything else, with
@@ -26,8 +26,8 @@ export const RESEND_COPY = {
   action: 'Send a new link',
   again: 'Send another link',
   sending: 'Sending',
-  sent: 'If an account is waiting for confirmation, a new link is on its way. Check the spam folder too.',
-  limited: 'Too many new links were requested. Try again later.',
+  sent: 'Request sent. Check your inbox and your spam folder.',
+  limited: 'Too many links were requested. Wait before trying again.',
   offline: 'No connection. Check the connection and try again.',
   invalid: 'Check the email address and try again.',
   missingEmail: 'Enter the email address used at sign-up.',
@@ -50,31 +50,49 @@ export default function ResendVerificationLink({ email, onContactSupport, testID
   const knownEmail = (email ?? '').trim();
   const [typedEmail, setTypedEmail] = useState('');
   const [status, setStatus] = useState<Status>('idle');
-  const [coolingDown, setCoolingDown] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(0);
+  const inFlight = useRef(false);
 
-  useEffect(() => () => {
-    if (timer.current) clearTimeout(timer.current);
-  }, []);
+  useEffect(() => {
+    if (cooldownUntil === null) return;
+    const tick = () => {
+      const seconds = Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000));
+      setSecondsLeft(seconds);
+      if (seconds === 0) setCooldownUntil(null);
+    };
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownUntil]);
+
+  const startCooldown = () => {
+    setSecondsLeft(RESEND_COOLDOWN_MS / 1000);
+    setCooldownUntil(Date.now() + RESEND_COOLDOWN_MS);
+  };
 
   const send = async () => {
+    if (inFlight.current || (cooldownUntil !== null && Date.now() < cooldownUntil)) return;
     const address = knownEmail || typedEmail.trim();
     if (!address) {
       setStatus('missing');
       return;
     }
+    inFlight.current = true;
     setStatus('sending');
     try {
       await authApi.resendVerification(address);
       setStatus('sent');
-      setCoolingDown(true);
-      timer.current = setTimeout(() => setCoolingDown(false), RESEND_COOLDOWN_MS);
+      startCooldown();
     } catch (err) {
       const httpStatus = toAuthErrorDetail(err).status;
-      if (httpStatus === 429) setStatus('limited');
-      else if (httpStatus === 400) setStatus('invalid');
+      if (httpStatus === 429) {
+        setStatus('limited');
+        startCooldown();
+      } else if (httpStatus === 400) setStatus('invalid');
       else if (isNetworkFailure(err)) setStatus('offline');
       else setStatus('failed');
+    } finally {
+      inFlight.current = false;
     }
   };
 
@@ -88,7 +106,9 @@ export default function ResendVerificationLink({ email, onContactSupport, testID
                 : null;
   const showSupport = onContactSupport && (status === 'failed' || status === 'limited');
   const sending = status === 'sending';
-  const label = status === 'sent' ? RESEND_COPY.again : RESEND_COPY.action;
+  const action = status === 'sent' ? RESEND_COPY.again : RESEND_COPY.action;
+  const label = sending ? RESEND_COPY.sending : secondsLeft > 0 ? `${action} in ${secondsLeft}s` : action;
+  const disabled = sending || secondsLeft > 0;
 
   return (
     <View style={styles.wrap} testID={testID}>
@@ -122,23 +142,21 @@ export default function ResendVerificationLink({ email, onContactSupport, testID
           Contact support
         </Text>
       ) : null}
-      {coolingDown ? null : (
-        <TouchableOpacity
-          style={styles.button}
-          onPress={send}
-          disabled={sending}
-          accessibilityRole="button"
-          accessibilityLabel={label}
-          accessibilityState={{ disabled: sending, busy: sending }}
-          testID={`${testID}-button`}
-        >
-          {sending ? (
-            <ActivityIndicator color={colors.accentText} accessibilityLabel={RESEND_COPY.sending} />
-          ) : (
-            <Text style={styles.link}>{label}</Text>
-          )}
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={styles.button}
+        onPress={send}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ disabled, busy: sending }}
+        testID={`${testID}-button`}
+      >
+        {sending ? (
+          <ActivityIndicator color={colors.accentText} />
+        ) : (
+          <Text style={styles.link}>{label}</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
