@@ -42,28 +42,18 @@ startClientTutorial(completeResponse.data); // body of POST /me/onboarding/compl
 | 1 | welcome | Begin | button |
 | 2 | plan | focus Train, then open "Why this plan" on the pinned plan card | route `WorkoutMain`; `plan_card_opened` |
 | 3 | macros | focus Home, then open "How to use these numbers" on the pinned macro card | route `HomeMain`; `macro_card_opened` |
-| 4 | community (coach linked) | focus Community, then Continue | route `CommunityTab` |
-| 5 | coach_messages (coach linked) | open the coach thread from Home's "Message your coach", then Continue | route `Messages` |
-| 6 | wearables | open Connected devices; connect Apple Health (iOS) or Health Connect (Android), **or tap Later**; open Health and sleep; Continue | route `Connections`; `wearable_connected` (on-device grant, OAuth success, or a `connected` row in the connections list) or DEFER; route `Health` |
-| 7 | first_meal (teach-back) | focus Log, then save a food entry | `meal_logged`: `POST /log/food` 2xx, or an entry the offline queue accepts |
-| 8 | first_message (teach-back, coach linked) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
-| 9 | complete | Done | button |
+| 4 | first_meal (teach-back) | focus Log, then save a food entry | `meal_logged`: `POST /log/food` 2xx, or an entry the offline queue accepts |
+| 5 | first_message (teach-back, coach linked) | open the coach thread, then send | `message_sent`: `POST /messages` 2xx (send or reply) |
+| 6 | complete | Done | button |
 
-With `clientCalendar` ON (S-SCHED, owner decisions 2026-10-01):
-
-| After | Step | Gates | Detected by |
-|---|---|---|---|
-| coach_messages | calendar (coach linked) | focus Calendar, then Continue | route `CalendarHome` |
-| first_message | welcome_call (coach linked) | "Book your welcome call with {coach}" opens booking, preselecting the day-1 seeded Quick initialization offering; renamed offerings can be selected explicitly; book, **or tap Later** | `welcome_call_booked` from `CalendarBookScreen` on a successful booking, or DEFER |
-
-The welcome call never blocks finishing. With no preselected welcome type the client can choose an active appointment type; with no open times the screen offers refresh, Calendar and "Message your coach". Phone calendar exports are user-controlled copies and do not auto-sync.
+TOUR-133 (decision 133-5): Community, Calendar, connected devices and the welcome call are no longer steps. The completion card names them in a quieter second paragraph (`sub`): the tabs this build has, "connected devices live under You", and, with `clientCalendar` on and a coach linked, "Book your welcome call with {coach} from Calendar when it suits you." The `wearable_connected` and `welcome_call_booked` signals are still emitted; the tour no longer waits on them. Saved v1 states (the nine- or eleven-step list) map to the new list: completed stays completed, paused stays paused at the welcome, active restarts at the welcome.
 
 ## Truthful tour (FW-ONB-128 B2)
 
-- "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`, and it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). A step can name several requirements (`requires: ['calendar', 'coach']`); the first one that is not met decides the outcome.
-- Without a coach, the five steps marked "coach linked" above are recorded as `unavailable` and skipped, with no done line. Community spaces live in the coach's workspace and Calendar shows the coach's open times, so those two need the coach as well.
+- "Coach linked" means `user.coach_id` is set, the same signal Home uses for its "Message your coach" row. `TutorialHost` passes it to `hydrateTutorial(userId, firstName, coachLinked)`, and it reaches the machine as `TutorialContext.coachLinked` (absent means no coach). A step can name several requirements; the first one that is not met decides the outcome.
+- Without a coach, the step marked "coach linked" above is recorded as `unavailable` and skipped, with no done line.
 - Welcome: with a coach, "I work with {coach} to help you get the most from your plan" ("your training" when no plan is set), then "you will try two things yourself". Without a coach Roman names none: "This takes a few minutes. I will show you where everything lives, and then you will log your first meal yourself."
-- Complete: built from this tour's outcomes. "Your plan is set" only when the plan step ended `done`, "your numbers are set" only when the macros step did, and "{coach} has your message" only when the first message was sent. With none of them: "That is everything. One thing at a time. Consistency matters more than perfection."
+- Complete: built from this tour's outcomes. "Your plan is set" only when the plan step ended `done`, "your numbers are set" only when the macros step did, and "{coach} has your message" only when the first message was sent. With none of them: "That is everything." The second paragraph ends "One thing at a time. You do not need to be perfect, just consistent."
 - Settings > Tutorial reads "Take the tour" until a tour has been completed on this device, then "Take the tour again".
 
 The two teach-back steps have no button and no "Later". The client can skip the whole tour (with a confirm), which pauses it. Progress is kept. Resume from the quiet line on Home or from Settings > Tutorial (owner decision T-5).

@@ -90,8 +90,6 @@ function envOf(s: TutorialStoreState): MachineEnv {
   return {
     hasProgram: !!s.payload?.program?.name,
     hasMacros: !!resolveMacros(s),
-    communityAvailable: featureFlags.communityTab,
-    calendarAvailable: featureFlags.clientCalendar,
     coachLinked: s.coachLinked,
     currentPath: s.currentPath,
     now: new Date().toISOString(),
@@ -112,6 +110,8 @@ export function buildCopyContext(
     platform: os === 'ios' ? 'ios' : os === 'android' ? 'android' : 'other',
     macroMode,
     coachLinked: s.coachLinked,
+    calendarAvailable: featureFlags.clientCalendar,
+    communityAvailable: featureFlags.communityTab,
     outcomes: s.tutorial.outcomes,
   };
 }
