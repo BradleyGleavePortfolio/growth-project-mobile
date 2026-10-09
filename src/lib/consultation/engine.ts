@@ -5,7 +5,7 @@
  * (conditions, validation, navigation order, chapter progress, resume) is
  * unit-tested directly in `__tests__/consultationEngine.test.ts`.
  */
-import { SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
+import { COACHLESS_COPY, SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
 import { CONSULT_CONSENT_COPY_VERSION, CONSULT_CONSENT_MEMORY_COPY_VERSION } from './consentVersion';
 import type {
   AnswerValue,
@@ -107,6 +107,17 @@ export function firstSessionOptions(now: Date): OptionDef[] {
       offset === 0 ? 'Today' : offset === 1 ? `Tomorrow, ${weekdayName(d)}` : weekdayName(d);
     return { value: isoDate(d), label };
   });
+}
+
+/**
+ * B3 smart default (prototype 08, "Default from locale"): imperial where
+ * people measure in feet and pounds (US, Liberia, Myanmar), metric elsewhere.
+ * An unknown region keeps imperial, the app-wide default.
+ */
+export function defaultMeasureUnit(regionCode: string | null | undefined): 'imperial' | 'metric' {
+  if (!regionCode) return 'imperial';
+  const r = regionCode.toUpperCase();
+  return r === 'US' || r === 'LR' || r === 'MM' ? 'imperial' : 'metric';
 }
 
 export function optionsFor(screen: ScreenDef, now: Date): OptionDef[] {
@@ -374,6 +385,8 @@ export interface CopyContext {
   coachName?: string | null;
   firstName?: string | null;
   now?: Date;
+  /** The client has no coach: lines that name a coach use COACHLESS_COPY. */
+  coachless?: boolean;
 }
 
 export function greetingFor(now: Date): string {
@@ -383,8 +396,9 @@ export function greetingFor(now: Date): string {
   return 'Good evening';
 }
 
-export function fillCopy(text: string, ctx: CopyContext): string {
-  const coach = ctx.coachName?.trim() || '';
+export function fillCopy(source: string, ctx: CopyContext): string {
+  const text = ctx.coachless ? (COACHLESS_COPY[source] ?? source) : source;
+  const coach = ctx.coachless ? '' : ctx.coachName?.trim() || '';
   const first = ctx.firstName?.trim() || '';
   return text
     .replace(/\{coach\}/g, coach || 'your coach')
