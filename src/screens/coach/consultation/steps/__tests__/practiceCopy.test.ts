@@ -58,7 +58,7 @@ describe('copy rules', () => {
     ...Object.values(K8_COPY),
   ];
   // Roman speaks in the first person; the K5 options and the button labels
-  // ("Share my link", "Show me around") are the coach's own voice.
+  // ("Share my link", "Go to my clients") are the coach's own voice.
   const appVoice = [
     ...Object.values(K6_COPY).filter((t) => t !== K6_COPY.roman),
     ...Object.values(K7_COPY),
