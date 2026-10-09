@@ -38,7 +38,11 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 import MacroExplanationCard, { MacroExplanationCardView } from '../MacroExplanationCard';
-import PlanExplanationCard, { PlanExplanationCardView } from '../PlanExplanationCard';
+import PlanExplanationCard, {
+  PLAN_NOTE_COACHED,
+  PLAN_NOTE_COACHLESS,
+  PlanExplanationCardView,
+} from '../PlanExplanationCard';
 import TutorialHomeSlot from '../TutorialHomeSlot';
 import TutorialSettingsRow from '../TutorialSettingsRow';
 import { subscribeTutorialSignals } from '../../../tutorial/tutorialEvents';
@@ -203,6 +207,42 @@ describe('PlanExplanationCard', () => {
     await render(<PlanExplanationCard />);
     await fireEvent.press(screen.getByLabelText('Your coach workouts'));
     expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
+  });
+
+  // B-SMALLFIX-135: the closing line under "Why this plan" was the coach line for everyone.
+  it('a coached client keeps the coach line under Why this plan', async () => {
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial(PAYLOAD);
+    await render(<PlanExplanationCard />);
+    await fireEvent.press(screen.getByLabelText('Why this plan'));
+    expect(screen.getByTestId('plan-explanation-note')).toHaveTextContent(
+      'Start each session light and learn the moves first. Your coach can adjust the plan at any time.',
+    );
+    expect(PLAN_NOTE_COACHED).toMatch(/Your coach can adjust the plan/);
+  });
+
+  it('a coachless client reads what a workout lets them change, and no coach anywhere on the card', async () => {
+    mockUser.coach_id = '';
+    mockAssignments = { isLoading: false, data: [] };
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial({ ...PAYLOAD, coach: null });
+    await render(<PlanExplanationCard />);
+    expect(screen.getByText('YOUR PLAN')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('Why this plan'));
+    expect(screen.getByTestId('plan-explanation-note')).toHaveTextContent(
+      'Start each session light and learn the moves first. In a workout you can swap an exercise, add a set or change the weight.',
+    );
+    expect(PLAN_NOTE_COACHLESS).not.toMatch(/coach/i);
+    expect(screen.queryByText(/coach/i)).toBeNull();
+    expect(screen.queryByLabelText(/coach/i)).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Your workouts'));
+    expect(mockParentNavigate).toHaveBeenCalledWith('MoreTab', { screen: 'ClientWorkoutViewer', initial: false });
+  });
+
+  it('the plain view defaults to the coached copy when no coachless flag is passed', async () => {
+    await render(<PlanExplanationCardView program={PAYLOAD.program!} coachName="Bradley" />);
+    await fireEvent.press(screen.getByLabelText('Why this plan'));
+    expect(screen.getByTestId('plan-explanation-note')).toHaveTextContent(PLAN_NOTE_COACHED);
   });
 });
 

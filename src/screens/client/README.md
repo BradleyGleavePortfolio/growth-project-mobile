@@ -93,7 +93,7 @@ Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy
 | Screen | Addition |
 | --- | --- |
 | `HomeScreen.tsx` | `<TutorialHomeSlot />` below the coach introduction banner: the pinned macro explanation card (C08, real `/me/macros/current` or onboarding numbers), a "Message your coach" row into HomeStack `Messages`, and after a skipped tour one quiet line that resumes it. |
-| `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
+| `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. Its closing line says the coach can adjust the plan only when the client has a coach; a coachless client (`useCoachlessClient`) reads that in a workout they can swap an exercise, add a set or change the weight. |
 | `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
 | `SettingsScreen.tsx` | Settings > Support: resume or run the tour again. |
 

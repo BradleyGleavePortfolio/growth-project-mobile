@@ -1,6 +1,7 @@
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
+import { radius } from '../../../theme/tokens';
 const mockAccept = jest.fn(), mockSession = jest.fn();
 jest.mock('../../../api/invites', () => ({ invitesApi: { acceptInvite: (...a: unknown[]) => mockAccept(...a) } }));
 jest.mock('../../../services/secureStorage', () => ({ secureStorage: { getItem: () => mockSession() } }));
@@ -84,7 +85,8 @@ describe('Invite copy and frozen action parity', () => {
     const view = await render(invite());
     const primary = await view.findByTestId('accept-success-login');
     const secondary = view.getByTestId('accept-success-signup');
-    expect(StyleSheet.flatten(primary.props.style)).toMatchObject({ minHeight: 52, borderRadius: 4 });
+    // B-SMALLFIX-135: the rounded button token (12), never the old 4 pt literal.
+    expect(StyleSheet.flatten(primary.props.style)).toMatchObject({ minHeight: 52, borderRadius: radius.button });
     expect(StyleSheet.flatten(secondary.props.style).backgroundColor).toBeUndefined();
     expect(StyleSheet.flatten(view.getByText('Coach Avery').props.style).fontFamily).toBe('CormorantGaramond_400Regular');
   });
@@ -97,6 +99,13 @@ describe('Email verification frozen action parity', () => {
     await fireEvent.press(view.getByLabelText('Sign in'));
     expect(navigation.replace).toHaveBeenCalledWith('Login');
     expect(StyleSheet.flatten(view.getByText('Sign in').props.style).textTransform).toBeUndefined();
+  });
+  it('the forest action uses radius.button on every state (B-SMALLFIX-135)', async () => {
+    const confirmed = await render(verified());
+    expect(confirmed.getByLabelText('Sign in')).toHaveStyle({ borderRadius: radius.button });
+    await confirmed.unmount();
+    const open = await render(verified(nav(['CreateAccount', 'EmailVerified'])));
+    expect(open.getByLabelText('Continue')).toHaveStyle({ borderRadius: radius.button });
   });
   it('open signup retains Continue and goes back', async () => {
     const navigation = nav(['CreateAccount', 'EmailVerified']), view = await render(verified(navigation));
