@@ -37,12 +37,12 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 
 ## 5. Restrained motion, restrained color, restrained chrome
 
-- Card corners are `radius.lg = 4`. Modal sheet corners are also `radius.lg = 4` — never `16` / `20` / `24`.
-- Chip / pill borders are the only place `radius.pill` is allowed.
+- Corners are rounded, soft and premium, never a near-square rectangle (owner ruling 17:07 on 8 October 2026: "I want nice rounded corners, luxurious, not rectangles"; decision 133-4). Use the semantic radius tokens in `src/theme/tokens.ts`, never a literal: `radius.button` 12 and `radius.input` 12, `radius.card` 16, `radius.sheet` 24 on bottom-sheet and modal top corners, `radius.chip` (pill) for chips, `radius.control` 6 for boxes under 28 pt such as a checkbox.
+- The legacy keys `radius.sm` / `md` / `lg` / `xl` / `2xl` (0 / 2 / 4 / 4 / 4) are deprecated for new code and move to the semantic keys screen by screen.
 - Backgrounds: `bone` (`#F5EFE4`) is the global background. Cards sit on `cream` or `surface`. Never use `#000`; ink (`#1A1A18`) is the dark.
 - Single accent: forest (`#2C4A36`). Avoid neon greens (`#52B788`, `#2D6A4F`), terra-cottas, steel blues, and the rest of the legacy palette.
 - Shadows are capped at `shadows.lg` (12px radius, 8% opacity). No drop shadows above that.
-- Motion durations live in `motion.duration`. Default to `base = 400ms` with `decel` easing. Springs and `accelerate` easing are gone.
+- Motion durations live in `motion.duration`. Default to `base = 400ms` with `decel` easing. Springs and `accelerate` easing are gone. Screen-level motion stays at 300 ms or less and respects Reduce Motion.
 
 ## 6. No global chrome, no floating widgets
 
@@ -79,13 +79,19 @@ The reviewer checklist below applies to UI changes; the doc rule above applies t
 | Coach client payments (`ClientPaymentsScreen`, `clientPaymentsCopy`) | Bone page, one Cormorant title, one hairline section per plan with a muted overline; prices use tabular numerals. Plan actions are text actions with 44 pt targets (Cancel plan muted), each confirmed in a native dialog. The refund sheet (radius 4, theme overlay) holds the one filled forest button. State is said in words, never by colour. |
 | Coach client archive (`ClientDetailScreen`, `useClientDetailData`) | The roster supplies the real archive state; unknown is never labelled active. The header keeps the goal alongside Active / Archived client. Archive confirms before the existing status endpoint and states that recurring billing is separate; client Your plans directions remain, while coach Payments directions require its server flag. Unarchive and refresh remain. CLIENT-ARCHIVE-COPY-132, agent 132. |
 
+## 10. Build client screens from `src/ui`
+
+- `Screen` (insets from react-native-safe-area-context plus 12 pt under the status bar, a pinned keyboard-aware footer), `ScreenTopBar`, `PrimaryButton` (the one filled forest button, `radius.button`), `TextLink` / `QuietTextButton`, `Headline` / `Lede` / `AccentRule`, `Overline` (`QuietOverline`), `QuietSection`, `QuietRow`, `WheelBand`. Import from `src/ui`.
+- Never import `SafeAreaView` from `react-native` (it does nothing on Android edge-to-edge). Serif roles keep lineHeight at least 1.25 x fontSize (`SERIF_MIN_LINE_RATIO`).
+
 ## 9. Reviewer checklist (paste into PRs that touch UI)
 
 - [ ] No `fontWeight: '700'` or `'800'` introduced.
 - [ ] No "Coming Soon" / "Planned" / "In Development" copy introduced.
 - [ ] No new emoji literals in source.
 - [ ] No new exclamation marks in user-facing copy.
-- [ ] No new `radius.xl` / `radius.2xl` values larger than 4.
+- [ ] Corners use the semantic radius tokens (button / input 12, card 16, sheet 24, chip pill); no literal radius, no new 0-4 pt button or card.
+- [ ] No `SafeAreaView` from `react-native`; the screen uses `Screen` or react-native-safe-area-context.
 - [ ] No new floating widgets, FABs, or global banners.
 - [ ] No new TODO/FIXME comments.
 - [ ] If founding/inner-circle phrasing appears, it is restrained (hairline + label only — no shimmer, no glow, no celebration).
