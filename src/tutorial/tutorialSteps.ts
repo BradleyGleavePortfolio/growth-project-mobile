@@ -316,18 +316,19 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     doneLine: (c) => `Sent. ${c.coachName} will see it in your conversation.`,
   },
   {
-    // Beat six for a client without a coach (decision 28).
+    // Beat six for a client without a coach (decision 28). Owner 10-09 00:0x
+    // (m#651): Roman opens once the client joins a coach, so the line says
+    // that instead of offering Roman now. Coached clients get first_message.
     id: 'roman',
     ordinal: 6,
-    title: 'Ask Roman',
+    title: 'Roman with a coach',
     requires: ['no_coach', 'roman'],
     gates: [
       {
         kind: 'ack',
         target: 'tab:MoreTab',
         cta: 'Continue',
-        line: () =>
-          'When a question comes up about your plan, your food or your training, ask me. You will find me under You, at any time.',
+        line: () => ROMAN_BEAT_COACHLESS_LINE,
       },
     ],
   },
@@ -338,6 +339,10 @@ export const TUTORIAL_STEPS: readonly TutorialStepDef[] = [
     gates: [{ kind: 'ack', center: true, cta: 'Got it', line: completeLine, sub: completeSub }],
   },
 ];
+
+/** Beat six for a client with no coach: true after m#651 (Roman needs a coach). */
+export const ROMAN_BEAT_COACHLESS_LINE =
+  "I work from a coach's guidance, so I open once you join a coach. You will find me under You when you do.";
 
 export function stepIndexOf(id: TutorialStepId): number {
   return TUTORIAL_STEPS.findIndex((s) => s.id === id);

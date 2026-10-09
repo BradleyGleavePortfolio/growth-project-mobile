@@ -59,7 +59,7 @@ import {
   type MachineEnv,
   type TutorialAction,
 } from '../tutorialMachine';
-import { TUTORIAL_STEPS, type CopyContext } from '../tutorialSteps';
+import { ROMAN_BEAT_COACHLESS_LINE, TUTORIAL_STEPS, type CopyContext } from '../tutorialSteps';
 import {
   __resetTutorialStoreForTests,
   buildCopyContext,
@@ -127,6 +127,17 @@ describe('no coach linked: beat six is Roman, never a lock', () => {
     const s = run(TO_COMPLETE, { coachLinked: false });
     expect(currentStep(s)?.id).toBe('complete');
     expect(s.outcomes).toMatchObject({ plan: 'pending', first_exercise: 'pending', macros: 'done', first_meal: 'done', roman: 'done' });
+  });
+
+  it('m#651: a client with no coach is told Roman opens once they join a coach; a coached client keeps today\'s beat six', () => {
+    expect(lineOf('roman', COACHLESS)).toBe(ROMAN_BEAT_COACHLESS_LINE);
+    expect(ROMAN_BEAT_COACHLESS_LINE).toMatch(/open once you join a coach/);
+    expect(ROMAN_BEAT_COACHLESS_LINE).not.toMatch(/ask me|at any time|your coach|!/i);
+    const coached = run(TO_BEAT_SIX, { coachLinked: true });
+    expect(currentStep(coached)?.id).toBe('first_message');
+    expect(lineOf('first_message', { ...BASE, coachLinked: true })).toBe(
+      'This is where you talk with Bradley directly. A real person, not me. Tap Message your coach.',
+    );
   });
 
   it('treats an env without coachLinked as no coach', () => {

@@ -133,7 +133,7 @@ describe('prototype copy (46-61), re-voiced without contractions', () => {
       .concat(pushPrimingLine(ctx))
       .join(' ');
     expect(lines).not.toContain('Bradley');
-    expect(line('roman', 0, ctx)).toContain('ask me');
+    expect(line('roman', 0, ctx)).toContain('once you join a coach');
   });
 });
 
