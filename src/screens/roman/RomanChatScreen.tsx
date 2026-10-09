@@ -247,9 +247,10 @@ export default function RomanChatScreen({
       // Clear the composer ONLY when the turn actually persisted; on a send
       // failure the draft is preserved so the user can retry without retyping
       // (brief §3 / F5 RomanSendOutcome). A chip never clears a typed draft;
-      // a chip that fails leaves its prompt in the composer to send again.
+      // a chip that fails leaves its prompt in the composer to send again,
+      // but only when the composer is empty: it never replaces a typed draft.
       if (fromChip) {
-        if (outcome === 'send-failed') setDraft(text);
+        if (outcome === 'send-failed') setDraft((d) => (d.trim() === '' ? text : d));
       } else if (outcome === 'sent') {
         setDraft('');
       }

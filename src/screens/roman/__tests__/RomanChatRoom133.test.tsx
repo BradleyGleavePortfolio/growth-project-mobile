@@ -107,6 +107,15 @@ describe('B30 chips send fixed prompts (prototype 70-73)', () => {
     await r.rerender(<RomanChatScreen surface="client" />);
     expect(r.getByTestId('roman-quick-start-1').props.accessibilityState).toMatchObject({ disabled: true });
   });
+
+  it('a failed chip never replaces a typed draft (B-601-SOL-B-1)', async () => {
+    state.send = jest.fn(async () => 'send-failed' as const);
+    const r = await render(<RomanChatScreen surface="client" />);
+    await fireEvent.changeText(r.getByTestId('roman-composer-input'), 'My own words');
+    await fireEvent.press(r.getByTestId('roman-quick-start-2'));
+    expect(state.send).toHaveBeenCalledWith(ROMAN_QUICK_STARTS[2]);
+    expect(r.getByTestId('roman-composer-input').props.value).toBe('My own words');
+  });
 });
 
 describe('QA evidence: the room at 360x800 and 390x844', () => {
