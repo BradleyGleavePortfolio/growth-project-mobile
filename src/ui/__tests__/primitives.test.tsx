@@ -123,6 +123,13 @@ describe('PrimaryButton', () => {
     fireEvent.press(r.getByTestId('b'));
     expect(onPress).not.toHaveBeenCalled();
   });
+
+  it('a fuller screen-reader label never changes the visible word', async () => {
+    const r = await render(<PrimaryButton label="Save" accessibilityLabel="Save weight log entry" onPress={jest.fn()} testID="b" />);
+    expect(r.getByTestId('b').props.accessibilityLabel).toBe('Save weight log entry');
+    expect(r.getByText('Save')).toBeTruthy();
+    expect(r.queryByText('Save weight log entry')).toBeNull();
+  });
 });
 
 describe('TextLink', () => {

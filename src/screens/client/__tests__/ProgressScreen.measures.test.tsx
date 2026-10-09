@@ -114,5 +114,8 @@ describe('Recent weigh-ins and the sheet', () => {
     expect(sheet.borderTopLeftRadius).toBe(radius.sheet);
     expect(StyleSheet.flatten(getByTestId('log-weight-input').props.style).borderRadius).toBe(radius.input);
     expect(StyleSheet.flatten(getByTestId('log-weight-save').props.style).borderRadius).toBe(radius.button);
+    // The button reads "Save"; screen readers still hear the full action.
+    expect(getByTestId('log-weight-save').props.accessibilityLabel).toBe('Save weight log entry');
+    expect(within(getByTestId('log-weight-save')).getByText('Save')).toBeTruthy();
   });
 });
