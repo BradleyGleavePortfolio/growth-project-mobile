@@ -158,20 +158,26 @@ import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
 
-const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
-const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
-const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen);
-const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen);
-const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen);
-const ProtectedPlanScreen = withProtectedScreen(PlanScreen);
-const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen);
-const ProtectedFastingScreen = withProtectedScreen(FastingScreen);
-const ProtectedLogScreen = withProtectedScreen(LogScreen);
-const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
+// B22/B24 (b#888): logging, workouts, plans, fasting, macros and Roman
+// guidance call routes marked @OpenToCoachlessClient() server-side, so a
+// client with no coach is never gated there (OWN). Clients with a coach keep
+// the package gate.
+const OWN = { openToCoachless: true } as const;
+const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen, OWN);
+const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen, OWN);
+const ProtectedWorkoutHistoryEditScreen = withProtectedScreen(WorkoutHistoryEditScreen, OWN);
+const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen, OWN);
+const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen, OWN);
+const ProtectedPlanScreen = withProtectedScreen(PlanScreen, OWN);
+const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen, OWN);
+const ProtectedFastingScreen = withProtectedScreen(FastingScreen, OWN);
+const ProtectedLogScreen = withProtectedScreen(LogScreen, OWN);
+const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen, OWN);
 // Apple 1.2 (B-IOSREV-2): the wins feed is community content, so it sits
-// behind the one-time community terms agreement too.
+// behind the one-time community terms agreement too. Not OWN: community
+// feed, wins and leaderboard still need a package server-side.
 const ProtectedCommunityScreen = withProtectedScreen(withCommunityTerms(CommunityScreen));
-const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
+const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen, OWN);
 // Messages is deliberately NOT wrapped (audit #304 B1). Basic text DM with
 // the assigned coach is free server-side (client-messaging.controller.ts:
 // GET/POST /messages, /messages/read, /messages/unread-count carry no

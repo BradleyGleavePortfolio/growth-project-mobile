@@ -42,6 +42,7 @@ import CompetencePill from '../../components/roman/CompetencePill';
 import { featureFlags } from '../../config/featureFlags';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { ProtectedScreen } from '../../entitlements/ProtectedScreen';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 
 const WORDS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten'];
 const word = (n: number) => WORDS[n] ?? String(n);
@@ -63,7 +64,9 @@ export default function HabitsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const { entitlementActive, status, confirmedActive, refreshEntitlement } = useEntitlement();
   // Match ProtectedScreen's confirmed-access policy before making a paid read.
-  const checkInAccessible = entitlementActive === true ||
+  // B22/B24 (b#888): check-ins are open to a client with no coach.
+  const coachless = useCoachlessClient();
+  const checkInAccessible = coachless || entitlementActive === true ||
     (confirmedActive && (status === 'checking' || status === 'unavailable'));
 
   // Server reads (React Query)
@@ -353,10 +356,10 @@ export default function HabitsScreen() {
         </>
       ) : (
         <>
-          {status === 'inactive' && (
+          {status === 'inactive' && !coachless && (
             <Text style={[styles.note, { marginVertical: 12 }]}>Daily check-ins need active coaching access.</Text>
           )}
-          <ProtectedScreen>
+          <ProtectedScreen openToCoachless>
             {todayCheckInQ.isLoading ? (
               <QuietLoading label="Loading check-in" rows={4} testID="checkin-loading" />
             ) : todayCheckInQ.isError && todayCheckInQ.data === undefined ? (

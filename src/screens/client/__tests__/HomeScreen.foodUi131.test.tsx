@@ -73,6 +73,7 @@ beforeEach(() => {
     dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   });
   mockAssignments.mockResolvedValue([]);
+  Object.assign(mockUser, { coach_id: 'coach' });
 });
 
 it.each(['full', 'simple'])('%s: shows no intake or meal claim before today loads', async (mode) => {
@@ -225,5 +226,30 @@ it('pull-to-refresh rechecks inactive access without making locked food requests
   await render(<HomeScreen />);
   await act(async () => screen.getByTestId('home-scroll').props.refreshControl.props.onRefresh());
   expect(mockEntitlement.refreshEntitlement).toHaveBeenCalledTimes(1);
+  expect(mockDay.loadDayData).not.toHaveBeenCalled();
+});
+
+// CLIENT-POLISH-134 item 5 (B22/B24): the server lets a client with no coach
+// log food and water (b#888), so Home never shows them an access line.
+it.each<[string, Partial<typeof mockEntitlement>]>([
+  ['inactive', { entitlementActive: false, confirmedActive: false, status: 'inactive' }],
+  ['unavailable', { entitlementActive: null, confirmedActive: false, status: 'unavailable' }],
+  ['loading', { entitlementActive: null, confirmedActive: false, status: 'loading' }],
+])('coachless client, access %s: today loads and logging stays open', async (_label, state) => {
+  Object.assign(mockUser, { coach_id: null });
+  Object.assign(mockEntitlement, state);
+  await render(<HomeScreen />);
+  expect(mockDay.loadDayData).toHaveBeenCalledWith(mockUser.id, getTodayString());
+  expect(screen.queryByTestId('home-access-note')).toBeNull();
+  expect(screen.queryByText('Food and water logging need active access.')).toBeNull();
+  expect(screen.queryByLabelText('View access')).toBeNull();
+  expect(screen.queryByLabelText('View access to log food')).toBeNull();
+});
+
+it('a coached client whose plan lapsed keeps the access line', async () => {
+  Object.assign(mockEntitlement, { entitlementActive: false, confirmedActive: false, status: 'inactive' });
+  await render(<HomeScreen />);
+  expect(screen.getByTestId('home-access-note')).toBeTruthy();
+  expect(screen.getByText('Food and water logging need active access.')).toBeTruthy();
   expect(mockDay.loadDayData).not.toHaveBeenCalled();
 });

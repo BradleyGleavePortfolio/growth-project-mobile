@@ -15,6 +15,7 @@ import {
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { useCoachlessClient } from '../../hooks/useCoachlessClient';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useSettings } from '../../hooks/useSettings';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
@@ -144,7 +145,10 @@ export default function HomeScreen() {
 
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [refreshing, setRefreshing] = useState(false);
-  const canLoadDay = entitlementActive === true || (confirmedActive && status !== 'inactive');
+  // B22/B24 (b#888): food and water logging never wait on a package for a
+  // client with no coach; a client with a coach keeps the access line.
+  const coachless = useCoachlessClient();
+  const canLoadDay = coachless || entitlementActive === true || (confirmedActive && status !== 'inactive');
   const accessPending = !canLoadDay && status !== 'inactive' && status !== 'unavailable';
   const needsAccess = !canLoadDay && !accessPending;
   const dayReady = canLoadDay && hasLoadedDay && selectedDate === getTodayString();
