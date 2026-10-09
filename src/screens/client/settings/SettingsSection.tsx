@@ -1,19 +1,20 @@
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
-import { typography } from '../../../theme/tokens';
+import { layout } from '../../../theme/tokens';
+import { Overline } from '../../../ui';
 
 /** A visible group, never a disclosure control or another navigation step. */
 export default function SettingsSection({
   title, id, children,
 }: { title: React.ReactNode; id: string; children: React.ReactNode }) {
-  const { colors } = useTheme();
+  const { semanticColors: sc } = useTheme();
   return (
     <View style={styles.section} testID={`settings-section-${id}`}>
-      <Text accessibilityRole="header" style={[styles.title, { color: colors.textMuted }]}>
+      <Overline accessibilityRole="header" style={styles.title}>
         {title}
-      </Text>
-      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }}>
+      </Overline>
+      <View style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: sc.border }}>
         {children}
       </View>
     </View>
@@ -21,6 +22,6 @@ export default function SettingsSection({
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: 28 },
-  title: { ...typography.eyebrow, fontSize: 13, lineHeight: 18, marginBottom: 10 },
+  section: { marginTop: layout.sectionGap + 12 },
+  title: { marginBottom: 10 },
 });

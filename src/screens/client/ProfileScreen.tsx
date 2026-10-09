@@ -6,12 +6,11 @@
  * - Closing CTA replaced by date list per brief.
  * - Radius literals cleaned to tokens.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   Alert,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
@@ -30,7 +29,8 @@ import { resolveIdentityTitle } from '../../lib/identityTitle';
 import MilestoneCabinet from '../../components/community/MilestoneCabinet';
 import { track } from '../../lib/analytics';
 import { useEffect } from 'react';
-import { colors as colorTokens, typography, radius } from '../../theme/tokens';
+import { layout, radius, typography, type SemanticTokens } from '../../theme/tokens';
+import { Headline, Lede, Overline, Screen, ScreenTopBar, TextLink } from '../../ui';
 import { useTheme } from '../../theme/ThemeProvider';
 import { getProfileCompletion } from '../../lib/profileCompletion';
 import { buildProfileRows, buildTargetRows, type ProfileValues } from './profileDisplay';
@@ -43,7 +43,8 @@ interface SavedValues {
 }
 
 export default function ProfileScreen() {
-  const { colors } = useTheme();
+  const { semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(sc), [sc]);
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
   // Saved values from the server, read on every focus (also after Edit).
@@ -129,29 +130,23 @@ export default function ProfileScreen() {
     : mine?.targetStatus === 'error' ? 'Daily targets did not load. Reopen Profile to try again.'
     : 'Loading daily targets.';
 
+  const initial = currentUser?.name?.trim().charAt(0).toUpperCase() || '';
+
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      <View style={styles.header}>
-        <Text style={styles.title}>Profile</Text>
-      </View>
-
-      <View style={styles.avatarSection}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
-          </Text>
-        </View>
-        <Text style={styles.name}>
-          {currentUser?.name || 'No name set'}
-        </Text>
-        <Text style={styles.email}>{currentUser?.email || ''}</Text>
-
+    <Screen edges={['top']} testID="profile-screen"
+      header={<ScreenTopBar onBack={navigation.goBack ? () => navigation.goBack() : undefined} />}>
+      {/* Names are headline-sized (CATALOG): the person is the h1, the page name the overline. */}
+      <View style={styles.identity}>
+        {initial ? (
+          <View style={styles.avatar} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+        ) : null}
+        <Overline>Profile</Overline>
+        <Headline level="h1">{currentUser?.name || 'No name set'}</Headline>
+        {currentUser?.email ? <Text style={styles.email}>{currentUser.email}</Text> : null}
         {/* Current client-coach sharing state */}
-        {privacyCopy ? <Text style={styles.privacyLine}>{privacyCopy}</Text> : null}
+        {privacyCopy ? <Lede size="small" style={styles.privacyLine}>{privacyCopy}</Lede> : null}
       </View>
 
       {/* Quick Actions — 2×2 grid */}
@@ -164,7 +159,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Settings"
           accessibilityHint="Opens app settings"
         >
-          <Ionicons name="settings-outline" size={24} color={colors.primary} />
+          <Ionicons name="settings-outline" size={24} color={sc.textMuted} />
           <Text style={styles.actionText}>Settings</Text>
         </HapticPressable>
         <HapticPressable
@@ -175,7 +170,7 @@ export default function ProfileScreen() {
           accessibilityLabel="My report"
           accessibilityHint="Opens your progress report"
         >
-          <Ionicons name="document-text-outline" size={24} color={colors.primary} />
+          <Ionicons name="document-text-outline" size={24} color={sc.textMuted} />
           <Text style={styles.actionText}>My report</Text>
         </HapticPressable>
         <HapticPressable
@@ -186,7 +181,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Shortcuts"
           accessibilityHint="Opens quick actions"
         >
-          <Ionicons name="apps-outline" size={24} color={colors.primary} />
+          <Ionicons name="apps-outline" size={24} color={sc.textMuted} />
           <Text style={styles.actionText}>Shortcuts</Text>
         </HapticPressable>
         <HapticPressable
@@ -197,7 +192,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Learn"
           accessibilityHint="Opens learning content"
         >
-          <Ionicons name="book-outline" size={24} color={colors.primary} />
+          <Ionicons name="book-outline" size={24} color={sc.textMuted} />
           <Text style={styles.actionText}>Learn</Text>
         </HapticPressable>
       </View>
@@ -207,6 +202,7 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Personal info</Text>
           <HapticPressable
             intent="light"
+            style={styles.editLink}
             onPress={() => {
               track('profile_edit_opened', { source: 'profile_section_header' });
               navigation.navigate('EditProfile');
@@ -214,7 +210,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Edit personal info"
           >
-            <Text style={styles.editLink}>Edit</Text>
+            <Text style={styles.editLinkText}>Edit</Text>
           </HapticPressable>
         </View>
         {!completion.isComplete ? (
@@ -251,7 +247,7 @@ export default function ProfileScreen() {
         {targetItems.map((item) => (
           <View key={item.label} style={styles.row}>
             <Text style={styles.rowLabel}>{item.label}</Text>
-            <Text style={[styles.rowValue, { color: colors.primary }]}>
+            <Text style={[styles.rowValue, styles.targetValue]}>
               {item.value}
             </Text>
           </View>
@@ -263,171 +259,128 @@ export default function ProfileScreen() {
         <MilestoneCabinet isFoundingMember={foundingData?.isFoundingMember ?? false} />
       </View>
 
-      <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color={colors.error} />
-        <Text style={styles.signOutText}>Sign out</Text>
-      </HapticPressable>
-    </ScrollView>
+      <TextLink label="Sign out" tone="ink" underline={false} style={styles.signOut}
+        onPress={() => { void handleSignOut(); }} />
+    </Screen>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colorTokens.bone,
-  },
-  content: {
-    paddingBottom: 40,
-  },
-  header: {
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    marginBottom: 20,
-  },
-  title: {
-    ...typography.h1,
-    color: colorTokens.ink,
-  },
-  avatarSection: {
-    alignItems: 'center',
-    marginBottom: 20,
+// Semantic colours only (U2: the old static grey text was about 2.3:1 on bone; textMuted clears AA).
+const makeStyles = (sc: SemanticTokens) => StyleSheet.create({
+  identity: {
+    paddingTop: 8,
+    marginBottom: 28,
+    gap: 6,
   },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 4,
-    backgroundColor: colorTokens.forest,
+    width: 64,
+    height: 64,
+    borderRadius: radius.chip,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   avatarText: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 28,
-    lineHeight: 32,
-    letterSpacing: 0.5,
-    fontWeight: '400',
-    color: colorTokens.bone,
-  },
-  name: {
-    ...typography.h3,
-    color: colorTokens.ink,
+    ...typography.h2,
+    color: sc.textPrimary,
   },
   email: {
-    ...typography.body,
-    color: colorTokens.stone,
-    marginTop: 4,
-  },
-  // Wave 3: streak as plain text line — "Day 7 of 30." No flame.
-  streakLine: {
-    ...typography.body,
-    color: colorTokens.charcoal,
-    marginTop: 10,
+    ...typography.bodySmall,
+    color: sc.textMuted,
+    fontVariant: ['tabular-nums'],
   },
   privacyLine: {
-    ...typography.bodySmall,
-    color: colorTokens.stone,
-    textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: 24,
-    fontStyle: 'italic',
+    marginTop: 6,
   },
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    paddingHorizontal: 24,
-    gap: 12,
-    marginBottom: 28,
+    justifyContent: 'space-between',
+    rowGap: 12,
+    marginBottom: 36,
   },
   actionBtn: {
-    width: '47%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colorTokens.cream,
-    borderRadius: radius.lg,  // 4
-    paddingVertical: 18,
-    borderWidth: 0.5,
-    borderColor: colorTokens.stone,
+    width: '48%',
+    minHeight: 88,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: sc.border,
   },
   actionText: {
-    ...typography.bodySmall,
-    color: colorTokens.ink,
-    fontWeight: '600' as const,
+    ...typography.bodyMd,
+    lineHeight: 22,
+    color: sc.textPrimary,
   },
   section: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
+    marginBottom: 32,
   },
   sectionTitle: {
     ...typography.eyebrow,
-    color: colorTokens.charcoal,
+    color: sc.textMuted,
     marginBottom: 12,
   },
   sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
   },
   editLink: {
+    minHeight: layout.touchMin,
+    minWidth: layout.touchMin,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+  },
+  editLinkText: {
     ...typography.bodySmall,
-    color: colorTokens.forest,
-    fontWeight: '600' as const,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
+    fontFamily: 'Inter_500Medium',
+    color: sc.accentText,
   },
   sectionStatus: {
     ...typography.bodySmall,
-    color: colorTokens.stone,
+    color: sc.textMuted,
     marginBottom: 12,
-    fontStyle: 'italic',
   },
   rowValueMissing: {
-    color: colorTokens.stone,
-    fontStyle: 'italic',
+    color: sc.textMuted,
+    fontWeight: '400' as const,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colorTokens.stone,
+    alignItems: 'center',
+    minHeight: layout.rowMinHeight,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: sc.border,
   },
   rowLabel: {
     ...typography.body,
-    color: colorTokens.stone,
+    lineHeight: 22,
+    color: sc.textMuted,
     flex: 1,
     paddingRight: 12,
   },
   rowValue: {
     ...typography.body,
-    color: colorTokens.ink,
+    lineHeight: 22,
+    color: sc.textPrimary,
     fontWeight: '500' as const,
     flexShrink: 1,
     maxWidth: '55%',
     textAlign: 'right',
   },
+  targetValue: {
+    fontVariant: ['tabular-nums'],
+  },
   milestoneCabinetSection: {
-    paddingHorizontal: 24,
     marginBottom: 24,
   },
-  signOutButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginHorizontal: 24,
-    marginTop: 12,
-    paddingVertical: 16,
-    backgroundColor: colorTokens.cream,
-    borderRadius: radius.lg,  // 4
-    borderWidth: 0.5,
-    borderColor: colorTokens.stone,
-  },
-  signOutText: {
-    ...typography.body,
-    color: colorTokens.error,
-    fontWeight: '600' as const,
+  signOut: {
+    marginTop: 8,
   },
 });

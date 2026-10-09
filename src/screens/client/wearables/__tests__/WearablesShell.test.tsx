@@ -13,6 +13,7 @@
  */
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => {
@@ -23,6 +24,8 @@ jest.mock('react-native-safe-area-context', () => {
       ReactLocal.createElement(View, { style }, children),
     SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+    // REDO-DEVICES-133: the shared Screen reads insets from this context.
+    SafeAreaInsetsContext: ReactLocal.createContext(null),
   };
 });
 
@@ -188,6 +191,14 @@ describe('WearablesShell', () => {
     expect(screen.getByText('All sources current')).toBeTruthy();
   });
 
+  // REDO-DEVICES-133: the shell opens on the same words as the More row, and
+  // the sync notice is a hairline band, not a cream box.
+  it('opens on the Health and sleep title stack', async () => {
+    await render(<WearablesShell />);
+    expect(screen.getByRole('header', { name: 'Health and sleep' })).toBeTruthy();
+    expect(screen.getByText('Health data')).toBeTruthy();
+  });
+
   it('switches to Recovery → mounts the Sleep & Recovery screen, never a placeholder gate', async () => {
     await render(<WearablesShell />);
     await fireEvent.press(screen.getByLabelText('Recovery'));
@@ -256,6 +267,10 @@ describe('WearablesShell', () => {
         screen.getByText('Apple Health is not syncing on this phone. Tap Reconnect to continue.'),
       ).toBeTruthy(),
     );
+    // REDO-DEVICES-133: a hairline band on the page, no cream fill.
+    const band = StyleSheet.flatten(screen.getByTestId('health-notice').props.style);
+    expect(band.backgroundColor).toBeUndefined();
+    expect(band.borderTopWidth).toBe(StyleSheet.hairlineWidth);
     await fireEvent.press(screen.getByLabelText('Reconnect Apple Health'));
     expect(mockNavigate).toHaveBeenCalledWith('Connections');
   });

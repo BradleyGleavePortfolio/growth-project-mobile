@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../../theme/ThemeProvider';
 import { motion, typography } from '../../../theme/tokens';
 import { useReducedMotion } from '../../../hooks/useReducedMotion';
+import { Overline } from '../../../ui';
 import type { ActiveWorkoutStyles } from './styles';
 import type { workoutSummary } from './sessionQuality';
 
@@ -41,7 +42,7 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
       : summary.records.length === 0 ? 'Recent bests compare the last 50 saved workouts.' : null;
 
   return <Animated.View testID="workout-finish-summary" style={[styles.exerciseCard, { opacity }]}>
-    <Text style={styles.exerciseName}>Session summary</Text>
+    <Overline>Session summary</Overline>
     <View style={local.row}>
       {cells.map((cell, i) => (
         <View
@@ -66,7 +67,7 @@ export default function WorkoutFinishSummary({ summary, styles, historyState, el
 }
 
 const local = StyleSheet.create({
-  row: { flexDirection: 'row', marginTop: 12 },
+  row: { flexDirection: 'row', marginTop: 8 },
   cell: { flex: 1, alignItems: 'center', paddingVertical: 4 },
   value: { ...typography.h2, fontVariant: ['tabular-nums'] },
   label: { fontFamily: typography.bodySmall.fontFamily, fontSize: 13, lineHeight: 18, marginTop: 2 },

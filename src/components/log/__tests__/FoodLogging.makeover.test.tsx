@@ -19,7 +19,9 @@ const log: FoodLog = { ...food, foodName: food.name, id: 'log', userId: 'user', 
 const action = jest.fn();
 const search = { searchQuery: '', onSearchChange: jest.fn(), onClearSearch: jest.fn(), onRetrySearch: jest.fn(), searching: false, showSlowMessage: false, searchError: null, searchResults: [], didYouMean: [], recentTab: 'recent' as const, onRecentTabChange: jest.fn(), recentFoods: [food], frequentFoods: [food], onSelectFood: jest.fn(), onEnterManualMode: jest.fn() };
 const press = async (label: string, handler: jest.Mock, ...args: unknown[]) => { await fireEvent.press(screen.getByText(label)); if (args.length) expect(handler).toHaveBeenLastCalledWith(...args); else expect(handler).toHaveBeenCalled(); };
-const fonts = () => expect(screen.getAllByText(/./).every((text) => { const s = StyleSheet.flatten(text.props.style); return s.fontFamily === 'Inter_400Regular' && s.fontSize >= 13; })).toBe(true);
+// REDO-FOOD-133: theme families only (Inter body, Cormorant serif titles); 13 pt floor except the 11 pt uppercase eyebrow token.
+const FAMILIES = ['Inter_400Regular', 'Inter_500Medium', 'CormorantGaramond_400Regular', 'CormorantGaramond_500Medium'];
+const fonts = () => expect(screen.getAllByText(/./).filter((text) => { const s = StyleSheet.flatten(text.props.style); return !(FAMILIES.includes(s.fontFamily) && (s.fontSize >= 13 || (s.fontSize === 11 && s.textTransform === 'uppercase'))); }).map((t) => t.props.children)).toEqual([]);
 beforeEach(() => { jest.clearAllMocks(); mockReduced = false; });
 it('preserves meal add, tap-to-edit and long-press-to-delete', async () => {
   const add = jest.fn(), edit = jest.fn();

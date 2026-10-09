@@ -46,13 +46,13 @@ beforeEach(async () => {
 describe('Settings uses this account’s retained Day-1 check-in choice', () => {
   it('preserves all other Settings navigation and preference actions', async () => {
     const view = await render(<SettingsScreen navigation={navigation} />);
-    await fireEvent.press(view.getByTestId('icon-arrow-back'));
+    await fireEvent.press(view.getByLabelText('Back'));
     expect(navigation.goBack).toHaveBeenCalled();
     for (const [label, route] of [
       ['Delete account', 'DeleteAccount'], ['Notification preferences', 'NotificationSettings'],
-      ['Support inbox', 'SupportInbox'], ['Trust and Privacy', 'TrustCenter'],
+      ['Support, Chat with the support team.', 'SupportInbox'], ['Trust & Privacy, How your data is protected.', 'TrustCenter'],
       ['Roman and AI', 'RomanAiConsent'], ['Blocked users', 'BlockedUsers'],
-      ['Request my data export', 'DataExport'],
+      ['My data, Request a copy of your data.', 'DataExport'],
     ]) {
       await fireEvent.press(view.getByLabelText(label));
       expect(navigation.navigate).toHaveBeenLastCalledWith(route);
