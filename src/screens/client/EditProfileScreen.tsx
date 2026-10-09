@@ -22,7 +22,6 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TextInput,
   Alert,
   ActivityIndicator,
@@ -43,6 +42,7 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { typography, radius, spacing, SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/useTheme';
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
+import { Screen } from '../../ui';
 import {
   getProfileCompletion,
   buildProfileUpdatePayload,
@@ -429,12 +429,7 @@ export default function EditProfileScreen() {
   })();
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+    <Screen edges={['top']} contentStyle={styles.content}>
       <View style={styles.header}>
         <HapticPressable
           intent="light"
@@ -639,7 +634,7 @@ export default function EditProfileScreen() {
       <Text style={styles.footnote}>
         You can revise these any time.
       </Text>
-    </ScrollView>
+    </Screen>
   );
 }
 
@@ -729,13 +724,9 @@ function useStyles() {
 }
 
 const createStyles = (colors: SemanticTokens) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgPrimary,
-  },
+  // Screen owns the inset top (insets.top + 12) and the page colour.
   content: {
     paddingHorizontal: 24,
-    paddingTop: 60,
     paddingBottom: 64,
   },
   header: {
@@ -866,7 +857,7 @@ const createStyles = (colors: SemanticTokens) => StyleSheet.create({
   saveBtn: {
     backgroundColor: colors.accent,
     minHeight: 52,
-    borderRadius: radius.lg,
+    borderRadius: radius.button,
     paddingVertical: 18,
     alignItems: 'center',
     marginTop: spacing.lg,
