@@ -1,0 +1,15 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Profile and more"
+- scrollUntilVisible:
+    element: "Roman"
+    direction: DOWN
+- tapOn: "Roman"
+- extendedWaitUntil:
+    visible:
+      id: "roman-composer"
+    timeout: 60000
+- assertNotVisible:
+    id: "roman-loading-skeleton"
+# No AI turn is generated and no credit is consumed.

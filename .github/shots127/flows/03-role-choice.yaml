@@ -1,0 +1,16 @@
+appId: com.growthproject.app
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Get started"
+    timeout: 60000
+- tapOn: "Get started"
+- extendedWaitUntil:
+    visible: "How will you use the app?"
+    timeout: 60000
+- assertVisible:
+    id: "role-choice-client"
+- assertVisible:
+    id: "role-choice-coach"

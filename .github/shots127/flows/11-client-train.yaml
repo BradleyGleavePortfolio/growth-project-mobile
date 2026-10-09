@@ -1,0 +1,9 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Train"
+- extendedWaitUntil:
+    visible: "From your coach"
+    timeout: 60000
+- assertVisible:
+    id: "workout-scroll"

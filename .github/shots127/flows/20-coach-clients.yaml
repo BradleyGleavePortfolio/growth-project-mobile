@@ -1,0 +1,10 @@
+appId: com.growthproject.app
+---
+- runFlow: coach-root.yaml
+- tapOn: "Clients"
+- extendedWaitUntil:
+    visible:
+      id: "client-row-.*"
+    timeout: 60000
+- assertVisible:
+    id: "clients-count"

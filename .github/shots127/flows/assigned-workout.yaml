@@ -1,0 +1,19 @@
+appId: com.growthproject.app
+---
+- runFlow: client-root.yaml
+- tapOn: "Train"
+- extendedWaitUntil:
+    visible: "Open assigned workout:.*|View .* coach-assigned workouts"
+    timeout: 60000
+- tapOn: "Open assigned workout:.*|View .* coach-assigned workouts"
+- runFlow:
+    when:
+      visible: "Open workout .*"
+    commands:
+      - tapOn:
+          text: "Open workout .*"
+          index: 0
+- extendedWaitUntil:
+    visible:
+      id: "assignment-start"
+    timeout: 60000
