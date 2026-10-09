@@ -1,6 +1,6 @@
 import React from 'react';
 import { Text } from 'react-native';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 import type { CurrentUser } from '../hooks/useCurrentUser';
 
 let mockUser: CurrentUser;
@@ -206,24 +206,19 @@ it('ClientPackages keeps the other empty-list copy for a connected client with a
   expect(r.getByText("Your coach hasn't published a plan yet. Message them to ask what's available.")).toBeTruthy();
 });
 
+// B-SMALLFIX-135: every Day 1 card is basic self logging (weight, check-in,
+// meal), so no client sees fewer cards for having no coach or no package.
 it.each([
-  ['inactive', { ok: true, data: { active: false } }],
-  ['unavailable', { ok: false, reason: 'error', message: 'Network unavailable' }],
-])('Day 1 shows only the ungated weight card when entitlement is %s', async (_label, result) => {
+  ['coached, plan inactive', 'coach-1', { ok: true, data: { active: false } }],
+  ['coached, check unavailable', 'coach-1', { ok: false, reason: 'error', message: 'Network unavailable' }],
+  ['coached, plan active', 'coach-1', { ok: true, data: { active: true } }],
+  ['coachless, no plan', undefined, { ok: true, data: { active: false } }],
+])('Day 1 shows all three self-logging cards (%s) and never reads the entitlement for them', async (_label, coachId, result) => {
+  mockUser = { ...mockUser, coach_id: coachId };
   mockGetEntitlement.mockResolvedValue(result);
   const r = await render(<Day1WinScreen onComplete={jest.fn()} />);
-  expect(r.getByText('Log your starting weight')).toBeTruthy();
-  expect(r.queryByTestId('day1win-card-first_checkin')).toBeNull();
-  expect(r.queryByTestId('day1win-card-first_meal')).toBeNull();
-  await waitFor(() => expect(mockGetEntitlement).toHaveBeenCalled());
-  expect(r.queryByTestId('day1win-card-first_checkin')).toBeNull();
-  expect(r.queryByTestId('day1win-card-first_meal')).toBeNull();
-});
-
-it('Day 1 keeps all three cards for an explicitly entitled client', async () => {
-  mockGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
-  const r = await render(<Day1WinScreen onComplete={jest.fn()} />);
-  expect(r.getByText('Log your starting weight')).toBeTruthy();
-  expect(await r.findByTestId('day1win-card-first_checkin')).toBeTruthy();
+  expect(r.getByTestId('day1win-card-logged_first_weight')).toBeTruthy();
+  expect(r.getByTestId('day1win-card-first_checkin')).toBeTruthy();
   expect(r.getByTestId('day1win-card-first_meal')).toBeTruthy();
+  expect(mockGetEntitlement).not.toHaveBeenCalled();
 });

@@ -32,7 +32,7 @@ import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton
 import InviteCoachCardDetails from '../../components/invite/InviteCoachCardDetails';
 import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
 import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
-import { typography } from '../../theme/tokens';
+import { radius, typography } from '../../theme/tokens';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 
@@ -586,7 +586,7 @@ const makeStyles = (colors: ThemeColors) =>
   skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', minHeight: 44, paddingVertical: 11 },
   continueBtn: {
     backgroundColor: colors.primary,
-    borderRadius: 4,
+    borderRadius: radius.button,
     paddingVertical: 16,
     minHeight: 52,
     alignItems: 'center',

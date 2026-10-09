@@ -2,8 +2,10 @@
  * Day1WinScreen — Phase 7A: Day 1 Win Sequence
  *
  * Shown once to every new client on their first cold app open after
- * onboarding. Presents three quick-win cards for entitled clients, or the
- * ungated starting-weight card otherwise. Tapping one calls
+ * onboarding. Presents the same three quick-win cards to every client: each
+ * is basic self logging (weight, the daily check-in, a meal), which no client
+ * is locked out of (owner 10-08 23:5x, m#650). Only the coach-sold package
+ * sheet afterwards keeps its gate (lib/packagePromptGate). Tapping one calls
  * POST /me/first-win/complete, shows the 2-sentence AI coaching message,
  * then navigates the client into the main app.
  *
@@ -14,7 +16,7 @@
  *   - Every interactive element has accessibilityLabel + accessibilityRole.
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -34,7 +36,6 @@ import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { markDay1WinSkipped } from '../../lib/day1WinSkip';
-import { clientPaymentsApi } from '../../api/clientPaymentsApi';
 
 // ── Win card definitions ──────────────────────────────────────────────────────
 
@@ -86,22 +87,9 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const [entitlementActive, setEntitlementActive] = useState(false);
-  // This interstitial lives outside EntitlementProvider. Weight is always
-  // available; paid quick wins require an explicit active server response.
-  useEffect(() => {
-    if (!currentUser?.id) return;
-    let mounted = true;
-    void clientPaymentsApi.getEntitlement().then((result) => {
-      if (mounted) setEntitlementActive(result.ok && result.data.active === true);
-    }).catch(() => {
-      if (mounted) setEntitlementActive(false);
-    });
-    return () => { mounted = false; };
-  }, [currentUser?.id]);
-  const availableCards = entitlementActive
-    ? WIN_CARDS
-    : WIN_CARDS.filter((card) => card.id === 'logged_first_weight');
+  // Every card is basic self logging, open to every client with or without a
+  // coach or a package, so no entitlement is read here.
+  const availableCards = WIN_CARDS;
 
   const [selectedWin, setSelectedWin] = useState<WinType | null>(null);
   const [loading, setLoading] = useState(false);
