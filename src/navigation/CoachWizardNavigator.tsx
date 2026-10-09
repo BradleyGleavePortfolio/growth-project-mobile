@@ -37,6 +37,7 @@ import { authEvents } from "../utils/authEvents";
 import { prefsStorage } from "../storage/mmkv";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme, ThemeColors } from "../theme/ThemeProvider";
+import { radius } from "../theme/tokens";
 import {
   advanceWizardTo,
   stepBlob,
@@ -825,7 +826,7 @@ const makeStyles = (colors: ThemeColors) =>
     dot: {
       width: 8,
       height: 8,
-      borderRadius: 4,
+      borderRadius: radius.chip,
       backgroundColor: colors.border,
     },
     dotActive: { backgroundColor: colors.primary, width: 24 },
@@ -833,7 +834,7 @@ const makeStyles = (colors: ThemeColors) =>
     headline: {
       fontFamily: "CormorantGaramond_400Regular",
       fontSize: 32,
-      lineHeight: 36,
+      lineHeight: 40,
       color: colors.textPrimary,
       marginBottom: 12,
     },
@@ -847,7 +848,7 @@ const makeStyles = (colors: ThemeColors) =>
     childrenContainer: { marginBottom: 16 },
     primaryBtn: {
       backgroundColor: colors.primary,
-      borderRadius: 4,
+      borderRadius: radius.button,
       minHeight: 48,
       paddingVertical: 16,
       alignItems: "center",
@@ -888,6 +889,7 @@ const makeStyles = (colors: ThemeColors) =>
     input: {
       borderWidth: 1,
       borderColor: colors.border,
+      borderRadius: radius.input,
       minHeight: 48,
       paddingHorizontal: 12,
       fontFamily: "Inter_400Regular",
@@ -899,6 +901,7 @@ const makeStyles = (colors: ThemeColors) =>
     chip: {
       borderWidth: 1,
       borderColor: colors.border,
+      borderRadius: radius.chip,
       minHeight: 44,
       paddingHorizontal: 14,
       justifyContent: "center",
@@ -921,7 +924,7 @@ const makeStyles = (colors: ThemeColors) =>
     checkDot: {
       width: 12,
       height: 12,
-      borderRadius: 6,
+      borderRadius: radius.chip,
       borderWidth: 2,
       borderColor: colors.primary,
       marginRight: 12,

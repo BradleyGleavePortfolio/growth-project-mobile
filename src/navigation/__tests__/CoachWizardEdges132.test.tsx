@@ -54,6 +54,7 @@ import CoachWizardNavigator from "../CoachWizardNavigator";
 import SetupNotice from "../../components/coach/setup/SetupNotice";
 import { COACH_SUPPORT_EMAIL, describeError } from "../../lib/coachSetup/errors";
 import { SUPPORT_EMAIL } from "../../constants/support";
+import { radius } from "../../theme/tokens";
 
 const REF = "12345678-0000-4000-8000-000000000001";
 const httpError = (code: string, status = 503) => ({
@@ -124,6 +125,14 @@ describe("B01/B09 safe areas and B08 resumed Back", () => {
     });
     const back = ui.getByTestId("wizard-step-4-back");
     expect(StyleSheet.flatten(back.props.style).minHeight).toBeGreaterThanOrEqual(44);
+  });
+
+  it("the wizard takes rounded corners from the semantic tokens (owner 17:07) and its serif headline never clips", async () => {
+    const ui = await wizard(4);
+    const cta = StyleSheet.flatten(ui.getByTestId("wizard-step-4-cta").props.style);
+    expect(cta.borderRadius).toBe(radius.button);
+    const headline = StyleSheet.flatten(ui.getByText("Invite your first client").props.style);
+    expect(headline.lineHeight / headline.fontSize).toBeGreaterThanOrEqual(1.2);
   });
 
   it.each([2, 3, 4, 5])("cold resume at step %i returns to the preceding step", async (step) => {

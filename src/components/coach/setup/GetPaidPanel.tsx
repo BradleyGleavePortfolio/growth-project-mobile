@@ -31,6 +31,7 @@ import {
 } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useTheme, ThemeColors } from "../../../theme/ThemeProvider";
+import { radius } from "../../../theme/tokens";
 import { coachSetupApi, type ConnectView } from "../../../api/coachSetupApi";
 import { connectCopy } from "../../../lib/coachSetup/connectCopy";
 import {
@@ -299,6 +300,7 @@ const makeStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderColor: colors.border,
       backgroundColor: colors.surface,
+      borderRadius: radius.card,
       padding: 16,
       marginVertical: 8,
     },
@@ -330,6 +332,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     primary: {
       backgroundColor: colors.primary,
+      borderRadius: radius.button,
       minHeight: 48,
       alignItems: "center",
       justifyContent: "center",
