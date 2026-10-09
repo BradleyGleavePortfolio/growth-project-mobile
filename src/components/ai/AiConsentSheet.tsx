@@ -62,6 +62,7 @@ import {
   romanGrantBody,
 } from '../../lib/consultation/aiConsent';
 import { readUserCacheSync } from '../../lib/userCache';
+import { openPrivacyPolicyPage } from '../../lib/legalLinks';
 import { diagnosticReference, shortReference } from '../../utils/correlation';
 import { captureError } from '../../services/sentry';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
@@ -81,6 +82,12 @@ export interface AiConsentSheetProps {
   api?: AiConsentSheetApi;
   /** The signed-in user right now (identity fence of the ledger queue). */
   sessionUserId?: () => string | null;
+  /**
+   * 'beforeAnswer' (B32, prototype 68): opened by the Roman room before a
+   * first answer. Same ledger, same server wording; the title, the paired
+   * same-size actions and the Privacy Policy link follow the prototype.
+   */
+  variant?: 'default' | 'beforeAnswer';
   testID?: string;
 }
 
@@ -111,6 +118,9 @@ type Phase =
 
 export const AI_CONSENT_SHEET_COPY = {
   title: 'Allow AI help',
+  beforeAnswerTitle: 'Before Roman answers',
+  allowAndContinue: 'Allow and continue',
+  privacyPolicy: 'Privacy Policy',
   coachNote:
     'Your coach still sees your training information as usual. This choice only decides whether Roman and your coach’s AI tools can use it.',
   changeLater: 'You can change this later in Settings > Privacy.',
@@ -155,8 +165,10 @@ export default function AiConsentSheet({
   onContactSupport,
   api = defaultAiConsentApi,
   sessionUserId = defaultSessionUserId,
+  variant = 'default',
   testID = 'ai-consent-sheet',
 }: AiConsentSheetProps): React.ReactElement {
+  const beforeAnswer = variant === 'beforeAnswer';
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   // Presentation (ROMAN-ROOM-133, operator 17:16): the sheet clears the
@@ -347,20 +359,36 @@ export default function AiConsentSheet({
               <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.coachNote}</Text>
               <Text style={styles.note}>{AI_CONSENT_SHEET_COPY.changeLater}</Text>
             </ScrollView>
-            <PrimaryButton
-              label={AI_CONSENT_SHEET_COPY.allow}
-              onPress={() => void allow()}
-              loading={saving}
-              style={styles.primary}
-              testID={`${testID}-allow`}
-            />
-            <TextLink
-              label={AI_CONSENT_SHEET_COPY.notNow}
-              onPress={onClose}
-              disabled={saving}
-              style={styles.secondary}
-              testID={`${testID}-not-now`}
-            />
+            <View style={beforeAnswer ? styles.pair : null}>
+              <PrimaryButton
+                label={beforeAnswer ? AI_CONSENT_SHEET_COPY.allowAndContinue : AI_CONSENT_SHEET_COPY.allow}
+                onPress={() => void allow()}
+                loading={saving}
+                style={[styles.primary, beforeAnswer && styles.pairItem]}
+                testID={`${testID}-allow`}
+              />
+              <TextLink
+                label={AI_CONSENT_SHEET_COPY.notNow}
+                onPress={onClose}
+                disabled={saving}
+                tone={beforeAnswer ? 'ink' : 'muted'}
+                underline={!beforeAnswer}
+                // Prototype 68: Not now matches Allow in size (a framed TextLink, never a second fill).
+                style={beforeAnswer ? [styles.pairItem, styles.pairOutline, { borderColor: colors.textPrimary }] : styles.secondary}
+                testID={`${testID}-not-now`}
+              />
+            </View>
+            {beforeAnswer ? (
+              <TextLink
+                label={AI_CONSENT_SHEET_COPY.privacyPolicy}
+                onPress={openPrivacyPolicyPage}
+                role="link"
+                tone="ink"
+                size="small"
+                style={styles.secondary}
+                testID={`${testID}-privacy`}
+              />
+            ) : null}
           </>
         );
       }
@@ -456,7 +484,7 @@ export default function AiConsentSheet({
           accessibilityViewIsModal
         >
           <Headline level="h2" style={styles.title}>
-            {AI_CONSENT_SHEET_COPY.title}
+            {beforeAnswer ? AI_CONSENT_SHEET_COPY.beforeAnswerTitle : AI_CONSENT_SHEET_COPY.title}
           </Headline>
           {renderBody()}
         </View>
@@ -487,5 +515,14 @@ function makeStyles(colors: ThemeColors) {
     reference: { fontSize: 13, color: colors.textSecondary, marginBottom: 12 },
     primary: { marginTop: 8 },
     secondary: { marginTop: 4 },
+    pair: { flexDirection: 'row', gap: 12 },
+    pairItem: { flex: 1, alignSelf: 'auto' },
+    pairOutline: {
+      marginTop: 8,
+      minHeight: layout.buttonHeight,
+      borderWidth: 1,
+      borderRadius: radius.button,
+      justifyContent: 'center',
+    },
   });
 }
