@@ -76,6 +76,10 @@ Coverage:
 
 Also: `src/services/__tests__/deletionApi.test.ts` (wire shapes, header, Apple code), `src/services/__tests__/api.refresh.test.ts` (`skipAuthRefresh`), `src/utils/__tests__/appleAuth.test.ts` (`reauthenticateWithApple`).
 
+### RomanAiConsentScreen: prototype 74 look
+
+Built on the shared `src/ui` `Screen` (`edges={['top']}`, real insets, so Android clears the status bar; it sits in the More stack above the tab bar) with `ScreenTopBar` Back, a "Privacy" overline and the serif title "Roman and AI". When the choice has loaded, Roman's portrait sits beside one state line: "Roman is on. ..." exactly when the heading says Allowed (a live server grant), otherwise "Roman is off. ...". The card uses `radius.card` and a hairline, the buttons `radius.button`. Presentation only (ROMAN-ROOM-133): the consent paragraph, choices, confirmations and ledger writes are unchanged.
+
 ### RomanAiConsentScreen: "Roman's memory"
 
 The last row of Settings > Privacy > Roman and AI is a "Roman's memory" switch (R11-C2B). It is ON for a live

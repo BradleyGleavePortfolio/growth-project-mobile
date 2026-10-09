@@ -31,7 +31,7 @@ export function BookingOptionsEntry({
         testID="settings-booking-options"
       >
         <Ionicons name="options-outline" size={20} color={colors.textSecondary} />
-        <Text style={styles.rowLabel}>Booking Options</Text>
+        <Text style={styles.rowLabel}>Booking options</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </TouchableOpacity>
       <View style={styles.divider} />

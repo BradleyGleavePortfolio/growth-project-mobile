@@ -22,7 +22,7 @@ import {
   ViewStyle,
   GestureResponderEvent,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
+import { HapticService } from '../ui/haptics/haptics.service';
 import { useReduceMotion } from '../screens/client/wearables/components/useReduceMotion';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,32 +44,22 @@ export interface HapticPressableProps extends Omit<PressableProps, 'style'> {
 }
 
 // ─── Haptic dispatcher ────────────────────────────────────────────────────────
+// Routed through HapticService so the client and coach Settings "Haptics"
+// switch is honoured everywhere (DESIGN-QA-128 U1, DS-THEME-133). HapticService
+// already no-ops when the switch is off and swallows unsupported hardware.
 
-async function fireHaptic(intent: HapticIntent): Promise<void> {
-  try {
-    switch (intent) {
-      case 'light':
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        break;
-      case 'medium':
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        break;
-      case 'heavy':
-        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-        break;
-      case 'success':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        break;
-      case 'warning':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        break;
-      case 'error':
-        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        break;
-    }
-  } catch {
-    // Silently ignore — web or unsupported hardware
-  }
+const DISPATCH: Record<HapticIntent, keyof typeof HapticService> = {
+  light:   'softImpact',
+  medium:  'mediumImpact',
+  heavy:   'heavyImpact',
+  success: 'success',
+  warning: 'warning',
+  error:   'error',
+};
+
+function fireHaptic(intent: HapticIntent): void {
+  const fn = HapticService[DISPATCH[intent]] as (() => Promise<void>) | undefined;
+  void fn?.();
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -119,11 +109,11 @@ export default function HapticPressable({
   const animateOut = useCallback(() => {
     if (animationDisabled) return;
     Animated.parallel([
-      Animated.spring(scaleAnim, {
+      // Calm release: a 120 ms timing, never a spring (doctrine 5).
+      Animated.timing(scaleAnim, {
         toValue: 1,
+        duration: 120,
         useNativeDriver: true,
-        speed: 40,
-        bounciness: 3,
       }),
       Animated.timing(opacityAnim, {
         toValue: 1,
