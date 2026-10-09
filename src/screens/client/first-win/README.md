@@ -10,7 +10,7 @@ Once completed the screen never appears again. If the API is unreachable at boot
 
 | Screen | Path | State | Description |
 |--------|------|-------|-------------|
-| `Day1WinScreen` | `src/screens/client/Day1WinScreen.tsx` | Local (`useState`) | Two-phase: selection view (3 win cards) → completion view (AI message + continue button). Accepts an `onComplete` prop. |
+| `Day1WinScreen` | `src/screens/client/Day1WinScreen.tsx` | Local (`useState`) | Two-phase: selection view (3 win cards) → completion view (AI message + continue button). Accepts an `onComplete` prop. Every client sees all three cards, coached or coachless, with or without a package: each is basic self logging (B-SMALLFIX-135), so the screen reads no entitlement for them. Only the coach-sold package sheet afterwards keeps its gate (`lib/packagePromptGate`). Test: `src/__tests__/coachlessGateVersionB.test.tsx`. |
 
 ---
 
