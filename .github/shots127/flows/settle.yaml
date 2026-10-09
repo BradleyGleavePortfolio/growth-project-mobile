@@ -1,0 +1,38 @@
+appId: com.growthproject.app
+---
+# Clears first-run overlays (tutorial, push priming, system alerts). Every
+# step is conditional, so this flow never fails on its own.
+- repeat:
+    times: 4
+    commands:
+      - runFlow:
+          when:
+            visible:
+              id: "tutorial-push-later"
+          commands:
+            - tapOn:
+                id: "tutorial-push-later"
+      - runFlow:
+          when:
+            visible:
+              id: "tutorial-skip"
+          commands:
+            - tapOn:
+                id: "tutorial-skip"
+      - runFlow:
+          when:
+            visible:
+              id: "tutorial-ack"
+          commands:
+            - tapOn:
+                id: "tutorial-ack"
+      - runFlow:
+          when:
+            visible: "Not now"
+          commands:
+            - tapOn: "Not now"
+      - runFlow:
+          when:
+            visible: "Don’t Allow|Don't Allow"
+          commands:
+            - tapOn: "Don’t Allow|Don't Allow"

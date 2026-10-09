@@ -1,0 +1,19 @@
+appId: com.growthproject.app
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 60000
+- tapOn: "Log in"
+- tapOn: "Email"
+- inputText: ${MAESTRO_REVIEW_EMAIL}
+- tapOn: "Password"
+- inputText: ${MAESTRO_REVIEW_PASSWORD}
+- hideKeyboard
+- tapOn: "Sign in"
+- extendedWaitUntil:
+    visible: "Home|Overview|Not now|Skip.*"
+    timeout: 60000
+- runFlow: settle.yaml

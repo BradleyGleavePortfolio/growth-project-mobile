@@ -1,0 +1,8 @@
+appId: com.growthproject.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Overview"
+    timeout: 60000
+- runFlow: settle.yaml
+

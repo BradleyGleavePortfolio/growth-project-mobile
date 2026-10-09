@@ -1,0 +1,12 @@
+appId: com.growthproject.app
+---
+- launchApp:
+    clearState: true
+    clearKeychain: true
+- extendedWaitUntil:
+    visible: "Log in"
+    timeout: 60000
+- tapOn: "Log in"
+- assertVisible: "Welcome back."
+- assertVisible: "Email"
+- assertVisible: "Password"

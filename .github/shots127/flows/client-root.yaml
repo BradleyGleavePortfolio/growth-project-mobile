@@ -1,0 +1,10 @@
+appId: com.growthproject.app
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Home"
+    timeout: 60000
+- runFlow: settle.yaml
+- tapOn: "Home"
+- assertNotVisible:
+    id: "tutorial-overlay"
