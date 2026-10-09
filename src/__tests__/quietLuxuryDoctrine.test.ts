@@ -293,9 +293,8 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('ActiveWorkout', { routineName: 'Quick Workout', exercises: '[]' });
     await fireEvent.press(s.getByText('Create a routine'));
     expect(mockNavigate).toHaveBeenLastCalledWith('RoutineBuilder');
-    for (const [label, route] of [['Exercise library', 'ExerciseLibrary'], ['Coach guidelines', 'CoachGuidelines']]) {
-      await press(s, label); expect(mockNavigate).toHaveBeenLastCalledWith(route);
-    }
+    await press(s, 'Exercise library'); expect(mockNavigate).toHaveBeenLastCalledWith('ExerciseLibrary');
+    expect(s.queryByLabelText('Coach guidelines')).toBeNull();
   });
   it('keeps assigned, routine, edit, delete, older history and refresh actions', async () => {
     mockUser.coach_id = 'coach';
@@ -318,6 +317,7 @@ describe('Truthful client copy and routes/actions parity', () => {
     expect(require('../services/api').workoutApi.deleteWorkout).toHaveBeenCalledWith('session');
     alert.mockRestore();
     await press(s, 'Show older workouts'); await press(s, 'Show recent workouts only');
+    await press(s, 'Coach guidelines'); expect(mockNavigate).toHaveBeenLastCalledWith('CoachGuidelines');
     expect(s.getByTestId('workout-scroll').props.refreshControl.props.onRefresh).toEqual(expect.any(Function));
   });
   it.each([['today gap', [0, 1, 3], '2'], ['today not logged', [1, 2, 3], '3'], ['look-back limit', Array.from({ length: 60 }, (_, i) => i), '60+']])(
