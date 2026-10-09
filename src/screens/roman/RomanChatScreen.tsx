@@ -29,10 +29,8 @@
  * client's turns as quiet bubbles, and the composer with the forest send
  * square in the src/ui Screen footer, above the keyboard and the gesture bar.
  *
- * Coach only (owner 2026-10-09 00:0x): a client with no coach meets the calm
- * "Roman works with a coach" state with one "Join a coach" button instead of
- * the room, and so does any client the server answers with 403
- * ROMAN_REQUIRES_COACH. Nothing is sent to Roman for them.
+ * Owner 2026-10-09 00:0x: a client with no coach, or a 403 ROMAN_REQUIRES_COACH,
+ * gets the "Join a coach" lock instead of the room. Nothing is sent to Roman.
  */
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from '@react-navigation/native';

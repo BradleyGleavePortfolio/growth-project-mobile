@@ -32,15 +32,6 @@ afterEach(() => {
   global.fetch = realFetch;
 });
 
-async function failureOf(p: Promise<unknown>): Promise<unknown> {
-  try {
-    await p;
-  } catch (err) {
-    return err;
-  }
-  throw new Error('expected a rejection');
-}
-
 it('reads the code from `error` or `code`, only on a 403', () => {
   expect(romanRequiresCoachFromHttp(403, BODY)).toBe(true);
   expect(romanRequiresCoachFromHttp(403, { code: 'ROMAN_REQUIRES_COACH' })).toBe(true);
@@ -50,9 +41,9 @@ it('reads the code from `error` or `code`, only on a 403', () => {
 
 it('open: 403 ROMAN_REQUIRES_COACH -> requiresCoach; another 403 does not', async () => {
   (api.post as jest.Mock).mockRejectedValueOnce(axios403(BODY));
-  expect(await failureOf(openOrResumeSession('client'))).toMatchObject({ kind: 'requiresCoach' });
+  await expect(openOrResumeSession('client')).rejects.toMatchObject({ kind: 'requiresCoach' });
   (api.post as jest.Mock).mockRejectedValueOnce(axios403({ statusCode: 403, error: 'Forbidden' }));
-  expect(await failureOf(openOrResumeSession('client'))).toMatchObject({ kind: 'generic' });
+  await expect(openOrResumeSession('client')).rejects.toMatchObject({ kind: 'generic' });
 });
 
 it('send: 403 ROMAN_REQUIRES_COACH -> requiresCoach, turn not stored', async () => {
@@ -62,9 +53,9 @@ it('send: 403 ROMAN_REQUIRES_COACH -> requiresCoach, turn not stored', async () 
     headers: { get: () => null },
     text: async () => JSON.stringify(BODY),
   })) as unknown as typeof fetch;
-  const err = await failureOf(sendMessage('11111111-1111-4111-8111-111111111111', 'hi'));
-  expect(err).toBeInstanceOf(RomanApiError);
-  expect(err).toMatchObject({ kind: 'requiresCoach', turnStored: false });
+  const sent = sendMessage('11111111-1111-4111-8111-111111111111', 'hi');
+  await expect(sent).rejects.toBeInstanceOf(RomanApiError);
+  await expect(sent).rejects.toMatchObject({ kind: 'requiresCoach', turnStored: false });
 });
 
 it('useRomanChat: the open answer puts the room in the requiresCoach phase', async () => {

@@ -78,7 +78,8 @@ jest.mock('../../../screens/roman/useRomanChat', () => ({
 }));
 jest.mock('../../../screens/client/wearables/components/useReduceMotion', () => ({ useReduceMotion: () => true }));
 jest.mock('../../../ui/skeletons/Skeleton', () => ({ Skeleton: () => null }));
-jest.mock('../../../components/ai/useOpenSupport', () => ({ useOpenSupport: () => jest.fn() }));
+const mockOpenSupport = jest.fn(() => true);
+jest.mock('../../../components/ai/useOpenSupport', () => ({ useOpenSupport: () => mockOpenSupport }));
 
 const mockGetEntitlement = jest.fn();
 jest.mock('../../../api/clientPaymentsApi', () => ({
@@ -89,6 +90,7 @@ jest.mock('../../../services/queryClient', () => ({ queryClient: { invalidateQue
 import RomanChatScreen from '../../../screens/roman/RomanChatScreen';
 import AIGuideScreen from '../../../screens/client/AIGuideScreen';
 import { EntitlementProvider } from '../../../entitlements/EntitlementProvider';
+import { COMMUNITY_REPORT_CRISIS_LINE } from '../../../api/communitySafetyApi';
 import { CoachOnlyGate, COMMUNITY_LOCK_BODY, COMMUNITY_LOCK_TITLE, JOIN_A_COACH, ROMAN_LOCK_BODY, ROMAN_LOCK_TITLE } from '../JoinCoachState';
 
 const COACHLESS: MockUser = { id: 'client-1', email: 'c@example.test', role: 'student', firstName: 'Maya' };
@@ -117,6 +119,9 @@ function expectRomanLock(r: { getByText: (t: string) => unknown }) {
   expect(r.getByText(ROMAN_LOCK_TITLE)).toBeTruthy();
   expect(r.getByText(ROMAN_LOCK_BODY)).toBeTruthy();
   expect(r.getByText(JOIN_A_COACH)).toBeTruthy();
+  // b#900 lens: help stays reachable from the lock (the app's crisis line, as is, and Contact support).
+  expect(r.getByText(COMMUNITY_REPORT_CRISIS_LINE)).toBeTruthy();
+  expect(r.getByText('Contact support')).toBeTruthy();
 }
 
 beforeEach(() => {
@@ -135,6 +140,8 @@ describe('Roman chat', () => {
     expect(r.queryByTestId('roman-composer')).toBeNull();
     await fireEvent.press(r.getByTestId('roman-coach-lock-join'));
     expect(r.onMessageCoach).toHaveBeenCalledWith(true);
+    await fireEvent.press(r.getByTestId('roman-coach-lock-support'));
+    expect(mockOpenSupport).toHaveBeenCalledTimes(1);
     await fireEvent.press(r.getByRole('button', { name: 'Back' }));
     expect(mockGoBack).toHaveBeenCalledTimes(1);
   });
@@ -204,6 +211,7 @@ describe('Community tab', () => {
     expect(r.getByText(COMMUNITY_LOCK_TITLE)).toBeTruthy();
     expect(r.getByText(COMMUNITY_LOCK_BODY)).toBeTruthy();
     expect(r.queryByTestId('community-stack')).toBeNull();
+    expect(r.queryByText(COMMUNITY_REPORT_CRISIS_LINE)).toBeNull();
     expect(r.queryByRole('button', { name: 'Back' })).toBeNull();
     await fireEvent.press(r.getByText(JOIN_A_COACH));
     expect(r.onMessageCoach).toHaveBeenCalledWith(true);

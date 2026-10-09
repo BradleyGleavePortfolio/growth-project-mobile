@@ -75,11 +75,7 @@ class EmptyGuideReplyError extends Error {
   }
 }
 
-/**
- * Coach only (owner 2026-10-09 00:0x): a client with no coach, or one the
- * server answers with 403 ROMAN_REQUIRES_COACH, sees Roman's locked state
- * with "Join a coach" instead of the guide. Nothing is sent for them.
- */
+/** Owner 2026-10-09 00:0x: no coach, or a 403 ROMAN_REQUIRES_COACH, gets Roman's lock. */
 function GuideCoachLock() {
   const navigation = useContext(NavigationContext);
   return (

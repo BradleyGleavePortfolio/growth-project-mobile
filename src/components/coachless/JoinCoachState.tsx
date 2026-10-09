@@ -1,19 +1,17 @@
 /**
- * JoinCoachState: the calm locked state a client with no coach meets where
- * coaching lives (owner 2026-10-09 00:0x: "Lets lock roman usage away for
- * coachless clients with epxlanation, lets show \"Join a coach\" on community
- * message screens - lets leave basic self logging alone though!").
- *
- * One serif headline, one muted line, one forest "Join a coach" button. The
- * button opens the existing coachless join path: the coach-code sheet on
- * Messages (EntitlementProvider.messageCoach, the same action as the coachless
- * gate in ProtectedScreen). Copy never says "your coach": there is none yet.
+ * JoinCoachState (owner 2026-10-09 00:0x): the calm locked state a client with
+ * no coach meets on Roman and Community. One serif headline, one muted line,
+ * one forest "Join a coach" (EntitlementProvider.messageCoach: the coach-code
+ * sheet on Messages). Copy never says "your coach": there is none yet.
  */
 import React, { useContext, useEffect, useReducer } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { NavigationContext } from '@react-navigation/native';
-import { Headline, Lede, PrimaryButton, Screen, ScreenTopBar, type ScreenEdge } from '../../ui';
+import { Headline, Lede, PrimaryButton, Screen, ScreenTopBar, TextLink, type ScreenEdge } from '../../ui';
 import RomanAvatar from '../roman/RomanAvatar';
+import { AI_REFUSAL_ACTIONS } from '../ai/AiRefusalNotice';
+import { useOpenSupport } from '../ai/useOpenSupport';
+import { COMMUNITY_REPORT_CRISIS_LINE } from '../../api/communitySafetyApi';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachlessClient } from '../../hooks/useCoachlessClient';
@@ -80,8 +78,22 @@ export default function JoinCoachState({
         {roman ? <RomanAvatar size={40} /> : null}
         <Headline level="h2">{title}</Headline>
         <Lede>{body}</Lede>
+        {roman ? <RomanLockHelp testID={testID} /> : null}
       </View>
     </Screen>
+  );
+}
+
+/** b#900 lens: never only a join wall. The app's crisis line, as is, and Contact support. */
+function RomanLockHelp({ testID }: { testID: string }): React.ReactElement {
+  const openSupport = useOpenSupport();
+  return (
+    <View style={styles.block} testID={`${testID}-help`}>
+      <Lede size="small" testID={`${testID}-crisis`}>{COMMUNITY_REPORT_CRISIS_LINE}</Lede>
+      {openSupport ? (
+        <TextLink label={AI_REFUSAL_ACTIONS.contactSupport} onPress={openSupport} size="small" align="start" testID={`${testID}-support`} />
+      ) : null}
+    </View>
   );
 }
 
