@@ -46,6 +46,7 @@ import {
 import { grantState, keepsIdempotencyKey, refusalLine } from './coachlessCopy';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
 import CoachSharingNotice from '../coachSharing/CoachSharingNotice';
+import InviteCoachCardDetails from '../invite/InviteCoachCardDetails';
 
 export const CHECK_DEBOUNCE_MS = 400;
 
@@ -230,9 +231,16 @@ export default function CoachCodeSheet({
                   {refusalLine(shown)}
                 </Text>
               ) : check.state === 'valid' ? (
-                <Text style={[styles.small, { color: sc.textPrimary }]} testID="coach-code-valid">
-                  {`Coach: ${check.coach.name}`}
-                </Text>
+                <>
+                  <Text style={[styles.small, { color: sc.textPrimary }]} testID="coach-code-valid">
+                    {`Coach: ${check.coach.name}`}
+                  </Text>
+                  <InviteCoachCardDetails
+                    headline={check.coach.headline}
+                    specialties={check.coach.specialties}
+                    testID="coach-code-card"
+                  />
+                </>
               ) : null}
             </View>
             <CoachSharingNotice
