@@ -13,6 +13,8 @@
  * echoes the raw server string, per the no-raw-errors rule.
  */
 
+import { joinOutcomeOf } from './joinPackage';
+
 export interface InviteAttachOutcome {
   /** true / false when the server reported it; null when it did not. */
   attached: boolean | null;
@@ -23,7 +25,9 @@ export interface InviteAttachOutcome {
 export function readInviteAttachOutcome(data: unknown): InviteAttachOutcome {
   if (!data || typeof data !== 'object') return { attached: null, reason: null };
   const d = data as { invite_attached?: unknown; invite_attach_error?: unknown };
-  const attached = typeof d.invite_attached === 'boolean' ? d.invite_attached : null;
+  // B-PACKAGE-135: a join means the code was accepted, even when a paid
+  // package still has to be paid on the package screen before the attach.
+  const attached = joinOutcomeOf(data) ? true : typeof d.invite_attached === 'boolean' ? d.invite_attached : null;
   let reason: string | null = null;
   if (typeof d.invite_attach_error === 'string' && d.invite_attach_error.trim()) {
     reason = d.invite_attach_error.trim().slice(0, 120);

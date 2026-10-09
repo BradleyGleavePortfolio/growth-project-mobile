@@ -39,6 +39,7 @@ export default function PendingInviteBanner() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<'idle' | 'ok' | 'err'>('idle');
   const [errMessage, setErrMessage] = useState<string | null>(null);
+  const [paidJoin, setPaidJoin] = useState(false);
   // Refs to clear timers on unmount — prevents setState on dead component.
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // B-SHARE-127: Attach is the join; the sentence shows and its version is sent.
@@ -91,6 +92,7 @@ export default function PendingInviteBanner() {
     setBusy(false);
     if (result.ok) {
       setStatus('ok');
+      setPaidJoin(result.paidJoin === true);
       // The attach may grant a plan. Re-read the same shared gate checkout
       // uses and Home's coachless state; never infer access from the code.
       void refreshEntitlement().catch((err: unknown) =>
@@ -119,7 +121,9 @@ export default function PendingInviteBanner() {
       <QuietOverline>COACH INVITE</QuietOverline>
       <Text style={styles.subtitle}>
         {status === 'ok'
-          ? 'Invite attached to your account.'
+          ? paidJoin
+            ? 'Code accepted. Joining finishes after the payment.'
+            : 'Invite attached to your account.'
           : status === 'err'
           ? (errMessage ?? 'The invite could not be attached right now. Try Attach again.')
           : `${coachName ? `Invite from ${coachName}. ` : ''}Attach "${code}" to your account.`}

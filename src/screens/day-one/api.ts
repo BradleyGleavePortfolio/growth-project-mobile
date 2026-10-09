@@ -10,6 +10,7 @@
 import { profileApi, authApi, preferencesApi, notificationsApi } from '../../services/api';
 import { keepDayOneAnswers } from './answers';
 import { patchUserCache } from '../../lib/userCache';
+import { presentJoinFrom } from '../../lib/joinPackage';
 import { logger } from '../../utils/logger';
 
 // ─── Error shape ─────────────────────────────────────────────────────────────
@@ -119,6 +120,7 @@ export async function pairWithCoach(
   const trimmed = code.trim();
   try {
     const response = await authApi.attachInviteCode(trimmed, coachSharingNotice);
+    presentJoinFrom(response?.data);
     const coachId = response?.data?.coach_id;
     if (typeof coachId === 'string') {
       await patchUserCache({ coach_id: coachId }).catch((err: unknown) =>

@@ -30,6 +30,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { patchUserCache } from '../../lib/userCache';
+import { presentJoinFrom } from '../../lib/joinPackage';
 import { useEntitlement } from '../../entitlements/EntitlementProvider';
 import { logger } from '../../utils/logger';
 import { priceLabel, purchasableFromCoachPackage } from '../../lib/planTerms';
@@ -144,17 +145,26 @@ export default function CoachCodeSheet({
     try {
       const result = await redeemCoachCode(code, keyRef.current.key, sharingVersion);
       keyRef.current = null;
-      // Local mirror only; the server already holds the attach.
-      await patchUserCache({ coach_id: result.coach.id }).catch((e: unknown) =>
-        logger.warn('CoachCodeSheet', 'user cache patch failed', e),
-      );
-      // B-386-SOL-1: a code with a free or prepaid plan activates access on the
-      // server; refresh the shared gate now (the same refresh checkout uses),
-      // not only on the next foreground.
-      void refreshEntitlement().catch((e: unknown) =>
-        logger.warn('CoachCodeSheet', 'entitlement refresh after redeem failed', e),
-      );
+      const paidFirst = result.status === 'checkout_required';
+      if (!paidFirst) {
+        // Local mirror only; the server already holds the attach.
+        await patchUserCache({ coach_id: result.coach.id }).catch((e: unknown) =>
+          logger.warn('CoachCodeSheet', 'user cache patch failed', e),
+        );
+        // B-386-SOL-1: a code with a free or prepaid plan activates access on the
+        // server; refresh the shared gate now (the same refresh checkout uses),
+        // not only on the next foreground.
+        void refreshEntitlement().catch((e: unknown) =>
+          logger.warn('CoachCodeSheet', 'entitlement refresh after redeem failed', e),
+        );
+      }
       track('coachless_code_redeemed', { already_attached: result.already_attached });
+      // B-PACKAGE-135: the code's package screen (FinishJoining) takes over from the welcome.
+      if (presentJoinFrom(result) || paidFirst) {
+        onClose();
+        if (!paidFirst) onAttached(result);
+        return;
+      }
       setWelcome(result);
       onAttached(result);
     } catch (err) {
@@ -165,7 +175,7 @@ export default function CoachCodeSheet({
     } finally {
       setJoining(false);
     }
-  }, [code, joining, onAttached, refreshEntitlement, sharingVersion]);
+  }, [code, joining, onAttached, onClose, refreshEntitlement, sharingVersion]);
 
   const close = useCallback(() => {
     if (joining) return;

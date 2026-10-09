@@ -157,6 +157,7 @@ import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
 import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
 import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
 import type { CalendarStackParamList } from './calendarRoutes';
+import JoinPackageHost from '../components/join/JoinPackageHost';
 
 // B22/B24 (b#888) and B1 (owner ruling 10-08 23:5x, m#650): logging,
 // workouts, routines, habits, plans, fasting, macros and Roman guidance call
@@ -821,6 +822,7 @@ export default function ClientNavigator() {
         />
       )}
     </Tab.Navigator>
+    <JoinPackageHost />
     </TutorialHost>
   );
 }

@@ -75,6 +75,7 @@ const ASYNC_SIGN_OUT_KEYS = [
   'lean_onboarding_synced',
   'analytics_onboarding_completed_fired',
   'pending_invite_code',
+  'pending_join_package.v1', // B-PACKAGE-135: an unpaid coach-code join belongs to this account
   // #306 r3: a pre-sign-in marker of an unconfirmed coach signup; never
   // carried to the next person on the device.
   COACH_SIGNUP_UNCONFIRMED_KEY,

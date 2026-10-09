@@ -34,6 +34,7 @@ import { clearRoleSelectionPending } from '../../lib/roleSelectionGate';
 import { isNetworkFailure, unknownAuthFailure } from '../../utils/authFailure';
 import { radius, typography } from '../../theme/tokens';
 import { useCoachSharingNotice } from '../../lib/coachSharingNotice';
+import { presentJoinFrom } from '../../lib/joinPackage';
 import CoachSharingNotice from '../../components/coachSharing/CoachSharingNotice';
 
 type Props = {
@@ -267,6 +268,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     try {
       if (trimmed) {
         const res = await authApi.attachInviteCode(trimmed, sharingVersion);
+        presentJoinFrom(res?.data);
         const data = (res?.data ?? {}) as { role?: string; coach_id?: string | null };
         const confirmedNow = {
           role: typeof data.role === 'string' ? data.role : 'student',

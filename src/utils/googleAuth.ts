@@ -20,6 +20,7 @@ import { authApi } from '../services/api';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
 import { readInviteAttachOutcome } from '../lib/inviteAttachOutcome';
+import { presentJoinFrom } from '../lib/joinPackage';
 import { toAuthErrorDetail, type AuthErrorDetail } from './authErrorDetail';
 import {
   COACH_SIGNUP_UNAVAILABLE,
@@ -209,6 +210,7 @@ export async function signInWithGoogle(
       // The legacy second pass below runs only when the field is absent.
       let inviteAttached: boolean | undefined;
       let inviteAttachError: string | undefined;
+      if (options.inviteCode) presentJoinFrom(response.data);
       const serverAttach = readInviteAttachOutcome(response.data);
       if (options.inviteCode && serverAttach.attached !== null) {
         inviteAttached = serverAttach.attached;
