@@ -88,4 +88,22 @@ describe('every new coach goes to the consultation (B02, prototype 77, 86)', () 
     buttons.find((b) => b.text === 'Sign out')?.onPress?.();
     expect(mockSignOut).toHaveBeenCalledWith('c1');
   });
+
+  it('no route reaches the earlier wizard: only the gate mounts the navigator, and nothing opens its steps', () => {
+    const fs = jest.requireActual<typeof import('fs')>('fs');
+    const path = jest.requireActual<typeof import('path')>('path');
+    const root = path.join(__dirname, '../../../..');
+    const files: string[] = [];
+    const walk = (d: string) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) return e.name === '__tests__' ? undefined : walk(f);
+      if (/\.tsx?$/.test(e.name)) files.push(f);
+    });
+    walk(root);
+    const app = files.filter((f) => !f.endsWith('CoachWizardNavigator.tsx'));
+    const hits = (re: RegExp) => app.filter((f) => re.test(fs.readFileSync(f, 'utf8'))).map((f) => path.relative(root, f));
+    expect(hits(/CoachSetupWizard/)).toEqual([]);
+    expect(hits(/navigate\(\s*['"]CoachWizardStep/)).toEqual([]);
+    expect(hits(/from '\.\/CoachWizardNavigator'/)).toEqual(['navigation/RootNavigator.tsx']);
+  });
 });
