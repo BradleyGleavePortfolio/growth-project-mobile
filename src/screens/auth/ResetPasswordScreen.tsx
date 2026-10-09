@@ -296,7 +296,6 @@ const makeStyles = (colors: SemanticTokens) =>
       backgroundColor: colors.bgPrimary,
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
-      borderRadius: 2,
       padding: 16,
       fontSize: 16,
       fontFamily: 'Inter_400Regular',
