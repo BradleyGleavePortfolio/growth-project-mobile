@@ -489,9 +489,9 @@ function GoalWeightBody(props: BodyProps) {
         <View style={{ width: 220 }}>
           <Text style={s.eyebrow}>Goal weight</Text>
           {unit === 'imperial' ? (
-            <Wheel label="Goal weight" values={range(70, 600)} value={Math.min(600, Math.max(70, lbs))} format={(x) => `${x} lb`} onChange={(x) => setLbs(x)} testID="wheel-goal" />
+            <Wheel label="Goal weight" values={range(70, 600)} value={Math.min(600, Math.max(70, lbs))} format={(x) => `${x} lb`} onChange={(x) => { setLbs(x); onAnswer('B4', x); }} testID="wheel-goal" />
           ) : (
-            <Wheel label="Goal weight" values={range(32, 272)} value={Math.min(272, Math.max(32, kg))} format={(x) => `${x} kg`} onChange={(x) => setLbs(Math.round(x / 0.453592))} testID="wheel-goal" />
+            <Wheel label="Goal weight" values={range(32, 272)} value={Math.min(272, Math.max(32, kg))} format={(x) => `${x} kg`} onChange={(x) => { const lb = Math.round(x / 0.453592); setLbs(lb); onAnswer('B4', lb); }} testID="wheel-goal" />
           )}
         </View>
       </View>
